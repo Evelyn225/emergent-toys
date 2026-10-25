@@ -49,16 +49,12 @@ function phoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.68, 0.32, 0.36, C(RED, 15), C(YEL, 7))) return true;
   if (backWall(my) && photoMenu(i, u, uStep, z, d, 5.0, 1.6, C(GREEN, 1.5))) return true;
-  if (!backWall(my) && z > 1.7 && z < 2.5 && Math.abs(fract(Math.abs(u) / 4.0) - 0.5) < 0.12) { // a wall fan, turning
-    const fu = (fract(Math.abs(u) / 4.0) - 0.5) * 4.0, fz = z - 2.1, r = Math.hypot(fu, fz);
-    if (r < 0.3) { const blade = fract(Math.atan2(fz, fu) / Math.PI * 1.5 + T * 4) < 0.35; BG[i] = C(r < 0.05 ? GRAY : blade ? CYAN : WHITE, r < 0.05 ? 2 : blade ? 5 : 5.5); return set(i, r > 0.27 || fract(r * 20) < 0.15 ? '+' : ' ', C(GRAY, 4)), true; }
-  }
   if (z < 1.2) { BG[i] = C(GREEN, 2.6 + L * 0.2); return set(i, fract(u * 5) < 0.05 || fract(z * 5) < 0.05 ? '+' : ' ', C(WHITE, 5)), true; } // green tiles
   BG[i] = C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true;
 }
 const steelTop = solid(GRAY, { bright: 1.6 });
 ROOM_DEFS.pho = { grid: backWc(13, 9), wc: wcAt(13), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: phoWall, keeper: [5.0, 1.6],
-  props: r => [KITCHEN_SERVICE_COUNTER(5,2.4,2.2,.3,1,GRAY,GRAY), { ...standing(5.0, 1.6, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_SERVICE_COUNTER(5,2.4,2.2,.3,1,GRAY,GRAY), { ...standing(5.0, 1.6, WHITE), face: [0, 1] }, PHO_WALL_FAN(1, 4.5, 2.1, 1, 0), PHO_WALL_FAN(12, 4.5, 2.1, -1, 0, 1.7),
     stockPot(1.45, 1.45), stockPot(2.25, 1.45), { ...standing(2.0, 2.2, WHITE), face: [0, -1] },
     ...dining(2.8, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: RED, busy: 0.4 }), ...dining(9.4, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: BLUE, busy: 0.4 }),
     ...dining(2.8, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: GREEN, busy: 0.35 }), ...dining(9.4, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: YEL, busy: 0.35 }),
@@ -126,10 +122,6 @@ const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass,
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
-  if (!backWall(my) && z > 1.9 && z < 2.4 && Math.abs(fract(Math.abs(u) / 3.5) - 0.5) < 0.08) { // a clock
-    const cu = (fract(Math.abs(u) / 3.5) - 0.5) * 3.5, cz = z - 2.15, r = Math.hypot(cu, cz), ang = Math.atan2(cu, cz);
-    if (r < 0.22) { BG[i] = C(WHITE, 7); const hrs = tod / 12 * Math.PI * 2, mins = fract(tod) * Math.PI * 2, hand = (h, l) => Math.abs(mod(ang - h + Math.PI, Math.PI * 2) - Math.PI) < 0.12 && r < l; return set(i, hand(hrs, 0.12) || hand(mins, 0.19) ? '#' : r > 0.19 ? '.' : ' ', C(BRICK, 2)), true; }
-  }
   if (z < 1.0) { BG[i] = C(BRICK, 1.1 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, 2)), true; }
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, fract(u / 0.8) < 0.03 ? '|' : ' ', C(BRICK, 3)), true; // dark panelling
 }
@@ -137,7 +129,7 @@ ROOM_DEFS.kissaten = { grid: backWc(13, 8), wc: wcAt(13), light: 0.65, floor: 'o
   props: r => [KITCHEN_CUP_RACK(), KITCHEN_SERVICE_COUNTER(4.6,2.4,2.6,.3,1,BRICK,BRICK), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
     siphon(3.6, 2.4), siphon(4.1, 2.4), siphon(4.6, 2.4), ...stools(2.4, 6.9, 3.05, 0.9, RED, 0, -1, 0.35),
     ...booth(1.95, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }),
-    tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), ...wcFittings(13)] };
+    tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), KISSATEN_CLOCK(1, 3.4, 2.15, 1, 0), ...wcFittings(13)] };
 
 // ---- the izakaya (IZAKAYA): the counter and its stools, sake bottles up the wall behind, red lanterns, a tatami corner
 // with low tables and cushions, a table for a crowd by the window
@@ -202,7 +194,6 @@ function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.6, 0.32, 0.36, C(WHITE, 15), C(GRAY, 1))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 6.0, 2.0, ['ETHIOPIA  FLORAL', 'COLOMBIA  CARAMEL', ...menuLines()], 1.5, C(GRAY, 0.9), C(WHITE, 13))) return true; // (the beans this week, chalked up over the bar)
-  if (z > 1.5 && !backWall(my) && my !== room.H - 1 && Math.abs(fract(Math.abs(u) / 3.2) - 0.5) < 0.18) { const k = hash(Math.floor(Math.abs(u) * 6), Math.floor(z * 6), 147); BG[i] = C(GREEN, 2 + k * 2.5); return set(i, k > 0.6 ? '&' : k > 0.4 ? '%' : ' ', C(GREEN, 9)), true; } // plants trailing down the walls
   BG[i] = C(WHITE, 4.6 + L * 0.15); return set(i, fract(z / 0.16) < 0.1 ? '-' : fract(u / 0.36 + (Math.floor(z / 0.16) & 1) * 0.5) < 0.05 ? '|' : ' ', C(GRAY, 4)), true; // white-painted brick
 }
 ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hinoki', ceil: 'pendant', sign: false, wall: roasteryWall, keeper: [6.0, 1.7],
@@ -211,7 +202,8 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
     ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
     KITCHEN_TRESTLE_TABLE(3.6,6.2),
     ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] },KITCHEN_SETTING(x,y+fy*.6,.78,{fx:0,fy,meal:'coffee'})] : [])])),
-    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), FURNITURE_EAT_TABLE(9.9,6.15,.25,.25,teak,.5), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
+    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), FURNITURE_EAT_TABLE(9.9,6.15,.25,.25,teak,.5), POT_PLANT(11.4, 4.1, 1.5),
+    TRAILING_PLANT(1, 4.8, 2.05, 1, 0), TRAILING_PLANT(1, 6.4, 2.05, 1, 0), TRAILING_PLANT(12, 1.9, 2.05, -1, 0), TRAILING_PLANT(12, 4.4, 2.05, -1, 0), ...wcFittings(13)] }; // plants trailing down the walls
 
 // ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips

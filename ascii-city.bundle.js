@@ -15803,15 +15803,6 @@ const BARBER_CHAIR = (x, y) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy - 0.42, 1, 0, 0.18, 0.06, 0.13, 0.17), CHROME);
   for (const e of [-1, 1]) rod(vx + e * 0.12, vy - 0.42, 0.15, vx + e * 0.12, vy - 0.2, 0.32, 0.012, GRAY, 1.2);
 }, [0.34, 0.3, 1.25]), seat: true, fx: 0, fy: -1, h: 0.45 });
-// a PA speaker on the floor, facing (0, 1): a black cabinet, the woofer and tweeter on its front in rings
-const SPEAKER = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.28, 0.2, 0, 0.9), (i, t, L) => {
-    BG[i] = C(GRAY, (0.8 + L * 0.15) * shadeFace(HIT.face));
-    if (HIT.face !== 3) return set(i, ' ', 0), true;
-    for (const [w, r] of [[0.3, 0.17], [0.7, 0.07]]) { const d = Math.hypot(HIT.u, HIT.w - w); if (d < r) { BG[i] = C(GRAY, d > r * 0.8 ? 2.5 : d < r * 0.25 ? 2 : 0.4); return set(i, d > r * 0.8 ? 'o' : ' ', C(GRAY, L)), true; } }
-    return set(i, ' ', 0), true;
-  });
-}, [0.28, 0.2, 0.9]);
 // a bouquet in a glass vase: stems fanning up, a flower head on each in the bloom's colour
 const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
   drum(vx, vy, 0.09, 0, 0.32, (i, t, L) => { BG[i] = C(CYAN, (1.6 + L * 0.3) * drumLit(0.09)); return set(i, HIT.face === 5 ? '~' : ':', C(WHITE, L * 0.6)), true; });
@@ -16096,9 +16087,9 @@ const ROOM_DEFS = {
   karaoke: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
     wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
-      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
+      const p = [KARAOKE_STAGE_PLATFORM(r.neon), KARAOKE_MONITOR(6, 2.66, KARAOKE.stage.top), KARAOKE_SCREEN(1), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
-                 SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
+                 KARAOKE_SPEAKER(3.5, 2.3), KARAOKE_SPEAKER(8.5, 2.3)];
       const seats = [...couch(3.2, 6.3, 1.1, 0, -1, MAG), ...couch(10.0, 6.3, 1.1, 0, -1, MAG), ...[3.0, 4.6, 7.4, 9.0].map(x => POUF(x, 4.4, r.neon, 0, -1))];
       p.push(...fillSeats(seats, barCrowd()));
       return p;
@@ -16615,18 +16606,7 @@ function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0) return false; // back wall: the sign
   set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
 }
-const KARAOKE_STAGE = 6; // (the stage's middle, and the screen's over it)
-function karaokeWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - KARAOKE_STAGE) < 3) { // lyrics screen: the sung part lights up
-    BG[i] = C(BLUE, 2);
-    const line = LYRICS[Math.floor(T / 5) % LYRICS.length], sung = fract(T / 5) * 1.3 * line.length;
-    const q = (u - KARAOKE_STAGE) / 0.28 + line.length / 2, p = Math.floor(q);
-    if (Math.abs(z - 1.9) < 0.15 && p >= 0 && p < line.length) {
-      const on = (uStep >= 0.28 || oneCell((fract(q) - 0.5) * 0.28, uStep)) && oneCell(z - 1.9, d / projY);
-      set(i, on ? line[p] : ' ', C(p < sung ? MAG : WHITE, 15)); return true;
-    }
-    set(i, ' ', 0); return true;
-  }
+function karaokeWall(i, u, uStep, z, d, mx, my, L) { // the lyrics are on the mounted screen (karaoke-stage.js)
   set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 9 ? ' ' : '*', C(NEON[(Math.floor(u) + (T * 2 | 0)) & 3], 8)); return true; // glitter
 }
 function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
@@ -18985,6 +18965,7 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
 const shakeMachine = (x, y) => KITCHEN_SHAKE_MACHINE(x,y);
 const sodaFountain = (x, y) => KITCHEN_SODA_FOUNTAIN(x,y);
 const BURGER_COUNTER_Y=2.6; // leave a walkable staff aisle beside the supported machines
+const BURGER_PASS_HALF=1.0; // the pass: over the counter, clear of the shake machine and the soda fountain
 function burgerWall(i, u, uStep, z, d, mx, my, L) {
   const M = 5.7; // (over the counter, clear of the bathroom)
   if (backWall(my)) {
@@ -18998,7 +18979,7 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
       if (r < 0.18) { const layer = bz > 0.06 ? [ORANGE, 8] : bz > 0.02 ? [GREEN, 6] : bz > -0.02 ? [YEL, 11] : bz > -0.07 ? [BRICK, 3] : [ORANGE, 8]; BG[i] = C(...layer); return set(i, bz > 0.1 && fract(cu * 20) < 0.2 ? '.' : ' ', C(WHITE, 13)), true; }
       return set(i, ' ', 0), true;
     }
-    if (z > 1.0 && z < 1.65 && Math.abs(u - M) < 2.2) { const g = noise(u * 6, z * 6 - T * 2, 90); BG[i] = C(ORANGE, 2 + g * 3); return set(i, g > 0.6 ? '~' : '.', C(YEL, 9)), true; } // the pass, the griddle hot behind it
+    if (burgerPassOpening(u, z, M, BURGER_PASS_HALF)) { const low = clamp(1 - (z - BURGER_PASS.bottom) / 0.25, 0, 1); BG[i] = low > 0 ? C(ORANGE, 0.8 + low * 2.4 + noise(u * 3, T * 0.8, 90) * 0.6) : C(GRAY, 0.7); return set(i, ' ', 0), true; } // through the pass: the kitchen, the griddle glowing low
   }
   if (z < 1.0) { BG[i] = (Math.floor(u * 4) + Math.floor(z * 4)) & 1 ? C(WHITE, 4 + L * 0.2) : C(RED, 3 + L * 0.2); return set(i, ' ', 0), true; } // red and white tiles
   if (z < 1.08) { BG[i] = C(GRAY, 4); return set(i, '=', C(WHITE, 13)), true; } // a chrome strip
@@ -19006,7 +18987,7 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
   props: r => [KITCHEN_SERVICE_COUNTER(6,BURGER_COUNTER_Y,2.8,.32,1.05,RED,WHITE),
-    { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
+    { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45), BURGER_KITCHEN_PASS(5.7, 1, BURGER_PASS_HALF, 0, 1),
     ...stools(3.6, 8.6, BURGER_COUNTER_Y+.7, 1.0, RED, 0, -1, 0.35),
     ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
     JUKEBOX(11.55, 5.9, -1, 0), ...wcFittings(13)] };
@@ -19116,13 +19097,12 @@ function iceWall(i, u, uStep, z, d, mx, my, L) {
     BG[i] = scoop ? C(MAG, 10) : cone ? C(ORANGE, 9) : C(GRAY, 1); return set(i, cone && fract(cz * 8 + cu * 8) < 0.2 ? 'x' : ' ', C(BRICK, 6)), true;
   }
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.6, 2.0, ['1 SCOOP 3', '2 SCOOPS 5', 'SHAKE 5', 'SUNDAE 7'], 1.2, C(WHITE, 8), C(MAG, 8), room.word, C(CYAN, 7))) return true;
-  if (backWall(my) && z > 1.3 && z < 1.8 && Math.abs(u - 4.2) < 0.9) { BG[i] = C(WHITE, 6); return set(i, fract(u * 6) < 0.5 && fract(z * 6) < 0.5 ? 'V' : ' ', C(ORANGE, 9)), true; } // cones, racked
   if (z < 0.95) { BG[i] = C(WHITE, 5 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(MAG, 6)), true; } // white panelling
   const st = Math.floor(u * 3) % 3; BG[i] = C([MAG, WHITE, GREEN][(st + 3) % 3], [7, 9, 7][(st + 3) % 3] + L * 0.2); return set(i, ' ', 0), true; // candy stripes
 }
 ROOM_FLOORS.pastel = (i, f, wx, wy, r, x, L) => { BG[i] = (Math.floor(wx * 2) + Math.floor(wy * 2)) & 1 ? C(MAG, 5 + f * 3) : C(WHITE, 6 + f * 4); return set(i, ' ', 0); };
 ROOM_DEFS.icecream = { grid: boxRoom(11, 8), light: 1.1, floor: 'pastel', ceil: 'pendant', sign: false, neon: true, wall: iceWall, keeper: [5.5, 1.5],
-  props: r => [KITCHEN_FOOD_CASE(5.5,2.3,2.6,.42,1.1,'icecream',WHITE), { ...standing(5.5, 1.5, MAG), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5.5,2.3,2.6,.42,1.1,'icecream',WHITE), { ...standing(5.5, 1.5, MAG), face: [0, 1] }, ICECREAM_CONE_RACK(4.2, 1, 0, 1), // cones, racked
     ...[[2.0, 4.6], [5.5, 5.4], [9.0, 4.6]].flatMap(([x, y]) => dining(x, y, { hl: 0.32, hw: 0.32, top: solid(WHITE, { top: ' ', bright: 2 }), busy: 0.4, chair: wireChair, chairCol: MAG, h: 0.74 })),
     POT_PLANT(10.2, 6.9, 1.2)] };
 
@@ -20836,16 +20816,12 @@ function phoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.68, 0.32, 0.36, C(RED, 15), C(YEL, 7))) return true;
   if (backWall(my) && photoMenu(i, u, uStep, z, d, 5.0, 1.6, C(GREEN, 1.5))) return true;
-  if (!backWall(my) && z > 1.7 && z < 2.5 && Math.abs(fract(Math.abs(u) / 4.0) - 0.5) < 0.12) { // a wall fan, turning
-    const fu = (fract(Math.abs(u) / 4.0) - 0.5) * 4.0, fz = z - 2.1, r = Math.hypot(fu, fz);
-    if (r < 0.3) { const blade = fract(Math.atan2(fz, fu) / Math.PI * 1.5 + T * 4) < 0.35; BG[i] = C(r < 0.05 ? GRAY : blade ? CYAN : WHITE, r < 0.05 ? 2 : blade ? 5 : 5.5); return set(i, r > 0.27 || fract(r * 20) < 0.15 ? '+' : ' ', C(GRAY, 4)), true; }
-  }
   if (z < 1.2) { BG[i] = C(GREEN, 2.6 + L * 0.2); return set(i, fract(u * 5) < 0.05 || fract(z * 5) < 0.05 ? '+' : ' ', C(WHITE, 5)), true; } // green tiles
   BG[i] = C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true;
 }
 const steelTop = solid(GRAY, { bright: 1.6 });
 ROOM_DEFS.pho = { grid: backWc(13, 9), wc: wcAt(13), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: phoWall, keeper: [5.0, 1.6],
-  props: r => [KITCHEN_SERVICE_COUNTER(5,2.4,2.2,.3,1,GRAY,GRAY), { ...standing(5.0, 1.6, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_SERVICE_COUNTER(5,2.4,2.2,.3,1,GRAY,GRAY), { ...standing(5.0, 1.6, WHITE), face: [0, 1] }, PHO_WALL_FAN(1, 4.5, 2.1, 1, 0), PHO_WALL_FAN(12, 4.5, 2.1, -1, 0, 1.7),
     stockPot(1.45, 1.45), stockPot(2.25, 1.45), { ...standing(2.0, 2.2, WHITE), face: [0, -1] },
     ...dining(2.8, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: RED, busy: 0.4 }), ...dining(9.4, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: BLUE, busy: 0.4 }),
     ...dining(2.8, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: GREEN, busy: 0.35 }), ...dining(9.4, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: YEL, busy: 0.35 }),
@@ -20913,10 +20889,6 @@ const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass,
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
-  if (!backWall(my) && z > 1.9 && z < 2.4 && Math.abs(fract(Math.abs(u) / 3.5) - 0.5) < 0.08) { // a clock
-    const cu = (fract(Math.abs(u) / 3.5) - 0.5) * 3.5, cz = z - 2.15, r = Math.hypot(cu, cz), ang = Math.atan2(cu, cz);
-    if (r < 0.22) { BG[i] = C(WHITE, 7); const hrs = tod / 12 * Math.PI * 2, mins = fract(tod) * Math.PI * 2, hand = (h, l) => Math.abs(mod(ang - h + Math.PI, Math.PI * 2) - Math.PI) < 0.12 && r < l; return set(i, hand(hrs, 0.12) || hand(mins, 0.19) ? '#' : r > 0.19 ? '.' : ' ', C(BRICK, 2)), true; }
-  }
   if (z < 1.0) { BG[i] = C(BRICK, 1.1 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, 2)), true; }
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, fract(u / 0.8) < 0.03 ? '|' : ' ', C(BRICK, 3)), true; // dark panelling
 }
@@ -20924,7 +20896,7 @@ ROOM_DEFS.kissaten = { grid: backWc(13, 8), wc: wcAt(13), light: 0.65, floor: 'o
   props: r => [KITCHEN_CUP_RACK(), KITCHEN_SERVICE_COUNTER(4.6,2.4,2.6,.3,1,BRICK,BRICK), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
     siphon(3.6, 2.4), siphon(4.1, 2.4), siphon(4.6, 2.4), ...stools(2.4, 6.9, 3.05, 0.9, RED, 0, -1, 0.35),
     ...booth(1.95, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }),
-    tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), ...wcFittings(13)] };
+    tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), KISSATEN_CLOCK(1, 3.4, 2.15, 1, 0), ...wcFittings(13)] };
 
 // ---- the izakaya (IZAKAYA): the counter and its stools, sake bottles up the wall behind, red lanterns, a tatami corner
 // with low tables and cushions, a table for a crowd by the window
@@ -20989,7 +20961,6 @@ function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.6, 0.32, 0.36, C(WHITE, 15), C(GRAY, 1))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 6.0, 2.0, ['ETHIOPIA  FLORAL', 'COLOMBIA  CARAMEL', ...menuLines()], 1.5, C(GRAY, 0.9), C(WHITE, 13))) return true; // (the beans this week, chalked up over the bar)
-  if (z > 1.5 && !backWall(my) && my !== room.H - 1 && Math.abs(fract(Math.abs(u) / 3.2) - 0.5) < 0.18) { const k = hash(Math.floor(Math.abs(u) * 6), Math.floor(z * 6), 147); BG[i] = C(GREEN, 2 + k * 2.5); return set(i, k > 0.6 ? '&' : k > 0.4 ? '%' : ' ', C(GREEN, 9)), true; } // plants trailing down the walls
   BG[i] = C(WHITE, 4.6 + L * 0.15); return set(i, fract(z / 0.16) < 0.1 ? '-' : fract(u / 0.36 + (Math.floor(z / 0.16) & 1) * 0.5) < 0.05 ? '|' : ' ', C(GRAY, 4)), true; // white-painted brick
 }
 ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hinoki', ceil: 'pendant', sign: false, wall: roasteryWall, keeper: [6.0, 1.7],
@@ -20998,7 +20969,8 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
     ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
     KITCHEN_TRESTLE_TABLE(3.6,6.2),
     ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] },KITCHEN_SETTING(x,y+fy*.6,.78,{fx:0,fy,meal:'coffee'})] : [])])),
-    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), FURNITURE_EAT_TABLE(9.9,6.15,.25,.25,teak,.5), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
+    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), FURNITURE_EAT_TABLE(9.9,6.15,.25,.25,teak,.5), POT_PLANT(11.4, 4.1, 1.5),
+    TRAILING_PLANT(1, 4.8, 2.05, 1, 0), TRAILING_PLANT(1, 6.4, 2.05, 1, 0), TRAILING_PLANT(12, 1.9, 2.05, -1, 0), TRAILING_PLANT(12, 4.4, 2.05, -1, 0), ...wcFittings(13)] }; // plants trailing down the walls
 
 // ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
@@ -37728,6 +37700,302 @@ function WIRE_CHAIR(x,y,fx,fy,col) {
         handShape:{ax:ux*(r0-mid),ay:0,az:hz+uz*r0,bx:ux*(r1-mid),by:0,bz:hz+uz*r1,r:W}},wire,homeClockRayHand);
     }
   },[.2,.2,seatZ]),seat:true,fx,fy,h:seatZ,wireChair:{x,y,fx,fy,seat:seatZ,back:hz}};
+}
+// Wall fixtures that used to be painted in the ice-cream parlour and the
+// burger joint, built: a rack of wafer cones in wire rings, and the kitchen
+// pass with its steel shelf, heat lamps and ticket rail. Each mounts on the
+// wall face it stands off; (fx, fy) points into the room and local u runs
+// along the wall.
+const CONE_RACK={rows:[1.32,1.58],per:6,pitch:.28,ring:.03,v:.075,stack:4,step:.02}; // (step: each cone's tip stands on the floor of the cone below)
+const WAFER_CONE=[[0,0],[0,.003],[.12,.028],[.13,.031],[.13,.027],[.02,.005],[.02,0]];
+function waferShade(seed) { // golden wafer, a diamond grid pressed into it
+  return (i,t,L)=>{
+    const a=Math.atan2(HIT.v,HIT.u),f=t/projX,r=Math.hypot(HIT.u,HIT.v);
+    const grid=Math.min(1,coveGroove(a*r*6+HIT.w*6,.08,.012,f*6)+coveGroove(a*r*6-HIT.w*6,.08,.012,f*6))*coveDetail(t,.3);
+    BG[i]=C(seed&1?ORANGE:YEL,(seed&1?3.4:3)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-grid*1.1);set(i,' ',0);return true;
+  };
+}
+function ICECREAM_CONE_RACK(x,y,fx,fy) {
+  const R=CONE_RACK,c=-fy,s=fx,holders=[];
+  for(const [row,z]of R.rows.entries())for(let k=0;k<R.per;k++)holders.push({u:(k-(R.per-1)/2)*R.pitch,z,row});
+  const half=(R.per-1)/2*R.pitch+.06,steel=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+  const wafers=[0,1,2,3].map(waferShade),ringProfile=[[0,R.ring-.003],[0,R.ring+.003],[.006,R.ring+.003],[.006,R.ring-.003],[0,R.ring-.003]];
+  const plateProfiles=new Map(R.rows.map(z=>[z,kitchenPanelProfile(.025,.006,z-.04,z+.04,.003)]));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+    for(const [n,q]of holders.entries()) {
+      const [hx,hy]=at(q.u,R.v),ring=R.ring,base=q.z-.12; // the lowest cone rests in the ring at 2.8 cm across, inside the ring's 2.7 cm hole
+      for(let k=R.stack-1;k>=0;k--)coveLathe(hx,hy,base+k*R.step,WAFER_CONE,wafers[(n+k)&3]);
+      coveLathe(hx,hy,q.z-.004,ringProfile,steel);
+      const [ax,ay]=at(q.u,R.v-ring),[bx,by]=at(q.u,.02);coveTube(ax,ay,q.z,bx,by,q.z,.004,GRAY);
+    }
+    // a steel rail along each row on two wall plates
+    for(const z of R.rows) {
+      const [rx0,ry0]=at(-half,.02),[rx1,ry1]=at(half,.02);coveTube(rx0,ry0,z,rx1,ry1,z,.008,GRAY);
+      for(const e of [-1,1]){const [px_,py_]=at(e*(half-.04),.006);drawBox({...boxAt(px_,py_,c,s,.025,.006,z-.04,z+.04),...plateProfiles.get(z)},steel,homeRayWorktop);
+        const [qx,qy]=at(e*(half-.04),.012);coveTube(qx,qy,z,px_+fx*.02,py_+fy*.02,z,.008,GRAY);}
+    }
+  }),radius:half+.1,coneRack:{x,y,fx,fy,holders,half,v:R.v,ring:R.ring}};
+}
+
+// The burger joint's pass: a hatch through to the kitchen (the opening stays
+// in the wall painter: a dim kitchen with the griddle glowing low), framed in
+// steel, with a steel pass shelf, a heat-lamp hood over it and a ticket rail.
+const BURGER_PASS={bottom:1.12,top:1.66,shelf:.24,frame:.03,hood:.2};
+function burgerPassOpening(u,z,u0,half) { // inside the hatch, for the wall painter
+  const P=BURGER_PASS;return Math.abs(u-u0)<half-P.frame&&z>P.bottom&&z<P.top-P.frame;
+}
+function BURGER_KITCHEN_PASS(x,y,half,fx,fy) {
+  const P=BURGER_PASS,c=-fy,s=fx,steel=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+  const tickets=[-.55,-.2,.3,.62].map((u,k)=>({u,h:.09+(k%2)*.02}));
+  const lamp=(i,t,L)=>{ // a red bulb glowing under the hood
+    BG[i]=C(HIT.nz< -.3?ORANGE:RED,HIT.nz< -.3?12:6+L*.2);set(i,' ',0);return true;
+  };
+  const paper=(i,t,L)=>{
+    const line=coveGroove(HIT.w,.012,.002,t/projX)*coveDetail(t,.2);
+    BG[i]=C(WHITE,6.5+L*.15-line*2);set(i,' ',0);return true;
+  };
+  const hood0=.016,projection=P.shelf+.02,railZ=P.top+.18,railRadius=.008,railPlateHalf=.035;
+  const railPlate=kitchenPanelProfile(.02,.006,railZ-railPlateHalf,railZ+railPlateHalf,.003),postProfile=kitchenPanelProfile(P.frame/2,.008,P.bottom,P.top,.003);
+  const headerProfile=kitchenPanelProfile(half-P.frame,.008,P.top-P.frame,P.top,.003),shelfProfile=kitchenTopProfile(half,P.shelf/2,P.bottom-.025,P.bottom,.006);
+  const hoodProfile=kitchenTopProfile(half-.12,(projection-hood0)/2,P.top-.02,P.top+.02,.008),lampProfile=[[0,0],[0,.028],[.03,.035],[.045,.03],[.05,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+    // tickets clipped to the rail, then the rail
+    for(const q of tickets){const [tx,ty]=at(q.u,.03);drawBox(boxAt(tx,ty,c,s,.035,.001,railZ-q.h,railZ-.005),paper);}
+    const [r0x,r0y]=at(-half+.05,.03),[r1x,r1y]=at(half-.05,.03);coveTube(r0x,r0y,railZ,r1x,r1y,railZ,.008,GRAY);
+    for(const e of [-1,1]){const u=e*(half-.1),[px_,py_]=at(u,.006),[qx,qy]=at(u,.012),[rx,ry]=at(u,.026); // its wall plates and standoffs
+      drawBox({...boxAt(px_,py_,c,s,.02,.006,railZ-railPlateHalf,railZ+railPlateHalf),...railPlate},steel,homeRayWorktop);
+      coveTube(qx,qy,railZ,rx,ry,railZ,.006,GRAY);}
+    // the heat-lamp hood: a steel box over the shelf, two lamps under it
+    const [hx,hy]=at(0,(hood0+projection)/2); // its back on the frame's face (the frame is .016 deep)
+    for(const e of [-.45,.45]){const [lx,ly]=at(e,P.shelf/2+.02);coveLathe(lx,ly,P.top-.13,lampProfile,lamp);
+      coveTube(lx,ly,P.top-.08,lx,ly,P.top-.02,.006,GRAY);}
+    drawBox({...boxAt(hx,hy,c,s,half-.12,(projection-hood0)/2,P.top-.02,P.top+.02),...hoodProfile},steel,homeRayWorktop);
+    // the pass shelf, on two brackets
+    const [sx,sy]=at(0,P.shelf/2);
+    drawBox({...boxAt(sx,sy,c,s,half,P.shelf/2,P.bottom-.025,P.bottom),...shelfProfile},steel,homeRayWorktop);
+    for(const e of [-1,1]){const [bx,by]=at(e*(half-.12),.006),[ex,ey]=at(e*(half-.12),P.shelf-.03);coveTube(bx,by,P.bottom-.16,ex,ey,P.bottom-.027,.006,GRAY);}
+    // the steel frame round the hatch, its four sides meeting at the corners
+    for(const e of [-1,1]){const [fx_,fy_]=at(e*(half-P.frame/2),.008);drawBox({...boxAt(fx_,fy_,c,s,P.frame/2,.008,P.bottom,P.top),...postProfile},steel,homeRayWorktop);}
+    const [tx,ty]=at(0,.008);drawBox({...boxAt(tx,ty,c,s,half-P.frame,.008,P.top-P.frame,P.top),...headerProfile},steel,homeRayWorktop);
+  }),box:boxAt(x+fx*projection/2,y+fy*projection/2,c,s,half,projection/2,P.bottom-.16-.006,railZ+Math.max(railRadius,railPlateHalf)),walk:true,radius:half+.1,
+    burgerPass:{x,y,half,fx,fy,shelf:P.shelf,bottom:P.bottom,top:P.top,tickets}};
+}
+// Wall fixtures that used to be painted on restaurant walls, built: the pho
+// shop's oscillating wall fans, the kissaten's wall clock and the roastery's
+// trailing plants. Each mounts on the wall face it stands off; (fx, fy)
+// points from that face into the room.
+
+// A side-on lathe (its axis along the facing) and a flat blade, drawn with
+// the wall clock's rays: homeClockRay and homeClockRayHand.
+function wallLathe(vx,vy,c,s,z,v0,profile,shade) {
+  const lo=Math.min(...profile.map(q=>q[0])),hi=Math.max(...profile.map(q=>q[0])),r=Math.max(...profile.map(q=>q[1])),mid=(lo+hi)/2;
+  drawBox({...boxAt(vx-s*(v0+mid),vy+c*(v0+mid),c,s,r,(hi-lo)/2,z-r,z+r),centerZ:z,clockShape:{x:0,y:0,profile:profile.map(([v,q])=>[v-mid,q])}},shade,homeClockRay);
+}
+const PHO_FAN={pivot:.24,cage:.2,blade:.11,width:.04,speed:9,sweep:.55,period:9,
+  front:{v:.16,hub:.03,rings:[.05,.1,.15]},back:{v:.055,hub:.05,rings:[.09,.14]},spokes:4,wire:.004,spinner:[.098,.126],shaft:[.055,.1]};
+// A straight flat bar in the plane at v, from radius r0 to r1 at angle a about the axis.
+function wallBar(at,c,s,z,v,r0,r1,a,W,thick,shade) {
+  const ux=Math.cos(a),uz=Math.sin(a),half=(r1-r0)/2,mid=(r0+r1)/2,cu=ux*mid,[bx,by]=at(cu,v);
+  drawBox({...boxAt(bx,by,c,s,Math.abs(ux)*half+W,thick,z+uz*mid-Math.abs(uz)*half-W,z+uz*mid+Math.abs(uz)*half+W),handRatio:thick/W,
+    handShape:{ax:ux*r0-cu,ay:0,az:z+uz*r0,bx:ux*r1-cu,by:0,bz:z+uz*r1,r:W}},shade,homeClockRayHand);
+}
+// The fan's heading at time t: it sweeps either side of straight out.
+function phoFanHeading(fx,fy,t,phase=0) {
+  const a=Math.atan2(fy,fx)+PHO_FAN.sweep*Math.sin(t*TAU/PHO_FAN.period+phase);
+  return [Math.cos(a),Math.sin(a)];
+}
+function PHO_WALL_FAN(x,y,z,fx,fy,phase=0) {
+  const F=PHO_FAN,plastic=(base,lv)=>(i,t,L)=>{BG[i]=C(base,lv+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const white=plastic(WHITE,3.6),blue=plastic(CYAN,2.6),wire=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  const mountProfile=kitchenPanelProfile(.06,.012,z-.24,z-.08,.006);
+  const px=x+fx*F.pivot,py=y+fy*F.pivot; // the head turns about this point on its arm
+  return {...ROOM_MODEL(px,py,(vx,vy)=>{
+    const [hx,hy]=phoFanHeading(fx,fy,T,phase),c=hy,s=-hx; // heading (hx, hy) is the lathe's +v: (-s, c)
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    // v = 0 is the middle of the motor, over the pivot. The front grille: a
+    // rim and three rings in one plane.
+    const front=F.front.v,spinner=.11,back=F.back.v,W=F.width;
+    // Each grille: rings carried on flat radial spokes, from the hub (the
+    // badge in front, the motor face behind) out into the rim. (Flat bars, not
+    // tubes: ray-traced, so they don't turn into line glyphs a few metres off.)
+    const ring=(v,r)=>wallLathe(vx,vy,c,s,z,v,[[-.002,r-.003],[-.002,r+.003],[.002,r+.003],[.002,r-.003],[-.002,r-.003]],wire);
+    for(const g of [F.front,F.back])for(let k=0;k<F.spokes;k++)wallBar(at,c,s,z,g.v,g.hub-.004,F.cage,(k+.5)*TAU/F.spokes,F.wire,.002,wire);
+    for(const r of F.front.rings)ring(front,r);
+    wallLathe(vx,vy,c,s,z,front,[[-.002,0],[-.002,.03],[.012,.03],[.012,0]],blue); // the badge on the grille's hub
+    // three blades on the spinner, turning, their tips inside the rim
+    const spin=T*F.speed;
+    for(let k=0;k<3;k++){
+      const a=spin+k*TAU/3,ux=Math.cos(a),uz=Math.sin(a),half=F.blade/2,mid=.03+half,cu=ux*mid,[bx,by]=at(cu,spinner);
+      drawBox({...boxAt(bx,by,c,s,Math.abs(ux)*half+W,.004,z+uz*mid-Math.abs(uz)*half-W,z+uz*mid+Math.abs(uz)*half+W),handRatio:.004/W,
+        handShape:{ax:ux*.03-cu,ay:0,az:z+uz*.03,bx:ux*(.03+F.blade)-cu,by:0,bz:z+uz*(.03+F.blade),r:W}},blue,homeClockRayHand);
+    }
+    wallLathe(vx,vy,c,s,z,spinner,[[-.012,0],[-.012,.035],[.012,.03],[.016,0]],white); // the spinner
+    wallLathe(vx,vy,c,s,z,F.shaft[0],[[0,0],[0,.008],[F.shaft[1]-F.shaft[0],.008],[F.shaft[1]-F.shaft[0],0]],wire); // its shaft, out of the motor
+    // rim and back grille, then the motor housing behind
+    wallLathe(vx,vy,c,s,z,back,[[-.01,F.cage-.004],[-.01,F.cage+.006],[front-back+.002,F.cage+.006],[front-back+.002,F.cage-.004],[-.01,F.cage-.004]],white);
+    for(const r of F.back.rings)ring(back,r);
+    wallLathe(vx,vy,c,s,z,-.065,[[0,0],[0,.04],[.02,.065],[.09,.07],[.115,.05],[.12,0]],white);
+    // the arm from the wall plate to the pivot under the motor, the post up
+    // into it, and the plate
+    const [wx,wy]=[vx-fx*F.pivot,vy-fy*F.pivot];
+    coveTube(wx+fx*.03,wy+fy*.03,z-.16,vx,vy,z-.11,.016,WHITE);
+    coveTube(vx,vy,z-.11,vx,vy,z-.055,.016,WHITE);
+    drawBox({...boxAt(wx+fx*.012,wy+fy*.012,-fy,fx,.06,.012,z-.24,z-.08),...mountProfile},white,homeRayWorktop);
+  }),radius:F.pivot+F.cage+.1,phoFan:{x,y,z,fx,fy,phase,px,py}};
+}
+
+// A wall clock for the coffee house: the home clock fixture, its back
+// standing on the wall face.
+function KISSATEN_CLOCK(x,y,z,fx,fy) {
+  const depth=HOME_FURNITURE.f_clock.hy,a=Math.atan2(-fx,fy); // the clock faces (-sin a, cos a)
+  return {...HOME_WALL_CLOCK({id:'f_clock',x:x+fx*depth,y:y+fy*depth,z,a}),kissatenClock:{x,y,z,fx,fy}};
+}
+
+// A trailing plant: a terracotta pot on a wall bracket, vines of leaves
+// falling down the wall in front of it.
+function trailingVines(seed) {
+  return [-1,0,1].map(k=>({off:k*.07+(hash(seed,k,1601)-.5)*.03,len:.45+hash(seed,k,1603)*.35,sway:hash(seed,k,1605)*6}));
+}
+function TRAILING_PLANT(x,y,z,fx,fy,seed=x*5+y) {
+  const c=-fy,s=fx,vines=trailingVines(seed),pot=[[0,0],[0,.05],[.01,.055],[.1,.075],[.1,.085],[.115,.085],[.115,.075],[.105,.073],[.105,0]],potV=.12;
+  const clay=(i,t,L)=>{
+    if(HIT.nz>.9&&HIT.w>z+.1&&HIT.w<z+.11){BG[i]=C(BRICK,1.2);set(i,' ',0);return true;} // the soil
+    BG[i]=C(ORANGE,1.8+L*.28*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  const leaf=k=>(i,t,L)=>{BG[i]=C(GREEN,1.8+(k%3)*.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const leaves=[];
+  // Each vine grows out of the soil, over the pot's front rim, hangs straight
+  // down in front of the pot until it's past its base, then falls back toward
+  // the wall; its leaves hang along it.
+  const reach=d=>Math.max(.03,potV+.09-d*.25);
+  for(const [n,q]of vines.entries()){
+    const d=Math.hypot(q.off,.09);
+    q.root={u:q.off*.5,v:potV+.03,z:z+.105}; // in the soil
+    q.rim={u:q.off/d*.097,v:potV+.09/d*.097,z:z+.125}; // just over the rim
+    q.knee={u:q.rim.u,v:q.rim.v+.01,z:z-.04}; // past the pot's base
+    q.end={u:q.off,v:reach(q.len),z:q.rim.z-.03-q.len};
+    const along=lz=>{const [a,b]=lz>=q.knee.z?[q.rim,q.knee]:[q.knee,q.end],f=(a.z-lz)/(a.z-b.z);return [a.u+(b.u-a.u)*f,a.v+(b.v-a.v)*f];};
+    for(let k=1;k*.06<q.len;k++){
+      const lz=q.rim.z-.03-k*.06,[u,v]=along(lz),side=Math.sin(k*1.3+q.sway)*.025;
+      leaves.push({u:u+side,v,z:lz,k:k+n});
+    }
+  }
+  const leafShades=[0,1,2].map(leaf),plateProfile=kitchenPanelProfile(.03,.006,z-.12,z+.01,.003);
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+    for(const q of leaves){const [lx,ly]=at(q.u,q.v);drawBox(boxAt(lx,ly,c,s,.03,.01,q.z-.028,q.z+.028),leafShades[q.k%3],homeRayEllipsoid);}
+    for(const q of vines){const [ax,ay]=at(q.root.u,q.root.v),[mx,my]=at(q.rim.u,q.rim.v),[kx,ky]=at(q.knee.u,q.knee.v),[bx,by]=at(q.end.u,q.end.v);
+      coveTube(ax,ay,q.root.z,mx,my,q.rim.z,.003,GREEN);coveTube(mx,my,q.rim.z,kx,ky,q.knee.z,.003,GREEN);coveTube(kx,ky,q.knee.z,bx,by,q.end.z,.003,GREEN);}
+    const [px_,py_]=at(0,potV);coveLathe(px_,py_,z,pot,clay);
+    // the bracket: a wall plate, an arm under the pot, a brace
+    const [wx,wy]=at(0,.006),[ex,ey]=at(0,potV);
+    drawBox({...boxAt(wx,wy,c,s,.03,.006,z-.12,z+.01),...plateProfile},metal,homeRayWorktop);
+    coveTube(wx+fx*.006,wy+fy*.006,z-.006,ex,ey,z-.006,.006,GRAY);
+    coveTube(wx+fx*.006,wy+fy*.006,z-.1,ex-fx*.03,ey-fy*.03,z-.008,.004,GRAY);
+  }),radius:.45,trailingPlant:{x,y,z,fx,fy,vines,leaves:leaves.map(q=>({...q})),pot:{v:potV,top:z+.115,radius:.085,inner:.073,soil:z+.105}}};
+}
+// The karaoke room's stage, speakers and screen are built: a platform with a
+// carpeted deck, a metal nosing and a lit riser; PA cabinets with corner caps,
+// a perforated steel grille and a top handle; a floor wedge monitor turned to
+// the singer; and a wall-mounted screen whose unlit case and brackets are
+// separate from the lit picture, the lyrics lighting up as they are sung.
+const KARAOKE={stage:{x:6,y:2.3,hl:2,hw:.6,top:.3,deck:.025,nosing:.02},
+  screen:{x:6,half:1.25,bottom:1.35,top:2.55,depth:.07,stand:.06},
+  speaker:{hl:.28,hw:.2,h:.9,corner:.035},
+  lyric:{w:.16,h:.22}};
+// The lyric line and how much of it has been sung, from the music's clock
+// (which may run from before zero: mod, not %, keeps the line in range).
+function karaokeLyric(t) {
+  const line=LYRICS[mod(Math.floor(t/5),LYRICS.length)];
+  return {line,sung:fract(t/5)*1.3*line.length};
+}
+function KARAOKE_STAGE_PLATFORM(neon) {
+  const {x,y,hl,hw,top,deck,nosing}=KARAOKE.stage;
+  const carpet=(i,t,L)=>{ // black stage carpet, a fine pile that fades with distance
+    const pile=hash(Math.floor(HIT.u*120),Math.floor(HIT.v*120),1501)*coveDetail(t,.3);
+    BG[i]=C(GRAY,.5+L*.05+pile*.4);set(i,' ',0);return true;
+  };
+  const riser=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.06*shadeFace(HIT.face));set(i,' ',0);return true;}; // painted black ply
+  const strip=(i,t,L)=>{ // the front board, a strip light along its top under the nosing
+    if(HIT.face===3&&HIT.w>top-deck-nosing-.03){BG[i]=C(neon,11);set(i,' ',0);return true;}
+    return riser(i,t,L);
+  };
+  const metal=(i,t,L)=>{const f=HIT.face;return coveMetal(i,L,f===1?1:f===2?-1:0,f===3?1:f===4?-1:0,f===5?1:f===6?-1:0);};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    // The front nosing caps the front board; the deck and riser stop behind
+    // them, so no two faces share a plane. (The room is on +y.)
+    drawBox(boxAt(vx,vy+hw-nosing/2,1,0,hl,nosing/2,top-deck-nosing,top),metal);
+    drawBox(boxAt(vx,vy+hw-nosing/2,1,0,hl,nosing/2,0,top-deck-nosing),strip);
+    drawBox(boxAt(vx,vy-nosing/2,1,0,hl,hw-nosing/2,top-deck,top),carpet);
+    drawBox(boxAt(vx,vy-nosing/2,1,0,hl,hw-nosing/2,0,top-deck),riser);
+  }),box:boxAt(x,y,1,0,hl,hw,0,top),radius:Math.hypot(hl,hw),karaokeStage:{x,y,hl,hw,top}};
+}
+// a PA cabinet on the floor, its grille facing (0, 1)
+function KARAOKE_SPEAKER(x,y) {
+  const {hl,hw,h,corner}=KARAOKE.speaker;
+  const cabinet=(i,t,L)=>{BG[i]=C(GRAY,.6+L*.07*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const grille=(i,t,L)=>{ // perforated steel: holes too small to see far off blend into an even grey
+    const f=t/projX,holes=Math.min(1,coveGroove(HIT.u,.008,.004,f)+coveGroove(HIT.w,.008,.004,f));
+    const badge=Math.abs(HIT.u)<.05&&Math.abs(HIT.w-(h-.11))<.012;
+    BG[i]=badge?C(WHITE,7):C(GRAY,1.6+L*.1-holes*.9);set(i,' ',0);return true;
+  };
+  const cap=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),front=hw-.012; // (the cabinet's face; the grille and caps stand proud of it to hw)
+  const grilleProfile=kitchenPanelProfile(hl-.03,.006,.05,h-.05,.004); // (fixed: built once, not every frame)
+  const feet=[[0,0],[0,.025],[.015,.022],[.015,0]],rubber=(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const ex of [-1,1])for(const ez of [0,1]){ // steel corner caps on the front corners
+      const cz=ez?h-corner:corner;coveRound(vx+ex*(hl-corner),vy+hw-corner,1,0,corner,corner,cz-corner,cz+corner,.012,cap);
+    }
+    drawBox({...boxAt(vx,vy+front+.006,1,0,hl-.03,.006,.05,h-.05),...grilleProfile},grille,homeRayWorktop); // proud of the cabinet front
+    coveTube(vx-.08,vy,h+.02,vx+.08,vy,h+.02,.012,GRAY); // the carrying handle, on two posts
+    for(const e of [-.08,.08])coveTube(vx+e,vy,h,vx+e,vy,h+.02,.01,GRAY);
+    coveRound(vx,vy-.006,1,0,hl,hw-.006,.015,h,.025,cabinet);
+    for(const ex of [-1,1])for(const ey of [-1,1])coveLathe(vx+ex*(hl-.05),vy+ey*(hw-.05),0,feet,rubber);
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.032),radius:Math.hypot(hl,hw)+.05,karaokeSpeaker:{hl,hw,h}};
+}
+// a floor wedge monitor on the stage, its sloped face turned up to the singer at -y
+function KARAOKE_MONITOR(x,y,z) {
+  const hl=.24,hw=.16,low=.08,high=.26;
+  // the slope runs from high at +y down to low at -y
+  const slope=(high-low)/(2*hw),n=Math.hypot(slope,1);
+  // (cos, sin) of the box frame are (1, 0), so local v is world y
+  const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],[0,0,-1,-z,6],[0,-slope/n,1/n,(z+(low+high)/2)/n,5]];
+  const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
+  const shade=(i,t,L)=>{
+    if(HIT.face===5){const f=t/projX,holes=Math.min(1,coveGroove(HIT.u,.008,.004,f)+coveGroove(HIT.v,.008,.004,f));BG[i]=C(GRAY,1.5+L*.1-holes*.8);set(i,' ',0);return true;}
+    BG[i]=C(GRAY,.6+L*.07*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox({...boxAt(vx,vy,1,0,hl,hw,z,z+high),planes,normals},shade,homeRayWorktop)),
+    radius:.3,karaokeMonitor:{hl,hw,z,low,high}};
+}
+// Letters as wide as fits the whole line inside the bezel.
+function karaokeLetter(line) {
+  const {half}=KARAOKE.screen;return Math.min(KARAOKE.lyric.w,(2*(half-.04)-.12)/line.length);
+}
+// The screen hangs on the back wall face at y = wallY, its picture facing +y.
+function KARAOKE_SCREEN(wallY) {
+  const {x,half,bottom,top,depth,stand}=KARAOKE.screen,{w,h}=KARAOKE.lyric,bezel=.04,mid=(bottom+top)/2;
+  const cy=wallY+stand+depth/2;
+  const caseShade=(i,t,L)=>{BG[i]=C(GRAY,.5+L*.06*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const caseProfile=kitchenPanelProfile(half,depth/2,bottom,top,.012); // (built once)
+  let cx=0,cyv=0;
+  const picture=(i,t,L)=>{
+    // a slow colour wash behind the words, and the line itself, sung part in magenta
+    const {line,sung}=karaokeLyric(T),wash=.5+.5*Math.sin(HIT.u*1.3+T*.4);
+    const lw=karaokeLetter(line),p=Math.floor(HIT.u/lw+line.length/2);
+    const ch=worldText(line,HIT.u,HIT.w,t,i,cx,cyv,mid-.12,1,0,lw,h);
+    BG[i]=C(BLUE,2+wash*1.4);set(i,ch,C(p>=0&&p<sung?MAG:WHITE,15));return true;
+  };
+  return {...ROOM_MODEL(x,cy,(vx,vy)=>{
+    cx=vx;cyv=vy+depth/2+.001;
+    drawBox(boxAt(vx,vy+depth/2+.0005,1,0,half-bezel,.0005,bottom+bezel,top-bezel),picture);
+    drawBox({...boxAt(vx,vy,1,0,half,depth/2,bottom,top),...caseProfile},caseShade,homeRayWorktop);
+    for(const e of [-.5,.5]) // the wall brackets behind it
+      drawBox(boxAt(vx+e,vy-depth/2-stand/2,1,0,.05,stand/2,mid-.2,mid+.2),(i,t,L)=>coveMetal(i,L,0,0,1));
+  }),box:boxAt(x,wallY+(stand+depth+.001)/2,1,0,half,(stand+depth+.001)/2,bottom,top),walk:true,radius:half+.1,karaokeScreen:{x,y:cy,half,bottom,top,depth,stand,wallY}};
 }
 // The sushi bar's island is built round its belt rather than four painted
 // boxes: a hinoki carcass on a recessed plinth, an eating ledge outside the
