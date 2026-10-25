@@ -185,26 +185,7 @@ Object.assign(ROOM_CEILS, {
 // ---- the grocer (GROCERY, MARKET; FRUIT is more produce): fridges down the left, an aisle of shelves, tiered stands of
 // fruit and veg, the checkout by the door with its belt running, and through the plastic strips at the back, the
 // stockroom: cartons on pallets, bananas ripening
-const PRODUCE_KINDS = [[RED, '@'], [ORANGE, 'o'], [YEL, ')'], [GREEN, 'o'], [MAG, '%'], [GREEN, 'O'], [RED, 'o'], [YEL, 'O'], [BRICK, '@'], [GREEN, '&']];
-// a stand of produce along x: three tiers of crates stepping up away from the door, each crate heaped with one thing
-function produceStand(x, y, hl, seed) {
-  return [0, 1, 2].map(k => BX(x, y - 0.3 + k * 0.3, hl, 0.15, 0, 0.95 - k * 0.22, (i, t, L) => {
-    const f = HIT.face, crate = Math.floor((HIT.u + hl) / 0.5), [col, ch] = PRODUCE_KINDS[(hash(crate, k, seed) * PRODUCE_KINDS.length) | 0];
-    if (f === 5) { BG[i] = C(col, 2 + L * 0.25); return set(i, fract((HIT.u + hl) / 0.5) < 0.06 ? '|' : hash(i, 3) > 0.35 ? ch : ' ', C(col, fract((HIT.u + hl) / 0.5) < 0.06 ? 4 : 8 + L * 0.5)), true; }
-    if (f === 3 && HIT.w > 0.95 - k * 0.22 - 0.1) { BG[i] = C(WHITE, 4); return set(i, fract((HIT.u + hl) / 0.5 - 0.5) < 0.2 ? '$' : ' ', C(GRAY, 2)), true; } // the price cards
-    BG[i] = C(BRICK, (1.2 + L * 0.25) * shadeFace(f)); return set(i, fract(HIT.w * 8) < 0.3 ? '=' : ' ', C(WARM, L * 0.6)), true; // slatted crates
-  }));
-}
-// the checkout: a counter with a belt running toward the till, a scale, the card reader
-const checkout = (x, y, hl) => [ // (along y, the cashier on the +x side)
-  BX(x, y, hl, 0.32, 0, 0.88, (i, t, L) => {
-    const f = HIT.face;
-    if (f === 5 && Math.abs(HIT.v) < 0.22) { BG[i] = C(GRAY, 0.8); return set(i, fract(HIT.u * 4 + T * 1.2) < 0.15 ? '-' : ' ', C(GRAY, 6)), true; } // the belt
-    BG[i] = C(f === 5 ? GRAY : WHITE, (1.5 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '=' : f > 2 && fract(HIT.u * 1.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.6)), true;
-  }, 0, 1),
-  BX(x + 0.05, y - hl + 0.35, 0.2, 0.22, 0.88, 0.95, solid(GRAY, { top: '#' }), 0, 1), // the scale's glass
-  BX(x + 0.22, y - hl + 0.2, 0.12, 0.15, 0.88, 1.15, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 4 || HIT.face === 2 ? '$' : '#', C(GREEN, L)), true; }, 0, 1), // the till
-];
+// (the produce stands, melon bin, baskets, crates and checkout are built: grocer-produce.js)
 ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#', '#..SS...##.###', '#..SS........#', '#..SS........#', '#............#', '#............#', '#............#', '######DD######'],
   light: 1, floor: 'tile', ceil: 'strip', sign: true, signAt: 6, keeper: [11.45, 7.6], glyphs: 'o#=@',
   wall: (i, u, uStep, z, d, mx, my, L) => {
@@ -212,20 +193,16 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
     return false; // (the fridges along the left and back walls are built: shop-fridges.js)
   },
   props: r => {
-    const fruit = r.word === 'FRUIT', p = [...checkout(10.65, 7.6, 0.85), standing(11.45, 7.6, GREEN), ...SHOP_FRIDGES.grocer(),
-      ...produceStand(8.9, 4.9, 0.9, 63), ...produceStand(8.5, 6.6, 0.8, 70), // (a clear way down from the stockroom door, and between the two) ...(fruit ? produceStand(6.5, 2.4, 0.8, 11) : []),
-      BX(12.2, 6.1, 0.5, 0.5, 0, 0.8, (i, t, L) => { // a bin of watermelons
-        const f = HIT.face; if (f === 5) { BG[i] = C(GREEN, 1.5); return set(i, hash(i, 9) > 0.5 ? 'O' : 'o', C(GREEN, 9)), true; }
-        BG[i] = C(BRICK, (1.2 + L * 0.2) * shadeFace(f)); return set(i, fract(HIT.w * 6) < 0.25 ? '=' : ' ', C(WARM, L * 0.5)), true; }),
+    const fruit = r.word === 'FRUIT', p = [CHECKOUT_COUNTER(10.65, 7.6, 0.85), standing(11.45, 7.6, GREEN), ...SHOP_FRIDGES.grocer(),
+      PRODUCE_STAND(8.9, 4.9, 0.9, 63), PRODUCE_STAND(8.5, 6.6, 0.8, 70), // (a clear way down from the stockroom door, and between the two)
+      ...(fruit ? [PRODUCE_STAND(6.5, 2.4, 0.8, 11)] : []), WATERMELON_BIN(12.2, 6.1),
       stripCurtain(10.5, 3.5, 0.5), lintelSign(10.5, 3.5, 0.5, 'STAFF', C(RED, 4), C(WHITE, 15)), // the way into the stockroom
       ...cartons(9.65, 1.5, 3, 1), ...cartons(12.4, 1.55, 4, 2), ...cartons(12.4, 2.55, 2, 3),
-      BX(10.9, 1.35, 0.35, 0.25, 0, 0.45, (i, t, L) => { if (HIT.face === 5) { BG[i] = C(YEL, 3); return set(i, ')', C(GREEN, 10)), true; } // a crate of green bananas
-        BG[i] = C(BRICK, (1.3 + L * 0.2) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 8) < 0.3 ? '=' : ' ', C(WARM, L * 0.5)), true; })];
-    for (let k = 0; k < 5; k++) p.push(BX(1.4, 8.5, 0.24, 0.18, k * 0.09, k * 0.09 + 0.08, solid(k & 1 ? RED : ORANGE, { top: '#' }))); // a stack of baskets by the door
+      KITCHEN_PRODUCE_CRATE(10.9, 1.35, 'banana'), BASKET_STACK(1.4, 8.5)]; // bananas ripening; baskets by the door
     p.push(aisleSign(8.9, 4.5, fruit ? 'FRESH FRUIT' : 'PRODUCE', C(GREEN, 4), C(WHITE, 15), 0.6));
     if (!fruit) p.push(aisleSign(4, 3.6, 'AISLE 1', C(BLUE, 4), C(WHITE, 15), 0.35));
     p.push(...shoppers([[2, 4, -1, 0], [7.2, 3.6, 1, 0], [7.2, 6, 0, -1], [5.6, 2.6, -1, 0]], 0.35));
-    p.push(BX(11.5, 2.6, 0.2, 0.17, 0, 0.38, (i, t, L) => { BG[i] = C(BRICK, (1.3 + L * 0.2) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 8) < 0.3 || HIT.face === 5 && fract(HIT.u * 5) < 0.2 ? '=' : ' ', C(WARM, L * 0.5)), true; }), SEAT(11.5, 2.6, -1, 0, 0.4)); // an upturned crate
+    p.push(UPTURNED_CRATE(11.5, 2.6, 0.4), SEAT(11.5, 2.6, -1, 0, 0.4)); // an upturned crate
     if (chance(0.4)) p.push({ ...sitting(11.5, 2.6, GREEN, 0.4), face: [-1, 0] }); // somebody on their break, on it
     return p;
   } };

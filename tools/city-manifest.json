@@ -159,6 +159,7 @@
     "city/bar-backbar.js",
     "city/bar-quality.js",
     "city/shop-gondolas.js",
+    "city/grocer-produce.js",
     "city/shop-fridges.js",
     "city/shop-display-cases.js",
     "city/izakaya-sake.js",
