@@ -79,6 +79,25 @@ function beginFurnishingPlacement(item,part=null) {
   furnishingPlacement={home,id,item,part,a:part?.a||0,held};held=-1;lockMouse();
   say(HOME_FURNITURE[id].wall?'Look at a wall to hang it. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
 }
+// Cache the authored bed pieces, then probe their actual top surfaces. The
+// conservative bed box includes pillows, which are not a flat support plane.
+const HOME_PLUSH_BEDS=new WeakMap();
+function homePlushBedSupport(p,prop) {
+ if(!furnishingOverlap(furnishingBox(p),prop.box))return null;
+ let parts=HOME_PLUSH_BEDS.get(prop);
+ if(!parts){parts=[];const draw=drawBox;drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}HOME_PLUSH_BEDS.set(prop,parts);}
+ const hit={...HIT};try{
+ const b=furnishingBox(p),d=HOME_FURNITURE[p.id],heights=[];
+ for(const u of [-d.hx,0,d.hx])for(const v of [-d.hy,0,d.hy]){
+  const x=p.x+b.c*u-b.s*v,y=p.y+b.s*u+b.c*v;
+  const height=Math.max(-Infinity,...parts.map(q=>{const t=q.ray(x,y,.9,0,0,-1,q.box);return t>.01?.9-t:-Infinity;}));
+  if(!Number.isFinite(height))return null;heights.push(height);
+ }
+ const top=Math.max(...heights);
+ if(top<.3||top>.85||Math.min(...heights)<top-.001||parts.some(q=>q.box.z1>top+.001&&furnishingOverlap(b,q.box,.003)))return null;
+ return top;
+ }finally{for(const key in HIT)if(!(key in hit))delete HIT[key];Object.assign(HIT,hit);}
+}
 function furnishingCandidate() {
   const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
   const d=HOME_FURNITURE[q.id],p={id:q.id,key:q.part?.key??-1,a:q.a,x:0,y:0,z:d.wall?1.6:0};
@@ -104,15 +123,18 @@ function furnishingCandidate() {
       if(Math.abs(p[axis]+half-(limit-1))<.3)p[axis]=limit-1-half;
     }
   }
+  let support=null;
   if(d.plush) {
     p.z=0;const footprint=furnishingBox(p);
     for(const prop of room.props)if(prop.box&&!prop.walk&&prop.furnishingKey!==p.key) {
       const b=prop.box,height=b.z1;
+      if(prop.furniture==='bed'){const top=homePlushBedSupport(p,prop);if(top!=null&&top>p.z){p.z=top;support=prop;}continue;}
       if(prop.draw&&prop.furnishingKey==null)continue;
-      if(height>.3&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01))))p.z=Math.max(p.z,height);
+      if(height>Math.max(.3,p.z)&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01)))){p.z=height;support=null;}
     }
   }
-  let reason=furnishingFit(p,room.grid,room.props);
+  const obstacles=support?room.props.map(o=>o===support?{...o,box:{...o.box,z1:p.z}}:o):room.props;
+  let reason=furnishingFit(p,room.grid,obstacles);
   if(!reason&&!d.wall&&!d.rug) {
     const obstacle=furnishingBox(p),pass=extra=>(x,y)=>room.grid[y]?.[x]==='.'&&!room.props.some(o=>o.box&&!o.walk&&!(q.part&&o.furnishingKey===q.part.key)&&inBox(o.box,x+.5,y+.5,.1))&&(!extra||!inBox(extra,x+.5,y+.5,.1));
     const from={x:room.def.entry[0],y:room.def.entry[1]},world={width:room.W,height:room.H,wrap:false};

@@ -15972,14 +15972,7 @@ function teaWall(i, u, uStep, z, d, mx, my, L) { // red and gold, with long hang
   set(i, ' ', 0); BG[i] = C(RED, 1 + L * 0.1); return true;
 }
 // a few more room kinds' worth of props
-const cabinet = (x, y, k, body) => BX(x, y, 0.35, 0.4, 0, 1.8, (i, t, L) => { // an arcade machine, screen on the front
-  const f = HIT.face, w = HIT.w;
-  BG[i] = C(body, (1 + L * 0.3) * shadeFace(f));
-  if (f === 1 && w > 1.05 && w < 1.5 && Math.abs(HIT.v) < 0.27) { BG[i] = C(NEON[k], 2); return set(i, '*@#+o~%'[hash(Math.floor(HIT.v * 12), Math.floor(w * 10), (T * 6 | 0) + k) * 7 | 0], C(NEON[(k + 1) & 3], 15)), true; }
-  if (f === 1 && w > 1.6) return set(i, '=', C(NEON[k], 15)), true; // the marquee
-  if (f === 1 && w > 0.85 && w < 0.98) return set(i, 'o', C(RED, 13)), true; // buttons
-  return set(i, ' ', 0), true;
-}, 0, 1);
+const cabinet = (x, y, k, body) => ARCADE_CABINET(x, y, 0, 1, k, body); // an arcade machine, its screen to the room (built: leisure-fittings.js)
 
 
 const homeLayout = r => r.def.home;
@@ -16032,7 +16025,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
-        p.push({ ...BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } }, BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        p.push({ ...CINEMA_ROW(cx, y, 1.75), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } });
         if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.45, true));
       }
       return p;
@@ -16456,7 +16449,8 @@ function homePlan(w, h, tier) {
   }
   const entryX = tier === 2 ? 9 : w / 2;
   wall(entryX - 1, h - 1, entryX, h - 1, 'D');
-  const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.3, half: tier ? 1 : 1.25 }];
+  // The studio's second sill clears the full-width native bookcase.
+  const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.47, half: tier ? 1 : 1.25 }];
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
   const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
     : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
@@ -16485,9 +16479,10 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
+      ...homeWindowCasings(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
@@ -16596,7 +16591,7 @@ function homeWall(i, u, uStep, z, d, mx, my, L) {
   }
   for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > (win.bottom??.85) && z < (win.top??(def.tier ? 2.95 : 2.5))) {
     const du = Math.abs(along - win.center), bottom=win.bottom??.85,top=win.top??(def.tier ? 2.95 : 2.5);
-    if (du > win.half - 0.09 || z < bottom+.1 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
+    if (!def.builtWindows && (du > win.half - 0.09 || z < bottom+.1 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035)) {
       BG[i] = C(def.tier === 2 ? WHITE : BRICK, 2 + L * 0.25); return set(i, du < 0.035 || du > win.half - 0.09 ? '|' : '=', C(WHITE, L)), true;
     }
     if(room.kind==='islandhome'){const marks=COVE_VIEW.marks.get(face)||[];if(!COVE_VIEW.marks.has(face))COVE_VIEW.marks.set(face,marks);marks.push([i,d]);BG[i]=C(CYAN,4);set(i,' ',0);}
@@ -16923,7 +16918,7 @@ function roomSprites() {
   if (home) {
     drawWorkshopPreview();
     const { pet } = homeLayout(room);
-    for(const p of homeShelfLayout())drawDropped({...p.it,displayZ:p.z,displaySize:{w:p.size.radius*2,h:p.size.height}},p.x-px,p.y-py,1);
+    for(const p of homeShelfLayout())if(!drawHomeKeepsake(p))drawDropped({...p.it,displayZ:p.z,displaySize:{w:p.size.radius*2,h:p.size.height}},p.x-px,p.y-py,1);
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
     const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
@@ -20192,21 +20187,11 @@ ROOM_DEFS.aquarium = { grid: AQUA_GRID, light: 0.55, floor: 'aqua', ceil: 'aqua'
       ? figProp(x, y, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.2 })
       : standing(x, y, shirt()));
     // the touch pool: a low rock basin, starfish and crabs and urchins in the shallows
-    p.push(BX(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw, 0, 0.75, (i, t, L) => {
-      if (HIT.face !== 5) { BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.7 ? '=' : (Math.floor(HIT.u * 6) + Math.floor(HIT.w * 6)) & 1 ? '#' : ' ', C(GRAY, L * 0.7)), true; }
-      if (Math.abs(HIT.u) > TOUCH_POOL.hl - 0.08 || Math.abs(HIT.v) > TOUCH_POOL.hw - 0.08) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, L)), true; }
-      BG[i] = C(CYAN, 2 + noise(HIT.u * 4 + T * 0.4, HIT.v * 4, 37) * 2);
-      const k = hash(Math.floor(HIT.u * 5), Math.floor(HIT.v * 5), 38);
-      return set(i, k > 0.85 ? '*' : k > 0.78 ? 'w' : k > 0.73 ? '#' : k > 0.6 ? '~' : ' ', C(k > 0.85 ? ORANGE : k > 0.78 ? RED : k > 0.73 ? MAG : WHITE, 13)), true;
-    }));
+    p.push(TOUCH_POOL_TANK(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw)); // starfish, urchins and anemones under the water (built: leisure-fittings.js)
     if (chance(0.7)) p.push(figProp(TOUCH_POOL.x + 0.4, TOUCH_POOL.y + 0.9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2, pose: 'reach', face: [-0.4, -0.9] })); // a kid, hands in the water
     // the gift shop: a counter, the keeper, a stand of plush sharks
     p.push(...counterBox(20.5, 13.95, 1.1), standing(20.5, 13.3, CYAN));
-    p.push(BX(22.4, 13.2, 0.3, 0.3, 0, 1.6, (i, t, L) => {
-      BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face));
-      if (HIT.face === 5) return set(i, ' ', 0), true;
-      return set(i, fract(HIT.w / 0.4) < 0.15 ? '=' : hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w / 0.4), 39) > 0.4 ? '<' : '@', C(fract(HIT.w / 0.4) < 0.15 ? BRICK : [GRAY, BLUE, MAG, CYAN][Math.floor(HIT.w / 0.4) & 3], 13)), true;
-    }));
+    p.push(PLUSH_STAND(22.4, 13.2)); // the stand of plush sharks, turning
     return p;
   } };
 STOCK_WORD.AQUARIUM = ['sharkplush', 'snowglobe', 'soda', 'water'];
@@ -20426,35 +20411,22 @@ function cathedralFloor(i, f, wx, wy) {
 
 ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cathedral', ceil: 'cathedral', wall: cathedralWall, keeper: [11, 4.9],
   props: r => {
-    const gold = solid(YEL, { top: '=', bright: 1.4 }), white = solid(WHITE, { top: '~', trim: 0.92 });
-    const flame = (x, y, z) => SP(x, y, 0.05, 0.12, ['*', '|'], (c, row, L) => row ? C(WHITE, 14) : C(fract(T * 7 + x * 3) < 0.5 ? YEL : ORANGE, 15), z);
-    const p = [
-      { ...BX(11, 4, 5, 2.2, 0, 0.3, solid(GRAY, { top: '.', panel: 1 })), walk: true }, // the sanctuary steps
-      BX(11, 3.1, 1.5, 0.5, 0, 1.0, white), // the altar, under its cloth
-      BX(11, 2.5, 0.06, 0.06, 1.0, 2.8, gold), BX(11, 2.5, 0.45, 0.06, 2.15, 2.3, gold), // the cross
-      BX(9.2, 3.2, 0.05, 0.05, 0, 1.5, gold), BX(12.8, 3.2, 0.05, 0.05, 0, 1.5, gold), flame(9.2, 3.2, 1.5), flame(12.8, 3.2, 1.5),
-      BX(8.65, 6.4, 1.65, 0.06, 0, 0.9, solid(BRICK, { panel: 0.3, top: '=' })), BX(13.35, 6.4, 1.65, 0.06, 0, 0.9, solid(BRICK, { panel: 0.3, top: '=' })), // the altar rail
-      BX(7.8, 7.4, 0.4, 0.4, 0, 1.3, solid(BRICK, { panel: 0.2, trim: 1.2, top: '=' })), // the pulpit
-      standing(11, 4.9, WHITE), // the priest
-      BX(11, 36, 0.5, 0.5, 0, 1.0, (i, t, L) => { // the font
-        if (HIT.face === 5) { BG[i] = C(CYAN, 2 + noise(HIT.u * 6 + T * 0.3, HIT.v * 6, 505) * 2); return set(i, Math.hypot(HIT.u, HIT.v) > 0.42 ? '#' : '~', C(WHITE, 10)), true; }
-        BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.9 ? '=' : HIT.w < 0.15 ? '#' : (Math.floor(HIT.u * 8) & 1) ? '|' : ' ', C(GRAY, L)), true;
-      }),
-      BX(19, 34, 0.8, 0.25, 0, 0.9, (i, t, L) => { // the votive stand: rows of little candles, as many lit as there are
-        if (HIT.face !== 5) { BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.84 ? '=' : ' ', C(YEL, L)), true; }
-        const slot = Math.floor((HIT.u + 0.8) / 0.2) + Math.floor((HIT.v + 0.25) / 0.17) * 8;
-        BG[i] = C(BRICK, 2);
-        return set(i, slot < room.candles ? '*' : 'i', slot < room.candles ? C(fract(T * 6 + slot * 0.37) < 0.5 ? YEL : ORANGE, 15) : C(WHITE, 8)), true;
-      }),
+    const sanctuary=.3,altar=ALTAR(11, 3.1, 1.46, .46, 1, sanctuary);
+    const p = [ // (built: cathedral-fittings.js)
+      SANCTUARY_STEPS(11, 4, 5, 2.2, sanctuary), // the sanctuary steps
+      altar, ALTAR_CROSS(11, 2.85, altar.altar.h), // the altar under its cloth, the cross on it
+      CANDLESTICK(9.2, 3.2, 1.5, sanctuary), CANDLESTICK(12.8, 3.2, 1.5, sanctuary), // candlesticks either side
+      ALTAR_RAIL(8.65, 6.4, 1.65), ALTAR_RAIL(13.35, 6.4, 1.65), // the altar rail, the way through between
+      PULPIT(7.8, 7.4, 1, 1), // the pulpit
+      {...standing(11, 4.9, WHITE), z:sanctuary}, // the priest, standing on the sanctuary
+      FONT(11, 36), // the font
+      VOTIVE_STAND(19, 34, 0.8, () => room.candles), // the votive stand: as many lit as there are
     ];
     for (let y = 11; y <= 30; y += 2.1) for (const cx of [8.8, 13.2]) { // the pews, either side of the aisle
-      p.push({ ...BX(cx, y, 1.6, 0.22, 0, 0.45, solid(BRICK, { top: '=', bright: 1.3 })), seatRow: { x0: cx - 1.4, x1: cx + 1.4, y, fx: 0, fy: -1 } },
-             BX(cx, y + 0.26, 1.6, 0.05, 0.45, 1.0, solid(BRICK, { panel: 0.4, trim: 0.94, bright: 1.3 })));
+      p.push({ ...PEW(cx, y, 1.6), seatRow: { x0: cx - 1.4, x1: cx + 1.4, y, fx: 0, fy: -1 } });
       if (chance(0.3)) p.push(sitting(cx - 1.2 + Math.random() * 2.4, y + 0.02, pick([GRAY, BLUE, BRICK, WHITE, GREEN]), 0.45, true));
     }
-    for (const y of [13, 21, 29]) p.push(SP(11, y, 0.5, 3, pad(['  |', '  |', '  |', '  |', ' _|_', '*-o-*', " \\_/"]), // chandeliers on long chains
-      (c, row, L) => c === '*' ? C(fract(T * 5 + y) < 0.5 ? YEL : ORANGE, 15) : row < 4 ? C(GRAY, L * 0.8) : C(YEL, Math.max(L, 9)), 6),
-      BX(11, y, 0.025, 0.025, 8.7, CATH_H, (i, t, L) => (set(i, fract(HIT.w * 3) < 0.5 ? '|' : ':', C(GRAY, L * 0.8)), true))); // the chain, right up to the vault
+    for (const y of [13, 21, 29]) p.push(CHANDELIER_RING(11, y, 6.4, CATH_H)); // chandeliers on long chains, right up to the vault
     for (const [x, y] of [[3, 20], [18.5, 14], [4, 33], [17, 26]]) if (chance(0.5)) p.push(standing(x, y, pick([GRAY, BLUE, BRICK, GREEN]))); // a few sightseers in the aisles
     return p;
   } };
@@ -22249,35 +22221,22 @@ function casinoCeil(i, wx, wy) { // chandeliers
 // cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
 const BJ_CARDS = [];
 for (const [u, v] of [[-0.85, 0.36], [0, 0.4], [0.85, 0.36], [-0.1, -0.3]]) for (const k of [0, 1]) BJ_CARDS.push([u + k * 0.09, v - k * 0.02, '♠♥♦♣'[(BJ_CARDS.length * 7) & 3], (BJ_CARDS.length * 7) & 3 && ((BJ_CARDS.length * 7) & 3) < 3 ? RED : GRAY]);
-const SLOT_ART = pad([' .---. ', ' |7=7| ', ' |---|o', ' |___|/', ' [###] ', ' [###] ']);
-const felt = (shade) => (i, t, L) => { // a gaming table: green felt on top, a padded rail round it, wood below
-  const f = HIT.face;
-  if (f === 5) { const s = shade && shade(i, L); if (s) return true; BG[i] = C(GREEN, 2 + L * 0.06); return set(i, ' ', 0), true; }
-  BG[i] = C(BRICK, (1 + L * 0.15) * shadeFace(f));
-  return set(i, HIT.w > 0.78 ? '=' : ' ', C(BRICK, L)), true;
-};
+// (the tables, the slots and the cage are built: leisure-fittings.js)
 ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6, floor: 'casino', ceil: 'chandelier', sign: true, signAt: CASINO_W / 2, wall: casinoWall, keeper: [11, 1.5],
   props: r => {
     const p = [...counterBox(11, 2.2, 2.4, 1.1), standing(11, 1.5, GREEN)];
-    for (const x of [8.4, 9.6, 10.8, 12, 13.2]) p.push(BX(x, 2.5, 0.03, 0.03, 1.1, 2.4, solid(YEL))); // the cage's bars
+    p.push(CASHIER_CAGE_BARS([8.4, 9.6, 10.8, 12, 13.2], 2.5, 1.1, 2.4)); // the cage's bars
     for (const [x, y] of [[5, 6.5], [17, 6.5]]) { // blackjack: cards out on the felt, the dealer behind
-      p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BX(x, y, 1.3, 0.6, 0, 0.8, felt((i, L) => {
-        const card = BJ_CARDS.find(([cu, cv]) => Math.abs(HIT.u - cu) < 0.06 && Math.abs(HIT.v - cv) < 0.085); // the hands dealt: a pair at each seat, the dealer's
-        if (card) { BG[i] = C(WHITE, 9); return set(i, Math.abs(HIT.u - card[0]) < 0.025 && Math.abs(HIT.v - card[1]) < 0.035 ? card[2] : ' ', C(card[3], 12)), true; }
-        return false; })) });
+      p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BLACKJACK_TABLE(x, y) }); // cards out on the felt, chips by the seats
       p.push({ ...standing(x, y - 0.9, WHITE), face: [0, 1] }); // the dealer, and the players across the felt from her
       for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push({ ...standing(x + ox, y + 0.95, shirt()), face: [0, -1] });
     }
-    p.push({ casino: 'roulette', cx: 11, cy: 10.4, ...BX(11, 9.3, 1.8, 0.7, 0, 0.8, felt((i, L) => { // the roulette table: the wheel at one end, spinning, the layout of numbers
-      const wx = HIT.u + 1.2, d = Math.hypot(wx, HIT.v);
-      if (d < 0.55) { const an = Math.atan2(HIT.v, wx) + T * 2; BG[i] = d < 0.15 ? C(YEL, 6) : (Math.floor(an / (Math.PI * 2) * 37 + 37) & 1) ? C(RED, 5) : C(GRAY, 1.5); return set(i, d < 0.15 ? '+' : ' ', C(YEL, 15)), true; }
-      if (HIT.u > -0.4) { BG[i] = (Math.floor((HIT.u + 0.4) * 5) + Math.floor((HIT.v + 0.7) * 3)) & 1 ? C(RED, 3) : C(GRAY, 1.5); return set(i, Math.abs(fract((HIT.u + 0.4) * 5) - 0.5) < 0.1 ? '|' : ' ', C(WHITE, 8)), true; }
-      return false; })) });
+    p.push({ casino: 'roulette', cx: 11, cy: 10.4, ...ROULETTE_TABLE(11, 9.3) }); // the wheel at one end, spinning, the layout of numbers
     p.push({ ...standing(11, 8.3, WHITE), face: [0, 1] });
     for (const ox of [-1.2, 0, 1.2]) if (chance(0.5)) p.push({ ...standing(11 + ox, 10.35, shirt()), face: [0, -1] });
     for (const x of [1.3, CASINO_W - 1.3]) for (let y = 4.5; y < CASINO_H - 2; y += 1.6) { // slot machines down both walls, lights going
       const ph = x * 3 + y;
-      p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SP(x, y, 0.75, 1.7, SLOT_ART, (c, row, L) => c === '7' ? C(RED, 15) : c === '=' && row === 1 ? C(YEL, 15) : c === 'o' ? C(RED, 14) : row === 0 ? C(NEON[(Math.floor(T * 5 + ph)) & 3], 15) : C(GRAY, Math.max(L, 8))) });
+      p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SLOT_MACHINE(x, y, x < 5 ? 1 : -1, 0, ph) });
       p.push({ ...STOOL(x + (x < 5 ? 0.7 : -0.7), y, RED, 0.45), walk: true, fx: x < 5 ? -1 : 1, fy: 0 }); // (its stool: walk past, or sit and you're at it)
       if (chance(0.3)) p.push({ ...sitting(x + (x < 5 ? 0.7 : -0.7), y, shirt(), 0.45), face: [x < 5 ? -1 : 1, 0] }); // (at the machine)
     }
@@ -23074,19 +23033,13 @@ function clubWall(i, su, uStep, z, d, mx, my, L) {
 const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
   [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
 const SEQUINS = [MAG, CYAN, YEL, RED];
-// buttoned velvet, for the chair backs: a stud in every diamond
-const tufted = (i, t, L) => {
-  BG[i] = C(MAG, (1.2 + L * 0.3) * shadeFace(HIT.face));
-  const a_ = fract(HIT.u * 9), b_ = fract(HIT.w * 9);
-  return set(i, a_ < 0.25 && b_ < 0.3 ? '*' : Math.abs(a_ - b_) < 0.12 ? '\\' : Math.abs(a_ + b_ - 1) < 0.12 ? '/' : ' ', C(MAG, L * 1.3)), true;
-};
 ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75 && Math.abs(y - 9.8) < 0.45, light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
   props: r => {
-    const p = [BX(CLUB_W / 2, 2.2, 4.5, 1.3, 0, 0.5, solid(GRAY, { top: '=', bright: 1.4 }))]; // the stage
+    const p = [CLUB_STAGE(CLUB_W / 2, 2.2, 4.5, 1.3, 0.5)]; // the stage
     p.push(...counterBox(2.2, 6, 0.9, 1.05).map(b => ({ ...b, box: { ...b.box, c: 0, s: 1 } })), standing(1.5, 6, MAG)); // the bar along the left wall, the bartender behind it
     for (let k = 0; k < 3; k++) { // three poles, a dancer on each
       const x = 5.5 + k * 3.5, col = SEQUINS[k];
-      p.push(BX(x, 2, 0.04, 0.04, 0.5, 3, solid(WHITE, { bright: 1.6 })));
+      p.push(CLUB_POLE(x, 2, 0.5, 3));
       p.push(figProp(x, 2.05, CLUB_DANCERS[k], { z: 0.5, h: 1.72, chat: false, light: 12,
         pose: () => 'dance' + mod(Math.floor(T * 1.6 + k * 1.3), FIG_DANCE.length), // (a new move every beat or so)
         tick: s => { s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } })); // (swinging round the pole, facing the way she's going)
@@ -23094,17 +23047,15 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     // little round cocktail tables, a candle on each, two velvet chairs apiece facing the stage; the punters in them, all eyes front
     const busy = 0.45 + 0.4 * barCrowd();
     for (const [x, y] of [[6, 6.4], [9.5, 6.4], [13, 6.4], [7.7, 9.2], [11.2, 9.2]]) {
-      p.push(BX(x, y, 0.32, 0.32, 0.68, 0.74, solid(GRAY, { top: '.', trim: 0.05, bright: 1.2 })), BX(x, y, 0.05, 0.05, 0, 0.68, solid(GRAY)));
-      p.push({ ...SP(x, y, 0.12, 0.14, ['*'], () => C(fract(T * 3 + x) < 0.85 ? YEL : ORANGE, 15), 0.74) }); // (the candle flickers)
+      p.push(FURNITURE_ROUND_TABLE(x, y, 0.32, 0.74, GRAY), TABLE_CANDLE(x, y, 0.74)); // (the candle flickers)
       for (const cx of [x - 0.42, x + 0.42]) {
         const cy = y + 0.55;
-        p.push({ ...BX(cx, cy, 0.22, 0.22, 0, 0.42, solid(MAG, { top: '=', bright: 1.6 })), seat: true, x: cx, y: cy, fx: 0, fy: -1, h: 0.42 }, BX(cx, cy + 0.2, 0.22, 0.04, 0.42, 0.72, tufted)); // (a low back: you can see who's in it)
+        p.push(CLUB_CHAIR(cx, cy, 0, -1), SEAT(cx, cy, 0, -1, 0.42)); // (a low back: you can see who's in it)
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }
     for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
-    p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
-    p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
+    p.push(VIP_BOOTH(15.5, 11.4, 1.55, 1.4, 2.2, -1, 0)); // the VIP booth, curtained off, its sign over the way in
     p.push({...standing(13.4, 10.2, GRAY),service:'vip'}); // the host by the curtain
     p.push({ vm: { kind: 'CIGARETTES', c: 0, s: 1, fs: -1 }, x: 1.4, y: 9.8 }); // a cigarette machine by the bar, the same as the ones on the street
     return p;
@@ -37813,6 +37764,311 @@ function SEAFOOD_TANK_UNIT(x,y,half,fx=1,fy=0,seed=7) {
   }),box:boxAt(cx,cy,c,s,half,hw,0,T_.hood),radius:Math.hypot(half,hw)+.05,
     seafoodTank:{x,y,half,fx,fy,depth,inner,floor,water:T_.water,top:T_.top,fish,lobsters,bubbles:bubbles.length}};
 }
+// Leisure interiors (pass 10): the cinema's seat rows, the arcade's cabinets
+// and the casino's tables and machines, built. A part helper turns each model
+// to face (fx,fy): u across it, v toward its front.
+const leisurePart=(vx,vy,c,s)=>(u,v,hl,hw,z0,z1,shade,r=0)=>{
+  const x=vx+c*u-s*v,y=vy+s*u+c*v;
+  if(r)coveRound(x,y,c,s,hl,hw,z0,z1,r,shade);
+  else drawBox(boxAt(x,y,c,s,hl,hw,z0,z1),(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);});
+};
+const leisurePaint=(col,base,spread=.3)=>(i,t,L)=>{BG[i]=C(col,base+L*spread*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+// A row of cinema seats along x facing (0,-1): each seat a cushion and a
+// back, armrests between them on their standards, end panels.
+function CINEMA_ROW(x,y,hl,col=RED) {
+  const n=Math.max(1,Math.floor(hl*2/.52)),pitch=hl*2/n,plush=leisurePaint(col,2.2,.35),frame=leisurePaint(GRAY,1,.15);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=0;k<n;k++){const u=-hl+pitch*(k+.5);
+      coveRound(vx+u,vy-.02,1,0,pitch/2-.04,.22,.36,.45,.04,plush); // the cushion
+      coveRound(vx+u,vy+.27,1,0,pitch/2-.04,.07,.42,1.0,.05,plush);} // the back
+    for(let k=0;k<=n;k++){const end=k===0||k===n,u=end?(k?hl-.02:-hl+.02):-hl+pitch*k;
+      coveRound(vx+u,vy+.06,1,0,end?.02:.025,end?.3:.24,0,end?.75:.36,.008,frame); // a standard (or the row's end panel, flush with its end)
+      if(!end)coveRound(vx+u,vy+.04,1,0,.03,.23,.6,.64,.012,frame);} // its armrest
+  }),box:boxAt(x,y+.05,1,0,hl,.31,0,1.0),radius:hl+.3,cinemaRow:{n,pitch}};
+}
+// An arcade cabinet facing (fx,fy): side panels, the coin door, the control
+// deck with its stick and buttons, the screen in its bezel playing, the lit marquee.
+function ARCADE_CABINET(x,y,fx,fy,k,body) {
+  const c=fy,s=-fx,side=leisurePaint(body,1.2,.3),black=leisurePaint(GRAY,.5,.1);
+  const screen=(i,t,L)=>{if(HIT.face!==3)return black(i,t,L);BG[i]=C(NEON[k],2);
+    return set(i,'*@#+o~%'[hash(Math.floor(HIT.u*24),Math.floor(HIT.w*20),(T*6|0)+k)*7|0],C(NEON[(k+1)&3],15)),true;};
+  const marquee=(i,t,L)=>{BG[i]=C(NEON[(k+2)&3],5+Math.sin(T*3+k)*.8);set(i,' ',0);return true;};
+  const coin=(i,t,L)=>{BG[i]=C(GRAY,.8);return set(i,HIT.face===3&&Math.abs(HIT.w-.55)<.02&&Math.abs(HIT.u)<.04?'=':' ',C(RED,12)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    for(const e of [-1,1])part(e*.33,-.02,.02,.38,0,1.8,side,.01); // the side panels
+    part(0,-.38,.31,.02,0,1.8,side); // the back
+    part(0,.33,.31,.03,0,.8,coin); // the coin door
+    part(0,.3,.31,.12,.86,.92,black,.012); // the control deck
+    coveTube(vx-c*.1-s*.32,vy-s*.1+c*.32,.92,vx-c*.1-s*.32,vy-s*.1+c*.32,1.0,.008); // the stick
+    coveLathe(vx-c*.1-s*.32,vy-s*.1+c*.32,.99,[[0,0],[0,.015],[.02,.02],[.04,0]],leisurePaint(RED,3.4)); // its ball
+    for(const j of [0,1,2])coveLathe(vx+c*(.04+j*.07)-s*.33,vy+s*(.04+j*.07)+c*.33,.92,[[0,0],[0,.016],[.012,.016],[.012,0]],leisurePaint(NEON[(k+j)&3],4));
+    part(0,.12,.31,.02,1.0,1.55,screen); // the screen, set back in the cabinet
+    part(0,.16,.31,.02,.92,1.0,black); part(0,.16,.31,.02,1.55,1.6,black); // its bezel above and below
+    part(0,.12,.31,.12,1.6,1.8,marquee); // the marquee
+  }),box:boxAt(x,y,c,s,.35,.42,0,1.8),radius:.6,arcade:{fx,fy,k}};
+}
+// The cashier's cage bars: brass rods from the counter top up to the head rail.
+function CASHIER_CAGE_BARS(xs,y,z0,z1) {
+  return {...ROOM_MODEL(xs[0],y,(vx,vy)=>{const dxs=xs.map(x=>x-xs[0]);
+    for(const d of dxs)coveTube(vx+d,vy,z0,vx+d,vy,z1,.015,YEL);
+    coveTube(vx+dxs[0]-.1,vy,z1,vx+dxs.at(-1)+.1,vy,z1,.02,YEL);}),cage:true};
+}
+// A gaming table: a wood base, a padded rail round a felt top let in below it.
+function gamingTable(vx,vy,hl,hw,h,felt) {
+  coveRound(vx,vy,1,0,hl-.15,hw-.15,0,h-.08,.04,'wood'); // the base meets the underside of the rail
+  coveRound(vx,vy,1,0,hl,hw,h-.08,h,.04,leisurePaint(BRICK,1.4,.3)); // the padded rail
+  drawBox(boxAt(vx,vy,1,0,hl-.08,hw-.08,h-.08,h+.001),felt); // the felt, just proud of the rail's inside
+}
+// Blackjack: the dealt hands as cards on the felt, chip stacks by each seat.
+function BLACKJACK_TABLE(x,y,hl=1.3,hw=.6,h=.8) {
+  const felt=(i,t,L)=>{BG[i]=C(GREEN,2+L*.06);set(i,' ',0);return true;};
+  const cards=BJ_CARDS.map(([u,v,suit,col])=>({u,v,suit,col}));
+  const card=q=>(i,t,L)=>{BG[i]=C(WHITE,9);return set(i,HIT.face===5&&Math.abs(HIT.u)<.025&&Math.abs(HIT.v)<.035&&coveDetail(t,.1)>.3?q.suit:' ',C(q.col,12)),true;};
+  const chip=[[0,0],[0,.02],[.006,.02],[.006,0]],chips=[[-.8,.45,RED],[0,.48,BLUE],[.8,.45,GREEN],[-.4,-.35,YEL],[.4,-.35,WHITE]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const q of cards)drawBox(boxAt(vx+q.u,vy+q.v,1,0,.04,.06,h+.001,h+.004),card(q)); // the hands, lying on the felt
+    for(const [u,v,col] of chips)for(let j=0;j<3;j++)coveLathe(vx+u,vy+v,h+.001+j*.006,chip,leisurePaint(col,3.2)); // chips, stacked on the felt
+    gamingTable(vx,vy,hl,hw,h,felt);
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.02),radius:Math.hypot(hl,hw),gaming:{h,cards:cards.length}}; // (the box takes in the chips)
+}
+// Roulette: the wheel sunk in a bowl at one end, spinning, the ball running
+// round it; the layout of numbers on the felt.
+function ROULETTE_TABLE(x,y,hl=1.8,hw=.7,h=.8) {
+  const wx=-1.2,bowl=[[0,0],[0,.5],[.06,.52],[.06,.46],[.02,.42],[.02,0]];
+  const wheel=(i,t,L)=>{const d=Math.hypot(HIT.u,HIT.v),an=Math.atan2(HIT.v,HIT.u)+T*2;
+    if(d<.12){BG[i]=C(YEL,6);return set(i,'+',C(YEL,15)),true;}
+    BG[i]=(Math.floor(an/TAU*37+37)&1)?C(RED,5):C(GRAY,1.5);set(i,' ',0);return true;};
+  const felt=(i,t,L)=>{if(HIT.u<-.4){BG[i]=C(GREEN,2+L*.06);set(i,' ',0);return true;}
+    BG[i]=(Math.floor((HIT.u+.4)*5)+Math.floor((HIT.v+.7)*3))&1?C(RED,3):C(GRAY,1.5);return set(i,Math.abs(fract((HIT.u+.4)*5)-.5)<.1?'|':' ',C(WHITE,8)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const a=T*-3.1;coveLathe(vx+wx+Math.cos(a)*.38,vy+Math.sin(a)*.38,h+.02,[[0,0],[0,.012],[.012,.012],[.024,0]],leisurePaint(WHITE,6)); // the ball
+    coveLathe(vx+wx,vy,h+.005,[[0,0],[0,.4],[.012,.4],[.012,0]],wheel); // the wheel
+    coveLathe(vx+wx,vy,h-.05,bowl,(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,9)); // its bowl
+    gamingTable(vx,vy,hl,hw,h,felt);
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.06),radius:Math.hypot(hl,hw),gaming:{h}};
+}
+// A slot machine facing (fx,fy): a rounded cabinet, the reels turning behind
+// their window, the lit topper, the coin tray and the lever on the side.
+function SLOT_MACHINE(x,y,fx,fy,ph) {
+  const c=fy,s=-fx,body=leisurePaint(GRAY,1.6,.3),reel=[[-.05,0],[-.05,.09],[.05,.09],[.05,0]];
+  const reelShade=k=>(i,t,L)=>{const a=Math.atan2(HIT.w-1.12,HIT.u)+T*(6+k)+ph,sym=Math.floor(a/TAU*8+80)%4;
+    BG[i]=C(WHITE,7);return set(i,fract(a/TAU*8)<.5?'7@$*'[sym]:' ',C([RED,YEL,GREEN,MAG][sym],14)),true;};
+  const topper=(i,t,L)=>{BG[i]=C(NEON[Math.floor(T*5+ph)&3],6);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    part(0,0,.3,.3,0,1.0,body,.04); // the cabinet below the window
+    part(0,-.09,.3,.21,1.0,1.35,body,.03); // and behind the reels
+    for(const e of [-1,1])part(e*.28,.21,.02,.09,1.0,1.35,body,.008); // the window's cheeks
+    part(0,.21,.3,.09,1.24,1.35,body,.01); // its head
+    part(0,.02,.32,.28,1.35,1.6,topper,.08); // the topper
+    for(const k of [-1,0,1]){const [rx,ry]=[vx+c*k*.11-s*.22,vy+s*k*.11+c*.22];
+      drawBox({...boxAt(rx,ry,-s,c,.05,.09,1.03,1.21),centerZ:1.12,clockShape:{x:0,y:0,profile:reel}},reelShade(k+1),homeClockRay);} // the reels, axles across
+    part(0,.31,.3,.02,.98,1.01,body,.006); // the window's sill
+    part(0,.31,.22,.06,.45,.5,body,.01); // the coin tray
+    coveTube(vx+c*.285,vy+s*.285,.95,vx+c*.34,vy+s*.34,.95,.012); // the lever pivot, seated in the cabinet
+    coveTube(vx+c*.34,vy+s*.34,.95,vx+c*.34,vy+s*.34,1.35,.012); // the lever
+    coveLathe(vx+c*.34,vy+s*.34,1.34,[[0,0],[0,.03],[.04,.035],[.07,0]],leisurePaint(RED,3.6)); // its knob
+  }),box:boxAt(x,y,c,s,.38,.37,0,1.6),radius:.5,slot:{fx,fy}};
+}
+// The club's stage: a plinth with a lit nosing chasing along its edge.
+function CLUB_STAGE(x,y,hl,hw,h) {
+  const top=leisurePaint(GRAY,1.6,.3),nosing=(i,t,L)=>{const k=Math.floor((HIT.u+hl)*4+T*6);BG[i]=C(NEON[k&3],8);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,0,h-.03,.02,top);
+    coveRound(vx,vy,1,0,hl,hw,h-.03,h,.012,leisurePaint(GRAY,2.6,.3)); // the boards
+    drawBox(boxAt(vx,vy+hw+.006,1,0,hl-.03,.006,h-.08,h-.045),nosing); // the light strip along the front
+  }),box:boxAt(x,y,1,0,hl,hw+.012,0,h),radius:Math.hypot(hl,hw),stage:{h}};
+}
+// A dance pole from the stage at z0 to the ceiling, with its flanges.
+function CLUB_POLE(x,y,z0,z1) {
+  const chrome=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,z0,[[0,0],[0,.07],[.015,.06],[.03,.022],[.03,0]],chrome); // the base flange
+    coveTube(vx,vy,z0+.03,vx,vy,z1-.03,.022,WHITE);
+    coveLathe(vx,vy,z1-.03,[[0,0],[0,.022],[.015,.06],[.03,.07],[.03,0]],chrome); // the ceiling flange
+  }),box:boxAt(x,y,1,0,.07,.07,z0,z1),radius:.1,pole:{z0,z1}};
+}
+// A candle in its glass on a table top at z, the flame flickering.
+function TABLE_CANDLE(x,y,z) {
+  const glass=(i,t,L)=>{if(Math.abs(HIT.nx*dx+HIT.ny*dy)>.4&&HIT.w>z+.01)return false;BG[i]=C(RED,1.6);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const f=fract(T*3+x)<.85;
+    foodOval(vx,vy,z+.045,.008,.008,f?.03:.024,(i,t,L)=>{BG[i]=C(f?YEL:ORANGE,15);set(i,' ',0);return true;}); // the flame
+    coveLathe(vx,vy,z,[[0,0],[0,.025],[.04,.024],[.04,0]],leisurePaint(WHITE,4)); // the candle
+    coveLathe(vx,vy,z,[[0,0],[0,.04],[.07,.042],[.07,.036],[.006,.034],[.006,0]],glass); // its glass, clear but for the rim and a tint
+  }),box:boxAt(x,y,1,0,.042,.042,z,z+.08),radius:.06,candle:{z}};
+}
+// A low velvet club chair facing (fx,fy): a cushion on short legs, a
+// buttoned back.
+function CLUB_CHAIR(x,y,fx,fy,col=MAG,h=.42) {
+  const c=fy,s=-fx,velvet=leisurePaint(col,1.6,.35);
+  const tufted=(i,t,L)=>{const a=fract(HIT.u*9),b=fract(HIT.w*9),stud=a<.25&&b<.3&&coveDetail(t,.15)>.3;
+    BG[i]=C(col,1.4+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)-(stud?.6:0));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    for(const e of [-1,1])for(const f of [-1,1])part(e*.16,f*.16,.02,.02,0,h-.12,GRAY,.006); // the legs
+    part(0,0,.22,.22,h-.12,h,velvet,.04); // the cushion
+    part(0,-.19,.22,.04,h,.72,tufted,.03); // the buttoned back
+  }),box:boxAt(x,y,c,s,.22,.23,0,.72),radius:.32,clubChair:{h}};
+}
+// The VIP booth: velvet walls on three sides, a curtain across the front in
+// folds, parted at the middle, a lit VIP sign over it. Its front faces (fx,fy).
+function VIP_BOOTH(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,velvet=leisurePaint(MAG,.8,.2),n=Math.round(hl*2/.14);
+  const fold=k=>leisurePaint(RED,1+(k&1)*.5,.3);
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'VIP',0,h+.11,.06,.09,C(YEL,15),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    part(0,-hw+.03,hl,.03,0,h,velvet); for(const e of [-1,1])part(e*(hl-.03),0,.03,hw,0,h,velvet); // the walls
+    part(0,0,hl,hw,h-.03,h,velvet); // its ceiling
+    for(let k=0;k<n;k++){const u=-hl+.06+(hl*2-.12)*(k+.5)/n;if(Math.abs(u)<.18)continue; // the parting
+      part(u,hw-.04+((k&1)?.012:0),(hl*2-.12)/n/2+.004,.028,.02,h-.06,fold(k),.026);}
+    coveTube(vx-c*hl-s*(hw-.04),vy-s*hl+c*(hw-.04),h-.04,vx+c*hl-s*(hw-.04),vy+s*hl+c*(hw-.04),h-.04,.012); // the curtain rail
+    part(0,hw+.02,.35,.02,h+.02,h+.2,sign,.01); // the sign
+  }),box:boxAt(x,y,1,0,Math.abs(c)*hl+Math.abs(s)*hw,Math.abs(s)*hl+Math.abs(c)*hw+.04,0,h+.2),radius:Math.hypot(hl,hw),vip:{fx,fy}};
+}
+// The aquarium's touch pool: a tiled basin, its rim at hand height, water you
+// can see down through to the sand and what lives on it.
+function TOUCH_POOL_TANK(x,y,hl,hw,h=.75) {
+  const rim=.08,floor=.42,water=h-.05,tile=(i,t,L)=>{const g=coveGroove(HIT.u+HIT.w,.15,.01,t/projX)*coveDetail(t,.2);BG[i]=C(GRAY,1.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-g*.6);set(i,' ',0);return true;};
+  const sand=(i,t,L)=>{BG[i]=C(STONE,2.2+hash(Math.floor(HIT.u*40),Math.floor(HIT.v*40),41)*.6);set(i,' ',0);return true;};
+  const ripple=(i,t,L)=>{const n=noise(HIT.u*4+T*.4,HIT.v*4,37);if(n<.62)return false;BG[i]=C(CYAN,2+n*2);return set(i,'~',C(WHITE,10)),true;}; // (clear but for the ripples)
+  const life=[];
+  for(let k=0;k<9;k++)life.push({u:(hash(k,1,40)-.5)*(hl-rim-.15)*2,v:(hash(k,2,40)-.5)*(hw-rim-.12)*2,kind:k%3});
+  const star=(i,t,L)=>{BG[i]=C(ORANGE,3.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const urchin=(i,t,L)=>{const spine=fract(Math.atan2(HIT.v,HIT.u)*3+HIT.w*40)<.4;BG[i]=C(MAG,(spine?1.2:2)+L*.25);set(i,' ',0);return true;};
+  const anemone=(i,t,L)=>{BG[i]=C(RED,2.8+Math.sin(T*2+HIT.w*60)*.4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,water-.004,water),ripple); // the water's surface
+    for(const q of life){const px_=vx+q.u,py_=vy+q.v;
+      if(q.kind===0)for(let a=0;a<5;a++){const an=a*TAU/5;foodOval(px_+Math.cos(an)*.035,py_+Math.sin(an)*.035,floor,.04,.014,.012,star,Math.cos(an),Math.sin(an));} // a starfish
+      else if(q.kind===1)foodOval(px_,py_,floor,.04,.04,.05,urchin); // an urchin
+      else coveLathe(px_,py_,floor,[[0,0],[0,.03],[.05,.022],[.08,.04],[.08,0]],anemone);} // an anemone
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,floor-.02,floor),gondolaFlatOr(sand)); // the sand
+    for(const e of [-1,1]){coveRound(vx,vy+e*(hw-rim/2),1,0,hl,rim/2,0,h,.01,tile);coveRound(vx+e*(hl-rim/2),vy,1,0,rim/2,hw-rim,0,h,.01,tile);} // the basin's walls
+    coveRound(vx,vy,1,0,hl-rim,hw-rim,0,floor-.02,.005,tile); // its floor
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),touchPool:{floor,water,h,life:life.length}};
+}
+const gondolaFlatOr=shade=>(i,t,L)=>{HIT.nx=0;HIT.ny=0;HIT.nz=1;return shade(i,t,L);};
+// A spinner stand of plush sharks: a pole, three round shelves, the sharks
+// lying round each with their fins up.
+function PLUSH_STAND(x,y) {
+  const shelves=[.45,.95,1.45],wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,39);
+  const plush=col=>(i,t,L)=>{const belly=HIT.nz<-.2;BG[i]=C(belly?WHITE:col,(belly?3.6:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [k,z] of shelves.entries())for(let j=0;j<5;j++){const a=j*TAU/5+k*.6+T*.2,col=[GRAY,BLUE,MAG,CYAN][(j+k)&3],sx=vx+Math.cos(a)*.18,sy=vy+Math.sin(a)*.18,c=-Math.sin(a),s=Math.cos(a),sh=plush(col);
+      foodOval(sx,sy,z+.02,.11,.04,.07,sh,c,s); // the body, lying round the shelf
+      foodOval(sx,sy,z+.07,.025,.008,.05,sh,c,s);} // its fin
+    for(const z of shelves)coveLathe(vx,vy,z,[[0,0],[0,.3],[.02,.3],[.02,0]],wood); // the shelves
+    coveTube(vx,vy,0,vx,vy,1.6,.02,GRAY);coveLathe(vx,vy,0,[[0,0],[0,.22],[.03,.2],[.03,0]],wood); // the pole, its foot
+  }),box:boxAt(x,y,1,0,.3,.3,0,1.6),radius:.35,plushStand:{shelves}};
+}
+// The cathedral's fittings, built: the sanctuary steps, the altar under its
+// cloth with its cross and candlesticks, the altar rail, the pulpit, the
+// font, the votive stand, the pews and the chandeliers on their chains.
+const cathStone=(i,t,L)=>{const g=coveGroove(HIT.w,.3,.006,t/projX)*coveDetail(t,.3);BG[i]=C(GRAY,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-g*.5);set(i,' ',0);return true;};
+const cathGold=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
+const cathOak=seed=>(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed);
+const cathFlame=(x,y,z)=>{const f=fract(T*7+x*3)<.5;foodOval(x,y,z,.01,.01,f?.035:.028,(i,t,L)=>{BG[i]=C(f?YEL:ORANGE,15);set(i,' ',0);return true;});};
+// Two broad steps up to the sanctuary, each with a rounded nosing.
+function SANCTUARY_STEPS(x,y,hl,hw,h) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy-.15,1,0,hl,hw-.15,h/2,h,.02,cathStone); // the upper step
+    coveRound(vx,vy,1,0,hl,hw,0,h/2,.02,cathStone); // the lower
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),walk:true,steps:{h}};
+}
+// The altar: a stone block, its cloth laid over the top and hanging down the front.
+function ALTAR(x,y,hl,hw,h,base=0) {
+  h+=base;
+  const cloth=(i,t,L)=>{const hem=HIT.w<h-.32&&HIT.w>h-.36;BG[i]=C(hem?YEL:WHITE,(hem?4:4.4)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl+.02,hw+.02,h-.01,h+.006,.004,cloth); // the cloth on top
+    coveRound(vx,vy+hw+.01,1,0,hl-.1,.008,h-.4,h-.01,.003,cloth); // and down the front
+    coveRound(vx,vy,1,0,hl,hw,base+.06,h-.01,.015,cathStone); coveRound(vx,vy,1,0,hl+.04,hw+.04,base,base+.06,.01,cathStone); // the block, its plinth
+  }),box:boxAt(x,y,1,0,hl+.04,hw+.04,base,h+.006),radius:Math.hypot(hl,hw),altar:{h:h+.006}};
+}
+// A gold cross standing on a base at z.
+function ALTAR_CROSS(x,y,z,h=1.8,arm=.45) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.12,.08,z,z+.06,.01,cathGold); // its base
+    coveRound(vx,vy,1,0,.04,.04,z+.06,z+h,.008,cathGold); // the upright
+    coveRound(vx,vy,1,0,arm,.04,z+h*.62,z+h*.62+.1,.008,cathGold); // the arms
+  }),box:boxAt(x,y,1,0,arm,.08,z,z+h),radius:arm,cross:{z}};
+}
+// A floor candlestick: a spread foot, a turned stem, a drip pan, the candle and its flame.
+function CANDLESTICK(x,y,h=1.5,base=0) {
+  const stem=[[0,0],[0,.16],[.04,.14],[.08,.04],[.6,.03],[.65,.05],[.7,.03],[h-.12,.025],[h-.1,.07],[h-.08,.07],[h-.08,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    cathFlame(vx,vy,base+h+.14);
+    coveLathe(vx,vy,base+h-.08,[[0,0],[0,.022],[.22,.02],[.22,0]],(i,t,L)=>{BG[i]=C(WHITE,5+L*.2);set(i,' ',0);return true;}); // the candle
+    coveLathe(vx,vy,base,stem,cathGold);
+  }),box:boxAt(x,y,1,0,.16,.16,base,base+h+.18),radius:.2,candlestick:{h}};
+}
+// The altar rail along x: a kneeler step, turned balusters, the top rail.
+function ALTAR_RAIL(x,y,hl,h=.9) {
+  const oak=cathOak(17),n=Math.round(hl*2/.18);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,.07,h-.06,h,.015,oak); // the rail
+    for(let k=0;k<=n;k++)coveLathe(vx-hl+.03+(hl*2-.06)*k/n,vy,.12,[[0,0],[0,.025],[.15,.035],[.35,.022],[.55,.03],[h-.18,.025],[h-.18,0]],oak); // the balusters
+    coveRound(vx,vy,1,0,hl,.07,0,.12,.01,oak); // the sill they stand on
+    coveRound(vx,vy+.25,1,0,hl,.12,0,.14,.04,(i,t,L)=>{BG[i]=C(RED,1.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}); // the kneeler, on the people's side
+  }),box:boxAt(x,y+.13,1,0,hl,.26,0,h),radius:hl+.1,rail:{h}};
+}
+// The pulpit: a tub on a stem, a sloping book rest on its rim.
+function PULPIT(x,y,fx,fy) {
+  const length=Math.hypot(fx,fy)||1;fx/=length;fy/=length;
+  const oak=cathOak(23),tub=[[0,0],[0,.22],[.06,.18],[.08,.12],[.55,.14],[.62,.38],[1.15,.4],[1.2,.42],[1.2,.36],[.7,.34],[.7,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,0,tub,oak);
+    for(let k=0;k<3;k++)coveRound(vx+fx*(.34-k*.04),vy+fy*(.34-k*.04),fy,-fx,.16,.06,1.2+k*.03,1.23+k*.03,.006,oak); // the book rest, stepped back up
+  }),box:boxAt(x,y,1,0,.42,.42,0,1.32),radius:.45,pulpit:{fx,fy}};
+}
+// The font: a stone bowl on a pedestal, holy water still in it.
+function FONT(x,y,h=1.0) {
+  const bowl=[[0,0],[0,.3],[.08,.26],[.12,.14],[.55,.12],[.62,.42],[h,.5],[h,.44],[h-.12,.38],[h-.12,0]];
+  const water=(i,t,L)=>{BG[i]=C(CYAN,2+noise(HIT.u*6+T*.3,HIT.v*6,505)*2);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,h-.10,[[0,0],[0,.38],[.001,.38],[.001,0]],water);
+    coveLathe(vx,vy,0,bowl,cathStone);
+  }),box:boxAt(x,y,1,0,.5,.5,0,h),radius:.55,font:{h}};
+}
+// The votive stand: a sloped rack in three tiers of tealights, as many lit
+// as candles have been lit today (count()).
+function VOTIVE_STAND(x,y,hl,count) {
+  const oak=cathOak(29),tiers=[.7,.78,.86],slots=[];
+  tiers.forEach((z,row)=>{for(let k=0;k<8;k++)slots.push({u:-hl+.1+k*(hl*2-.2)/7,v:.15-row*.12,z});});
+  const cup=[[0,0],[0,.025],[.03,.027],[.03,.022],[.012,.02],[.012,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const lit=count();
+    slots.forEach((q,n)=>{const px_=vx+q.u,py_=vy+q.v;if(n<lit)cathFlame(px_,py_,q.z+.025);
+      coveLathe(px_,py_,q.z,cup,n<lit?(i,t,L)=>{BG[i]=C(RED,4+fract(T*6+n*.37)*1.5);set(i,' ',0);return true;}:leisurePaint(WHITE,3.4));});
+    tiers.forEach((z,row)=>coveRound(vx,vy+.15-row*.12,1,0,hl,.06,.66,z,.006,oak)); // the tiers
+    coveRound(vx,vy,1,0,hl,.25,0,.66,.02,oak); // the stand
+  }),box:boxAt(x,y,1,0,hl,.25,0,.92),radius:hl+.1,votive:{slots:slots.length}};
+}
+// A pew along x facing (0,-1): the seat, the back with a book ledge, carved
+// ends with finials, and on the floor behind it a kneeler for the row behind.
+function PEW(x,y,hl) {
+  const oak=cathOak(31);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl-.04,.22,.4,.45,.015,oak); // the seat
+    coveRound(vx,vy+.26,1,0,hl-.04,.04,.45,1.0,.015,oak); // the back
+    coveRound(vx,vy+.26,1,0,hl-.04,.05,.88,.92,.012,oak); // the book ledge along its top, for the row behind
+    for(const e of [-1,1]){coveRound(vx+e*(hl-.03),vy+.04,1,0,.03,.28,0,1.0,.012,oak); // the carved ends
+      coveLathe(vx+e*(hl-.03),vy+.04,1.0,[[0,0],[0,.035],[.04,.04],[.07,0]],oak);} // their finials
+    for(const e of [-1,1])coveRound(vx+e*(hl-.12),vy+.48,1,0,.04,.04,0,.06,.008,oak); // the kneeler's feet
+    coveRound(vx,vy+.48,1,0,hl-.04,.08,.06,.14,.03,(i,t,L)=>{BG[i]=C(RED,1.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}); // the kneeler, for the row behind
+  }),box:boxAt(x,y+.13,1,0,hl,.43,0,1.07),radius:hl+.2,pew:true};
+}
+// A chandelier hung from the vault on its chain: a gilt ring of arms, a
+// candle and flame on each.
+function CHANDELIER_RING(x,y,z,top,r=.4,arms=6) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=0;k<arms;k++){const a=k*TAU/arms,ax=vx+Math.cos(a)*r,ay=vy+Math.sin(a)*r;
+      cathFlame(ax,ay,z+.14);
+      coveLathe(ax,ay,z+.02,[[0,0],[0,.016],[.12,.015],[.12,0]],leisurePaint(WHITE,5)); // the candle
+      coveLathe(ax,ay,z,[[0,0],[0,.04],[.02,.04],[.02,0]],cathGold); // its cup
+      coveTube(vx,vy,z-.1,ax,ay,z,.01,YEL);} // the arm
+    coveLathe(vx,vy,z-.25,[[0,0],[0,.03],[.1,.08],[.18,.03],[.2,0]],cathGold); // the boss
+    coveTube(vx,vy,z-.05,vx,vy,top,.012,GRAY); // the chain, right up to the vault
+  }),chandelier:{z,top,r}};
+}
 // Two wall-mounted boards carry distinct sealed sake bottles. Board tops set
 // every bottle foot and guard height; brackets derive from the same underside.
 const SAKE_SHELF={half:2.6,depth:.115,thickness:.035,levels:[1.15,1.75],brackets:[-2.2,0,2.2]};
@@ -38486,6 +38742,59 @@ function homeShelfTake(p) {
   const home=homeRecord(),k=home.decor.indexOf(p.it);if(k<0)return;
   const it=home.decor.splice(k,1)[0];delete it.shelfPlacement;carryItem(it,false);saveGame();say(`You take the ${itemName(it)} down.`,3);
 }
+// Small home keepsakes share the shelf's existing saved footprint and facing.
+// Static shapes cache per inventory object; placement and taking remain in the
+// shelf system, so the displayed model cannot enlarge its reserved space.
+const HOME_KEEPSAKE_MODELS=new WeakMap();
+function homeKeepsakeModel(it,size) {
+ const cached=HOME_KEEPSAKE_MODELS.get(it);
+ if(cached&&cached.id===it.id&&cached.radius===size.radius&&cached.height===size.height)return cached;
+ if(!['duck','snowglobe'].includes(it.id))return null;
+ const R=size.radius,H=size.height,parts=[],state={z:0};
+ const flat=(base,level)=>(i,t,L)=>{BG[i]=C(base,level+L*.28*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+ const yellow=flat(YEL,4.1),orange=flat(ORANGE,3.9),eyes=flat(BLACK,.4),wood=furnitureTimber(BRICK),snow=flat(WHITE,5),green=flat(GREEN,2.5);
+ const lathe=(role,u,v,profile,shade)=>{
+  const points=profile.map(([z,r])=>[z*H,r*R]),radius=Math.max(...points.map(p=>p[1]));
+  parts.push({role,u:u*R,v:v*R,hl:radius,hw:radius,z0:Math.min(...points.map(p=>p[0])),z1:Math.max(...points.map(p=>p[0])),profile:points,shade,ray:coveRayLathe});
+ };
+ const ell=(role,u,v,z,hx,hy,hz,shade)=>parts.push({role,u:u*R,v:v*R,hl:hx*R,hw:hy*R,z0:(z-hz)*H,z1:(z+hz)*H,shade,ray:homeRayEllipsoid});
+ if(it.id==='duck'){
+  lathe('body',0,0,[[0,0],[0,.55],[.04,.72],[.15,.86],[.30,.85],[.43,.70],[.50,.45],[.51,0]],yellow);
+  ell('tail',0,-.65,.36,.22,.32,.12,yellow);
+  ell('head',0,.35,.72,.45,.45,.28,yellow);
+  ell('beak',0,.80,.68,.27,.18,.065,orange);
+  for(const side of [-1,1])ell('eye',side*.30,.66,.82,.055,.055,.04,eyes);
+ }else{
+  lathe('base',0,0,[[0,0],[0,.75],[.025,.82],[.12,.82],[.16,.75],[.16,0]],wood);
+  lathe('snow-floor',0,0,[[.16,0],[.16,.68],[.18,.68],[.18,0]],snow);
+  lathe('trunk',0,0,[[.18,0],[.18,.055],[.31,.055],[.31,0]],wood);
+  lathe('tree',0,0,[[.28,0],[.28,.35],[.44,.13],[.44,.29],[.57,.10],[.57,.21],[.75,0]],green);
+  const glass=(i,t,L)=>{
+   const rx=state.x+HIT.u,ry=state.y+HIT.v,rz=HIT.w-eye,incidence=Math.abs((rx*HIT.nx+ry*HIT.ny+rz*HIT.nz)/Math.hypot(rx,ry,rz));
+   const edge=1-smooth(clamp((incidence-state.edgeLimit*.8)/(state.edgeLimit*.2),0,1));
+   const glint=coveGroove(HIT.u+((HIT.w-state.z)/H)*R*.7,R*1.5,R*.035,t/projX)*coveDetail(t,Math.max(.15,R*4));
+   if(Math.max(edge,glint)<.42)return false;BG[i]=C(CYAN,5.2+edge+L*.08*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  lathe('glass',0,0,[[.16,.70],[.22,.82],[.38,.94],[.56,.94],[.74,.80],[.90,.51],[1,0],[.97,0],[.87,.48],[.72,.76],[.55,.90],[.39,.90],[.24,.78],[.18,.68],[.16,.70]],glass);
+ }
+ const model={id:it.id,radius:R,height:H,parts,state};HOME_KEEPSAKE_MODELS.set(it,model);return model;
+}
+function drawHomeKeepsake(p) {
+ const model=homeKeepsakeModel(p.it,p.size);if(!model)return false;
+ if(!inView(p.x-px,p.y-py,model.radius))return true;
+ if(model.state.z!==p.z||!model.positioned){
+  model.state.z=p.z;model.positioned=true;
+  for(const q of model.parts)if(q.profile)q.placedProfile=q.profile.map(([z,r])=>[p.z+z,r]);
+ }
+ model.state.x=p.x-px;model.state.y=p.y-py;
+ model.state.edgeLimit=Math.min(.85,Math.sqrt(2*Math.hypot(model.state.x,model.state.y,p.z+model.height*.5-eye)/(projY*Math.min(model.radius,model.height/2))));
+ const {c,s}=p.surface;
+ for(const q of model.parts){
+  const x=p.x-px+c*q.u-s*q.v,y=p.y-py+s*q.u+c*q.v;
+  drawBox({...boxAt(x,y,c,s,q.hl,q.hw,p.z+q.z0,p.z+q.z1),...(q.profile?{profile:q.placedProfile}:{}),keepsakeRole:q.role},q.shade,q.ray);
+ }
+ return true;
+}
 function homeRayEllipsoid(ox,oy,oz,rx,ry,rz,b) {
   const z=(b.z0+b.z1)/2,h=(b.z1-b.z0)/2,x=ox-b.x,y=oy-b.y;
   const u=(x*b.c+y*b.s)/b.hl,v=(-x*b.s+y*b.c)/b.hw,w=(oz-z)/h,du=(rx*b.c+ry*b.s)/b.hl,dv=(-rx*b.s+ry*b.c)/b.hw,dw=rz/h;
@@ -38502,6 +38811,7 @@ function homePlushShark(vx,vy,c,s,zBase=0) {
   ell(0,-.08,.34,.035,.13,.14,BLUE);
 }
 function furnishingProp(p,r) {
+  if(p.id==='sharkplush')return HOME_PLUSH_SHARK(p);
   if(p.id==='f_lamp')return HOME_FLOOR_LAMP(p);
   if(p.id==='f_recordplayer')return HOME_RECORD_PLAYER(p);
   if(p.id==='f_frame')return HOME_PHOTO_FRAME(p);
@@ -38527,12 +38837,101 @@ function furnishingProp(p,r) {
       for(const side of [-1,1]){wood(side*.53,.025,.51,.38,.32,.49,.09,fabric);wood(side*1.12,0,.08,.46,.34,.72,.065,fabric);wood(side*.53,-.36,.51,.1,.46,.95,.075,fabric);}
     }else if(p.id==='f_rug') {
       wood(0,0,1.3,.9,.002,.014,.005,(i,t,L)=>{const edge=Math.abs(HIT.u)>1.21||Math.abs(HIT.v)>.81;BG[i]=C(edge?STONE:BLUE,2.7+L*.2);set(i,edge?'=':' ',C(STONE,L));return true;});
-    }else if(p.id==='sharkplush')homePlushShark(vx,vy,c,s,p.z||0);
+    }
   });
   prop.radius=Math.hypot(d.hx,d.hy)+.2;prop.box=furnishingBox(p);prop.walk=!!(d.rug||d.wall);prop.furnishingKey=p.key;
   if(d.seat)Object.assign(prop,{seat:true,h:d.seat,fx:-s,fy:c});return prop;
 }
 function furnishingProps(r) {const home=homeRecord(r);return home?homeFurnishings(home).parts.map(p=>furnishingProp(p,r)):[];}
+// The stuffed body is an ellipsoid with a flat, closed contact patch. This
+// wrapper retains the common ellipsoid helper used by shops and restaurants.
+function homePlushRayBody(ox,oy,oz,rx,ry,rz,b) {
+ const shape=b.plushShape,t=homeRayEllipsoid(ox,oy,oz,rx,ry,rz,shape);
+ if(t>.01&&oz+rz*t>=b.z0-1e-9)return t;
+ if(Math.abs(rz)<1e-12)return -1;
+ const floor=(b.z0-oz)/rz;if(floor<=.01)return -1;
+ const x=ox+rx*floor-shape.x,y=oy+ry*floor-shape.y,u=x*shape.c+y*shape.s,v=-x*shape.s+y*shape.c;
+ const center=(shape.z0+shape.z1)/2,half=(shape.z1-shape.z0)/2;
+ if((u/shape.hl)**2+(v/shape.hw)**2+((b.z0-center)/half)**2>1+1e-9)return -1;
+ HIT.u=u;HIT.v=v;HIT.w=b.z0;HIT.nx=HIT.ny=0;HIT.nz=-1;HIT.face=6;return floor;
+}
+function HOME_PLUSH_SHARK(p) {
+ const c=Math.cos(p.a),s=Math.sin(p.a),base=p.z||0,parts=[],hx=.175,hy=.34,hz=.13,bodyCenter=.11;
+ const cloth=(colour)=>(i,t,L)=>{
+  const grain=Math.sin(HIT.u*800)*Math.sin(HIT.w*740)*.08*coveDetail(t,.08);
+  BG[i]=C(colour,2.8+L*.32*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;
+ };
+ const blue=cloth(BLUE),black=cloth(BLACK),white=cloth(WHITE);
+ const body=(i,t,L)=>{
+  const z=HIT.w-base,belly=z<.095||HIT.nz<-.25;
+  (belly?white:blue)(i,t,L);
+  const fine=coveDetail(t,.3),footprint=t/projY;
+  const mouth=HIT.v>.29&&Math.abs(HIT.u)<.075&&Math.abs(z-.115)<Math.max(.0015,footprint*.65);
+  const gill=Math.abs(HIT.u)>.13&&HIT.v>.09&&HIT.v<.17&&z>.115&&z<.175;
+  if(fine>.3&&mouth)BG[i]=C(BLACK,1.1+L*.08);
+  else if(fine>.3&&gill&&coveGroove(HIT.v-.095,.025,.003,footprint)>.45)BG[i]=C(BLACK,1.4+L*.1);
+  return true;
+ };
+ const ell=(role,u,v,z,hl,hw,hh,shade=blue,turn=0)=>parts.push({role,u,v,z0:base+z-hh,z1:base+z+hh,hl,hw,c:Math.cos(p.a+turn),s:Math.sin(p.a+turn),shade});
+ ell('tail-neck',0,-.345,.11,.055,.09,.05);
+ for(const side of [-1,1]){
+  ell('tail-fin',side*.09,-.415,.105,.11,.06,.028);
+  ell('side-fin',side*.1755,-.04,.085,.06,.024,.025,blue,-side*.5);
+ }
+ ell('dorsal-fin',0,-.09,.265,.018,.085,.085);
+ // Eye centres derive from the actual body surface, seating each bead with 12mm overlap.
+ const ex=.6,ey=.66,ez=Math.sqrt(1-ex*ex-ey*ey),normal=[ex/hx,ey/hy,ez/hz],len=Math.hypot(...normal);
+ for(const side of [-1,1]){
+  const nx=side*normal[0]/len,ny=normal[1]/len,nz=normal[2]/len;
+  const u=side*ex*hx+nx*.005,v=ey*hy+ny*.005,z=bodyCenter+ez*hz+nz*.005;
+  ell('eye',u,v,z,.017,.017,.017,black);
+  ell('eye-glint',u+nx*.014,v+ny*.014,z+nz*.014,.0035,.0035,.0035,white);
+ }
+ return {...ROOM_MODEL(p.x,p.y,(vx,vy)=>{
+  const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+  // Cloth pieces overlap the stuffing at their roots, so reverse views close.
+  const shape=boxAt(vx,vy,c,s,hx,hy,base+bodyCenter-hz,base+bodyCenter+hz);
+  drawBox({...boxAt(vx,vy,c,s,hx,hy,base,base+.24),plushShape:shape,plushRole:'body'},body,homePlushRayBody);
+  for(const q of parts){const[x,y]=at(q.u,q.v);drawBox({...boxAt(x,y,q.c,q.s,q.hl,q.hw,q.z0,q.z1),plushRole:q.role},q.shade,homeRayEllipsoid);}
+ }),box:furnishingBox(p),radius:Math.hypot(.24,.48),furnishingKey:p.key,plushShark:true};
+}
+// Native apartment windows share the wall painter's opening measurements.
+// Closed fitted pieces sit on the inner wall face; the existing exterior ray
+// still supplies the view through the four clear panes. Fern uses its own set.
+function HOME_WINDOW_CASING(win,W,H,tier) {
+  const bottom=win.bottom??.85,top=win.top??(tier?2.95:2.5),half=win.half;
+  const face=win.face,c=face==='north'?1:face==='south'?-1:0,s=face==='west'?-1:face==='east'?1:0;
+  const x=face==='west'?1:face==='east'?W-1:win.center,y=face==='north'?1:face==='south'?H-1:win.center;
+  const shade=(i,t,L)=>{
+    if(tier===0)return coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,16);
+    const light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    BG[i]=C(tier===2?WHITE:GRAY,(tier===2?3.9:1.2)+L*(tier===2?.36:.24)*light);
+    set(i,' ',0);return true;
+  };
+  const pieces=[],add=(u,v,hl,hw,z0,z1,round=0)=>{
+    const box=boxAt(c*u-s*v,s*u+c*v,c,s,hl,hw,z0,z1);
+    const material=round?shade:(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;
+      HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
+    pieces.push({local:box,view:{...box,...(round?{round}:null)},shade:material,ray:round?coveRayRounded:rayBox});
+  };
+  // The horizontal rails own the corners; the jambs meet their end planes.
+  for(const z of [bottom,top-.10])add(0,.045,half,.045,z,z+.10);
+  for(const e of [-1,1])add(e*(half-.045),.045,.045,.045,bottom+.10,top-.10);
+  // Recessed glazing bars meet the inner faces, with one owner at the cross.
+  const cross=clamp(2.12,bottom+.20,top-.20);
+  add(0,.027,half-.09,.027,cross-.035,cross+.035);
+  add(0,.027,.035,.027,bottom+.10,cross-.035);
+  add(0,.027,.035,.027,cross+.035,top-.10);
+  // A deep sill seats the bottom rail; its rear face is on the wall plane.
+  add(0,.08,half+.055,.08,bottom-.045,bottom,.008);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const p of pieces){const b=p.view;b.x=vx+p.local.x;b.y=vy+p.local.y;
+      drawBox(b,p.shade,p.ray);}
+  }),radius:half+.2,windowCasing:{face,bottom,top,half,cross}};
+}
+function homeWindowCasings(r) {
+  return r.def.windows.map(win=>HOME_WINDOW_CASING(win,r.W,r.H,r.def.tier));
+}
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
   if(furnishingEl)return furnishingEl;
@@ -38614,6 +39013,25 @@ function beginFurnishingPlacement(item,part=null) {
   furnishingPlacement={home,id,item,part,a:part?.a||0,held};held=-1;lockMouse();
   say(HOME_FURNITURE[id].wall?'Look at a wall to hang it. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
 }
+// Cache the authored bed pieces, then probe their actual top surfaces. The
+// conservative bed box includes pillows, which are not a flat support plane.
+const HOME_PLUSH_BEDS=new WeakMap();
+function homePlushBedSupport(p,prop) {
+ if(!furnishingOverlap(furnishingBox(p),prop.box))return null;
+ let parts=HOME_PLUSH_BEDS.get(prop);
+ if(!parts){parts=[];const draw=drawBox;drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}HOME_PLUSH_BEDS.set(prop,parts);}
+ const hit={...HIT};try{
+ const b=furnishingBox(p),d=HOME_FURNITURE[p.id],heights=[];
+ for(const u of [-d.hx,0,d.hx])for(const v of [-d.hy,0,d.hy]){
+  const x=p.x+b.c*u-b.s*v,y=p.y+b.s*u+b.c*v;
+  const height=Math.max(-Infinity,...parts.map(q=>{const t=q.ray(x,y,.9,0,0,-1,q.box);return t>.01?.9-t:-Infinity;}));
+  if(!Number.isFinite(height))return null;heights.push(height);
+ }
+ const top=Math.max(...heights);
+ if(top<.3||top>.85||Math.min(...heights)<top-.001||parts.some(q=>q.box.z1>top+.001&&furnishingOverlap(b,q.box,.003)))return null;
+ return top;
+ }finally{for(const key in HIT)if(!(key in hit))delete HIT[key];Object.assign(HIT,hit);}
+}
 function furnishingCandidate() {
   const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
   const d=HOME_FURNITURE[q.id],p={id:q.id,key:q.part?.key??-1,a:q.a,x:0,y:0,z:d.wall?1.6:0};
@@ -38639,15 +39057,18 @@ function furnishingCandidate() {
       if(Math.abs(p[axis]+half-(limit-1))<.3)p[axis]=limit-1-half;
     }
   }
+  let support=null;
   if(d.plush) {
     p.z=0;const footprint=furnishingBox(p);
     for(const prop of room.props)if(prop.box&&!prop.walk&&prop.furnishingKey!==p.key) {
       const b=prop.box,height=b.z1;
+      if(prop.furniture==='bed'){const top=homePlushBedSupport(p,prop);if(top!=null&&top>p.z){p.z=top;support=prop;}continue;}
       if(prop.draw&&prop.furnishingKey==null)continue;
-      if(height>.3&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01))))p.z=Math.max(p.z,height);
+      if(height>Math.max(.3,p.z)&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01)))){p.z=height;support=null;}
     }
   }
-  let reason=furnishingFit(p,room.grid,room.props);
+  const obstacles=support?room.props.map(o=>o===support?{...o,box:{...o.box,z1:p.z}}:o):room.props;
+  let reason=furnishingFit(p,room.grid,obstacles);
   if(!reason&&!d.wall&&!d.rug) {
     const obstacle=furnishingBox(p),pass=extra=>(x,y)=>room.grid[y]?.[x]==='.'&&!room.props.some(o=>o.box&&!o.walk&&!(q.part&&o.furnishingKey===q.part.key)&&inBox(o.box,x+.5,y+.5,.1))&&(!extra||!inBox(extra,x+.5,y+.5,.1));
     const from={x:room.def.entry[0],y:room.def.entry[1]},world={width:room.W,height:room.H,wrap:false};
