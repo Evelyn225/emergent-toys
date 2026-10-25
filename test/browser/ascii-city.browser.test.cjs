@@ -1844,7 +1844,7 @@ test('the night market\'s fortune teller and goldfish tub: five stalls, a readin
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {
-    const seated = room.props.filter(s => s.fig && s.pose === 'sit' && s.face?.[1] === -1), tables = room.props.filter(s => s.box && s.box.z0 > 0.6 && s.box.z1 < 0.8);
+    const seated = room.props.filter(s => s.fig && s.pose === 'sit' && s.face?.[1] === -1), tables = room.props.filter(s => s.box && !s.fig && Math.abs(s.box.z1 - 0.74) < 1e-9); // (built round tables, their tops at 0.74)
     const p = seated[0]; px = p.x; py = p.y + 0.9; a = -Math.PI / 2; // behind them, facing the stage
     return [seated.length, tables.length, promptText()];
   });

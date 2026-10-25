@@ -38,6 +38,60 @@ test('cinema rows, arcade cabinets and the casino floor are built, every part in
  assert.deepEqual(r,[]);
 }));
 
+test('the club: poles stand on the stage up to the ceiling, candles on the tables, chairs carry their seats, the VIP booth opens to its host',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const rnd=Math.random;Math.random=()=>.3;try{enterRoom('stripclub',{word:'VELVET',ret:[100,100,0]},[5,5,0]);}finally{Math.random=rnd;}
+  const P=room.props,stage=P.find(o=>o.stage),H=room.def.height||3;
+  const poles=P.filter(o=>o.pole);if(poles.length!==3)bad.push(['poles',poles.length]);
+  for(const o of poles){if(!inBox(stage.box,o.x,o.y,0)||Math.abs(o.pole.z0-stage.stage.h)>1e-9)bad.push('pole not on the stage');if(o.pole.z1>H+1e-9)bad.push('pole through the ceiling');}
+  const candles=P.filter(o=>o.candle);if(candles.length!==5)bad.push(['candles',candles.length]);
+  for(const c of candles){const t=P.find(o=>o!==c&&o.box&&inBox(o.box,c.x,c.y,0)&&Math.abs(o.box.z1-c.candle.z)<1e-9);if(!t)bad.push('candle not on a table');}
+  const chairs=P.filter(o=>o.clubChair);if(chairs.length!==10)bad.push(['chairs',chairs.length]);
+  for(const c of chairs){const s=P.find(o=>o.seat&&Math.abs(o.x-c.x)<1e-9&&Math.abs(o.y-c.y)<1e-9);if(!s||s.h!==c.clubChair.h)bad.push('chair seat');}
+  const vip=P.find(o=>o.vip),host=P.find(o=>o.service==='vip');
+  if(!vip||!host||(host.x-vip.x)*vip.vip.fx+(host.y-vip.y)*vip.vip.fy<=0)bad.push('VIP booth faces away from its host');
+  for(const [x,y] of [[vip.box.x-vip.box.hl,vip.box.y-vip.box.hw],[vip.box.x+vip.box.hl,vip.box.y+vip.box.hw]])if(roomAt(x-Math.sign(x-vip.x)*.01,y-Math.sign(y-vip.y)*.01)==='#')bad.push('VIP booth in the wall');
+  const s=String(ROOM_DEFS.stripclub.props);if(s.includes('BX(')||s.includes('SP('))bad.push('painted props left in the club');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('the touch pool holds its creatures on the sand under clear water inside the basin; the plush sharks lie on their shelves',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  enterRoom('aquarium',{word:'AQUARIUM',ret:[100,100,0]},[5,5,0]);
+  const P=room.props,pool=P.find(o=>o.touchPool),d=pool.touchPool;
+  const draw=drawBox,parts=[];drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray,shade});try{pool.draw(pool.x-px,pool.y-py);}finally{drawBox=draw;}
+  const life=parts.filter(q=>q.box.z0===d.floor);if(life.length<d.life)bad.push(['creatures',life.length]);
+  for(const q of life){const x=q.box.x+px,y=q.box.y+py;if(Math.abs(x-pool.x)>pool.box.hl-.08||Math.abs(y-pool.y)>pool.box.hw-.08)bad.push('a creature in the basin wall');if(q.box.z1>d.water)bad.push('a creature out of the water');}
+  const surface=parts.find(q=>q.box.z1===d.water);let clear=0;for(let k=0;k<40;k++){HIT.u=k*.05-1;HIT.v=k*.013-.3;if(!surface.shade(0,1,8))clear++;}
+  if(clear<20)bad.push(['water not clear',clear]);
+  const plush=P.find(o=>o.plushStand);if(!plush)bad.push('no plush stand');
+  const s=String(ROOM_DEFS.aquarium.props);if(s.includes('BX('))bad.push('painted boxes left in the aquarium');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('the cathedral: the cross stands on the altar, pews keep their rows, chandeliers hang from the vault, the votive stand lights as many as are lit',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  enterRoom('cathedral',{word:'CATHEDRAL',ret:[100,100,0]},[11,30,0]);const P=room.props;
+  const altar=P.find(o=>o.altar),cross=P.find(o=>o.cross);if(!altar||!cross||Math.abs(cross.cross.z-altar.altar.h)>1e-9||!inBox(altar.box,cross.x,cross.y,0))bad.push('cross not on the altar');
+  if(P.filter(o=>o.candlestick).length!==2||P.filter(o=>o.rail).length!==2||!P.some(o=>o.pulpit)||!P.some(o=>o.font)||!P.some(o=>o.steps&&o.walk))bad.push('a fitting missing');
+  const pews=P.filter(o=>o.pew);if(pews.length!==20||pews.some(o=>!o.seatRow))bad.push(['pews',pews.length]);
+  const ch=P.filter(o=>o.chandelier);if(ch.length!==3||ch.some(o=>o.chandelier.top!==CATH_H))bad.push('chandeliers');
+  const v=P.find(o=>o.votive),draw=drawBox;let flames=0;room.candles=5;
+  drawBox=(box,shade,ray=rayBox)=>{if(ray===foodRayEllipsoid&&box.hl===.01)flames++;};try{v.draw(v.x-px,v.y-py);}finally{drawBox=draw;}
+  if(flames!==5)bad.push(['votive flames',flames]);
+  const s=String(ROOM_DEFS.cathedral.props);if(s.includes('BX(')||s.includes('SP('))bad.push('painted props left in the cathedral');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
 // Review regression: bounds alone cannot prove that the top or a handle is attached.
 test('casino table tops meet their bases and slot levers have a continuous attachment to the cabinet',()=>fixture(async p=>{
  const bad=await p.evaluate(()=>{
@@ -53,6 +107,35 @@ test('casino table tops meet their bases and slot levers have a continuous attac
    for(const u of [.3,.309,.318,.327,.34]){
     const x=c*u+s*.1,y=s*u-c*.1;
     if(!ps.some(q=>{const t=q.ray(x,y,.95,-s,c,0,q.box);return t>0&&t<.12;}))errors.push(['detached slot lever',fx,fy,u]);
+   }
+  }
+  return errors;
+ });assert.deepEqual(bad,[]);
+}));
+
+test('cathedral fittings meet the sanctuary and floor, expose the font water and keep the book rest normalized and connected',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  px=py=0;dx=1;dy=0;projX=10000;const errors=[],save=drawBox;
+  const parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,ray});try{o.draw(o.x,o.y);}finally{drawBox=save;}return a;};
+  const def=ROOM_DEFS.cathedral,ps=def.props({}),altar=ps.find(o=>o.altar),steps=ps.find(o=>o.steps);
+  for(const o of ps.filter(o=>o.altar||o.candlestick)){
+   const floor=Math.max(...parts(steps).map(q=>{const t=q.ray(o.x,o.y,2,0,0,-1,q.box);return t>0?2-t:0;}));
+   if(Math.abs(o.box.z0-floor)>.0005)errors.push(['fitting sinks through the sanctuary',o.x,o.box.z0,floor]);
+  }
+  const font=parts(FONT(0,0)),bowl=font.find(q=>q.box.z1===1),water=font.find(q=>q!==bowl),stoneTop=2-bowl.ray(0,0,2,0,0,-1,bowl.box);
+  if(water.box.z0<=stoneTop||water.box.z1>=1)errors.push(['font water hidden by stone',water.box.z0,stoneTop]);
+  const votive=parts(VOTIVE_STAND(0,0,.8,()=>0)),base=votive.find(q=>q.box.z0===0);
+  for(const tier of votive.filter(q=>q.ray===coveRayRounded&&q!==base))if(tier.box.z0>base.box.z1+.0001)errors.push('floating votive tier');
+  const pew=parts(PEW(0,0,1.6)),kneeler=pew.find(q=>q.box.z0===.06&&q.box.z1===.14);
+  for(const u of [-1.48,1.48])if(!pew.some(q=>q!==kneeler&&q.box.z0===0&&q.box.z1>=.06&&q.ray(u,.48,1,0,0,-1,q.box)>0))errors.push('kneeler has no floor support');
+  for(const [fx,fy]of [[1,1],[-1,1],[1,-1],[-1,-1]]){
+   const P=parts(PULPIT(0,0,fx,fy)),tub=P.find(q=>q.ray===coveRayLathe),rest=P.find(q=>q.box.z0===1.2),len=Math.hypot(fx,fy),x=fx/len*.38,y=fy/len*.38;
+   const top=2-tub.ray(x,y,2,0,0,-1,tub.box),bottom=rest.ray(x,y,0,0,0,1,rest.box);
+   if(Math.abs(top-bottom)>.0005)errors.push(['book rest is not seated on its rim',top,bottom]);
+   for(const q of P.filter(q=>q.ray===coveRayRounded)){
+    if(Math.abs(q.box.c*q.box.c+q.box.s*q.box.s-1)>.00001)errors.push('book rest has a non-unit rotation');
+    const ex=Math.abs(q.box.c)*q.box.hl+Math.abs(q.box.s)*q.box.hw,ey=Math.abs(q.box.s)*q.box.hl+Math.abs(q.box.c)*q.box.hw;
+    if(Math.abs(q.box.x)+ex>.421||Math.abs(q.box.y)+ey>.421)errors.push('book rest outside pulpit');
    }
   }
   return errors;

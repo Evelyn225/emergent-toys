@@ -103,3 +103,94 @@ function SLOT_MACHINE(x,y,fx,fy,ph) {
     coveLathe(vx+c*.34,vy+s*.34,1.34,[[0,0],[0,.03],[.04,.035],[.07,0]],leisurePaint(RED,3.6)); // its knob
   }),box:boxAt(x,y,c,s,.38,.37,0,1.6),radius:.5,slot:{fx,fy}};
 }
+// The club's stage: a plinth with a lit nosing chasing along its edge.
+function CLUB_STAGE(x,y,hl,hw,h) {
+  const top=leisurePaint(GRAY,1.6,.3),nosing=(i,t,L)=>{const k=Math.floor((HIT.u+hl)*4+T*6);BG[i]=C(NEON[k&3],8);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,0,h-.03,.02,top);
+    coveRound(vx,vy,1,0,hl,hw,h-.03,h,.012,leisurePaint(GRAY,2.6,.3)); // the boards
+    drawBox(boxAt(vx,vy+hw+.006,1,0,hl-.03,.006,h-.08,h-.045),nosing); // the light strip along the front
+  }),box:boxAt(x,y,1,0,hl,hw+.012,0,h),radius:Math.hypot(hl,hw),stage:{h}};
+}
+// A dance pole from the stage at z0 to the ceiling, with its flanges.
+function CLUB_POLE(x,y,z0,z1) {
+  const chrome=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,z0,[[0,0],[0,.07],[.015,.06],[.03,.022],[.03,0]],chrome); // the base flange
+    coveTube(vx,vy,z0+.03,vx,vy,z1-.03,.022,WHITE);
+    coveLathe(vx,vy,z1-.03,[[0,0],[0,.022],[.015,.06],[.03,.07],[.03,0]],chrome); // the ceiling flange
+  }),box:boxAt(x,y,1,0,.07,.07,z0,z1),radius:.1,pole:{z0,z1}};
+}
+// A candle in its glass on a table top at z, the flame flickering.
+function TABLE_CANDLE(x,y,z) {
+  const glass=(i,t,L)=>{if(Math.abs(HIT.nx*dx+HIT.ny*dy)>.4&&HIT.w>z+.01)return false;BG[i]=C(RED,1.6);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const f=fract(T*3+x)<.85;
+    foodOval(vx,vy,z+.045,.008,.008,f?.03:.024,(i,t,L)=>{BG[i]=C(f?YEL:ORANGE,15);set(i,' ',0);return true;}); // the flame
+    coveLathe(vx,vy,z,[[0,0],[0,.025],[.04,.024],[.04,0]],leisurePaint(WHITE,4)); // the candle
+    coveLathe(vx,vy,z,[[0,0],[0,.04],[.07,.042],[.07,.036],[.006,.034],[.006,0]],glass); // its glass, clear but for the rim and a tint
+  }),box:boxAt(x,y,1,0,.042,.042,z,z+.08),radius:.06,candle:{z}};
+}
+// A low velvet club chair facing (fx,fy): a cushion on short legs, a
+// buttoned back.
+function CLUB_CHAIR(x,y,fx,fy,col=MAG,h=.42) {
+  const c=fy,s=-fx,velvet=leisurePaint(col,1.6,.35);
+  const tufted=(i,t,L)=>{const a=fract(HIT.u*9),b=fract(HIT.w*9),stud=a<.25&&b<.3&&coveDetail(t,.15)>.3;
+    BG[i]=C(col,1.4+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)-(stud?.6:0));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    for(const e of [-1,1])for(const f of [-1,1])part(e*.16,f*.16,.02,.02,0,h-.12,GRAY,.006); // the legs
+    part(0,0,.22,.22,h-.12,h,velvet,.04); // the cushion
+    part(0,-.19,.22,.04,h,.72,tufted,.03); // the buttoned back
+  }),box:boxAt(x,y,c,s,.22,.23,0,.72),radius:.32,clubChair:{h}};
+}
+// The VIP booth: velvet walls on three sides, a curtain across the front in
+// folds, parted at the middle, a lit VIP sign over it. Its front faces (fx,fy).
+function VIP_BOOTH(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,velvet=leisurePaint(MAG,.8,.2),n=Math.round(hl*2/.14);
+  const fold=k=>leisurePaint(RED,1+(k&1)*.5,.3);
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'VIP',0,h+.11,.06,.09,C(YEL,15),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    part(0,-hw+.03,hl,.03,0,h,velvet); for(const e of [-1,1])part(e*(hl-.03),0,.03,hw,0,h,velvet); // the walls
+    part(0,0,hl,hw,h-.03,h,velvet); // its ceiling
+    for(let k=0;k<n;k++){const u=-hl+.06+(hl*2-.12)*(k+.5)/n;if(Math.abs(u)<.18)continue; // the parting
+      part(u,hw-.04+((k&1)?.012:0),(hl*2-.12)/n/2+.004,.028,.02,h-.06,fold(k),.026);}
+    coveTube(vx-c*hl-s*(hw-.04),vy-s*hl+c*(hw-.04),h-.04,vx+c*hl-s*(hw-.04),vy+s*hl+c*(hw-.04),h-.04,.012); // the curtain rail
+    part(0,hw+.02,.35,.02,h+.02,h+.2,sign,.01); // the sign
+  }),box:boxAt(x,y,1,0,Math.abs(c)*hl+Math.abs(s)*hw,Math.abs(s)*hl+Math.abs(c)*hw+.04,0,h+.2),radius:Math.hypot(hl,hw),vip:{fx,fy}};
+}
+// The aquarium's touch pool: a tiled basin, its rim at hand height, water you
+// can see down through to the sand and what lives on it.
+function TOUCH_POOL_TANK(x,y,hl,hw,h=.75) {
+  const rim=.08,floor=.42,water=h-.05,tile=(i,t,L)=>{const g=coveGroove(HIT.u+HIT.w,.15,.01,t/projX)*coveDetail(t,.2);BG[i]=C(GRAY,1.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-g*.6);set(i,' ',0);return true;};
+  const sand=(i,t,L)=>{BG[i]=C(STONE,2.2+hash(Math.floor(HIT.u*40),Math.floor(HIT.v*40),41)*.6);set(i,' ',0);return true;};
+  const ripple=(i,t,L)=>{const n=noise(HIT.u*4+T*.4,HIT.v*4,37);if(n<.62)return false;BG[i]=C(CYAN,2+n*2);return set(i,'~',C(WHITE,10)),true;}; // (clear but for the ripples)
+  const life=[];
+  for(let k=0;k<9;k++)life.push({u:(hash(k,1,40)-.5)*(hl-rim-.15)*2,v:(hash(k,2,40)-.5)*(hw-rim-.12)*2,kind:k%3});
+  const star=(i,t,L)=>{BG[i]=C(ORANGE,3.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const urchin=(i,t,L)=>{const spine=fract(Math.atan2(HIT.v,HIT.u)*3+HIT.w*40)<.4;BG[i]=C(MAG,(spine?1.2:2)+L*.25);set(i,' ',0);return true;};
+  const anemone=(i,t,L)=>{BG[i]=C(RED,2.8+Math.sin(T*2+HIT.w*60)*.4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,water-.004,water),ripple); // the water's surface
+    for(const q of life){const px_=vx+q.u,py_=vy+q.v;
+      if(q.kind===0)for(let a=0;a<5;a++){const an=a*TAU/5;foodOval(px_+Math.cos(an)*.035,py_+Math.sin(an)*.035,floor,.04,.014,.012,star,Math.cos(an),Math.sin(an));} // a starfish
+      else if(q.kind===1)foodOval(px_,py_,floor,.04,.04,.05,urchin); // an urchin
+      else coveLathe(px_,py_,floor,[[0,0],[0,.03],[.05,.022],[.08,.04],[.08,0]],anemone);} // an anemone
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,floor-.02,floor),gondolaFlatOr(sand)); // the sand
+    for(const e of [-1,1]){coveRound(vx,vy+e*(hw-rim/2),1,0,hl,rim/2,0,h,.01,tile);coveRound(vx+e*(hl-rim/2),vy,1,0,rim/2,hw-rim,0,h,.01,tile);} // the basin's walls
+    coveRound(vx,vy,1,0,hl-rim,hw-rim,0,floor-.02,.005,tile); // its floor
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),touchPool:{floor,water,h,life:life.length}};
+}
+const gondolaFlatOr=shade=>(i,t,L)=>{HIT.nx=0;HIT.ny=0;HIT.nz=1;return shade(i,t,L);};
+// A spinner stand of plush sharks: a pole, three round shelves, the sharks
+// lying round each with their fins up.
+function PLUSH_STAND(x,y) {
+  const shelves=[.45,.95,1.45],wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,39);
+  const plush=col=>(i,t,L)=>{const belly=HIT.nz<-.2;BG[i]=C(belly?WHITE:col,(belly?3.6:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [k,z] of shelves.entries())for(let j=0;j<5;j++){const a=j*TAU/5+k*.6+T*.2,col=[GRAY,BLUE,MAG,CYAN][(j+k)&3],sx=vx+Math.cos(a)*.18,sy=vy+Math.sin(a)*.18,c=-Math.sin(a),s=Math.cos(a),sh=plush(col);
+      foodOval(sx,sy,z+.02,.11,.04,.07,sh,c,s); // the body, lying round the shelf
+      foodOval(sx,sy,z+.07,.025,.008,.05,sh,c,s);} // its fin
+    for(const z of shelves)coveLathe(vx,vy,z,[[0,0],[0,.3],[.02,.3],[.02,0]],wood); // the shelves
+    coveTube(vx,vy,0,vx,vy,1.6,.02,GRAY);coveLathe(vx,vy,0,[[0,0],[0,.22],[.03,.2],[.03,0]],wood); // the pole, its foot
+  }),box:boxAt(x,y,1,0,.3,.3,0,1.6),radius:.35,plushStand:{shelves}};
+}

@@ -20185,21 +20185,11 @@ ROOM_DEFS.aquarium = { grid: AQUA_GRID, light: 0.55, floor: 'aqua', ceil: 'aqua'
       ? figProp(x, y, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.2 })
       : standing(x, y, shirt()));
     // the touch pool: a low rock basin, starfish and crabs and urchins in the shallows
-    p.push(BX(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw, 0, 0.75, (i, t, L) => {
-      if (HIT.face !== 5) { BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.7 ? '=' : (Math.floor(HIT.u * 6) + Math.floor(HIT.w * 6)) & 1 ? '#' : ' ', C(GRAY, L * 0.7)), true; }
-      if (Math.abs(HIT.u) > TOUCH_POOL.hl - 0.08 || Math.abs(HIT.v) > TOUCH_POOL.hw - 0.08) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, L)), true; }
-      BG[i] = C(CYAN, 2 + noise(HIT.u * 4 + T * 0.4, HIT.v * 4, 37) * 2);
-      const k = hash(Math.floor(HIT.u * 5), Math.floor(HIT.v * 5), 38);
-      return set(i, k > 0.85 ? '*' : k > 0.78 ? 'w' : k > 0.73 ? '#' : k > 0.6 ? '~' : ' ', C(k > 0.85 ? ORANGE : k > 0.78 ? RED : k > 0.73 ? MAG : WHITE, 13)), true;
-    }));
+    p.push(TOUCH_POOL_TANK(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw)); // starfish, urchins and anemones under the water (built: leisure-fittings.js)
     if (chance(0.7)) p.push(figProp(TOUCH_POOL.x + 0.4, TOUCH_POOL.y + 0.9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2, pose: 'reach', face: [-0.4, -0.9] })); // a kid, hands in the water
     // the gift shop: a counter, the keeper, a stand of plush sharks
     p.push(...counterBox(20.5, 13.95, 1.1), standing(20.5, 13.3, CYAN));
-    p.push(BX(22.4, 13.2, 0.3, 0.3, 0, 1.6, (i, t, L) => {
-      BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face));
-      if (HIT.face === 5) return set(i, ' ', 0), true;
-      return set(i, fract(HIT.w / 0.4) < 0.15 ? '=' : hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w / 0.4), 39) > 0.4 ? '<' : '@', C(fract(HIT.w / 0.4) < 0.15 ? BRICK : [GRAY, BLUE, MAG, CYAN][Math.floor(HIT.w / 0.4) & 3], 13)), true;
-    }));
+    p.push(PLUSH_STAND(22.4, 13.2)); // the stand of plush sharks, turning
     return p;
   } };
 STOCK_WORD.AQUARIUM = ['sharkplush', 'snowglobe', 'soda', 'water'];
@@ -20419,35 +20409,22 @@ function cathedralFloor(i, f, wx, wy) {
 
 ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cathedral', ceil: 'cathedral', wall: cathedralWall, keeper: [11, 4.9],
   props: r => {
-    const gold = solid(YEL, { top: '=', bright: 1.4 }), white = solid(WHITE, { top: '~', trim: 0.92 });
-    const flame = (x, y, z) => SP(x, y, 0.05, 0.12, ['*', '|'], (c, row, L) => row ? C(WHITE, 14) : C(fract(T * 7 + x * 3) < 0.5 ? YEL : ORANGE, 15), z);
-    const p = [
-      { ...BX(11, 4, 5, 2.2, 0, 0.3, solid(GRAY, { top: '.', panel: 1 })), walk: true }, // the sanctuary steps
-      BX(11, 3.1, 1.5, 0.5, 0, 1.0, white), // the altar, under its cloth
-      BX(11, 2.5, 0.06, 0.06, 1.0, 2.8, gold), BX(11, 2.5, 0.45, 0.06, 2.15, 2.3, gold), // the cross
-      BX(9.2, 3.2, 0.05, 0.05, 0, 1.5, gold), BX(12.8, 3.2, 0.05, 0.05, 0, 1.5, gold), flame(9.2, 3.2, 1.5), flame(12.8, 3.2, 1.5),
-      BX(8.65, 6.4, 1.65, 0.06, 0, 0.9, solid(BRICK, { panel: 0.3, top: '=' })), BX(13.35, 6.4, 1.65, 0.06, 0, 0.9, solid(BRICK, { panel: 0.3, top: '=' })), // the altar rail
-      BX(7.8, 7.4, 0.4, 0.4, 0, 1.3, solid(BRICK, { panel: 0.2, trim: 1.2, top: '=' })), // the pulpit
-      standing(11, 4.9, WHITE), // the priest
-      BX(11, 36, 0.5, 0.5, 0, 1.0, (i, t, L) => { // the font
-        if (HIT.face === 5) { BG[i] = C(CYAN, 2 + noise(HIT.u * 6 + T * 0.3, HIT.v * 6, 505) * 2); return set(i, Math.hypot(HIT.u, HIT.v) > 0.42 ? '#' : '~', C(WHITE, 10)), true; }
-        BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.9 ? '=' : HIT.w < 0.15 ? '#' : (Math.floor(HIT.u * 8) & 1) ? '|' : ' ', C(GRAY, L)), true;
-      }),
-      BX(19, 34, 0.8, 0.25, 0, 0.9, (i, t, L) => { // the votive stand: rows of little candles, as many lit as there are
-        if (HIT.face !== 5) { BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.84 ? '=' : ' ', C(YEL, L)), true; }
-        const slot = Math.floor((HIT.u + 0.8) / 0.2) + Math.floor((HIT.v + 0.25) / 0.17) * 8;
-        BG[i] = C(BRICK, 2);
-        return set(i, slot < room.candles ? '*' : 'i', slot < room.candles ? C(fract(T * 6 + slot * 0.37) < 0.5 ? YEL : ORANGE, 15) : C(WHITE, 8)), true;
-      }),
+    const sanctuary=.3,altar=ALTAR(11, 3.1, 1.46, .46, 1, sanctuary);
+    const p = [ // (built: cathedral-fittings.js)
+      SANCTUARY_STEPS(11, 4, 5, 2.2, sanctuary), // the sanctuary steps
+      altar, ALTAR_CROSS(11, 2.85, altar.altar.h), // the altar under its cloth, the cross on it
+      CANDLESTICK(9.2, 3.2, 1.5, sanctuary), CANDLESTICK(12.8, 3.2, 1.5, sanctuary), // candlesticks either side
+      ALTAR_RAIL(8.65, 6.4, 1.65), ALTAR_RAIL(13.35, 6.4, 1.65), // the altar rail, the way through between
+      PULPIT(7.8, 7.4, 1, 1), // the pulpit
+      {...standing(11, 4.9, WHITE), z:sanctuary}, // the priest, standing on the sanctuary
+      FONT(11, 36), // the font
+      VOTIVE_STAND(19, 34, 0.8, () => room.candles), // the votive stand: as many lit as there are
     ];
     for (let y = 11; y <= 30; y += 2.1) for (const cx of [8.8, 13.2]) { // the pews, either side of the aisle
-      p.push({ ...BX(cx, y, 1.6, 0.22, 0, 0.45, solid(BRICK, { top: '=', bright: 1.3 })), seatRow: { x0: cx - 1.4, x1: cx + 1.4, y, fx: 0, fy: -1 } },
-             BX(cx, y + 0.26, 1.6, 0.05, 0.45, 1.0, solid(BRICK, { panel: 0.4, trim: 0.94, bright: 1.3 })));
+      p.push({ ...PEW(cx, y, 1.6), seatRow: { x0: cx - 1.4, x1: cx + 1.4, y, fx: 0, fy: -1 } });
       if (chance(0.3)) p.push(sitting(cx - 1.2 + Math.random() * 2.4, y + 0.02, pick([GRAY, BLUE, BRICK, WHITE, GREEN]), 0.45, true));
     }
-    for (const y of [13, 21, 29]) p.push(SP(11, y, 0.5, 3, pad(['  |', '  |', '  |', '  |', ' _|_', '*-o-*', " \\_/"]), // chandeliers on long chains
-      (c, row, L) => c === '*' ? C(fract(T * 5 + y) < 0.5 ? YEL : ORANGE, 15) : row < 4 ? C(GRAY, L * 0.8) : C(YEL, Math.max(L, 9)), 6),
-      BX(11, y, 0.025, 0.025, 8.7, CATH_H, (i, t, L) => (set(i, fract(HIT.w * 3) < 0.5 ? '|' : ':', C(GRAY, L * 0.8)), true))); // the chain, right up to the vault
+    for (const y of [13, 21, 29]) p.push(CHANDELIER_RING(11, y, 6.4, CATH_H)); // chandeliers on long chains, right up to the vault
     for (const [x, y] of [[3, 20], [18.5, 14], [4, 33], [17, 26]]) if (chance(0.5)) p.push(standing(x, y, pick([GRAY, BLUE, BRICK, GREEN]))); // a few sightseers in the aisles
     return p;
   } };
@@ -23060,19 +23037,13 @@ function clubWall(i, su, uStep, z, d, mx, my, L) {
 const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
   [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
 const SEQUINS = [MAG, CYAN, YEL, RED];
-// buttoned velvet, for the chair backs: a stud in every diamond
-const tufted = (i, t, L) => {
-  BG[i] = C(MAG, (1.2 + L * 0.3) * shadeFace(HIT.face));
-  const a_ = fract(HIT.u * 9), b_ = fract(HIT.w * 9);
-  return set(i, a_ < 0.25 && b_ < 0.3 ? '*' : Math.abs(a_ - b_) < 0.12 ? '\\' : Math.abs(a_ + b_ - 1) < 0.12 ? '/' : ' ', C(MAG, L * 1.3)), true;
-};
 ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75 && Math.abs(y - 9.8) < 0.45, light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
   props: r => {
-    const p = [BX(CLUB_W / 2, 2.2, 4.5, 1.3, 0, 0.5, solid(GRAY, { top: '=', bright: 1.4 }))]; // the stage
+    const p = [CLUB_STAGE(CLUB_W / 2, 2.2, 4.5, 1.3, 0.5)]; // the stage
     p.push(...counterBox(2.2, 6, 0.9, 1.05).map(b => ({ ...b, box: { ...b.box, c: 0, s: 1 } })), standing(1.5, 6, MAG)); // the bar along the left wall, the bartender behind it
     for (let k = 0; k < 3; k++) { // three poles, a dancer on each
       const x = 5.5 + k * 3.5, col = SEQUINS[k];
-      p.push(BX(x, 2, 0.04, 0.04, 0.5, 3, solid(WHITE, { bright: 1.6 })));
+      p.push(CLUB_POLE(x, 2, 0.5, 3));
       p.push(figProp(x, 2.05, CLUB_DANCERS[k], { z: 0.5, h: 1.72, chat: false, light: 12,
         pose: () => 'dance' + mod(Math.floor(T * 1.6 + k * 1.3), FIG_DANCE.length), // (a new move every beat or so)
         tick: s => { s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } })); // (swinging round the pole, facing the way she's going)
@@ -23080,17 +23051,15 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     // little round cocktail tables, a candle on each, two velvet chairs apiece facing the stage; the punters in them, all eyes front
     const busy = 0.45 + 0.4 * barCrowd();
     for (const [x, y] of [[6, 6.4], [9.5, 6.4], [13, 6.4], [7.7, 9.2], [11.2, 9.2]]) {
-      p.push(BX(x, y, 0.32, 0.32, 0.68, 0.74, solid(GRAY, { top: '.', trim: 0.05, bright: 1.2 })), BX(x, y, 0.05, 0.05, 0, 0.68, solid(GRAY)));
-      p.push({ ...SP(x, y, 0.12, 0.14, ['*'], () => C(fract(T * 3 + x) < 0.85 ? YEL : ORANGE, 15), 0.74) }); // (the candle flickers)
+      p.push(FURNITURE_ROUND_TABLE(x, y, 0.32, 0.74, GRAY), TABLE_CANDLE(x, y, 0.74)); // (the candle flickers)
       for (const cx of [x - 0.42, x + 0.42]) {
         const cy = y + 0.55;
-        p.push({ ...BX(cx, cy, 0.22, 0.22, 0, 0.42, solid(MAG, { top: '=', bright: 1.6 })), seat: true, x: cx, y: cy, fx: 0, fy: -1, h: 0.42 }, BX(cx, cy + 0.2, 0.22, 0.04, 0.42, 0.72, tufted)); // (a low back: you can see who's in it)
+        p.push(CLUB_CHAIR(cx, cy, 0, -1), SEAT(cx, cy, 0, -1, 0.42)); // (a low back: you can see who's in it)
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }
     for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
-    p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
-    p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
+    p.push(VIP_BOOTH(15.5, 11.4, 1.55, 1.4, 2.2, -1, 0)); // the VIP booth, curtained off, its sign over the way in
     p.push({...standing(13.4, 10.2, GRAY),service:'vip'}); // the host by the curtain
     p.push({ vm: { kind: 'CIGARETTES', c: 0, s: 1, fs: -1 }, x: 1.4, y: 9.8 }); // a cigarette machine by the bar, the same as the ones on the street
     return p;
@@ -37790,6 +37759,206 @@ function SLOT_MACHINE(x,y,fx,fy,ph) {
     coveTube(vx+c*.34,vy+s*.34,.95,vx+c*.34,vy+s*.34,1.35,.012); // the lever
     coveLathe(vx+c*.34,vy+s*.34,1.34,[[0,0],[0,.03],[.04,.035],[.07,0]],leisurePaint(RED,3.6)); // its knob
   }),box:boxAt(x,y,c,s,.38,.37,0,1.6),radius:.5,slot:{fx,fy}};
+}
+// The club's stage: a plinth with a lit nosing chasing along its edge.
+function CLUB_STAGE(x,y,hl,hw,h) {
+  const top=leisurePaint(GRAY,1.6,.3),nosing=(i,t,L)=>{const k=Math.floor((HIT.u+hl)*4+T*6);BG[i]=C(NEON[k&3],8);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,0,h-.03,.02,top);
+    coveRound(vx,vy,1,0,hl,hw,h-.03,h,.012,leisurePaint(GRAY,2.6,.3)); // the boards
+    drawBox(boxAt(vx,vy+hw+.006,1,0,hl-.03,.006,h-.08,h-.045),nosing); // the light strip along the front
+  }),box:boxAt(x,y,1,0,hl,hw+.012,0,h),radius:Math.hypot(hl,hw),stage:{h}};
+}
+// A dance pole from the stage at z0 to the ceiling, with its flanges.
+function CLUB_POLE(x,y,z0,z1) {
+  const chrome=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,z0,[[0,0],[0,.07],[.015,.06],[.03,.022],[.03,0]],chrome); // the base flange
+    coveTube(vx,vy,z0+.03,vx,vy,z1-.03,.022,WHITE);
+    coveLathe(vx,vy,z1-.03,[[0,0],[0,.022],[.015,.06],[.03,.07],[.03,0]],chrome); // the ceiling flange
+  }),box:boxAt(x,y,1,0,.07,.07,z0,z1),radius:.1,pole:{z0,z1}};
+}
+// A candle in its glass on a table top at z, the flame flickering.
+function TABLE_CANDLE(x,y,z) {
+  const glass=(i,t,L)=>{if(Math.abs(HIT.nx*dx+HIT.ny*dy)>.4&&HIT.w>z+.01)return false;BG[i]=C(RED,1.6);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const f=fract(T*3+x)<.85;
+    foodOval(vx,vy,z+.045,.008,.008,f?.03:.024,(i,t,L)=>{BG[i]=C(f?YEL:ORANGE,15);set(i,' ',0);return true;}); // the flame
+    coveLathe(vx,vy,z,[[0,0],[0,.025],[.04,.024],[.04,0]],leisurePaint(WHITE,4)); // the candle
+    coveLathe(vx,vy,z,[[0,0],[0,.04],[.07,.042],[.07,.036],[.006,.034],[.006,0]],glass); // its glass, clear but for the rim and a tint
+  }),box:boxAt(x,y,1,0,.042,.042,z,z+.08),radius:.06,candle:{z}};
+}
+// A low velvet club chair facing (fx,fy): a cushion on short legs, a
+// buttoned back.
+function CLUB_CHAIR(x,y,fx,fy,col=MAG,h=.42) {
+  const c=fy,s=-fx,velvet=leisurePaint(col,1.6,.35);
+  const tufted=(i,t,L)=>{const a=fract(HIT.u*9),b=fract(HIT.w*9),stud=a<.25&&b<.3&&coveDetail(t,.15)>.3;
+    BG[i]=C(col,1.4+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)-(stud?.6:0));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    for(const e of [-1,1])for(const f of [-1,1])part(e*.16,f*.16,.02,.02,0,h-.12,GRAY,.006); // the legs
+    part(0,0,.22,.22,h-.12,h,velvet,.04); // the cushion
+    part(0,-.19,.22,.04,h,.72,tufted,.03); // the buttoned back
+  }),box:boxAt(x,y,c,s,.22,.23,0,.72),radius:.32,clubChair:{h}};
+}
+// The VIP booth: velvet walls on three sides, a curtain across the front in
+// folds, parted at the middle, a lit VIP sign over it. Its front faces (fx,fy).
+function VIP_BOOTH(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,velvet=leisurePaint(MAG,.8,.2),n=Math.round(hl*2/.14);
+  const fold=k=>leisurePaint(RED,1+(k&1)*.5,.3);
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'VIP',0,h+.11,.06,.09,C(YEL,15),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    part(0,-hw+.03,hl,.03,0,h,velvet); for(const e of [-1,1])part(e*(hl-.03),0,.03,hw,0,h,velvet); // the walls
+    part(0,0,hl,hw,h-.03,h,velvet); // its ceiling
+    for(let k=0;k<n;k++){const u=-hl+.06+(hl*2-.12)*(k+.5)/n;if(Math.abs(u)<.18)continue; // the parting
+      part(u,hw-.04+((k&1)?.012:0),(hl*2-.12)/n/2+.004,.028,.02,h-.06,fold(k),.026);}
+    coveTube(vx-c*hl-s*(hw-.04),vy-s*hl+c*(hw-.04),h-.04,vx+c*hl-s*(hw-.04),vy+s*hl+c*(hw-.04),h-.04,.012); // the curtain rail
+    part(0,hw+.02,.35,.02,h+.02,h+.2,sign,.01); // the sign
+  }),box:boxAt(x,y,1,0,Math.abs(c)*hl+Math.abs(s)*hw,Math.abs(s)*hl+Math.abs(c)*hw+.04,0,h+.2),radius:Math.hypot(hl,hw),vip:{fx,fy}};
+}
+// The aquarium's touch pool: a tiled basin, its rim at hand height, water you
+// can see down through to the sand and what lives on it.
+function TOUCH_POOL_TANK(x,y,hl,hw,h=.75) {
+  const rim=.08,floor=.42,water=h-.05,tile=(i,t,L)=>{const g=coveGroove(HIT.u+HIT.w,.15,.01,t/projX)*coveDetail(t,.2);BG[i]=C(GRAY,1.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-g*.6);set(i,' ',0);return true;};
+  const sand=(i,t,L)=>{BG[i]=C(STONE,2.2+hash(Math.floor(HIT.u*40),Math.floor(HIT.v*40),41)*.6);set(i,' ',0);return true;};
+  const ripple=(i,t,L)=>{const n=noise(HIT.u*4+T*.4,HIT.v*4,37);if(n<.62)return false;BG[i]=C(CYAN,2+n*2);return set(i,'~',C(WHITE,10)),true;}; // (clear but for the ripples)
+  const life=[];
+  for(let k=0;k<9;k++)life.push({u:(hash(k,1,40)-.5)*(hl-rim-.15)*2,v:(hash(k,2,40)-.5)*(hw-rim-.12)*2,kind:k%3});
+  const star=(i,t,L)=>{BG[i]=C(ORANGE,3.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const urchin=(i,t,L)=>{const spine=fract(Math.atan2(HIT.v,HIT.u)*3+HIT.w*40)<.4;BG[i]=C(MAG,(spine?1.2:2)+L*.25);set(i,' ',0);return true;};
+  const anemone=(i,t,L)=>{BG[i]=C(RED,2.8+Math.sin(T*2+HIT.w*60)*.4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,water-.004,water),ripple); // the water's surface
+    for(const q of life){const px_=vx+q.u,py_=vy+q.v;
+      if(q.kind===0)for(let a=0;a<5;a++){const an=a*TAU/5;foodOval(px_+Math.cos(an)*.035,py_+Math.sin(an)*.035,floor,.04,.014,.012,star,Math.cos(an),Math.sin(an));} // a starfish
+      else if(q.kind===1)foodOval(px_,py_,floor,.04,.04,.05,urchin); // an urchin
+      else coveLathe(px_,py_,floor,[[0,0],[0,.03],[.05,.022],[.08,.04],[.08,0]],anemone);} // an anemone
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,floor-.02,floor),gondolaFlatOr(sand)); // the sand
+    for(const e of [-1,1]){coveRound(vx,vy+e*(hw-rim/2),1,0,hl,rim/2,0,h,.01,tile);coveRound(vx+e*(hl-rim/2),vy,1,0,rim/2,hw-rim,0,h,.01,tile);} // the basin's walls
+    coveRound(vx,vy,1,0,hl-rim,hw-rim,0,floor-.02,.005,tile); // its floor
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),touchPool:{floor,water,h,life:life.length}};
+}
+const gondolaFlatOr=shade=>(i,t,L)=>{HIT.nx=0;HIT.ny=0;HIT.nz=1;return shade(i,t,L);};
+// A spinner stand of plush sharks: a pole, three round shelves, the sharks
+// lying round each with their fins up.
+function PLUSH_STAND(x,y) {
+  const shelves=[.45,.95,1.45],wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,39);
+  const plush=col=>(i,t,L)=>{const belly=HIT.nz<-.2;BG[i]=C(belly?WHITE:col,(belly?3.6:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [k,z] of shelves.entries())for(let j=0;j<5;j++){const a=j*TAU/5+k*.6+T*.2,col=[GRAY,BLUE,MAG,CYAN][(j+k)&3],sx=vx+Math.cos(a)*.18,sy=vy+Math.sin(a)*.18,c=-Math.sin(a),s=Math.cos(a),sh=plush(col);
+      foodOval(sx,sy,z+.02,.11,.04,.07,sh,c,s); // the body, lying round the shelf
+      foodOval(sx,sy,z+.07,.025,.008,.05,sh,c,s);} // its fin
+    for(const z of shelves)coveLathe(vx,vy,z,[[0,0],[0,.3],[.02,.3],[.02,0]],wood); // the shelves
+    coveTube(vx,vy,0,vx,vy,1.6,.02,GRAY);coveLathe(vx,vy,0,[[0,0],[0,.22],[.03,.2],[.03,0]],wood); // the pole, its foot
+  }),box:boxAt(x,y,1,0,.3,.3,0,1.6),radius:.35,plushStand:{shelves}};
+}
+// The cathedral's fittings, built: the sanctuary steps, the altar under its
+// cloth with its cross and candlesticks, the altar rail, the pulpit, the
+// font, the votive stand, the pews and the chandeliers on their chains.
+const cathStone=(i,t,L)=>{const g=coveGroove(HIT.w,.3,.006,t/projX)*coveDetail(t,.3);BG[i]=C(GRAY,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-g*.5);set(i,' ',0);return true;};
+const cathGold=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
+const cathOak=seed=>(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed);
+const cathFlame=(x,y,z)=>{const f=fract(T*7+x*3)<.5;foodOval(x,y,z,.01,.01,f?.035:.028,(i,t,L)=>{BG[i]=C(f?YEL:ORANGE,15);set(i,' ',0);return true;});};
+// Two broad steps up to the sanctuary, each with a rounded nosing.
+function SANCTUARY_STEPS(x,y,hl,hw,h) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy-.15,1,0,hl,hw-.15,h/2,h,.02,cathStone); // the upper step
+    coveRound(vx,vy,1,0,hl,hw,0,h/2,.02,cathStone); // the lower
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),walk:true,steps:{h}};
+}
+// The altar: a stone block, its cloth laid over the top and hanging down the front.
+function ALTAR(x,y,hl,hw,h,base=0) {
+  h+=base;
+  const cloth=(i,t,L)=>{const hem=HIT.w<h-.32&&HIT.w>h-.36;BG[i]=C(hem?YEL:WHITE,(hem?4:4.4)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl+.02,hw+.02,h-.01,h+.006,.004,cloth); // the cloth on top
+    coveRound(vx,vy+hw+.01,1,0,hl-.1,.008,h-.4,h-.01,.003,cloth); // and down the front
+    coveRound(vx,vy,1,0,hl,hw,base+.06,h-.01,.015,cathStone); coveRound(vx,vy,1,0,hl+.04,hw+.04,base,base+.06,.01,cathStone); // the block, its plinth
+  }),box:boxAt(x,y,1,0,hl+.04,hw+.04,base,h+.006),radius:Math.hypot(hl,hw),altar:{h:h+.006}};
+}
+// A gold cross standing on a base at z.
+function ALTAR_CROSS(x,y,z,h=1.8,arm=.45) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.12,.08,z,z+.06,.01,cathGold); // its base
+    coveRound(vx,vy,1,0,.04,.04,z+.06,z+h,.008,cathGold); // the upright
+    coveRound(vx,vy,1,0,arm,.04,z+h*.62,z+h*.62+.1,.008,cathGold); // the arms
+  }),box:boxAt(x,y,1,0,arm,.08,z,z+h),radius:arm,cross:{z}};
+}
+// A floor candlestick: a spread foot, a turned stem, a drip pan, the candle and its flame.
+function CANDLESTICK(x,y,h=1.5,base=0) {
+  const stem=[[0,0],[0,.16],[.04,.14],[.08,.04],[.6,.03],[.65,.05],[.7,.03],[h-.12,.025],[h-.1,.07],[h-.08,.07],[h-.08,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    cathFlame(vx,vy,base+h+.14);
+    coveLathe(vx,vy,base+h-.08,[[0,0],[0,.022],[.22,.02],[.22,0]],(i,t,L)=>{BG[i]=C(WHITE,5+L*.2);set(i,' ',0);return true;}); // the candle
+    coveLathe(vx,vy,base,stem,cathGold);
+  }),box:boxAt(x,y,1,0,.16,.16,base,base+h+.18),radius:.2,candlestick:{h}};
+}
+// The altar rail along x: a kneeler step, turned balusters, the top rail.
+function ALTAR_RAIL(x,y,hl,h=.9) {
+  const oak=cathOak(17),n=Math.round(hl*2/.18);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,.07,h-.06,h,.015,oak); // the rail
+    for(let k=0;k<=n;k++)coveLathe(vx-hl+.03+(hl*2-.06)*k/n,vy,.12,[[0,0],[0,.025],[.15,.035],[.35,.022],[.55,.03],[h-.18,.025],[h-.18,0]],oak); // the balusters
+    coveRound(vx,vy,1,0,hl,.07,0,.12,.01,oak); // the sill they stand on
+    coveRound(vx,vy+.25,1,0,hl,.12,0,.14,.04,(i,t,L)=>{BG[i]=C(RED,1.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}); // the kneeler, on the people's side
+  }),box:boxAt(x,y+.13,1,0,hl,.26,0,h),radius:hl+.1,rail:{h}};
+}
+// The pulpit: a tub on a stem, a sloping book rest on its rim.
+function PULPIT(x,y,fx,fy) {
+  const length=Math.hypot(fx,fy)||1;fx/=length;fy/=length;
+  const oak=cathOak(23),tub=[[0,0],[0,.22],[.06,.18],[.08,.12],[.55,.14],[.62,.38],[1.15,.4],[1.2,.42],[1.2,.36],[.7,.34],[.7,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,0,tub,oak);
+    for(let k=0;k<3;k++)coveRound(vx+fx*(.34-k*.04),vy+fy*(.34-k*.04),fy,-fx,.16,.06,1.2+k*.03,1.23+k*.03,.006,oak); // the book rest, stepped back up
+  }),box:boxAt(x,y,1,0,.42,.42,0,1.32),radius:.45,pulpit:{fx,fy}};
+}
+// The font: a stone bowl on a pedestal, holy water still in it.
+function FONT(x,y,h=1.0) {
+  const bowl=[[0,0],[0,.3],[.08,.26],[.12,.14],[.55,.12],[.62,.42],[h,.5],[h,.44],[h-.12,.38],[h-.12,0]];
+  const water=(i,t,L)=>{BG[i]=C(CYAN,2+noise(HIT.u*6+T*.3,HIT.v*6,505)*2);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,h-.10,[[0,0],[0,.38],[.001,.38],[.001,0]],water);
+    coveLathe(vx,vy,0,bowl,cathStone);
+  }),box:boxAt(x,y,1,0,.5,.5,0,h),radius:.55,font:{h}};
+}
+// The votive stand: a sloped rack in three tiers of tealights, as many lit
+// as candles have been lit today (count()).
+function VOTIVE_STAND(x,y,hl,count) {
+  const oak=cathOak(29),tiers=[.7,.78,.86],slots=[];
+  tiers.forEach((z,row)=>{for(let k=0;k<8;k++)slots.push({u:-hl+.1+k*(hl*2-.2)/7,v:.15-row*.12,z});});
+  const cup=[[0,0],[0,.025],[.03,.027],[.03,.022],[.012,.02],[.012,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const lit=count();
+    slots.forEach((q,n)=>{const px_=vx+q.u,py_=vy+q.v;if(n<lit)cathFlame(px_,py_,q.z+.025);
+      coveLathe(px_,py_,q.z,cup,n<lit?(i,t,L)=>{BG[i]=C(RED,4+fract(T*6+n*.37)*1.5);set(i,' ',0);return true;}:leisurePaint(WHITE,3.4));});
+    tiers.forEach((z,row)=>coveRound(vx,vy+.15-row*.12,1,0,hl,.06,.66,z,.006,oak)); // the tiers
+    coveRound(vx,vy,1,0,hl,.25,0,.66,.02,oak); // the stand
+  }),box:boxAt(x,y,1,0,hl,.25,0,.92),radius:hl+.1,votive:{slots:slots.length}};
+}
+// A pew along x facing (0,-1): the seat, the back with a book ledge, carved
+// ends with finials, and on the floor behind it a kneeler for the row behind.
+function PEW(x,y,hl) {
+  const oak=cathOak(31);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl-.04,.22,.4,.45,.015,oak); // the seat
+    coveRound(vx,vy+.26,1,0,hl-.04,.04,.45,1.0,.015,oak); // the back
+    coveRound(vx,vy+.26,1,0,hl-.04,.05,.88,.92,.012,oak); // the book ledge along its top, for the row behind
+    for(const e of [-1,1]){coveRound(vx+e*(hl-.03),vy+.04,1,0,.03,.28,0,1.0,.012,oak); // the carved ends
+      coveLathe(vx+e*(hl-.03),vy+.04,1.0,[[0,0],[0,.035],[.04,.04],[.07,0]],oak);} // their finials
+    for(const e of [-1,1])coveRound(vx+e*(hl-.12),vy+.48,1,0,.04,.04,0,.06,.008,oak); // the kneeler's feet
+    coveRound(vx,vy+.48,1,0,hl-.04,.08,.06,.14,.03,(i,t,L)=>{BG[i]=C(RED,1.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}); // the kneeler, for the row behind
+  }),box:boxAt(x,y+.13,1,0,hl,.43,0,1.07),radius:hl+.2,pew:true};
+}
+// A chandelier hung from the vault on its chain: a gilt ring of arms, a
+// candle and flame on each.
+function CHANDELIER_RING(x,y,z,top,r=.4,arms=6) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=0;k<arms;k++){const a=k*TAU/arms,ax=vx+Math.cos(a)*r,ay=vy+Math.sin(a)*r;
+      cathFlame(ax,ay,z+.14);
+      coveLathe(ax,ay,z+.02,[[0,0],[0,.016],[.12,.015],[.12,0]],leisurePaint(WHITE,5)); // the candle
+      coveLathe(ax,ay,z,[[0,0],[0,.04],[.02,.04],[.02,0]],cathGold); // its cup
+      coveTube(vx,vy,z-.1,ax,ay,z,.01,YEL);} // the arm
+    coveLathe(vx,vy,z-.25,[[0,0],[0,.03],[.1,.08],[.18,.03],[.2,0]],cathGold); // the boss
+    coveTube(vx,vy,z-.05,vx,vy,top,.012,GRAY); // the chain, right up to the vault
+  }),chandelier:{z,top,r}};
 }
 // Two wall-mounted boards carry distinct sealed sake bottles. Board tops set
 // every bottle foot and guard height; brackets derive from the same underside.
