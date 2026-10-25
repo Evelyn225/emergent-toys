@@ -15940,12 +15940,9 @@ function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind th
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
   return false;
 }
-function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves of coloured spines
-  if (z > 2.6 || (my === room.H - 1)) return false;
-  if (fract(z / 0.42) < 0.12) { set(i, '=', C(BRICK, L)); return true; }
-  const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my);
-  set(i, k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L)); BG[i] = C(BRICK, 1); return true;
-}
+// Floor-to-ceiling bookcases round the walls; the right-hand run stops short of the till.
+const BOOKS_CASE = { kind: 'books', timber: true, height: 2.15, levels: [0.15, 0.55, 0.95, 1.35, 1.75] };
+const BOOKS_CASES = [BOOKS_CASE, { ...BOOKS_CASE, wall: 'left', from: 1.2, to: 6 }, { ...BOOKS_CASE, wall: 'right', from: 1.2, to: 4.3 }];
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind real pots, red walls hung with signs
   if (my === 0 && mx < 11 && z < 1.4) {
     const seam=coveGroove(u,.6,.003,uStep);
@@ -16155,7 +16152,7 @@ const ROOM_DEFS = {
       return p;
     } },
   books: { grid: ['##########', '#........#', '#.SS..SS.#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', wall: booksWall, keeper: [7.8, 4.6],
+    light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', shelves: BOOKS_CASES, keeper: [7.8, 4.6],
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
       BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), SEAT(2.2, 5.05, 0, 1), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
@@ -17553,7 +17550,7 @@ function oldWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.95) return set(i, '=', C(YEL, L * 0.6)), true;
   BG[i] = C(w === 'TAILOR' ? STONE : GREEN, 1.1); return set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 3 ? ' ' : w === 'ANTIQUES' ? '*' : '.', C(YEL, L * 0.35)), true; // faded wallpaper
 }
-ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', x1: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
+ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', to: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
   props: r => {
     const w = r.word, p = [BX(9.8, 7.25, 1.0, 0.3, 0, 0.95, solid(BRICK, { panel: 0.5, trim: 0.9, top: '=' })), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
       clothCurtain(10.02, 1.5, 0.5, w === 'TAILOR' ? GRAY : RED), clothCurtain(10.02, 3.5, 0.5, w === 'TAILOR' ? GRAY : RED)]; // the fitting rooms
@@ -37695,10 +37692,10 @@ function gondolaBlocks(grid) {
   return out;
 }
 // The facings on one shelf face of a gondola: (u along the gondola, side ±1).
-function gondolaFacings(len,depth,kind,seed,sides=[-1,1]) {
+function gondolaFacings(len,depth,kind,seed,sides=[-1,1],levels=GONDOLA.levels,height=GONDOLA.height) {
   const S=GONDOLA_STOCK[kind],G=GONDOLA,out=[];
-  for(const [n,z]of G.levels.entries()){
-    const top=(G.levels[n+1]??G.height-.05)-.03,gap=top-z-G.board;
+  for(const [n,z]of levels.entries()){
+    const top=(levels[n+1]??height-.05)-.03,gap=top-z-G.board;
     for(const side of sides){
       let u=-len/2+G.upright+.01,k=0;
       while(u<len/2-G.upright-.02){
@@ -37790,32 +37787,39 @@ function SHOP_GONDOLA(b,kind,seed) {
   }),box:boxAt(cx,cy,1,0,(b.x1-b.x0)/2,(b.y1-b.y0)/2,0,G.height),radius:Math.hypot(len,half*2)/2+.1,
     gondola:{block:b,kind,len,half,depth,alongX,facings:facings.length}};
 }
-// Wall shelving along the back wall (its face at y=1), shelves fitted bay by
-// bay between full-depth uprights, a back panel and a top cap: the same stock
-// as the islands, one face. Shallow enough to keep the clerk's aisle open.
+// Wall shelving against a wall face, shelves fitted bay by bay between
+// full-depth uprights, a back panel and a top cap: the same stock as the
+// islands, one face. Shallow enough to keep a clerk's aisle open.
+// opts.wall: 'back' (the face at y=1), 'left' (x=1) or 'right' (x=W-1, needs
+// opts.W); a0..a1 run along that wall. opts.levels/height: a taller case.
 const WALL_SHELF={depth:.2,back:.012,gap:.02,bay:1};
-function SHOP_WALL_SHELVES(x0,x1,kind,seed,opts={}) {
-  const G=GONDOLA,W=WALL_SHELF,c=1,s=0,len=x1-x0,n=Math.max(1,Math.round(len/W.bay)),half=W.depth/2;
-  const cx=(x0+x1)/2,cy=1+half,v0=-half+W.back,depth=W.depth-W.back-W.gap,facings=[];
+function SHOP_WALL_SHELVES(a0,a1,kind,seed,opts={}) {
+  const G=GONDOLA,W=WALL_SHELF,wall=opts.wall||'back',levels=opts.levels||G.levels,height=opts.height||G.height;
+  const len=a1-a0,n=Math.max(1,Math.round(len/W.bay)),half=W.depth/2,mid=(a0+a1)/2;
+  // the model frame: u along the wall, v out from it into the room
+  const [c,s,cx,cy]=wall==='left'?[0,-1,1+half,mid]:wall==='right'?[0,1,opts.W-1-half,mid]:[1,0,mid,1+half];
+  const v0=-half+W.back,depth=W.depth-W.back-W.gap,facings=[];
   // upright centres, the end ones flush with the unit's ends; a bay is the clear span between two
   const posts=Array.from({length:n+1},(_,b)=>-len/2+G.upright/2+b*(len-G.upright)/n),bay=(len-G.upright)/n-G.upright;
-  for(let b=0;b<n;b++)for(const q of gondolaFacings(bay+2*G.upright,depth,kind,seed*7+b,[1]))facings.push({...q,u:q.u+(posts[b]+posts[b+1])/2,k:q.k+b*100});
+  for(let b=0;b<n;b++)for(const q of gondolaFacings(bay+2*G.upright,depth,kind,seed*7+b,[1],levels,height))facings.push({...q,u:q.u+(posts[b]+posts[b+1])/2,k:q.k+b*100});
   const flat=shade=>gondolaFlat(c,s,shade);
   const frame=opts.timber?flat((i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed)):flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
   const back=opts.timber?frame:flat((i,t,L)=>{BG[i]=C(WHITE,3.2+L*.12*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   const plinth=flat((i,t,L)=>{BG[i]=C(opts.timber?BRICK:GRAY,.8+L*.06);set(i,' ',0);return true;});
   const goods=gondolaGoods(facings,kind,c,s,q=>v0+W.gap+depth/2);
-  const inner=half-W.back/2,mid=W.back/2; // everything in front of the back panel
+  const inner=half-W.back/2,front=W.back/2; // everything in front of the back panel
+  const part=(vx,vy,u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1),shade);
+  const side=wall==='back'?[len/2,half]:[half,len/2]; // the collision box, square to the room
   return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
     goods.draw(vx,vy);
     for(let b=0;b<n;b++){const m=(posts[b]+posts[b+1])/2;
-      for(const z of G.levels)drawBox(boxAt(vx+m,vy+mid,c,s,bay/2,inner,z,z+G.board),frame); // shelves, upright face to upright face
-      drawBox(boxAt(vx+m,vy+mid-.015,c,s,bay/2,inner-.015,0,G.levels[0]),plinth);} // a plinth under each bay, set back
-    for(const e of posts)drawBox(boxAt(vx+e,vy+mid,c,s,G.upright/2,inner,0,G.height-.03),frame); // uprights, up to the cap
-    drawBox(boxAt(vx,vy-half+W.back/2,c,s,len/2,W.back/2,0,G.height),back); // the back panel
-    drawBox(boxAt(vx,vy+mid,c,s,len/2,inner,G.height-.03,G.height),frame); // the top cap
-  }),box:boxAt(cx,cy,1,0,len/2,half,0,G.height),radius:Math.hypot(len,W.depth)/2+.1,
-    wallShelves:{x0,x1,kind,bays:n,bay,posts,depth,facings:facings.length}};
+      for(const z of levels)part(vx,vy,m,front,bay/2,inner,z,z+G.board,frame); // shelves, upright face to upright face
+      part(vx,vy,m,front-.015,bay/2,inner-.015,0,levels[0],plinth);} // a plinth under each bay, set back
+    for(const e of posts)part(vx,vy,e,front,G.upright/2,inner,0,height-.03,frame); // uprights, up to the cap
+    part(vx,vy,0,-half+W.back/2,len/2,W.back/2,0,height,back); // the back panel
+    part(vx,vy,0,front,len/2,inner,height-.03,height,frame); // the top cap
+  }),box:boxAt(cx,cy,1,0,side[0],side[1],0,height),radius:Math.hypot(len,W.depth)/2+.1,
+    wallShelves:{a0,a1,wall,kind,bays:n,bay,posts,depth,levels,height,c,s,facings:facings.length}};
 }
 // At room build: the 'S' cells become floor with a gondola on each block.
 function shopGondolas(r) {
@@ -37825,11 +37829,14 @@ function shopGondolas(r) {
   return blocks.map((b,k)=>SHOP_GONDOLA(b,kind,k*13+b.x0*7+b.y0));
 }
 // At room build: a shop whose def asks for shelves gets a wall unit along its
-// back wall (def.shelves: {kind, x0, x1, timber}, or a function of the room).
+// wall (def.shelves: {kind, wall, from, to, timber, levels, height}, a list of
+// them, or a function of the room returning either); a run defaults to the
+// whole back wall.
 function shopWallShelves(r) {
   const spec=typeof r.def.shelves==='function'?r.def.shelves(r):r.def.shelves;
   if(!spec)return [];
-  return [SHOP_WALL_SHELVES(spec.x0??1,spec.x1??r.W-1,spec.kind,(spec.x0??1)*5+r.W,spec)];
+  return [].concat(spec).map((q,k)=>{const side=q.wall&&q.wall!=='back',a0=q.from??1,a1=q.to??(side?r.H-1:r.W-1);
+    return SHOP_WALL_SHELVES(a0,a1,q.kind,a0*5+r.W+k*17,{...q,W:r.W});});
 }
 // Two wall-mounted boards carry distinct sealed sake bottles. Board tops set
 // every bottle foot and guard height; brackets derive from the same underside.
