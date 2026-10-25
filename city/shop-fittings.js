@@ -94,3 +94,21 @@ function DESK_MONITOR(x,y,z,fx,fy) {
     part(0,0,.15,.012,z+.08,z+.27,screen); // the screen
   }),box:boxAt(x,y,c,s,.15,.06,z,z+.27),radius:.2,monitor:{z}};
 }
+// A rubber mat on the floor with rounded edges.
+function FLOOR_MAT(x,y,hl,hw,h=.03,col=GRAY,c=1,s=0) {
+  const shade=(i,t,L)=>{BG[i]=C(col,1+L*.15*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,c,s,hl,hw,0,h,Math.min(.012,h*.45),shade)),mat:true};
+}
+// A video store's returns box facing (fx,fy): a steel drop box on its foot,
+// a hooded slot with its flap, RETURNS over it.
+function RETURNS_BOX(x,y,fx,fy) {
+  const c=fy,s=-fx,blue=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);
+  const label=(i,t,L)=>{BG[i]=C(WHITE,4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'RETURNS',0,.8,.018,.03,C(BLUE,3),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.25,.2,.06,.9,blue,.03); // the box
+    part(0,0,.22,.17,0,.06,GRAY,.01); // its foot
+    part(0,.205,.14,.005,.66,.7,(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;}); // the slot's flap, dark
+    part(0,.22,.16,.02,.7,.72,blue,.006); // the hood over it
+    part(0,.202,.12,.002,.76,.84,label); // the label
+  }),box:boxAt(x,y,c,s,.25,.24,0,.9),radius:.35,returnsBox:{fx,fy}};
+}

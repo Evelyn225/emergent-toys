@@ -81,3 +81,23 @@ test('the bodega counter carries its plexiglass screen; grill, deli case and cra
  });
  assert.deepEqual(r,[]);
 }));
+
+test('toys, sports, video and liquor: built counters, tills and screens on them, the returns box and the bike mat',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  for(const kind of ['toys','sports','video','liquor']){
+   enterRoom(kind,{word:kind.toUpperCase(),ret:[100,100,0]},[5,5,0]);
+   const P=room.props,counter=P.find(o=>o.shopCounter),keeper=room.def.keeper;
+   if(!counter){bad.push([kind,'no counter']);continue;}
+   // the clerk stands behind it, on the side away from the panels
+   const d=counter.shopCounter,vx=-d.s,vy=d.c;if((keeper[0]-counter.x)*vx+(keeper[1]-counter.y)*vy>=0)bad.push([kind,'clerk on the customers\' side']);
+   for(const o of P.filter(o=>o.till||o.plexi))if(Math.abs(o.box.z0-counter.box.z1)>1e-9||!inBox(counter.box,o.x,o.y,0))bad.push([kind,'not on the counter',o.x,o.y]);
+   if(String(ROOM_DEFS[kind].props).includes('BX('))bad.push([kind,'a painted box is left']);
+  }
+  enterRoom('video',{word:'VIDEO',ret:[100,100,0]},[5,5,0]);const rb=room.props.find(o=>o.returnsBox);
+  if(!rb||roomAt(rb.x+rb.returnsBox.fx*.4,rb.y+rb.returnsBox.fy*.4)!=='.')bad.push('returns box faces a wall');
+  enterRoom('sports',{word:'SPORTS',ret:[100,100,0]},[5,5,0]);if(!room.props.some(o=>o.mat))bad.push('no bike mat');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));

@@ -13,14 +13,14 @@ const gasPaint=(col,base,spread=.3)=>(i,t,L)=>{BG[i]=C(col,base+L*spread*coveLig
 // (models facing (fx,fy) put +v that way: c=fy, s=-fx)
 // A shop counter along u (c,s), the customers on +v: a set-back plinth, a
 // laminate carcass with a panel per metre on the customers' face and an
-// overhanging top.
+// overhanging top. col: one colour, or a list the panels take in turn.
 function SHOP_COUNTER(x,y,hl,hw,h,c,s,col=GRAY) {
-  const panels=Math.max(1,Math.ceil(hl*2/1)),pw=hl/panels;
-  const lam=gasPaint(col,1.8),top=gasPaint(STONE,3.6,.25),kick=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.06);set(i,' ',0);return true;};
+  const cols=[].concat(col),panels=Math.max(cols.length>1?Math.round(hl*2/.6):1,Math.ceil(hl*2/1)),pw=hl/panels;
+  const lam=gasPaint(cols[0],1.8),panelLam=cols.map(c=>gasPaint(c,1.8)),top=gasPaint(STONE,3.6,.25),kick=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.06);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
     part(0,0,hl-.04,hw-.05,0,.1,kick,.008); // the plinth
     part(0,-.01,hl-.02,hw-.03,.08,h-.035,lam,.012); // the carcass
-    for(let k=0;k<panels;k++)part(-hl+pw*(2*k+1),hw-.02,pw-.04,.012,.18,h-.12,lam,.008); // panels on the customers' face
+    for(let k=0;k<panels;k++)part(-hl+pw*(2*k+1),hw-.02,pw-.04,.012,.18,h-.12,panelLam[k%cols.length],.008); // panels on the customers' face
     part(0,0,hl,hw,h-.035,h,top,.012); // the top
   }),box:boxAt(x,y,c,s,hl,hw,0,h),radius:Math.hypot(hl,hw),shopCounter:{hl,hw,h,c,s}};
 }
