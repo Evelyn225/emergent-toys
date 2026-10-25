@@ -24,7 +24,13 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/bar-quality.js`, bar-only definition in `city/rooms.js`, manifest and
   focused browser tests. Geometry, real service input and all-shop route checks
   pass; views and rendering costs reviewed. #207 full CI is green.
-  Next: native restaurant paper lanterns, then the Thai spirit house. The user was asked whether public/shop shelves are also in scope;
+  Back bar is merged in **#208**, full CI pending.
+  **Native lantern chunk complete:** `codex/restaurant-lantern-quality`, new
+  `city/restaurant-lanterns.js`, native hanging fixture calls in
+  `city/counters.js`, `city/eateries.js`, `city/dining.js`, manifest/tests.
+  Geometry/clearance, route and bundle checks pass; close/wide/night/phone
+  views and rendering costs reviewed. Next: the Thai spirit house, then
+  painted ceiling lantern patterns and the remaining restaurant audit. The user was asked whether public/shop shelves are also in scope;
   current chunk covers every physical shelf/board in the four home types.
   #204 palms/balcony cache and #205 wall clock are merged, full CI green.
   #197–#202 full CI are green.
