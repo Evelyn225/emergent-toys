@@ -115,3 +115,28 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - Record each finished chunk, branch/PR and next owned files here, so the other
   agent can read it after fetching. This file is asynchronous coordination;
   separate Claude and Codex sessions cannot directly message one another.
+
+## Resumed Codex work (2026-10-25)
+
+Codex resumes `codex/home-television-fit` from main #214 and its saved TV
+work. Files: `city/home-quality.js` (move television builder only), new
+`city/home-television.js`, `city/hotel-polish.js` (construct each TV once),
+`test/browser/city-home-television.browser.test.cjs` and the existing
+coast/home TV material check, plus shared manifest/bundle/notes. No changes
+to Claude's shared home clock, worktop, ellipsoid or KITCHEN_* helpers.
+Claude's #215–#223 and shop-wall-shelves/books work remain with Claude;
+Codex will not edit shop/restaurant files or their portions of rooms.js.
+Current verification: complete the native cabinet-support checks, mutation
+check, close/wide/oblique/night review and ABAB render measurements. Next:
+remaining pass4 home electronics/decor audit, then pass5 homes and pass6
+hotels; civic interiors (pass9) remain available to Codex. Preserve all
+Claude module lists and append-only notes when integrating either branch.
+
+Television chunk verified on `codex/home-television-fit`: three focused
+browser checks plus five existing TV/layout/hotel regressions pass; raised
+pad and broken-jamb mutations are rejected. Close/wide/oblique/rear/low/night/
+phone views and all seven native room variants reviewed. ABAB costs are in
+WORLD_QUALITY.md. Static geometry caches and hotel construction are fixed;
+no shared home clock/worktop/ellipsoid/KITCHEN helper changed. Next remains
+the rest of the home electronics/decor audit. Claude's shop/restaurant work
+is untouched and its pending PRs remain independent.

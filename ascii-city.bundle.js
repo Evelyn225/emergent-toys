@@ -34375,7 +34375,7 @@ function hotelRoomPlan(tier){
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y,angle=0){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1,angle).draw(vx,vy)),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
+function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
@@ -34389,7 +34389,7 @@ function hotelDefinition(tier){
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
  const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
- ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle),hotelLandscape(bed[0],1.03),
+ ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle,r),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
@@ -35580,23 +35580,6 @@ function televisionProgramme(u,v,time,channel) {
   }
   return {base,level,ch,ink};
 }
-function TELEVISION(x,y,r,scale=1,angle=0) {
-  return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    const c=Math.cos(angle),s=Math.sin(angle),at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
-    const shell={...boxAt(vx,vy,c,s,.74*scale,.07*scale,.7*scale,1.55*scale),round:.025*scale};
-    drawBox(shell,(i,t,L)=>{
-      if(HIT.face===3&&Math.abs(HIT.u)<.65*scale&&HIT.w>.79*scale&&HIT.w<1.47*scale)return false;
-      BG[i]=C(GRAY,.8+L*.14*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
-    },coveRayRounded);
-    const [sx,sy]=at(0,.063*scale);
-    drawBox(boxAt(sx,sy,c,s,.65*scale,.001*scale,.79*scale,1.47*scale),(i,t,L)=>{
-      if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
-      const frame=televisionProgramme((HIT.u/(.65*scale)+1)/2,(1.47*scale-HIT.w)/(.68*scale),T,(r.tvChannel??Math.floor(T/24))%4);
-      BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
-    });
-    for(const side of [-1,1]){const [ax,ay]=at(side*.42*scale,.01*scale),[bx,by]=at(side*.5*scale,.1*scale);coveTube(ax,ay,.7*scale,bx,by,.61*scale,.018*scale,GRAY);}
-  }),radius:scale,box:boxAt(x,y,Math.cos(angle),Math.sin(angle),.74*scale,.12*scale,.61*scale,1.55*scale)};
-}
 
 function homeStone(i,t,L) {BG[i]=C(STONE,3.5+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
 function HOME_FRIDGE(x,y,{angle=0,height=1.9,halfWidth=.43,halfDepth=.4}={}) {
@@ -35698,6 +35681,47 @@ ROOM_FLOORS.fernBath=(i,f,x,y,row,column,L)=>{
   const grout=Math.max(coveGroove(x,.4,.008,footprint),coveGroove(y,.4,.008,footprint));
   BG[i]=C(STONE,4.5+L*.18-grout*1.2);set(i,' ',0);
 };
+// Four joined bezel pieces enclose a real recess and back plate. Their front
+// bevels stop at joining edges, so there are no cracks between adjacent bars.
+function TELEVISION(x,y,r,scale=1,angle=0) {
+ const c=Math.cos(angle),s=Math.sin(angle),parts=[],legs=[],q=v=>v*scale;
+ const dark=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+ const rear=(i,t,L)=>{
+  let vent=0;if(HIT.face===4&&HIT.w>q(1.3)&&HIT.w<q(1.4))vent=coveGroove(HIT.u,q(.035),q(.005),t/projX);
+  BG[i]=C(GRAY,.8+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-vent*.5);set(i,' ',0);return true;
+ };
+ const panel=(role,u,v,hl,hw,z0,z1,bevel,omit=[],shade=dark)=>{
+  const profile=kitchenPanelProfile(q(hl),q(hw),q(z0),q(z1),q(bevel));
+  profile.planes=profile.planes.filter(p=>!omit.includes(p[4]));
+  parts.push({role,u:q(u),v:q(v),box:boxAt(0,0,c,s,q(hl),q(hw),q(z0),q(z1)),profile,shade});
+ };
+ // z=0.79..1.47, u=-0.65..0.65 defines both the opening and screen.
+ panel('bezel',0,0,.74,.07,.7,.79,.007,[9]);
+ panel('bezel',0,0,.74,.07,1.47,1.55,.007,[10]);
+ panel('bezel',-.695,0,.045,.07,.79,1.47,.007,[7,9,10]);
+ panel('bezel',.695,0,.045,.07,.79,1.47,.007,[8,9,10]);
+ panel('back',0,-.034,.65,.036,.79,1.47,0,[],rear);
+ panel('power-button',.61,.073,.015,.003,.735,.765,.001);
+ for(const side of [-1,1])for(const v of [-.08,.08]){
+  panel('foot-pad',side*.49,v,.11,.025,.61,.63,.003);
+  const ax=q(side*.49),ay=q(v),az=q(.634),bx=q(side*.42),by=0,bz=q(.72),radius=q(.01);
+  legs.push({ax,ay,az,bx,by,bz,r:radius});
+ }
+ const screenBox=boxAt(0,0,c,s,q(.65),q(.001),q(.79),q(1.47));
+ const screenShade=(i,t,L)=>{
+  if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
+  const frame=televisionProgramme((HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T,(r.tvChannel??Math.floor(T/24))%4);
+  BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
+ };
+ return {...ROOM_MODEL(x,y,(vx,vy)=>{
+  const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v], [sx,sy]=at(0,q(.063));
+  drawBox({...screenBox,x:sx,y:sy,tvRole:'screen'},screenShade);
+  for(const p of parts){const[xx,yy]=at(p.u,p.v);drawBox({...p.box,x:xx,y:yy,...p.profile,tvRole:p.role},p.shade,homeRayWorktop);}
+  for(const p of legs){const[ax,ay]=at(p.ax,p.ay),[bx,by]=at(p.bx,p.by),radius=p.r;
+   drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+radius,Math.abs(by-ay)/2+radius,Math.min(p.az,p.bz)-radius,Math.max(p.az,p.bz)+radius),ax,ay,az:p.az,bx,by,bz:p.bz,r:radius,tvRole:'leg'},dark,coveRayCapsule);
+  }
+ }),radius:scale,box:boxAt(x,y,c,s,q(.74),q(.12),q(.61),q(1.55)),television:{scale,angle}};
+}
 // Home light fittings share closed profiles, an actual bulb/socket and an open
 // shade. Profiles and materials are prepared once, outside the drawing loop.
 const HOME_LAMP_BULB=[[0,0],[0,.014],[.018,.014],[.032,.030],[.050,.040],[.075,.037],[.094,.022],[.103,0]];
