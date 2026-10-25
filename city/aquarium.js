@@ -319,21 +319,11 @@ ROOM_DEFS.aquarium = { grid: AQUA_GRID, light: 0.55, floor: 'aqua', ceil: 'aqua'
       ? figProp(x, y, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.2 })
       : standing(x, y, shirt()));
     // the touch pool: a low rock basin, starfish and crabs and urchins in the shallows
-    p.push(BX(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw, 0, 0.75, (i, t, L) => {
-      if (HIT.face !== 5) { BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.7 ? '=' : (Math.floor(HIT.u * 6) + Math.floor(HIT.w * 6)) & 1 ? '#' : ' ', C(GRAY, L * 0.7)), true; }
-      if (Math.abs(HIT.u) > TOUCH_POOL.hl - 0.08 || Math.abs(HIT.v) > TOUCH_POOL.hw - 0.08) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, L)), true; }
-      BG[i] = C(CYAN, 2 + noise(HIT.u * 4 + T * 0.4, HIT.v * 4, 37) * 2);
-      const k = hash(Math.floor(HIT.u * 5), Math.floor(HIT.v * 5), 38);
-      return set(i, k > 0.85 ? '*' : k > 0.78 ? 'w' : k > 0.73 ? '#' : k > 0.6 ? '~' : ' ', C(k > 0.85 ? ORANGE : k > 0.78 ? RED : k > 0.73 ? MAG : WHITE, 13)), true;
-    }));
+    p.push(TOUCH_POOL_TANK(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw)); // starfish, urchins and anemones under the water (built: leisure-fittings.js)
     if (chance(0.7)) p.push(figProp(TOUCH_POOL.x + 0.4, TOUCH_POOL.y + 0.9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2, pose: 'reach', face: [-0.4, -0.9] })); // a kid, hands in the water
     // the gift shop: a counter, the keeper, a stand of plush sharks
     p.push(...counterBox(20.5, 13.95, 1.1), standing(20.5, 13.3, CYAN));
-    p.push(BX(22.4, 13.2, 0.3, 0.3, 0, 1.6, (i, t, L) => {
-      BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face));
-      if (HIT.face === 5) return set(i, ' ', 0), true;
-      return set(i, fract(HIT.w / 0.4) < 0.15 ? '=' : hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w / 0.4), 39) > 0.4 ? '<' : '@', C(fract(HIT.w / 0.4) < 0.15 ? BRICK : [GRAY, BLUE, MAG, CYAN][Math.floor(HIT.w / 0.4) & 3], 13)), true;
-    }));
+    p.push(PLUSH_STAND(22.4, 13.2)); // the stand of plush sharks, turning
     return p;
   } };
 STOCK_WORD.AQUARIUM = ['sharkplush', 'snowglobe', 'soda', 'water'];
