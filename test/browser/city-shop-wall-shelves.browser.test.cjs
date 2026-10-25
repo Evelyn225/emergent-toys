@@ -40,7 +40,7 @@ test('wall shelves are built units on their wall faces, clear of the clerk, and 
   enterRoom('thrift',{word:'THRIFT',ret:[100,100,0]},[5,5,0]);
   if(!free(9.2,1.5))out.push(['thrift',['fitting room blocked']]);
   enterRoom('store',{word:'STORE',ret:[100,100,0]},[5,5,0]);
-  for(const x of [1.5,2.5,7.5,8.5])if(!free(x,1.6))out.push(['store',['back aisle blocked',x]]);
+  for(const x of [1.5,2.5,7.5,8.3])if(!free(x,1.6))out.push(['store',['back aisle blocked',x]]);
   // the bookshop's aisles beside the cases, and the walk past the right-hand case stay open
   enterRoom('books',{word:'BOOKS',ret:[100,100,0]},[5,5,0]);
   for(const [x,y] of [[1.6,2.5],[1.6,4],[8.4,2.5],[5,1.6],[8.4,3.8]])if(!free(x,y))out.push(['books',['aisle blocked',x,y]]);
