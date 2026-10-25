@@ -8,34 +8,24 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** pass 4 shelf books on `codex/home-books-quality`. Owns
-  `city/furniture-quality.js` (open storage book call only), new
-  `city/home-books.js` and its browser test. User requested usable placement on
-  every shelf: also owns new `city/home-shelves.js`, storage surface metadata,
-  interaction hooks, home decor render/capacity in `city/rooms.js` (not bar),
-  `city/actions.js`, `city/goods.js` and optional storage callbacks in
-  `city/goods-ui.js`, plus the home shelf prompt in `city/hud.js` and display
-  placement restoration in `city/save.js`. Claude's bar/lantern ownership stays
-  separate. Books and home shelves are complete and locally checked in **PR #206**;
-  focused checks pass. Full CI passed Node/three browser shards; its older roof
-  traversal test failed a wall-clock assumption. Codex is repairing that test
-  in merged **#207**, verified normally and with90ms added per render frame.
-  **Current chunk complete:** `codex/bar-backbar-quality`, new
-  `city/bar-quality.js`, bar-only definition in `city/rooms.js`, manifest and
-  focused browser tests. Geometry, real service input and all-shop route checks
-  pass; views and rendering costs reviewed. #207 full CI is green.
-  Back bar is merged in **#208**, full CI pending.
-  **Native lantern chunk complete:** `codex/restaurant-lantern-quality`, new
-  `city/restaurant-lanterns.js`, native hanging fixture calls in
-  `city/counters.js`, `city/eateries.js`, `city/dining.js`, manifest/tests.
-  Geometry/clearance, route and bundle checks pass; close/wide/night/phone
-  views and rendering costs reviewed. Next: the Thai spirit house, then
-  painted ceiling lantern patterns and the remaining restaurant audit. The user was asked whether public/shop shelves are also in scope;
-  current chunk covers every physical shelf/board in the four home types.
-  #204 palms/balcony cache and #205 wall clock are merged, full CI green.
-  #197–#202 full CI are green.
-  User has paused Claude. Codex takes over the back bar, lanterns and Thai
-  spirit house queue below, then resumes the remaining quality audit.
+- **Codex (Claude is currently unavailable):** owns the active restaurant
+  quality queue and the existing home quality queue. Completed and merged:
+  **#206** home books/shelf placement; **#207** roof-browser state waits,
+  repairing #206's only CI failure; **#208** built bar cabinet/bottles/glasses;
+  **#209** eight fitted hanging restaurant lanterns. #207–#209 full CI are green.
+  **Current chunk complete:** `codex/thai-spirit-house-quality`, new
+  `city/thai-spirit-house.js`, spiritHouse dispatch in `city/dining.js`,
+  manifest and geometry tests. Roof/support/garland probes and all-shop routes
+  pass; front/side/roof/garland/wide/night/phone views reviewed. Final local
+  rendering measurements are recorded in WORLD_QUALITY.md; publication
+  follows the same focused-check/PR workflow.
+  **Next:** painted ceiling lantern patterns and the remaining restaurant
+  audit (including the izakaya's painted sake bottles), then the remaining
+  home electronics/decor audit and pass 5. Keep pass 8 open until audited.
+  #206 covers every physical home shelf board; the question about extending
+  placement to shop/public shelves remains unanswered.
+  #197–#202 and #204–#205 full CI are green. Keep the home files with Codex
+  if Claude resumes; agree on a fresh ownership split before overlapping.
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
