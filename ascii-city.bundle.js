@@ -37645,6 +37645,7 @@ function phoFanHeading(fx,fy,t,phase=0) {
 function PHO_WALL_FAN(x,y,z,fx,fy,phase=0) {
   const F=PHO_FAN,plastic=(base,lv)=>(i,t,L)=>{BG[i]=C(base,lv+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   const white=plastic(WHITE,3.6),blue=plastic(CYAN,2.6),wire=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  const mountProfile=kitchenPanelProfile(.06,.012,z-.24,z-.08,.006);
   const px=x+fx*F.pivot,py=y+fy*F.pivot; // the head turns about this point on its arm
   return {...ROOM_MODEL(px,py,(vx,vy)=>{
     const [hx,hy]=phoFanHeading(fx,fy,T,phase),c=hy,s=-hx; // heading (hx, hy) is the lathe's +v: (-s, c)
@@ -37677,7 +37678,7 @@ function PHO_WALL_FAN(x,y,z,fx,fy,phase=0) {
     const [wx,wy]=[vx-fx*F.pivot,vy-fy*F.pivot];
     coveTube(wx+fx*.03,wy+fy*.03,z-.16,vx,vy,z-.11,.016,WHITE);
     coveTube(vx,vy,z-.11,vx,vy,z-.055,.016,WHITE);
-    drawBox({...boxAt(wx+fx*.012,wy+fy*.012,-fy,fx,.06,.012,z-.24,z-.08),...kitchenPanelProfile(.06,.012,z-.24,z-.08,.006)},white,homeRayWorktop);
+    drawBox({...boxAt(wx+fx*.012,wy+fy*.012,-fy,fx,.06,.012,z-.24,z-.08),...mountProfile},white,homeRayWorktop);
   }),radius:F.pivot+F.cage+.1,phoFan:{x,y,z,fx,fy,phase,px,py}};
 }
 
@@ -37710,22 +37711,24 @@ function TRAILING_PLANT(x,y,z,fx,fy,seed=x*5+y) {
     q.root={u:q.off*.5,v:potV+.03,z:z+.105}; // in the soil
     q.rim={u:q.off/d*.097,v:potV+.09/d*.097,z:z+.125}; // just over the rim
     q.knee={u:q.rim.u,v:q.rim.v+.01,z:z-.04}; // past the pot's base
-    q.end={u:q.off,v:reach(q.len),z:z+.13-q.len};
+    q.end={u:q.off,v:reach(q.len),z:q.rim.z-.03-q.len};
     const along=lz=>{const [a,b]=lz>=q.knee.z?[q.rim,q.knee]:[q.knee,q.end],f=(a.z-lz)/(a.z-b.z);return [a.u+(b.u-a.u)*f,a.v+(b.v-a.v)*f];};
     for(let k=1;k*.06<q.len;k++){
-      const lz=q.rim.z-.03-k*.06,[u,v]=along(lz+.03),side=Math.sin(k*1.3+q.sway)*.025;
+      const lz=q.rim.z-.03-k*.06,[u,v]=along(lz),side=Math.sin(k*1.3+q.sway)*.025;
       leaves.push({u:u+side,v,z:lz,k:k+n});
     }
   }
+  const leafShades=[0,1,2].map(leaf),plateProfile=kitchenPanelProfile(.03,.006,z-.12,z+.01,.003);
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
-    for(const q of leaves){const [lx,ly]=at(q.u,q.v);drawBox(boxAt(lx,ly,c,s,.03,.01,q.z-.028,q.z+.028),leaf(q.k),homeRayEllipsoid);}
+    for(const q of leaves){const [lx,ly]=at(q.u,q.v);drawBox(boxAt(lx,ly,c,s,.03,.01,q.z-.028,q.z+.028),leafShades[q.k%3],homeRayEllipsoid);}
     for(const q of vines){const [ax,ay]=at(q.root.u,q.root.v),[mx,my]=at(q.rim.u,q.rim.v),[kx,ky]=at(q.knee.u,q.knee.v),[bx,by]=at(q.end.u,q.end.v);
       coveTube(ax,ay,q.root.z,mx,my,q.rim.z,.003,GREEN);coveTube(mx,my,q.rim.z,kx,ky,q.knee.z,.003,GREEN);coveTube(kx,ky,q.knee.z,bx,by,q.end.z,.003,GREEN);}
     const [px_,py_]=at(0,potV);coveLathe(px_,py_,z,pot,clay);
     // the bracket: a wall plate, an arm under the pot, a brace
     const [wx,wy]=at(0,.006),[ex,ey]=at(0,potV);
-    drawBox({...boxAt(wx,wy,c,s,.03,.006,z-.12,z+.01),...kitchenPanelProfile(.03,.006,z-.12,z+.01,.003)},(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY),homeRayWorktop);
+    drawBox({...boxAt(wx,wy,c,s,.03,.006,z-.12,z+.01),...plateProfile},metal,homeRayWorktop);
     coveTube(wx+fx*.006,wy+fy*.006,z-.006,ex,ey,z-.006,.006,GRAY);
     coveTube(wx+fx*.006,wy+fy*.006,z-.1,ex-fx*.03,ey-fy*.03,z-.008,.004,GRAY);
   }),radius:.45,trailingPlant:{x,y,z,fx,fy,vines,leaves:leaves.map(q=>({...q})),pot:{v:potV,top:z+.115,radius:.085,inner:.073,soil:z+.105}}};

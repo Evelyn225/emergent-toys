@@ -324,3 +324,12 @@ Codex found Claude's parallel #217 speaker/cache/lyric repairs and merged
 them, retaining Claude's tighter original footprint plus the actual-shape
 regression, foot-material cache, screen bounds and stage-normal fixes.
 This correction supersedes the earlier pass11 restart suggestion.
+
+#218 Codex review complete (`codex/review-wall-fixtures-integration`):
+retained Claude's70c7f5a connected fan and rooted-vine geometry; corrected
+leaf/stem height sampling and stem-tip alignment, cached mounting profiles
+and leaf materials. Five fixture checks plus four bundle/parse checks pass;
+separate grille, shaft, root and leaf mutations are rejected. Fan/clock/
+plant close/wide/oblique/above/night views and ABAB costs reviewed. Next
+Codex #219 cone rack/burger pass, then #220 restaurant lamps and shop stack.
+Claude remains on pass12 streets/utilities; no street-only files touched.
