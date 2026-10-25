@@ -37629,7 +37629,10 @@ const gondolaFlat=(c,s,shade)=>(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,
 function gondolaTurned(q,form) {
   const r=Math.min(q.w,q.d)/2-.008,h=q.h;
   if(form==='pot'){const ph=Math.min(.12,h*.45);return [[0,0],[0,r*.72],[ph,r],[ph,r*.92],[ph+(h-ph)*.45,r*1.0],[h*.92,r*.6],[h,0]];}
-  return [[0,0],[0,r*.6],[h*.08,r*.65],[h*.45,r],[h*.75,r*.45],[h*.9,r*.32],[h*.94,r*.42],[h*.96,r*.38],[h*.96,0]]; // a jug: belly, neck, lip
+  // A closed ceramic shell: an open flared neck, inner belly and an 8mm
+  // floor that rests on the shelf, rather than a solid disk over the mouth.
+  return [[0,0],[0,r*.6],[h*.08,r*.65],[h*.45,r],[h*.75,r*.45],[h*.9,r*.32],[h*.94,r*.42],[h*.96,r*.38],
+    [h*.96,r*.27],[h*.9,r*.23],[h*.75,r*.35],[h*.45,r-.004],[h*.08,r*.65-.004],[.008,r*.6-.004],[.008,0],[0,0]];
 }
 // The stock on a run of facings, pre-built (a gondola holds hundreds); draw()
 // moves them to the model's origin and draws them nearest first, so the depth
@@ -37651,7 +37654,7 @@ function gondolaGoods(facings,kind,c,s,vOf) {
       BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
     };
     if(f==='bottle')return (i,t,L)=>{BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-    if(f!=='box')return (i,t,L)=>{BG[i]=C(q.col,(q.col===WHITE?4.2:2.6)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}; // (a turned ray gives its own normals)
+    if(f!=='box')return (i,t,L)=>{const inside=f==='jug'&&HIT.part>=9;BG[i]=C(q.col,(inside?1.4:q.col===WHITE?4.2:2.6)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}; // (a turned ray gives its own normals)
     return flat((i,t,L)=>{
       const front=HIT.face===3||HIT.face===4,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
       if(S.label&&front&&Math.abs(HIT.w-(q.z+q.h*.55))<q.h*.18){BG[i]=C(WHITE,5+L*.2*light);set(i,' ',0);return true;} // the label band
@@ -37672,12 +37675,12 @@ function gondolaGoods(facings,kind,c,s,vOf) {
         const part=homeLampPart('washers',floor,[[0,.006],[0,.014],[h,.014],[h,.006],[0,.006]]);
         contents.push({ox:ox+c*u-s*v,oy:oy+s*u+c*v,box:{...part.box,gondolaContents:true},shade:gondolaWasherShade,ray:coveRayLathe});
       }
-      return {ox,oy,shade:shade,ray:gondolaBinRay,box:{...boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h),
+      return {ox,oy,shade,ray:gondolaBinRay,box:{...boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h),
         gondolaBin:{...boxAt(0,0,1,0,q.w/2,q.d/2,q.z,q.z+q.h),...kitchenTopProfile(q.w/2,q.d/2,q.z,q.z+q.h,.002)}}};
     }
     if(f==='box')return {ox,oy,shade,ray:rayBox,box:boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h)};
-    const prof=f==='bottle'?bottle:gondolaTurned(q,f),r=Math.max(...prof.map(p=>p[1]));
-    return {ox,oy,shade,ray:coveRayLathe,form:f,box:{...boxAt(0,0,1,0,r,r,q.z,q.z+prof[prof.length-1][0]),profile:prof.map(([h,rr])=>[h+q.z,rr])}};
+    const prof=f==='bottle'?bottle:gondolaTurned(q,f),part=homeLampPart('stock',q.z,prof);
+    return {ox,oy,shade,ray:coveRayLathe,form:f,box:part.box};
   });
   const order=boxes.map((_,n)=>n);let orderDx=NaN,orderDy=NaN;
   return {boxes,draw(vx,vy){

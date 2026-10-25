@@ -67,3 +67,19 @@ test('wall-shelf stock stands on its shelf, inside its bay and under the shelf a
  },SHOPS);
  assert.deepEqual(r,[]);
 }));
+
+test('thrift shelf vases have open necks, real inner walls and a closed supported base',()=>fixture(async p=>{
+ const result=await p.evaluate(()=>{
+  enterRoom('thrift',{word:'THRIFT',ret:[100,100,0]},[5,5,0]);const o=room.props.find(p=>p.wallShelves),parts=[],draw=drawBox,bad=[];
+  drawBox=(box,shade,ray=rayBox)=>parts.push({box:{...box},shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}
+  const vases=parts.filter(q=>q.ray===coveRayLathe);
+  for(const q of vases){const b=q.box,from=b.z1+.1,t=q.ray(b.x,b.y,from,0,0,-1,b);
+   if(!(t>0&&Math.abs(from-t-b.z0-.008)<1e-7))bad.push('sealed mouth or missing base');
+   const z=b.z0+(b.z1-b.z0)*.46,inside=q.ray(b.x,b.y,z,1,0,0,b),nx=HIT.nx;
+   const outside=1-q.ray(b.x+1,b.y,z,-1,0,0,b),thickness=outside-inside;
+   if(!(inside>0&&nx<-.5&&thickness>.002&&thickness<.008))bad.push('no thin inward-facing wall');
+   if(!parts.some(s=>s.ray===rayBox&&Math.abs(s.box.z1-b.z0)<1e-8&&inBox(s.box,b.x,b.y,0)))bad.push('base off the shelf');
+  }
+  return{bad:bad.slice(0,8),count:vases.length};
+ });assert.deepEqual(result.bad,[]);assert.ok(result.count>10,'native bric-a-brac vases checked');
+}));
