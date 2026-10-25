@@ -20,6 +20,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 10 (leisure interiors):** cinema rows, arcade cabinets and the
+  casino floor on `claude/leisure-cinema-casino`, from main (new
+  `city/leisure-fittings.js`; the cinema and arcade defs and `cabinet` in
+  `city/rooms.js`, `city/casino.js`). Independent of the pass 7 shop stack.
+  Next: the strip club, aquarium, conservatory, aviary and cathedral.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
