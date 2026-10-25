@@ -29,19 +29,6 @@ const caseGoods = (glyphs, cols, glint = false, seed = 0) => (i, u, v, w, L, f) 
   const shine = glint && hash(Math.floor(a * 9), Math.floor(T * 3), seed + 1) > 0.85;
   return set(i, shine ? '*' : glyphs[k * 37 % glyphs.length | 0], C(cols[k * 23 % cols.length | 0], shine ? 15 : 12)), true;
 };
-// a wall of glass-doored fridges (in a wall painter: z under 2.1), lit inside, shelves of bottles and cartons
-function fridgeWall(i, u, z, L, seed, goods = '!iU#') {
-  if (z > 2.12) return false;
-  const door = fract(u / 0.75);
-  if (z < 0.14) { BG[i] = C(GRAY, 1.6); return set(i, fract(u * 6) < 0.5 ? '=' : '-', C(GRAY, 6)), true; } // the grille along the bottom
-  if (door < 0.04 || door > 0.96 || z > 2.04) { BG[i] = C(GRAY, 3); return set(i, ' ', 0), true; } // the frames
-  if (Math.abs(door - 0.88) < 0.015 && z > 0.8 && z < 1.5) { BG[i] = C(GRAY, 6); return set(i, '|', C(WHITE, 14)), true; } // handles
-  BG[i] = C(CYAN, 2.2 + (1 - Math.abs(door - 0.5)) * 1.5); // lit from inside, through the glass
-  if (fract((z - 0.14) / 0.38) < 0.07) return set(i, '_', C(WHITE, 12)), true; // the shelves
-  const k = hash(Math.floor(u * 9), Math.floor((z - 0.14) / 0.38), seed);
-  if (k < 0.2 || fract(u * 9) < 0.3 || fract((z - 0.14) / 0.38) > 0.8) return set(i, ' ', 0), true;
-  return set(i, goods[k * 31 % goods.length | 0], C(ITEM_COL[k * 17 % 8 | 0], 14)), true;
-}
 // a clothes rail along x: chrome uprights and rail, garments hanging off it in a run of colours
 const clothesRack = (x, y, hl, seed, cols = ITEM_COL, long = false) => ROOM_MODEL(x, y, (vx, vy) => {
   for (const e of [-1, 1]) { rod(vx + e * hl, vy, 0, vx + e * hl, vy, 1.45, 0.015, GRAY, 1.2); rod(vx + e * hl, vy - 0.25, 0.01, vx + e * hl, vy + 0.25, 0.01, 0.015, GRAY, 1.2); }
@@ -243,10 +230,10 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
   light: 1, floor: 'tile', ceil: 'strip', sign: true, signAt: 6, keeper: [11.45, 7.6], glyphs: 'o#=@',
   wall: (i, u, uStep, z, d, mx, my, L) => {
     if (viewIn(9, 1, 13, 3.5) && mx >= 8 && my <= 3) { BG[i] = C(GRAY, 1.6); return set(i, fract(u * 2.5 + (Math.floor(z * 5) & 1) * 0.5) < 0.05 || fract(z * 5) < 0.06 ? '+' : ' ', C(GRAY, L * 0.5)), true; } // the stockroom: bare breeze block
-    return leftWall(mx) && my > 0 && my < room.H - 1 && fridgeWall(i, u, z, L, 3, '!iU#=') || backWall(my) && mx < 6 && z < 2.1 && fridgeWall(i, u, z, L, 4, '#=8o');
+    return false; // (the fridges along the left and back walls are built: shop-fridges.js)
   },
   props: r => {
-    const fruit = r.word === 'FRUIT', p = [...checkout(10.65, 7.6, 0.85), standing(11.45, 7.6, GREEN),
+    const fruit = r.word === 'FRUIT', p = [...checkout(10.65, 7.6, 0.85), standing(11.45, 7.6, GREEN), ...SHOP_FRIDGES.grocer(),
       ...produceStand(8.9, 4.9, 0.9, 63), ...produceStand(8.5, 6.6, 0.8, 70), // (a clear way down from the stockroom door, and between the two) ...(fruit ? produceStand(6.5, 2.4, 0.8, 11) : []),
       BX(12.2, 6.1, 0.5, 0.5, 0, 0.8, (i, t, L) => { // a bin of watermelons
         const f = HIT.face; if (f === 5) { BG[i] = C(GREEN, 1.5); return set(i, hash(i, 9) > 0.5 ? 'O' : 'o', C(GREEN, 9)), true; }
@@ -281,7 +268,7 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
     }
     if (z < 1.25) { BG[i] = C(WHITE, 2.5); return set(i, fract(u * 6) < 0.06 || fract(z * 6) < 0.06 ? '+' : ' ', C(GRAY, L * 0.5)), true; } // white tiles behind the counter
   }
-  if (leftWall(mx) && my > 0) return fridgeWall(i, u, z, L, 9, '!iU');
+  // (the left wall's fridges are built: shop-fridges.js)
   if (z < 1.0) { BG[i] = C(GREEN, 1); return set(i, fract(u * 3) < 0.08 ? '|' : ' ', C(GREEN, L * 0.6)), true; } // green panelling
   if (z < 1.05) return set(i, '=', C(WARM, L)), true;
   BG[i] = C(STONE, 1.6); return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 7 ? ' ' : '.', C(GRAY, L * 0.3)), true;
@@ -289,7 +276,7 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', '#............#', '#.........W.W#', '#.........W..#', '#.........W..#', '#.........W..#', '######DD######'],
   wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
   props: r => {
-    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE),
+    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE), ...SHOP_FRIDGES.deli(),
       BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
         if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
         BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
@@ -945,8 +932,8 @@ ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'stri
 // cave: a walk-in cold room lined with fridges, cases stacked to the ceiling
 function liquorWall(i, u, uStep, z, d, mx, my, L) {
   const c = roomAt(mx, my);
-  if (viewIn(1, 1, 4, 3) && mx <= 4 && my <= 3) { // in the cave: fridges all round, frost over them
-    if (fridgeWall(i, u, z, L, mx * 5 + my + 50, 'U!iU')) return true;
+  if (viewIn(1, 1, 4, 3) && mx <= 4 && my <= 3) { // in the cave: frosted insulated panels round its fridges
+    // (its back wall's fridges are built; the rest is insulated panelling)
     BG[i] = C(WHITE, 2.2); return set(i, hash(Math.floor(u * 9), Math.floor(z * 9), 5) > 0.85 ? '.' : ' ', C(CYAN, 9)), true;
   }
   if (mx >= 1 && mx <= 4 && my >= 1 && my <= 3) { // the cave from outside: white insulated panels, beaded with cold
@@ -956,7 +943,7 @@ function liquorWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && bottleWall(i, u, z, L, 99)) return true;
   if (leftWall(mx) && my > 3 && my < room.H - 1) {
     if (z > 2.18 && z < 2.42) return wallText(i, u, uStep, z, d, 'COLD BEER', -5.5, 2.3, 0.22, 0.24, C(RED, fract(T * 0.4) < 0.92 ? 15 : 5)) || false;
-    if (fridgeWall(i, u, z, L, 98, 'U!iU')) return true;
+    return false; // (under the sign: the built beer fridges)
   }
   return false;
 }
@@ -976,7 +963,7 @@ ROOM_DEFS.liquor = { grid: ['############', '#...#......#', '#...#......#', '##.
       BX(9.6, 6.1, 1.0, 0.015, 1.0, 1.95, (i, t, L) => { if (Math.abs(HIT.u) < 0.3 && HIT.w < 1.3) return false; BG[i] = C(CYAN, 0.6); return set(i, fract((HIT.u + HIT.w) * 2) < 0.05 ? '/' : ' ', C(WHITE, 7)), true; }), // the plexiglass
       BX(10.35, 6.25, 0.18, 0.15, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 3 ? '$' : '#', C(GREEN, L)), true; }),
       caveDoor(2.5, 3.5, 0.5), lintelSign(2.5, 3.5, 0.5, 'BEER', C(BLUE, 3), C(WHITE, 15), WHITE), // the way into the beer cave
-      beerCases(1.5, 1.4, 6), beerCases(3.4, 1.4, 7), beerCases(3.45, 2.4, 5), beerCases(1.7, 7.2, 4), beerCases(2.4, 7.2, 3)];
+      beerCases(1.5, 1.62, 6), beerCases(3.4, 1.62, 7), ...SHOP_FRIDGES.liquor(), beerCases(3.45, 2.4, 5), beerCases(1.7, 7.2, 4), beerCases(2.4, 7.2, 3)];
     p.push(...shoppers([[8.4, 3.6, -1, 0], [7.6, 2, 0, -1], [2.4, 5.4, 0, -1]], 0.4));
     if (chance(0.4)) p.push(shopper(2.2, 2.3, -1, -0.4)); // in the cave, choosing
     return p;
@@ -1012,9 +999,9 @@ ROOM_DEFS.jeweler = { grid: ['#############', '#........#..#', '#...........#', 
 // ---- the corner store stays the corner store (24/7, BODEGA and anything else without a place of its own), but with a
 // wall of fridges, and at a 24/7 the slushie machine and the hot dogs turning; at a bodega, the bodega cat
 const storeProps = ROOM_DEFS.store.props;
-ROOM_DEFS.store.wall = (i, u, uStep, z, d, mx, my, L) => rightWall(mx) && my > 0 && my < room.H - 1 && fridgeWall(i, u, z, L, 6, '!iU#');
+// (the store's right-wall fridges are built: shop-fridges.js)
 ROOM_DEFS.store.props = r => {
-  const p = storeProps(r);
+  const p = [...storeProps(r), ...SHOP_FRIDGES.store()];
   if (r.word === '24/7') p.push(ROOM_MODEL(5.75, 1.75, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
     for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx + e, vy, 0.1, 1.05, 1.45, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
     BXD(vx, vy, 0.24, 0.13, 1.45, 1.55, solid(WHITE, { top: '=' }));
@@ -1092,7 +1079,7 @@ function gasWall(i, u, uStep, z, d, mx, my, L) {
   if (c === 'W') return mx === 9 && my === 3 && wallText(i, u, uStep, z, d, 'KEY AT COUNTER', 3.5, 1.6, 0.11, 0.15, C(WHITE, 13), C(BLUE, 2)); // (round the restroom door)
   if (backWall(my) && mx < 9) {
     if (z > 2.25 && z < 2.6) return wallText(i, u, uStep, z, d, 'ICE COLD', 4.5, 2.42, 0.22, 0.28, C(CYAN, 15), C(BLUE, 2)) || (BG[i] = C(BLUE, 2), set(i, ' ', 0), true);
-    return fridgeWall(i, u, z, L, 12, '!iU#');
+    return false; // (the fridges are built: shop-fridges.js)
   }
   if (rightWall(mx) && my >= 5) { // behind the counter: the cigarettes, the lottery
     if (z > 2.2 && z < 2.6) return wallText(i, u, uStep, z, d, 'LOTTO', 7, 2.4, 0.2, 0.28, C(YEL, 15), C(RED, 3)) || (BG[i] = C(RED, 3), set(i, ' ', 0), true);
@@ -1134,7 +1121,7 @@ ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..
   wc: { x0: 10, y0: 1, x1: 12, y1: 4, sign: [9, 1, 1.5] }, light: 1.2, floor: 'lino', ceil: 'strip', sign: false, wall: gasWall, keeper: [10.4, 7.2], glyphs: 'o#=@%',
   props: r => {
     const counter = solid(GRAY, { panel: 0.5, trim: 0.94, top: '=' });
-    const p = [BX(9.3, 7.2, 1, 0.32, 0, 1, counter, 0, 1), // the counter, along the aisle
+    const p = [BX(9.3, 7.2, 1, 0.32, 0, 1, counter, 0, 1), ...SHOP_FRIDGES.gas(), // the counter, along the aisle
       { ...standing(10.4, 7.2, r.neon), face: [-1, 0] },
       BX(9.35, 7.75, 0.2, 0.18, 1, 1.3, (i, t, L) => { // the till
         if (HIT.face === 2 && HIT.w > 1.15) { BG[i] = C(GREEN, 2); return set(i, ' $'[Math.floor(HIT.v * 20 + 4) & 1], C(GREEN, 14)), true; }
