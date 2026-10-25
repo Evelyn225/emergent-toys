@@ -1155,7 +1155,7 @@ ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..
       aisleSign(4, 5, 'SNACKS', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6.6, 1.8, 'DRINKS', C(BLUE, 4), C(WHITE, 15), 0.4),
       hung(11.6, 5.3, 2.55, (vx, vy, z) => dot(vx, vy, z - 0.12, 0.12, (i, t, L) => { BG[i] = C(GRAY, 4 + L * 0.3); return set(i, fract(HIT.u * 4 + HIT.v * 4) < 0.2 ? ')' : ' ', C(WHITE, 12)), true; })), // the round mirror, for the aisles
     ];
-    if (chance(0.3)) p.push(BX(8.4, 1.3, 0.08, 0.14, 0, 0.6, (i, t, L) => { BG[i] = C(YEL, 4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.35) < 0.06 ? '!' : ' ', C(GRAY, 3)), true; })); // wet floor
+    if (chance(0.3)) p.push(BX(8.4, 1.7, 0.08, 0.14, 0, 0.6, (i, t, L) => { BG[i] = C(YEL, 4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.35) < 0.06 ? '!' : ' ', C(GRAY, 3)), true; })); // wet floor (in front of the fridges)
     p.push(...shoppers([[2.4, 5.2, -1, 0], [5.5, 3.5, -1, 0], [8.4, 2, 0, -1], [2.2, 1.8, -1, 0], [7.6, 4.4, -1, 0]], 0.35));
     return p;
   } };
