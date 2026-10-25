@@ -386,8 +386,8 @@ const CAFE_BAR={x:4.6,y:2.15,half:1.4,height:1,keeperY:1.45,espressoX:5.25,caseX
 const BACK_COUNTER_STAFF_Y=1.4,BACK_COUNTER_Y=2.05;
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'grocery' }, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
-    props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6
+    light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'grocery', to: 8.64 }, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
+    props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6 (the wall shelves stop where the right-hand fridges start)
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', sign: true, neon: true, keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon),
