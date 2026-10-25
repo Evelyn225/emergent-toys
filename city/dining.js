@@ -104,12 +104,6 @@ function dragonWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.98 || z > 2.85) { BG[i] = C(YEL, 4.5); return set(i, fract(u * 6) < 0.5 ? '=' : '+', C(BRICK, 6)), true; } // gold trim
   BG[i] = C(RED, 2.4 + L * 0.15); return set(i, ' ', 0), true;
 }
-const fishTank = (x, y, hl) => [BX(x, y, hl, 0.28, 0, 0.8, solid(GRAY, { panel: 0.4 }), 0, 1), BX(x, y, hl, 0.28, 0.8, 1.6, (i, t, L) => { // the lobsters and the groupers, waiting
-  BG[i] = C(BLUE, 1.6 + (HIT.w - 0.8) * 1.5);
-  const a = HIT.face <= 2 ? HIT.v : HIT.u, f = Math.floor(HIT.w * 6), sx = fract(a * 0.8 + T * 0.1 * (f & 1 ? 1 : -1) + hash(f, 1, 124));
-  if (sx < 0.06 && f > 0 && f < 9) return set(i, f & 1 ? '>' : '<', C(f % 3 ? ORANGE : RED, 13)), true;
-  return set(i, hash(Math.floor(a * 20), Math.floor(HIT.w * 20 - T * 2), 125) > 0.94 ? 'o' : ' ', C(CYAN, 9)), true; // bubbles
-}, 0, 1)];
 ROOM_FLOORS.banquet = (i, f, wx, wy, r, x, L) => { // the hall's carpet: deep red, a gold medallion repeating
   const mu = fract(wx / 1.2) - 0.5, mv = fract(wy / 1.2) - 0.5, m = Math.abs(Math.hypot(mu, mv) - 0.3) < 0.035 || Math.abs(mu) + Math.abs(mv) < 0.08;
   BG[i] = C(m ? YEL : RED, m ? 1.2 + f * 2.4 : 0.8 + f * 1.8); return set(i, m ? ' ' : (r + x) % 4 ? ' ' : '.', C(BRICK, L));
@@ -119,7 +113,7 @@ ROOM_DEFS.dimsum = { grid: backWc(15, 11), wc: wcAt(15), light: 0.95, height: 3.
     ...roundTable(3.2, 4.6, 0.6, 6, { susan: true, chairCol: RED, busy: 0.5 }), ...roundTable(11.6, 5.2, 0.6, 6, { susan: true, chairCol: RED, busy: 0.5 }),
     ...roundTable(3.2, 8.0, 0.6, 6, { susan: true, chairCol: RED, busy: 0.4 }), ...roundTable(11.6, 8.0, 0.6, 6, { susan: true, chairCol: RED, busy: 0.4 }),
     trolley(0), trolleyServer(0, WHITE), trolley(1), trolleyServer(1, RED),
-    ...fishTank(1.3, 6.3, 0.7), roundLantern(5.4, 3.4), roundLantern(9.4, 3.4), roundLantern(7.4, 8.6), ...wcFittings(15)] };
+    SEAFOOD_TANK_UNIT(1, 6.3, 0.7, 1, 0), roundLantern(5.4, 3.4), roundLantern(9.4, 3.4), roundLantern(7.4, 8.6), ...wcFittings(15)] };
 
 // ---- the kissaten (KISSATEN): an old coffee house: dark wood, red velvet booths, the siphons bubbling on the bar, a wall
 // of cups behind it, stained-glass lamps low over the tables
