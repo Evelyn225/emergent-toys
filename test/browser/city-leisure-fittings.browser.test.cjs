@@ -57,3 +57,20 @@ test('the club: poles stand on the stage up to the ceiling, candles on the table
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the touch pool holds its creatures on the sand under clear water inside the basin; the plush sharks lie on their shelves',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  enterRoom('aquarium',{word:'AQUARIUM',ret:[100,100,0]},[5,5,0]);
+  const P=room.props,pool=P.find(o=>o.touchPool),d=pool.touchPool;
+  const draw=drawBox,parts=[];drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray,shade});try{pool.draw(pool.x-px,pool.y-py);}finally{drawBox=draw;}
+  const life=parts.filter(q=>q.box.z0===d.floor);if(life.length<d.life)bad.push(['creatures',life.length]);
+  for(const q of life){const x=q.box.x+px,y=q.box.y+py;if(Math.abs(x-pool.x)>pool.box.hl-.08||Math.abs(y-pool.y)>pool.box.hw-.08)bad.push('a creature in the basin wall');if(q.box.z1>d.water)bad.push('a creature out of the water');}
+  const surface=parts.find(q=>q.box.z1===d.water);let clear=0;for(let k=0;k<40;k++){HIT.u=k*.05-1;HIT.v=k*.013-.3;if(!surface.shade(0,1,8))clear++;}
+  if(clear<20)bad.push(['water not clear',clear]);
+  const plush=P.find(o=>o.plushStand);if(!plush)bad.push('no plush stand');
+  const s=String(ROOM_DEFS.aquarium.props);if(s.includes('BX('))bad.push('painted boxes left in the aquarium');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));

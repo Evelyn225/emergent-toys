@@ -20185,21 +20185,11 @@ ROOM_DEFS.aquarium = { grid: AQUA_GRID, light: 0.55, floor: 'aqua', ceil: 'aqua'
       ? figProp(x, y, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.2 })
       : standing(x, y, shirt()));
     // the touch pool: a low rock basin, starfish and crabs and urchins in the shallows
-    p.push(BX(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw, 0, 0.75, (i, t, L) => {
-      if (HIT.face !== 5) { BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.7 ? '=' : (Math.floor(HIT.u * 6) + Math.floor(HIT.w * 6)) & 1 ? '#' : ' ', C(GRAY, L * 0.7)), true; }
-      if (Math.abs(HIT.u) > TOUCH_POOL.hl - 0.08 || Math.abs(HIT.v) > TOUCH_POOL.hw - 0.08) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, L)), true; }
-      BG[i] = C(CYAN, 2 + noise(HIT.u * 4 + T * 0.4, HIT.v * 4, 37) * 2);
-      const k = hash(Math.floor(HIT.u * 5), Math.floor(HIT.v * 5), 38);
-      return set(i, k > 0.85 ? '*' : k > 0.78 ? 'w' : k > 0.73 ? '#' : k > 0.6 ? '~' : ' ', C(k > 0.85 ? ORANGE : k > 0.78 ? RED : k > 0.73 ? MAG : WHITE, 13)), true;
-    }));
+    p.push(TOUCH_POOL_TANK(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw)); // starfish, urchins and anemones under the water (built: leisure-fittings.js)
     if (chance(0.7)) p.push(figProp(TOUCH_POOL.x + 0.4, TOUCH_POOL.y + 0.9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2, pose: 'reach', face: [-0.4, -0.9] })); // a kid, hands in the water
     // the gift shop: a counter, the keeper, a stand of plush sharks
     p.push(...counterBox(20.5, 13.95, 1.1), standing(20.5, 13.3, CYAN));
-    p.push(BX(22.4, 13.2, 0.3, 0.3, 0, 1.6, (i, t, L) => {
-      BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face));
-      if (HIT.face === 5) return set(i, ' ', 0), true;
-      return set(i, fract(HIT.w / 0.4) < 0.15 ? '=' : hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w / 0.4), 39) > 0.4 ? '<' : '@', C(fract(HIT.w / 0.4) < 0.15 ? BRICK : [GRAY, BLUE, MAG, CYAN][Math.floor(HIT.w / 0.4) & 3], 13)), true;
-    }));
+    p.push(PLUSH_STAND(22.4, 13.2)); // the stand of plush sharks, turning
     return p;
   } };
 STOCK_WORD.AQUARIUM = ['sharkplush', 'snowglobe', 'soda', 'water'];
@@ -37836,6 +37826,42 @@ function VIP_BOOTH(x,y,hl,hw,h,fx,fy) {
     coveTube(vx-c*hl-s*(hw-.04),vy-s*hl+c*(hw-.04),h-.04,vx+c*hl-s*(hw-.04),vy+s*hl+c*(hw-.04),h-.04,.012); // the curtain rail
     part(0,hw+.02,.35,.02,h+.02,h+.2,sign,.01); // the sign
   }),box:boxAt(x,y,1,0,Math.abs(c)*hl+Math.abs(s)*hw,Math.abs(s)*hl+Math.abs(c)*hw+.04,0,h+.2),radius:Math.hypot(hl,hw),vip:{fx,fy}};
+}
+// The aquarium's touch pool: a tiled basin, its rim at hand height, water you
+// can see down through to the sand and what lives on it.
+function TOUCH_POOL_TANK(x,y,hl,hw,h=.75) {
+  const rim=.08,floor=.42,water=h-.05,tile=(i,t,L)=>{const g=coveGroove(HIT.u+HIT.w,.15,.01,t/projX)*coveDetail(t,.2);BG[i]=C(GRAY,1.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-g*.6);set(i,' ',0);return true;};
+  const sand=(i,t,L)=>{BG[i]=C(STONE,2.2+hash(Math.floor(HIT.u*40),Math.floor(HIT.v*40),41)*.6);set(i,' ',0);return true;};
+  const ripple=(i,t,L)=>{const n=noise(HIT.u*4+T*.4,HIT.v*4,37);if(n<.62)return false;BG[i]=C(CYAN,2+n*2);return set(i,'~',C(WHITE,10)),true;}; // (clear but for the ripples)
+  const life=[];
+  for(let k=0;k<9;k++)life.push({u:(hash(k,1,40)-.5)*(hl-rim-.15)*2,v:(hash(k,2,40)-.5)*(hw-rim-.12)*2,kind:k%3});
+  const star=(i,t,L)=>{BG[i]=C(ORANGE,3.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const urchin=(i,t,L)=>{const spine=fract(Math.atan2(HIT.v,HIT.u)*3+HIT.w*40)<.4;BG[i]=C(MAG,(spine?1.2:2)+L*.25);set(i,' ',0);return true;};
+  const anemone=(i,t,L)=>{BG[i]=C(RED,2.8+Math.sin(T*2+HIT.w*60)*.4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,water-.004,water),ripple); // the water's surface
+    for(const q of life){const px_=vx+q.u,py_=vy+q.v;
+      if(q.kind===0)for(let a=0;a<5;a++){const an=a*TAU/5;foodOval(px_+Math.cos(an)*.035,py_+Math.sin(an)*.035,floor,.04,.014,.012,star,Math.cos(an),Math.sin(an));} // a starfish
+      else if(q.kind===1)foodOval(px_,py_,floor,.04,.04,.05,urchin); // an urchin
+      else coveLathe(px_,py_,floor,[[0,0],[0,.03],[.05,.022],[.08,.04],[.08,0]],anemone);} // an anemone
+    drawBox(boxAt(vx,vy,1,0,hl-rim,hw-rim,floor-.02,floor),gondolaFlatOr(sand)); // the sand
+    for(const e of [-1,1]){coveRound(vx,vy+e*(hw-rim/2),1,0,hl,rim/2,0,h,.01,tile);coveRound(vx+e*(hl-rim/2),vy,1,0,rim/2,hw-rim,0,h,.01,tile);} // the basin's walls
+    coveRound(vx,vy,1,0,hl-rim,hw-rim,0,floor-.02,.005,tile); // its floor
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),touchPool:{floor,water,h,life:life.length}};
+}
+const gondolaFlatOr=shade=>(i,t,L)=>{HIT.nx=0;HIT.ny=0;HIT.nz=1;return shade(i,t,L);};
+// A spinner stand of plush sharks: a pole, three round shelves, the sharks
+// lying round each with their fins up.
+function PLUSH_STAND(x,y) {
+  const shelves=[.45,.95,1.45],wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,39);
+  const plush=col=>(i,t,L)=>{const belly=HIT.nz<-.2;BG[i]=C(belly?WHITE:col,(belly?3.6:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [k,z] of shelves.entries())for(let j=0;j<5;j++){const a=j*TAU/5+k*.6+T*.2,col=[GRAY,BLUE,MAG,CYAN][(j+k)&3],sx=vx+Math.cos(a)*.18,sy=vy+Math.sin(a)*.18,c=-Math.sin(a),s=Math.cos(a),sh=plush(col);
+      foodOval(sx,sy,z+.02,.11,.04,.07,sh,c,s); // the body, lying round the shelf
+      foodOval(sx,sy,z+.07,.025,.008,.05,sh,c,s);} // its fin
+    for(const z of shelves)coveLathe(vx,vy,z,[[0,0],[0,.3],[.02,.3],[.02,0]],wood); // the shelves
+    coveTube(vx,vy,0,vx,vy,1.6,.02,GRAY);coveLathe(vx,vy,0,[[0,0],[0,.22],[.03,.2],[.03,0]],wood); // the pole, its foot
+  }),box:boxAt(x,y,1,0,.3,.3,0,1.6),radius:.35,plushStand:{shelves}};
 }
 // Two wall-mounted boards carry distinct sealed sake bottles. Board tops set
 // every bottle foot and guard height; brackets derive from the same underside.
