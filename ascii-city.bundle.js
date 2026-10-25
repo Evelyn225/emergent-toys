@@ -37611,13 +37611,25 @@ function gondolaFacings(len,depth,kind,seed) {
         if(u+w>len/2-G.upright-.01)break;
         if(hash(k,n,seed+7)>.06){ // (the odd gap where something's sold out)
           const hf=S.short?.45+h*.3:S.spines?.7+h*.25:.55+h*.4;
-          out.push({u:u+w/2,side,z:z+G.board,w,h:Math.min(gap,gap*hf),d:depth*(S.spines?.75:.85),col:S.cols[Math.floor(hash(k,n,seed+3)*S.cols.length)],k,spine});
+          out.push({u:u+w/2,side,z:z+G.board,w,h:Math.min(gap,gap*hf),d:S.bins?Math.min(.32,depth*.85):depth*(S.spines?.75:.85),col:S.cols[Math.floor(hash(k,n,seed+3)*S.cols.length)],k,spine});
         }
         u+=w+(S.spines?.002:.008);k++;
       }
     }
   }
   return out;
+}
+// The existing tray ray works in its own axes. Translate and rotate it here
+// so an aisle along y has the same closed rim, cavity and floor as one along x.
+function gondolaBinRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,c=b.c,s=b.s;
+  const t=foodRayTray(x*c+y*s,-x*s+y*c,oz,rx*c+ry*s,-rx*s+ry*c,rz,b.gondolaBin);
+  if(t>0){const nx=HIT.nx,ny=HIT.ny;HIT.nx=c*nx-s*ny;HIT.ny=s*nx+c*ny;}
+  return t;
+}
+function gondolaWasherShade(i,t,L) {
+  const seam=coveGroove(HIT.w,.004,.001,t/projX)*coveDetail(t,.08);
+  BG[i]=C(GRAY,3.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-seam*1.2);set(i,' ',0);return true;
 }
 function SHOP_GONDOLA(b,kind,seed) {
   const G=GONDOLA,S=GONDOLA_STOCK[kind],alongX=b.x1-b.x0>=b.y1-b.y0;
@@ -37629,7 +37641,7 @@ function SHOP_GONDOLA(b,kind,seed) {
   const steel=flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
   const plinth=flat((i,t,L)=>{BG[i]=C(GRAY,.9+L*.06);set(i,' ',0);return true;});
   const peg=flat((i,t,L)=>{const f=t/projX,hole=Math.min(1,coveGroove(HIT.u,.025,.006,f)*coveGroove(HIT.w,.025,.006,f)*4)*coveDetail(t,.3);BG[i]=C(WHITE,3.6+L*.12-hole*1.6);set(i,' ',0);return true;});
-  const goodsShade=q=>(S.bottles?f=>f:flat)((i,t,L)=>{ // (a turned bottle's ray gives its own normals)
+  const goodsShade=q=>(S.bottles||S.bins?f=>f:flat)((i,t,L)=>{ // (a turned bottle's ray gives its own normals)
     const front=HIT.face===3||HIT.face===4,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
     if(S.label&&front&&Math.abs(HIT.w-(q.z+q.h*.55))<q.h*.18){BG[i]=C(WHITE,5+L*.2*light);set(i,' ',0);return true;} // the label band
     if(S.spines&&front){ // each spine its own colour, a dark line where two meet, a title line across
@@ -37643,21 +37655,36 @@ function SHOP_GONDOLA(b,kind,seed) {
   });
   const shades=facings.map(goodsShade);
   const bottle=[[0,0],[0,.032],[.005,.035],[.2,.035],[.25,.014],[.3,.012],[.31,0]];
+  const contents=[];
   const boxes=facings.map((q,n)=>{
     // wine: the front bottle of each row; everything else a solid facing
-    const v=S.bottles?q.side*(G.spine/2+G.inset+depth*.7):q.side*(G.spine/2+G.inset+depth/2+.005),ox=c*q.u-s*v,oy=s*q.u+c*v;
+    const v=S.bottles?q.side*(G.spine/2+G.inset+depth*.7):S.bins?q.side*(half-G.inset-q.d/2):q.side*(G.spine/2+G.inset+depth/2+.005),ox=c*q.u-s*v,oy=s*q.u+c*v;
+    if(S.bins){
+      const floor=q.z+.008;
+      for(const [u,v,h]of [[-.021,-.05,.036],[.021,.05,.048],[0,0,.024]]){
+        const part=homeLampPart('washers',floor,[[0,.006],[0,.014],[h,.014],[h,.006],[0,.006]]);
+        contents.push({ox:ox+c*u-s*v,oy:oy+s*u+c*v,box:{...part.box,gondolaContents:true},shade:gondolaWasherShade,ray:coveRayLathe});
+      }
+      return {ox,oy,shade:shades[n],ray:gondolaBinRay,box:{...boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h),
+        gondolaBin:{...boxAt(0,0,1,0,q.w/2,q.d/2,q.z,q.z+q.h),...kitchenTopProfile(q.w/2,q.d/2,q.z,q.z+q.h,.002)}}};
+    }
     return S.bottles?{ox,oy,shade:shades[n],ray:coveRayLathe,box:{...boxAt(0,0,1,0,.035,.035,q.z,q.z+.31),profile:bottle.map(([h,r])=>[h+q.z,r])}}
       :{ox,oy,shade:shades[n],ray:rayBox,box:boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h)};
   });
-  const order=boxes.map((_,n)=>n);
+  const order=boxes.map((_,n)=>n);let orderDx=NaN,orderDy=NaN;
   return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
     // Facings are pre-built (a gondola holds hundreds); each frame only moves them.
     // Nearest first, so the depth buffer turns away the facings behind them
     // (looking down an aisle hundreds of them overlap on screen).
-    for(const q of boxes){q.box.x=vx+q.ox;q.box.y=vy+q.oy;q.near=dx*q.box.x+dy*q.box.y;}
-    order.sort((a,b)=>boxes[a].near-boxes[b].near);
-    for(const n of order){const q=boxes[n];drawBox(q.box,q.shade,q.ray);}
+    // Translation adds the same depth to every facing, so only a turn can
+    // change this order. Keep exact directions, including reversed views.
+    if(dx!==orderDx||dy!==orderDy){
+      for(const q of boxes)q.near=dx*q.ox+dy*q.oy;
+      order.sort((a,b)=>boxes[a].near-boxes[b].near);orderDx=dx;orderDy=dy;
+    }
+    for(const q of contents){q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
+    for(const n of order){const q=boxes[n];q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
     for(const z of G.levels){const [sx,sy]=at(0,0);drawBox(boxAt(sx,sy,c,s,len/2-G.upright,half,z,z+G.board),steel);}
     for(const e of [-1,1]){const [ux,uy]=at(e*(len/2-G.upright/2),0);drawBox(boxAt(ux,uy,c,s,G.upright/2,half,0,G.height),steel);} // end uprights
     const [px,py_]=at(0,0);

@@ -423,3 +423,26 @@ parse checks pass; all rooms, close/wide/oblique/night and grocer corner
 reviewed, with ABAB costs appended. No new shared-helper edits. Next Codex
 #223 gondolas: review stock support and avoid repeated depth-order sorting
 when only the camera position changes. Claude remains on pass12.
+
+Codex active review `codex/review-shop-gondolas` (#223): current main
+through #222 integrated, additive notes/manifest preserved and bundle rebuilt.
+`city/shop-gondolas.js` and its browser test: stock/support/route review and
+camera-direction depth-order caching. Shared room/shop hooks from Claude's
+PR retained; no shared home/hotel/kitchen helper edits planned. Next #224
+back-wall shelves; Claude retains pass12 lights/utilities.
+
+#223 Codex review complete (`codex/review-shop-gondolas`): hardware bins have
+real cavities and supported washer stacks, with shallow boxes at the shelf
+front; exact camera-direction order cached through translation and refreshed
+on turns. Only the gondola module/test and shared notes/bundle changed; tray
+and home profile builders called unchanged. Four gondola checks,17 route/
+placement/case/fridge and seven bundle/parse/render checks pass; four targeted
+mutations rejected. Non-hardware grocery/books/wine images match the built
+prototype exactly; close/above/wide/oblique/night and ABAB costs reviewed.
+Next #224 refactors the goods builder in the SAME module: preserve the new
+bin geometry and order invalidation there, retaining both agents' work.
+Before #224, Codex will fix a CI café-test fixture separately: its randomly
+chosen front-row seat puts the test player inside the front wall. Reproduced
+free=false/no prompt versus clear-floor E: talk, rather than a game regression.
+#220 full CI green; #221 failed shard retried after diagnosis. Claude stays
+on pass12 lights/utilities; no street-only files touched.
