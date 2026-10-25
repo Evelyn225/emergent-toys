@@ -583,7 +583,7 @@ function oldWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.95) return set(i, '=', C(YEL, L * 0.6)), true;
   BG[i] = C(w === 'TAILOR' ? STONE : GREEN, 1.1); return set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 3 ? ' ' : w === 'ANTIQUES' ? '*' : '.', C(YEL, L * 0.35)), true; // faded wallpaper
 }
-ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', x1: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
+ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', to: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
   props: r => {
     const w = r.word, p = [BX(9.8, 7.25, 1.0, 0.3, 0, 0.95, solid(BRICK, { panel: 0.5, trim: 0.9, top: '=' })), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
       clothCurtain(10.02, 1.5, 0.5, w === 'TAILOR' ? GRAY : RED), clothCurtain(10.02, 3.5, 0.5, w === 'TAILOR' ? GRAY : RED)]; // the fitting rooms

@@ -330,12 +330,9 @@ function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind th
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
   return false;
 }
-function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves of coloured spines
-  if (z > 2.6 || (my === room.H - 1)) return false;
-  if (fract(z / 0.42) < 0.12) { set(i, '=', C(BRICK, L)); return true; }
-  const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my);
-  set(i, k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L)); BG[i] = C(BRICK, 1); return true;
-}
+// Tall timber bookcases round the walls; the right-hand run stops short of the till.
+const BOOKS_CASE = { kind: 'books', timber: true, height: 2.15, levels: [0.15, 0.55, 0.95, 1.35, 1.75] };
+const BOOKS_CASES = [BOOKS_CASE, { ...BOOKS_CASE, wall: 'left', from: 1.2, to: 6 }, { ...BOOKS_CASE, wall: 'right', from: 1.2, to: 4.3 }];
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind real pots, red walls hung with signs
   if (my === 0 && mx < 11 && z < 1.4) {
     const seam=coveGroove(u,.6,.003,uStep);
@@ -373,7 +370,7 @@ const CAFE_BAR={x:4.6,y:2.15,half:1.4,height:1,keeperY:1.45,espressoX:5.25,caseX
 const BACK_COUNTER_STAFF_Y=1.4,BACK_COUNTER_Y=2.05;
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'grocery', x1: 8.64 }, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
+    light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'grocery', to: 8.64 }, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
     props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6 (the wall shelves stop where the right-hand fridges start)
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', sign: true, neon: true, keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
@@ -538,7 +535,7 @@ const ROOM_DEFS = {
       return p;
     } },
   books: { grid: ['##########', '#........#', '#.SS..SS.#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', wall: booksWall, keeper: [7.8, 4.6],
+    light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', shelves: BOOKS_CASES, keeper: [7.8, 4.6],
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
       BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), SEAT(2.2, 5.05, 0, 1), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
