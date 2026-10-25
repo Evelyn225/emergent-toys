@@ -202,15 +202,6 @@ const BARBER_CHAIR = (x, y) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy - 0.42, 1, 0, 0.18, 0.06, 0.13, 0.17), CHROME);
   for (const e of [-1, 1]) rod(vx + e * 0.12, vy - 0.42, 0.15, vx + e * 0.12, vy - 0.2, 0.32, 0.012, GRAY, 1.2);
 }, [0.34, 0.3, 1.25]), seat: true, fx: 0, fy: -1, h: 0.45 });
-// a PA speaker on the floor, facing (0, 1): a black cabinet, the woofer and tweeter on its front in rings
-const SPEAKER = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.28, 0.2, 0, 0.9), (i, t, L) => {
-    BG[i] = C(GRAY, (0.8 + L * 0.15) * shadeFace(HIT.face));
-    if (HIT.face !== 3) return set(i, ' ', 0), true;
-    for (const [w, r] of [[0.3, 0.17], [0.7, 0.07]]) { const d = Math.hypot(HIT.u, HIT.w - w); if (d < r) { BG[i] = C(GRAY, d > r * 0.8 ? 2.5 : d < r * 0.25 ? 2 : 0.4); return set(i, d > r * 0.8 ? 'o' : ' ', C(GRAY, L)), true; } }
-    return set(i, ' ', 0), true;
-  });
-}, [0.28, 0.2, 0.9]);
 // a bouquet in a glass vase: stems fanning up, a flower head on each in the bloom's colour
 const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
   drum(vx, vy, 0.09, 0, 0.32, (i, t, L) => { BG[i] = C(CYAN, (1.6 + L * 0.3) * drumLit(0.09)); return set(i, HIT.face === 5 ? '~' : ':', C(WHITE, L * 0.6)), true; });
@@ -495,9 +486,9 @@ const ROOM_DEFS = {
   karaoke: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
     wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
-      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
+      const p = [KARAOKE_STAGE_PLATFORM(r.neon), KARAOKE_MONITOR(6, 2.66, KARAOKE.stage.top), KARAOKE_SCREEN(1), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
-                 SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
+                 KARAOKE_SPEAKER(3.5, 2.3), KARAOKE_SPEAKER(8.5, 2.3)];
       const seats = [...couch(3.2, 6.3, 1.1, 0, -1, MAG), ...couch(10.0, 6.3, 1.1, 0, -1, MAG), ...[3.0, 4.6, 7.4, 9.0].map(x => POUF(x, 4.4, r.neon, 0, -1))];
       p.push(...fillSeats(seats, barCrowd()));
       return p;
@@ -1015,18 +1006,7 @@ function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0) return false; // back wall: the sign
   set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
 }
-const KARAOKE_STAGE = 6; // (the stage's middle, and the screen's over it)
-function karaokeWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - KARAOKE_STAGE) < 3) { // lyrics screen: the sung part lights up
-    BG[i] = C(BLUE, 2);
-    const line = LYRICS[Math.floor(T / 5) % LYRICS.length], sung = fract(T / 5) * 1.3 * line.length;
-    const q = (u - KARAOKE_STAGE) / 0.28 + line.length / 2, p = Math.floor(q);
-    if (Math.abs(z - 1.9) < 0.15 && p >= 0 && p < line.length) {
-      const on = (uStep >= 0.28 || oneCell((fract(q) - 0.5) * 0.28, uStep)) && oneCell(z - 1.9, d / projY);
-      set(i, on ? line[p] : ' ', C(p < sung ? MAG : WHITE, 15)); return true;
-    }
-    set(i, ' ', 0); return true;
-  }
+function karaokeWall(i, u, uStep, z, d, mx, my, L) { // the lyrics are on the mounted screen (karaoke-stage.js)
   set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 9 ? ' ' : '*', C(NEON[(Math.floor(u) + (T * 2 | 0)) & 3], 8)); return true; // glitter
 }
 function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
