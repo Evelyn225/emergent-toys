@@ -37689,8 +37689,8 @@ function SEAFOOD_TANK_UNIT(x,y,half,fx=1,fy=0,seed=7) {
     const z=(HIT.w-floor)/(T_.water-floor);BG[i]=C(BLUE,1.2+z*1.6+L*.05);set(i,' ',0);return true;
   };
   const gravel=(i,t,L)=>{
-    const g=hash(Math.floor(HIT.u*90),Math.floor((HIT.v+HIT.w)*90),1413),fine=coveDetail(t,.3);
-    BG[i]=C(g>.6?STONE:g>.3?BRICK:GRAY,2+L*.12+(fine?g-.5:0));set(i,' ',0);return true;
+    const g=hash(Math.floor(HIT.u*90),Math.floor((HIT.v+HIT.w)*90),1413),fine=coveDetail(t,.04);
+    BG[i]=C(STONE,2.4+L*.12+(g-.5)*1.5*fine);set(i,' ',0);return true;
   };
   const surface=(i,t,L)=>{ // seen from above: the water only shows where ripples catch the hood light
     const ripple=Math.sin(HIT.u*40+T*2)*Math.sin(HIT.v*36-T*1.6);
@@ -37704,7 +37704,10 @@ function SEAFOOD_TANK_UNIT(x,y,half,fx=1,fy=0,seed=7) {
   const band=(i,t,L)=>{BG[i]=C(YEL,4+L*.3);set(i,' ',0);return true;};
   const eye=(i,t,L)=>{BG[i]=C(BLACK,0);set(i,' ',0);return true;};
   const bubble=(i,t,L)=>{BG[i]=C(WHITE,5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const skins=fish.map((f,k)=>seafoodSkin(f.col,STONE,seed*5+k));
+  const skins=fish.map((f,k)=>seafoodSkin(f.col,STONE,seed*5+k)),lobsterSkins=[shell(BLUE),shell(GREEN)];
+  const cabinetProfile=kitchenPanelProfile(half,hw,0,T_.cabinet,.006),doorProfile=kitchenPanelProfile(half/2-.01,.006,.08,T_.cabinet-.04);
+  const railProfiles=[[T_.cabinet,T_.cabinet+T_.rail],[T_.top-T_.rail,T_.top]].map(([z0,z1])=>({z0,z1,shape:kitchenPanelProfile(half,hw,z0,z1,.004)}));
+  const hoodProfile=kitchenTopProfile(half,hw,T_.top,T_.hood,.01),pullReach=.038;
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u+fx*(hw+v),vy+s*u+fy*(hw+v)]; // v measured from the tank's middle
     // (cc, ss): a heading in the tank's own (u, v) frame, turned into the world
@@ -37730,7 +37733,7 @@ function SEAFOOD_TANK_UNIT(x,y,half,fx=1,fy=0,seed=7) {
     // Live lobsters on the gravel: carapace, tail segments and fan, banded claws, feelers.
     for(const [n,o]of lobsters.entries()) {
       const cc=Math.cos(o.turn),ss=Math.sin(o.turn),z=floor,P=(a,b)=>[o.u+cc*a-ss*b,o.v+ss*a+cc*b];
-      const dark=shell(n?GREEN:BLUE);
+      const dark=lobsterSkins[n];
       let [u,v]=P(0,0);ell(u,v,z+.03,cc,ss,.07,.035,.03,dark);
       for(let k=0;k<4;k++){[u,v]=P(-.08-k*.03,0);ell(u,v,z+.022,cc,ss,.022,.032-k*.004,.02,dark);}
       [u,v]=P(-.205,0);ell(u,v,z+.012,cc,ss,.02,.04,.008,dark);
@@ -37746,22 +37749,22 @@ function SEAFOOD_TANK_UNIT(x,y,half,fx=1,fy=0,seed=7) {
     }
     // Bubbles rising from the air stone in the back corner.
     const [ax,ay]=at(half-.12,-inner+.06);
-    for(const b of bubbles){const z=floor+.03+fract(T*.35+b.k/bubbles.length)*(T_.water-floor-.04);coveLathe(ax+Math.sin(z*30+b.k)*.008,ay,z,[[0,0],[0,b.r*.6],[b.r,b.r],[b.r*2,b.r*.6],[b.r*2,0]],bubble);}
+    for(const b of bubbles){const z=floor+.03+fract(T*.35+b.k/bubbles.length)*(T_.water-floor-.03-b.r*2);coveLathe(ax+Math.sin(z*30+b.k)*.008,ay,z,[[0,0],[0,b.r*.6],[b.r,b.r],[b.r*2,b.r*.6],[b.r*2,0]],bubble);}
     coveLathe(ax,ay,floor-.005,[[0,0],[0,.03],[.025,.026],[.03,0]],(i,t,L)=>{BG[i]=C(GRAY,1.5+L*.15);set(i,' ',0);return true;});
     const [wx,wy]=at(0,0);
     drawBox(boxAt(wx,wy,c,s,half-T_.glass,inner,T_.water-.002,T_.water),surface);
     drawBox(boxAt(wx,wy,c,s,half-T_.glass,inner,T_.cabinet+T_.rail,floor),gravel);
     const [bx,by]=at(0,-inner+.005);drawBox(boxAt(bx,by,c,s,half,.005,floor,T_.top),back);
     // Rails, hood and the cabinet below.
-    for(const [z0,z1]of [[T_.cabinet,T_.cabinet+T_.rail],[T_.top-T_.rail,T_.top]])drawBox({...boxAt(wx,wy,c,s,half,hw,z0,z1),...kitchenPanelProfile(half,hw,z0,z1,.004)},steel,homeRayWorktop);
-    drawBox({...boxAt(wx,wy,c,s,half,hw,T_.top,T_.hood),...kitchenTopProfile(half,hw,T_.top,T_.hood,.01)},hoodShade,homeRayWorktop);
+    for(const {z0,z1,shape}of railProfiles)drawBox({...boxAt(wx,wy,c,s,half,hw,z0,z1),...shape},steel,homeRayWorktop);
+    drawBox({...boxAt(wx,wy,c,s,half,hw,T_.top,T_.hood),...hoodProfile},hoodShade,homeRayWorktop);
     for(const side of [-1,1]) {
       const [dx_,dy_]=at(side*half/2,hw+.006),[hx0,hy0]=at(side*.06,hw+.03),[hx1,hy1]=at(side*.06,hw+.006);
       coveTube(hx0,hy0,.36,hx0,hy0,.6,.008,GRAY);for(const z of [.38,.58])coveTube(hx0,hy0,z,hx1,hy1,z,.006,GRAY);
-      drawBox({...boxAt(dx_,dy_,c,s,half/2-.01,.006,.08,T_.cabinet-.04),...kitchenPanelProfile(half/2-.01,.006,.08,T_.cabinet-.04)},doorShade,homeRayWorktop);
+      drawBox({...boxAt(dx_,dy_,c,s,half/2-.01,.006,.08,T_.cabinet-.04),...doorProfile},doorShade,homeRayWorktop);
     }
-    drawBox({...boxAt(wx,wy,c,s,half,hw,0,T_.cabinet),...kitchenPanelProfile(half,hw,0,T_.cabinet,.006)},steel,homeRayWorktop);
-  }),box:boxAt(cx,cy,c,s,half,hw,0,T_.hood),radius:Math.hypot(half,hw)+.05,
+    drawBox({...boxAt(wx,wy,c,s,half,hw,0,T_.cabinet),...cabinetProfile},steel,homeRayWorktop);
+  }),box:boxAt(cx+fx*pullReach/2,cy+fy*pullReach/2,c,s,half,hw+pullReach/2,0,T_.hood),radius:Math.hypot(half,hw+pullReach)+.05,
     seafoodTank:{x,y,half,fx,fy,depth,inner,floor,water:T_.water,top:T_.top,fish,lobsters,bubbles:bubbles.length}};
 }
 // Leisure interiors (pass 10): the cinema's seat rows, the arcade's cabinets

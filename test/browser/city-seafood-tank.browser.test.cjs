@@ -70,3 +70,25 @@ test('the fish turn smoothly: heading follows their path, never flipping between
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the tank bounds enclose its real door pulls and bubbles remain below the water at every peak phase',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  const errors=[];
+  for(let k=0;k<7;k++){
+   const {model,shapes}=parts((.999999-k/7)/.35),d=model.seafoodTank,b=model.box,c=b.c,s=b.s;
+   for(const q of shapes){const a=q.box,u=(a.x-b.x)*c+(a.y-b.y)*s,v=-(a.x-b.x)*s+(a.y-b.y)*c;
+    const hu=Math.abs(a.hl*(a.c*c+a.s*s))+Math.abs(a.hw*(-a.s*c+a.c*s)),hv=Math.abs(a.hl*(a.c*-s+a.s*c))+Math.abs(a.hw*(-a.s*-s+a.c*c));
+    if(Math.abs(u)+hu>b.hl+.000001||Math.abs(v)+hv>b.hw+.000001||a.z0<b.z0-.000001||a.z1>b.z1+.000001)errors.push(['outside tank bounds',k,a.z0,a.z1]);
+    if(q.ray===coveRayLathe&&a.z0>d.floor+.02&&a.z1>d.water+.000001)errors.push(['bubble above water',k,a.z1]);
+   }
+  }
+  const {model,shapes}=parts(12),gravel=shapes.find(q=>q.ray===rayBox&&Math.abs(q.box.z1-model.seafoodTank.floor)<1e-8),far=new Set(),close=new Set();
+  for(let k=0;k<40;k++){HIT.u=k*.017;HIT.v=k*.023;HIT.w=model.seafoodTank.floor;gravel.shade(0,40,8);far.add(BG[0]);gravel.shade(0,.01,8);close.add(BG[0]);}
+  if(far.size!==1||close.size<2)errors.push(['gravel fails to filter with distance',far.size,close.size]);
+  const panel=kitchenPanelProfile,top=kitchenTopProfile;let builds=0;
+  kitchenPanelProfile=(...a)=>{builds++;return panel(...a);};kitchenTopProfile=(...a)=>{builds++;return top(...a);};
+  try{parts(12);parts(12.1);}finally{kitchenPanelProfile=panel;kitchenTopProfile=top;}
+  if(builds)errors.push(['static profile rebuilt during drawing',builds]);
+  return errors.slice(0,15);
+ });assert.deepEqual(bad,[]);
+}));
