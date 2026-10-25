@@ -389,7 +389,7 @@ const CAFE_BAR={x:4.6,y:2.15,half:1.4,height:1,keeperY:1.45,espressoX:5.25,caseX
 const BACK_COUNTER_STAFF_Y=1.4,BACK_COUNTER_Y=2.05;
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
+    light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'grocery' }, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
     props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', sign: true, neon: true, keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
@@ -513,7 +513,7 @@ const ROOM_DEFS = {
     props: r => [...counterBox(5, BACK_COUNTER_Y, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon),
                  ...petCage(2.2, 4, KITTEN_LOOK, () => fract(T / 6 + 0.4) < 0.04 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
                  figProp(4.2, 5.3, dogLook(BRICK), { h: 1.22 / 2, pose: () => 'f' + (5 + ((T * 2) & 1)), face: [0, 0], chat: false, light: 6 })] }, // a kitten, a puppy, and the shop dog
-  florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, BACK_COUNTER_STAFF_Y],
+  florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'florist', timber: true }, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, BACK_COUNTER_STAFF_Y],
     props: r => {
       const p = [...counterBox(5, BACK_COUNTER_Y, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon)];
       for (let k = 0; k < 7; k++) {
@@ -554,7 +554,7 @@ const ROOM_DEFS = {
       return p;
     } },
   books: { grid: ['##########', '#........#', '#.SS..SS.#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 0.8, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, glyphs: '|]|[', wall: booksWall, keeper: [7.8, 4.6],
+    light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', wall: booksWall, keeper: [7.8, 4.6],
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
       BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), SEAT(2.2, 5.05, 0, 1), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
@@ -653,7 +653,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
-  r.props.push(...shopGondolas(r)); // shelf islands ('S' cells) become built gondolas: shop-gondolas.js
+  r.props.push(...shopGondolas(r), ...shopWallShelves(r)); // shelf islands ('S' cells) and back-wall shelves are built: shop-gondolas.js
   if(def.wc){
     const frames=bathroomSurrounds(r);r.props.push(...frames);
     r.bathroomDoors=frames.map((frame,index)=>BATHROOM_POCKET_DOOR(r,frame.bathroomOpening,index));
@@ -1123,14 +1123,6 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-  if (D.shelves && my === 0 && z < 2) { // shelves along the back wall (islands are built gondolas: shop-gondolas.js)
-    if (z < 0.15) return set(i, '_', C(GRAY, L * 0.6));
-    if (fract(z / 0.45) < 0.14) return set(i, '=', C(WHITE, L * 0.7));
-    const glyphs = D.glyphs || R.glyphs || 'o#=@';
-    const hh = hash(Math.floor(u * 7), Math.floor(z / 0.45), mx * 31 + my), fu = fract(u * 7), fz = fract(z / 0.45);
-    if (hh < 0.2 || fu < 0.2 || fu > 0.8 || fz > 0.7) return set(i, ' ', 0); // gaps between products
-    return set(i, glyphs[hh * 97 % glyphs.length | 0], C(ITEM_COL[hh * 13 % ITEM_COL.length | 0], D.neon ? 14 : L));
-  }
   if (D.neon && z > 2.75 && z < 2.85) return set(i, '=', C(R.neon, 15));
   if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6)); // wainscot
   if (z < 0.95) return set(i, '=', C(GRAY, L));

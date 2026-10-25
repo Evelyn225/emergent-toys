@@ -247,14 +247,13 @@ ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 
 ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { BG[i] = C(WHITE, 2.4 + f * 4); return set(i, fract(wx / 0.6) < 0.03 || fract(wy / 0.6) < 0.03 ? '+' : ' ', C(GRAY, L * 0.5)); }; // shiny white tiles
 const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.01, z - 0.35, z), (i, t, L) => { BG[i] = C(col, 8); return set(i, HIT.w > z - 0.15 ? '!' : fract(HIT.u * 9) < 0.4 ? '%' : ' ', C(RED, 12)), true; }));
 function drugWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z < 2) return false; // (the shelves behind the counter: rooms.js stocks them)
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
   if (z > 2.0 && z < 2.2) { BG[i] = C(YEL, 8); return set(i, fract(u * 2) < 0.5 ? '%' : ' ', C(RED, 10)), true; } // price banners all round
   BG[i] = C(WHITE, 6 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.drugstore = { grid: ['############', '#..........#', '#..........#', '#.SSS..SSS.#', '#..........#', '#.SSS..SSS.#', '#..........#', '#..........#', '#####DD#####'],
-  light: 1.2, floor: 'gloss', ceil: 'strip', sign: false, shelves: true, neon: true, glyphs: '[]+%=o', wall: drugWall, keeper: [6.0, 1.4],
+  light: 1.2, floor: 'gloss', ceil: 'strip', sign: false, shelves: { kind: 'pharmacy' }, neon: true, glyphs: '[]+%=o', wall: drugWall, keeper: [6.0, 1.4],
   props: r => [...counterBox(6.0, 1.85, 1.6), { ...standing(6.0, 1.4, WHITE), face: [0, 1] }, popSign(3.5, 4.0, YEL), popSign(8.5, 4.0, YEL), popSign(3.5, 6.0, MAG), popSign(8.5, 6.0, CYAN),
     ...plainBench(10.6, 2.2, 0.7, -1, 0, BLUE, 0.35), ...shoppers([[4.6, 4.4, 0, -1], [9.1, 6.5, -1, 0]], 0.5)] };
 
