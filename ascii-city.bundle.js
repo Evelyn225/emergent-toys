@@ -39033,6 +39033,7 @@ function homePlushShark(vx,vy,c,s,zBase=0) {
   ell(0,-.08,.34,.035,.13,.14,BLUE);
 }
 function furnishingProp(p,r) {
+  if(p.id==='sharkplush')return HOME_PLUSH_SHARK(p);
   if(p.id==='f_lamp')return HOME_FLOOR_LAMP(p);
   if(p.id==='f_recordplayer')return HOME_RECORD_PLAYER(p);
   if(p.id==='f_frame')return HOME_PHOTO_FRAME(p);
@@ -39058,12 +39059,64 @@ function furnishingProp(p,r) {
       for(const side of [-1,1]){wood(side*.53,.025,.51,.38,.32,.49,.09,fabric);wood(side*1.12,0,.08,.46,.34,.72,.065,fabric);wood(side*.53,-.36,.51,.1,.46,.95,.075,fabric);}
     }else if(p.id==='f_rug') {
       wood(0,0,1.3,.9,.002,.014,.005,(i,t,L)=>{const edge=Math.abs(HIT.u)>1.21||Math.abs(HIT.v)>.81;BG[i]=C(edge?STONE:BLUE,2.7+L*.2);set(i,edge?'=':' ',C(STONE,L));return true;});
-    }else if(p.id==='sharkplush')homePlushShark(vx,vy,c,s,p.z||0);
+    }
   });
   prop.radius=Math.hypot(d.hx,d.hy)+.2;prop.box=furnishingBox(p);prop.walk=!!(d.rug||d.wall);prop.furnishingKey=p.key;
   if(d.seat)Object.assign(prop,{seat:true,h:d.seat,fx:-s,fy:c});return prop;
 }
 function furnishingProps(r) {const home=homeRecord(r);return home?homeFurnishings(home).parts.map(p=>furnishingProp(p,r)):[];}
+// The stuffed body is an ellipsoid with a flat, closed contact patch. This
+// wrapper retains the common ellipsoid helper used by shops and restaurants.
+function homePlushRayBody(ox,oy,oz,rx,ry,rz,b) {
+ const shape=b.plushShape,t=homeRayEllipsoid(ox,oy,oz,rx,ry,rz,shape);
+ if(t>.01&&oz+rz*t>=b.z0-1e-9)return t;
+ if(Math.abs(rz)<1e-12)return -1;
+ const floor=(b.z0-oz)/rz;if(floor<=.01)return -1;
+ const x=ox+rx*floor-shape.x,y=oy+ry*floor-shape.y,u=x*shape.c+y*shape.s,v=-x*shape.s+y*shape.c;
+ const center=(shape.z0+shape.z1)/2,half=(shape.z1-shape.z0)/2;
+ if((u/shape.hl)**2+(v/shape.hw)**2+((b.z0-center)/half)**2>1+1e-9)return -1;
+ HIT.u=u;HIT.v=v;HIT.w=b.z0;HIT.nx=HIT.ny=0;HIT.nz=-1;HIT.face=6;return floor;
+}
+function HOME_PLUSH_SHARK(p) {
+ const c=Math.cos(p.a),s=Math.sin(p.a),base=p.z||0,parts=[],hx=.175,hy=.34,hz=.13,bodyCenter=.11;
+ const cloth=(colour)=>(i,t,L)=>{
+  const grain=Math.sin(HIT.u*800)*Math.sin(HIT.w*740)*.08*coveDetail(t,.08);
+  BG[i]=C(colour,2.8+L*.32*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;
+ };
+ const blue=cloth(BLUE),black=cloth(BLACK),white=cloth(WHITE);
+ const body=(i,t,L)=>{
+  const z=HIT.w-base,belly=z<.095||HIT.nz<-.25;
+  (belly?white:blue)(i,t,L);
+  const fine=coveDetail(t,.3),footprint=t/projY;
+  const mouth=HIT.v>.29&&Math.abs(HIT.u)<.075&&Math.abs(z-.115)<Math.max(.0015,footprint*.65);
+  const gill=Math.abs(HIT.u)>.13&&HIT.v>.09&&HIT.v<.17&&z>.115&&z<.175;
+  if(fine>.3&&mouth)BG[i]=C(BLACK,1.1+L*.08);
+  else if(fine>.3&&gill&&coveGroove(HIT.v-.095,.025,.003,footprint)>.45)BG[i]=C(BLACK,1.4+L*.1);
+  return true;
+ };
+ const ell=(role,u,v,z,hl,hw,hh,shade=blue,turn=0)=>parts.push({role,u,v,z0:base+z-hh,z1:base+z+hh,hl,hw,c:Math.cos(p.a+turn),s:Math.sin(p.a+turn),shade});
+ ell('tail-neck',0,-.345,.11,.055,.09,.05);
+ for(const side of [-1,1]){
+  ell('tail-fin',side*.09,-.415,.105,.11,.06,.028);
+  ell('side-fin',side*.1755,-.04,.085,.06,.024,.025,blue,-side*.5);
+ }
+ ell('dorsal-fin',0,-.09,.265,.018,.085,.085);
+ // Eye centres derive from the actual body surface, seating each bead with 12mm overlap.
+ const ex=.6,ey=.66,ez=Math.sqrt(1-ex*ex-ey*ey),normal=[ex/hx,ey/hy,ez/hz],len=Math.hypot(...normal);
+ for(const side of [-1,1]){
+  const nx=side*normal[0]/len,ny=normal[1]/len,nz=normal[2]/len;
+  const u=side*ex*hx+nx*.005,v=ey*hy+ny*.005,z=bodyCenter+ez*hz+nz*.005;
+  ell('eye',u,v,z,.017,.017,.017,black);
+  ell('eye-glint',u+nx*.014,v+ny*.014,z+nz*.014,.0035,.0035,.0035,white);
+ }
+ return {...ROOM_MODEL(p.x,p.y,(vx,vy)=>{
+  const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+  // Cloth pieces overlap the stuffing at their roots, so reverse views close.
+  const shape=boxAt(vx,vy,c,s,hx,hy,base+bodyCenter-hz,base+bodyCenter+hz);
+  drawBox({...boxAt(vx,vy,c,s,hx,hy,base,base+.24),plushShape:shape,plushRole:'body'},body,homePlushRayBody);
+  for(const q of parts){const[x,y]=at(q.u,q.v);drawBox({...boxAt(x,y,q.c,q.s,q.hl,q.hw,q.z0,q.z1),plushRole:q.role},q.shade,homeRayEllipsoid);}
+ }),box:furnishingBox(p),radius:Math.hypot(.24,.48),furnishingKey:p.key,plushShark:true};
+}
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
   if(furnishingEl)return furnishingEl;
@@ -39145,6 +39198,25 @@ function beginFurnishingPlacement(item,part=null) {
   furnishingPlacement={home,id,item,part,a:part?.a||0,held};held=-1;lockMouse();
   say(HOME_FURNITURE[id].wall?'Look at a wall to hang it. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
 }
+// Cache the authored bed pieces, then probe their actual top surfaces. The
+// conservative bed box includes pillows, which are not a flat support plane.
+const HOME_PLUSH_BEDS=new WeakMap();
+function homePlushBedSupport(p,prop) {
+ if(!furnishingOverlap(furnishingBox(p),prop.box))return null;
+ let parts=HOME_PLUSH_BEDS.get(prop);
+ if(!parts){parts=[];const draw=drawBox;drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}HOME_PLUSH_BEDS.set(prop,parts);}
+ const hit={...HIT};try{
+ const b=furnishingBox(p),d=HOME_FURNITURE[p.id],heights=[];
+ for(const u of [-d.hx,0,d.hx])for(const v of [-d.hy,0,d.hy]){
+  const x=p.x+b.c*u-b.s*v,y=p.y+b.s*u+b.c*v;
+  const height=Math.max(-Infinity,...parts.map(q=>{const t=q.ray(x,y,.9,0,0,-1,q.box);return t>.01?.9-t:-Infinity;}));
+  if(!Number.isFinite(height))return null;heights.push(height);
+ }
+ const top=Math.max(...heights);
+ if(top<.3||top>.85||Math.min(...heights)<top-.001||parts.some(q=>q.box.z1>top+.001&&furnishingOverlap(b,q.box,.003)))return null;
+ return top;
+ }finally{for(const key in HIT)if(!(key in hit))delete HIT[key];Object.assign(HIT,hit);}
+}
 function furnishingCandidate() {
   const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
   const d=HOME_FURNITURE[q.id],p={id:q.id,key:q.part?.key??-1,a:q.a,x:0,y:0,z:d.wall?1.6:0};
@@ -39170,15 +39242,18 @@ function furnishingCandidate() {
       if(Math.abs(p[axis]+half-(limit-1))<.3)p[axis]=limit-1-half;
     }
   }
+  let support=null;
   if(d.plush) {
     p.z=0;const footprint=furnishingBox(p);
     for(const prop of room.props)if(prop.box&&!prop.walk&&prop.furnishingKey!==p.key) {
       const b=prop.box,height=b.z1;
+      if(prop.furniture==='bed'){const top=homePlushBedSupport(p,prop);if(top!=null&&top>p.z){p.z=top;support=prop;}continue;}
       if(prop.draw&&prop.furnishingKey==null)continue;
-      if(height>.3&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01))))p.z=Math.max(p.z,height);
+      if(height>Math.max(.3,p.z)&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01)))){p.z=height;support=null;}
     }
   }
-  let reason=furnishingFit(p,room.grid,room.props);
+  const obstacles=support?room.props.map(o=>o===support?{...o,box:{...o.box,z1:p.z}}:o):room.props;
+  let reason=furnishingFit(p,room.grid,obstacles);
   if(!reason&&!d.wall&&!d.rug) {
     const obstacle=furnishingBox(p),pass=extra=>(x,y)=>room.grid[y]?.[x]==='.'&&!room.props.some(o=>o.box&&!o.walk&&!(q.part&&o.furnishingKey===q.part.key)&&inBox(o.box,x+.5,y+.5,.1))&&(!extra||!inBox(extra,x+.5,y+.5,.1));
     const from={x:room.def.entry[0],y:room.def.entry[1]},world={width:room.W,height:room.H,wrap:false};
