@@ -274,3 +274,69 @@ function TICKET_DISPENSER(x,y,fx,fy) {
     part(0,.085,.025,.004,1.2,1.25,(i,t,L)=>{BG[i]=C(WHITE,5);set(i,' ',0);return true;}); // the ticket sticking out
   }),box:boxAt(x,y,c,s,.12,.12,0,1.35),radius:.2};
 }
+// An upholstered armchair facing (fx,fy), its seat at h: four feet, a base,
+// one seat cushion, a back cushion, two arms joined to base and back.
+function ARMCHAIR(x,y,fx,fy,col=BRICK,h=.42) {
+  const c=-fy,s=fx,cloth=furnitureCloth(col),at=(u,v)=>[x+c*u+fx*v,y+s*u+fy*v],hl=.38;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,a,b,z0,z1,r,mat='wood')=>coveRound(vx+c*u+fx*v,vy+s*u+fy*v,c,s,a,b,z0,z1,r,mat);
+    for(const u of [-hl+.1,hl-.1])for(const v of [-.27,.27])part(u,v,.035,.035,0,.12,.012); // the feet
+    part(0,0,hl-.04,.36,.1,h-.15,.03); // the base
+    part(0,.04,hl-.16,.32,h-.15,h,.06,cloth); // the seat cushion
+    part(0,-.31,hl-.16,.08,h-.02,.95,.06,cloth); // the back
+    for(const e of [-1,1])part(e*(hl-.08),0,.08,.38,h-.18,h+.22,.06,cloth); // the arms
+  }),box:boxAt(x,y,c,s,hl,.4,0,.95),radius:.55,armchair:{fx,fy,h}};
+}
+// Old suitcases lying one on another: [x, y, z0, z1, colour] each, a handle
+// on the front and two straps round each.
+function SUITCASE_PILE(cases) {
+  const x=cases[0][0],y=cases[0][1],top=Math.max(...cases.map(q=>q[3]));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const [cx,cy,z0,z1,col] of cases){const px=vx+cx-x,py=vy+cy-y,h=z1-z0;
+    coveRound(px,py,1,0,.4,.28,z0,z1,.03,paintShade(col,2.2,.3)); // the case
+    for(const e of [-.22,.22])coveRound(px+e,py,1,0,.025,.285,z0+.005,z1+.004,.004,paintShade(BRICK,1.2,.2)); // its straps
+    coveTube(px-.07,py+.29,z0+h*.55,px+.07,py+.29,z0+h*.55,.01,BRICK);}}), // the handle
+    box:boxAt(x,y,1,0,.42,.3,0,top),radius:.55,suitcases:{cases}};
+}
+// The tailor's cutting table: a top on four legs, a length of cloth laid on
+// it with the pattern chalked, a rule along the front edge.
+function CUTTING_TABLE(x,y,hl,hw,h,col=BLUE) {
+  const wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,13);
+  const cloth=(i,t,L)=>{const u=HIT.u,v=HIT.v,chalk=Math.abs(Math.abs(u-.2)-.5)<.012||Math.abs(v-Math.sin(u*3)*.1)<.012;
+    BG[i]=C(col,2.2+L*.2);return set(i,chalk&&coveDetail(t,.1)>.3?'.':' ',C(WHITE,12)),true;};
+  const rule=(i,t,L)=>{BG[i]=C(YEL,4);return set(i,fract(HIT.u*10)<.1&&coveDetail(t,.1)>.3?'|':' ',C(GRAY,2)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,.9,.4,h,h+.004),gondolaFlat(1,0,cloth)); // the cloth, flat on the top
+    drawBox(boxAt(vx,vy+hw-.025,1,0,hl-.05,.02,h,h+.003),gondolaFlat(1,0,rule)); // the rule
+    coveRound(vx,vy,1,0,hl,hw,h-.04,h,.01,wood);
+    for(const e of [-1,1])for(const f of [-1,1])coveRound(vx+e*(hl-.08),vy+f*(hw-.08),1,0,.035,.035,0,h-.04,.01,wood);
+    coveRound(vx,vy,1,0,hl-.1,hw-.1,.12,.15,.006,wood); // the shelf low down
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.004),radius:Math.hypot(hl,hw),cuttingTable:{h}};
+}
+// A fitting mirror standing on its feet, the glass to (fx,fy).
+function FITTING_MIRROR(x,y,hl,h,fx,fy) {
+  const c=fy,s=-fx,glass=(i,t,L)=>{if(HIT.face!==3){BG[i]=C(BRICK,1.8);set(i,' ',0);return true;}BG[i]=C(CYAN,1.4+(HIT.w*.6));return set(i,fract((HIT.u+HIT.w)*2)<.05?'/':' ',C(WHITE,12)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,hl,.02,.08,h,glass); // the glass in its frame
+    for(const e of [-1,1]){part(e*(hl+.015),0,.015,.03,0,h,'wood',.006);part(e*hl,0,.04,.15,0,.04,'wood',.01);} // the frame's sides, the feet
+    part(0,0,hl+.03,.03,h,h+.03,'wood',.008); // its head
+  }),box:boxAt(x,y,c,s,hl+.04,.15,0,h+.03),radius:hl+.1,mirror:{fx,fy}};
+}
+// A curtain drawn back on its rail: the folds bunched as soft columns, along u (c,s).
+function CURTAIN_DRAWN(x,y,hl,z0,z1,col,c=1,s=0) {
+  const fold=k=>(i,t,L)=>{BG[i]=C(col,1.6+(k&1)*.6+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;},n=Math.max(3,Math.round(hl*2/.12));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=0;k<n;k++){const u=-hl+hl/n*(2*k+1),v=(k&1)?.012:-.012;coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl/n+.004,.03,z0,z1,.028,fold(k));}
+    coveTube(vx-c*(hl+.05),vy-s*(hl+.05),z1+.03,vx+c*(hl+.05),vy+s*(hl+.05),z1+.03,.012); // the rail
+  }),box:boxAt(x,y,c,s,hl,.045,0,z1+.05),radius:hl+.1,curtain:true};
+}
+// A hot-dog roller on a counter at z: a steel tray, the rollers turning, the
+// sausages resting between them.
+function HOTDOG_ROLLER_AT(x,y,z) {
+  const n=6,pitch=.04,r=.012,sr=.021,roll=(i,t,L)=>{const ridge=fract(HIT.u*20+T*2)<.5;BG[i]=C(GRAY,(ridge?3.2:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const sz=z+.03+r+Math.sqrt((r+sr)**2-(pitch/2)**2); // a sausage's centre, touching both rollers under it
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const k of [0,2,4])coveTube(vx-.14,vy+(-n/2+k+1)*pitch,sz,vx+.14,vy+(-n/2+k+1)*pitch,sz,sr,BRICK); // the sausages
+    for(let k=0;k<n;k++){const v=(-n/2+k+.5)*pitch;drawBox({...boxAt(vx,vy+v,1,0,.18,r,z+.03,z+.03+2*r),ax:vx-.18,ay:vy+v,az:z+.03+r,bx:vx+.18,by:vy+v,bz:z+.03+r,r},roll,coveRayCapsule);}
+    coveRound(vx,vy,1,0,.22,.14,z,z+.03,.008,GRAY); // the tray
+  }),box:boxAt(x,y,1,0,.22,.14,z,sz+sr),radius:.3,roller:{z}};
+}

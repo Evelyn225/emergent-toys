@@ -148,16 +148,9 @@ ROOM_DEFS.tireshop = { grid: boxRoom(12, 9), light: 0.95, floor: 'concrete', cei
 
 // ---- the tailor (TAILOR): the cutting table with a pattern chalked out, two sewing machines going, dress forms, bolts of
 // cloth up the wall, the fitting mirror; an armchair to wait in
-const cuttingTop = (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-  const cloth = Math.abs(HIT.u) < 0.9 && Math.abs(HIT.v) < 0.4, chalk = cloth && (Math.abs(Math.abs(HIT.u - 0.2) - 0.5) < 0.015 || Math.abs(HIT.v - Math.sin(HIT.u * 3) * 0.1) < 0.015);
-  BG[i] = cloth ? C(BLUE, 2.2 + L * 0.2) : C(STONE, 3); return set(i, chalk ? '.' : !cloth && fract(HIT.u * 10) < 0.08 ? '|' : ' ', C(WHITE, 12)), true; // (and a measuring rule along the edge)
-};
-const sewingMachine = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, -fy, fx, 0.45, 0.3, 0, 0.75), solid(BRICK, { top: '=' }));
-  drawBox(boxAt(vx - fx * 0.05, vy - fy * 0.05, -fy, fx, 0.2, 0.08, 0.75, 0.95), solid(WHITE, { bright: 2 }));
-  rod(vx - fy * 0.18 + fx * 0.05, vy + fx * 0.18 + fy * 0.05, 0.95, vx - fy * 0.18 + fx * 0.05, vy + fx * 0.18 + fy * 0.05, 0.78 + Math.abs(Math.sin(T * 20)) * 0.04, 0.008, GRAY, 1.5); // the needle, going
-}, [0.45, 0.3, 0.95]);
+// a sewing machine on its own table, its user on (fx, fy): built (shop-fittings.js)
+const sewingMachine = (x, y, fx, fy) => [ROOM_MODEL(x, y, (vx, vy) => drawFurnitureTable(vx, vy, Math.abs(fy) * 0.45 + Math.abs(fx) * 0.3, Math.abs(fx) * 0.45 + Math.abs(fy) * 0.3, 0.75), [Math.abs(fy) * 0.45 + Math.abs(fx) * 0.3, Math.abs(fx) * 0.45 + Math.abs(fy) * 0.3, 0.75]),
+  SEWING_MACHINE(x, y, 0.75, -fy, fx)];
 function tailorWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 0.9 && z < 2.3 && u > 3.0 && u < 8.0) { // bolts of cloth, end on, on their shelves
@@ -170,12 +163,12 @@ function tailorWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(STONE, 3.8 + L * 0.15); return set(i, fract(u / 0.12) < 0.08 ? ':' : ' ', C(GRAY, 4)), true; // pinstripe
 }
 ROOM_DEFS.tailor = { grid: boxRoom(11, 8), light: 0.95, floor: 'oak', ceil: 'pendant', sign: false, wall: tailorWall, keeper: [5.5, 2.9],
-  props: r => [BX(5.5, 3.6, 1.3, 0.55, 0, 0.9, cuttingTop), { ...standing(5.5, 2.9, r.neon), face: [0, 1] },
-    sewingMachine(1.5, 2.4, 1, 0), ...homeChair(2.3, 2.4, -1, 0, BRICK), { ...sitting(2.3, 2.4, shirt(), 0.48), face: [-1, 0], chat: false },
-    sewingMachine(1.5, 4.4, 1, 0), ...homeChair(2.3, 4.4, -1, 0, BRICK), ...(chance(0.6) ? [{ ...sitting(2.3, 4.4, shirt(), 0.48), face: [-1, 0] }] : []),
+  props: r => [CUTTING_TABLE(5.5, 3.6, 1.3, 0.55, 0.9), { ...standing(5.5, 2.9, r.neon), face: [0, 1] },
+    ...sewingMachine(1.5, 2.4, 1, 0), ...homeChair(2.3, 2.4, -1, 0, BRICK), { ...sitting(2.3, 2.4, shirt(), 0.48), face: [-1, 0], chat: false },
+    ...sewingMachine(1.5, 4.4, 1, 0), ...homeChair(2.3, 4.4, -1, 0, BRICK), ...(chance(0.6) ? [{ ...sitting(2.3, 4.4, shirt(), 0.48), face: [-1, 0] }] : []),
     mannequin(8.6, 2.0, 'jacket', 'pants', GRAY), mannequin(9.5, 2.8, 'dress', 'skirt', RED), mannequin(8.4, 3.6, 'jacket', 'pants', BLUE),
-    BX(9.7, 6.2, 0.04, 0.6, 0, 2.0, (i, t, L) => { BG[i] = C(CYAN, 1.4 + (HIT.w * 0.6)); return set(i, fract((HIT.v + HIT.w) * 2) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }), // the fitting mirror
-    BX(9.0, 5.45, 0.65, 0.03, 0.05, 2.1, (i, t, L) => { BG[i] = C(RED, 1.8 + L * 0.2); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L)), true; }), // the curtain, drawn back
+    FITTING_MIRROR(9.7, 6.2, 0.6, 2.0, -1, 0), // the fitting mirror
+    CURTAIN_DRAWN(9.0, 5.45, 0.65, 0.05, 2.1, RED), // the curtain, drawn back
     ...armchair(2.0, 6.4, 1, 0, GREEN)] };
 
 // ---- antiques (ANTIQUES): the grandfather clock ticking, a gramophone, chandeliers, glass cabinets of trinkets, two
@@ -211,9 +204,9 @@ function antiqueWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 'pendant', sign: false, wall: antiqueWall, keeper: [9.6, 1.6],
   props: r => [...counterBox(9.6, 2.3, 1.1), { ...standing(9.6, 1.6, GRAY), face: [0, 1] }, grandfatherClock(1.45, 1.35), gramophone(6.4, 1.45),
     ...glassCase(3.6, 1.6, 1.2, 0.35, 1.2, caseGoods('trinkets', [YEL, WHITE, CYAN, MAG], true, 7), BRICK), ...glassCase(10.6, 5.4, 1.0, 0.35, 1.2, caseGoods('trinkets', [YEL, WHITE, GREEN], true, 9), BRICK, 0, 1),
-    ...armchair(4.4, 6.6, 1, 0, GREEN), ...armchair(7.2, 6.6, -1, 0, RED), BX(5.8, 6.6, 0.3, 0.3, 0, 0.55, solid(BRICK, { top: '=' })), // two armchairs over a little table
+    ...armchair(4.4, 6.6, 1, 0, GREEN), ...armchair(7.2, 6.6, -1, 0, RED), TEA_TABLE(5.8, 6.6, 0.3, 0.3, 0.55), // two armchairs over a little table
     ...(chance(0.4) ? [{ ...sitting(7.2, 6.6, shirt(), 0.42), face: [-1, 0] }] : []),
-    ...[[1.5, 6.2, 0.4], [1.5, 6.2, 0.75], [1.55, 7.3, 0.3]].map(([x, y, z], k) => BX(x, y, 0.4, 0.28, z - (k === 1 ? 0.35 : z), z, solid([BRICK, ORANGE, GREEN][k], { top: '=', panel: 0.3 }))), // old suitcases piled up
+    SUITCASE_PILE([[1.5, 6.2, 0, 0.4, BRICK], [1.5, 6.2, 0.4, 0.75, ORANGE]]), SUITCASE_PILE([[1.55, 7.3, 0, 0.3, GREEN]]), // old suitcases piled up
     chandelier(4.0, 4.0), chandelier(8.0, 4.0)] };
 
 // ---- the drugstore (DRUGSTORE): bright as day, aisles of everything in loud packets, signs hung over them, the

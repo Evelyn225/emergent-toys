@@ -148,3 +148,25 @@ test('motel, welder, tyre shop, gacha, delicatessen and deli: fittings stand on 
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the last shop rooms: the store roller, reading chair, tailor tables and mirror, suitcases resting, the showroom and agency desks',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const onTop=(P,o)=>P.some(u=>u!==o&&u.box&&inBox(u.box,o.x,o.y,0)&&Math.abs(u.box.z1-o.box.z0)<1e-9);
+  const rooms=[['store','24/7'],['books','BOOKS'],['tailor','TAILOR'],['antiques','ANTIQUES'],['showroom','CARS'],['realty','REALTY']];
+  for(const [kind,word] of rooms){
+   enterRoom(kind,{word,ret:[100,100,0]},[5,5,0]);const P=room.props;
+   if(String(ROOM_DEFS[kind].props).includes('BX('))bad.push([kind,'a painted box is left']);
+   if(kind==='store'){const ro=P.find(o=>o.roller);if(!ro||!onTop(P,ro))bad.push('roller not on the counter');}
+   if(kind==='books'){const a=P.find(o=>o.armchair),s=P.find(o=>o.seat&&Math.abs(o.x-2.2)<.01);if(!a||!s||Math.abs(s.h-a.armchair.h)>1e-9)bad.push('reading chair seat');}
+   if(kind==='tailor'){const m=P.filter(o=>o.sewing);if(m.length!==2||m.some(o=>!onTop(P,o)))bad.push('sewing machines not on their tables');
+    const mi=P.find(o=>o.mirror);if(!mi||roomAt(mi.x+mi.mirror.fx*.5,mi.y+mi.mirror.fy*.5)!=='.')bad.push('mirror faces a wall');
+    if(!P.some(o=>o.cuttingTable)||!P.some(o=>o.curtain))bad.push('cutting table or curtain missing');}
+   if(kind==='antiques'){for(const o of P.filter(o=>o.suitcases)){const cs=o.suitcases.cases;cs.forEach((q,k)=>{if(Math.abs(q[2]-(k?cs[k-1][3]:0))>1e-9)bad.push('a suitcase not resting');});}
+    for(const a of P.filter(o=>o.armchair)){const s=P.find(o=>o.seat&&Math.abs(o.x-a.x)<.01&&Math.abs(o.y-a.y)<.01);if(!s||s.h!==a.armchair.h)bad.push('armchair seat');}}
+   if(kind==='showroom'||kind==='realty'){if(!P.some(o=>o.desk))bad.push([kind,'no desk']);}
+  }
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
