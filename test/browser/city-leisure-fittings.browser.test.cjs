@@ -37,3 +37,23 @@ test('cinema rows, arcade cabinets and the casino floor are built, every part in
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the club: poles stand on the stage up to the ceiling, candles on the tables, chairs carry their seats, the VIP booth opens to its host',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const rnd=Math.random;Math.random=()=>.3;try{enterRoom('stripclub',{word:'VELVET',ret:[100,100,0]},[5,5,0]);}finally{Math.random=rnd;}
+  const P=room.props,stage=P.find(o=>o.stage),H=room.def.height||3;
+  const poles=P.filter(o=>o.pole);if(poles.length!==3)bad.push(['poles',poles.length]);
+  for(const o of poles){if(!inBox(stage.box,o.x,o.y,0)||Math.abs(o.pole.z0-stage.stage.h)>1e-9)bad.push('pole not on the stage');if(o.pole.z1>H+1e-9)bad.push('pole through the ceiling');}
+  const candles=P.filter(o=>o.candle);if(candles.length!==5)bad.push(['candles',candles.length]);
+  for(const c of candles){const t=P.find(o=>o!==c&&o.box&&inBox(o.box,c.x,c.y,0)&&Math.abs(o.box.z1-c.candle.z)<1e-9);if(!t)bad.push('candle not on a table');}
+  const chairs=P.filter(o=>o.clubChair);if(chairs.length!==10)bad.push(['chairs',chairs.length]);
+  for(const c of chairs){const s=P.find(o=>o.seat&&Math.abs(o.x-c.x)<1e-9&&Math.abs(o.y-c.y)<1e-9);if(!s||s.h!==c.clubChair.h)bad.push('chair seat');}
+  const vip=P.find(o=>o.vip),host=P.find(o=>o.service==='vip');
+  if(!vip||!host||(host.x-vip.x)*vip.vip.fx+(host.y-vip.y)*vip.vip.fy<=0)bad.push('VIP booth faces away from its host');
+  for(const [x,y] of [[vip.box.x-vip.box.hl,vip.box.y-vip.box.hw],[vip.box.x+vip.box.hl,vip.box.y+vip.box.hw]])if(roomAt(x-Math.sign(x-vip.x)*.01,y-Math.sign(y-vip.y)*.01)==='#')bad.push('VIP booth in the wall');
+  const s=String(ROOM_DEFS.stripclub.props);if(s.includes('BX(')||s.includes('SP('))bad.push('painted props left in the club');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));

@@ -23060,19 +23060,13 @@ function clubWall(i, su, uStep, z, d, mx, my, L) {
 const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
   [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
 const SEQUINS = [MAG, CYAN, YEL, RED];
-// buttoned velvet, for the chair backs: a stud in every diamond
-const tufted = (i, t, L) => {
-  BG[i] = C(MAG, (1.2 + L * 0.3) * shadeFace(HIT.face));
-  const a_ = fract(HIT.u * 9), b_ = fract(HIT.w * 9);
-  return set(i, a_ < 0.25 && b_ < 0.3 ? '*' : Math.abs(a_ - b_) < 0.12 ? '\\' : Math.abs(a_ + b_ - 1) < 0.12 ? '/' : ' ', C(MAG, L * 1.3)), true;
-};
 ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75 && Math.abs(y - 9.8) < 0.45, light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
   props: r => {
-    const p = [BX(CLUB_W / 2, 2.2, 4.5, 1.3, 0, 0.5, solid(GRAY, { top: '=', bright: 1.4 }))]; // the stage
+    const p = [CLUB_STAGE(CLUB_W / 2, 2.2, 4.5, 1.3, 0.5)]; // the stage
     p.push(...counterBox(2.2, 6, 0.9, 1.05).map(b => ({ ...b, box: { ...b.box, c: 0, s: 1 } })), standing(1.5, 6, MAG)); // the bar along the left wall, the bartender behind it
     for (let k = 0; k < 3; k++) { // three poles, a dancer on each
       const x = 5.5 + k * 3.5, col = SEQUINS[k];
-      p.push(BX(x, 2, 0.04, 0.04, 0.5, 3, solid(WHITE, { bright: 1.6 })));
+      p.push(CLUB_POLE(x, 2, 0.5, 3));
       p.push(figProp(x, 2.05, CLUB_DANCERS[k], { z: 0.5, h: 1.72, chat: false, light: 12,
         pose: () => 'dance' + mod(Math.floor(T * 1.6 + k * 1.3), FIG_DANCE.length), // (a new move every beat or so)
         tick: s => { s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } })); // (swinging round the pole, facing the way she's going)
@@ -23080,17 +23074,15 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     // little round cocktail tables, a candle on each, two velvet chairs apiece facing the stage; the punters in them, all eyes front
     const busy = 0.45 + 0.4 * barCrowd();
     for (const [x, y] of [[6, 6.4], [9.5, 6.4], [13, 6.4], [7.7, 9.2], [11.2, 9.2]]) {
-      p.push(BX(x, y, 0.32, 0.32, 0.68, 0.74, solid(GRAY, { top: '.', trim: 0.05, bright: 1.2 })), BX(x, y, 0.05, 0.05, 0, 0.68, solid(GRAY)));
-      p.push({ ...SP(x, y, 0.12, 0.14, ['*'], () => C(fract(T * 3 + x) < 0.85 ? YEL : ORANGE, 15), 0.74) }); // (the candle flickers)
+      p.push(FURNITURE_ROUND_TABLE(x, y, 0.32, 0.74, GRAY), TABLE_CANDLE(x, y, 0.74)); // (the candle flickers)
       for (const cx of [x - 0.42, x + 0.42]) {
         const cy = y + 0.55;
-        p.push({ ...BX(cx, cy, 0.22, 0.22, 0, 0.42, solid(MAG, { top: '=', bright: 1.6 })), seat: true, x: cx, y: cy, fx: 0, fy: -1, h: 0.42 }, BX(cx, cy + 0.2, 0.22, 0.04, 0.42, 0.72, tufted)); // (a low back: you can see who's in it)
+        p.push(CLUB_CHAIR(cx, cy, 0, -1), SEAT(cx, cy, 0, -1, 0.42)); // (a low back: you can see who's in it)
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }
     for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
-    p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
-    p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
+    p.push(VIP_BOOTH(15.5, 11.4, 1.55, 1.4, 2.2, -1, 0)); // the VIP booth, curtained off, its sign over the way in
     p.push({...standing(13.4, 10.2, GRAY),service:'vip'}); // the host by the curtain
     p.push({ vm: { kind: 'CIGARETTES', c: 0, s: 1, fs: -1 }, x: 1.4, y: 9.8 }); // a cigarette machine by the bar, the same as the ones on the street
     return p;
@@ -37789,6 +37781,61 @@ function SLOT_MACHINE(x,y,fx,fy,ph) {
     coveTube(vx+c*.34,vy+s*.34,.95,vx+c*.34,vy+s*.34,1.35,.012); // the lever
     coveLathe(vx+c*.34,vy+s*.34,1.34,[[0,0],[0,.03],[.04,.035],[.07,0]],leisurePaint(RED,3.6)); // its knob
   }),box:boxAt(x,y,c,s,.38,.37,0,1.6),radius:.5,slot:{fx,fy}};
+}
+// The club's stage: a plinth with a lit nosing chasing along its edge.
+function CLUB_STAGE(x,y,hl,hw,h) {
+  const top=leisurePaint(GRAY,1.6,.3),nosing=(i,t,L)=>{const k=Math.floor((HIT.u+hl)*4+T*6);BG[i]=C(NEON[k&3],8);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,0,h-.03,.02,top);
+    coveRound(vx,vy,1,0,hl,hw,h-.03,h,.012,leisurePaint(GRAY,2.6,.3)); // the boards
+    drawBox(boxAt(vx,vy+hw+.006,1,0,hl-.03,.006,h-.08,h-.045),nosing); // the light strip along the front
+  }),box:boxAt(x,y,1,0,hl,hw+.012,0,h),radius:Math.hypot(hl,hw),stage:{h}};
+}
+// A dance pole from the stage at z0 to the ceiling, with its flanges.
+function CLUB_POLE(x,y,z0,z1) {
+  const chrome=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,z0,[[0,0],[0,.07],[.015,.06],[.03,.022],[.03,0]],chrome); // the base flange
+    coveTube(vx,vy,z0+.03,vx,vy,z1-.03,.022,WHITE);
+    coveLathe(vx,vy,z1-.03,[[0,0],[0,.022],[.015,.06],[.03,.07],[.03,0]],chrome); // the ceiling flange
+  }),box:boxAt(x,y,1,0,.07,.07,z0,z1),radius:.1,pole:{z0,z1}};
+}
+// A candle in its glass on a table top at z, the flame flickering.
+function TABLE_CANDLE(x,y,z) {
+  const glass=(i,t,L)=>{if(Math.abs(HIT.nx*dx+HIT.ny*dy)>.4&&HIT.w>z+.01)return false;BG[i]=C(RED,1.6);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const f=fract(T*3+x)<.85;
+    foodOval(vx,vy,z+.045,.008,.008,f?.03:.024,(i,t,L)=>{BG[i]=C(f?YEL:ORANGE,15);set(i,' ',0);return true;}); // the flame
+    coveLathe(vx,vy,z,[[0,0],[0,.025],[.04,.024],[.04,0]],leisurePaint(WHITE,4)); // the candle
+    coveLathe(vx,vy,z,[[0,0],[0,.04],[.07,.042],[.07,.036],[.006,.034],[.006,0]],glass); // its glass, clear but for the rim and a tint
+  }),box:boxAt(x,y,1,0,.042,.042,z,z+.08),radius:.06,candle:{z}};
+}
+// A low velvet club chair facing (fx,fy): a cushion on short legs, a
+// buttoned back.
+function CLUB_CHAIR(x,y,fx,fy,col=MAG,h=.42) {
+  const c=fy,s=-fx,velvet=leisurePaint(col,1.6,.35);
+  const tufted=(i,t,L)=>{const a=fract(HIT.u*9),b=fract(HIT.w*9),stud=a<.25&&b<.3&&coveDetail(t,.15)>.3;
+    BG[i]=C(col,1.4+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)-(stud?.6:0));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    for(const e of [-1,1])for(const f of [-1,1])part(e*.16,f*.16,.02,.02,0,h-.12,GRAY,.006); // the legs
+    part(0,0,.22,.22,h-.12,h,velvet,.04); // the cushion
+    part(0,-.19,.22,.04,h,.72,tufted,.03); // the buttoned back
+  }),box:boxAt(x,y,c,s,.22,.23,0,.72),radius:.32,clubChair:{h}};
+}
+// The VIP booth: velvet walls on three sides, a curtain across the front in
+// folds, parted at the middle, a lit VIP sign over it. Its front faces (fx,fy).
+function VIP_BOOTH(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,velvet=leisurePaint(MAG,.8,.2),n=Math.round(hl*2/.14);
+  const fold=k=>leisurePaint(RED,1+(k&1)*.5,.3);
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'VIP',0,h+.11,.06,.09,C(YEL,15),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=leisurePart(vx,vy,c,s);
+    part(0,-hw+.03,hl,.03,0,h,velvet); for(const e of [-1,1])part(e*(hl-.03),0,.03,hw,0,h,velvet); // the walls
+    part(0,0,hl,hw,h-.03,h,velvet); // its ceiling
+    for(let k=0;k<n;k++){const u=-hl+.06+(hl*2-.12)*(k+.5)/n;if(Math.abs(u)<.18)continue; // the parting
+      part(u,hw-.04+((k&1)?.012:0),(hl*2-.12)/n/2+.004,.028,.02,h-.06,fold(k),.026);}
+    coveTube(vx-c*hl-s*(hw-.04),vy-s*hl+c*(hw-.04),h-.04,vx+c*hl-s*(hw-.04),vy+s*hl+c*(hw-.04),h-.04,.012); // the curtain rail
+    part(0,hw+.02,.35,.02,h+.02,h+.2,sign,.01); // the sign
+  }),box:boxAt(x,y,1,0,Math.abs(c)*hl+Math.abs(s)*hw,Math.abs(s)*hl+Math.abs(c)*hw+.04,0,h+.2),radius:Math.hypot(hl,hw),vip:{fx,fy}};
 }
 // Two wall-mounted boards carry distinct sealed sake bottles. Board tops set
 // every bottle foot and guard height; brackets derive from the same underside.
