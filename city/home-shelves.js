@@ -13,6 +13,15 @@ function homeShelfSize(it) {
   return {radius:p.w*m/2,height:p.h*m};
 }
 function homeShelfSurfaces() {return room.props.flatMap(p=>p.shelfSurfaces||[]);}
+function homeShelfLine(s,x,y,z) {
+  const eye=interactionEye(),hit={...HIT};
+  try{return !s.owner.shelfOccluders.some(b=>{const t=rayBox(px,py,eye,x-px,y-py,z-eye,b);return t>.01&&t<.99;});}
+  finally{Object.assign(HIT,hit);}
+}
+function homeShelfVisible(p) {
+  const forward=(p.x-px)*Math.cos(a)+(p.y-py)*Math.sin(a),z=clamp(interactionEye()+pitch*rows/projY*forward,p.z,p.z+p.size.height);
+  return homeShelfLine(p.surface,p.x,p.y,z);
+}
 function homeShelfFits(s,u,v,size,placed) {
   const r=size.radius,top=s.z+size.height;
   if(![u,v,r,top].every(Number.isFinite)||Math.abs(u)+r>s.hl+1e-7||Math.abs(v)+r>s.hw+1e-7||top>Math.min(s.ceiling-.006,(room.def.height||3)-.02))return false;
@@ -53,7 +62,7 @@ function homeShelfAim() {
       if(!(t>0&&t<=2.2&&Math.abs(hitU)<s.hl&&Math.abs(hitV)<s.hw))continue;
     }
     const xx=s.x+s.c*hitU-s.s*hitV,yy=s.y+s.s*hitU+s.c*hitV;
-    if(interactionClear(xx,yy,hitZ+.002,s.owner))out.push({surface:s,u:hitU,x:xx,y:yy,z:hitZ});
+    if(interactionClear(xx,yy,hitZ+.002,s.owner)&&homeShelfLine(s,xx,yy,hitZ+.002))out.push({surface:s,u:hitU,x:xx,y:yy,z:hitZ});
   }return out;
 }
 function homeShelfStore(k,target=homeShelfMenuTarget) {

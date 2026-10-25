@@ -29,6 +29,15 @@ test('every home shelf board supports fitting items without book, neighbour, edg
    if(legacy.length!==4||legacy.some(p=>!homeShelfFits(p.surface,p.u,p.v,p.size,legacy.filter(q=>q!==p))))bad.push('legacy fit');
    if(!isHomeDecor({id:'f_lamp'})||!isHomeDecor({id:'sharkplush'})||isHomeDecor({id:'constructor'}))bad.push('legacy/unknown items');
    const invalid=restoreShelfItem({id:'yoyo',uses:0,shelfPlacement:{key:'old',level:1,u:NaN,v:0}});if(invalid.shelfPlacement||invalid.id!=='yoyo')bad.push('invalid placement retained or item lost');
+   const freestanding=FURNITURE_STORAGE(8,8,.75,.18,1.05,0,true);room.props.push(freestanding);
+   const surface=freestanding.shelfSurfaces[1],probe=homeShelfFind(surface,homeShelfSize({id:'apple',uses:1}),[],0);
+   px=probe.x;py=9.2;a=-Math.PI/2;pitch=((probe.z+.04-interactionEye())/(py-probe.y))*projY/rows;
+   if(!homeShelfVisible(probe))bad.push('front visibility');
+   py=6.8;a=Math.PI/2;pitch=((probe.z+.04-interactionEye())/(probe.y-py))*projY/rows;
+   if(homeShelfVisible(probe))bad.push('through back panel');
+   px=9.1;py=probe.y;a=Math.PI;pitch=((probe.z+.04-interactionEye())/(px-probe.x))*projY/rows;
+   if(homeShelfVisible(probe))bad.push('through side panel');
+   room.props.pop();
    out.push({kind,bad,surfaces:surfaces.length,shelves:room.props.filter(q=>q.shelfSurfaces).length});
   }return out;
  });for(const q of r){assert.deepEqual(q.bad,[],JSON.stringify(q));assert.equal(q.surfaces,q.shelves*4);assert.ok(q.shelves>0);}

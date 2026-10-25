@@ -105,6 +105,11 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
   });
   model.furniture=open?'shelf':'cabinet';
   if(open)model.shelfSurfaces=[...levels.map((z,k)=>({level:k,hl:hl-thick-.009,hw:hw-thick-.009,z:z+.035,ceiling:levels[k+1]??cap})),{level:3,hl:hl-.016,hw:hw-.016,z:height,ceiling:Infinity}].map(q=>({...q,x,y,c,s,key:[x,y,hl,hw,height].join(':'),owner:model,books:books.map(b=>b.bounds).filter(b=>Math.abs(b.z0-q.z)<1e-7)}));
+  if(open){
+    const at=(u,v,hx,hy,z0,z1)=>boxAt(x+c*u-s*v,y+s*u+c*v,c,s,hx,hy,z0,z1);
+    model.shelfOccluders=[at(0,0,hl-.035,hw-.025,0,base),at(0,-hw+thick/2,hl-thick,thick/2,base,cap),at(0,0,hl,hw,cap,height),
+      ...[-1,1].map(side=>at(side*(hl-thick/2),0,thick/2,hw,base,cap)),...levels.map(z=>at(0,0,hl-thick,hw-thick,z,z+.035)),...books.map(({bounds:b})=>at(b.u,b.v,b.hl,b.hw,b.z0,b.z1))];
+  }
   return model;
 }
 

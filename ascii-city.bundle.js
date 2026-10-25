@@ -24432,7 +24432,7 @@ function interactionFocus() {
       offer('bathroom-door',prop,prop.x+c*offset,prop.y+s*offset,.4,2.1,d.open>.85?.12:Math.min(.45,width*(1-d.open)/2),2.2,prop);
     }
     if(homeRecord()){
-      for(const p of homeShelfLayout())offer('home-display',p,p.x,p.y,p.z,p.z+p.size.height,p.size.radius,2.2,p.surface.owner,true);
+      for(const p of homeShelfLayout())if(homeShelfVisible(p))offer('home-display',p,p.x,p.y,p.z,p.z+p.size.height,p.size.radius,2.2,p.surface.owner,true);
       if(!best)for(const t of homeShelfAim())offer('home-shelf',t,t.x,t.y,t.z,t.z+.01,.025,2.2,t.surface.owner,true);
     }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
@@ -35118,6 +35118,11 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
   });
   model.furniture=open?'shelf':'cabinet';
   if(open)model.shelfSurfaces=[...levels.map((z,k)=>({level:k,hl:hl-thick-.009,hw:hw-thick-.009,z:z+.035,ceiling:levels[k+1]??cap})),{level:3,hl:hl-.016,hw:hw-.016,z:height,ceiling:Infinity}].map(q=>({...q,x,y,c,s,key:[x,y,hl,hw,height].join(':'),owner:model,books:books.map(b=>b.bounds).filter(b=>Math.abs(b.z0-q.z)<1e-7)}));
+  if(open){
+    const at=(u,v,hx,hy,z0,z1)=>boxAt(x+c*u-s*v,y+s*u+c*v,c,s,hx,hy,z0,z1);
+    model.shelfOccluders=[at(0,0,hl-.035,hw-.025,0,base),at(0,-hw+thick/2,hl-thick,thick/2,base,cap),at(0,0,hl,hw,cap,height),
+      ...[-1,1].map(side=>at(side*(hl-thick/2),0,thick/2,hw,base,cap)),...levels.map(z=>at(0,0,hl-thick,hw-thick,z,z+.035)),...books.map(({bounds:b})=>at(b.u,b.v,b.hl,b.hw,b.z0,b.z1))];
+  }
   return model;
 }
 
@@ -37918,6 +37923,15 @@ function homeShelfSize(it) {
   return {radius:p.w*m/2,height:p.h*m};
 }
 function homeShelfSurfaces() {return room.props.flatMap(p=>p.shelfSurfaces||[]);}
+function homeShelfLine(s,x,y,z) {
+  const eye=interactionEye(),hit={...HIT};
+  try{return !s.owner.shelfOccluders.some(b=>{const t=rayBox(px,py,eye,x-px,y-py,z-eye,b);return t>.01&&t<.99;});}
+  finally{Object.assign(HIT,hit);}
+}
+function homeShelfVisible(p) {
+  const forward=(p.x-px)*Math.cos(a)+(p.y-py)*Math.sin(a),z=clamp(interactionEye()+pitch*rows/projY*forward,p.z,p.z+p.size.height);
+  return homeShelfLine(p.surface,p.x,p.y,z);
+}
 function homeShelfFits(s,u,v,size,placed) {
   const r=size.radius,top=s.z+size.height;
   if(![u,v,r,top].every(Number.isFinite)||Math.abs(u)+r>s.hl+1e-7||Math.abs(v)+r>s.hw+1e-7||top>Math.min(s.ceiling-.006,(room.def.height||3)-.02))return false;
@@ -37958,7 +37972,7 @@ function homeShelfAim() {
       if(!(t>0&&t<=2.2&&Math.abs(hitU)<s.hl&&Math.abs(hitV)<s.hw))continue;
     }
     const xx=s.x+s.c*hitU-s.s*hitV,yy=s.y+s.s*hitU+s.c*hitV;
-    if(interactionClear(xx,yy,hitZ+.002,s.owner))out.push({surface:s,u:hitU,x:xx,y:yy,z:hitZ});
+    if(interactionClear(xx,yy,hitZ+.002,s.owner)&&homeShelfLine(s,xx,yy,hitZ+.002))out.push({surface:s,u:hitU,x:xx,y:yy,z:hitZ});
   }return out;
 }
 function homeShelfStore(k,target=homeShelfMenuTarget) {
