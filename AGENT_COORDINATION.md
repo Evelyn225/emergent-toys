@@ -278,3 +278,10 @@ materials. Four tank checks plus home-window controls, all five shop/seating/
 route checks and four bundle/parse checks pass. Original-defect regression
 fails before correction; close/wide/oblique/above/night views reviewed and
 costs appended. Next #216: belt rails currently intersect the plate rims.
+
+#216 solo review complete (`codex/review-sushi-integration`): expanded the
+belt to clear the actual plate rims, with no collision-footprint changes.
+New rendered plate/slab probes catch the original990 intersections; all10
+sushi/prep/tableware checks and four bundle/parse checks pass. Close/wide/
+corner/end/night views and ABAB costs reviewed. Next #217 karaoke: review
+speaker/screen bounds and startup-time lyrics. #233/#234/#237 full CI green.

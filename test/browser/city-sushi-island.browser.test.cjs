@@ -48,3 +48,25 @@ test('plates ride on the belt all the way round; taps and tea canisters stand on
  });
  assert.deepEqual(r.bad,[],r.count+' bad');assert.equal(r.seats,16);assert.ok(r.lane);assert.match(r.prompt,/E: shop$/);
 }));
+
+test('the actual plate foot rides on the rendered belt and its curved rim clears every guide through each corner',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  const save=drawBox,slabs=[],plate=[];
+  try{for(const o of room.props.filter(o=>o.sushiIsland)){
+   let k=0;drawBox=(box,shade,ray=rayBox)=>slabs.push({box:{...box},ray,role:o.sushiIsland.parts[k++].role});o.draw(o.x,o.y);
+  }drawBox=(box,shade,ray)=>plate.push({box,ray});kitchenSushi(0,0,.95,0);}finally{drawBox=save;}
+  const dish=plate.find(q=>q.ray===coveRayLathe),rails=slabs.filter(q=>q.role.endsWith('rail')),belt=slabs.filter(q=>q.role==='belt'),bad=[];
+  const P=2*(SUSHI_LOOP.x1-SUSHI_LOOP.x0+SUSHI_LOOP.y1-SUSHI_LOOP.y0),foot=Math.max(...dish.box.profile.filter(q=>Math.abs(q[0]-.95)<1e-8).map(q=>q[1]));
+  for(let step=0;step<=Math.ceil(P/.1);step++){
+   const [x,y]=sushiAt(step*.1);
+   for(let a=0;a<TAU;a+=TAU/16){
+    const sx=x+Math.cos(a)*foot,sy=y+Math.sin(a)*foot;
+    if(!belt.some(q=>{const t=q.ray(sx,sy,2,0,0,-1,q.box);return t>0&&Math.abs(2-t-.95)<1e-8;}))bad.push('plate foot unsupported');
+    for(const [z,r]of dish.box.profile){const px_=x+Math.cos(a)*r,py_=y+Math.sin(a)*r;
+     if(rails.some(q=>{const b=q.box;return Math.abs(px_-b.x)<b.hl-1e-6&&Math.abs(py_-b.y)<b.hw-1e-6&&z>b.z0+1e-6&&z<b.z1-1e-6;}))bad.push('guide penetrates plate');
+    }
+   }
+  }
+  return{count:bad.length,bad:bad.slice(0,6),plateParts:plate.length};
+ });assert.ok(bad.plateParts>1);assert.equal(bad.count,0,JSON.stringify(bad));
+}));

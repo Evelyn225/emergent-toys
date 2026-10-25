@@ -4,7 +4,8 @@
 // slatted belt that moves at the plates' own speed. Hot-water taps and tea
 // canisters stand on the outer ledge at the seats. Every piece is an
 // axis-aligned slab from one set of measurements, so corners meet exactly.
-const SUSHI_ISLAND={fitting:.2,edge:.25,top:.95,slab:.04,belt:.08,rail:.02,railTop:.965,plinth:.1,kick:.05,speed:.18};
+// The 20cm plate rims need clearance from the raised guides, not just foot support.
+const SUSHI_ISLAND={fitting:.2,edge:.25,top:.95,slab:.04,belt:.11,rail:.02,railTop:.965,plinth:.1,kick:.05,speed:.18};
 const sushiRect=(x0,x1,y0,y1,z0,z1,role)=>({x0,x1,y0,y1,z0,z1,role});
 // One side's slabs. Long sides (along x) own the corners; (o) is outward.
 function sushiIslandSide(loop,kind,o) {
