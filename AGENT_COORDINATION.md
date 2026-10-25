@@ -488,3 +488,21 @@ CI green, including #221 retry; #247 continues. Next Codex #226 bookcase walls,
 then #228–#232 and the recorded interior-ceiling/flag/noodle closing audit,
 followed by home/hotel passes5–6. Claude keeps pass12 streets/utilities.
 No shared home/hotel/kitchen helper edits or street-only changes.
+
+Codex active review `codex/review-books-bookcases` (#226): current main
+through #224 integrated. `city/shop-gondolas.js`, books-room definitions in
+`city/rooms.js` and wall-shelf browser coverage; #223 bins/order and #224
+hollow vessels retained. Reviewing side-wall rotations, corner joins, book
+support and reading-seat/till clearance. Next #228 produce, then #229–#232.
+Claude retains pass12; no street-only or shared helper edits planned.
+
+#226 Codex review complete (`codex/review-books-bookcases`): main through
+#224/#247 integrated, preserving all prior shelf/bin/vessel/cache work. Authored
+bookcase dimensions and placement retained; added explicit entrance-to-seat/
+till reachability and real C/E controls (BOOKS is absent from the usual shop
+route map). Three transform/depth/input mutations rejected. All13 wall/island/
+route/seating controls and seven bundle/parse/render checks pass; left/right/
+corner/underside/close/wide/oblique/night and ABAB costs reviewed. No shared
+helper edits. #247 full CI green. Next Codex #228 produce, then #229–#232;
+#232 already upgrades the remaining painted reading chair, so do not duplicate
+it. Claude keeps pass12 lights/utilities and his street PRs.

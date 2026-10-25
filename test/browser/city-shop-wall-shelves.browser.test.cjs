@@ -98,3 +98,24 @@ test('thrift shelf vases have open necks, real inner walls and a closed supporte
   return{bad:bad.slice(0,8),count:vases.length};
  });assert.deepEqual(result.bad,[]);assert.ok(result.count>10,'native bric-a-brac vases checked');
 }));
+
+test('bookcase aisles connect the entrance to the reading seat and the till, with real C and E controls',()=>fixture(async p=>{
+ const points=await p.evaluate(()=>{
+  enterRoom('books',{word:'BOOKS',neon:CYAN,ret:[100,100,0]},[5,5.4,0]);body.seat=null;
+  const seat=room.props.find(o=>o.seat),k=room.def.keeper,S=10,W=room.W*S,H=room.H*S,seen=new Uint8Array(W*H),queue=[[Math.round(px*S),Math.round(py*S)]];let chair=null,clerk=null;
+  while(queue.length&&(!chair||!clerk)){
+   const[x,y]=queue.pop();if(x<0||y<0||x>=W||y>=H||seen[y*W+x])continue;seen[y*W+x]=1;
+   const X=x/S,Y=y/S;if(!free(X,Y))continue;
+   const sd=Math.hypot(X-seat.x,Y-seat.y),kd=Math.hypot(X-k[0],Y-k[1]);
+   if(!chair&&sd>.65&&sd<1)chair=[X,Y];
+   if(!clerk&&kd>.8&&kd<1.7){px=X;py=Y;a=Math.atan2(k[1]-Y,k[0]-X);pitch=0;if(nearKeeper())clerk=[X,Y,a];}
+   queue.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+  if(chair){[px,py]=chair;a=Math.atan2(seat.y-py,seat.x-px);pitch=0;}
+  return{chair,clerk,seat:[seat.x,seat.y]};
+ });assert.ok(points.chair,'reading seat reachable on clear floor from the entrance');assert.ok(points.clerk,'till reachable from the entrance');
+ await p.keyboard.press('c');assert.deepEqual(await p.evaluate(()=>body.seat&&[px,py]),points.seat);
+ await p.keyboard.press('c');assert.equal(await p.evaluate(()=>body.seat),null);
+ await p.evaluate(q=>{[px,py,a]=q;pitch=0;},points.clerk);
+ await p.keyboard.press('e');assert.equal(await p.evaluate(()=>shopEl?.style.display),'flex');assert.match(await p.locator('#shop h1').innerText(),/^Books$/);
+}));

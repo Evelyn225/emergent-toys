@@ -330,7 +330,7 @@ function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind th
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
   return false;
 }
-// Floor-to-ceiling bookcases round the walls; the right-hand run stops short of the till.
+// Tall timber bookcases round the walls; the right-hand run stops short of the till.
 const BOOKS_CASE = { kind: 'books', timber: true, height: 2.15, levels: [0.15, 0.55, 0.95, 1.35, 1.75] };
 const BOOKS_CASES = [BOOKS_CASE, { ...BOOKS_CASE, wall: 'left', from: 1.2, to: 6 }, { ...BOOKS_CASE, wall: 'right', from: 1.2, to: 4.3 }];
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind real pots, red walls hung with signs
