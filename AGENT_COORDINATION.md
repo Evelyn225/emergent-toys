@@ -48,6 +48,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 12, signals:** `claude/street-signals` from main (new
+  `city/street-signals.js`; `drawSignal` and its constants removed from
+  `city/city-sprites.js`). Next: wall pipes and meters, then service hatches.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
