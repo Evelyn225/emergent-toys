@@ -50,3 +50,26 @@ test('the dairy run stocks cartons and pots; the wall painters no longer draw fr
  });
  assert.deepEqual(r.kinds,['carton','pot']);for(const [k,p] of r.painted)assert.equal(p,false,k);
 }));
+
+test('wall-fridge stock has real shelf contacts inside the glass and reuses its prepared profiles',()=>fixture(async p=>{
+ const result=await p.evaluate(ROOMS=>{
+  const bad=[];let count=0;
+  const capture=o=>{const draw=drawBox,out=[];projX=10000;drawBox=(box,shade,ray=rayBox)=>out.push({box:{...box},shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return out;};
+  for(const[kind,word]of ROOMS){
+   enterRoom(kind,{word,ret:[100,100,0]},[5,5,0]);
+   for(const o of room.props.filter(o=>o.drinksCooler?.depth===SHOP_FRIDGE_DEPTH)){
+    const d=o.drinksCooler,c=-d.fy,s=d.fx,parts=capture(o),stock=parts.filter(q=>(q.ray===coveRayLathe||q.ray===homeRayWorktop)&&q.box.hl<.05&&q.box.hw<.05&&q.box.z1-q.box.z0<.3&&COOLER_LEVELS.some(z=>Math.abs(q.box.z0-z)<1e-8));
+    const again=capture(o).filter(q=>(q.ray===coveRayLathe||q.ray===homeRayWorktop)&&q.box.hl<.05&&q.box.hw<.05&&q.box.z1-q.box.z0<.3&&COOLER_LEVELS.some(z=>Math.abs(q.box.z0-z)<1e-8));
+    if(stock.length!==d.goods.length)bad.push([kind,'stock count']);count+=stock.length;
+    if(stock.some((q,k)=>q.box.profile&&q.box.profile!==again[k].box.profile))bad.push([kind,'stock profiles rebuilt']);
+    const shelves=parts.filter(q=>q.box.hl>d.half*.9&&q.box.hw>.07&&q.ray===rayBox);
+    for(const q of stock){const b=q.box,u=(b.x-o.x)*c+(b.y-o.y)*s,v=(b.x-o.x)*d.fx+(b.y-o.y)*d.fy,ru=b.hl,rv=q.ray===coveRayLathe?b.hl:b.hw;
+     if(Math.abs(u)+ru>d.half-COOLER_WALL+1e-8||v+rv>d.depth-.019||v-rv< -d.depth+COOLER_WALL)bad.push([kind,'stock outside the cabinet/glass']);
+     if(!shelves.some(r=>{const t=r.ray(b.x,b.y,b.z0+.05,0,0,-1,r.box);return t>0&&Math.abs(t-.05)<1e-7;}))bad.push([kind,'stock has no shelf contact']);
+     const next=COOLER_LEVELS.find(z=>z>b.z0+.01)??COOLER_TOP;if(b.z1>next-.015)bad.push([kind,'stock enters the shelf above']);
+    }
+   }
+  }
+  return{bad:bad.slice(0,8),count};
+ },ROOMS);assert.deepEqual(result.bad,[]);assert.ok(result.count>1000,'all seven authored wall coolers checked');
+}));
