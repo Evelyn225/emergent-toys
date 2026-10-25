@@ -371,14 +371,7 @@ function teaWall(i, u, uStep, z, d, mx, my, L) { // red and gold, with long hang
   set(i, ' ', 0); BG[i] = C(RED, 1 + L * 0.1); return true;
 }
 // a few more room kinds' worth of props
-const cabinet = (x, y, k, body) => BX(x, y, 0.35, 0.4, 0, 1.8, (i, t, L) => { // an arcade machine, screen on the front
-  const f = HIT.face, w = HIT.w;
-  BG[i] = C(body, (1 + L * 0.3) * shadeFace(f));
-  if (f === 1 && w > 1.05 && w < 1.5 && Math.abs(HIT.v) < 0.27) { BG[i] = C(NEON[k], 2); return set(i, '*@#+o~%'[hash(Math.floor(HIT.v * 12), Math.floor(w * 10), (T * 6 | 0) + k) * 7 | 0], C(NEON[(k + 1) & 3], 15)), true; }
-  if (f === 1 && w > 1.6) return set(i, '=', C(NEON[k], 15)), true; // the marquee
-  if (f === 1 && w > 0.85 && w < 0.98) return set(i, 'o', C(RED, 13)), true; // buttons
-  return set(i, ' ', 0), true;
-}, 0, 1);
+const cabinet = (x, y, k, body) => ARCADE_CABINET(x, y, 0, 1, k, body); // an arcade machine, its screen to the room (built: leisure-fittings.js)
 
 
 const homeLayout = r => r.def.home;
@@ -431,7 +424,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
-        p.push({ ...BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } }, BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        p.push({ ...CINEMA_ROW(cx, y, 1.75), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } });
         if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.45, true));
       }
       return p;
