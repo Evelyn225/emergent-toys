@@ -13,6 +13,8 @@ const GONDOLA_STOCK={
   video:{widths:[.018,.018,.02],cols:[BLUE,RED,BLACK,GREEN,MAG,YEL],spines:true},
   wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
   toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
+  florist:{widths:[.12,.14,.16],cols:[RED,MAG,YEL,WHITE,ORANGE],pots:true}, // potted plants in bloom
+  thrift:{widths:[.08,.11,.14,.18],cols:[BRICK,GREEN,BLUE,YEL,GRAY,WHITE,MAG],mixed:true}, // bric-a-brac: boxes, jugs and vases
 };
 const GONDOLA_FOR={store:'grocery',bodega:'grocery',gas:'grocery',grocer:'grocery',drugstore:'pharmacy',pharmacy:'pharmacy',books:'books',hardware:'hardware',video:'video',liquor:'wine',toys:'toys'};
 // Rectangles of 'S' cells, each grown right then down from its first cell.
@@ -28,11 +30,11 @@ function gondolaBlocks(grid) {
   return out;
 }
 // The facings on one shelf face of a gondola: (u along the gondola, side ±1).
-function gondolaFacings(len,depth,kind,seed) {
+function gondolaFacings(len,depth,kind,seed,sides=[-1,1]) {
   const S=GONDOLA_STOCK[kind],G=GONDOLA,out=[];
   for(const [n,z]of G.levels.entries()){
     const top=(G.levels[n+1]??G.height-.05)-.03,gap=top-z-G.board;
-    for(const side of [-1,1]){
+    for(const side of sides){
       let u=-len/2+G.upright+.01,k=0;
       while(u<len/2-G.upright-.02){
         const h=hash(k,n*2+(side>0),seed),spine=S.widths[Math.floor(h*S.widths.length)];
@@ -62,60 +64,91 @@ function gondolaWasherShade(i,t,L) {
   const seam=coveGroove(HIT.w,.004,.001,t/projX)*coveDetail(t,.08);
   BG[i]=C(GRAY,3.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-seam*1.2);set(i,' ',0);return true;
 }
-function SHOP_GONDOLA(b,kind,seed) {
-  const G=GONDOLA,S=GONDOLA_STOCK[kind],alongX=b.x1-b.x0>=b.y1-b.y0;
-  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,len=(alongX?b.x1-b.x0:b.y1-b.y0)-.02,half=(alongX?b.y1-b.y0:b.x1-b.x0)/2-.01;
-  const c=alongX?1:0,s=alongX?0:1,depth=half-G.spine/2-G.inset;
-  const facings=gondolaFacings(len,depth,kind,seed);
-  // face normals for plain boxes in the gondola's frame
-  const flat=shade=>(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
-  const steel=flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
-  const plinth=flat((i,t,L)=>{BG[i]=C(GRAY,.9+L*.06);set(i,' ',0);return true;});
-  const peg=flat((i,t,L)=>{const f=t/projX,hole=Math.min(1,coveGroove(HIT.u,.025,.006,f)*coveGroove(HIT.w,.025,.006,f)*4)*coveDetail(t,.3);BG[i]=C(WHITE,3.6+L*.12-hole*1.6);set(i,' ',0);return true;});
-  const goodsShade=q=>(S.bottles||S.bins?f=>f:flat)((i,t,L)=>{ // (a turned bottle's ray gives its own normals)
-    const front=HIT.face===3||HIT.face===4,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
-    if(S.label&&front&&Math.abs(HIT.w-(q.z+q.h*.55))<q.h*.18){BG[i]=C(WHITE,5+L*.2*light);set(i,' ',0);return true;} // the label band
-    if(S.spines&&front){ // each spine its own colour, a dark line where two meet, a title line across
-      const j=Math.floor((HIT.u+q.w/2)/q.spine),edge=coveGroove(HIT.u+q.w/2,q.spine,.002,t/projX)*coveDetail(t,.15);
-      const col=S.cols[Math.floor(hash(j,q.k,q.z*100|0)*S.cols.length)];
-      if(coveDetail(t,.15)>.3&&Math.abs(HIT.w-(q.z+q.h*.8))<.006){BG[i]=C(YEL,5);set(i,' ',0);return true;}
-      BG[i]=C(col,(col===WHITE?4.2:2.4)+L*.3*light-edge*1.6);set(i,' ',0);return true;
-    }
-    if(S.bins&&HIT.face===5){BG[i]=C(GRAY,1.2);set(i,' ',0);return true;} // an open bin of parts
-    BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*light);set(i,' ',0);return true;
-  });
-  const shades=facings.map(goodsShade);
+// Plain boxes in a frame turned by (c,s): face normals from the box face.
+const gondolaFlat=(c,s,shade)=>(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
+// Pot and jug profiles for a facing: [z above the shelf, radius]
+function gondolaTurned(q,form) {
+  const r=Math.min(q.w,q.d)/2-.008,h=q.h;
+  if(form==='pot'){const ph=Math.min(.12,h*.45);return [[0,0],[0,r*.72],[ph,r],[ph,r*.92],[ph+(h-ph)*.45,r*1.0],[h*.92,r*.6],[h,0]];}
+  // A closed ceramic shell: an open flared neck, inner belly and an 8mm
+  // floor that rests on the shelf, rather than a solid disk over the mouth.
+  return [[0,0],[0,r*.6],[h*.08,r*.65],[h*.45,r],[h*.75,r*.45],[h*.9,r*.32],[h*.94,r*.42],[h*.96,r*.38],
+    [h*.96,r*.27],[h*.9,r*.23],[h*.75,r*.35],[h*.45,r-.004],[h*.08,r*.65-.004],[.008,r*.6-.004],[.008,0],[0,0]];
+}
+// The stock on a run of facings, pre-built (a gondola holds hundreds); draw()
+// moves them to the model's origin and draws them nearest first, so the depth
+// buffer turns away those behind (looking down an aisle hundreds overlap).
+// vOf(q): a facing's centre across the run in the model frame.
+function gondolaGoods(facings,kind,c,s,vOf) {
+  const S=GONDOLA_STOCK[kind],flat=shade=>gondolaFlat(c,s,shade);
   const bottle=[[0,0],[0,.032],[.005,.035],[.2,.035],[.25,.014],[.3,.012],[.31,0]];
-  const contents=[];
-  const boxes=facings.map((q,n)=>{
-    // wine: the front bottle of each row; everything else a solid facing
-    const v=S.bottles?q.side*(G.spine/2+G.inset+depth*.7):S.bins?q.side*(half-G.inset-q.d/2):q.side*(G.spine/2+G.inset+depth/2+.005),ox=c*q.u-s*v,oy=s*q.u+c*v;
-    if(S.bins){
+  const form=q=>S.bottles?'bottle':S.bins?'bin':S.pots?'pot':S.mixed&&hash(q.k,q.z*100|0,q.u*100|0)<.4?'jug':'box';
+  const shadeFor=q=>{
+    const f=form(q);
+    if(f==='pot')return (i,t,L)=>{ // terracotta below, leaves above with blooms in them
+      const light=coveLight(HIT.nx,HIT.ny,HIT.nz),pot=HIT.w<q.z+Math.min(.12,q.h*.45)+1e-4;
+      if(pot){BG[i]=C(BRICK,2.2+L*.3*light);set(i,' ',0);return true;}
+      const an=Math.atan2(HIT.v,HIT.u),bloom=hash(Math.floor(an*3),Math.floor(HIT.w*28),q.k)>.72;
+      BG[i]=C(bloom?q.col:GREEN,(bloom?3.2:1.6)+L*.3*light);set(i,' ',0);return true;};
+    if(f==='bin')return (i,t,L)=>{
+      if(HIT.face===5){BG[i]=C(GRAY,1.2);set(i,' ',0);return true;}
+      BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    };
+    if(f==='bottle')return (i,t,L)=>{BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    if(f!=='box')return (i,t,L)=>{const inside=f==='jug'&&HIT.part>=9;BG[i]=C(q.col,(inside?1.4:q.col===WHITE?4.2:2.6)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}; // (a turned ray gives its own normals)
+    return flat((i,t,L)=>{
+      const front=HIT.face===3||HIT.face===4,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+      if(S.label&&front&&Math.abs(HIT.w-(q.z+q.h*.55))<q.h*.18){BG[i]=C(WHITE,5+L*.2*light);set(i,' ',0);return true;} // the label band
+      if(S.spines&&front){ // each spine its own colour, a dark line where two meet, a title line across
+        const j=Math.floor((HIT.u+q.w/2)/q.spine),edge=coveGroove(HIT.u+q.w/2,q.spine,.002,t/projX)*coveDetail(t,.15);
+        const col=S.cols[Math.floor(hash(j,q.k,q.z*100|0)*S.cols.length)];
+        if(coveDetail(t,.15)>.3&&Math.abs(HIT.w-(q.z+q.h*.8))<.006){BG[i]=C(YEL,5);set(i,' ',0);return true;}
+        BG[i]=C(col,(col===WHITE?4.2:2.4)+L*.3*light-edge*1.6);set(i,' ',0);return true;
+      }
+      BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*light);set(i,' ',0);return true;
+    });
+  };
+  const contents=[],boxes=facings.map(q=>{
+    const f=form(q),v=vOf(q),ox=c*q.u-s*v,oy=s*q.u+c*v,shade=shadeFor(q);
+    if(f==='bin'){
       const floor=q.z+.008;
       for(const [u,v,h]of [[-.021,-.05,.036],[.021,.05,.048],[0,0,.024]]){
         const part=homeLampPart('washers',floor,[[0,.006],[0,.014],[h,.014],[h,.006],[0,.006]]);
         contents.push({ox:ox+c*u-s*v,oy:oy+s*u+c*v,box:{...part.box,gondolaContents:true},shade:gondolaWasherShade,ray:coveRayLathe});
       }
-      return {ox,oy,shade:shades[n],ray:gondolaBinRay,box:{...boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h),
+      return {ox,oy,shade,ray:gondolaBinRay,box:{...boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h),
         gondolaBin:{...boxAt(0,0,1,0,q.w/2,q.d/2,q.z,q.z+q.h),...kitchenTopProfile(q.w/2,q.d/2,q.z,q.z+q.h,.002)}}};
     }
-    return S.bottles?{ox,oy,shade:shades[n],ray:coveRayLathe,box:{...boxAt(0,0,1,0,.035,.035,q.z,q.z+.31),profile:bottle.map(([h,r])=>[h+q.z,r])}}
-      :{ox,oy,shade:shades[n],ray:rayBox,box:boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h)};
+    if(f==='box')return {ox,oy,shade,ray:rayBox,box:boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h)};
+    const prof=f==='bottle'?bottle:gondolaTurned(q,f),part=homeLampPart('stock',q.z,prof);
+    return {ox,oy,shade,ray:coveRayLathe,form:f,box:part.box};
   });
   const order=boxes.map((_,n)=>n);let orderDx=NaN,orderDy=NaN;
-  return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
-    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
-    // Facings are pre-built (a gondola holds hundreds); each frame only moves them.
-    // Nearest first, so the depth buffer turns away the facings behind them
-    // (looking down an aisle hundreds of them overlap on screen).
-    // Translation adds the same depth to every facing, so only a turn can
-    // change this order. Keep exact directions, including reversed views.
+  return {boxes,draw(vx,vy){
+    // Translation adds a common depth. Only an exact direction change can
+    // reorder the facings; keep this cache for islands and wall units alike.
     if(dx!==orderDx||dy!==orderDy){
       for(const q of boxes)q.near=dx*q.ox+dy*q.oy;
       order.sort((a,b)=>boxes[a].near-boxes[b].near);orderDx=dx;orderDy=dy;
     }
     for(const q of contents){q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
     for(const n of order){const q=boxes[n];q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
+  }};
+}
+function SHOP_GONDOLA(b,kind,seed) {
+  const G=GONDOLA,S=GONDOLA_STOCK[kind],alongX=b.x1-b.x0>=b.y1-b.y0;
+  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,len=(alongX?b.x1-b.x0:b.y1-b.y0)-.02,half=(alongX?b.y1-b.y0:b.x1-b.x0)/2-.01;
+  const c=alongX?1:0,s=alongX?0:1,depth=half-G.spine/2-G.inset;
+  const facings=gondolaFacings(len,depth,kind,seed);
+  const flat=shade=>gondolaFlat(c,s,shade);
+  const steel=flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+  const plinth=flat((i,t,L)=>{BG[i]=C(GRAY,.9+L*.06);set(i,' ',0);return true;});
+  const peg=flat((i,t,L)=>{const f=t/projX,hole=Math.min(1,coveGroove(HIT.u,.025,.006,f)*coveGroove(HIT.w,.025,.006,f)*4)*coveDetail(t,.3);BG[i]=C(WHITE,3.6+L*.12-hole*1.6);set(i,' ',0);return true;});
+  // wine: the front bottle of each row; everything else a solid facing
+  const goods=gondolaGoods(facings,kind,c,s,q=>S.bottles?q.side*(G.spine/2+G.inset+depth*.7):S.bins?q.side*(half-G.inset-q.d/2):q.side*(G.spine/2+G.inset+depth/2+.005));
+  return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    goods.draw(vx,vy);
     for(const z of G.levels){const [sx,sy]=at(0,0);drawBox(boxAt(sx,sy,c,s,len/2-G.upright,half,z,z+G.board),steel);}
     for(const e of [-1,1]){const [ux,uy]=at(e*(len/2-G.upright/2),0);drawBox(boxAt(ux,uy,c,s,G.upright/2,half,0,G.height),steel);} // end uprights
     const [px,py_]=at(0,0);
@@ -125,10 +158,44 @@ function SHOP_GONDOLA(b,kind,seed) {
   }),box:boxAt(cx,cy,1,0,(b.x1-b.x0)/2,(b.y1-b.y0)/2,0,G.height),radius:Math.hypot(len,half*2)/2+.1,
     gondola:{block:b,kind,len,half,depth,alongX,facings:facings.length}};
 }
+// Wall shelving along the back wall (its face at y=1), shelves fitted bay by
+// bay between full-depth uprights, a back panel and a top cap: the same stock
+// as the islands, one face. Shallow enough to keep the clerk's aisle open.
+const WALL_SHELF={depth:.2,back:.012,gap:.02,bay:1};
+function SHOP_WALL_SHELVES(x0,x1,kind,seed,opts={}) {
+  const G=GONDOLA,W=WALL_SHELF,c=1,s=0,len=x1-x0,n=Math.max(1,Math.round(len/W.bay)),half=W.depth/2;
+  const cx=(x0+x1)/2,cy=1+half,v0=-half+W.back,depth=W.depth-W.back-W.gap,facings=[];
+  // upright centres, the end ones flush with the unit's ends; a bay is the clear span between two
+  const posts=Array.from({length:n+1},(_,b)=>-len/2+G.upright/2+b*(len-G.upright)/n),bay=(len-G.upright)/n-G.upright;
+  for(let b=0;b<n;b++)for(const q of gondolaFacings(bay+2*G.upright,depth,kind,seed*7+b,[1]))facings.push({...q,u:q.u+(posts[b]+posts[b+1])/2,k:q.k+b*100});
+  const flat=shade=>gondolaFlat(c,s,shade);
+  const frame=opts.timber?flat((i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed)):flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+  const back=opts.timber?frame:flat((i,t,L)=>{BG[i]=C(WHITE,3.2+L*.12*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
+  const plinth=flat((i,t,L)=>{BG[i]=C(opts.timber?BRICK:GRAY,.8+L*.06);set(i,' ',0);return true;});
+  const goods=gondolaGoods(facings,kind,c,s,q=>v0+W.gap+depth/2);
+  const inner=half-W.back/2,mid=W.back/2; // everything in front of the back panel
+  return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
+    goods.draw(vx,vy);
+    for(let b=0;b<n;b++){const m=(posts[b]+posts[b+1])/2;
+      for(const z of G.levels)drawBox(boxAt(vx+m,vy+mid,c,s,bay/2,inner,z,z+G.board),frame); // shelves, upright face to upright face
+      drawBox(boxAt(vx+m,vy+mid-.015,c,s,bay/2,inner-.015,0,G.levels[0]),plinth);} // a plinth under each bay, set back
+    for(const e of posts)drawBox(boxAt(vx+e,vy+mid,c,s,G.upright/2,inner,0,G.height-.03),frame); // uprights, up to the cap
+    drawBox(boxAt(vx,vy-half+W.back/2,c,s,len/2,W.back/2,0,G.height),back); // the back panel
+    drawBox(boxAt(vx,vy+mid,c,s,len/2,inner,G.height-.03,G.height),frame); // the top cap
+  }),box:boxAt(cx,cy,1,0,len/2,half,0,G.height),radius:Math.hypot(len,W.depth)/2+.1,
+    wallShelves:{x0,x1,kind,bays:n,bay,posts,depth,facings:facings.length}};
+}
 // At room build: the 'S' cells become floor with a gondola on each block.
 function shopGondolas(r) {
   if(!r.grid.some(row=>row.includes('S')))return [];
   const kind=GONDOLA_STOCK[GONDOLA_FOR[r.kind]]?GONDOLA_FOR[r.kind]:'grocery',blocks=gondolaBlocks(r.grid);
   r.grid=r.grid.map(row=>row.replace(/S/g,'.'));
   return blocks.map((b,k)=>SHOP_GONDOLA(b,kind,k*13+b.x0*7+b.y0));
+}
+// At room build: a shop whose def asks for shelves gets a wall unit along its
+// back wall (def.shelves: {kind, x0, x1, timber}, or a function of the room).
+function shopWallShelves(r) {
+  const spec=typeof r.def.shelves==='function'?r.def.shelves(r):r.def.shelves;
+  if(!spec)return [];
+  return [SHOP_WALL_SHELVES(spec.x0??1,spec.x1??r.W-1,spec.kind,(spec.x0??1)*5+r.W,spec)];
 }

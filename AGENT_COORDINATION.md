@@ -24,6 +24,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `claude/shop-shelf-islands` (new `city/shop-gondolas.js`; one line in
   `makeRoom` in `city/rooms.js` turns 'S' cells into floor plus gondolas; the
   shop painters' dead 'S' branches in `city/shops.js`, `city/storefronts.js`
+  and `roomWall` are removed, #223). Back-wall shelves on
+  `claude/shop-wall-shelves`, stacked on #223: `def.shelves` is now a spec
+  (`{kind, x0, x1, timber}` or a function of the room) and `makeRoom` adds a
+  built wall unit from `city/shop-gondolas.js`; the painter in `roomWall` is
+  gone. Earlier pass 7 PRs: #221 display cases, #222 fridge walls. Next: the
+  books walls, then the shops' painted boxes group by group. `city/home-*.js`
+  stays with Codex.
+
   and `roomWall` are removed). Earlier pass 7 PRs: #221 display cases, #222
   fridge walls. Next: the `shelves: true` back-wall painter, then the shops'
   painted boxes group by group. `city/home-*.js` stays with Codex.
@@ -456,3 +464,21 @@ checks and four bundle/parse checks pass. No game/bundle/helper changes.
 #222 final full CI green. Next Codex #224 wall shelves, carefully integrating
 its factored goods builder with #223 bins and camera-direction cache.
 Claude keeps pass12; no street-only edits.
+
+Codex active review `codex/review-shop-wall-shelves` (#224): integrated main
+through #247 and moved #223's supported bins, original wine material and exact
+direction-order cache into Claude's factored `gondolaGoods` builder. Reviewing
+`city/shop-gondolas.js` and the wall-shelf browser test; shared room/shop hooks
+retained, no shared home/hotel/kitchen helper edits. Next #226 bookcases.
+
+#224 Codex review complete (`codex/review-shop-wall-shelves`): retained both
+agents' goods builder/bins and exact-direction cache; restored unchanged wine
+material. Hollow thrift-vase necks, inner walls and supported closed floors;
+profile bounds use the unchanged home part builder. All15 route/wall/island/
+fridge/seating and seven bundle/parse/render checks pass; three targeted
+mouth/wall/mount mutations rejected. Grocery/hardware/wine images match main;
+all four rooms close/wide/oblique/night and ABAB costs reviewed. #220–#223 full
+CI green, including #221 retry; #247 continues. Next Codex #226 bookcase walls,
+then #228–#232 and the recorded interior-ceiling/flag/noodle closing audit,
+followed by home/hotel passes5–6. Claude keeps pass12 streets/utilities.
+No shared home/hotel/kitchen helper edits or street-only changes.

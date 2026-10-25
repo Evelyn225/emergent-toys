@@ -570,7 +570,6 @@ function oldWall(i, u, uStep, z, d, mx, my, L) {
   if (rightWall(mx) && (my === 1 || my === 3) && z > 0.3 && z < 2) { BG[i] = C(CYAN, 1.4 + z * 0.6); return set(i, fract((u + z) * 2.5) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; } // a fitting room's mirror
   if (mx === 9 && my === 2 && wallText(i, u, uStep, z, d, 'FITTING', 2.5, 1.95, 0.13, 0.2, C(YEL, 14), C(BRICK, 1))) return true;
   if (w === 'THRIFT' && leftWall(mx) && my > 0 && shoeWall(i, u, z, L, 72)) return true;
-  if (w === 'THRIFT' && backWall(my) && z < 2) return false; // (the shelves of bric-a-brac)
   if ((w !== 'THRIFT' || rightWall(mx)) && my > 0 && my < room.H - 1 && z > 1.1 && z < 2.3) { // pictures in gilt frames: a landscape, a portrait, the sea
     const n = Math.floor(u / 1.4), fu = fract(u / 1.4), k = hash(n, mx * 3 + my, 73), h = 0.5 + k * 0.4, fz = (z - 1.2) / h;
     if (fu > 0.18 && fu < 0.82 && fz > 0 && fz < 1 && k > 0.3) {
@@ -584,7 +583,7 @@ function oldWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.95) return set(i, '=', C(YEL, L * 0.6)), true;
   BG[i] = C(w === 'TAILOR' ? STONE : GREEN, 1.1); return set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 3 ? ' ' : w === 'ANTIQUES' ? '*' : '.', C(YEL, L * 0.35)), true; // faded wallpaper
 }
-ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: true, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
+ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', x1: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
   props: r => {
     const w = r.word, p = [BX(9.8, 7.25, 1.0, 0.3, 0, 0.95, solid(BRICK, { panel: 0.5, trim: 0.9, top: '=' })), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
       clothCurtain(10.02, 1.5, 0.5, w === 'TAILOR' ? GRAY : RED), clothCurtain(10.02, 3.5, 0.5, w === 'TAILOR' ? GRAY : RED)]; // the fitting rooms
