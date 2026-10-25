@@ -19,7 +19,12 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   separate. Books and home shelves are complete and locally checked in **PR #206**;
   focused checks pass. Full CI passed Node/three browser shards; its older roof
   traversal test failed a wall-clock assumption. Codex is repairing that test
-  on `codex/roof-browser-state-waits` before the next visual chunk. The user was asked whether public/shop shelves are also in scope;
+  in merged **#207**, verified normally and with90ms added per render frame.
+  **Current chunk complete:** `codex/bar-backbar-quality`, new
+  `city/bar-quality.js`, bar-only definition in `city/rooms.js`, manifest and
+  focused browser tests. Geometry, real service input and all-shop route checks
+  pass; views and rendering costs reviewed. #207 full CI is green.
+  Next: native restaurant paper lanterns, then the Thai spirit house. The user was asked whether public/shop shelves are also in scope;
   current chunk covers every physical shelf/board in the four home types.
   #204 palms/balcony cache and #205 wall clock are merged, full CI green.
   #197–#202 full CI are green.
