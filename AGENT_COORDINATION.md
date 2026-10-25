@@ -38,9 +38,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   the gas def in `city/shops.js`, the bodega def in `city/storefronts.js`),
   stacked on #228 (#229). Record shop, tattoo parlour, hardware and pharmacy
   on `claude/shop-boxes-3` (new `city/record-shop.js`, `city/shop-fittings.js`;
-  their defs and painters in `city/shops.js`), stacked on #229. Next: the
-  other shops' painted boxes group by group (markethall, motel, welding, toys,
-  phones, thrift, herbs, deli, tireshop, tailor, liquor and the rest). `city/home-*.js` stays with Codex.
+  their defs and painters in `city/shops.js`), stacked on #229 (#230). Toys,
+  sports, video, liquor, phones, pawn, the thrift room's three trades and the
+  herbalist on `claude/shop-boxes-4`, stacked on #230. Next: the market hall,
+  motel office, welder's, tyre shop, delis, fruit shop and gacha machines. `city/home-*.js` stays with Codex.
 - **Claude pass 7 (shop interiors):** shop fridge walls on
   `claude/shop-fridges` (new `city/shop-fridges.js`; runs and wall painters in
   `city/shops.js`; label/stock options and plain-box long parts in my
