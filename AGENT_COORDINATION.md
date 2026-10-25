@@ -446,3 +446,13 @@ chosen front-row seat puts the test player inside the front wall. Reproduced
 free=false/no prompt versus clear-floor E: talk, rather than a game regression.
 #220 full CI green; #221 failed shard retried after diagnosis. Claude stays
 on pass12 lights/utilities; no street-only files touched.
+
+Codex test-only CI repair complete on `codex/indoor-talk-fixture`:
+`test/browser/ascii-city.browser.test.cjs` and shared notes. Deterministic
+native café crowd/front-row patron, clear-floor/unobstructed approach and
+head-height aim; retain café/station dialogue and clerk assertions. Focused
+check passes twice and old wall-placement mutation fails; both aimed-focus
+checks and four bundle/parse checks pass. No game/bundle/helper changes.
+#222 final full CI green. Next Codex #224 wall shelves, carefully integrating
+its factored goods builder with #223 bins and camera-direction cache.
+Claude keeps pass12; no street-only edits.
