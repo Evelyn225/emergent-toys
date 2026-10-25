@@ -15578,7 +15578,35 @@ function drawKerbBollard(o, vx, vy, z, near) {
     BG[i] = band ? C(YEL, 4 + L * .25) : C(GRAY, 1.2 + L * .3 * coveLight(HIT.nx, HIT.ny, HIT.nz)); return set(i, ' ', 0), true;
   });
 }
-const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard };
+// A flat part's world normal from its rayBox face (the box runs along (c, s)), for kerbPaint.
+function kerbNormal(c, s) {
+  const f = HIT.face;
+  HIT.nx = f === 1 ? c : f === 2 ? -c : f === 3 ? -s : f === 4 ? s : 0;
+  HIT.ny = f === 1 ? s : f === 2 ? -s : f === 3 ? c : f === 4 ? -c : 0;
+  HIT.nz = f === 5 ? 1 : f === 6 ? -1 : 0;
+}
+// A street cabinet (signal controller grey, telecom green): a concrete plinth,
+// a steel body under an overhanging cap, two doors on the pavement side with a
+// handle, hinges and a label, and louvred vents high on each end.
+function drawKerbCabinet(o, vx, vy, z, near) {
+  const k = KERB_K, c = o.c, s = o.s, fs = Math.sign(-s * o.fx + c * o.fy) || 1, paint = kerbPaint(o.col, 1.9);
+  const at = (a, v) => [vx + (c * a - s * v * fs) * k, vy + (s * a + c * v * fs) * k]; // a along the kerb, v out of the doors
+  const flat = (a0, a1, v0, v1, z0, z1, shade) => { const [x, y] = at((a0 + a1) / 2, (v0 + v1) / 2); drawBox(boxAt(x, y, c, s, (a1 - a0) / 2 * k, (v1 - v0) / 2 * k, z + z0 * k, z + z1 * k), (i, t, L) => (kerbNormal(c, s), shade(i, t, L))); };
+  if (near) {
+    for (const e of [-1, 1]) flat(e > 0 ? .005 : -.38, e > 0 ? .38 : -.005, .25, .256, .16, 1.3, kerbPaint(o.col, 2.2)); // the doors, a seam between
+    flat(.3, .33, .256, .27, .62, .82, (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY)); // the handle
+    for (const zz of [.3, 1.1]) for (const e of [-1, 1]) flat(e * .395 - .01, e * .395 + .01, .25, .262, zz, zz + .08, (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY)); // hinges
+    flat(-.3, -.12, .256, .258, 1.05, 1.17, kerbPaint(WHITE, 3.6)); // its label
+    for (const e of [-1, 1]) for (let n = 0; n < 5; n++) { const zz = 1.0 + n * .055; // louvres down each end
+      flat(e * .4 - (e > 0 ? 0 : .012), e * .4 + (e > 0 ? .012 : 0), -.18, .18, zz, zz + .022, kerbPaint(o.col, 1.4)); }
+  }
+  const [bx, by] = at(0, 0);
+  coveRound(bx, by, c, s, .43 * k, .28 * k, z + 1.35 * k, z + 1.41 * k, .012 * k, paint); // the cap
+  coveRound(bx, by, c, s, .4 * k, .25 * k, z + .1 * k, z + 1.35 * k, .02 * k, paint); // the body
+  const stone = kerbPaint(STONE, 2.6);
+  drawBox(boxAt(bx, by, c, s, .42 * k, .27 * k, z, z + .1 * k), (i, t, L) => (kerbNormal(c, s), stone(i, t, L))); // the plinth
+}
+const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard, cabinet: drawKerbCabinet };
 function drawKerbFixtures() {
   forNear(kerbsB, o => {
     const [vx, vy] = R(o.x, o.y), d = Math.hypot(vx, vy);
@@ -39693,6 +39721,7 @@ const KERB_KINDS = {
   bin: { hl: .027, hw: .027, h: .09 },
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
+  cabinet: { hl: .043, hw: .029, h: .141 },
 };
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
@@ -39738,6 +39767,7 @@ for (const o of [CURB, 2 - CURB]) {
     if (dist !== 'industrial' && r(1402) < ({ downtown: .75, chinatown: .75, shotengai: .8 }[dist] || .55))
       addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
     if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
+    if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
     if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
       for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
   }
@@ -39749,6 +39779,18 @@ function kerbAt(x, y, pad) {
     if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return o;
   }
   return null;
+}
+// A signal controller cabinet at most junctions: on the kerb beside the first
+// signal pole, half a cell back from the corner, its doors to the pavement.
+{
+  const done = new Set();
+  for (const l of lights) {
+    const ix = Math.floor(l.bx / 8), iy = Math.floor(l.by / 8), key = bi(ix, iy);
+    if (done.has(key) || hash(ix, iy, 1406) > .6) continue;
+    const e = l.vert ? mod(l.x, 8) : mod(l.y, 8), ax = l.vert ? (e < 1 ? 1 : -1) : 0, ay = l.vert ? 0 : (e < 1 ? 1 : -1);
+    const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
+    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
+  }
 }
 // Window-local geometry. Static solids are built once and indexed by bounds;
 // a pane cell visits only nearby leaves instead of testing every miniature.

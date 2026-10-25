@@ -20,7 +20,8 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
    for(const l of lamps)if(Math.abs(rel(l.x-o.x))<.06&&Math.abs(rel(l.y-o.y))<.06)bad.push([o.kind,'against a lamp']);
    for(const m of machines)if(Math.hypot(rel(m.x-o.x),rel(m.y-o.y))<.08)bad.push([o.kind,'against a vending machine']);
    for(const s of stations)if(Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.3)bad.push([o.kind,'at a subway entrance']);
-   const face=Math.sign(o.c?o.fy:o.fx),road=across<1?1:-1;if(o.kind==='mailbox'?face!==-road:face!==road)bad.push([o.kind,'facing the wrong way']);
+   const face=Math.sign(o.c?o.fy:o.fx),road=across<1?1:-1;if(['mailbox','cabinet'].includes(o.kind)?face!==-road:face!==road)bad.push([o.kind,'facing the wrong way']); // (doors and slots to the pavement)
+   if(o.signal&&!lights.some(l=>Math.hypot(rel(l.x-o.x),rel(l.y-o.y))<.8))bad.push('a signal cabinet away from any signal');
   }
   for(let i=0;i<kerbs.length;i++)for(let j=i+1;j<kerbs.length;j++){const a_=kerbs[i],b=kerbs[j];if(Math.abs(rel(a_.x-b.x))<a_.hl+b.hl+.01&&Math.abs(rel(a_.y-b.y))<a_.hl+b.hl+.01&&Math.hypot(rel(a_.x-b.x),rel(a_.y-b.y))<Math.max(a_.hl,a_.hw)+Math.max(b.hl,b.hw)+.01)bad.push(['two fixtures overlap',a_.kind,b.kind]);}
   const indexed=kerbsB.flat().length===kerbs.length&&kerbs.every(o=>kerbsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].includes(o));
@@ -28,7 +29,7 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
  });
  assert.deepEqual(r.bad,[]);
  assert.equal(r.indexed,true);
- for(const k of ['hydrant','bin','mailbox','bollard'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
+ for(const k of ['hydrant','bin','mailbox','bollard','cabinet'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
 }));
 
 test('each fixture is built inside its box, and on foot you walk round it while the walking line stays open',()=>fixture(async p=>{
@@ -47,5 +48,5 @@ test('each fixture is built inside its box, and on foot you walk round it while 
   return {bad:bad.slice(0,10),kinds:Object.keys(seen).length};
  });
  assert.deepEqual(r.bad,[]);
- assert.ok(r.kinds>=8,'every kind in more than one facing was built');
+ assert.ok(r.kinds>=10,'every kind in more than one facing was built');
 }));

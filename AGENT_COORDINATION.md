@@ -53,6 +53,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
   `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
   grates, utility cabinets, then bus shelters.
+- **Claude pass 11, utility cabinets:** `claude/utility-cabinets`, stacked on
+  `claude/kerb-fixtures` (#238): a `cabinet` kind in `city/kerb-fixtures.js` and
+  its model in `city/kerb-fixtures-render.js`. Next: bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

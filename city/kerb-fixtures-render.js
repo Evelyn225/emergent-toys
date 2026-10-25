@@ -67,7 +67,35 @@ function drawKerbBollard(o, vx, vy, z, near) {
     BG[i] = band ? C(YEL, 4 + L * .25) : C(GRAY, 1.2 + L * .3 * coveLight(HIT.nx, HIT.ny, HIT.nz)); return set(i, ' ', 0), true;
   });
 }
-const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard };
+// A flat part's world normal from its rayBox face (the box runs along (c, s)), for kerbPaint.
+function kerbNormal(c, s) {
+  const f = HIT.face;
+  HIT.nx = f === 1 ? c : f === 2 ? -c : f === 3 ? -s : f === 4 ? s : 0;
+  HIT.ny = f === 1 ? s : f === 2 ? -s : f === 3 ? c : f === 4 ? -c : 0;
+  HIT.nz = f === 5 ? 1 : f === 6 ? -1 : 0;
+}
+// A street cabinet (signal controller grey, telecom green): a concrete plinth,
+// a steel body under an overhanging cap, two doors on the pavement side with a
+// handle, hinges and a label, and louvred vents high on each end.
+function drawKerbCabinet(o, vx, vy, z, near) {
+  const k = KERB_K, c = o.c, s = o.s, fs = Math.sign(-s * o.fx + c * o.fy) || 1, paint = kerbPaint(o.col, 1.9);
+  const at = (a, v) => [vx + (c * a - s * v * fs) * k, vy + (s * a + c * v * fs) * k]; // a along the kerb, v out of the doors
+  const flat = (a0, a1, v0, v1, z0, z1, shade) => { const [x, y] = at((a0 + a1) / 2, (v0 + v1) / 2); drawBox(boxAt(x, y, c, s, (a1 - a0) / 2 * k, (v1 - v0) / 2 * k, z + z0 * k, z + z1 * k), (i, t, L) => (kerbNormal(c, s), shade(i, t, L))); };
+  if (near) {
+    for (const e of [-1, 1]) flat(e > 0 ? .005 : -.38, e > 0 ? .38 : -.005, .25, .256, .16, 1.3, kerbPaint(o.col, 2.2)); // the doors, a seam between
+    flat(.3, .33, .256, .27, .62, .82, (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY)); // the handle
+    for (const zz of [.3, 1.1]) for (const e of [-1, 1]) flat(e * .395 - .01, e * .395 + .01, .25, .262, zz, zz + .08, (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY)); // hinges
+    flat(-.3, -.12, .256, .258, 1.05, 1.17, kerbPaint(WHITE, 3.6)); // its label
+    for (const e of [-1, 1]) for (let n = 0; n < 5; n++) { const zz = 1.0 + n * .055; // louvres down each end
+      flat(e * .4 - (e > 0 ? 0 : .012), e * .4 + (e > 0 ? .012 : 0), -.18, .18, zz, zz + .022, kerbPaint(o.col, 1.4)); }
+  }
+  const [bx, by] = at(0, 0);
+  coveRound(bx, by, c, s, .43 * k, .28 * k, z + 1.35 * k, z + 1.41 * k, .012 * k, paint); // the cap
+  coveRound(bx, by, c, s, .4 * k, .25 * k, z + .1 * k, z + 1.35 * k, .02 * k, paint); // the body
+  const stone = kerbPaint(STONE, 2.6);
+  drawBox(boxAt(bx, by, c, s, .42 * k, .27 * k, z, z + .1 * k), (i, t, L) => (kerbNormal(c, s), stone(i, t, L))); // the plinth
+}
+const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard, cabinet: drawKerbCabinet };
 function drawKerbFixtures() {
   forNear(kerbsB, o => {
     const [vx, vy] = R(o.x, o.y), d = Math.hypot(vx, vy);
