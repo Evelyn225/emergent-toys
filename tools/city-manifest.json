@@ -173,6 +173,7 @@
     "city/home-keepsakes.js",
     "city/home-furniture-render.js",
     "city/home-plush-shark.js",
+    "city/home-windows.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
     "city/window-railway-geometry.js",
