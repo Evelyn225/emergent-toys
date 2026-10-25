@@ -16,7 +16,6 @@ const grillTop = (i, t, L) => { BG[i] = C(GRAY, (HIT.face === 5 ? 1.2 : 2.4 + L 
 const plexi = (i, t, L) => fract((HIT.u + HIT.w) * 2.5) < 0.04 ? (set(i, '/', C(WHITE, 8)), true) : false; // (see-through, a glint across it)
 const shopCat = (x, y, z) => figProp(x, y, KITTEN_LOOK, { z, h: 0.3 / KITTEN_LOOK.scale(0), pose: () => fract(T / 7) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 }); // (it lives here: still there after closing)
 function bodegaWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S') return false; // (the aisles: rooms.js stocks them)
   if (my === room.H - 1 && z > 1.3 && z < 2.1 && hash(Math.floor(u / 0.5), Math.floor(z / 0.4), 131) > 0.55) { // flyers taped up in the window
     BG[i] = C([YEL, RED, WHITE, GREEN][hash(Math.floor(u / 0.5), 1, 132) * 4 | 0], 6); return set(i, fract(z * 8) < 0.3 ? '=' : ' ', C(GRAY, 3)), true; }
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -248,7 +247,7 @@ ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 
 ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { BG[i] = C(WHITE, 2.4 + f * 4); return set(i, fract(wx / 0.6) < 0.03 || fract(wy / 0.6) < 0.03 ? '+' : ' ', C(GRAY, L * 0.5)); }; // shiny white tiles
 const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.01, z - 0.35, z), (i, t, L) => { BG[i] = C(col, 8); return set(i, HIT.w > z - 0.15 ? '!' : fract(HIT.u * 9) < 0.4 ? '%' : ' ', C(RED, 12)), true; }));
 function drugWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S' || backWall(my) && z < 2) return false; // (the aisles and the shelves behind the counter: rooms.js stocks them)
+  if (backWall(my) && z < 2) return false; // (the shelves behind the counter: rooms.js stocks them)
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
   if (z > 2.0 && z < 2.2) { BG[i] = C(YEL, 8); return set(i, fract(u * 2) < 0.5 ? '%' : ' ', C(RED, 10)), true; } // price banners all round

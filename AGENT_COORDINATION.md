@@ -20,6 +20,13 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 7 (shop interiors):** shelf islands on
+  `claude/shop-shelf-islands` (new `city/shop-gondolas.js`; one line in
+  `makeRoom` in `city/rooms.js` turns 'S' cells into floor plus gondolas; the
+  shop painters' dead 'S' branches in `city/shops.js`, `city/storefronts.js`
+  and `roomWall` are removed). Earlier pass 7 PRs: #221 display cases, #222
+  fridge walls. Next: the `shelves: true` back-wall painter, then the shops'
+  painted boxes group by group. `city/home-*.js` stays with Codex.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
