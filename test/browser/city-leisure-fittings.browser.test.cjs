@@ -37,3 +37,24 @@ test('cinema rows, arcade cabinets and the casino floor are built, every part in
  });
  assert.deepEqual(r,[]);
 }));
+
+// Review regression: bounds alone cannot prove that the top or a handle is attached.
+test('casino table tops meet their bases and slot levers have a continuous attachment to the cabinet',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  px=py=0;dx=1;dy=0;projX=10000;
+  const save=drawBox,parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,ray});try{o.draw(o.x,o.y);}finally{drawBox=save;}return a;},errors=[];
+  for(const o of [BLACKJACK_TABLE(0,0),ROULETTE_TABLE(0,0)]){
+   const ps=parts(o),base=ps.find(q=>q.box.z0===0),rail=ps.find(q=>Math.abs(q.box.z1-o.gaming.h)<1e-9);
+   const top=1-base.ray(0,0,1,0,0,-1,base.box),underside=rail.ray(0,0,0,0,0,1,rail.box);
+   if(Math.abs(top-underside)>.0002)errors.push(['table top separated from base',top,underside]);
+  }
+  for(const [fx,fy]of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const ps=parts(SLOT_MACHINE(0,0,fx,fy,0)),c=fy,s=-fx;
+   for(const u of [.3,.309,.318,.327,.34]){
+    const x=c*u+s*.1,y=s*u-c*.1;
+    if(!ps.some(q=>{const t=q.ray(x,y,.95,-s,c,0,q.box);return t>0&&t<.12;}))errors.push(['detached slot lever',fx,fy,u]);
+   }
+  }
+  return errors;
+ });assert.deepEqual(bad,[]);
+}));

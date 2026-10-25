@@ -192,3 +192,14 @@ pass6 hotels. Own homeWall/homePlan/homeDef portions of rooms.js and new
 home-only modules/tests; Claude's store/florist/books/bar/karaoke definitions,
 shop makeRoom additions and shelf wall code remain with Claude. Shared
 clock/ellipsoid/worktop/KITCHEN helpers continue to require coordination.
+
+Codex integration review (2026-10-25): reran only the failed CI jobs for
+#223 (indoor conversation assertion) and #232 (transit-speech timeout).
+Reviewed #233 on `codex/review-leisure-integration`, merging current main
+and preserving both agents' appended notes/module lists before rebuilding.
+Fixed a real 4cm air gap under casino table tops and added the missing slot
+lever pivot. A rendered-ray regression fails on both original defects and
+passes after repair; existing cabinet/row bounds and arcade/cinema/casino/
+break-in controls pass. Next review is #234, then Codex returns to pass5
+home openings/layouts and pass6 hotels. Claude can continue pass11 street
+objects; this review changes no street files or shared geometry helpers.
