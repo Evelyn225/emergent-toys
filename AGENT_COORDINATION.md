@@ -357,3 +357,15 @@ fixture checks and four bundle/parse checks pass; actual-part containment
 fails before correction. Close/above/wide/front/oblique/under/night views
 and ABAB costs reviewed. Next #220 restaurant lamps, closing pass8 review,
 then the shop stack. Claude owns pass12; no street-only files changed.
+
+#220 Codex review (`codex/review-restaurant-lamps`): `city/restaurant-lamps.js`,
+its browser test and shared generated bundle/notes. Hollow Tiffany/heat shades,
+real supported bulbs/sockets and cached static lamp/cord profiles; Claude's
+wire-chair support bars retained. Three lamp checks and the restaurant closing
+route/seating/service/audio/hot-line/native-dining sweep pass; original and
+three targeted defects rejected. Close/below/wide/oblique/night reviewed,
+ABAB costs appended. Pass8 stays open for sagged paper-flag/cord contacts and
+older noodle-pulling lines found in the closing audit. Next Codex #221 shop
+display-case review, then remaining shop stack and home/hotel passes5–6.
+Claude owns pass12 lights/utilities; no street-only or shared helper edits.
+#218's final full CI is green; #219's updated run continues.

@@ -3,9 +3,21 @@
 // of leaded coloured glass, enamelled heat-lamp shades with their bulbs
 // glowing underneath, and wire parlour chairs. Every lamp hangs on a cord
 // from a ceiling rose.
+const RESTAURANT_CORD_PARTS=new Map();
+function drawRestaurantLampParts(vx,vy,parts) {
+  for(const [part,shade]of parts)drawBox({...part.box,x:vx,y:vy},shade,coveRayLathe);
+}
+function restaurantLampBulbShade(i,t,L) {BG[i]=C(WARM,13+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+function restaurantLampSocketShade(i,t,L) {return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);}
 function restaurantCord(vx,vy,z,ceiling) {
-  coveLathe(vx,vy,ceiling-.02,[[0,0],[0,.03],[.006,.032],[.02,.02],[.02,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz)); // the rose
-  coveLathe(vx,vy,z,[[0,0],[0,.003],[ceiling-.02-z,.003],[ceiling-.02-z,0]],(i,t,L)=>{BG[i]=C(GRAY,.6);set(i,' ',0);return true;});
+  const key=z+':'+ceiling;let parts=RESTAURANT_CORD_PARTS.get(key);
+  if(!parts){
+    const dark=(i,t,L)=>{BG[i]=C(GRAY,.6);set(i,' ',0);return true;};
+    parts=[[homeLampPart('rose',ceiling-.02,[[0,0],[0,.03],[.006,.032],[.02,.02],[.02,0]]),restaurantLampSocketShade],
+      [homeLampCylinder('cord',z,ceiling-.02,.003),dark]];
+    RESTAURANT_CORD_PARTS.set(key,parts);
+  }
+  drawRestaurantLampParts(vx,vy,parts);
 }
 // A round paper lantern: a globe on vertical ribs between gold caps, lit from
 // inside (brightest where you look straight through), a gold tassel below.
@@ -24,44 +36,52 @@ function ROUND_LANTERN_LAMP(x,y,top=2.3) {
   };
   const gold=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
   const fringe=(i,t,L)=>{const cord=coveGroove(Math.atan2(HIT.v,HIT.u)*.03,.006,.002,t/projX)*coveDetail(t,.2);BG[i]=C(YEL,4.4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz)-cord*1.6);set(i,' ',0);return true;};
+  const parts=[
+    [homeLampPart('tassel',base-tassel,[[0,0],[0,.03],[.16,.018],[.18,.012],[.18,0]]),fringe],
+    [homeLampPart('knot',base-tassel+.18,[[0,0],[0,.014],[tassel-.18-capH,.008],[tassel-.18-capH,0]]),gold],
+    [homeLampPart('lower-cap',base-capH,[[0,0],[0,cap*.7],[capH*.6,cap+.01],[capH,cap+.01],[capH,0]]),gold],
+    [homeLampPart('paper',base,ROUND_LANTERN_GLOBE),paper],
+    [homeLampPart('upper-cap',top,[[0,0],[0,cap+.01],[capH*.4,cap+.01],[capH,cap*.7],[capH,0]]),gold]
+  ];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveLathe(vx,vy,base-tassel,[[0,0],[0,.03],[.16,.018],[.18,.012],[.18,0]],fringe); // the tassel, its cords flaring out
-    coveLathe(vx,vy,base-tassel+.18,[[0,0],[0,.014],[tassel-.18-capH,.008],[tassel-.18-capH,0]],gold); // its knot and cord up to the cap
-    coveLathe(vx,vy,base-capH,[[0,0],[0,cap*.7],[capH*.6,cap+.01],[capH,cap+.01],[capH,0]],gold);
-    coveLathe(vx,vy,base,ROUND_LANTERN_GLOBE,paper);
-    coveLathe(vx,vy,top,[[0,0],[0,cap+.01],[capH*.4,cap+.01],[capH,cap*.7],[capH,0]],gold);
-    restaurantCord(vx,vy,top+capH,ceiling());
+    drawRestaurantLampParts(vx,vy,parts);restaurantCord(vx,vy,top+capH,ceiling());
   }),radius:ROUND_LANTERN.radius+.05,roundLantern:{x,y,top,base,height:H,bottom:base-tassel}};
 }
 // A Tiffany shade: a dome of coloured glass in leaded segments, a brass cap,
 // the bulb's glow under it.
-const TIFFANY_SHADE=[[0,0],[0,.24],[.012,.24],[.05,.215],[.11,.15],[.16,.08],[.18,.045],[.18,0]];
+const TIFFANY_SHADE=[[0,.24],[.012,.24],[.05,.215],[.11,.15],[.16,.08],[.18,.045],[.18,.036],[.16,.071],[.11,.142],[.05,.207],[.012,.232],[0,.232],[0,.24]];
 function TIFFANY_LAMP(x,y,bottom=1.77) {
   const ceiling=()=>room.def.height||3,top=bottom+.18;
   const glass=(i,t,L)=>{
-    if(HIT.nz< -.9){BG[i]=C(WARM,13);set(i,' ',0);return true;} // looking up at the bulb through the open rim
     const a=Math.atan2(HIT.v,HIT.u),seg=Math.floor((a/Math.PI+1)*6),band=Math.floor((HIT.w-bottom)/.06);
     const f=t/projX,lead=Math.min(1,coveGroove(a*.2,Math.PI*.2/6,.004,f)+coveGroove(HIT.w-bottom,.06,.004,f))*coveDetail(t,.4);
     const col=[RED,YEL,GREEN,ORANGE,YEL,GREEN][(seg+band)%6];
     BG[i]=C(col,(4+2*Math.max(night,.4))-lead*3.4);set(i,' ',0);return true;
   };
+  const parts=[
+    [homeLampPart('shade',bottom,TIFFANY_SHADE),glass],
+    [homeLampPart('cap',top-.005,[[0,0],[0,.05],[.02,.04],[.04,.012],[.04,0]]),(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL)],
+    [homeLampCylinder('socket',bottom+.12,top,.018),restaurantLampSocketShade]
+  ];
+  const bulb=boxAt(0,0,1,0,.027,.027,bottom+.025,bottom+.125);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveLathe(vx,vy,bottom,TIFFANY_SHADE,glass);
-    coveLathe(vx,vy,top-.005,[[0,0],[0,.05],[.02,.04],[.04,.012],[.04,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL)); // the brass cap
-    restaurantCord(vx,vy,top+.035,ceiling());
+    drawBox({...bulb,x:vx,y:vy},restaurantLampBulbShade,foodRayEllipsoid);
+    drawRestaurantLampParts(vx,vy,parts);restaurantCord(vx,vy,top+.035,ceiling());
   }),radius:.27,tiffanyLamp:{x,y,bottom,top}};
 }
 // An enamelled heat-lamp shade, its bulb glowing under the rim.
-const HEAT_LAMP_SHADE=[[0,0],[0,.12],[.015,.115],[.06,.07],[.11,.035],[.13,.025],[.13,0]];
+const HEAT_LAMP_SHADE=[[0,.12],[.015,.115],[.06,.07],[.11,.035],[.13,.025],[.13,0],[.12,0],[.12,.018],[.11,.027],[.06,.062],[.015,.108],[0,.112],[0,.12]];
 function HEAT_LAMP(x,y,bottom,col=RED) {
   const ceiling=()=>room.def.height||3;
   const shade=(i,t,L)=>{
-    if(HIT.nz< -.9){BG[i]=C(HIT.u*HIT.u+HIT.v*HIT.v<.004?YEL:ORANGE,HIT.u*HIT.u+HIT.v*HIT.v<.004?14:11);set(i,' ',0);return true;} // the bulb and the glow round it
-    BG[i]=C(col,2.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    const inside=HIT.part>=7;BG[i]=C(inside?STONE:col,(inside?5:2.4)+L*(inside?.15:.3)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
   };
+  const parts=[[homeLampPart('shade',bottom,HEAT_LAMP_SHADE),shade],
+    [homeLampCylinder('socket',bottom+.08,bottom+.13,.016),restaurantLampSocketShade]];
+  const bulb=boxAt(0,0,1,0,.022,.022,bottom+.015,bottom+.095);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveLathe(vx,vy,bottom,HEAT_LAMP_SHADE,shade);
-    restaurantCord(vx,vy,bottom+.13,ceiling());
+    drawBox({...bulb,x:vx,y:vy},restaurantLampBulbShade,foodRayEllipsoid);
+    drawRestaurantLampParts(vx,vy,parts);restaurantCord(vx,vy,bottom+.13,ceiling());
   }),radius:.15,heatLamp:{x,y,bottom,top:bottom+.13}};
 }
 // A wire parlour chair: a padded round seat on a wire ring, four splayed

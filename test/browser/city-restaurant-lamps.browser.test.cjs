@@ -58,3 +58,27 @@ test('wire chairs: legs on the floor meeting the seat ring, the low ring where t
  })()`);
  assert.deepEqual(r.bad,[]);assert.equal(r.chairs,6);assert.ok(r.sat>0,'patrons sit on the chairs');
 }));
+
+test('Tiffany and heat lamps have closed hollow shades with supported bulbs and sockets inside the open rims',()=>fixture(async p=>{
+ const bad=await p.evaluate(`(()=>{${SHAPES}
+  enterRoom('kissaten',{word:'KISSATEN',ret:[100,100,0]},[5,5,0]);const bad=[];
+  for(const[kind,o,bottom]of [['Tiffany',TIFFANY_LAMP(5,5),1.77],['heat',HEAT_LAMP(5,5,1.8),1.8]]){
+   const P=shapes(o),shade=P.find(q=>q.ray===coveRayLathe&&q.box.hl>.1&&Math.abs(q.box.z0-bottom)<1e-8),bulbs=P.filter(q=>q.ray===foodRayEllipsoid);
+   const again=shapes(o);if(P.some((q,k)=>q.box.profile&&q.box.profile!==again[k].box.profile))bad.push([kind,'fixed profiles rebuilt during drawing']);
+   const up=shade.ray(5,5,bottom-.4,0,0,1,shade.box);if(up>0&&up<.475)bad.push([kind,'rim filled by a glowing disk']);
+   const inner=shade.ray(5,5,bottom+.025,1,0,0,shade.box),nx=HIT.nx;
+   const outer=1-shade.ray(6,5,bottom+.025,-1,0,0,shade.box),wall=outer-inner;
+   if(!(inner>0&&nx<-.5&&wall>.003&&wall<.02))bad.push([kind,'shade lacks a real inner wall',inner,nx,wall]);
+   if(bulbs.length!==1){bad.push([kind,'missing real bulb']);continue;}
+   const bulb=bulbs[0],b=bulb.box,socket=P.find(q=>q.ray===coveRayLathe&&q!==shade&&q.box.hl<.025&&q.box.z0<b.z1&&q.box.z1>b.z1+.02);
+   if(!socket)bad.push([kind,'bulb has no supporting socket']);
+   else {
+    const top=P.some(q=>{if(q===socket||q.ray!==coveRayLathe)return false;const t=q.ray(5,5,bottom-.4,0,0,1,q.box),z=bottom-.4+t;return t>0&&z>=socket.box.z0&&z<=socket.box.z1+1e-7;});if(!top)bad.push([kind,'socket detached from shade/cap']);
+   }
+   for(const f of [.1,.25,.5,.75,.9]){const z=b.z0+(b.z1-b.z0)*f,rr=b.hl*Math.sqrt(1-(f*2-1)**2),cavity=shade.ray(5,5,z,1,0,0,shade.box);if(!(cavity>rr))bad.push([kind,'bulb intersects shade']);}
+   bulb.ray(5,4,b.z0+(b.z1-b.z0)/2,0,1,0,b);bulb.shade(0,1,0);if((BG[0]&15)<11)bad.push([kind,'bulb is not luminous']);
+   shade.ray(6,5,bottom+.025,-1,0,0,shade.box);shade.shade(0,1,0);if((BG[0]&15)>9)bad.push([kind,'whole outer case glows like the bulb']);
+  }
+  return bad;
+ })()`);assert.deepEqual(bad,[]);
+}));
