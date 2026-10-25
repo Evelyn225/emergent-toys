@@ -73,6 +73,9 @@ function FURNITURE_BED(x,y,halfWidth,halfLength,col=BLUE,angle=0,top=.55,headHei
 }
 function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
   const c=Math.cos(angle),s=Math.sin(angle),thick=.035,base=.085,cap=height-.045;
+  const levels=[base,.37*height,.69*height],books=[];
+  if(open)for(let shelf=0;shelf<2;shelf++)for(let k=0;k<3;k++)
+    books.push(homeShelfBook((k-1)*.057+(shelf?1:-1)*hl*.43,hw*.1,levels[shelf]+.035,.17+((k+shelf)%3)*.023,Math.min(.07,hw-.04),[BLUE,STONE,BRICK][(k+shelf)%3],shelf*3+k));
   const model=furnitureModel(x,y,c,s,hl,hw,height,(vx,vy)=>{
     const part=(u,v,hx,hy,z0,z1,r=.01,material='wood')=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hx,hy,z0,z1,r,material);
     // Recessed plinth, joined side walls, back and cap. A shelf's top remains the
@@ -82,15 +85,8 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
     part(0,-hw+thick/2,hl-thick,thick/2,base,cap);
     part(0,0,hl,hw,cap,height,.015);
     if(open) {
-      const levels=[base,.37*height,.69*height];
       for(const z of levels)part(0,0,hl-thick,hw-thick,z,z+.035,.008);
-      for(let shelf=0;shelf<2;shelf++)for(let k=0;k<3;k++) {
-        const u=(k-1)*.057+(shelf?1:-1)*hl*.43,z=levels[shelf]+.035,h=.17+((k+shelf)%3)*.023;
-        part(u,hw*.1,.022,Math.min(.07,hw-.04),z,z+h,.004,(i,t,L)=>{
-          const color=[BLUE,STONE,BRICK][(k+shelf)%3],binding=HIT.w>z+h-.015||HIT.w<z+.014;
-          BG[i]=C(binding?WARM:color,2.5+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
-        });
-      }
+      for(const book of books)book.draw(vx,vy,c,s);
     }else {
       const drawer=height<1.25,doorTop=drawer?height-.27:height-.075,doorBottom=base+.025;
       const half=(hl-.05)/2;
@@ -107,7 +103,9 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
       }
     }
   });
-  model.furniture=open?'shelf':'cabinet';return model;
+  model.furniture=open?'shelf':'cabinet';
+  if(open)model.shelfSurfaces=[...levels.map((z,k)=>({level:k,hl:hl-thick-.009,hw:hw-thick-.009,z:z+.035,ceiling:levels[k+1]??cap})),{level:3,hl:hl-.016,hw:hw-.016,z:height,ceiling:Infinity}].map(q=>({...q,x,y,c,s,key:[x,y,hl,hw,height].join(':'),owner:model,books:books.map(b=>b.bounds).filter(b=>Math.abs(b.z0-q.z)<1e-7)}));
+  return model;
 }
 
 function furnitureTimber(base=BRICK,unit=1) {

@@ -166,14 +166,7 @@ function interact() {
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', '120 spaces. Shared between your apartments; equipment and batches fit too.', null, HOME_STORE_SIZE);
       if (hs === 'workshop') return openWorkshop();
       if (hs === 'terrace') { room.ret = [...FERN_HOUSE.terrace, 0];return leaveRoom(); }
-      if (hs === 'shelf') {
-        home.decor ||= [];
-        if (heldItem() && isHomeDecor(heldItem())) {
-          if (home.decor.length >= HOME_SHELF_CAPACITY) return say('The shelf is full. Take something down first.');
-          const it = takeSlot(held); home.decor.push(it); saveGame(); return say(`You put the ${ITEMS[it.id].name} on the shelf.`, 2);
-        }
-        return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
-      }
+      if(hs==='shelf')return say('Look at the shelf board where you want to put an item.',3);
       if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {

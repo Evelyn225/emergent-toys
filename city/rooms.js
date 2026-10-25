@@ -815,7 +815,7 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
   }
   BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
 }
-const HOME_SHELF_CAPACITY = 4;
+const HOME_SHELF_CAPACITY = 48;
 function homeRecord(r = room) {
   if (!r || !r.cell || !['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return null;
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
@@ -1321,11 +1321,8 @@ function roomSprites() {
   const home = homeRecord(room);
   if (home) {
     drawWorkshopPreview();
-    const { shelf, pet } = homeLayout(room);
-    for (const [k, it] of (home.decor || []).entries()) {
-      const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
-      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 1);
-    }
+    const { pet } = homeLayout(room);
+    for(const p of homeShelfLayout())drawDropped({...p.it,displayZ:p.z,displaySize:{w:p.size.radius*2,h:p.size.height}},p.x-px,p.y-py,1);
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
     const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];

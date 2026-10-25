@@ -6431,7 +6431,7 @@ function getTattoo(id) {
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
 const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look', 'gun', 'ammo'].includes(ITEMS[id].kind)); // (nor what's under the counter)
-const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
+const isHomeDecor = it => !!it && typeof ITEMS[it.id]?.kind==='string' && !['car','home','tattoo','look','pet'].includes(ITEMS[it.id].kind) && it.id!=='goldfish';
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish', 'ingredient'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
@@ -6463,7 +6463,7 @@ function sellSlot(k, rate) {
 function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
   if (!list[k]) return [false, 'Nothing there.'];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
-  const it = list.splice(k, 1)[0]; carryItem(it, false);
+  const it = list.splice(k, 1)[0]; if(where==='the shelf')delete it.shelfPlacement; carryItem(it, false);
   return [true, `You take the ${ITEMS[it.id].name} out of ${where}.`];
 }
 function removeHeld() {
@@ -16416,7 +16416,7 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
   }
   BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
 }
-const HOME_SHELF_CAPACITY = 4;
+const HOME_SHELF_CAPACITY = 48;
 function homeRecord(r = room) {
   if (!r || !r.cell || !['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return null;
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
@@ -16922,11 +16922,8 @@ function roomSprites() {
   const home = homeRecord(room);
   if (home) {
     drawWorkshopPreview();
-    const { shelf, pet } = homeLayout(room);
-    for (const [k, it] of (home.decor || []).entries()) {
-      const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
-      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 1);
-    }
+    const { pet } = homeLayout(room);
+    for(const p of homeShelfLayout())drawDropped({...p.it,displayZ:p.z,displaySize:{w:p.size.radius*2,h:p.size.height}},p.x-px,p.y-py,1);
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
     const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
@@ -24110,7 +24107,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -24434,6 +24431,10 @@ function interactionFocus() {
       const offset=d.dir*(d.open>.85?width/2-.06:width*d.open/2);
       offer('bathroom-door',prop,prop.x+c*offset,prop.y+s*offset,.4,2.1,d.open>.85?.12:Math.min(.45,width*(1-d.open)/2),2.2,prop);
     }
+    if(homeRecord()){
+      for(const p of homeShelfLayout())offer('home-display',p,p.x,p.y,p.z,p.z+p.size.height,p.size.radius,2.2,p.surface.owner,true);
+      if(!best)for(const t of homeShelfAim())offer('home-shelf',t,t.x,t.y,t.z,t.z+.01,.025,2.2,t.surface.owner,true);
+    }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
@@ -24452,6 +24453,8 @@ function interactionFocus() {
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
   if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
+  if(target?.kind==='home-display')return `E: take ${itemName(target.who.it)}`;
+  if(target?.kind==='home-shelf')return heldItem()?'E: put on shelf':'E: display shelves';
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
   if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
@@ -24459,6 +24462,8 @@ function focusedInteractionPrompt(target=interactionFocus()) {
 }
 function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
+  if(target?.kind==='home-display'){homeShelfTake(target.who);return true;}
+  if(target?.kind==='home-shelf'){homeShelfUse(target.who);return true;}
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
@@ -24633,14 +24638,7 @@ function interact() {
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', '120 spaces. Shared between your apartments; equipment and batches fit too.', null, HOME_STORE_SIZE);
       if (hs === 'workshop') return openWorkshop();
       if (hs === 'terrace') { room.ret = [...FERN_HOUSE.terrace, 0];return leaveRoom(); }
-      if (hs === 'shelf') {
-        home.decor ||= [];
-        if (heldItem() && isHomeDecor(heldItem())) {
-          if (home.decor.length >= HOME_SHELF_CAPACITY) return say('The shelf is full. Take something down first.');
-          const it = takeSlot(held); home.decor.push(it); saveGame(); return say(`You put the ${ITEMS[it.id].name} on the shelf.`, 2);
-        }
-        return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
-      }
+      if(hs==='shelf')return say('Look at the shelf board where you want to put an item.',3);
       if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
@@ -28833,6 +28831,7 @@ const placeKey = () => mode === 'walk' || mode === 'roof' ? '' : mode === 'room'
 function dropHere() {
   const at = placeKey();
   if (!heldItem()) return;
+  if(mode==='room'&&homeRecord()&&isHomeDecor(heldItem())){const target=homeShelfAim()[0];if(target)return say(homeShelfStore(held,target)[1],3);}
   if (at === null) return say('Not up here.');
   const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
   const x = mode === 'room' ? px + Math.cos(a) * reach : worldCoord(px + Math.cos(a) * reach), y = mode === 'room' ? py + Math.sin(a) * reach : worldCoord(py + Math.sin(a) * reach);
@@ -28891,7 +28890,7 @@ function droppedPicture(d) {
 // unit: world units in a metre (0.1 outdoors, where a cell is 10 m; 1 indoors)
 function drawDropped(d, vx, vy, unit) {
   const p = droppedPicture(d), m = itemSize(d) * unit / Math.max(p.w, p.h);
-  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), p.w * m, p.h * m, p.art, (c, r, L, k) => { const v = p.col(c, r, k); return C(v >> 4, (v & 15) * clamp(L / 11, 0.3, 1)); }, true);
+  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), (d.displaySize?.w??p.w*m), (d.displaySize?.h??p.h*m), p.art, (c, r, L, k) => { const v = p.col(c, r, k); return C(v >> 4, (v & 15) * clamp(L / 11, 0.3, 1)); }, true);
 }
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
@@ -28991,8 +28990,10 @@ const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
 let storeEl = null;
 let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town', null, STORE_SIZE];
-function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5]) {
-  storeCtx = [list, where, title, sub, accepts, capacity];
+function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5], put = null) {
+  if(arguments.length===0)put=storeCtx[6]||null;
+  storeCtx = [list, where, title, sub, accepts, capacity, put];
+  const store=k=>put?put(k):storeSlot(k,list,where,accepts,capacity);
   storeEl = storeEl || panel('storage');
   const item = it => `${itemName(it)}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
   const eligible = inv.map((it, k) => ({ it, k })).filter(({ it }) => !accepts || accepts(it));
@@ -29004,9 +29005,9 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
     <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (e.target.closest('[data-store-all]')) { for (const {k} of [...eligible].reverse()) if (list.length < capacity) storeSlot(k,list,where,accepts,capacity); }
+    if (e.target.closest('[data-store-all]')) { for (const {k} of [...eligible].reverse()) if (list.length < capacity) store(k); }
     else if (e.target.closest('[data-take-all]')) { while(list.length && inv.length < INV_SIZE) retrieveSlot(0,list,where); }
-    else if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    else if (s) say(store(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
     saveGame();
     openStorage();
   };
@@ -29022,7 +29023,7 @@ function panelKey(e) {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
     else if (n && e.shiftKey) { say(retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
-    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1], storeCtx[4], storeCtx[5])[1], 2); openStorage(); }
+    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say((storeCtx[6]?storeCtx[6](k):storeSlot(k, storeCtx[0], storeCtx[1], storeCtx[4], storeCtx[5]))[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
@@ -35085,6 +35086,9 @@ function FURNITURE_BED(x,y,halfWidth,halfLength,col=BLUE,angle=0,top=.55,headHei
 }
 function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
   const c=Math.cos(angle),s=Math.sin(angle),thick=.035,base=.085,cap=height-.045;
+  const levels=[base,.37*height,.69*height],books=[];
+  if(open)for(let shelf=0;shelf<2;shelf++)for(let k=0;k<3;k++)
+    books.push(homeShelfBook((k-1)*.057+(shelf?1:-1)*hl*.43,hw*.1,levels[shelf]+.035,.17+((k+shelf)%3)*.023,Math.min(.07,hw-.04),[BLUE,STONE,BRICK][(k+shelf)%3],shelf*3+k));
   const model=furnitureModel(x,y,c,s,hl,hw,height,(vx,vy)=>{
     const part=(u,v,hx,hy,z0,z1,r=.01,material='wood')=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hx,hy,z0,z1,r,material);
     // Recessed plinth, joined side walls, back and cap. A shelf's top remains the
@@ -35094,15 +35098,8 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
     part(0,-hw+thick/2,hl-thick,thick/2,base,cap);
     part(0,0,hl,hw,cap,height,.015);
     if(open) {
-      const levels=[base,.37*height,.69*height];
       for(const z of levels)part(0,0,hl-thick,hw-thick,z,z+.035,.008);
-      for(let shelf=0;shelf<2;shelf++)for(let k=0;k<3;k++) {
-        const u=(k-1)*.057+(shelf?1:-1)*hl*.43,z=levels[shelf]+.035,h=.17+((k+shelf)%3)*.023;
-        part(u,hw*.1,.022,Math.min(.07,hw-.04),z,z+h,.004,(i,t,L)=>{
-          const color=[BLUE,STONE,BRICK][(k+shelf)%3],binding=HIT.w>z+h-.015||HIT.w<z+.014;
-          BG[i]=C(binding?WARM:color,2.5+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
-        });
-      }
+      for(const book of books)book.draw(vx,vy,c,s);
     }else {
       const drawer=height<1.25,doorTop=drawer?height-.27:height-.075,doorBottom=base+.025;
       const half=(hl-.05)/2;
@@ -35119,7 +35116,9 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
       }
     }
   });
-  model.furniture=open?'shelf':'cabinet';return model;
+  model.furniture=open?'shelf':'cabinet';
+  if(open)model.shelfSurfaces=[...levels.map((z,k)=>({level:k,hl:hl-thick-.009,hw:hw-thick-.009,z:z+.035,ceiling:levels[k+1]??cap})),{level:3,hl:hl-.016,hw:hw-.016,z:height,ceiling:Infinity}].map(q=>({...q,x,y,c,s,key:[x,y,hl,hw,height].join(':'),owner:model,books:books.map(b=>b.bounds).filter(b=>Math.abs(b.z0-q.z)<1e-7)}));
+  return model;
 }
 
 function furnitureTimber(base=BRICK,unit=1) {
@@ -37878,6 +37877,108 @@ function HOME_WALL_CLOCK(p) {
     for(const u of [-.13,.13])tube('wall-pad',u,-.035,-.10,u,-.035,-.085,.005,dark);
   }),box:furnishingBox(p),walk:true,radius:Math.hypot(.25,.04),furnishingKey:p.key};
 }
+// A bound volume shares its shelf support plane. The covers stand proud of
+// the paper; the spine joins both covers and the page block's bound edge.
+function homeShelfBook(u,v,z,height,halfDepth,color,index) {
+  const cover=.003,halfWidth=.022,paperHalf=halfWidth-cover,spine=.006;
+  const parts=[],ink=(i,t,L)=>{
+    const band=HIT.face===3&&(Math.abs(HIT.w-z-.018)<.003||Math.abs(HIT.w-z-height+.018)<.003);
+    BG[i]=C(band?WARM:color,(band?3.8:2.5)+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  const paper=(i,t,L)=>{
+    const grain=coveDetail(t,.003)*Math.sin((HIT.w-z)*1700)*.12;
+    BG[i]=C(STONE,4.3+L*.24*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;
+  };
+  const part=(role,x,y,hl,hw,z0,z1,shade,bevel)=>parts.push({role,x,y,hl,hw,z0,z1,shade,profile:kitchenPanelProfile(hl,hw,z0,z1,bevel)});
+  for(const side of [-1,1])part('cover',side*(halfWidth-cover/2),0,cover/2,halfDepth,z,z+height,ink,.0005);
+  part('spine',0,halfDepth-spine/2,paperHalf,spine/2,z,z+height,ink,.0005);
+  const pageBack=-halfDepth+.005,pageFront=halfDepth-spine;
+  part('pages',0,(pageBack+pageFront)/2,paperHalf,(pageFront-pageBack)/2,z+.004,z+height-.004,paper,.00025);
+  return {
+    bounds:{u,v,hl:halfWidth,hw:halfDepth,z0:z,z1:z+height},
+    draw(vx,vy,c,s){
+      for(const p of parts){const x=u+p.x,y=v+p.y;
+        drawBox({...boxAt(vx+c*x-s*y,vy+s*x+c*y,c,s,p.hl,p.hw,p.z0,p.z1),...p.profile,bookRole:p.role,bookIndex:index},p.shade,homeRayWorktop);
+      }
+    },
+  };
+}
+// Shelf geometry supplies the support planes; item sizes come from the same
+// cropped pictures the renderer draws. Saved coordinates are local to a board.
+const HOME_SHELF_LAYOUTS=new WeakMap();
+let homeShelfMenuTarget=null;
+function restoreShelfItem(it) {
+  const out={...it},p=it.shelfPlacement;delete out.shelfPlacement;
+  if(p&&typeof p.key==='string'&&p.key.length<=120&&Number.isInteger(p.level)&&p.level>=0&&p.level<=3&&[p.u,p.v].every(v=>Number.isFinite(v)&&Math.abs(v)<20))out.shelfPlacement={key:p.key,level:p.level,u:p.u,v:p.v};
+  return out;
+}
+const homeShelfItem=it=>isHomeDecor(it)&&!HOME_FURNITURE[it.id];
+function homeShelfSize(it) {
+  const p=droppedPicture(it),m=itemSize(it)/Math.max(p.w,p.h);
+  return {radius:p.w*m/2,height:p.h*m};
+}
+function homeShelfSurfaces() {return room.props.flatMap(p=>p.shelfSurfaces||[]);}
+function homeShelfFits(s,u,v,size,placed) {
+  const r=size.radius,top=s.z+size.height;
+  if(![u,v,r,top].every(Number.isFinite)||Math.abs(u)+r>s.hl+1e-7||Math.abs(v)+r>s.hw+1e-7||top>Math.min(s.ceiling-.006,(room.def.height||3)-.02))return false;
+  const overlap=b=>Math.hypot(Math.max(0,Math.abs(u-b.u)-b.hl),Math.max(0,Math.abs(v-b.v)-b.hw))<r+.004;
+  if(s.books.some(overlap)||placed.some(p=>p.surface.key===s.key&&p.surface.level===s.level&&Math.hypot(p.u-u,p.v-v)<p.size.radius+r+.008))return false;
+  const x=s.x+s.c*u-s.s*v,y=s.y+s.s*u+s.c*v;
+  const b=boxAt(x,y,1,0,r,r,s.z,top);
+  return !room.props.some(p=>p!==s.owner&&p.box&&!p.walk&&b.z0<p.box.z1-.001&&b.z1>p.box.z0+.001&&furnishingOverlap(b,p.box,.002));
+}
+function homeShelfFind(s,size,placed,preferred=0) {
+  const span=s.hl-size.radius;if(span<0)return null;
+  const positions=[clamp(preferred,-span,span),0];
+  for(let k=1;k<=Math.ceil(span/.025);k++)positions.push(clamp(preferred+k*.025,-span,span),clamp(preferred-k*.025,-span,span));
+  for(const v of [0,s.hw-size.radius,-s.hw+size.radius])for(const u of positions)if(homeShelfFits(s,u,v,size,placed))return {surface:s,u,v,size,x:s.x+s.c*u-s.s*v,y:s.y+s.s*u+s.c*v,z:s.z};
+  return null;
+}
+function homeShelfLayout() {
+  const home=homeRecord();if(!home)return [];
+  const items=home.decor||[],signature=items.map(it=>[it.id,it.uses,it.q,it.of,it.kg,it.shelfPlacement?.key,it.shelfPlacement?.level,it.shelfPlacement?.u,it.shelfPlacement?.v].join('|')).join(';');
+  const cached=HOME_SHELF_LAYOUTS.get(home);if(cached?.props===room.props&&cached.signature===signature)return cached.placed;
+  const primary=homeLayout(room).shelf,surfaces=homeShelfSurfaces().sort((a,b)=>Math.hypot(a.x-primary[0],a.y-primary[1])-Math.hypot(b.x-primary[0],b.y-primary[1])||b.level-a.level),placed=[];
+  for(const it of items){
+    const size=homeShelfSize(it),saved=it.shelfPlacement,s=saved&&surfaces.find(s=>s.key===saved.key&&s.level===saved.level);let p;
+    if(s&&homeShelfFits(s,saved.u,saved.v,size,placed))p={surface:s,u:saved.u,v:saved.v,size,x:s.x+s.c*saved.u-s.s*saved.v,y:s.y+s.s*saved.u+s.c*saved.v,z:s.z};
+    else for(const surface of surfaces){p=homeShelfFind(surface,size,placed);if(p)break;}
+    if(p)placed.push({...p,it});
+  }
+  HOME_SHELF_LAYOUTS.set(home,{props:room.props,signature,placed});return placed;
+}
+function homeShelfAim() {
+  if(mode!=='room'||!homeRecord())return [];
+  const out=[],eye=interactionEye(),slope=pitch*rows/projY,ax=Math.cos(a),ay=Math.sin(a);
+  for(const surface of homeShelfSurfaces()){
+    const s=surface,x=px-s.x,y=py-s.y,u=x*s.c+y*s.s,v=-x*s.s+y*s.c,du=ax*s.c+ay*s.s,dv=-ax*s.s+ay*s.c;
+    let t=dv<-.001?(s.hw-v)/dv:-1,hitU=u+du*t,hitZ=eye+slope*t,hitV=s.hw;
+    if(!(t>0&&t<=2.2&&Math.abs(hitU)<s.hl&&hitZ>=s.z&&hitZ<Math.min(s.ceiling,(room.def.height||3)))){
+      t=Math.abs(slope)>.001?(s.z-eye)/slope:-1;hitU=u+du*t;hitV=v+dv*t;hitZ=s.z;
+      if(!(t>0&&t<=2.2&&Math.abs(hitU)<s.hl&&Math.abs(hitV)<s.hw))continue;
+    }
+    const xx=s.x+s.c*hitU-s.s*hitV,yy=s.y+s.s*hitU+s.c*hitV;
+    if(interactionClear(xx,yy,hitZ+.002,s.owner))out.push({surface:s,u:hitU,x:xx,y:yy,z:hitZ});
+  }return out;
+}
+function homeShelfStore(k,target=homeShelfMenuTarget) {
+  const home=homeRecord(),it=inv[k];if(!home||!target||!room.props.includes(target.surface.owner)||!it||!homeShelfItem(it))return [false,'Hold a small item to put on the shelf.'];
+  if((home.decor||[]).length>=HOME_SHELF_CAPACITY)return [false,'Take an item down first.'];
+  const p=homeShelfFind(target.surface,homeShelfSize(it),homeShelfLayout(),target.u);
+  if(!p)return [false,'That item does not fit here. Try another shelf or a smaller item.'];
+  const item=takeSlot(k);item.shelfPlacement={key:p.surface.key,level:p.surface.level,u:p.u,v:p.v};(home.decor||=[]).push(item);saveGame();
+  return [true,`You put the ${itemName(item)} on the shelf.`];
+}
+function homeShelfUse(target) {
+  if(heldItem())return say(homeShelfStore(held,target)[1],3);
+  const home=homeRecord();home.decor||=[];homeShelfMenuTarget=target;
+  openStorage(home.decor,'the shelf','Display shelves','Hold an item and look at any shelf to place it. Click a displayed item to take it down.',it=>homeShelfItem(it)&&!!homeShelfFind(target.surface,homeShelfSize(it),homeShelfLayout(),target.u),HOME_SHELF_CAPACITY,k=>homeShelfStore(k,target));
+}
+function homeShelfTake(p) {
+  if(inv.length>=INV_SIZE)return say('Your bag is full.',3);
+  const home=homeRecord(),k=home.decor.indexOf(p.it);if(k<0)return;
+  const it=home.decor.splice(k,1)[0];delete it.shelfPlacement;carryItem(it,false);saveGame();say(`You take the ${itemName(it)} down.`,3);
+}
 function homeRayEllipsoid(ox,oy,oz,rx,ry,rz,b) {
   const z=(b.z0+b.z1)/2,h=(b.z1-b.z0)/2,x=ox-b.x,y=oy-b.y;
   const u=(x*b.c+y*b.s)/b.hl,v=(-x*b.s+y*b.c)/b.hw,w=(oz-z)/h,du=(rx*b.c+ry*b.s)/b.hl,dv=(-rx*b.s+ry*b.c)/b.hw,dw=rz/h;
@@ -39139,7 +39240,7 @@ function loadGame() {
     const cell = restoreHomeCell(h.cell, h.placeId);
     if (cell < 0 || ITEMS[h.kind]?.kind !== 'home') continue;
     owned.homes.push({ ...h, cell,
-    decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
+    decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY).map(restoreShelfItem),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     workshop: restoreWorkshop(h.workshop,h.kind),
     furnishings: restoreHomeFurnishings(h.furnishings,h.kind),

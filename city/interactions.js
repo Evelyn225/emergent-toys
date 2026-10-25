@@ -66,6 +66,10 @@ function interactionFocus() {
       const offset=d.dir*(d.open>.85?width/2-.06:width*d.open/2);
       offer('bathroom-door',prop,prop.x+c*offset,prop.y+s*offset,.4,2.1,d.open>.85?.12:Math.min(.45,width*(1-d.open)/2),2.2,prop);
     }
+    if(homeRecord()){
+      for(const p of homeShelfLayout())offer('home-display',p,p.x,p.y,p.z,p.z+p.size.height,p.size.radius,2.2,p.surface.owner,true);
+      if(!best)for(const t of homeShelfAim())offer('home-shelf',t,t.x,t.y,t.z,t.z+.01,.025,2.2,t.surface.owner,true);
+    }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
@@ -84,6 +88,8 @@ function interactionFocus() {
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
   if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
+  if(target?.kind==='home-display')return `E: take ${itemName(target.who.it)}`;
+  if(target?.kind==='home-shelf')return heldItem()?'E: put on shelf':'E: display shelves';
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
   if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
@@ -91,6 +97,8 @@ function focusedInteractionPrompt(target=interactionFocus()) {
 }
 function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
+  if(target?.kind==='home-display'){homeShelfTake(target.who);return true;}
+  if(target?.kind==='home-shelf'){homeShelfUse(target.who);return true;}
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}

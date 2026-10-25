@@ -480,6 +480,7 @@ const placeKey = () => mode === 'walk' || mode === 'roof' ? '' : mode === 'room'
 function dropHere() {
   const at = placeKey();
   if (!heldItem()) return;
+  if(mode==='room'&&homeRecord()&&isHomeDecor(heldItem())){const target=homeShelfAim()[0];if(target)return say(homeShelfStore(held,target)[1],3);}
   if (at === null) return say('Not up here.');
   const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
   const x = mode === 'room' ? px + Math.cos(a) * reach : worldCoord(px + Math.cos(a) * reach), y = mode === 'room' ? py + Math.sin(a) * reach : worldCoord(py + Math.sin(a) * reach);
@@ -538,7 +539,7 @@ function droppedPicture(d) {
 // unit: world units in a metre (0.1 outdoors, where a cell is 10 m; 1 indoors)
 function drawDropped(d, vx, vy, unit) {
   const p = droppedPicture(d), m = itemSize(d) * unit / Math.max(p.w, p.h);
-  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), p.w * m, p.h * m, p.art, (c, r, L, k) => { const v = p.col(c, r, k); return C(v >> 4, (v & 15) * clamp(L / 11, 0.3, 1)); }, true);
+  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), (d.displaySize?.w??p.w*m), (d.displaySize?.h??p.h*m), p.art, (c, r, L, k) => { const v = p.col(c, r, k); return C(v >> 4, (v & 15) * clamp(L / 11, 0.3, 1)); }, true);
 }
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
@@ -638,8 +639,10 @@ const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
 let storeEl = null;
 let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town', null, STORE_SIZE];
-function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5]) {
-  storeCtx = [list, where, title, sub, accepts, capacity];
+function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5], put = null) {
+  if(arguments.length===0)put=storeCtx[6]||null;
+  storeCtx = [list, where, title, sub, accepts, capacity, put];
+  const store=k=>put?put(k):storeSlot(k,list,where,accepts,capacity);
   storeEl = storeEl || panel('storage');
   const item = it => `${itemName(it)}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
   const eligible = inv.map((it, k) => ({ it, k })).filter(({ it }) => !accepts || accepts(it));
@@ -651,9 +654,9 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
     <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (e.target.closest('[data-store-all]')) { for (const {k} of [...eligible].reverse()) if (list.length < capacity) storeSlot(k,list,where,accepts,capacity); }
+    if (e.target.closest('[data-store-all]')) { for (const {k} of [...eligible].reverse()) if (list.length < capacity) store(k); }
     else if (e.target.closest('[data-take-all]')) { while(list.length && inv.length < INV_SIZE) retrieveSlot(0,list,where); }
-    else if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    else if (s) say(store(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
     saveGame();
     openStorage();
   };
@@ -669,7 +672,7 @@ function panelKey(e) {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
     else if (n && e.shiftKey) { say(retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
-    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1], storeCtx[4], storeCtx[5])[1], 2); openStorage(); }
+    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say((storeCtx[6]?storeCtx[6](k):storeSlot(k, storeCtx[0], storeCtx[1], storeCtx[4], storeCtx[5]))[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);

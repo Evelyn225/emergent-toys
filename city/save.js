@@ -86,7 +86,7 @@ function loadGame() {
     const cell = restoreHomeCell(h.cell, h.placeId);
     if (cell < 0 || ITEMS[h.kind]?.kind !== 'home') continue;
     owned.homes.push({ ...h, cell,
-    decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
+    decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY).map(restoreShelfItem),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     workshop: restoreWorkshop(h.workshop,h.kind),
     furnishings: restoreHomeFurnishings(h.furnishings,h.kind),
