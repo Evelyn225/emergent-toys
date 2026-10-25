@@ -58,35 +58,22 @@ function casinoCeil(i, wx, wy) { // chandeliers
 // cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
 const BJ_CARDS = [];
 for (const [u, v] of [[-0.85, 0.36], [0, 0.4], [0.85, 0.36], [-0.1, -0.3]]) for (const k of [0, 1]) BJ_CARDS.push([u + k * 0.09, v - k * 0.02, '♠♥♦♣'[(BJ_CARDS.length * 7) & 3], (BJ_CARDS.length * 7) & 3 && ((BJ_CARDS.length * 7) & 3) < 3 ? RED : GRAY]);
-const SLOT_ART = pad([' .---. ', ' |7=7| ', ' |---|o', ' |___|/', ' [###] ', ' [###] ']);
-const felt = (shade) => (i, t, L) => { // a gaming table: green felt on top, a padded rail round it, wood below
-  const f = HIT.face;
-  if (f === 5) { const s = shade && shade(i, L); if (s) return true; BG[i] = C(GREEN, 2 + L * 0.06); return set(i, ' ', 0), true; }
-  BG[i] = C(BRICK, (1 + L * 0.15) * shadeFace(f));
-  return set(i, HIT.w > 0.78 ? '=' : ' ', C(BRICK, L)), true;
-};
+// (the tables, the slots and the cage are built: leisure-fittings.js)
 ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6, floor: 'casino', ceil: 'chandelier', sign: true, signAt: CASINO_W / 2, wall: casinoWall, keeper: [11, 1.5],
   props: r => {
     const p = [...counterBox(11, 2.2, 2.4, 1.1), standing(11, 1.5, GREEN)];
-    for (const x of [8.4, 9.6, 10.8, 12, 13.2]) p.push(BX(x, 2.5, 0.03, 0.03, 1.1, 2.4, solid(YEL))); // the cage's bars
+    p.push(CASHIER_CAGE_BARS([8.4, 9.6, 10.8, 12, 13.2], 2.5, 1.1, 2.4)); // the cage's bars
     for (const [x, y] of [[5, 6.5], [17, 6.5]]) { // blackjack: cards out on the felt, the dealer behind
-      p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BX(x, y, 1.3, 0.6, 0, 0.8, felt((i, L) => {
-        const card = BJ_CARDS.find(([cu, cv]) => Math.abs(HIT.u - cu) < 0.06 && Math.abs(HIT.v - cv) < 0.085); // the hands dealt: a pair at each seat, the dealer's
-        if (card) { BG[i] = C(WHITE, 9); return set(i, Math.abs(HIT.u - card[0]) < 0.025 && Math.abs(HIT.v - card[1]) < 0.035 ? card[2] : ' ', C(card[3], 12)), true; }
-        return false; })) });
+      p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BLACKJACK_TABLE(x, y) }); // cards out on the felt, chips by the seats
       p.push({ ...standing(x, y - 0.9, WHITE), face: [0, 1] }); // the dealer, and the players across the felt from her
       for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push({ ...standing(x + ox, y + 0.95, shirt()), face: [0, -1] });
     }
-    p.push({ casino: 'roulette', cx: 11, cy: 10.4, ...BX(11, 9.3, 1.8, 0.7, 0, 0.8, felt((i, L) => { // the roulette table: the wheel at one end, spinning, the layout of numbers
-      const wx = HIT.u + 1.2, d = Math.hypot(wx, HIT.v);
-      if (d < 0.55) { const an = Math.atan2(HIT.v, wx) + T * 2; BG[i] = d < 0.15 ? C(YEL, 6) : (Math.floor(an / (Math.PI * 2) * 37 + 37) & 1) ? C(RED, 5) : C(GRAY, 1.5); return set(i, d < 0.15 ? '+' : ' ', C(YEL, 15)), true; }
-      if (HIT.u > -0.4) { BG[i] = (Math.floor((HIT.u + 0.4) * 5) + Math.floor((HIT.v + 0.7) * 3)) & 1 ? C(RED, 3) : C(GRAY, 1.5); return set(i, Math.abs(fract((HIT.u + 0.4) * 5) - 0.5) < 0.1 ? '|' : ' ', C(WHITE, 8)), true; }
-      return false; })) });
+    p.push({ casino: 'roulette', cx: 11, cy: 10.4, ...ROULETTE_TABLE(11, 9.3) }); // the wheel at one end, spinning, the layout of numbers
     p.push({ ...standing(11, 8.3, WHITE), face: [0, 1] });
     for (const ox of [-1.2, 0, 1.2]) if (chance(0.5)) p.push({ ...standing(11 + ox, 10.35, shirt()), face: [0, -1] });
     for (const x of [1.3, CASINO_W - 1.3]) for (let y = 4.5; y < CASINO_H - 2; y += 1.6) { // slot machines down both walls, lights going
       const ph = x * 3 + y;
-      p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SP(x, y, 0.75, 1.7, SLOT_ART, (c, row, L) => c === '7' ? C(RED, 15) : c === '=' && row === 1 ? C(YEL, 15) : c === 'o' ? C(RED, 14) : row === 0 ? C(NEON[(Math.floor(T * 5 + ph)) & 3], 15) : C(GRAY, Math.max(L, 8))) });
+      p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SLOT_MACHINE(x, y, x < 5 ? 1 : -1, 0, ph) });
       p.push({ ...STOOL(x + (x < 5 ? 0.7 : -0.7), y, RED, 0.45), walk: true, fx: x < 5 ? -1 : 1, fy: 0 }); // (its stool: walk past, or sit and you're at it)
       if (chance(0.3)) p.push({ ...sitting(x + (x < 5 ? 0.7 : -0.7), y, shirt(), 0.45), face: [x < 5 ? -1 : 1, 0] }); // (at the machine)
     }
