@@ -247,7 +247,7 @@ function getTattoo(id) {
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
 const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look', 'gun', 'ammo'].includes(ITEMS[id].kind)); // (nor what's under the counter)
-const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
+const isHomeDecor = it => !!it && typeof ITEMS[it.id]?.kind==='string' && !['car','home','tattoo','look','pet'].includes(ITEMS[it.id].kind) && it.id!=='goldfish';
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish', 'ingredient'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
@@ -279,7 +279,7 @@ function sellSlot(k, rate) {
 function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
   if (!list[k]) return [false, 'Nothing there.'];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
-  const it = list.splice(k, 1)[0]; carryItem(it, false);
+  const it = list.splice(k, 1)[0]; if(where==='the shelf')delete it.shelfPlacement; carryItem(it, false);
   return [true, `You take the ${ITEMS[it.id].name} out of ${where}.`];
 }
 function removeHeld() {

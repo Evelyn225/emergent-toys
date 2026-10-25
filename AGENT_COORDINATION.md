@@ -1,6 +1,6 @@
 # Current quality work: Codex and Claude
 
-Updated 2026-10-24 (Codex/Claude integration). Read this alongside `WORLD_QUALITY.md` and
+Updated 2026-10-25 (Codex/Claude integration). Read this alongside `WORLD_QUALITY.md` and
 `corridor-geometry-notes.md`. Do not edit `CLOUD_HANDOFF.md`.
 
 PRs #195 (dining ledges/tables) and #196 (juice-bar produce) are merged into
@@ -8,14 +8,20 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** home wall clock on `codex/home-clock-quality` (pass 4). Owns
-  Clock complete; two geometry/real-control checks and three original furnishing
-  checks pass. Owns new `city/home-clock.js`, `city/home-furnishings.js`, clock dispatch in
-  `city/home-furniture-render.js` and fixture/IDEA additions in
-  `city/home-furnishing-ui.js`, with new browser tests. #204 palms and balcony
-  cache refresh are merged; full CI pending. #197–#202 full CI are green.
-  Next: pass 4 shelf books (`city/furniture-quality.js`, new helper/test),
-  remaining electronics/decor audit, then pass 5 (home files).
+- **Codex:** pass 4 shelf books on `codex/home-books-quality`. Owns
+  `city/furniture-quality.js` (open storage book call only), new
+  `city/home-books.js` and its browser test. User requested usable placement on
+  every shelf: also owns new `city/home-shelves.js`, storage surface metadata,
+  interaction hooks, home decor render/capacity in `city/rooms.js` (not bar),
+  `city/actions.js`, `city/goods.js` and optional storage callbacks in
+  `city/goods-ui.js`, plus the home shelf prompt in `city/hud.js` and display
+  placement restoration in `city/save.js`. Claude's bar/lantern ownership stays
+  separate. Books and home shelves are complete and locally checked in **PR #206**;
+  focused checks pass, full CI pending. The user was asked whether public/shop shelves are also in scope;
+  current chunk covers every physical shelf/board in the four home types.
+  #204 palms/balcony cache and #205 wall clock are merged, full CI green.
+  #197–#202 full CI are green.
+  Next: remaining pass 4 electronics/decor audit, then pass 5 (home files).
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
