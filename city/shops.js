@@ -285,18 +285,15 @@ ROOM_DEFS.hardware = { grid: ['##################', '#............#...#', '#...S
     '#............#...#', '#............#...#', '#............#...#', '########DD########'],
   light: 0.9, floor: 'concrete', ceil: 'strip', sign: true, signAt: 7, wall: hardwareWall, keeper: [2.6, 6.8],
   props: r => {
-    const p = [BX(2.6, 7.5, 1.3, 0.32, 0, 1.0, solid(ORANGE, { panel: 0.6, trim: 0.96, top: '=' })), standing(2.6, 6.8, ORANGE),
-      BX(1.8, 7.55, 0.18, 0.15, 1.0, 1.3, (i, t, L) => { // the key cutter: a little machine with its wheel going
-        if (HIT.face === 3 && Math.hypot(HIT.u, HIT.w - 1.16) < 0.08) return set(i, '-\\|/'[Math.floor(T * 10) & 3], C(WHITE, 14)), true;
-        BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      BX(3.4, 7.55, 0.15, 0.12, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 3 ? '$' : '#', C(GREEN, L)), true; }),
+    const p = [SHOP_COUNTER(2.6, 7.5, 1.3, 0.32, 1.0, 1, 0, ORANGE), standing(2.6, 6.8, ORANGE),
+      KEY_CUTTER(1.8, 7.55, 1.0, 0, 1), GAS_TILL(3.4, 7.55, 1.0, 0, -1), // the key cutter, wheel to the customer; the till, to the clerk
       paintPyramid(10.6, 7.4), ladder(1.25, 3, 2.3, 0.25), ladder(1.25, 4.1, 1.9, 0.2, GRAY),
-      { ...BX(13.5, 4.5, 1.5, 0.5, 2.3, 3, solid(GRAY, { bright: 0.8 }), 0, 1) }, // the beam over the opening
+      BULKHEAD(13.5, 4.5, 1.5, 0.5, 2.3, 3, 0, 1), // the beam over the opening
       aisleSign(15.5, 3.4, 'GARDEN', C(GREEN, 4), C(WHITE, 15), 0.4)];
-    for (let k = 0; k < 7; k++) p.push(BX(16.65, 1.6 + k * 0.27, 0.05, 0.12, 0, 2.5 - (k % 3) * 0.2, solid(WARM, { panel: 0.4 }))); // lumber, stood on end against the wall
-    p.push(BX(16.3, 5.4, 0.45, 0.45, 0, 0.55, (i, t, L) => { BG[i] = C(GREEN, 1.6 + L * 0.2); return set(i, HIT.face === 5 ? '@' : 'O', C(GREEN, L)), true; })); // coils of garden hose
+    p.push(LUMBER(16.945, 2.41, Array.from({ length: 7 }, (_, k) => [-0.81 + k * 0.27, 2.5 - (k % 3) * 0.2]), 0, 1, 0.05, 0.12)); // lumber, stood on end against the wall
+    p.push(HOSE_COILS(16.3, 5.4)); // coils of garden hose
     for (const [x, y, h] of [[14.4, 1.5, 1.4], [15.2, 1.45, 1.0], [14.5, 6.4, 1.6], [16.4, 6.6, 1.2]]) p.push(POT_PLANT(x, y, h));
-    for (let k = 0; k < 4; k++) p.push(BX(16.2, 8.25, 0.4, 0.28, k * 0.16, k * 0.16 + 0.15, (i, t, L) => { BG[i] = C(k & 1 ? GREEN : BRICK, (1.6 + L * 0.25) * shadeFace(HIT.face)); return set(i, HIT.face === 3 && Math.abs(HIT.u) < 0.15 ? '%' : ' ', C(YEL, 10)), true; })); // bags of compost
+    p.push(COMPOST_BAGS(16.2, 8.25)); // bags of compost
     p.push(ROOM_MODEL(14.6, 8.1, (vx, vy) => { // a lawnmower: the red deck on its wheels, the handle back up to waist height
       BXD(vx, vy, 0.28, 0.24, 0.08, 0.32, (i, t, L) => { BG[i] = C(RED, (2.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? 'o' : ' ', C(GRAY, 6)), true; });
       for (const [e, w] of [[-0.22, -0.2], [-0.22, 0.2], [0.22, -0.2], [0.22, 0.2]]) dot(vx + e, vy + w, 0.07, 0.07, (i, t, L) => { BG[i] = C(GRAY, 0.8); return set(i, 'o', C(GRAY, 5)), true; });
@@ -601,14 +598,12 @@ const sunglassSpinner = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.2, 0.2, 1.75]);
 ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#..........#', '#.SS....SS.#', '####....SS.#', '#..........#', '#..#.......#', '#####DD#####'], light: 1.1, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pharmacyWall, keeper: [6, 1.4],
   props: r => {
-    const p = [BX(6, 2.15, 2.4, 0.32, 0, 1.15, solid(WHITE, { panel: 0.8, trim: 1.1, top: '=' })), standing(6, 1.4, WHITE), standing(4.4, 1.4, WHITE), // the pharmacist, and one counting pills
+    const p = [SHOP_COUNTER(6, 2.15, 2.4, 0.32, 1.15, 1, 0, WHITE), standing(6, 1.4, WHITE), standing(4.4, 1.4, WHITE), // the pharmacist, and one counting pills
       { x: 6, y: 2.4, draw: (vx, vy) => hallSign(vx, vy, 0.95, 1.94, 2.12, 3, 'PRESCRIPTIONS', C(GREEN, 4), C(WHITE, 15)) },
       aisleSign(2.9, 4.95, 'COLD & FLU', C(BLUE, 4), C(WHITE, 15), 0.6), aisleSign(9.1, 4.95, 'VITAMINS', C(ORANGE, 4), C(WHITE, 15), 0.5),
-      BX(10.8, 7.4, 0.3, 0.3, 0, 1.3, (i, t, L) => { if (HIT.face === 2 && HIT.w > 0.9 && HIT.w < 1.2) { BG[i] = C(CYAN, 3); return set(i, HIT.w > 1.05 ? '1' : '2', C(WHITE, 14)), true; } // the blood pressure machine
-        BG[i] = C(WHITE, (2.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 2 && Math.abs(HIT.w - 0.75) < 0.05 ? 'O' : ' ', C(GRAY, 6)), true; }),
-      { ...BX(10.15, 7.4, 0.25, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seat: true, x: 10.15, y: 7.4, fx: 1, fy: 0, h: 0.45 }, sunglassSpinner(4.5, 7.5),
-      BX(1.5, 6.5, 0.35, 0.3, 0, 0.75, solid(WHITE, { top: '=', panel: 0.35 })), STOOL(1.5, 7.4, BLUE, 0.5), // the consultation room: a desk, a stool
-      BX(1.35, 6.5, 0.12, 0.1, 0.75, 1.0, (i, t, L) => { BG[i] = HIT.face === 1 ? C(CYAN, 4) : C(GRAY, 1.5); return set(i, ' ', 0), true; })]; // and its screen
+      BP_MACHINE(10.8, 7.4, -1, 0), // the blood pressure machine
+      STOOL(10.15, 7.4, BLUE, 0.45), SEAT(10.15, 7.4, 1, 0, 0.45), sunglassSpinner(4.5, 7.5),
+      SMALL_DESK(1.5, 6.5, 0.35, 0.3, 0.75, 0, -1), STOOL(1.5, 7.4, BLUE, 0.5), DESK_MONITOR(1.4, 6.45, 0.75, 0, 1)]; // the consultation room: a desk, a stool, its screen
     p.push(...shoppers([[6, 3.1, 0, -1], [6.3, 3.9, 0, -1], [4.8, 4.6, -1, 0], [7.2, 6.2, 1, 0]], 0.45));
     if (chance(0.4)) p.push({ ...sitting(10.15, 7.45, shirt(), 0.45), face: [1, 0] });
     return p;

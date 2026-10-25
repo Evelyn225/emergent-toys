@@ -65,3 +65,31 @@ test('tattoo parlour: till and portfolios on the glass case, binders on the low 
  });
  assert.deepEqual(r,[]);
 }));
+
+test('hardware and pharmacy: counters and what stands on them, the garden corner, the blood pressure machine and the consultation desk',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const draw=drawBox,parts=o=>{const out=[];drawBox=(box,shade,ray=rayBox)=>out.push({box,ray});try{o.draw(o.x-px,o.y-py);}finally{drawBox=draw;}return out.map(q=>({...q,box:{...q.box,x:q.box.x+px,y:q.box.y+py}}));};
+  const onTop=(P,o)=>{const under=P.filter(u=>u!==o&&u.box&&inBox(u.box,o.x,o.y,0)).map(u=>u.box.z1);return under.some(z=>Math.abs(z-o.box.z0)<1e-9);};
+  enterRoom('hardware',{word:'HARDWARE',ret:[100,100,0]},[5,5,0]);
+  let P=room.props;
+  for(const o of P.filter(o=>o.keyCutter||o.till))if(!onTop(P,o))bad.push(['hardware: not on the counter',o.x,o.y]);
+  const hose=P.find(o=>o.hose),h=hose.hose;
+  for(const q of parts(hose)){const top=Math.max(...q.box.profile.map(p=>p[0])),bot=Math.min(...q.box.profile.map(p=>p[0]));
+   const k=Math.round((bot-q.box.z0)/(2*h.r));if(Math.abs(bot-q.box.z0-k*2*h.r)>1e-9)bad.push('hose turn not resting');}
+  const lum=P.find(o=>o.lumber);for(const q of parts(lum))if(Math.abs(q.box.x+q.box.hw-17)>.02&&Math.abs(q.box.x+q.box.hl-17)>.02)bad.push(['board off the wall',+q.box.x.toFixed(3)]);
+  const bags=P.find(o=>o.bags),bp=parts(bags).sort((a,b)=>a.box.z0-b.box.z0);bp.forEach((q,k)=>{if(Math.abs(q.box.z0-k*bags.bags.h)>1e-9)bad.push('bag not on the one below');});
+  if(String(ROOM_DEFS.hardware.props).includes('BX('))bad.push('hardware: a painted box is left');
+  for(const [x,y] of [[2.6,8.3],[15.2,4.6],[12,6.2]])if(!free(x,y))bad.push(['hardware aisle blocked',x,y]);
+  enterRoom('pharmacy',{word:'PHARMACY',ret:[100,100,0]},[5,5,0]);P=room.props;
+  const m=P.find(o=>o.monitor),desk=P.find(o=>o.desk);
+  if(!onTop(P,m))bad.push('monitor not on the desk');
+  const bpm=P.find(o=>o.bpMachine),seat=P.find(o=>o.seat&&Math.abs(o.x-10.15)<.01);
+  if(!bpm||!seat||(seat.x-bpm.x)*bpm.bpMachine.fx<=0)bad.push('the BP machine does not face its seat');
+  const ring=parts(bpm).find(q=>q.ray===homeClockRay);if(!ring||Math.abs(ring.box.centerZ-.75)>1e-9)bad.push('no cuff ring at arm height');
+  if(String(ROOM_DEFS.pharmacy.props).includes('BX('))bad.push('pharmacy: a painted box is left');
+  for(const [x,y] of [[6,3],[1.5,7.95],[9.5,7.4]])if(!free(x,y))bad.push(['pharmacy aisle blocked',x,y]);
+  return bad.slice(0,10);
+ });
+ assert.deepEqual(r,[]);
+}));
