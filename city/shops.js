@@ -233,11 +233,8 @@ ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', 
   wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
   props: r => {
     const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE), ...SHOP_FRIDGES.deli(),
-      BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
-        if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
-        BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      BX(7, 0.8, 4.5, 0.3, 0, 0.95, solid(GRAY, { top: '=', panel: 0.8 })), // the back counter
-      BX(2.2, 3.6, 0.07, 0.07, 0, 1.15, solid(GRAY)), BX(2.2, 3.6, 0.12, 0.1, 1.15, 1.35, (i, t, L) => { BG[i] = C(RED, 4 + L * 0.2); return set(i, HIT.face === 3 ? '#' : ' ', C(WHITE, 13)), true; }), // take a number
+      SHOP_COUNTER(7, 1.15, 4.5, 0.15, 0.95, 1, 0, GRAY), MEAT_SLICER(9.2, 1.15, 0.95, 0, 1), // the back counter, on the wall now, and the slicer on it
+      TICKET_DISPENSER(2.2, 3.6, 0, 1), // take a number
       ...toilet(12.3, 7.55, 1, porcelain), washbasin(11.3, 6.1, 1, 0), // the toilet
     ];
     for (let k = 0; k < 7; k++) p.push(hung(4.4 + k * 0.85, 2.15, 2.3, k % 3 === 1 ? cheeseWheel : salami));

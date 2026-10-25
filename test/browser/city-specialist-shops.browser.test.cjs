@@ -127,3 +127,24 @@ test('market stalls hold their goods on the counter top under the awning, stallh
  });
  assert.deepEqual(r,[]);
 }));
+
+test('motel, welder, tyre shop, gacha, delicatessen and deli: fittings stand on what carries them, racks on their walls, nothing painted left',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const onTop=(P,o)=>P.some(u=>u!==o&&u.box&&inBox(u.box,o.x,o.y,0)&&Math.abs(u.box.z1-o.box.z0)<1e-9);
+  const draw=drawBox,parts=o=>{const out=[];drawBox=(box,shade,ray=rayBox)=>out.push({box,ray});try{o.draw(o.x-px,o.y-py);}finally{drawBox=draw;}return out.map(q=>({...q,box:{...q.box,x:q.box.x+px,y:q.box.y+py,ax:q.box.ax+px,ay:q.box.ay+py,bx:q.box.bx+px,by:q.box.by+py}}));};
+  for(const [kind,word] of [['motel','MOTEL'],['welding','WELDING'],['tireshop','TIRES'],['gacha','GACHA'],['delicatessen','DELICATESSEN'],['deli','DELI']]){
+   enterRoom(kind,{word,ret:[100,100,0]},[5,5,0]);const P=room.props;
+   if(String(ROOM_DEFS[kind].props).includes('BX('))bad.push([kind,'a painted box is left']);
+   for(const o of P.filter(o=>o.slicer||o.vice||o.monitor))if(!onTop(P,o))bad.push([kind,'not resting on its counter or bench',o.x,o.y]);
+   if(kind==='motel'){const b=P.find(o=>o.brochures),edge=b.box.x+(Math.abs(b.box.s??0)>.5?b.box.hw:b.box.hl);if(Math.abs(edge-9)>.02)bad.push(['brochure rack off the wall',edge]);}
+   if(kind==='welding'){const rk=P.find(o=>o.steelRack),ps=parts(rk),bars=ps.filter(q=>q.ray===coveRayCapsule);
+    if(bars.length<12)bad.push(['steel bars',bars.length]);
+    for(const q of bars)if(!rk.steelRack.arms.some(z=>Math.abs(q.box.az-q.box.r-z)<1e-9))bad.push('a bar not lying on the arms');}
+   if(kind==='deli'){const back=P.find(o=>o.shopCounter&&o.box.hl>4);if(!back||back.box.y-back.box.hw<1-1e-9)bad.push('deli back counter in the wall');
+    if(back&&Math.abs(back.box.y-back.box.hw-1)>1e-9)bad.push('deli back counter off the wall');}
+  }
+  return bad.slice(0,10);
+ });
+ assert.deepEqual(r,[]);
+}));
