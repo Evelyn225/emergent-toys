@@ -174,13 +174,14 @@ function cathedralFloor(i, f, wx, wy) {
 
 ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cathedral', ceil: 'cathedral', wall: cathedralWall, keeper: [11, 4.9],
   props: r => {
+    const sanctuary=.3,altar=ALTAR(11, 3.1, 1.46, .46, 1, sanctuary);
     const p = [ // (built: cathedral-fittings.js)
-      SANCTUARY_STEPS(11, 4, 5, 2.2, 0.3), // the sanctuary steps
-      ALTAR(11, 3.1, 1.46, 0.46, 1.0), ALTAR_CROSS(11, 2.85, 1.006), // the altar under its cloth, the cross on it
-      CANDLESTICK(9.2, 3.2), CANDLESTICK(12.8, 3.2), // candlesticks either side
+      SANCTUARY_STEPS(11, 4, 5, 2.2, sanctuary), // the sanctuary steps
+      altar, ALTAR_CROSS(11, 2.85, altar.altar.h), // the altar under its cloth, the cross on it
+      CANDLESTICK(9.2, 3.2, 1.5, sanctuary), CANDLESTICK(12.8, 3.2, 1.5, sanctuary), // candlesticks either side
       ALTAR_RAIL(8.65, 6.4, 1.65), ALTAR_RAIL(13.35, 6.4, 1.65), // the altar rail, the way through between
       PULPIT(7.8, 7.4, 1, 1), // the pulpit
-      standing(11, 4.9, WHITE), // the priest
+      {...standing(11, 4.9, WHITE), z:sanctuary}, // the priest, standing on the sanctuary
       FONT(11, 36), // the font
       VOTIVE_STAND(19, 34, 0.8, () => room.candles), // the votive stand: as many lit as there are
     ];

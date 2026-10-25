@@ -112,3 +112,32 @@ test('casino table tops meet their bases and slot levers have a continuous attac
   return errors;
  });assert.deepEqual(bad,[]);
 }));
+
+test('cathedral fittings meet the sanctuary and floor, expose the font water and keep the book rest normalized and connected',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  px=py=0;dx=1;dy=0;projX=10000;const errors=[],save=drawBox;
+  const parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,ray});try{o.draw(o.x,o.y);}finally{drawBox=save;}return a;};
+  const def=ROOM_DEFS.cathedral,ps=def.props({}),altar=ps.find(o=>o.altar),steps=ps.find(o=>o.steps);
+  for(const o of ps.filter(o=>o.altar||o.candlestick)){
+   const floor=Math.max(...parts(steps).map(q=>{const t=q.ray(o.x,o.y,2,0,0,-1,q.box);return t>0?2-t:0;}));
+   if(Math.abs(o.box.z0-floor)>.0005)errors.push(['fitting sinks through the sanctuary',o.x,o.box.z0,floor]);
+  }
+  const font=parts(FONT(0,0)),bowl=font.find(q=>q.box.z1===1),water=font.find(q=>q!==bowl),stoneTop=2-bowl.ray(0,0,2,0,0,-1,bowl.box);
+  if(water.box.z0<=stoneTop||water.box.z1>=1)errors.push(['font water hidden by stone',water.box.z0,stoneTop]);
+  const votive=parts(VOTIVE_STAND(0,0,.8,()=>0)),base=votive.find(q=>q.box.z0===0);
+  for(const tier of votive.filter(q=>q.ray===coveRayRounded&&q!==base))if(tier.box.z0>base.box.z1+.0001)errors.push('floating votive tier');
+  const pew=parts(PEW(0,0,1.6)),kneeler=pew.find(q=>q.box.z0===.06&&q.box.z1===.14);
+  for(const u of [-1.48,1.48])if(!pew.some(q=>q!==kneeler&&q.box.z0===0&&q.box.z1>=.06&&q.ray(u,.48,1,0,0,-1,q.box)>0))errors.push('kneeler has no floor support');
+  for(const [fx,fy]of [[1,1],[-1,1],[1,-1],[-1,-1]]){
+   const P=parts(PULPIT(0,0,fx,fy)),tub=P.find(q=>q.ray===coveRayLathe),rest=P.find(q=>q.box.z0===1.2),len=Math.hypot(fx,fy),x=fx/len*.38,y=fy/len*.38;
+   const top=2-tub.ray(x,y,2,0,0,-1,tub.box),bottom=rest.ray(x,y,0,0,0,1,rest.box);
+   if(Math.abs(top-bottom)>.0005)errors.push(['book rest is not seated on its rim',top,bottom]);
+   for(const q of P.filter(q=>q.ray===coveRayRounded)){
+    if(Math.abs(q.box.c*q.box.c+q.box.s*q.box.s-1)>.00001)errors.push('book rest has a non-unit rotation');
+    const ex=Math.abs(q.box.c)*q.box.hl+Math.abs(q.box.s)*q.box.hw,ey=Math.abs(q.box.s)*q.box.hl+Math.abs(q.box.c)*q.box.hw;
+    if(Math.abs(q.box.x)+ex>.421||Math.abs(q.box.y)+ey>.421)errors.push('book rest outside pulpit');
+   }
+  }
+  return errors;
+ });assert.deepEqual(bad,[]);
+}));

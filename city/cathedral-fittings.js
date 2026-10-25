@@ -13,13 +13,14 @@ function SANCTUARY_STEPS(x,y,hl,hw,h) {
   }),box:boxAt(x,y,1,0,hl,hw,0,h),walk:true,steps:{h}};
 }
 // The altar: a stone block, its cloth laid over the top and hanging down the front.
-function ALTAR(x,y,hl,hw,h) {
+function ALTAR(x,y,hl,hw,h,base=0) {
+  h+=base;
   const cloth=(i,t,L)=>{const hem=HIT.w<h-.32&&HIT.w>h-.36;BG[i]=C(hem?YEL:WHITE,(hem?4:4.4)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     coveRound(vx,vy,1,0,hl+.02,hw+.02,h-.01,h+.006,.004,cloth); // the cloth on top
     coveRound(vx,vy+hw+.01,1,0,hl-.1,.008,h-.4,h-.01,.003,cloth); // and down the front
-    coveRound(vx,vy,1,0,hl,hw,.06,h-.01,.015,cathStone); coveRound(vx,vy,1,0,hl+.04,hw+.04,0,.06,.01,cathStone); // the block, its plinth
-  }),box:boxAt(x,y,1,0,hl+.04,hw+.04,0,h+.006),radius:Math.hypot(hl,hw),altar:{h:h+.006}};
+    coveRound(vx,vy,1,0,hl,hw,base+.06,h-.01,.015,cathStone); coveRound(vx,vy,1,0,hl+.04,hw+.04,base,base+.06,.01,cathStone); // the block, its plinth
+  }),box:boxAt(x,y,1,0,hl+.04,hw+.04,base,h+.006),radius:Math.hypot(hl,hw),altar:{h:h+.006}};
 }
 // A gold cross standing on a base at z.
 function ALTAR_CROSS(x,y,z,h=1.8,arm=.45) {
@@ -30,13 +31,13 @@ function ALTAR_CROSS(x,y,z,h=1.8,arm=.45) {
   }),box:boxAt(x,y,1,0,arm,.08,z,z+h),radius:arm,cross:{z}};
 }
 // A floor candlestick: a spread foot, a turned stem, a drip pan, the candle and its flame.
-function CANDLESTICK(x,y,h=1.5) {
+function CANDLESTICK(x,y,h=1.5,base=0) {
   const stem=[[0,0],[0,.16],[.04,.14],[.08,.04],[.6,.03],[.65,.05],[.7,.03],[h-.12,.025],[h-.1,.07],[h-.08,.07],[h-.08,0]];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    cathFlame(vx,vy,h+.14);
-    coveLathe(vx,vy,h-.08,[[0,0],[0,.022],[.22,.02],[.22,0]],(i,t,L)=>{BG[i]=C(WHITE,5+L*.2);set(i,' ',0);return true;}); // the candle
-    coveLathe(vx,vy,0,stem,cathGold);
-  }),box:boxAt(x,y,1,0,.16,.16,0,h+.14),radius:.2,candlestick:{h}};
+    cathFlame(vx,vy,base+h+.14);
+    coveLathe(vx,vy,base+h-.08,[[0,0],[0,.022],[.22,.02],[.22,0]],(i,t,L)=>{BG[i]=C(WHITE,5+L*.2);set(i,' ',0);return true;}); // the candle
+    coveLathe(vx,vy,base,stem,cathGold);
+  }),box:boxAt(x,y,1,0,.16,.16,base,base+h+.18),radius:.2,candlestick:{h}};
 }
 // The altar rail along x: a kneeler step, turned balusters, the top rail.
 function ALTAR_RAIL(x,y,hl,h=.9) {
@@ -50,10 +51,11 @@ function ALTAR_RAIL(x,y,hl,h=.9) {
 }
 // The pulpit: a tub on a stem, a sloping book rest on its rim.
 function PULPIT(x,y,fx,fy) {
+  const length=Math.hypot(fx,fy)||1;fx/=length;fy/=length;
   const oak=cathOak(23),tub=[[0,0],[0,.22],[.06,.18],[.08,.12],[.55,.14],[.62,.38],[1.15,.4],[1.2,.42],[1.2,.36],[.7,.34],[.7,0]];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     coveLathe(vx,vy,0,tub,oak);
-    for(let k=0;k<3;k++)coveRound(vx+fx*(.28+k*.02),vy+fy*(.28+k*.02),Math.abs(fy),Math.abs(fx),.16,.03,1.2+k*.03,1.23+k*.03,.006,oak); // the book rest, stepped back up
+    for(let k=0;k<3;k++)coveRound(vx+fx*(.34-k*.04),vy+fy*(.34-k*.04),fy,-fx,.16,.06,1.2+k*.03,1.23+k*.03,.006,oak); // the book rest, stepped back up
   }),box:boxAt(x,y,1,0,.42,.42,0,1.32),radius:.45,pulpit:{fx,fy}};
 }
 // The font: a stone bowl on a pedestal, holy water still in it.
@@ -61,7 +63,7 @@ function FONT(x,y,h=1.0) {
   const bowl=[[0,0],[0,.3],[.08,.26],[.12,.14],[.55,.12],[.62,.42],[h,.5],[h,.44],[h-.12,.38],[h-.12,0]];
   const water=(i,t,L)=>{BG[i]=C(CYAN,2+noise(HIT.u*6+T*.3,HIT.v*6,505)*2);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveLathe(vx,vy,h-.13,[[0,0],[0,.38],[.001,.38],[.001,0]],water);
+    coveLathe(vx,vy,h-.10,[[0,0],[0,.38],[.001,.38],[.001,0]],water);
     coveLathe(vx,vy,0,bowl,cathStone);
   }),box:boxAt(x,y,1,0,.5,.5,0,h),radius:.55,font:{h}};
 }
@@ -74,7 +76,7 @@ function VOTIVE_STAND(x,y,hl,count) {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{const lit=count();
     slots.forEach((q,n)=>{const px_=vx+q.u,py_=vy+q.v;if(n<lit)cathFlame(px_,py_,q.z+.025);
       coveLathe(px_,py_,q.z,cup,n<lit?(i,t,L)=>{BG[i]=C(RED,4+fract(T*6+n*.37)*1.5);set(i,' ',0);return true;}:leisurePaint(WHITE,3.4));});
-    tiers.forEach((z,row)=>coveRound(vx,vy+.15-row*.12,1,0,hl,.06,z-.03,z,.006,oak)); // the tiers
+    tiers.forEach((z,row)=>coveRound(vx,vy+.15-row*.12,1,0,hl,.06,.66,z,.006,oak)); // the tiers
     coveRound(vx,vy,1,0,hl,.25,0,.66,.02,oak); // the stand
   }),box:boxAt(x,y,1,0,hl,.25,0,.92),radius:hl+.1,votive:{slots:slots.length}};
 }
@@ -88,6 +90,7 @@ function PEW(x,y,hl) {
     coveRound(vx,vy+.26,1,0,hl-.04,.05,.88,.92,.012,oak); // the book ledge along its top, for the row behind
     for(const e of [-1,1]){coveRound(vx+e*(hl-.03),vy+.04,1,0,.03,.28,0,1.0,.012,oak); // the carved ends
       coveLathe(vx+e*(hl-.03),vy+.04,1.0,[[0,0],[0,.035],[.04,.04],[.07,0]],oak);} // their finials
+    for(const e of [-1,1])coveRound(vx+e*(hl-.12),vy+.48,1,0,.04,.04,0,.06,.008,oak); // the kneeler's feet
     coveRound(vx,vy+.48,1,0,hl-.04,.08,.06,.14,.03,(i,t,L)=>{BG[i]=C(RED,1.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}); // the kneeler, for the row behind
   }),box:boxAt(x,y+.13,1,0,hl,.43,0,1.07),radius:hl+.2,pew:true};
 }

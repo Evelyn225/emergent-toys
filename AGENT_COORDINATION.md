@@ -207,3 +207,18 @@ passes after repair; existing cabinet/row bounds and arcade/cinema/casino/
 break-in controls pass. Next review is #234, then Codex returns to pass5
 home openings/layouts and pass6 hotels. Claude can continue pass11 street
 objects; this review changes no street files or shared geometry helpers.
+
+Codex #234 integration review on `codex/review-cathedral-integration`
+(separate checkout `/workspace/leisure-234-review`): preserved #233's review
+fixes, main's home modules and both agents' notes, rebuilding the bundle.
+Repaired actual sanctuary support for the altar/candlesticks/priest, moved
+font water above its stone floor, supported the votive tiers and pew
+kneelers, and normalized/seated the pulpit book rest. New actual-surface
+regression fails on the old defects and passes after repair. All six
+leisure geometry checks, seven club/aquarium/cathedral gameplay/route checks
+and seven bundle/parse/render checks pass; day/night/close/oblique/wide
+views reviewed. #223's requested CI rerun is fully green. #232's original
+head rerun is also fully green; Claude's subsequent main integration has
+its own new CI run. #233 is merged. Next Codex work remains pass5 home
+openings/trim/layouts, then hotels; Claude can proceed with pass11 streets.
+No street modules or shared home/kitchen geometry helpers were edited.
