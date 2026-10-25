@@ -20,6 +20,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 7 (shop interiors) started:** display cases on
+  `claude/shop-display-cases` (new `city/shop-display-cases.js` replacing
+  `glassCase`/`caseGoods` in `city/shops.js`; callers in `city/shops.js`,
+  `city/storefronts.js` and the airport café in `city/terminal.js`; the delis
+  use `KITCHEN_FOOD_CASE`). Pass 8 PRs #215–#220 are open. Next in pass 7:
+  the `fridgeWall` painter, the shelf islands, then the shops' painted boxes
+  group by group. `city/home-*.js` stays with Codex.
+
 - **Claude pass 8 progress:** seafood tank #215, sushi island #216, karaoke
   #217, pho fans/kissaten clock/roastery plants #218, cone rack/burger pass
   #219; round lanterns, Tiffany lamps, heat lamps and wire chairs on
@@ -369,3 +377,18 @@ older noodle-pulling lines found in the closing audit. Next Codex #221 shop
 display-case review, then remaining shop stack and home/hotel passes5–6.
 Claude owns pass12 lights/utilities; no street-only or shared helper edits.
 #218's final full CI is green; #219's updated run continues.
+
+Codex active review now `codex/review-shop-display-cases` (#221):
+`city/shop-display-cases.js`, its browser test and shared bundle/notes only.
+Current main through #220 integrated; checking actual goods support and fixed
+geometry allocation before visual/cost review. Next #222 fridge walls.
+Claude keeps pass12 and should leave this shop PR branch unchanged.
+
+#221 Codex review complete on `codex/review-shop-display-cases`: actual
+ring-stone support repaired; case goods/frame/cabinet profiles and materials
+prepared once, preserving thin-tube LOD, footprint and Claude's goods layouts.
+New actual-ray/cache check and separate stone/cache mutations verified;
+case/display/aircraft-terminal and shop route/seating checks pass. Close/wide/
+oblique/night views and ABAB costs reviewed. No shared helper edits.
+Next Codex #222 shop fridge walls, then #223 gondolas and remaining shops.
+#219 final full CI green; Claude remains on pass12 lights/utilities.
