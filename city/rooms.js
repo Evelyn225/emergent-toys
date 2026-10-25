@@ -637,6 +637,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  r.props.push(...shopGondolas(r)); // shelf islands ('S' cells) become built gondolas: shop-gondolas.js
   if(def.wc){
     const frames=bathroomSurrounds(r);r.props.push(...frames);
     r.bathroomDoors=frames.map((frame,index)=>BATHROOM_POCKET_DOOR(r,frame.bathroomOpening,index));
@@ -1097,7 +1098,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-  if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
+  if (D.shelves && my === 0 && z < 2) { // shelves along the back wall (islands are built gondolas: shop-gondolas.js)
     if (z < 0.15) return set(i, '_', C(GRAY, L * 0.6));
     if (fract(z / 0.45) < 0.14) return set(i, '=', C(WHITE, L * 0.7));
     const glyphs = D.glyphs || R.glyphs || 'o#=@';

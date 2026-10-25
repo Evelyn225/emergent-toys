@@ -26,7 +26,8 @@ test('ramen and other back-counter staff retain their full heads from either sid
    // Keep the real counters/walls, excluding patrons who can legitimately hide a clerk.
    room.props=room.props.filter(p=>!p.fig||targets.includes(p));
    for(const p of targets)for(const side of [-1,0,1]){
-    px=p.x+side*1.2;py=3.4;a=Math.atan2(p.y-py,p.x-px);pitch=0;body.z=body.vz=0;render(0);
+    px=p.x+side*1.2;py=3.4;if(!free(px,py))py=2.6; // (a customer can't stand inside a shelf island: use the aisle in front of the counter)
+    a=Math.atan2(p.y-py,p.x-px);pitch=0;body.z=body.vz=0;render(0);
     const actual=Float32Array.from(ZB),depth=dx*(p.x-px)+dy*(p.y-py);
     ZB.fill(Infinity);drawFigProp(p,p.x-px,p.y-py);
     let expected=0,visible=0;

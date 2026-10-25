@@ -273,14 +273,7 @@ ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', 
 // pyramid of paint cans, the counter by the door with the key cutter on it; and through the wide opening on the right,
 // the garden centre: lumber, plants, bags of compost, a lawnmower
 function hardwareWall(i, u, uStep, z, d, mx, my, L) {
-  const c = roomAt(mx, my);
-  if (c === 'S') { // the aisles: bins of nuts, bolts and screws, labelled, a box of hose at the bottom
-    if (z < 0.5) { BG[i] = C(GREEN, 1.2); return set(i, fract(u * 2) < 0.06 ? '|' : 'O', C(GREEN, L * 0.8)), true; }
-    if (fract(z / 0.32) < 0.1) return set(i, '=', C(ORANGE, L)), true;
-    const bin = Math.floor(u / 0.2), k = hash(bin, Math.floor(z / 0.32), mx * 7 + my);
-    if (fract(u / 0.2) < 0.08) { BG[i] = C(GRAY, 1.5); return set(i, '|', C(GRAY, 6)), true; }
-    BG[i] = C([RED, BLUE, YEL, GRAY][k * 4 | 0], 1.2 + L * 0.1); return set(i, fract(z / 0.32) > 0.75 ? '_' : ':;.,'[k * 13 & 3], C(WHITE, L * 0.7)), true;
-  }
+  // (the aisles of bins are built gondolas: shop-gondolas.js)
   if (backWall(my) && z < 2.1) { // paint: shelves of cans, each with its colour on the label
     if (fract(z / 0.42) < 0.1) return set(i, '=', C(GRAY, L)), true;
     const can = fract(u / 0.22), k = hash(Math.floor(u / 0.22), Math.floor(z / 0.42), 5);
@@ -517,7 +510,6 @@ const balloon = (x, y, col) => ({ x, y, draw: (vx, vy) => { const z = (room.def.
   dot(vx, vy, z, 0.17, (i, t, L) => { BG[i] = C(col, 4 + L * 0.3); return set(i, HIT.w > z + 0.08 && hash(i, 1) > 0.5 ? '.' : ' ', C(WHITE, 14)), true; });
   rod(vx, vy, z - 0.17, vx + Math.sin(T + x) * 0.05, vy, z - 1.1, 0.003, WHITE, 0.8); } });
 function toysWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S') return false; // (the plush aisle: the shelves' own glyphs)
   if (my < room.H - 1 && toyBoxWall(i, u, z, L, mx * 13 + my)) return true;
   if (my < room.H - 1 && z < 2.25) { BG[i] = C(WHITE, 1.5); return set(i, ' ', 0), true; } // the back of the shelves
   if (z > 2.3 && z < 2.42) return set(i, '~', C(ITEM_COL[Math.floor(u * 2) & 7], 15)), true; // bunting
@@ -616,7 +608,6 @@ ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..
 // ---- the pharmacy (PHARMACY, DRUGSTORE): the dispensary along the back under PRESCRIPTIONS, the green cross, two aisles
 // with their signs, a blood pressure machine with a chair, a spinner of sunglasses, and the little consultation room
 function pharmacyWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S') return boxesWall(i, u, z, L, mx * 7 + my) || false;
   if (backWall(my) && z < 2.2 && boxesWall(i, u, z, L, 81)) return true;
   if (mx === 3 && my === 7 && wallText(i, u, uStep, z, d, 'CONSULT', -7.5, 1.95, 0.12, 0.2, C(WHITE, 15), C(GREEN, 4))) return true; // by its door
   if (leftWall(mx) && my > 0) { // the green cross, lit
@@ -918,7 +909,7 @@ function liquorWall(i, u, uStep, z, d, mx, my, L) {
   if (mx >= 1 && mx <= 4 && my >= 1 && my <= 3) { // the cave from outside: white insulated panels, beaded with cold
     BG[i] = C(WHITE, 2.6 + L * 0.1); return set(i, fract(u / 0.6) < 0.04 ? '|' : hash(Math.floor(u * 12), Math.floor(z * 12), 6) > 0.9 ? '.' : ' ', C(CYAN, 8)), true;
   }
-  if (c === 'S' || rightWall(mx) && my > 0 && my < room.H - 1) return wineWall(i, u, z, L, mx * 3 + my) || false;
+  if (rightWall(mx) && my > 0 && my < room.H - 1) return wineWall(i, u, z, L, mx * 3 + my) || false; // (the middle racks are built gondolas)
   if (backWall(my) && bottleWall(i, u, z, L, 99)) return true;
   if (leftWall(mx) && my > 3 && my < room.H - 1) {
     if (z > 2.18 && z < 2.42) return wallText(i, u, uStep, z, d, 'COLD BEER', -5.5, 2.3, 0.22, 0.24, C(RED, fract(T * 0.4) < 0.92 ? 15 : 5)) || false;

@@ -16238,6 +16238,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  r.props.push(...shopGondolas(r)); // shelf islands ('S' cells) become built gondolas: shop-gondolas.js
   if(def.wc){
     const frames=bathroomSurrounds(r);r.props.push(...frames);
     r.bathroomDoors=frames.map((frame,index)=>BATHROOM_POCKET_DOOR(r,frame.bathroomOpening,index));
@@ -16698,7 +16699,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-  if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
+  if (D.shelves && my === 0 && z < 2) { // shelves along the back wall (islands are built gondolas: shop-gondolas.js)
     if (z < 0.15) return set(i, '_', C(GRAY, L * 0.6));
     if (fract(z / 0.45) < 0.14) return set(i, '=', C(WHITE, L * 0.7));
     const glyphs = D.glyphs || R.glyphs || 'o#=@';
@@ -17191,14 +17192,7 @@ ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', 
 // pyramid of paint cans, the counter by the door with the key cutter on it; and through the wide opening on the right,
 // the garden centre: lumber, plants, bags of compost, a lawnmower
 function hardwareWall(i, u, uStep, z, d, mx, my, L) {
-  const c = roomAt(mx, my);
-  if (c === 'S') { // the aisles: bins of nuts, bolts and screws, labelled, a box of hose at the bottom
-    if (z < 0.5) { BG[i] = C(GREEN, 1.2); return set(i, fract(u * 2) < 0.06 ? '|' : 'O', C(GREEN, L * 0.8)), true; }
-    if (fract(z / 0.32) < 0.1) return set(i, '=', C(ORANGE, L)), true;
-    const bin = Math.floor(u / 0.2), k = hash(bin, Math.floor(z / 0.32), mx * 7 + my);
-    if (fract(u / 0.2) < 0.08) { BG[i] = C(GRAY, 1.5); return set(i, '|', C(GRAY, 6)), true; }
-    BG[i] = C([RED, BLUE, YEL, GRAY][k * 4 | 0], 1.2 + L * 0.1); return set(i, fract(z / 0.32) > 0.75 ? '_' : ':;.,'[k * 13 & 3], C(WHITE, L * 0.7)), true;
-  }
+  // (the aisles of bins are built gondolas: shop-gondolas.js)
   if (backWall(my) && z < 2.1) { // paint: shelves of cans, each with its colour on the label
     if (fract(z / 0.42) < 0.1) return set(i, '=', C(GRAY, L)), true;
     const can = fract(u / 0.22), k = hash(Math.floor(u / 0.22), Math.floor(z / 0.42), 5);
@@ -17435,7 +17429,6 @@ const balloon = (x, y, col) => ({ x, y, draw: (vx, vy) => { const z = (room.def.
   dot(vx, vy, z, 0.17, (i, t, L) => { BG[i] = C(col, 4 + L * 0.3); return set(i, HIT.w > z + 0.08 && hash(i, 1) > 0.5 ? '.' : ' ', C(WHITE, 14)), true; });
   rod(vx, vy, z - 0.17, vx + Math.sin(T + x) * 0.05, vy, z - 1.1, 0.003, WHITE, 0.8); } });
 function toysWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S') return false; // (the plush aisle: the shelves' own glyphs)
   if (my < room.H - 1 && toyBoxWall(i, u, z, L, mx * 13 + my)) return true;
   if (my < room.H - 1 && z < 2.25) { BG[i] = C(WHITE, 1.5); return set(i, ' ', 0), true; } // the back of the shelves
   if (z > 2.3 && z < 2.42) return set(i, '~', C(ITEM_COL[Math.floor(u * 2) & 7], 15)), true; // bunting
@@ -17534,7 +17527,6 @@ ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..
 // ---- the pharmacy (PHARMACY, DRUGSTORE): the dispensary along the back under PRESCRIPTIONS, the green cross, two aisles
 // with their signs, a blood pressure machine with a chair, a spinner of sunglasses, and the little consultation room
 function pharmacyWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S') return boxesWall(i, u, z, L, mx * 7 + my) || false;
   if (backWall(my) && z < 2.2 && boxesWall(i, u, z, L, 81)) return true;
   if (mx === 3 && my === 7 && wallText(i, u, uStep, z, d, 'CONSULT', -7.5, 1.95, 0.12, 0.2, C(WHITE, 15), C(GREEN, 4))) return true; // by its door
   if (leftWall(mx) && my > 0) { // the green cross, lit
@@ -17836,7 +17828,7 @@ function liquorWall(i, u, uStep, z, d, mx, my, L) {
   if (mx >= 1 && mx <= 4 && my >= 1 && my <= 3) { // the cave from outside: white insulated panels, beaded with cold
     BG[i] = C(WHITE, 2.6 + L * 0.1); return set(i, fract(u / 0.6) < 0.04 ? '|' : hash(Math.floor(u * 12), Math.floor(z * 12), 6) > 0.9 ? '.' : ' ', C(CYAN, 8)), true;
   }
-  if (c === 'S' || rightWall(mx) && my > 0 && my < room.H - 1) return wineWall(i, u, z, L, mx * 3 + my) || false;
+  if (rightWall(mx) && my > 0 && my < room.H - 1) return wineWall(i, u, z, L, mx * 3 + my) || false; // (the middle racks are built gondolas)
   if (backWall(my) && bottleWall(i, u, z, L, 99)) return true;
   if (leftWall(mx) && my > 3 && my < room.H - 1) {
     if (z > 2.18 && z < 2.42) return wallText(i, u, uStep, z, d, 'COLD BEER', -5.5, 2.3, 0.22, 0.24, C(RED, fract(T * 0.4) < 0.92 ? 15 : 5)) || false;
@@ -20974,7 +20966,6 @@ const grillTop = (i, t, L) => { BG[i] = C(GRAY, (HIT.face === 5 ? 1.2 : 2.4 + L 
 const plexi = (i, t, L) => fract((HIT.u + HIT.w) * 2.5) < 0.04 ? (set(i, '/', C(WHITE, 8)), true) : false; // (see-through, a glint across it)
 const shopCat = (x, y, z) => figProp(x, y, KITTEN_LOOK, { z, h: 0.3 / KITTEN_LOOK.scale(0), pose: () => fract(T / 7) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 }); // (it lives here: still there after closing)
 function bodegaWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S') return false; // (the aisles: rooms.js stocks them)
   if (my === room.H - 1 && z > 1.3 && z < 2.1 && hash(Math.floor(u / 0.5), Math.floor(z / 0.4), 131) > 0.55) { // flyers taped up in the window
     BG[i] = C([YEL, RED, WHITE, GREEN][hash(Math.floor(u / 0.5), 1, 132) * 4 | 0], 6); return set(i, fract(z * 8) < 0.3 ? '=' : ' ', C(GRAY, 3)), true; }
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -21206,7 +21197,7 @@ ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 
 ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { BG[i] = C(WHITE, 2.4 + f * 4); return set(i, fract(wx / 0.6) < 0.03 || fract(wy / 0.6) < 0.03 ? '+' : ' ', C(GRAY, L * 0.5)); }; // shiny white tiles
 const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.01, z - 0.35, z), (i, t, L) => { BG[i] = C(col, 8); return set(i, HIT.w > z - 0.15 ? '!' : fract(HIT.u * 9) < 0.4 ? '%' : ' ', C(RED, 12)), true; }));
 function drugWall(i, u, uStep, z, d, mx, my, L) {
-  if (roomAt(mx, my) === 'S' || backWall(my) && z < 2) return false; // (the aisles and the shelves behind the counter: rooms.js stocks them)
+  if (backWall(my) && z < 2) return false; // (the shelves behind the counter: rooms.js stocks them)
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
   if (z > 2.0 && z < 2.2) { BG[i] = C(YEL, 8); return set(i, fract(u * 2) < 0.5 ? '%' : ' ', C(RED, 10)), true; } // price banners all round
@@ -37575,6 +37566,140 @@ function BAR_BACK_BAR(x=6,y=1.09) {
     for(const p of vessels)drawBox({...p.box,x:vx+p.u,y:vy+p.v,barRole:p.role},p.shade,coveRayLathe);
     for(let k=parts.length-1;k>=0;k--){const p=parts[k];drawBox({...p.box,x:vx+p.u,y:vy+p.v,...p.profile,barRole:p.role},p.shade,homeRayWorktop);}
   }),box:boxAt(x,y+.008,1,0,q.half,q.depth+.008,0,q.top),radius:Math.hypot(q.half,q.depth+.016),backBar:{levels:q.levels.map(z=>z+q.board),bottles}};
+}
+// Shop shelf islands are built gondolas. A room's 'S' cells used to be wall
+// blocks with goods painted on their faces; at room build each rectangle of
+// them becomes floor with a gondola standing on it: a plinth, a pegboard
+// spine, shelves on both long faces, end caps, and stock as solid facings
+// sized and coloured for the shop. The collision footprint is the old block's.
+const GONDOLA={height:1.75,plinth:.12,levels:[.15,.55,.95,1.35],board:.025,spine:.02,upright:.03,inset:.04};
+// What a shop stocks, as facings: [width, height fraction of the shelf gap, depth fraction, colours]
+const GONDOLA_STOCK={
+  grocery:{widths:[.07,.09,.12,.2],cols:[RED,YEL,BLUE,GREEN,ORANGE,WHITE,MAG,CYAN],label:true},
+  pharmacy:{widths:[.06,.08,.1],cols:[WHITE,BLUE,CYAN,GREEN,RED],label:true,short:true},
+  books:{widths:[.03,.035,.045,.05],cols:[RED,BLUE,GREEN,BRICK,YEL,WHITE,MAG],spines:true},
+  hardware:{widths:[.12,.15,.2],cols:[RED,BLUE,YEL,GRAY,ORANGE],bins:true},
+  video:{widths:[.018,.018,.02],cols:[BLUE,RED,BLACK,GREEN,MAG,YEL],spines:true},
+  wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
+  toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
+};
+const GONDOLA_FOR={store:'grocery',bodega:'grocery',gas:'grocery',grocer:'grocery',drugstore:'pharmacy',pharmacy:'pharmacy',books:'books',hardware:'hardware',video:'video',liquor:'wine',toys:'toys'};
+// Rectangles of 'S' cells, each grown right then down from its first cell.
+function gondolaBlocks(grid) {
+  const used=new Set(),out=[];
+  for(let y=0;y<grid.length;y++)for(let x=0;x<grid[y].length;x++){
+    if(grid[y][x]!=='S'||used.has(x+','+y))continue;
+    let x1=x;while(grid[y][x1+1]==='S'&&!used.has((x1+1)+','+y))x1++;
+    let y1=y;for(;;){const n=y1+1;if(!grid[n])break;let ok=true;for(let k=x;k<=x1;k++)if(grid[n][k]!=='S'||used.has(k+','+n))ok=false;if(!ok)break;y1=n;}
+    for(let j=y;j<=y1;j++)for(let k=x;k<=x1;k++)used.add(k+','+j);
+    out.push({x0:x,y0:y,x1:x1+1,y1:y1+1});
+  }
+  return out;
+}
+// The facings on one shelf face of a gondola: (u along the gondola, side ±1).
+function gondolaFacings(len,depth,kind,seed) {
+  const S=GONDOLA_STOCK[kind],G=GONDOLA,out=[];
+  for(const [n,z]of G.levels.entries()){
+    const top=(G.levels[n+1]??G.height-.05)-.03,gap=top-z-G.board;
+    for(const side of [-1,1]){
+      let u=-len/2+G.upright+.01,k=0;
+      while(u<len/2-G.upright-.02){
+        const h=hash(k,n*2+(side>0),seed),spine=S.widths[Math.floor(h*S.widths.length)];
+        // Spines stand pressed together: a run of them, one height, is one solid
+        // (thousands of separate 2 cm boxes cost tens of milliseconds).
+        const w=S.spines?spine*(4+Math.floor(hash(k,n,seed+11)*6)):spine;
+        if(u+w>len/2-G.upright-.01)break;
+        if(hash(k,n,seed+7)>.06){ // (the odd gap where something's sold out)
+          const hf=S.short?.45+h*.3:S.spines?.7+h*.25:.55+h*.4;
+          out.push({u:u+w/2,side,z:z+G.board,w,h:Math.min(gap,gap*hf),d:S.bins?Math.min(.32,depth*.85):depth*(S.spines?.75:.85),col:S.cols[Math.floor(hash(k,n,seed+3)*S.cols.length)],k,spine});
+        }
+        u+=w+(S.spines?.002:.008);k++;
+      }
+    }
+  }
+  return out;
+}
+// The existing tray ray works in its own axes. Translate and rotate it here
+// so an aisle along y has the same closed rim, cavity and floor as one along x.
+function gondolaBinRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,c=b.c,s=b.s;
+  const t=foodRayTray(x*c+y*s,-x*s+y*c,oz,rx*c+ry*s,-rx*s+ry*c,rz,b.gondolaBin);
+  if(t>0){const nx=HIT.nx,ny=HIT.ny;HIT.nx=c*nx-s*ny;HIT.ny=s*nx+c*ny;}
+  return t;
+}
+function gondolaWasherShade(i,t,L) {
+  const seam=coveGroove(HIT.w,.004,.001,t/projX)*coveDetail(t,.08);
+  BG[i]=C(GRAY,3.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-seam*1.2);set(i,' ',0);return true;
+}
+function SHOP_GONDOLA(b,kind,seed) {
+  const G=GONDOLA,S=GONDOLA_STOCK[kind],alongX=b.x1-b.x0>=b.y1-b.y0;
+  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,len=(alongX?b.x1-b.x0:b.y1-b.y0)-.02,half=(alongX?b.y1-b.y0:b.x1-b.x0)/2-.01;
+  const c=alongX?1:0,s=alongX?0:1,depth=half-G.spine/2-G.inset;
+  const facings=gondolaFacings(len,depth,kind,seed);
+  // face normals for plain boxes in the gondola's frame
+  const flat=shade=>(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
+  const steel=flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+  const plinth=flat((i,t,L)=>{BG[i]=C(GRAY,.9+L*.06);set(i,' ',0);return true;});
+  const peg=flat((i,t,L)=>{const f=t/projX,hole=Math.min(1,coveGroove(HIT.u,.025,.006,f)*coveGroove(HIT.w,.025,.006,f)*4)*coveDetail(t,.3);BG[i]=C(WHITE,3.6+L*.12-hole*1.6);set(i,' ',0);return true;});
+  const goodsShade=q=>(S.bottles||S.bins?f=>f:flat)((i,t,L)=>{ // (a turned bottle's ray gives its own normals)
+    const front=HIT.face===3||HIT.face===4,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    if(S.label&&front&&Math.abs(HIT.w-(q.z+q.h*.55))<q.h*.18){BG[i]=C(WHITE,5+L*.2*light);set(i,' ',0);return true;} // the label band
+    if(S.spines&&front){ // each spine its own colour, a dark line where two meet, a title line across
+      const j=Math.floor((HIT.u+q.w/2)/q.spine),edge=coveGroove(HIT.u+q.w/2,q.spine,.002,t/projX)*coveDetail(t,.15);
+      const col=S.cols[Math.floor(hash(j,q.k,q.z*100|0)*S.cols.length)];
+      if(coveDetail(t,.15)>.3&&Math.abs(HIT.w-(q.z+q.h*.8))<.006){BG[i]=C(YEL,5);set(i,' ',0);return true;}
+      BG[i]=C(col,(col===WHITE?4.2:2.4)+L*.3*light-edge*1.6);set(i,' ',0);return true;
+    }
+    if(S.bins&&HIT.face===5){BG[i]=C(GRAY,1.2);set(i,' ',0);return true;} // an open bin of parts
+    BG[i]=C(q.col,(q.col===WHITE?4.4:2.6)+L*.3*light);set(i,' ',0);return true;
+  });
+  const shades=facings.map(goodsShade);
+  const bottle=[[0,0],[0,.032],[.005,.035],[.2,.035],[.25,.014],[.3,.012],[.31,0]];
+  const contents=[];
+  const boxes=facings.map((q,n)=>{
+    // wine: the front bottle of each row; everything else a solid facing
+    const v=S.bottles?q.side*(G.spine/2+G.inset+depth*.7):S.bins?q.side*(half-G.inset-q.d/2):q.side*(G.spine/2+G.inset+depth/2+.005),ox=c*q.u-s*v,oy=s*q.u+c*v;
+    if(S.bins){
+      const floor=q.z+.008;
+      for(const [u,v,h]of [[-.021,-.05,.036],[.021,.05,.048],[0,0,.024]]){
+        const part=homeLampPart('washers',floor,[[0,.006],[0,.014],[h,.014],[h,.006],[0,.006]]);
+        contents.push({ox:ox+c*u-s*v,oy:oy+s*u+c*v,box:{...part.box,gondolaContents:true},shade:gondolaWasherShade,ray:coveRayLathe});
+      }
+      return {ox,oy,shade:shades[n],ray:gondolaBinRay,box:{...boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h),
+        gondolaBin:{...boxAt(0,0,1,0,q.w/2,q.d/2,q.z,q.z+q.h),...kitchenTopProfile(q.w/2,q.d/2,q.z,q.z+q.h,.002)}}};
+    }
+    return S.bottles?{ox,oy,shade:shades[n],ray:coveRayLathe,box:{...boxAt(0,0,1,0,.035,.035,q.z,q.z+.31),profile:bottle.map(([h,r])=>[h+q.z,r])}}
+      :{ox,oy,shade:shades[n],ray:rayBox,box:boxAt(0,0,c,s,q.w/2,q.d/2,q.z,q.z+q.h)};
+  });
+  const order=boxes.map((_,n)=>n);let orderDx=NaN,orderDy=NaN;
+  return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    // Facings are pre-built (a gondola holds hundreds); each frame only moves them.
+    // Nearest first, so the depth buffer turns away the facings behind them
+    // (looking down an aisle hundreds of them overlap on screen).
+    // Translation adds the same depth to every facing, so only a turn can
+    // change this order. Keep exact directions, including reversed views.
+    if(dx!==orderDx||dy!==orderDy){
+      for(const q of boxes)q.near=dx*q.ox+dy*q.oy;
+      order.sort((a,b)=>boxes[a].near-boxes[b].near);orderDx=dx;orderDy=dy;
+    }
+    for(const q of contents){q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
+    for(const n of order){const q=boxes[n];q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
+    for(const z of G.levels){const [sx,sy]=at(0,0);drawBox(boxAt(sx,sy,c,s,len/2-G.upright,half,z,z+G.board),steel);}
+    for(const e of [-1,1]){const [ux,uy]=at(e*(len/2-G.upright/2),0);drawBox(boxAt(ux,uy,c,s,G.upright/2,half,0,G.height),steel);} // end uprights
+    const [px,py_]=at(0,0);
+    drawBox(boxAt(px,py_,c,s,len/2-G.upright,G.spine/2,G.levels[0],G.height),peg);
+    drawBox(boxAt(px,py_,c,s,len/2-G.upright,half,G.height-.03,G.height),steel); // the top cap
+    drawBox(boxAt(px,py_,c,s,len/2-G.upright,half-.03,0,G.plinth),plinth);
+  }),box:boxAt(cx,cy,1,0,(b.x1-b.x0)/2,(b.y1-b.y0)/2,0,G.height),radius:Math.hypot(len,half*2)/2+.1,
+    gondola:{block:b,kind,len,half,depth,alongX,facings:facings.length}};
+}
+// At room build: the 'S' cells become floor with a gondola on each block.
+function shopGondolas(r) {
+  if(!r.grid.some(row=>row.includes('S')))return [];
+  const kind=GONDOLA_STOCK[GONDOLA_FOR[r.kind]]?GONDOLA_FOR[r.kind]:'grocery',blocks=gondolaBlocks(r.grid);
+  r.grid=r.grid.map(row=>row.replace(/S/g,'.'));
+  return blocks.map((b,k)=>SHOP_GONDOLA(b,kind,k*13+b.x0*7+b.y0));
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on
