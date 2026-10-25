@@ -51,6 +51,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
   `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
   Next: utility cabinets, then bus shelters.
+- **Claude pass 12, service hatches:** `claude/service-hatches`, stacked on
+  `claude/street-drains` (`city/street-drains.js` only). Next: overhead cables
+  from main.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
