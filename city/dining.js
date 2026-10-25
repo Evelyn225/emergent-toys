@@ -155,12 +155,6 @@ ROOM_FLOORS.izakaya = (i, f, wx, wy, r, x, L) => { // dark boards, and tatami in
 function izakayaWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && noren(i, u, z, 1.5, 0.55, BLUE)) return true; // the kitchen
-  if (backWall(my) && z > 1.15 && z < 2.35 && u > 2.6 && u < 8.0) { // the bottles: big sake bottles, labels on them
-    const sz = (z - 1.15) / 0.6, row = Math.floor(sz), bz = fract(sz), cu = fract(u / 0.26), k = Math.floor(u / 0.26) + row * 37;
-    if (bz < 0.08) { BG[i] = C(BRICK, 2); return set(i, '=', C(WARM, L)), true; }
-    const bottle = Math.abs(cu - 0.5) < (bz > 0.7 ? 0.1 : 0.32) && bz < 0.95;
-    BG[i] = bottle ? (bz > 0.3 && bz < 0.6 ? C(WHITE, 7) : C([GREEN, BRICK, BLUE, GRAY][k & 3], 2.2)) : C(BRICK, 1); return set(i, bottle && bz > 0.3 && bz < 0.6 && fract(bz * 8) < 0.4 ? '=' : ' ', C(GRAY, 3)), true;
-  }
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.3, 2.68, 0.28, 0.32, C(WHITE, 13), C(BRICK, 2))) return true;
   if (!backWall(my) && z > 1.35 && z < 2.25 && Math.abs(u) % 3.4 > 1.2 && Math.abs(u) % 3.4 < 2.6) { // the menu tags
     const tu = fract(Math.abs(u) / 0.3), k = Math.floor(Math.abs(u) / 0.3);
@@ -180,6 +174,7 @@ ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'iza
       p.push(KITCHEN_LOW_TABLE(2.1,y));
       for (const [x, fx] of [[1.3, 1], [2.9, -1]]) { p.push(zabuton(x, y, fx, 0)); if (chance(0.45)) p.push({ ...sitting(x, y, shirt(), 0.12), face: [fx, 0] },KITCHEN_SETTING(2.1-fx*.22,y,.34,{fx,fy:0,meal:'dumplings'})); }
     }
+    p.push(IZAKAYA_SAKE_SHELVES());
     return p;
   } };
 
