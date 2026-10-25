@@ -17985,56 +17985,31 @@ function gasWall(i, u, uStep, z, d, mx, my, L) {
   }
   return false;
 }
-// a low shelf of motor oil and screenwash under the front windows: quarts in rows, blue jugs along the bottom
-const oilShelf = (x, y, hl) => BX(x, y, hl, 0.2, 0, 0.62, (i, t, L) => {
-  const f = HIT.face, w = HIT.w;
-  if (f !== 4) { BG[i] = C(GRAY, (1.4 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '=' : ' ', C(GRAY, 7)), true; }
-  if (fract(w / 0.3) < 0.12) return set(i, '_', C(GRAY, L)), true;
-  const k = hash(Math.floor(HIT.u * 9), Math.floor(w / 0.3), 883);
-  if (k < 0.15 || fract(HIT.u * 9) < 0.2) return set(i, ' ', 0), true;
-  return set(i, w < 0.3 ? 'U' : '[', C(w < 0.3 ? BLUE : [YEL, GRAY, RED, BLUE][k * 4 | 0], 13)), true;
-});
+// (the counters, till, console, jar, cups, ice chest, ATM, crisps and papers are built: gas-store.js; the oil shelf
+// under the front windows is a wall-shelf run)
 const roller = (x,y) => KITCHEN_HOTDOG_ROLLER(x,y);
 const coffeeMaker = (x,y) => KITCHEN_DRIP_BREWER(x,y);
 ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..SS....W..#', '#..SS....WWW#', '#..SS.......#', '#..SS.......#', '#...........#', '#...........#', '######DD#####'],
-  wc: { x0: 10, y0: 1, x1: 12, y1: 4, sign: [9, 1, 1.5] }, light: 1.2, floor: 'lino', ceil: 'strip', sign: false, wall: gasWall, keeper: [10.4, 7.2], glyphs: 'o#=@%',
+  wc: { x0: 10, y0: 1, x1: 12, y1: 4, sign: [9, 1, 1.5] }, light: 1.2, floor: 'lino', ceil: 'strip', sign: false, wall: gasWall, shelves: { kind: 'oil', wall: 'front', from: 2.7, to: 4.5, levels: [0.1, 0.36], height: 0.62 }, keeper: [10.4, 7.2], glyphs: 'o#=@%',
   props: r => {
-    const counter = solid(GRAY, { panel: 0.5, trim: 0.94, top: '=' });
-    const p = [BX(9.3, 7.2, 1, 0.32, 0, 1, counter, 0, 1), ...SHOP_FRIDGES.gas(), // the counter, along the aisle
+    const p = [SHOP_COUNTER(9.3, 7.2, 1, 0.32, 1, 0, 1), ...SHOP_FRIDGES.gas(), // the counter, along the aisle
       { ...standing(10.4, 7.2, r.neon), face: [-1, 0] },
-      BX(9.35, 7.75, 0.2, 0.18, 1, 1.3, (i, t, L) => { // the till
-        if (HIT.face === 2 && HIT.w > 1.15) { BG[i] = C(GREEN, 2); return set(i, ' $'[Math.floor(HIT.v * 20 + 4) & 1], C(GREEN, 14)), true; }
-        BG[i] = C(GRAY, (1.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '#' : ' ', C(GRAY, 7)), true; }),
-      BX(9.4, 6.65, 0.22, 0.16, 1, 1.32, (i, t, L) => { // the pump console: the six pumps, which are going
-        if (HIT.face !== 4 || HIT.w < 1.08) { BG[i] = C(GRAY, (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; } // (the screen faces the clerk)
-        const k = Math.floor((HIT.u + 0.22) / 0.44 * 3) + 3 * (HIT.w < 1.2 ? 1 : 0), on = r.gas && cars.some(c => gasFilling(c) && c.pit.st === r.gas && c.pit.lane === k % 3);
-        BG[i] = C(on ? GREEN : GRAY, on ? 3 : 0.8); return set(i, String(k + 1), C(WHITE, 13)), true; }, 0, 1),
+      GAS_TILL(9.35, 7.75, 1, 1, 0), PUMP_CONSOLE(9.4, 6.65, 1, 1, 0, r.gas), // the till and the pump console, to the clerk
       ROOM_MODEL(9.25, 6.3, (vx, vy) => { // the restroom key, on a hubcap so it comes back
         drum(vx, vy, 0.16, 1, 1.03, (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, HIT.face === 5 ? (Math.hypot(HIT.u, HIT.v) < 0.04 ? 'o' : fract(Math.atan2(HIT.v, HIT.u) * 1.6) < 0.2 ? '-' : ' ') : '=', C(WHITE, 11)), true; });
         rod(vx + 0.1, vy, 1.035, vx + 0.22, vy, 1.035, 0.008, YEL, 1.4);
       }),
-      BX(9.2, 8.05, 0.12, 0.12, 1, 1.3, (i, t, L) => { BG[i] = C(BRICK, 1.5 + L * 0.2); return set(i, HIT.face === 5 ? '%' : fract(HIT.w * 20) < 0.3 ? '=' : ' ', C(BRICK, 11)), true; }), // a jar of jerky
-      BX(1.3, 2, 0.9, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), coffeeMaker(1.25, 1.55), coffeeMaker(1.25, 2.15), // coffee
-      ...Array.from({ length: 6 }, (_, k) => BX(1.3, 2.7, 0.06, 0.06, 0.92 + k * 0.06, 0.97 + k * 0.06, solid(WHITE))), // a stack of cups
-      BX(1.3, 6.1, 0.8, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), roller(1.3, 5.75), // hot food
+      JERKY_JAR(9.2, 8.05, 1),
+      SHOP_COUNTER(1.3, 2, 0.9, 0.3, 0.92, 0, -1, BRICK), coffeeMaker(1.25, 1.55), coffeeMaker(1.25, 2.15), CUP_STACK(1.3, 2.7, 0.92), // coffee
+      SHOP_COUNTER(1.3, 6.1, 0.8, 0.3, 0.92, 0, -1, BRICK), roller(1.3, 5.75), // hot food
       KITCHEN_SLUSH_MACHINE(1.3,6.55),
-      BX(1.6, 8.55, 0.55, 0.3, 0, 0.85, (i, t, L) => { // the ice chest
-        BG[i] = C(WHITE, (2.6 + L * 0.3) * shadeFace(HIT.face));
-        if (HIT.face === 4 && Math.abs(HIT.w - 0.5) < 0.15) return set(i, ' ICE '[Math.floor((HIT.u + 0.55) / 1.1 * 5)] || ' ', C(BLUE, 14)), true;
-        return set(i, HIT.face === 5 ? '-' : ' ', C(CYAN, 8)), true; }),
-      BX(8.5, 8.6, 0.25, 0.2, 0, 1.55, (i, t, L) => { // the ATM
-        if (HIT.face === 4 && HIT.w > 1.05 && HIT.w < 1.4 && Math.abs(HIT.u) < 0.17) { BG[i] = C(BLUE, 3); return set(i, HIT.w > 1.3 ? 'ATM'[Math.floor((HIT.u + 0.17) / 0.34 * 3)] || ' ' : ' ', C(WHITE, 14)), true; }
-        BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 && Math.abs(HIT.w - 0.95) < 0.02 ? '=' : ' ', C(GRAY, 9)), true; }),
-      oilShelf(3.6, 8.75, 0.9), BX(6.6, 4.4, 0.55, 0.35, 0, 1.15, (i, t, L) => { // a low stand of crisps in the middle, bags hung on pegs
-        if (HIT.face === 5) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; }
-        const k = hash(Math.floor((HIT.face <= 2 ? HIT.v : HIT.u) * 6), Math.floor(HIT.w / 0.28), 885);
-        BG[i] = C(ITEM_COL[k * 8 | 0], fract(HIT.w / 0.28) < 0.15 ? 0.8 : 2.4 + L * 0.2); return set(i, fract(HIT.w / 0.28) < 0.15 ? '_' : ' ', C(GRAY, 8)), true; }),
-      BX(5.2, 8.7, 0.25, 0.12, 0, 0.75, (i, t, L) => { BG[i] = C(WHITE, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 ? (fract(HIT.w * 12) < 0.4 ? '=' : '-') : ' ', C(GRAY, 7)), true; }), // the newspapers
+      ICE_CHEST(1.6, 8.55, 0.55, 0.3, 0.85, 0, -1), ATM_MACHINE(8.5, 8.6, 0, -1),
+      CRISP_STAND(6.6, 4.4, 0.55, 0.35, 1.15, 85), NEWS_RACK(5.2, 8.7, 0, -1), // crisps on pegs in the middle; the papers by the door
       ...toilet(11.3, 3.45, 1, porcelain), washbasin(10.6, 1.3, 0, 1), // the restroom
       aisleSign(4, 5, 'SNACKS', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6.6, 1.8, 'DRINKS', C(BLUE, 4), C(WHITE, 15), 0.4),
       hung(11.6, 5.3, 2.55, (vx, vy, z) => dot(vx, vy, z - 0.12, 0.12, (i, t, L) => { BG[i] = C(GRAY, 4 + L * 0.3); return set(i, fract(HIT.u * 4 + HIT.v * 4) < 0.2 ? ')' : ' ', C(WHITE, 12)), true; })), // the round mirror, for the aisles
     ];
-    if (chance(0.3)) p.push(BX(8.4, 1.7, 0.08, 0.14, 0, 0.6, (i, t, L) => { BG[i] = C(YEL, 4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.35) < 0.06 ? '!' : ' ', C(GRAY, 3)), true; })); // wet floor (in front of the fridges)
+    if (chance(0.3)) p.push(WET_FLOOR_CONE(8.4, 1.75)); // wet floor (in front of the fridges)
     p.push(...shoppers([[2.4, 5.2, -1, 0], [5.5, 3.5, -1, 0], [8.4, 2, 0, -1], [2.2, 1.8, -1, 0], [7.6, 4.4, -1, 0]], 0.35));
     return p;
   } };
@@ -37643,6 +37618,7 @@ const GONDOLA_STOCK={
   video:{widths:[.018,.018,.02],cols:[BLUE,RED,BLACK,GREEN,MAG,YEL],spines:true},
   wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
   toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
+  oil:{widths:[.07,.07,.09,.13],cols:[YEL,GRAY,RED,BLUE,BLUE],label:true}, // quarts of motor oil, jugs of screenwash
   florist:{widths:[.12,.14,.16],cols:[RED,MAG,YEL,WHITE,ORANGE],pots:true}, // potted plants in bloom
   thrift:{widths:[.08,.11,.14,.18],cols:[BRICK,GREEN,BLUE,YEL,GRAY,WHITE,MAG],mixed:true}, // bric-a-brac: boxes, jugs and vases
 };
@@ -37758,14 +37734,14 @@ function SHOP_GONDOLA(b,kind,seed) {
 // Wall shelving against a wall face, shelves fitted bay by bay between
 // full-depth uprights, a back panel and a top cap: the same stock as the
 // islands, one face. Shallow enough to keep a clerk's aisle open.
-// opts.wall: 'back' (the face at y=1), 'left' (x=1) or 'right' (x=W-1, needs
-// opts.W); a0..a1 run along that wall. opts.levels/height: a taller case.
+// opts.wall: 'back' (the face at y=1), 'left' (x=1), 'right' (x=W-1, needs
+// opts.W) or 'front' (y=H-1, needs opts.H); a0..a1 run along that wall. opts.levels/height: a taller case.
 const WALL_SHELF={depth:.2,back:.012,gap:.02,bay:1};
 function SHOP_WALL_SHELVES(a0,a1,kind,seed,opts={}) {
   const G=GONDOLA,W=WALL_SHELF,wall=opts.wall||'back',levels=opts.levels||G.levels,height=opts.height||G.height;
   const len=a1-a0,n=Math.max(1,Math.round(len/W.bay)),half=W.depth/2,mid=(a0+a1)/2;
   // the model frame: u along the wall, v out from it into the room
-  const [c,s,cx,cy]=wall==='left'?[0,-1,1+half,mid]:wall==='right'?[0,1,opts.W-1-half,mid]:[1,0,mid,1+half];
+  const [c,s,cx,cy]=wall==='left'?[0,-1,1+half,mid]:wall==='right'?[0,1,opts.W-1-half,mid]:wall==='front'?[-1,0,mid,opts.H-1-half]:[1,0,mid,1+half];
   const v0=-half+W.back,depth=W.depth-W.back-W.gap,facings=[];
   // upright centres, the end ones flush with the unit's ends; a bay is the clear span between two
   const posts=Array.from({length:n+1},(_,b)=>-len/2+G.upright/2+b*(len-G.upright)/n),bay=(len-G.upright)/n-G.upright;
@@ -37777,7 +37753,7 @@ function SHOP_WALL_SHELVES(a0,a1,kind,seed,opts={}) {
   const goods=gondolaGoods(facings,kind,c,s,q=>v0+W.gap+depth/2);
   const inner=half-W.back/2,front=W.back/2; // everything in front of the back panel
   const part=(vx,vy,u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1),shade);
-  const side=wall==='back'?[len/2,half]:[half,len/2]; // the collision box, square to the room
+  const side=wall==='back'||wall==='front'?[len/2,half]:[half,len/2]; // the collision box, square to the room
   return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
     goods.draw(vx,vy);
     for(let b=0;b<n;b++){const m=(posts[b]+posts[b+1])/2;
@@ -37804,7 +37780,7 @@ function shopWallShelves(r) {
   const spec=typeof r.def.shelves==='function'?r.def.shelves(r):r.def.shelves;
   if(!spec)return [];
   return [].concat(spec).map((q,k)=>{const side=q.wall&&q.wall!=='back',a0=q.from??1,a1=q.to??(side?r.H-1:r.W-1);
-    return SHOP_WALL_SHELVES(a0,a1,q.kind,a0*5+r.W+k*17,{...q,W:r.W});});
+    return SHOP_WALL_SHELVES(a0,a1,q.kind,a0*5+r.W+k*17,{...q,W:r.W,H:r.H});});
 }
 // The grocer's floor: tiered produce stands of slatted crates, each heaped
 // with packed fruit or veg (laid out and shaded like the pass 3 juice-bar
@@ -37931,6 +37907,142 @@ function CHECKOUT_COUNTER(x,y,hl) {
   ];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const [u,v,a,b,z0,z1,shade]of parts){const [px_,py_]=[vx-s*v+c*u,vy+c*v+s*u];drawBox(boxAt(px_,py_,c,s,a,b,z0,z1),shade);}}),
     box:boxAt(x,y,1,0,hw,hl,0,H),radius:hl+.1,checkout:{hl,hw,H,parts:parts.length}};
+}
+// The gas station shop's fittings, built: the counter and what stands on it
+// (till, pump console, a jar of jerky), the coffee and hot-food counters with
+// a stack of cups, the chest freezer of ice, the ATM, a peg stand of crisps
+// and the newspaper rack. (The oil shelf under the window is a wall-shelf run.)
+// A part in a model's frame: u along (c,s), v along (-s,c). Rounded parts (r)
+// give their own normals; plain boxes get theirs from the face they hit.
+const GAS_PART=(vx,vy,c,s)=>(u,v,hl,hw,z0,z1,shade,r=0)=>{
+  const x=vx+c*u-s*v,y=vy+s*u+c*v;
+  if(r)coveRound(x,y,c,s,hl,hw,z0,z1,r,shade);else drawBox(boxAt(x,y,c,s,hl,hw,z0,z1),gondolaFlat(c,s,shade));
+};
+const gasPaint=(col,base,spread=.3)=>(i,t,L)=>{BG[i]=C(col,base+L*spread*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+// (models facing (fx,fy) put +v that way: c=fy, s=-fx)
+// A shop counter along u (c,s), the customers on +v: a set-back plinth, a
+// laminate carcass with a panel per metre on the customers' face and an
+// overhanging top.
+function SHOP_COUNTER(x,y,hl,hw,h,c,s,col=GRAY) {
+  const panels=Math.max(1,Math.ceil(hl*2/1)),pw=hl/panels;
+  const lam=gasPaint(col,1.8),top=gasPaint(STONE,3.6,.25),kick=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.06);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,hl-.04,hw-.05,0,.1,kick,.008); // the plinth
+    part(0,-.01,hl-.02,hw-.03,.08,h-.035,lam,.012); // the carcass
+    for(let k=0;k<panels;k++)part(-hl+pw*(2*k+1),hw-.02,pw-.04,.012,.18,h-.12,lam,.008); // panels on the customers' face
+    part(0,0,hl,hw,h-.035,h,top,.012); // the top
+  }),box:boxAt(x,y,c,s,hl,hw,0,h),radius:Math.hypot(hl,hw),shopCounter:{hl,hw,h,c,s}};
+}
+// A till on a counter top at z, its screen to the clerk (direction fx,fy).
+function GAS_TILL(x,y,z,fx,fy) {
+  const c=fy,s=-fx,screen=(i,t,L)=>{BG[i]=C(GREEN,1.4);return set(i,HIT.face===3&&coveDetail(t,.1)>.3&&Math.abs(HIT.w-(z+.2))<.012?'$':' ',C(GREEN,13)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.17,.15,z,z+.09,GRAY,.012); // the drawer
+    part(0,-.02,.02,.02,z+.09,z+.14,GRAY,.008); // its post
+    part(0,0,.14,.012,z+.13,z+.29,(i,t,L)=>{if(HIT.face!==3){BG[i]=C(GRAY,1.1);set(i,' ',0);return true;}return screen(i,t,L);}); // the screen
+  }),box:boxAt(x,y,c,s,.17,.15,z,z+.29),radius:.25,till:{z,fx,fy}};
+}
+// The pump console: a sloped-faced box of six lit buttons, one per pump, to
+// the clerk; a pump that's filling shows green.
+function PUMP_CONSOLE(x,y,z,fx,fy,station) {
+  const c=fy,s=-fx;
+  const face=(i,t,L)=>{
+    if(HIT.face!==3){BG[i]=C(GRAY,1.2+L*.2);set(i,' ',0);return true;}
+    const k=Math.floor((HIT.u+.2)/.4*3),row=HIT.w<z+.12?1:0,n=k+3*row;
+    const on=station&&cars.some(car=>gasFilling(car)&&car.pit.st===station&&car.pit.lane===n%3);
+    BG[i]=C(on?GREEN:GRAY,on?3:.8);return set(i,String(n+1),C(WHITE,13)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,.02,.22,.14,z,z+.05,GRAY,.01); // its foot
+    part(0,0,.2,.012,z+.05,z+.24,face); // the button panel
+    part(0,-.04,.2,.03,z+.05,z+.24,GRAY,.01); // the case behind it
+  }),box:boxAt(x,y,c,s,.22,.16,z,z+.24),radius:.3};
+}
+// A glass jar on the counter, its lid on, strips of jerky stood up inside.
+function JERKY_JAR(x,y,z) {
+  const glass=[[0,0],[0,.085],[.012,.09],[.2,.09],[.22,.07],[.235,.07],[.235,.06],[.012,.078],[.012,0]];
+  const lid=[[.225,0],[.225,.074],[.25,.074],[.255,.06],[.255,0]];
+  const jerky=[[.012,0],[.012,.075],[.17,.07],[.19,0]];
+  const glassShade=(i,t,L)=>{const n=Math.abs(HIT.nx*dx+HIT.ny*dy);if(n>.35&&HIT.w>z+.02&&HIT.w<z+.2)return false;BG[i]=C(CYAN,1.6+L*.15);set(i,' ',0);return true;};
+  const meat=(i,t,L)=>{const strip=Math.sin(Math.atan2(HIT.v,HIT.u)*9)>.2;BG[i]=C(BRICK,(strip?1.6:2.4)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,z,lid,(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,RED));
+    coveLathe(vx,vy,z,glass,glassShade); // clear through its sides
+    coveLathe(vx,vy,z,jerky,meat);
+  }),box:boxAt(x,y,1,0,.09,.09,z,z+.255),radius:.1,jar:{z,top:z+.255}};
+}
+// A stack of paper cups, nested: a tapered column with a rolled rim on each.
+function CUP_STACK(x,y,z,n=6) {
+  const prof=[[0,0],[0,.03]];for(let k=0;k<n;k++){const b=k*.02;prof.push([b+.08,.042],[b+.085,.045],[b+.09,.04]);}prof.push([(n-1)*.02+.09,0]);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveLathe(vx,vy,z,prof,(i,t,L)=>{BG[i]=C(WHITE,3.6+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;})),
+    box:boxAt(x,y,1,0,.045,.045,z,z+(n-1)*.02+.09),radius:.06};
+}
+// The chest freezer of bagged ice: a white body, the lid on its hinge line, a
+// handle along the front and ICE across it.
+function ICE_CHEST(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,white=gasPaint(WHITE,2.6,.3);
+  const front=(i,t,L)=>{BG[i]=C(WHITE,2.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));
+    if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'ICE',0,h*.55,.1,.16,C(BLUE,14),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,hl,hw,.06,h-.07,white,.03); // the body
+    part(0,0,hl-.03,hw-.03,0,.06,(i,t,L)=>{BG[i]=C(GRAY,.8);set(i,' ',0);return true;},.01); // its base
+    part(0,0,hl+.005,hw+.005,h-.07,h,white,.025); // the lid
+    part(0,hw+.01,hl*.6,.012,h-.1,h-.075,GRAY,.006); // the handle, along the lid's front edge
+    part(0,hw+.002,hl*.5,.002,.2,h-.2,front); // the ICE decal
+  }),box:boxAt(x,y,c,s,hl,hw+.025,0,h),radius:Math.hypot(hl,hw)};
+}
+// The ATM: a steel cabinet, the screen recessed under a hood, keypad, card and
+// cash slots, facing (fx,fy).
+function ATM_MACHINE(x,y,fx,fy) {
+  const c=fy,s=-fx,hl=.25,hw=.2,h=1.55;
+  const screen=(i,t,L)=>{BG[i]=C(BLUE,3);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'ATM',0,1.33,.05,.08,C(WHITE,14),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,hl,hw,0,h,GRAY,.02); // the cabinet
+    part(0,hw+.04,hl-.02,.04,1.42,1.46,GRAY,.008); // the hood over the screen
+    part(0,hw+.003,.17,.003,1.12,1.4,screen); // the screen
+    part(0,hw+.05,.12,.05,.96,.99,(i,t,L)=>{BG[i]=C(GRAY,1.4);const key=coveGroove(HIT.u,.035,.006,t/projX)*coveGroove(HIT.v,.03,.006,t/projX);set(i,' ',0);BG[i]=C(GRAY,1.4+key*2);return true;},.005); // the keypad shelf
+    part(.17,hw+.006,.04,.006,1.02,1.04,(i,t,L)=>{BG[i]=C(GREEN,2);set(i,' ',0);return true;}); // the card slot's light
+    part(0,hw+.004,.12,.004,.8,.83,(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;}); // the cash slot
+  }),box:boxAt(x,y,c,s,hl,hw+.1,0,h),radius:.4,atm:{fx,fy}};
+}
+// A low peg stand of crisps: a pegboard spine on a base, bags hung in rows on
+// both faces, each bag on its hook.
+function CRISP_STAND(x,y,hl,hw,h,seed) {
+  const base=.18,spine=.02,bags=[];
+  for(const side of [-1,1])for(let row=0;row<3;row++)for(let k=0;k<Math.floor(hl*2/.17);k++){
+    const u=-hl+.1+k*.17,z=h-.12-row*.3;
+    if(hash(k,row*2+(side>0),seed)<.1)continue; // one sold out
+    bags.push({u,side,z,col:ITEM_COL[Math.floor(hash(k,row,seed+side)*8)]});
+  }
+  const peg=(i,t,L)=>{const hole=coveGroove(HIT.u,.04,.006,t/projX)*coveGroove(HIT.w,.04,.006,t/projX)*coveDetail(t,.3);BG[i]=C(WHITE,3.2-hole*1.5);set(i,' ',0);return true;};
+  const bagShade=col=>(i,t,L)=>{const band=Math.abs(HIT.w-HIT.bz)<.02;BG[i]=C(band?WHITE:col,(band?4.4:2.6)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const shades=bags.map(b=>{const sh=bagShade(b.col);return (i,t,L)=>{HIT.bz=b.z-.08;return sh(i,t,L);};});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    bags.forEach((b,n)=>{const v=b.side*(spine/2+.06);
+      foodOval(vx+b.u,vy+v,b.z-.17,.065,.03,.17,shades[n]); // the bag, puffed
+      drawBox(boxAt(vx+b.u,vy+b.side*(spine/2+.03),1,0,.004,.03,b.z-.004,b.z),(i,t,L)=>coveMetal(i,L,0,b.side,0));}); // its hook
+    drawBox(boxAt(vx,vy,1,0,hl-.02,spine/2,base,h),peg);
+    coveRound(vx,vy,1,0,hl,hw,0,base,.015,GRAY); // the base
+    coveRound(vx,vy,1,0,hl-.01,.03,h,h+.03,.01,GRAY); // the cap
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.03),radius:Math.hypot(hl,hw),crispStand:{bags,spine,base,h}};
+}
+// The newspaper rack: a wire stand of three sloping tiers, papers folded on each.
+function NEWS_RACK(x,y,fx,fy) {
+  const c=fy,s=-fx,tiers=[[.2,.1],[.42,.02],[.64,-.06]],papers=[];
+  tiers.forEach(([z,v],k)=>{for(const u of [-.12,.12])papers.push({u,v,z:z+.01,h:.02+hash(k,u*10|0,3)*.03,col:k===1?CYAN:WHITE});});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    for(const q of papers)part(q.u,q.v,.11,.07,q.z,q.z+q.h,(i,t,L)=>{BG[i]=C(q.col===WHITE?WHITE:GRAY,3+L*.2);
+      return set(i,HIT.face===5&&coveDetail(t,.1)>.3&&fract((HIT.v+1)*30)<.3?'-':' ',C(GRAY,5)),true;});
+    for(const [z,v] of tiers)part(0,v,.24,.075,z,z+.01,GRAY,.004); // the wire trays
+    for(const u of [-.24,.24])part(u,-.06,.008,.008,0,.75,GRAY,.004); // the uprights
+  }),box:boxAt(x,y,c,s,.25,.18,0,.75),radius:.3,newsRack:{papers,tiers}};
+}
+// A wet-floor cone: a turned yellow cone on a square-ish foot, a black band
+// with the warning round it and a grip on top.
+function WET_FLOOR_CONE(x,y) {
+  const prof=[[0,0],[0,.16],[.025,.16],[.025,.11],[.55,.03],[.58,.03],[.6,.02],[.6,0]];
+  const shade=(i,t,L)=>{const band=Math.abs(HIT.w-.32)<.05;BG[i]=C(band?GRAY:YEL,(band?.6:3.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));
+    return set(i,band&&coveDetail(t,.1)>.3&&fract(Math.atan2(HIT.v,HIT.u)/TAU*6)<.3?'!':' ',C(YEL,14)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveLathe(vx,vy,0,prof,shade)),box:boxAt(x,y,1,0,.16,.16,0,.6),radius:.2,wetFloor:true};
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on

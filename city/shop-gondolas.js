@@ -13,6 +13,7 @@ const GONDOLA_STOCK={
   video:{widths:[.018,.018,.02],cols:[BLUE,RED,BLACK,GREEN,MAG,YEL],spines:true},
   wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
   toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
+  oil:{widths:[.07,.07,.09,.13],cols:[YEL,GRAY,RED,BLUE,BLUE],label:true}, // quarts of motor oil, jugs of screenwash
   florist:{widths:[.12,.14,.16],cols:[RED,MAG,YEL,WHITE,ORANGE],pots:true}, // potted plants in bloom
   thrift:{widths:[.08,.11,.14,.18],cols:[BRICK,GREEN,BLUE,YEL,GRAY,WHITE,MAG],mixed:true}, // bric-a-brac: boxes, jugs and vases
 };
@@ -128,14 +129,14 @@ function SHOP_GONDOLA(b,kind,seed) {
 // Wall shelving against a wall face, shelves fitted bay by bay between
 // full-depth uprights, a back panel and a top cap: the same stock as the
 // islands, one face. Shallow enough to keep a clerk's aisle open.
-// opts.wall: 'back' (the face at y=1), 'left' (x=1) or 'right' (x=W-1, needs
-// opts.W); a0..a1 run along that wall. opts.levels/height: a taller case.
+// opts.wall: 'back' (the face at y=1), 'left' (x=1), 'right' (x=W-1, needs
+// opts.W) or 'front' (y=H-1, needs opts.H); a0..a1 run along that wall. opts.levels/height: a taller case.
 const WALL_SHELF={depth:.2,back:.012,gap:.02,bay:1};
 function SHOP_WALL_SHELVES(a0,a1,kind,seed,opts={}) {
   const G=GONDOLA,W=WALL_SHELF,wall=opts.wall||'back',levels=opts.levels||G.levels,height=opts.height||G.height;
   const len=a1-a0,n=Math.max(1,Math.round(len/W.bay)),half=W.depth/2,mid=(a0+a1)/2;
   // the model frame: u along the wall, v out from it into the room
-  const [c,s,cx,cy]=wall==='left'?[0,-1,1+half,mid]:wall==='right'?[0,1,opts.W-1-half,mid]:[1,0,mid,1+half];
+  const [c,s,cx,cy]=wall==='left'?[0,-1,1+half,mid]:wall==='right'?[0,1,opts.W-1-half,mid]:wall==='front'?[-1,0,mid,opts.H-1-half]:[1,0,mid,1+half];
   const v0=-half+W.back,depth=W.depth-W.back-W.gap,facings=[];
   // upright centres, the end ones flush with the unit's ends; a bay is the clear span between two
   const posts=Array.from({length:n+1},(_,b)=>-len/2+G.upright/2+b*(len-G.upright)/n),bay=(len-G.upright)/n-G.upright;
@@ -147,7 +148,7 @@ function SHOP_WALL_SHELVES(a0,a1,kind,seed,opts={}) {
   const goods=gondolaGoods(facings,kind,c,s,q=>v0+W.gap+depth/2);
   const inner=half-W.back/2,front=W.back/2; // everything in front of the back panel
   const part=(vx,vy,u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1),shade);
-  const side=wall==='back'?[len/2,half]:[half,len/2]; // the collision box, square to the room
+  const side=wall==='back'||wall==='front'?[len/2,half]:[half,len/2]; // the collision box, square to the room
   return {...ROOM_MODEL(cx,cy,(vx,vy)=>{
     goods.draw(vx,vy);
     for(let b=0;b<n;b++){const m=(posts[b]+posts[b+1])/2;
@@ -174,5 +175,5 @@ function shopWallShelves(r) {
   const spec=typeof r.def.shelves==='function'?r.def.shelves(r):r.def.shelves;
   if(!spec)return [];
   return [].concat(spec).map((q,k)=>{const side=q.wall&&q.wall!=='back',a0=q.from??1,a1=q.to??(side?r.H-1:r.W-1);
-    return SHOP_WALL_SHELVES(a0,a1,q.kind,a0*5+r.W+k*17,{...q,W:r.W});});
+    return SHOP_WALL_SHELVES(a0,a1,q.kind,a0*5+r.W+k*17,{...q,W:r.W,H:r.H});});
 }
