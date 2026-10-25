@@ -39,6 +39,8 @@ test('speakers stand on the floor beside the stage; the screen hangs on the back
    if(o.box.z0!==0)bad.push('floating');
    if(Math.abs(o.x-stage.x)<stage.hl+o.box.hl+.05)bad.push(['on the stage',o.x]);
    const parts=shapesOf(o);for(const q of parts)if(q.box.z0< -1e-9)bad.push('below the floor');
+   for(const q of parts){const b=q.box,ex=b.hl*Math.abs(b.c??1)+b.hw*Math.abs(b.s??0),ey=b.hl*Math.abs(b.s??0)+b.hw*Math.abs(b.c??1); // every part, its hardware too, inside the cabinet's box
+    if(Math.abs(b.x-o.box.x)+ex>o.box.hl+1e-9||Math.abs(b.y-o.box.y)+ey>o.box.hw+1e-9||b.z1>o.box.z1+1e-9)bad.push(['speaker part outside its box',+(b.x-o.box.x).toFixed(3),+(b.y-o.box.y).toFixed(3),+b.z1.toFixed(3)]);}
   }
   const scr=room.props.find(o=>o.karaokeScreen),S=scr.karaokeScreen,parts=shapesOf(scr);
   const back=Math.min(...parts.map(q=>q.box.y-q.box.hw));
@@ -46,6 +48,7 @@ test('speakers stand on the floor beside the stage; the screen hangs on the back
   if(S.bottom<stage.z1+1)bad.push('too low over the stage');
   const inner=2*(S.half-.04);
   for(const line of LYRICS)if(karaokeLetter(line)*line.length>inner-.1+1e-9)bad.push(['overflows',line]);
+  for(const t of [-12.5,-.1,0,7])if(!LYRICS.includes(karaokeLyric(t).line))bad.push(['no lyric line at',t]); // (the music's clock can start before zero)
   // the wall painter no longer draws the screen
   const painted=(()=>{const i=0;karaokeWall(i,6,.01,1.9,3,6,0,8);return CH[i]!==' '&&CH[i]!=='*';})();
   return{bad,speakers:speakers.length,painted};

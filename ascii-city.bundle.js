@@ -37635,7 +37635,8 @@ const KARAOKE={stage:{x:6,y:2.3,hl:2,hw:.6,top:.3,deck:.025,nosing:.02},
   screen:{x:6,half:1.25,bottom:1.35,top:2.55,depth:.07,stand:.06},
   speaker:{hl:.28,hw:.2,h:.9,corner:.035},
   lyric:{w:.16,h:.22}};
-// The lyric line and how much of it has been sung, from the music's clock.
+// The lyric line and how much of it has been sung, from the music's clock
+// (which may run from before zero: mod, not %, keeps the line in range).
 function karaokeLyric(t) {
   const line=LYRICS[mod(Math.floor(t/5),LYRICS.length)];
   return {line,sung:fract(t/5)*1.3*line.length};
@@ -37670,20 +37671,19 @@ function KARAOKE_SPEAKER(x,y) {
     const badge=Math.abs(HIT.u)<.05&&Math.abs(HIT.w-(h-.11))<.012;
     BG[i]=badge?C(WHITE,7):C(GRAY,1.6+L*.1-holes*.9);set(i,' ',0);return true;
   };
-  const cap=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
-  const grilleProfile=kitchenPanelProfile(hl-.03,.008,.05,h-.05,.004),feet=[[0,0],[0,.025],[.015,.022],[.015,0]];
-  const rubber=(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;};
-  const boundWidth=hl+corner*.2,boundDepth=hw+Math.max(corner*.2,.012),boundTop=h+.032;
+  const cap=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),front=hw-.012; // (the cabinet's face; the grille and caps stand proud of it to hw)
+  const grilleProfile=kitchenPanelProfile(hl-.03,.006,.05,h-.05,.004); // (fixed: built once, not every frame)
+  const feet=[[0,0],[0,.025],[.015,.022],[.015,0]],rubber=(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const ex of [-1,1])for(const ez of [0,1]){ // steel corner caps on the front corners
-      const cz=ez?h-corner:corner;coveRound(vx+ex*(hl-corner*.8),vy+hw-corner*.8,1,0,corner,corner,cz-corner,cz+corner,.012,cap);
+      const cz=ez?h-corner:corner;coveRound(vx+ex*(hl-corner),vy+hw-corner,1,0,corner,corner,cz-corner,cz+corner,.012,cap);
     }
-    drawBox({...boxAt(vx,vy+hw+.004,1,0,hl-.03,.008,.05,h-.05),...grilleProfile},grille,homeRayWorktop); // proud of the cabinet front
+    drawBox({...boxAt(vx,vy+front+.006,1,0,hl-.03,.006,.05,h-.05),...grilleProfile},grille,homeRayWorktop); // proud of the cabinet front
     coveTube(vx-.08,vy,h+.02,vx+.08,vy,h+.02,.012,GRAY); // the carrying handle, on two posts
     for(const e of [-.08,.08])coveTube(vx+e,vy,h,vx+e,vy,h+.02,.01,GRAY);
-    coveRound(vx,vy,1,0,hl,hw,.015,h,.025,cabinet);
+    coveRound(vx,vy-.006,1,0,hl,hw-.006,.015,h,.025,cabinet);
     for(const ex of [-1,1])for(const ey of [-1,1])coveLathe(vx+ex*(hl-.05),vy+ey*(hw-.05),0,feet,rubber);
-  }),box:boxAt(x,y,1,0,boundWidth,boundDepth,0,boundTop),radius:Math.hypot(boundWidth,boundDepth)+.05,karaokeSpeaker:{hl,hw,h}};
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.032),radius:Math.hypot(hl,hw)+.05,karaokeSpeaker:{hl,hw,h}};
 }
 // a floor wedge monitor on the stage, its sloped face turned up to the singer at -y
 function KARAOKE_MONITOR(x,y,z) {
@@ -37709,7 +37709,7 @@ function KARAOKE_SCREEN(wallY) {
   const {x,half,bottom,top,depth,stand}=KARAOKE.screen,{w,h}=KARAOKE.lyric,bezel=.04,mid=(bottom+top)/2;
   const cy=wallY+stand+depth/2;
   const caseShade=(i,t,L)=>{BG[i]=C(GRAY,.5+L*.06*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const caseProfile=kitchenPanelProfile(half,depth/2,bottom,top,.012);
+  const caseProfile=kitchenPanelProfile(half,depth/2,bottom,top,.012); // (built once)
   let cx=0,cyv=0;
   const picture=(i,t,L)=>{
     // a slow colour wash behind the words, and the line itself, sung part in magenta
