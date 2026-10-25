@@ -177,3 +177,13 @@ in WORLD_QUALITY.md. The old homePlushShark helper remains unchanged for
 other callers; no shared ellipsoid/clock/worktop/KITCHEN helper edits.
 #227 keepsake full CI is green. Next: close the pass4 decoration audit,
 then pass5 home layouts and pass6 hotels; cathedral remains Claude's work.
+
+Pass4 decoration closing audit complete on the plush branch:14 existing
+component checks plus the three new plush/bed and three furnishing controls
+checks pass (20 total). Native four-home views and furnished Fern day/night/
+reverse views reviewed with no page errors. Completion/handoffs appended to
+WORLD_QUALITY.md. Next Codex queue: pass5 home openings/trim/layouts, then
+pass6 hotels. Own homeWall/homePlan/homeDef portions of rooms.js and new
+home-only modules/tests; Claude's store/florist/books/bar/karaoke definitions,
+shop makeRoom additions and shelf wall code remain with Claude. Shared
+clock/ellipsoid/worktop/KITCHEN helpers continue to require coordination.
