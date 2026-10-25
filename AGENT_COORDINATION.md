@@ -135,3 +135,20 @@ WORLD_QUALITY.md. Static geometry caches and hotel construction are fixed;
 no shared home clock/worktop/ellipsoid/KITCHEN helper changed. Next remains
 the rest of the home electronics/decor audit. Claude's shop/restaurant work
 is untouched and its pending PRs remain independent.
+
+Codex home TV chunk merged as #225. Next active chunk:
+`codex/home-keepsake-models`, new `city/home-keepsakes.js`, only the home
+shelf draw loop in `city/rooms.js`, new focused browser coverage and shared
+manifest/bundle/notes. Scope: real supported rubber ducks and snow globes on
+home shelves, retaining existing placement/save/take controls and footprints.
+No shared home helper or Claude-owned shop/restaurant code changes. Other
+inventory artwork stays with the common inventory rendering pass.
+
+`codex/home-keepsake-models` verified: two new keepsake browser checks plus
+both existing shelf placement/save/drop/take checks pass; the floating-base
+mutation is rejected. Duck/globe close/wide/oblique/reverse/above/night/phone
+views reviewed, with final ABAB costs in WORLD_QUALITY.md. Model/profile
+cache reuse and clear central glass are tested. TV #225 full CI is green.
+Remaining pass4 decoration audit stays with Codex, then passes5/6; other
+displayed item families share the inventory pass27 renderer. No Claude-owned
+source changed; rooms.js edit is only the home display loop in roomSprites.

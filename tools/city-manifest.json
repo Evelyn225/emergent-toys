@@ -168,6 +168,7 @@
     "city/home-clock.js",
     "city/home-books.js",
     "city/home-shelves.js",
+    "city/home-keepsakes.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
