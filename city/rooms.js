@@ -1322,7 +1322,7 @@ function roomSprites() {
   if (home) {
     drawWorkshopPreview();
     const { pet } = homeLayout(room);
-    for(const p of homeShelfLayout())drawDropped({...p.it,displayZ:p.z,displaySize:{w:p.size.radius*2,h:p.size.height}},p.x-px,p.y-py,1);
+    for(const p of homeShelfLayout())if(!drawHomeKeepsake(p))drawDropped({...p.it,displayZ:p.z,displaySize:{w:p.size.radius*2,h:p.size.height}},p.x-px,p.y-py,1);
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
     const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
