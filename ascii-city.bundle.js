@@ -14218,39 +14218,11 @@ function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
   return false;
 }
 
-// a lamp up close, built from boxes so it's solid from any side: a flared base, the pole with its collar, the swan
-// neck as a chain of short pieces round the half circle, and the lantern hanging off the end (glowing after dark).
-// Further off the billboard (lampCell) looks the same and costs far less.
-const LAMP_3D = 5, NECK_BITS = 7;
+// a lamp up close is turned and built (drawLamp3D, street-lamps.js); further off the billboard (lampCell) looks the
+// same and costs far less. STEEL: plain steel parts shared by the signals, the el and the bridges.
+const LAMP_3D = 5;
 const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
 const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
-function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
-  const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
-  B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
-  B(0, 0.06, top, 0.01, 0.01, STEEL.pole);
-  B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
-  for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
-    const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
-    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
-    B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
-  }
-  const hu = 2 * NECK;
-  B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
-  B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
-  B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
-    if (HIT.face === 6) { BG[i] = C(GRAY, 1); return set(i, 'v', C(GRAY, L)), true; }
-    const edge = Math.abs(Math.abs(HIT.face <= 2 ? HIT.v : HIT.u) - 0.024) < 0.004;
-    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
-    return set(i, edge ? '|' : lit ? '#' : ':', lit && !edge ? C(WARM, 15) : C(GRAY, L * 0.8)), true;
-  });
-  B(hu, top - 0.14, top - 0.125, 0.008, 0.008, STEEL.pole);
-  if (lit) drawShape(vx + ax * hu, vy + ay * hu, top - 0.16, 0.075, 0.13, (i, u, z, du, dz) => { // the soft glow round the lantern
-    const halo = Math.hypot(u / 0.075, (z - 0.065) / 0.065);
-    if (halo >= 1) return false;
-    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
-  });
-}
-
 // ---- signals and roof clutter as real 3D parts. Poles, masts, legs and wires are rods (rayRod, courier-ui.js): round
 // up close and never thinner than a character far off, so they hold the skyline at any distance. a, b camera-relative.
 function drawRod(ax, ay, az, bx, by, bz, r, shade) {
@@ -15506,6 +15478,44 @@ function fairSprites() {
     const ch = signLine(FAIR_SIGN, q, (0.51 - HIT.w) / 0.08, i, 0.47, midDepth(gx, gy), t, 2 * (hw + 0.03) / n, 0.08, farDepth(gx, gy, hw), ...faceDir(1, 0));
     if (ch !== null && (ch !== ' ' || Math.abs(HIT.w - 0.47) < 0.03)) return set(i, ch, C(YEL, 15)), true;
     return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
+  });
+}
+// The street lamp up close, turned rather than boxed: a flared cast base, a
+// fluted pole tapering to its finial with a collar part way up, the swan neck
+// as one smooth curve of tube, the drop rod, and the lantern itself: a ribbed
+// glass body between a domed cap and a finial, glowing after dark. Further off
+// the billboard (lampCell) stands in for it at a fraction of the cost.
+const LAMP_NECK_BITS = 10;
+const LAMP_BASE = [[0, 0], [0, .028], [.008, .028], [.012, .025], [.03, .019], [.05, .015], [.058, .0125], [.062, .0115], [.062, 0]];
+const LAMP_LANTERN = [[0, 0], [0, .004], [.012, .008], [.02, .014], [.026, .02], [.03, .02], [.09, .024], [.092, .031], [.098, .031], [.108, .018], [.116, .008], [.12, 0]]; // from its finial up to the cap
+const lampSteel = (i, t, L) => {
+  const flute = coveGroove(Math.atan2(HIT.v, HIT.u) * 12 / TAU, 1, .3, t / projX * 80) * coveDetail(t, .02); // the pole's flutes, gone far off
+  BG[i] = C(GRAY, .9 + L * .28 * coveLight(HIT.nx, HIT.ny, HIT.nz) - flute * .35); return set(i, ' ', 0), true;
+};
+function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
+  const lit = lampsOn > .3, metal = (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY);
+  coveLathe(vx, vy, 0, LAMP_BASE, metal);
+  coveLathe(vx, vy, .062, [[0, 0], [0, .0105], [top - .062, .0078], [top - .062, 0]], lampSteel); // the pole, tapering
+  coveLathe(vx, vy, .41, [[0, 0], [0, .014], [.006, .0165], [.014, .0165], [.02, .014], [.02, 0]], metal); // its collar
+  coveLathe(vx, vy, top - .004, [[0, 0], [0, .0095], [.008, .011], [.016, .007], [.024, 0]], metal); // the finial on top
+  for (let k = 0; k < LAMP_NECK_BITS; k++) { // the swan neck: up and over from the pole top out to the drop
+    const t0 = Math.PI * (1 - k / LAMP_NECK_BITS), t1 = Math.PI * (1 - (k + 1) / LAMP_NECK_BITS);
+    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
+    coveTube(vx + ax * u0, vy + ay * u0, z0, vx + ax * u1, vy + ay * u1, z1, .0075, GRAY);
+  }
+  const hx = vx + ax * 2 * NECK, hy = vy + ay * 2 * NECK, base = top - .15;
+  coveTube(hx, hy, top, hx, hy, base + .116, .003, GRAY); // the drop
+  coveLathe(hx, hy, base, LAMP_LANTERN, (i, t, L) => {
+    const w = HIT.w - base, glass = w > .03 && w < .09;
+    if (!glass) return metal(i, t, L);
+    const rib = coveGroove(Math.atan2(HIT.v, HIT.u) * 6 / TAU, 1, .08, t / projX * 25) * coveDetail(t, .03); // six frame bars
+    if (rib > .5) return metal(i, t, L);
+    BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(CYAN, 1 + L * .12); return set(i, ' ', 0), true;
+  });
+  if (lit) drawShape(hx, hy, top - .16, .075, .13, (i, u, z, du, dz) => { // the soft glow round the lantern
+    const halo = Math.hypot(u / .075, (z - .065) / .065);
+    if (halo >= 1) return false;
+    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
   });
 }
 // ===== the cell block: where you end up if you can't pay the fine. Your cell is the middle one of a row of three;
