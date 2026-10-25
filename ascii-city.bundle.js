@@ -16449,7 +16449,8 @@ function homePlan(w, h, tier) {
   }
   const entryX = tier === 2 ? 9 : w / 2;
   wall(entryX - 1, h - 1, entryX, h - 1, 'D');
-  const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.3, half: tier ? 1 : 1.25 }];
+  // The studio's second sill clears the full-width native bookcase.
+  const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.47, half: tier ? 1 : 1.25 }];
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
   const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
     : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
@@ -16478,9 +16479,10 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
+      ...homeWindowCasings(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
@@ -16589,7 +16591,7 @@ function homeWall(i, u, uStep, z, d, mx, my, L) {
   }
   for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > (win.bottom??.85) && z < (win.top??(def.tier ? 2.95 : 2.5))) {
     const du = Math.abs(along - win.center), bottom=win.bottom??.85,top=win.top??(def.tier ? 2.95 : 2.5);
-    if (du > win.half - 0.09 || z < bottom+.1 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
+    if (!def.builtWindows && (du > win.half - 0.09 || z < bottom+.1 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035)) {
       BG[i] = C(def.tier === 2 ? WHITE : BRICK, 2 + L * 0.25); return set(i, du < 0.035 || du > win.half - 0.09 ? '|' : '=', C(WHITE, L)), true;
     }
     if(room.kind==='islandhome'){const marks=COVE_VIEW.marks.get(face)||[];if(!COVE_VIEW.marks.has(face))COVE_VIEW.marks.set(face,marks);marks.push([i,d]);BG[i]=C(CYAN,4);set(i,' ',0);}
@@ -38785,6 +38787,43 @@ function HOME_PLUSH_SHARK(p) {
   drawBox({...boxAt(vx,vy,c,s,hx,hy,base,base+.24),plushShape:shape,plushRole:'body'},body,homePlushRayBody);
   for(const q of parts){const[x,y]=at(q.u,q.v);drawBox({...boxAt(x,y,q.c,q.s,q.hl,q.hw,q.z0,q.z1),plushRole:q.role},q.shade,homeRayEllipsoid);}
  }),box:furnishingBox(p),radius:Math.hypot(.24,.48),furnishingKey:p.key,plushShark:true};
+}
+// Native apartment windows share the wall painter's opening measurements.
+// Closed fitted pieces sit on the inner wall face; the existing exterior ray
+// still supplies the view through the four clear panes. Fern uses its own set.
+function HOME_WINDOW_CASING(win,W,H,tier) {
+  const bottom=win.bottom??.85,top=win.top??(tier?2.95:2.5),half=win.half;
+  const face=win.face,c=face==='north'?1:face==='south'?-1:0,s=face==='west'?-1:face==='east'?1:0;
+  const x=face==='west'?1:face==='east'?W-1:win.center,y=face==='north'?1:face==='south'?H-1:win.center;
+  const shade=(i,t,L)=>{
+    if(tier===0)return coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,16);
+    const light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    BG[i]=C(tier===2?WHITE:GRAY,(tier===2?3.9:1.2)+L*(tier===2?.36:.24)*light);
+    set(i,' ',0);return true;
+  };
+  const pieces=[],add=(u,v,hl,hw,z0,z1,round=0)=>{
+    const box=boxAt(c*u-s*v,s*u+c*v,c,s,hl,hw,z0,z1);
+    const material=round?shade:(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;
+      HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
+    pieces.push({local:box,view:{...box,...(round?{round}:null)},shade:material,ray:round?coveRayRounded:rayBox});
+  };
+  // The horizontal rails own the corners; the jambs meet their end planes.
+  for(const z of [bottom,top-.10])add(0,.045,half,.045,z,z+.10);
+  for(const e of [-1,1])add(e*(half-.045),.045,.045,.045,bottom+.10,top-.10);
+  // Recessed glazing bars meet the inner faces, with one owner at the cross.
+  const cross=clamp(2.12,bottom+.20,top-.20);
+  add(0,.027,half-.09,.027,cross-.035,cross+.035);
+  add(0,.027,.035,.027,bottom+.10,cross-.035);
+  add(0,.027,.035,.027,cross+.035,top-.10);
+  // A deep sill seats the bottom rail; its rear face is on the wall plane.
+  add(0,.08,half+.055,.08,bottom-.045,bottom,.008);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const p of pieces){const b=p.view;b.x=vx+p.local.x;b.y=vy+p.local.y;
+      drawBox(b,p.shade,p.ray);}
+  }),radius:half+.2,windowCasing:{face,bottom,top,half,cross}};
+}
+function homeWindowCasings(r) {
+  return r.def.windows.map(win=>HOME_WINDOW_CASING(win,r.W,r.H,r.def.tier));
 }
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {

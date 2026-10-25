@@ -222,3 +222,23 @@ head rerun is also fully green; Claude's subsequent main integration has
 its own new CI run. #233 is merged. Next Codex work remains pass5 home
 openings/trim/layouts, then hotels; Claude can proceed with pass11 streets.
 No street modules or shared home/kitchen geometry helpers were edited.
+
+Codex active `codex/home-window-casings` (pass5): new home-only
+`city/home-windows.js` and focused browser test, plus homeDef/homeWall
+sections of rooms.js. Replaces the three native apartment families' painted
+window frames with fitted casings/sills/mullions; keeps their current real
+exterior-view windows and leaves Fern/Cabin Cove, shops and shared helpers
+alone. Claude retains pass11 street objects. Bundle/manifest and appended
+notes are the only other shared files.
+
+`codex/home-window-casings` complete: the three native apartment families
+have fitted closed frames, recessed bars and deep sills with their real
+exterior views. A17cm studio window shift clears the native bookcase;
+bookcase geometry and saved shelf placements are unchanged. New contact/
+join/clear-pane/cache/furniture checks and both defect mutations pass,
+with11 existing home/Fern/TV/native-purchase-balcony regressions and seven
+bundle/parse/render checks. All three styles inspected close/wide/oblique/
+low/night/phone; ABAB costs appended to WORLD_QUALITY.md. Next Codex queue:
+pass5 doors/trim/layout character, then pass6 hotels; Claude owns pass11
+streets and the pending shop/restaurant stack. No shared helper edits.
+The full1069-test Node run on #233's final reviewed tree passed.
