@@ -18953,7 +18953,7 @@ function pizzaWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'cotto', ceil: 'pendant', sign: false, wall: pizzaWall, keeper: [6.6, 1.75],
   props: r => [pizzaOven(1.95, 1.85),
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
-    ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
+    ...[4.9, 6.6, 8.3].map(x => HEAT_LAMP(x, 2.45, 1.87)), // the heat lamps
     KITCHEN_SERVICE_COUNTER(8.3,1.4,.55,.35,.9,GRAY,GRAY), // the prep counter at the back, a sack of flour on it
     KITCHEN_UPRIGHT_FLOUR_SACK(8.05, 1.4, 0.9),
     ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
@@ -19090,15 +19090,7 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
 // ---- the ice cream parlour (ICE CREAM): the dipping case of tubs in every colour, cones racked on the wall, pastel
 // stripes, little marble tables with wire chairs, a big neon cone
 const ICE = [[MAG, 9], [WHITE, 12], [GREEN, 9], [BRICK, 4], [YEL, 12], [ORANGE, 9], [CYAN, 10], [RED, 8]];
-const wireChair = (x, y, fx, fy, col) => { // a parlour chair: a round seat, a heart-shaped wire back
-  const seat = { ...ROOM_MODEL(x, y, (vx, vy) => {
-    drum(vx, vy, 0.2, 0.44, 0.48, (i, t, L) => { BG[i] = C(col, 4 + L * 0.3); return set(i, ' ', 0), true; });
-    for (const [ex, ey] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) rod(vx + ex * 0.14, vy + ey * 0.14, 0, vx + ex * 0.12, vy + ey * 0.12, 0.44, 0.008, WHITE, 1.4);
-    const bx = vx - fx * 0.2, by = vy - fy * 0.2;
-    for (let k = 0; k < 10; k++) { const t0 = k / 10 * Math.PI * 2, t1 = (k + 1) / 10 * Math.PI * 2, r = 0.16; rod(bx - fy * Math.cos(t0) * r, by + fx * Math.cos(t0) * r, 0.75 + Math.sin(t0) * r, bx - fy * Math.cos(t1) * r, by + fx * Math.cos(t1) * r, 0.75 + Math.sin(t1) * r, 0.008, WHITE, 1.4); }
-  }, [0.2, 0.2, 0.48]), seat: true, fx, fy, h: 0.48 };
-  return [seat];
-};
+const wireChair = (x, y, fx, fy, col) => [WIRE_CHAIR(x, y, fx, fy, col)]; // a parlour chair: a round seat, a wire hoop back
 function iceWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.0 && Math.abs(u - 2.0) < 0.6) { // the neon cone
     const cu = u - 2.0, cz = z - 2.0, cone = cz < 0.5 && Math.abs(cu) < cz * 0.35, scoop = Math.hypot(cu, cz - 0.62) < 0.2;
@@ -20610,7 +20602,7 @@ function chickenWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.12) { BG[i] = C(RED, 4); return set(i, ' ', 0), true; }
   BG[i] = fract(u / 0.6) < 0.5 ? C(RED, 3 + L * 0.2) : C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true; // the stripes
 }
-const heatLamp = (x, y, z) => hung(x, y, z, (vx, vy, z_) => drum(vx, vy, 0.1, z_ - 0.1, z_, (i, t, L) => { BG[i] = C(HIT.face === 6 ? ORANGE : RED, HIT.face === 6 ? 12 : 4); return set(i, ' ', 0), true; }));
+const heatLamp = (x, y, z) => HEAT_LAMP(x, y, z - 0.1);
 ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ceil: 'strip', sign: false, wall: chickenWall, keeper: [5.6, 1.6],
   props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), KITCHEN_SERVICE_COUNTER(6.5,2.3,1.5,.3,1.05,RED,GRAY), // the warmer, the counter
     { ...standing(5.6, 1.6, RED), face: [0, 1] }, fryer(8.3, 1.4), heatLamp(3.0, 2.3, 1.75), heatLamp(4.0, 2.3, 1.75),
@@ -20848,7 +20840,7 @@ function dumplingWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.0) { BG[i] = C(RED, 2.2 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(BRICK, 4)), true; }
   BG[i] = C(YEL, 5.5 + L * 0.15); return set(i, ' ', 0), true; // cream
 }
-const roundLantern = (x, y) => hung(x, y, 2.3, (vx, vy, z) => { drum(vx, vy, 0.22, z - 0.35, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(YEL, 10)), true; }); rod(vx, vy, z - 0.35, vx, vy, z - 0.6, 0.02, YEL, 1.4); }); // a tassel under it
+const roundLantern = (x, y) => ROUND_LANTERN_LAMP(x, y, 2.3); // a round red lantern, a tassel under it
 ROOM_DEFS.dumplings = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'strip', sign: false, wall: dumplingWall, keeper: [6.6, 1.7],
   props: r => [KITCHEN_SERVICE_COUNTER(5,2.55,2.4,.3,1,RED), KITCHEN_PREP(4.2,1.45,1.2,.35,.85),
     { ...standing(3.6, 2.05, WHITE), face: [0, -1] }, { ...standing(4.8, 2.05, WHITE), face: [0, -1] }, { ...standing(6.6, 1.7, RED), face: [0, 1] }, // two folding, one serving
@@ -20893,8 +20885,7 @@ ROOM_DEFS.dimsum = { grid: backWc(15, 11), wc: wcAt(15), light: 0.95, height: 3.
 // ---- the kissaten (KISSATEN): an old coffee house: dark wood, red velvet booths, the siphons bubbling on the bar, a wall
 // of cups behind it, stained-glass lamps low over the tables
 const siphon = (x, y) => KITCHEN_SIPHON(x,y);
-const tiffany = (x, y) => hung(x, y, 1.95, (vx, vy, z) => drum(vx, vy, 0.24, z - 0.18, z, (i, t, L) => { // a lamp of coloured glass, lit
-  const seg = Math.floor((Math.atan2(HIT.v, HIT.u) / Math.PI + 1) * 4); BG[i] = C([RED, YEL, GREEN, ORANGE][seg & 3], 6 + 2 * Math.max(night, 0.4)); return set(i, fract(HIT.w * 10) < 0.2 ? '-' : ' ', C(BRICK, 4)), true; }));
+const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass, lit
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
@@ -37617,6 +37608,118 @@ function BAR_BACK_BAR(x=6,y=1.09) {
     for(const p of vessels)drawBox({...p.box,x:vx+p.u,y:vy+p.v,barRole:p.role},p.shade,coveRayLathe);
     for(let k=parts.length-1;k>=0;k--){const p=parts[k];drawBox({...p.box,x:vx+p.u,y:vy+p.v,...p.profile,barRole:p.role},p.shade,homeRayWorktop);}
   }),box:boxAt(x,y+.008,1,0,q.half,q.depth+.008,0,q.top),radius:Math.hypot(q.half,q.depth+.016),backBar:{levels:q.levels.map(z=>z+q.board),bottles}};
+}
+// Restaurant lamps and parlour chairs that were still painted drums and line
+// rods, built: round red lanterns with gold caps and tassels, Tiffany shades
+// of leaded coloured glass, enamelled heat-lamp shades with their bulbs
+// glowing underneath, and wire parlour chairs. Every lamp hangs on a cord
+// from a ceiling rose.
+const RESTAURANT_CORD_PARTS=new Map();
+function drawRestaurantLampParts(vx,vy,parts) {
+  for(const [part,shade]of parts)drawBox({...part.box,x:vx,y:vy},shade,coveRayLathe);
+}
+function restaurantLampBulbShade(i,t,L) {BG[i]=C(WARM,13+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+function restaurantLampSocketShade(i,t,L) {return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);}
+function restaurantCord(vx,vy,z,ceiling) {
+  const key=z+':'+ceiling;let parts=RESTAURANT_CORD_PARTS.get(key);
+  if(!parts){
+    const dark=(i,t,L)=>{BG[i]=C(GRAY,.6);set(i,' ',0);return true;};
+    parts=[[homeLampPart('rose',ceiling-.02,[[0,0],[0,.03],[.006,.032],[.02,.02],[.02,0]]),restaurantLampSocketShade],
+      [homeLampCylinder('cord',z,ceiling-.02,.003),dark]];
+    RESTAURANT_CORD_PARTS.set(key,parts);
+  }
+  drawRestaurantLampParts(vx,vy,parts);
+}
+// A round paper lantern: a globe on vertical ribs between gold caps, lit from
+// inside (brightest where you look straight through), a gold tassel below.
+const ROUND_LANTERN={radius:.22,height:.34,cap:.085,capH:.035,tassel:.24};
+const ROUND_LANTERN_GLOBE=(()=>{
+  const {radius:R,height:H,cap}=ROUND_LANTERN,out=[[0,0],[0,cap]];
+  for(let k=1;k<12;k++){const f=k/12,r=R*Math.sqrt(1-(2*f-1)**2);out.push([H*f,Math.max(cap,r)]);}
+  return [...out,[H,cap],[H,0]];
+})();
+function ROUND_LANTERN_LAMP(x,y,top=2.3) {
+  const {height:H,cap,capH,tassel}=ROUND_LANTERN,base=top-H,ceiling=()=>room.def.height||3;
+  const paper=(i,t,L)=>{
+    const r=Math.hypot(HIT.u,HIT.v),view=r>1e-6?Math.abs((HIT.u*dx+HIT.v*dy)/r):1;
+    const rib=coveGroove(Math.atan2(HIT.v,HIT.u)*ROUND_LANTERN.radius,.07,.004,t/projX)*coveDetail(t,.4);
+    BG[i]=C(RED,(4.2+4.2*view)*(.5+.5*Math.max(night,.35))-rib*2.6);set(i,' ',0);return true;
+  };
+  const gold=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
+  const fringe=(i,t,L)=>{const cord=coveGroove(Math.atan2(HIT.v,HIT.u)*.03,.006,.002,t/projX)*coveDetail(t,.2);BG[i]=C(YEL,4.4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz)-cord*1.6);set(i,' ',0);return true;};
+  const parts=[
+    [homeLampPart('tassel',base-tassel,[[0,0],[0,.03],[.16,.018],[.18,.012],[.18,0]]),fringe],
+    [homeLampPart('knot',base-tassel+.18,[[0,0],[0,.014],[tassel-.18-capH,.008],[tassel-.18-capH,0]]),gold],
+    [homeLampPart('lower-cap',base-capH,[[0,0],[0,cap*.7],[capH*.6,cap+.01],[capH,cap+.01],[capH,0]]),gold],
+    [homeLampPart('paper',base,ROUND_LANTERN_GLOBE),paper],
+    [homeLampPart('upper-cap',top,[[0,0],[0,cap+.01],[capH*.4,cap+.01],[capH,cap*.7],[capH,0]]),gold]
+  ];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawRestaurantLampParts(vx,vy,parts);restaurantCord(vx,vy,top+capH,ceiling());
+  }),radius:ROUND_LANTERN.radius+.05,roundLantern:{x,y,top,base,height:H,bottom:base-tassel}};
+}
+// A Tiffany shade: a dome of coloured glass in leaded segments, a brass cap,
+// the bulb's glow under it.
+const TIFFANY_SHADE=[[0,.24],[.012,.24],[.05,.215],[.11,.15],[.16,.08],[.18,.045],[.18,.036],[.16,.071],[.11,.142],[.05,.207],[.012,.232],[0,.232],[0,.24]];
+function TIFFANY_LAMP(x,y,bottom=1.77) {
+  const ceiling=()=>room.def.height||3,top=bottom+.18;
+  const glass=(i,t,L)=>{
+    const a=Math.atan2(HIT.v,HIT.u),seg=Math.floor((a/Math.PI+1)*6),band=Math.floor((HIT.w-bottom)/.06);
+    const f=t/projX,lead=Math.min(1,coveGroove(a*.2,Math.PI*.2/6,.004,f)+coveGroove(HIT.w-bottom,.06,.004,f))*coveDetail(t,.4);
+    const col=[RED,YEL,GREEN,ORANGE,YEL,GREEN][(seg+band)%6];
+    BG[i]=C(col,(4+2*Math.max(night,.4))-lead*3.4);set(i,' ',0);return true;
+  };
+  const parts=[
+    [homeLampPart('shade',bottom,TIFFANY_SHADE),glass],
+    [homeLampPart('cap',top-.005,[[0,0],[0,.05],[.02,.04],[.04,.012],[.04,0]]),(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL)],
+    [homeLampCylinder('socket',bottom+.12,top,.018),restaurantLampSocketShade]
+  ];
+  const bulb=boxAt(0,0,1,0,.027,.027,bottom+.025,bottom+.125);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox({...bulb,x:vx,y:vy},restaurantLampBulbShade,foodRayEllipsoid);
+    drawRestaurantLampParts(vx,vy,parts);restaurantCord(vx,vy,top+.035,ceiling());
+  }),radius:.27,tiffanyLamp:{x,y,bottom,top}};
+}
+// An enamelled heat-lamp shade, its bulb glowing under the rim.
+const HEAT_LAMP_SHADE=[[0,.12],[.015,.115],[.06,.07],[.11,.035],[.13,.025],[.13,0],[.12,0],[.12,.018],[.11,.027],[.06,.062],[.015,.108],[0,.112],[0,.12]];
+function HEAT_LAMP(x,y,bottom,col=RED) {
+  const ceiling=()=>room.def.height||3;
+  const shade=(i,t,L)=>{
+    const inside=HIT.part>=7;BG[i]=C(inside?STONE:col,(inside?5:2.4)+L*(inside?.15:.3)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  const parts=[[homeLampPart('shade',bottom,HEAT_LAMP_SHADE),shade],
+    [homeLampCylinder('socket',bottom+.08,bottom+.13,.016),restaurantLampSocketShade]];
+  const bulb=boxAt(0,0,1,0,.022,.022,bottom+.015,bottom+.095);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox({...bulb,x:vx,y:vy},restaurantLampBulbShade,foodRayEllipsoid);
+    drawRestaurantLampParts(vx,vy,parts);restaurantCord(vx,vy,bottom+.13,ceiling());
+  }),radius:.15,heatLamp:{x,y,bottom,top:bottom+.13}};
+}
+// A wire parlour chair: a padded round seat on a wire ring, four splayed
+// legs joined by a ring low down, and a round hoop back facing the seat, its
+// inner ring held in the hoop by four short bars.
+const WIRE_CHAIR_BACK={hoop:[.148,.165,.005],inner:[.07,.08,.003],bars:4,wire:.004};
+function WIRE_CHAIR(x,y,fx,fy,col) {
+  const seatZ=.48,hz=.76,c=fy,s=-fx; // the back hoop faces (fx, fy): its axis is the lathe's +v, (-s, c)
+  const wire=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
+  const cushion=(i,t,L)=>{BG[i]=C(col,3.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,seatZ-.045,[[0,0],[0,.19],[.01,.2],[.035,.2],[.045,.185],[.045,0]],cushion);
+    coveLathe(vx,vy,seatZ-.06,[[0,.17],[0,.18],[.015,.18],[.015,.17],[0,.17]],wire); // the seat ring
+    coveLathe(vx,vy,.16,[[0,.172],[0,.184],[.01,.184],[.01,.172],[0,.172]],wire); // the leg ring, where the splayed legs pass
+    for(const [ex,ey]of [[1,1],[1,-1],[-1,1],[-1,-1]])coveTube(vx+ex*.13,vy+ey*.13,.008,vx+ex*.12,vy+ey*.12,seatZ-.06,.008,WHITE);
+    const bx=vx-fx*.17,by=vy-fy*.17;
+    for(const e of [-1,1])coveTube(bx+fy*e*.1,by-fx*e*.1,seatZ-.05,bx+fy*e*.1,by-fx*e*.1,hz-.12,.008,WHITE); // two back posts up to the hoop
+    // the hoop and its inner ring, turned side-on with the wall clock's lathe ray
+    const B=WIRE_CHAIR_BACK;
+    for(const [r0,r1,d]of [B.hoop,B.inner])
+      drawBox({...boxAt(bx,by,c,s,r1,d,hz-r1,hz+r1),centerZ:hz,clockShape:{x:0,y:0,profile:[[-d,r0],[-d,r1],[d,r1],[d,r0],[-d,r0]]}},wire,homeClockRay);
+    for(let k=0;k<B.bars;k++){ // the bars, flat in the hoop's plane, from inside the inner ring out into the hoop
+      const a=(k+.5)*TAU/B.bars,ux=Math.cos(a),uz=Math.sin(a),r0=B.inner[0]+.004,r1=B.hoop[0]+.006,mid=(r0+r1)/2,half=(r1-r0)/2,W=B.wire;
+      drawBox({...boxAt(bx+c*ux*mid,by+s*ux*mid,c,s,Math.abs(ux)*half+W,.003,hz+uz*mid-Math.abs(uz)*half-W,hz+uz*mid+Math.abs(uz)*half+W),handRatio:.003/W,
+        handShape:{ax:ux*(r0-mid),ay:0,az:hz+uz*r0,bx:ux*(r1-mid),by:0,bz:hz+uz*r1,r:W}},wire,homeClockRayHand);
+    }
+  },[.2,.2,seatZ]),seat:true,fx,fy,h:seatZ,wireChair:{x,y,fx,fy,seat:seatZ,back:hz}};
 }
 // Wall fixtures that used to be painted in the ice-cream parlour and the
 // burger joint, built: a rack of wafer cones in wire rings, and the kitchen

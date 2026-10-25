@@ -108,7 +108,7 @@ function pizzaWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'cotto', ceil: 'pendant', sign: false, wall: pizzaWall, keeper: [6.6, 1.75],
   props: r => [pizzaOven(1.95, 1.85),
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
-    ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
+    ...[4.9, 6.6, 8.3].map(x => HEAT_LAMP(x, 2.45, 1.87)), // the heat lamps
     KITCHEN_SERVICE_COUNTER(8.3,1.4,.55,.35,.9,GRAY,GRAY), // the prep counter at the back, a sack of flour on it
     KITCHEN_UPRIGHT_FLOUR_SACK(8.05, 1.4, 0.9),
     ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
@@ -245,15 +245,7 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
 // ---- the ice cream parlour (ICE CREAM): the dipping case of tubs in every colour, cones racked on the wall, pastel
 // stripes, little marble tables with wire chairs, a big neon cone
 const ICE = [[MAG, 9], [WHITE, 12], [GREEN, 9], [BRICK, 4], [YEL, 12], [ORANGE, 9], [CYAN, 10], [RED, 8]];
-const wireChair = (x, y, fx, fy, col) => { // a parlour chair: a round seat, a heart-shaped wire back
-  const seat = { ...ROOM_MODEL(x, y, (vx, vy) => {
-    drum(vx, vy, 0.2, 0.44, 0.48, (i, t, L) => { BG[i] = C(col, 4 + L * 0.3); return set(i, ' ', 0), true; });
-    for (const [ex, ey] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) rod(vx + ex * 0.14, vy + ey * 0.14, 0, vx + ex * 0.12, vy + ey * 0.12, 0.44, 0.008, WHITE, 1.4);
-    const bx = vx - fx * 0.2, by = vy - fy * 0.2;
-    for (let k = 0; k < 10; k++) { const t0 = k / 10 * Math.PI * 2, t1 = (k + 1) / 10 * Math.PI * 2, r = 0.16; rod(bx - fy * Math.cos(t0) * r, by + fx * Math.cos(t0) * r, 0.75 + Math.sin(t0) * r, bx - fy * Math.cos(t1) * r, by + fx * Math.cos(t1) * r, 0.75 + Math.sin(t1) * r, 0.008, WHITE, 1.4); }
-  }, [0.2, 0.2, 0.48]), seat: true, fx, fy, h: 0.48 };
-  return [seat];
-};
+const wireChair = (x, y, fx, fy, col) => [WIRE_CHAIR(x, y, fx, fy, col)]; // a parlour chair: a round seat, a wire hoop back
 function iceWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.0 && Math.abs(u - 2.0) < 0.6) { // the neon cone
     const cu = u - 2.0, cz = z - 2.0, cone = cz < 0.5 && Math.abs(cu) < cz * 0.35, scoop = Math.hypot(cu, cz - 0.62) < 0.2;
