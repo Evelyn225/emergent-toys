@@ -20,6 +20,12 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 7 (shop interiors):** shop fridge walls on
+  `claude/shop-fridges` (new `city/shop-fridges.js`; runs and wall painters in
+  `city/shops.js`; label/stock options and plain-box long parts in my
+  `city/kitchen-crates-coolers.js`). Next: the shelf islands, then the shops'
+  painted boxes group by group. `city/home-*.js` stays with Codex.
+
 - **Claude pass 7 (shop interiors) started:** display cases on
   `claude/shop-display-cases` (new `city/shop-display-cases.js` replacing
   `glassCase`/`caseGoods` in `city/shops.js`; callers in `city/shops.js`,
@@ -392,3 +398,20 @@ case/display/aircraft-terminal and shop route/seating checks pass. Close/wide/
 oblique/night views and ABAB costs reviewed. No shared helper edits.
 Next Codex #222 shop fridge walls, then #223 gondolas and remaining shops.
 #219 final full CI green; Claude remains on pass12 lights/utilities.
+
+Codex active review now `codex/review-shop-fridges` (#222): integrated #221
+cases and main through its merge. The only source conflict removed both old
+case and fridge painters, keeping the built replacement modules. Reviewing
+`city/shop-fridges.js` and its test plus Claude's dairy-stock/shared-cooler
+changes already in this PR; no new shared-helper edits planned. Next #223.
+Claude keeps pass12 lights/utilities and his street branches.
+
+#222 Codex review complete (`codex/review-shop-fridges`): Claude's fridge
+geometry and dairy/prepared-stock implementation retained. Added native
+actual-stock support/glass/packing/cache coverage over all seven runs;
+lowered-shelf, rebuilt-profile and detached-wall mutations fail correctly.
+Six fridge/shared-cooler checks, five shop routes/seating and four bundle/
+parse checks pass; all rooms, close/wide/oblique/night and grocer corner
+reviewed, with ABAB costs appended. No new shared-helper edits. Next Codex
+#223 gondolas: review stock support and avoid repeated depth-order sorting
+when only the camera position changes. Claude remains on pass12.
