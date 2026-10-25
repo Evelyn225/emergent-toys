@@ -1269,7 +1269,7 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const h = map[idx(x, y)], e = map[idx(x + 1, y)];
       if (!h || roofHeightAt(x + 0.5, y + 0.5) !== h || map[idx(x - 1, y)] !== h || map[idx(x, y - 1)] !== h || map[idx(x, y + 1)] !== h) continue;
-      if (!across && e && e !== h && Math.abs(e - h) <= ROOF_STEP) across = [x, y, h, e];
+      if (!across && e && e !== h && roofHeightAt(x+1.5,y+.5)===e && Math.abs(e - h) <= ROOF_STEP) across = [x, y, h, e];
       if (!edge && !e && h >= 1.4 && h <= 1.8 && ROAD[idx(x + 1, y)]) edge = [x, y, h];
       const far = map[idx(x + 3, y)];
       if (!leap && !e && !map[idx(x + 2, y)] && far && map[idx(x + 4, y)] === far && (h - far) * 10 >= 4 && (h - far) * 10 <= 8) leap = [x, y, h, far];
@@ -1279,25 +1279,30 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   assert.ok(spots.across && spots.edge && spots.leap, JSON.stringify(spots));
   const [x, y, h, e] = spots.across;
   await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = { kind: 'store', def: { ex: 2 } }; roofLot = roofCells(x, y); px = x + 0.3; py = y + 0.5; a = 0; pitch = 0; }, [x, y, h]);
-  await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(e=>mode==='roof'&&roofH===e&&!onRoofLot(),e,{timeout:20000});
+  await page.keyboard.up('KeyW');
   assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, onRoofLot()]), ['roof', e, false], 'over on the next roof, away from the stairs');
   // to the edge, facing the street, and keep walking: there's no wall, you go over
   const [ex, ey, eh] = spots.edge;
-  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; roofLot = roofCells(x, y); px = x + 0.6; py = y + 0.5; a = 0; refillNeeds(); }, [ex, ey, eh]);
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; roofLot = roofCells(x, y); px = x + 0.6; py = y + 0.5; a = 0; refillNeeds();body.z=body.vz=body.peak=body.mx=body.my=0; }, [ex, ey, eh]);
   assert.match(await page.evaluate(() => promptText()), /edge: \d+m drop/);
-  await page.keyboard.down('KeyW'); await page.waitForTimeout(1200); await page.keyboard.up('KeyW');
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(()=>mode==='walk',null,{timeout:20000});
+  await page.keyboard.up('KeyW');
   assert.strictEqual(await page.evaluate(() => mode), 'walk', 'over the edge');
-  await page.waitForTimeout(2500);
+  await page.waitForFunction(()=>mode==='walk'&&body.z===0,null,{timeout:20000});
   const r = await page.evaluate(() => [body.z, needs.health]);
   assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
   // A sprinting jump keeps its momentum, but falls into this two-cell street before reaching the opposite roof.
   const [lx, ly, lh] = spots.leap;
-  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = body.mx = body.my = 0; }, [lx, ly, lh]);
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.5; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = body.mx = body.my = 0; }, [lx, ly, lh]);
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW');
-  await page.waitForFunction(() => body.mx > 0.7 && !body.z); // establish the sprint before popping into the air
+  await page.waitForFunction(x => body.mx > .7 && !body.z && mode==='roof' && rel(px-x)>=.8,lx,{timeout:20000}); // sprint to the edge before popping into the air
+  const jumpT=await page.evaluate(()=>T);
   await page.keyboard.press('Space');
-  await page.waitForTimeout(250); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
-  await page.waitForTimeout(2500);
+  await page.waitForFunction(start=>T>=start+.25,jumpT,{timeout:20000}); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
+  await page.waitForFunction(()=>mode==='walk'&&body.z===0,null,{timeout:20000});
   const fell = await page.evaluate(x => [mode, body.z, rel(px-x)<3 && !!ROAD[idx(Math.floor(px),Math.floor(py))]], lx);
   assert.deepStrictEqual(fell, ['walk', 0, true], 'down in the street, not across it');
   // no stairs on the roof next door: the fire escape takes you down to the sidewalk beside it

@@ -17,11 +17,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/goods-ui.js`, plus the home shelf prompt in `city/hud.js` and display
   placement restoration in `city/save.js`. Claude's bar/lantern ownership stays
   separate. Books and home shelves are complete and locally checked in **PR #206**;
-  focused checks pass, full CI pending. The user was asked whether public/shop shelves are also in scope;
+  focused checks pass. Full CI passed Node/three browser shards; its older roof
+  traversal test failed a wall-clock assumption. Codex is repairing that test
+  on `codex/roof-browser-state-waits` before the next visual chunk. The user was asked whether public/shop shelves are also in scope;
   current chunk covers every physical shelf/board in the four home types.
   #204 palms/balcony cache and #205 wall clock are merged, full CI green.
   #197–#202 full CI are green.
-  Next: remaining pass 4 electronics/decor audit, then pass 5 (home files).
+  User has paused Claude. Codex takes over the back bar, lanterns and Thai
+  spirit house queue below, then resumes the remaining quality audit.
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
@@ -52,7 +55,7 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   there (bar back-bar via the shared `shelves` wall painter, fish tank,
   bodega/gas/market food props, street-food carts, pier stall, spirit house,
   lanterns).
-  **Next (Claude), claimed unless Codex or the user redirects:** start pass 8
+  **Next queue (Codex taking over while Claude is unavailable):** start pass 8
   (restaurants, cafés and bars) where pass 3 left off: a built back bar for
   the bar in place of the `shelves` wall painter, then the paper lanterns
   (yakitori, pho, sushi, izakaya) and the Thai spirit house. Files:
@@ -68,7 +71,7 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   and append completed notes to `WORLD_QUALITY.md`. Preserve both source/module
   lists and notes, then rebuild the bundle to resolve generated-file conflicts.
 - Include focused checks, visual review and measured rendering costs in PRs.
-  Keep pass 3 open until its remaining audit is complete.
+  Pass 3 closed with the audit in #203; keep later passes open until their audits finish.
 - Record each finished chunk, branch/PR and next owned files here, so the other
   agent can read it after fetching. This file is asynchronous coordination;
   separate Claude and Codex sessions cannot directly message one another.
