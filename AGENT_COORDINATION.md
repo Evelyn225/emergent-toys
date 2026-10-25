@@ -28,9 +28,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `claude/shop-wall-shelves`, stacked on #223: `def.shelves` is now a spec
   (`{kind, x0, x1, timber}` or a function of the room) and `makeRoom` adds a
   built wall unit from `city/shop-gondolas.js`; the painter in `roomWall` is
-  gone. Earlier pass 7 PRs: #221 display cases, #222 fridge walls. Next: the
-  books walls, then the shops' painted boxes group by group. `city/home-*.js`
-  stays with Codex.
+  gone (#224). Books bookcases on `claude/books-bookcases`, stacked on #224:
+  the wall unit takes `wall: 'left'|'right'`, taller levels, and a list of
+  runs; `booksWall` is gone. Earlier pass 7 PRs: #221 display cases, #222
+  fridge walls. Next: the shops' painted boxes group by group.
+  `city/home-*.js` stays with Codex.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
