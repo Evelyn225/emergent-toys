@@ -32,9 +32,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   rooms. Geometry/native placement checks and all-shop routes pass; visuals
   and measured costs recorded in WORLD_QUALITY.md. Files:
   `city/restaurant-lanterns.js`, makeRoom/ceiling dispatch in `city/rooms.js`,
-  and the existing lantern browser test. #210 is merged; full CI is running.
-  **Next:** the remaining restaurant
-  audit (including the izakaya's painted sake bottles), then the remaining
+  and the existing lantern browser test. #210 is merged and its full CI is green; ceiling fixtures merged #212, CI running.
+  **Izakaya sake shelves complete** (`codex/izakaya-sake-shelves`):
+  `city/izakaya-sake.js`, izakaya wall/props in `city/dining.js`, manifest
+  and `city-izakaya-sake` browser test. Two boards, mounted brackets/guards
+  and42 real bottles; geometry and real E service checks, all-shop routes
+  and bundle checks pass. Close/end/underside/night/phone views reviewed;
+  cost measurements in WORLD_QUALITY.md. **Next:** the remaining restaurant
+  audit, then the remaining
   home electronics/decor audit and pass 5. Keep pass 8 open until audited.
   #206 covers every physical home shelf board; the question about extending
   placement to shop/public shelves remains unanswered.

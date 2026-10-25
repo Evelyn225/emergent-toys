@@ -20983,12 +20983,6 @@ ROOM_FLOORS.izakaya = (i, f, wx, wy, r, x, L) => { // dark boards, and tatami in
 function izakayaWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && noren(i, u, z, 1.5, 0.55, BLUE)) return true; // the kitchen
-  if (backWall(my) && z > 1.15 && z < 2.35 && u > 2.6 && u < 8.0) { // the bottles: big sake bottles, labels on them
-    const sz = (z - 1.15) / 0.6, row = Math.floor(sz), bz = fract(sz), cu = fract(u / 0.26), k = Math.floor(u / 0.26) + row * 37;
-    if (bz < 0.08) { BG[i] = C(BRICK, 2); return set(i, '=', C(WARM, L)), true; }
-    const bottle = Math.abs(cu - 0.5) < (bz > 0.7 ? 0.1 : 0.32) && bz < 0.95;
-    BG[i] = bottle ? (bz > 0.3 && bz < 0.6 ? C(WHITE, 7) : C([GREEN, BRICK, BLUE, GRAY][k & 3], 2.2)) : C(BRICK, 1); return set(i, bottle && bz > 0.3 && bz < 0.6 && fract(bz * 8) < 0.4 ? '=' : ' ', C(GRAY, 3)), true;
-  }
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.3, 2.68, 0.28, 0.32, C(WHITE, 13), C(BRICK, 2))) return true;
   if (!backWall(my) && z > 1.35 && z < 2.25 && Math.abs(u) % 3.4 > 1.2 && Math.abs(u) % 3.4 < 2.6) { // the menu tags
     const tu = fract(Math.abs(u) / 0.3), k = Math.floor(Math.abs(u) / 0.3);
@@ -21008,6 +21002,7 @@ ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'iza
       p.push(KITCHEN_LOW_TABLE(2.1,y));
       for (const [x, fx] of [[1.3, 1], [2.9, -1]]) { p.push(zabuton(x, y, fx, 0)); if (chance(0.45)) p.push({ ...sitting(x, y, shirt(), 0.12), face: [fx, 0] },KITCHEN_SETTING(2.1-fx*.22,y,.34,{fx,fy:0,meal:'dumplings'})); }
     }
+    p.push(IZAKAYA_SAKE_SHELVES());
     return p;
   } };
 
@@ -37686,6 +37681,56 @@ function BAR_BACK_BAR(x=6,y=1.09) {
     for(const p of vessels)drawBox({...p.box,x:vx+p.u,y:vy+p.v,barRole:p.role},p.shade,coveRayLathe);
     for(let k=parts.length-1;k>=0;k--){const p=parts[k];drawBox({...p.box,x:vx+p.u,y:vy+p.v,...p.profile,barRole:p.role},p.shade,homeRayWorktop);}
   }),box:boxAt(x,y+.008,1,0,q.half,q.depth+.008,0,q.top),radius:Math.hypot(q.half,q.depth+.016),backBar:{levels:q.levels.map(z=>z+q.board),bottles}};
+}
+// Two wall-mounted boards carry distinct sealed sake bottles. Board tops set
+// every bottle foot and guard height; brackets derive from the same underside.
+const SAKE_SHELF={half:2.6,depth:.115,thickness:.035,levels:[1.15,1.75],brackets:[-2.2,0,2.2]};
+const SAKE_BOTTLES=[
+ [[0,0],[0,.051],[.008,.061],[.03,.064],[.29,.064],[.32,.061],[.36,.032],[.39,.024],[.432,.024],[.432,.028],[.46,.028],[.46,0]],
+ [[0,0],[0,.051],[.01,.064],[.29,.064],[.33,.056],[.37,.024],[.41,.024],[.41,.028],[.435,.028],[.435,0]],
+ [[0,0],[0,.05],[.012,.064],[.23,.064],[.28,.057],[.33,.027],[.38,.027],[.38,.031],[.405,.031],[.405,0]],
+ [[0,0],[0,.051],[.015,.066],[.17,.066],[.24,.055],[.285,.025],[.33,.022],[.33,.027],[.355,.027],[.355,0]],
+];
+function sakeBottleShade(kind,base) {
+ const glass=[GREEN,BRICK,BLUE,STONE][kind],height=SAKE_BOTTLES[kind].at(-1)[0];
+ return (i,t,L)=>{
+  const z=HIT.w-base,cap=z>height-.028,label=z>.10&&z<.29&&HIT.nz<.7,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+  let colour=cap?GRAY:label?WHITE:glass,level=cap?3:label?5:2.2;
+  // The label's seal and short printed rules filter out before sub-cell size.
+  if(label&&coveDetail(t,.32)>.2){
+   if(z>.12&&z<.16&&HIT.ny>.6){colour=RED;level=3.8;}
+   else if(z>.19&&z<.26&&Math.abs(HIT.nx)<.4&&coveGroove(z-.19,.026,.008,t/projY)>.45){colour=GRAY;level=2;}
+  }
+  BG[i]=C(colour,level+L*.28*light);set(i,' ',0);return true;
+ };
+}
+function IZAKAYA_SAKE_SHELVES(x=5.3,y=1.115) {
+ const q=SAKE_SHELF,parts=[],bottles=[],rods=[],wood=furnitureTimber(BRICK);
+ const panel=(role,u,v,hl,hw,z0,z1)=>parts.push({role,u,v,box:boxAt(0,0,1,0,hl,hw,z0,z1),profile:kitchenPanelProfile(hl,hw,z0,z1,.003)});
+ const rod=(role,u,v,z,uu,vv,zz,r=.004)=>rods.push({role,ax:u,ay:v,az:z,bx:uu,by:vv,bz:zz,r});
+ const metal=(i,t,L)=>{BG[i]=C(GRAY,1.7+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+ for(const [row,z]of q.levels.entries()){
+  const top=z+q.thickness;panel('board',0,0,q.half,q.depth,z,top);
+  for(const u of q.brackets){
+   panel('wall-plate',u,-q.depth+.006,.025,.006,z-.18,z);
+   rod('bracket-wall',u,-.101,z-.16,u,-.101,z-.006,.006);
+   rod('bracket-arm',u,-.101,z-.006,u,.09,z-.006,.006);
+   rod('bracket-brace',u,-.101,z-.14,u,.09,z-.006);
+  }
+  for(const u of [-2.53,0,2.53])rod('guard-post',u,.105,top,u,.105,top+.065);
+  rod('guard',-2.53,.105,top+.065,2.53,.105,top+.065);
+  for(let k=0;k<21;k++){
+   const kind=(k+row*3)%4,u=(k-10)*.24,profile=SAKE_BOTTLES[kind],p=homeLampPart('bottle',top,profile);
+   bottles.push({...p,u,v:.005,kind,shade:sakeBottleShade(kind,top)});
+  }
+ }
+ return {...ROOM_MODEL(x,y,(vx,vy)=>{
+  for(const p of bottles)drawBox({...p.box,x:vx+p.u,y:vy+p.v,sakeRole:'bottle',sakeKind:p.kind},p.shade,backBarRayBottle);
+  for(const p of rods){const ax=vx+p.ax,ay=vy+p.ay,bx=vx+p.bx,by=vy+p.by,r=p.r;
+   drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(p.az,p.bz)-r,Math.max(p.az,p.bz)+r),ax,ay,az:p.az,bx,by,bz:p.bz,r,sakeRole:p.role},metal,coveRayCapsule);
+  }
+  for(const p of parts)drawBox({...p.box,x:vx+p.u,y:vy+p.v,...p.profile,sakeRole:p.role},p.role==='board'?wood:metal,homeRayWorktop);
+ }),box:boxAt(x,y,1,0,q.half,q.depth,.97,2.25),radius:q.half+.01,sakeShelves:true};
 }
 // Paper surrounds real space: the upper frame carries a socket and bulb, with
 // a cord seated in the ceiling rose. The dark hoops remain separate from glow.
