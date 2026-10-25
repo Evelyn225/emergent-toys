@@ -18168,12 +18168,11 @@ ROOM_DEFS.tattoo = { grid: boxRoom(14, 11), light: 0.85, floor: 'checker', ceil:
       ...[2.6, 7.0, 11.4].flatMap(sx => [tattooStation(sx, 2.3), SEAT(sx - 0.1, 2.3, 1, 0, 0.6), SEAT(sx + 0.25, 3.05, 0, -1, 0.52)]), // (sit in the chair, or on the artist's stool)
       ...glassCase(10.2, 7.45, 1.5, 0.34, 1.0, caseGoods('piercing', [YEL, WHITE, GRAY, CYAN], true, 84), GRAY), // the counter: rings, studs, barbells
       { ...artist(10.2, 6.75, (r.cell ? r.cell[0] * 31 + r.cell[1] : 7) | 0, { face: [0, 1] }) }, // behind it
-      BX(11.2, 7.45, 0.18, 0.15, 1.0, 1.24, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; }), // the till
-      BX(9.3, 7.4, 0.14, 0.2, 1.0, 1.08, solid(GRAY, { top: '#' })), BX(9.3, 7.4, 0.14, 0.2, 1.08, 1.14, solid(RED, { top: '=' })), // portfolios
+      GAS_TILL(11.2, 7.45, 1.0, 0, -1), BOOK_STACK(9.3, 7.4, 1.0, [[0.14, 0.2, 0.08, GRAY], [0.14, 0.2, 0.06, RED]]), // the till; portfolios
       ROOM_MODEL(9.8, 7.5, (vx, vy) => drum(vx, vy, 0.07, 1.0, 1.18, (i, t, L) => { BG[i] = C(CYAN, 1); const k = hash(Math.floor(HIT.u * 40), Math.floor(HIT.w * 30), 85); return set(i, k > 0.55 ? 'o' : ' ', C(INK_COLS[k * 9 | 0], 13)), true; })), // a jar of lollipops
       ...chesterfield(1.4, 8.0, 1.2), JUKEBOX(1.35, 5.6, 1, 0), POT_PLANT(5.4, 9.4, 1.5),
-      BX(2.75, 8.0, 0.35, 0.55, 0, 0.42, solid(GRAY, { top: '=' }), 0, 1), BX(2.75, 7.8, 0.12, 0.16, 0.42, 0.47, solid(MAG, { top: '#' })), BX(2.7, 8.3, 0.12, 0.16, 0.42, 0.46, solid(BLUE, { top: '#' })), // the low table and its binders
-      BX(2.6, 8.0, 1.25, 1.0, 0, 0.012, (i, t, L) => { const e = Math.min(1.25 - Math.abs(HIT.u), 1.0 - Math.abs(HIT.v)); BG[i] = C(e < 0.12 ? YEL : RED, e < 0.12 ? 3 : 1.6 + L * 0.2); return set(i, e > 0.12 && fract((HIT.u + HIT.v) * 3) < 0.15 ? '+' : ' ', C(ORANGE, 6)), true; }, 0, 1)]; // the rug
+      FURNITURE_EAT_TABLE(2.75, 8.0, 0.55, 0.35, GRAY, 0.42), BOOK_STACK(2.75, 7.8, 0.42, [[0.12, 0.16, 0.05, MAG]]), BOOK_STACK(2.7, 8.3, 0.42, [[0.12, 0.16, 0.04, BLUE]]), // the low table and its binders
+      FLOOR_RUG(2.6, 8.0, 1.25, 1.0, RED, YEL, 0, 1)]; // the rug
     let seed = 11;
     for (const sx of [2.6, 7.0, 11.4]) if (chance(0.55)) p.push( // someone in the chair, and their artist hunched over the work
       { ...sitting(sx - 0.2, 2.3, shirt(), 0.62), face: [1, 0] }, artist(sx + 0.25, 3.05, seed++, { pose: 'sit6', face: [0, -1] }));
@@ -38086,6 +38085,24 @@ function RECORD_FACEOUT_WALL(x0,x1,rows=[.4,1.12,1.84]) {
     sleeves.forEach((q,n)=>drawBox(boxAt(vx+q.x-cx,vy+1.008-cy,1,0,B.sleeve/2,.002,q.z,q.z+B.sleeve),shades[n])); // stood on the ledge against the wall
     for(const z of rows){drawBox(boxAt(vx,vy,1,0,len/2,ledge/2,z,z+.025),wood);drawBox(boxAt(vx,vy+ledge/2-.006,1,0,len/2,.006,z+.025,z+.025+lip),wood);} // ledge and lip
   }),box:boxAt(cx,cy,1,0,len/2,ledge/2,rows[0],rows.at(-1)+.025+B.sleeve),radius:len/2+.1,faceOut:{sleeves,rows,ledge,lip}};
+}
+// Small shop fittings shared between rooms: a stack of binders or books lying
+// flat, and a rug on the floor.
+// A stack lying flat at z: each [hl, hw, thickness, colour], bottom first,
+// each resting on the one beneath, the spines along u (c, s).
+function BOOK_STACK(x,y,z,books,c=1,s=0) {
+  const tops=[];let h=z;for(const b of books){tops.push(h);h+=b[2];}
+  const cover=col=>(i,t,L)=>{const edge=HIT.face!==5&&HIT.face!==6&&Math.abs(HIT.nz)<.5&&(HIT.face===1||HIT.face===2);
+    BG[i]=C(edge?WHITE:col,(edge?3.2:2.2)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const hl=Math.max(...books.map(b=>b[0])),hw=Math.max(...books.map(b=>b[1]));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>books.forEach((b,k)=>coveRound(vx,vy,c,s,b[0],b[1],tops[k],tops[k]+b[2],.004,cover(b[3])))),
+    box:boxAt(x,y,c,s,hl,hw,z,h),radius:Math.hypot(hl,hw),bookStack:{z,top:h,tops}};
+}
+// A rug on the floor, a border round it: (u, v) from its centre to shade(e, u, v) by e, the distance in from its edge.
+function FLOOR_RUG(x,y,hl,hw,field,border,c=1,s=0) {
+  const shade=(i,t,L)=>{const e=Math.min(hl-Math.abs(HIT.u),hw-Math.abs(HIT.v));
+    BG[i]=C(e<.12?border:field,e<.12?3:1.6+L*.2);return set(i,e>.12&&fract((HIT.u+HIT.v)*3)<.15?'+':' ',C(border,7)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox(boxAt(vx,vy,c,s,hl,hw,0,.012),gondolaFlat(c,s,shade))),rug:true};
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on

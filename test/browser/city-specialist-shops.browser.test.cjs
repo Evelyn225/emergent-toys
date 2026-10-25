@@ -43,3 +43,25 @@ test('record bins hold their LPs in the trough between divider cards; sleeves fa
  });
  assert.deepEqual(r,[]);
 }));
+
+test('tattoo parlour: till and portfolios on the glass case, binders on the low table, the rug flat on the floor',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  enterRoom('tattoo',{word:'TATTOO',ret:[100,100,0]},[5,5,0]);
+  const P=room.props,till=P.find(o=>o.till),stacks=P.filter(o=>o.bookStack),table=P.find(o=>o.furniture!=='counter'&&o.box&&inBox(o.box,2.75,8,0)&&o.box.z1===.42);
+  const caseTop=P.filter(o=>o.box&&inBox(o.box,till.x,till.y,0)&&o!==till).map(o=>o.box.z1);
+  if(!caseTop.some(z=>Math.abs(z-till.box.z0)<1e-9))bad.push('till not on the case');
+  if((room.def.keeper[1]-till.y)*till.till.fy<=0)bad.push('till faces away from the artist');
+  if(stacks.length!==3)bad.push(['stacks',stacks.length]);
+  for(const s of stacks){const d=s.bookStack;
+   const under=P.filter(o=>o!==s&&o.box&&inBox(o.box,s.x,s.y,0)).map(o=>o.box.z1);
+   if(!under.some(z=>Math.abs(z-d.z)<1e-9))bad.push(['stack floating',s.x,s.y,d.z]);
+   d.tops.forEach((z,k)=>{if(k&&z<=d.tops[k-1])bad.push('books not stacked');});}
+  if(!table)bad.push('no low table');
+  if(!P.some(o=>o.rug))bad.push('no rug');
+  if(String(ROOM_DEFS.tattoo.props).includes('BX('))bad.push('a painted box is left');
+  for(const [x,y] of [[4.2,8],[8,7.9],[5,6.2]])if(!free(x,y))bad.push(['aisle blocked',x,y]);
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
