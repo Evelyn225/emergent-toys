@@ -20,6 +20,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 11 (street objects):** vending machines on `claude/street-vending`
+  from main (new `city/street-vending.js`; `drawVending` moved out of
+  `city/city-sprites.js`). Next: kerb fixtures (bins, hydrants, mailboxes,
+  bollards) in new modules, with placement in `city/props.js`/`city/streetscape.js`.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
