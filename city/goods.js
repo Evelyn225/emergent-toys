@@ -512,7 +512,7 @@ const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
 let ball = null; // { x, y, vx, vy, z, vz }
 // what stops it: buildings (unless it's sailing over a low one), and everything solid at street level: fences,
 // containers, booths, lamp posts, vending machines
-const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || fairBlocked(x, y, 0.015));
+const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || kerbAt(x, y, 0.015) || fairBlocked(x, y, 0.015));
 function kickBall(x, y, a, power = 2.6) {
   let d = 0; // set down just in front of you, short of any wall you're standing against
   while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;

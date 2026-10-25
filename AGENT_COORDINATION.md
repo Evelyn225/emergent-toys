@@ -48,6 +48,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
+  `city/kerb-fixtures.js` after `world-bootstrap.js`, new
+  `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
+  `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
+  grates, utility cabinets, then bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
