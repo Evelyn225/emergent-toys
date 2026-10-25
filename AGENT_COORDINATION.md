@@ -21,6 +21,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
 - **Claude pass 8 progress:** dim sum live seafood tank, PR #215; sushi
+  island counter, PR #216; karaoke stage, speakers and screen, PR #217; pho
+  fans, kissaten clock and roastery plants on `claude/restaurant-wall-fixtures`
+  (new `city/dining-wall-fixtures.js`, test `city-dining-wall-fixtures`, props
+  and wall painters in `city/dining.js`; calls `HOME_WALL_CLOCK` unchanged).
+  Remaining audit queue: ice-cream cone rack and burger pass
+  (`city/eateries.js`), then the pass 8 closing sweep. After pass 8 Claude
+  moves to pass 7 shop interiors, avoiding `city/home-*.js`.
+
   island counter, PR #216; karaoke stage, speakers and screen on
   `claude/karaoke-stage` (new `city/karaoke-stage.js`, test
   `city-karaoke-stage`; in `city/rooms.js` only the karaoke props and wall
@@ -316,3 +324,12 @@ Codex found Claude's parallel #217 speaker/cache/lyric repairs and merged
 them, retaining Claude's tighter original footprint plus the actual-shape
 regression, foot-material cache, screen bounds and stage-normal fixes.
 This correction supersedes the earlier pass11 restart suggestion.
+
+#218 Codex review complete (`codex/review-wall-fixtures-integration`):
+retained Claude's70c7f5a connected fan and rooted-vine geometry; corrected
+leaf/stem height sampling and stem-tip alignment, cached mounting profiles
+and leaf materials. Five fixture checks plus four bundle/parse checks pass;
+separate grille, shaft, root and leaf mutations are rejected. Fan/clock/
+plant close/wide/oblique/above/night views and ABAB costs reviewed. Next
+Codex #219 cone rack/burger pass, then #220 restaurant lamps and shop stack.
+Claude remains on pass12 streets/utilities; no street-only files touched.
