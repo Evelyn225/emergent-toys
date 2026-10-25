@@ -20971,16 +20971,8 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
 // cheese, flowers, bread), a coffee stand with stools, benches back to back down the middle
-const stallTop = kind => (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 6) < 0.15 ? '=' : ' ', C(WARM, L * 0.5)), true; }
-  const k = hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 134 + kind), [c, lv, g] = [[WHITE, 8, '<'], [GREEN, 5, 'o'], [RED, 5, '~'], [YEL, 8, 'O'], [MAG, 8, '*'], [ORANGE, 6, ')']][kind];
-  if (kind === 0) { BG[i] = C(CYAN, 4); return set(i, k > 0.55 ? '<' : ' ', C(GRAY, 9)), true; } // fish on ice
-  const col = kind === 1 ? [GREEN, RED, ORANGE][k * 3 | 0] : kind === 4 ? [RED, YEL, WHITE, MAG][k * 4 | 0] : c;
-  BG[i] = C(col, lv * (0.7 + k * 0.5)); return set(i, k > 0.55 ? g : ' ', C(WHITE, 9)), true;
-};
-const stallAwning = (x, y, hl, col, ca = 1, sa = 0) => BX(x, y, hl, 0.6, 2.15, 2.22, (i, t, L) => { BG[i] = fract(HIT.u * 2.5) < 0.5 ? C(col, 4 + L * 0.2) : C(WHITE, 5 + L * 0.2); return set(i, HIT.face <= 4 ? 'v' : ' ', C(GRAY, 4)), true; }, ca, sa);
-const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [BX(x, y, hl, 0.35, 0, 0.9, stallTop(kind), ca, sa), stallAwning(x - sa * 0.1, y - ca * 0.1, hl + 0.1, col, ca, sa),
-  ...[-1, 1].map(e => BX(x + ca * e * hl - sa * 0.3, y + sa * e * hl - ca * 0.3, 0.03, 0.03, 0.9, 2.15, solid(GRAY))), // its posts
+// a stall along (ca, sa), its customers on (sa, ca) and its stallholder behind: built in market-hall.js
+const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
   ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || set(i, ' ', 0), true; }
@@ -20995,20 +20987,14 @@ function marketWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 'concrete', ceil: 'strip', sign: false, wall: marketWall, keeper: [8.0, 1.4],
   props: r => [...stall(3.5, 2.0, 1.4, 0, BLUE, WHITE), ...stall(8.0, 2.0, 1.6, 1, GREEN, r.neon), ...stall(12.5, 2.0, 1.4, 3, YEL, BRICK), // fish, the greengrocer, cheese
     ...stall(2.0, 5.5, 1.2, 2, RED, WHITE, 0, 1), ...stall(2.0, 8.6, 1.2, 4, MAG, shirt(), 0, 1), ...stall(14.0, 8.6, 1.2, 5, ORANGE, shirt(), 0, -1), // the butcher, flowers, bread
-    BX(14.0, 5.0, 1.0, 0.35, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(14.1, 4.6, 0.2, 0.18, 1.0, 1.4, solid(GRAY, { top: 'o', trim: 1.34 })), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
+    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
     ...stoolsY(13.25, 4.3, 5.7, 0.7, GRAY, 1, 0.4),
     ...plainBench(8.0, 6.3, 1.1, 0, -1, BRICK, 0.4), ...plainBench(8.0, 6.75, 1.1, 0, 1, BRICK, 0.4),
-    ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => BX(x, y, 0.32, 0.25, 0, 0.55, crateShade(BRICK)))] };
+    ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => KITCHEN_BEER_CRATE(x, y, { levels: 2, hl: 0.32, hw: 0.25, h: 0.275, col: BRICK }))] }; // crates, stacked
 
 // ---- the fruit shop (FRUIT): tiered stands heaped with fruit down both walls, melons on the table in the middle,
 // bananas hung up behind the counter, the scale; a bench by the window
-const FRUITS = [[ORANGE, 8, 'o'], [RED, 6, 'o'], [GREEN, 6, 'o'], [YEL, 9, ')'], [MAG, 5, '%'], [GREEN, 4, 'O']];
-const fruitTop = seed => (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 5) < 0.2 ? '=' : ' ', C(WARM, L * 0.5)), true; }
-  const [c, lv, g] = FRUITS[(Math.floor((HIT.u + 3) / 0.6) + seed) % FRUITS.length], k = hash(Math.floor(HIT.u * 14), Math.floor(HIT.v * 14), 135);
-  BG[i] = C(c, lv * (0.7 + k * 0.5)); return set(i, k > 0.55 ? g : ' ', C(c, lv + 5)), true;
-};
-const fruitTiers = (x, y, hl, s, seed) => [BX(x, y, hl, 0.2, 0, 0.95, fruitTop(seed), 0, 1), BX(x + s * 0.38, y, hl, 0.18, 0, 0.65, fruitTop(seed + 2), 0, 1), BX(x + s * 0.72, y, hl, 0.16, 0, 0.38, fruitTop(seed + 4), 0, 1)];
+// (the tiered stands are the grocer's, turned to face the room; the melon table is built: market-hall.js)
 const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k++) rod(vx - 0.1 + k * 0.05, vy, z - 0.05, vx - 0.16 + k * 0.08, vy + 0.06, z - 0.35, 0.025, YEL, 1.6); });
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -21019,11 +21005,8 @@ function fruitWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.fruitshop = { grid: boxRoom(10, 8), light: 1.1, floor: 'oak', ceil: 'pendant', sign: false, wall: fruitWall, keeper: [5.0, 1.4],
   props: r => [...counterBox(5.0, 1.8, 1.3), { ...standing(5.0, 1.4, GREEN), face: [0, 1] }, ROOM_MODEL(4.2, 1.8, (vx, vy) => { drum(vx, vy, 0.12, 1.05, 1.12, CHROME); rod(vx, vy, 1.12, vx, vy, 1.3, 0.02, GRAY, 1.2); drum(vx, vy, 0.09, 1.3, 1.42, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, HIT.face === 4 ? '/' : ' ', C(RED, 8)), true; }); }), // the scale
     bananas(3.6), bananas(6.4),
-    ...fruitTiers(1.3, 3.9, 1.6, 1, 0), ...fruitTiers(8.7, 3.9, 1.6, -1, 3),
-    BX(5.0, 4.3, 0.75, 0.45, 0, 0.7, (i, t, L) => { // melons and pineapples on the table
-      if (HIT.face !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-      const k = Math.floor((HIT.u + 1) / 0.3), cu = fract((HIT.u + 1) / 0.3) - 0.5, cv = fract((HIT.v + 1) / 0.3) - 0.5, r = Math.hypot(cu, cv);
-      BG[i] = r < 0.45 ? C(k & 1 ? YEL : GREEN, k & 1 ? 7 : 4) : C(BRICK, 2); return set(i, r < 0.45 && (k & 1 ? fract((cu + cv) * 6) < 0.3 : fract(cu * 5) < 0.2) ? (k & 1 ? '#' : '|') : ' ', C(k & 1 ? GREEN : GREEN, 8)), true; }),
+    PRODUCE_STAND(1.55, 3.9, 1.6, 21, 1, 0), PRODUCE_STAND(8.45, 3.9, 1.6, 24, -1, 0),
+    MELON_TABLE(5.0, 4.3, 0.75, 0.45, 0.7), // melons and pineapples on the table
     ...plainBench(2.4, 6.65, 0.8, 0, -1, BRICK, 0.35)] };
 
 // ---- the motel office (MOTEL): the desk with its bell, the room keys on their hooks, the ice machine, the soda machine,
@@ -37785,20 +37768,22 @@ function grocerCrate(kind,hl,hw,rim) {
   return {kind,hl,hw,rim,base,floor,fruit,top:Math.max(...fruit.map(q=>q.z+q.vr)),shades:fruit.map((_,k)=>produceShade(f.col,k)),
     apple:f.apple&&produceAppleProfile(f.hr,f.vr)};
 }
-function drawGrocerCrate(vx,vy,q,slats) {
+// (c,s): the crate's turn, a quarter turn at a time (trays are square to the room)
+function drawGrocerCrate(vx,vy,q,slats,c=1,s=0) {
   // top layer first: the depth test turns away most of the fruit beneath
-  for(let k=q.fruit.length-1;k>=0;k--){const p=q.fruit[k];
-    if(q.apple)coveLathe(vx+p.u,vy+p.v,p.z-p.vr,q.apple,q.shades[k]);
-    else foodOval(vx+p.u,vy+p.v,p.z-p.vr,p.hr,p.hr,2*p.vr,q.shades[k]);}
-  foodTray(vx,vy,q.base,q.hl,q.hw,GROCER_CRATE.depth,slats);
+  for(let k=q.fruit.length-1;k>=0;k--){const p=q.fruit[k],x=vx+c*p.u-s*p.v,y=vy+s*p.u+c*p.v;
+    if(q.apple)coveLathe(x,y,p.z-p.vr,q.apple,q.shades[k]);
+    else foodOval(x,y,p.z-p.vr,p.hr,p.hr,2*p.vr,q.shades[k]);}
+  const turned=Math.abs(s)>.5;
+  foodTray(vx,vy,q.base,turned?q.hw:q.hl,turned?q.hl:q.hw,GROCER_CRATE.depth,slats);
 }
 const grocerCard=(i,t,L)=>{ // a white price card, the price a dark line across it
   const line=Math.abs(HIT.w-HIT.z0mid)<.006&&coveDetail(t,.1)>.3;
   BG[i]=C(line?GRAY:WHITE,line?2:5+L*.15);set(i,' ',0);return true;};
-// A stand along x: three tiers of crates stepping up away from the door (+y),
+// A stand: three tiers of crates stepping down toward its customers (fx,fy),
 // each tier's crates on a timber riser. hl: half its length.
-function PRODUCE_STAND(x,y,hl,seed) {
-  const W=GROCER_CRATE,tiers=[],slats=grocerSlats(),riser=grocerSlats(BRICK);
+function PRODUCE_STAND(x,y,hl,seed,fx=0,fy=1) {
+  const W=GROCER_CRATE,tiers=[],slats=grocerSlats(),riser=grocerSlats(BRICK),c=fy,s=-fx,at=(vx,vy,u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
   for(let k=0;k<3;k++){
     const n=Math.max(1,Math.floor(hl*2/.5)),pitch=hl*2/n,rim=W.rims[k],v=-W.tier+k*W.tier,crates=[];
     for(let j=0;j<n;j++){const kind=GROCER_PRODUCE_KINDS[Math.floor(hash(j,k,seed)*GROCER_PRODUCE_KINDS.length)];
@@ -37808,14 +37793,15 @@ function PRODUCE_STAND(x,y,hl,seed) {
   const cards=[];
   for(const t of tiers)for(const q of t.crates)cards.push({u:q.u,v:t.v+q.hw+.0015,z0:q.rim-.045,z1:q.rim-.008});
   const cardShade=c=>(i,t,L)=>{HIT.z0mid=(c.z0+c.z1)/2;return grocerCard(i,t,L);};
+  const turned=Math.abs(s)>.5;
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const t of tiers){
-      for(const q of t.crates)drawGrocerCrate(vx+q.u,vy+t.v,q,slats);
-      drawBox(boxAt(vx,vy+t.v,1,0,hl,W.tier/2,0,t.base),riser); // the riser the crates stand on
+      for(const q of t.crates){const [cx,cy]=at(vx,vy,q.u,t.v);drawGrocerCrate(cx,cy,q,slats,c,s);}
+      const [rx,ry]=at(vx,vy,0,t.v);drawBox(boxAt(rx,ry,c,s,hl,W.tier/2,0,t.base),gondolaFlat(c,s,riser)); // the riser the crates stand on
     }
-    for(const c of cards)drawBox(boxAt(vx+c.u,vy+c.v,1,0,.03,.0015,c.z0,c.z1),cardShade(c)); // clipped to each crate's front
-  }),box:boxAt(x,y,1,0,hl,W.tier*1.5,0,W.rims[0]),radius:Math.hypot(hl,W.tier*1.5)+.1,
-    produceStand:{tiers,hl,cards}};
+    for(const q of cards){const [cx,cy]=at(vx,vy,q.u,q.v);drawBox(boxAt(cx,cy,c,s,.03,.0015,q.z0,q.z1),cardShade(q));} // clipped to each crate's front
+  }),box:boxAt(x,y,1,0,turned?W.tier*1.5:hl,turned?hl:W.tier*1.5,0,W.rims[0]),radius:Math.hypot(hl,W.tier*1.5)+.1,
+    produceStand:{tiers,hl,cards,c,s}};
 }
 // A slatted bin of watermelons, a false floor halfway down.
 function WATERMELON_BIN(x,y,h=.8) {
@@ -38250,6 +38236,67 @@ function TEA_TABLE(x,y,hl,hw,h) {
 function FLOOR_CUSHION(x,y,hl,hw,h,col) {
   const shade=(i,t,L)=>{const piping=Math.abs(HIT.w-h/2)<.008&&Math.abs(HIT.nz)<.6;BG[i]=C(col,(piping?1.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,hl,hw,0,h,Math.min(.045,h*.45),shade)),box:boxAt(x,y,1,0,hl,hw,0,h),cushion:true};
+}
+// The market hall's stalls, built, and the fruit shop's melon table. A stall
+// is a timber counter, its customers on (fx,fy), with its goods laid out on a
+// display on top, two posts on the stallholder's edge holding up a striped
+// awning with a valance along the front.
+const MARKET_KINDS=['fish','greens','butcher','cheese','flowers','bread'];
+function MARKET_STALL(x,y,hl,kind,col,fx,fy) {
+  const c=fy,s=-fx,hw=.35,top=.9,K=MARKET_KINDS[kind],seed=kind*17+Math.round(x*3+y*5);
+  const at=(vx,vy,u,v)=>[vx+c*u-s*v,vy+s*u+c*v],turned=Math.abs(s)>.5;
+  const steel=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),items=[];
+  // the goods, as [u, v, draw(x, y)] relative to the stall
+  if(K==='fish'){
+    const ice=(i,t,L)=>{const g=hash(Math.floor(HIT.u*60),Math.floor(HIT.v*60),seed)*coveDetail(t,.2);BG[i]=C(g>.6?WHITE:CYAN,3.6+g*1.5+L*.15);set(i,' ',0);return true;};
+    const fish=k=>(i,t,L)=>{const belly=HIT.nz>.6&&Math.abs(HIT.v)<.012;BG[i]=C(belly?WHITE:GRAY,(belly?4:2.8)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+hash(k,1,seed)*.6);set(i,' ',0);return true;};
+    items.push([0,0,(px,py)=>{foodTray(px,py,top,turned?hw-.04:hl-.04,turned?hl-.04:hw-.04,.06,steel);drawBox(boxAt(px,py,c,s,hl-.05,hw-.05,top+.008,top+.045),gondolaFlat(c,s,ice));}]);
+    for(let k=0;k<Math.floor((hl*2-.2)/.3);k++)for(const v of [-.12,.12]){const u=-hl+.25+k*.3,sh=fish(k*2+(v>0));items.push([u,v,(px,py)=>foodOval(px,py,top+.04,.13,.035,.045,sh,c,s)]);}
+  }
+  if(K==='greens'){const n=Math.floor(hl*2/.5),pitch=hl*2/n;
+    for(let k=0;k<n;k++){const q=grocerCrate(GROCER_PRODUCE_KINDS[Math.floor(hash(k,2,seed)*GROCER_PRODUCE_KINDS.length)],pitch/2-.015,hw-.06,top+GROCER_CRATE.depth),sl=grocerSlats();
+      items.push([-hl+pitch*(k+.5),0,(px,py)=>drawGrocerCrate(px,py,q,sl,c,s)]);}}
+  if(K==='butcher'){const meat=k=>(i,t,L)=>{const fat=HIT.nz<.5&&HIT.nz>-.2;BG[i]=C(fat?WHITE:k%3?RED:BRICK,(fat?3.6:2.2)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const n=Math.floor(hl*2/.6),pitch=hl*2/n;
+    for(let k=0;k<n;k++){const u=-hl+pitch*(k+.5);items.push([u,0,(px,py)=>foodTray(px,py,top,turned?hw-.05:pitch/2-.03,turned?pitch/2-.03:hw-.05,.03,steel)]);
+      for(const du of [-.12,0,.12])for(const v of [-.12,.12]){const sh=meat(k*7+Math.round(du*10)+(v>0));items.push([u+du,v,(px,py)=>foodOval(px,py,top+.008,.055,.08,.03,sh,c,s)]);}}}
+  if(K==='cheese'){const rind=[[0,0],[0,.115],[.01,.12],[.07,.12],[.08,.115],[.08,0]],wheel=(i,t,L)=>{const cut=HIT.face===5;BG[i]=C(cut?YEL:ORANGE,(cut?4.2:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const n=Math.floor(hl*2/.3);
+    for(let k=0;k<n;k++){const u=-hl+.15+k*.3,stack=1+Math.floor(hash(k,3,seed)*2);for(let j=0;j<stack;j++)items.push([u,-.1,(px,py)=>coveLathe(px,py,top+j*.08,rind,wheel)]);
+      if(k%2===0)items.push([u,.17,(px,py)=>{const [a,b]=[.07,.04];coveRound(px,py,c,s,a,b,top,top+.06,.008,(i,t,L)=>{BG[i]=C(YEL,4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});}]);}}
+  if(K==='flowers'){const bucket=[[0,0],[0,.09],[.22,.11],[.22,.1],[.01,.08],[.01,0]],zinc=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+    const n=Math.floor(hl*2/.28);
+    for(let k=0;k<n;k++){const u=-hl+.14+k*.28,v=k%2?.1:-.1,bloom=[RED,MAG,YEL,WHITE,ORANGE][Math.floor(hash(k,4,seed)*5)];
+      items.push([u,v,(px,py)=>{coveLathe(px,py,top,bucket,zinc);
+        coveLathe(px,py,top+.012,[[0,0],[0,.075],[.24,.07],[.24,0]],(i,t,L)=>{BG[i]=C(GREEN,1.4+L*.2);set(i,' ',0);return true;}); // the stems, packed in
+        for(let j=0;j<5;j++){const a=j*TAU/5+k;foodOval(px+Math.cos(a)*.05,py+Math.sin(a)*.05,top+.24+(j%2)*.03,.035,.035,.05,(i,t,L)=>{BG[i]=C(bloom,3.4+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});}
+      }]);}}
+  if(K==='bread'){const wicker=(i,t,L)=>{const w=coveGroove(HIT.u+HIT.w*2,.02,.004,t/projX)*coveDetail(t,.2);BG[i]=C(WARM,2.4-w+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const crust=k=>(i,t,L)=>{const score=HIT.nz>.7&&fract((HIT.u+HIT.v)*12)<.15;BG[i]=C(k%2?BRICK:ORANGE,(score?3.4:2.2)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const n=Math.floor(hl*2/.6),pitch=hl*2/n;
+    for(let k=0;k<n;k++){const u=-hl+pitch*(k+.5),bh=pitch/2-.04;items.push([u,0,(px,py)=>foodTray(px,py,top,turned?hw-.06:bh,turned?bh:hw-.06,.08,wicker)]);
+      for(let j=-1;j<=1;j++)for(const v of [-.1,.1]){const sh=crust(k*5+j+(v>0));items.push([u+j*bh*.6,v,(px,py)=>foodOval(px,py,top+.012,.09,.05,.07,sh,c,s)]);}}}
+  const canopy=(i,t,L)=>{const stripe=fract((HIT.u+hl)*2.5)<.5;BG[i]=C(stripe?col:WHITE,(stripe?4:5)+L*.2);return set(i,(HIT.face===3||HIT.face===4)&&HIT.w<2.1?'v':' ',C(GRAY,4)),true;};
+  return [SHOP_COUNTER(x,y,hl,hw,top,c,s,BRICK),{...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [u,v,draw] of items){const [px,py]=at(vx,vy,u,v);draw(px,py);}
+    const part=GAS_PART(vx,vy,c,s);
+    for(const e of [-1,1])part(e*(hl-.03),-.3,.025,.025,top,2.15,'wood',.008); // the posts, on the stallholder's edge
+    part(0,-.1,hl+.1,.6,2.15,2.2,canopy); // the awning
+    part(0,.49,hl+.1,.01,2.0,2.15,canopy); // its valance along the front
+  }),marketStall:{kind:K,hl,hw,top,c,s,items:items.length}}];
+}
+// The fruit shop's table of melons and pineapples: a table, the fruit lying on it.
+function MELON_TABLE(x,y,hl,hw,h) {
+  const melon=k=>(i,t,L)=>{const stripe=Math.sin(Math.atan2(HIT.v,HIT.u)*7+k)>.35;BG[i]=C(GREEN,(stripe?1.8:3.4)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const pine=(i,t,L)=>{const d=fract((HIT.w*14)+Math.atan2(HIT.v,HIT.u)*1.6)<.25;BG[i]=C(d?BRICK:YEL,(d?2:3.6)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const crown=(i,t,L)=>{BG[i]=C(GREEN,2.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const fruit=[];for(let k=0;k<Math.floor(hl*2/.3);k++)for(const v of [-.18,.18])fruit.push({u:-hl+.15+k*.3,v,pine:k%2===1});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [k,f] of fruit.entries()){const px=vx+f.u,py=vy+f.v;
+      if(f.pine){foodOval(px,py,h,.07,.07,.2,pine);coveLathe(px,py,h+.19,[[0,0],[0,.05],[.12,.01],[.12,0]],crown);}
+      else foodOval(px,py,h,.13,.1,.19,melon(k),1,0);}
+    drawFurnitureTable(vx,vy,hl,hw,h);
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),melonTable:{h,fruit}};
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on

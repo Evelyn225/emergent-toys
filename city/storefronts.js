@@ -29,16 +29,8 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
 // cheese, flowers, bread), a coffee stand with stools, benches back to back down the middle
-const stallTop = kind => (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 6) < 0.15 ? '=' : ' ', C(WARM, L * 0.5)), true; }
-  const k = hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 134 + kind), [c, lv, g] = [[WHITE, 8, '<'], [GREEN, 5, 'o'], [RED, 5, '~'], [YEL, 8, 'O'], [MAG, 8, '*'], [ORANGE, 6, ')']][kind];
-  if (kind === 0) { BG[i] = C(CYAN, 4); return set(i, k > 0.55 ? '<' : ' ', C(GRAY, 9)), true; } // fish on ice
-  const col = kind === 1 ? [GREEN, RED, ORANGE][k * 3 | 0] : kind === 4 ? [RED, YEL, WHITE, MAG][k * 4 | 0] : c;
-  BG[i] = C(col, lv * (0.7 + k * 0.5)); return set(i, k > 0.55 ? g : ' ', C(WHITE, 9)), true;
-};
-const stallAwning = (x, y, hl, col, ca = 1, sa = 0) => BX(x, y, hl, 0.6, 2.15, 2.22, (i, t, L) => { BG[i] = fract(HIT.u * 2.5) < 0.5 ? C(col, 4 + L * 0.2) : C(WHITE, 5 + L * 0.2); return set(i, HIT.face <= 4 ? 'v' : ' ', C(GRAY, 4)), true; }, ca, sa);
-const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [BX(x, y, hl, 0.35, 0, 0.9, stallTop(kind), ca, sa), stallAwning(x - sa * 0.1, y - ca * 0.1, hl + 0.1, col, ca, sa),
-  ...[-1, 1].map(e => BX(x + ca * e * hl - sa * 0.3, y + sa * e * hl - ca * 0.3, 0.03, 0.03, 0.9, 2.15, solid(GRAY))), // its posts
+// a stall along (ca, sa), its customers on (sa, ca) and its stallholder behind: built in market-hall.js
+const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
   ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || set(i, ' ', 0), true; }
@@ -53,20 +45,14 @@ function marketWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 'concrete', ceil: 'strip', sign: false, wall: marketWall, keeper: [8.0, 1.4],
   props: r => [...stall(3.5, 2.0, 1.4, 0, BLUE, WHITE), ...stall(8.0, 2.0, 1.6, 1, GREEN, r.neon), ...stall(12.5, 2.0, 1.4, 3, YEL, BRICK), // fish, the greengrocer, cheese
     ...stall(2.0, 5.5, 1.2, 2, RED, WHITE, 0, 1), ...stall(2.0, 8.6, 1.2, 4, MAG, shirt(), 0, 1), ...stall(14.0, 8.6, 1.2, 5, ORANGE, shirt(), 0, -1), // the butcher, flowers, bread
-    BX(14.0, 5.0, 1.0, 0.35, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(14.1, 4.6, 0.2, 0.18, 1.0, 1.4, solid(GRAY, { top: 'o', trim: 1.34 })), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
+    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
     ...stoolsY(13.25, 4.3, 5.7, 0.7, GRAY, 1, 0.4),
     ...plainBench(8.0, 6.3, 1.1, 0, -1, BRICK, 0.4), ...plainBench(8.0, 6.75, 1.1, 0, 1, BRICK, 0.4),
-    ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => BX(x, y, 0.32, 0.25, 0, 0.55, crateShade(BRICK)))] };
+    ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => KITCHEN_BEER_CRATE(x, y, { levels: 2, hl: 0.32, hw: 0.25, h: 0.275, col: BRICK }))] }; // crates, stacked
 
 // ---- the fruit shop (FRUIT): tiered stands heaped with fruit down both walls, melons on the table in the middle,
 // bananas hung up behind the counter, the scale; a bench by the window
-const FRUITS = [[ORANGE, 8, 'o'], [RED, 6, 'o'], [GREEN, 6, 'o'], [YEL, 9, ')'], [MAG, 5, '%'], [GREEN, 4, 'O']];
-const fruitTop = seed => (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 5) < 0.2 ? '=' : ' ', C(WARM, L * 0.5)), true; }
-  const [c, lv, g] = FRUITS[(Math.floor((HIT.u + 3) / 0.6) + seed) % FRUITS.length], k = hash(Math.floor(HIT.u * 14), Math.floor(HIT.v * 14), 135);
-  BG[i] = C(c, lv * (0.7 + k * 0.5)); return set(i, k > 0.55 ? g : ' ', C(c, lv + 5)), true;
-};
-const fruitTiers = (x, y, hl, s, seed) => [BX(x, y, hl, 0.2, 0, 0.95, fruitTop(seed), 0, 1), BX(x + s * 0.38, y, hl, 0.18, 0, 0.65, fruitTop(seed + 2), 0, 1), BX(x + s * 0.72, y, hl, 0.16, 0, 0.38, fruitTop(seed + 4), 0, 1)];
+// (the tiered stands are the grocer's, turned to face the room; the melon table is built: market-hall.js)
 const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k++) rod(vx - 0.1 + k * 0.05, vy, z - 0.05, vx - 0.16 + k * 0.08, vy + 0.06, z - 0.35, 0.025, YEL, 1.6); });
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -77,11 +63,8 @@ function fruitWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.fruitshop = { grid: boxRoom(10, 8), light: 1.1, floor: 'oak', ceil: 'pendant', sign: false, wall: fruitWall, keeper: [5.0, 1.4],
   props: r => [...counterBox(5.0, 1.8, 1.3), { ...standing(5.0, 1.4, GREEN), face: [0, 1] }, ROOM_MODEL(4.2, 1.8, (vx, vy) => { drum(vx, vy, 0.12, 1.05, 1.12, CHROME); rod(vx, vy, 1.12, vx, vy, 1.3, 0.02, GRAY, 1.2); drum(vx, vy, 0.09, 1.3, 1.42, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, HIT.face === 4 ? '/' : ' ', C(RED, 8)), true; }); }), // the scale
     bananas(3.6), bananas(6.4),
-    ...fruitTiers(1.3, 3.9, 1.6, 1, 0), ...fruitTiers(8.7, 3.9, 1.6, -1, 3),
-    BX(5.0, 4.3, 0.75, 0.45, 0, 0.7, (i, t, L) => { // melons and pineapples on the table
-      if (HIT.face !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-      const k = Math.floor((HIT.u + 1) / 0.3), cu = fract((HIT.u + 1) / 0.3) - 0.5, cv = fract((HIT.v + 1) / 0.3) - 0.5, r = Math.hypot(cu, cv);
-      BG[i] = r < 0.45 ? C(k & 1 ? YEL : GREEN, k & 1 ? 7 : 4) : C(BRICK, 2); return set(i, r < 0.45 && (k & 1 ? fract((cu + cv) * 6) < 0.3 : fract(cu * 5) < 0.2) ? (k & 1 ? '#' : '|') : ' ', C(k & 1 ? GREEN : GREEN, 8)), true; }),
+    PRODUCE_STAND(1.55, 3.9, 1.6, 21, 1, 0), PRODUCE_STAND(8.45, 3.9, 1.6, 24, -1, 0),
+    MELON_TABLE(5.0, 4.3, 0.75, 0.45, 0.7), // melons and pineapples on the table
     ...plainBench(2.4, 6.65, 0.8, 0, -1, BRICK, 0.35)] };
 
 // ---- the motel office (MOTEL): the desk with its bell, the room keys on their hooks, the ice machine, the soda machine,

@@ -93,3 +93,37 @@ test('hardware and pharmacy: counters and what stands on them, the garden corner
  });
  assert.deepEqual(r,[]);
 }));
+
+test('market stalls hold their goods on the counter top under the awning, stallholders behind; the fruit shop stands face the room',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const draw=drawBox,parts=o=>{const out=[];drawBox=(box,shade,ray=rayBox)=>out.push({box,ray});try{o.draw(o.x-px,o.y-py);}finally{drawBox=draw;}return out.map(q=>({...q,box:{...q.box,x:q.box.x+px,y:q.box.y+py,ax:q.box.ax+px,ay:q.box.ay+py}}));};
+  enterRoom('markethall',{word:'MARKET',ret:[100,100,0]},[5,5,0]);
+  const P=room.props,stalls=P.filter(o=>o.marketStall);
+  if(stalls.length!==6)bad.push(['stalls',stalls.length]);
+  for(const o of stalls){const d=o.marketStall,c=d.c,s=d.s,ps=parts(o);
+   const local=(x,y)=>[(x-o.x)*c+(y-o.y)*s,-(x-o.x)*s+(y-o.y)*c];
+   const counter=P.find(q=>q.shopCounter&&Math.abs(q.x-o.x)<1e-9&&Math.abs(q.y-o.y)<1e-9);if(!counter){bad.push([d.kind,'no counter']);continue;}
+   for(const q of ps){const [u,v]=local(q.box.x,q.box.y),x=q.box;
+    if(x.z1<=2)// goods: on or above the top, inside the counter's footprint (a rounded allowance for turned crates)
+     {if(x.z0<d.top-1e-6)bad.push([d.kind,'goods below the top',+x.z0.toFixed(3)]);
+      const ext=Math.max(x.hl,x.hw);if(Math.abs(u)>d.hl+1e-6||Math.abs(v)>d.hw+1e-6)bad.push([d.kind,'goods off the counter',+u.toFixed(2),+v.toFixed(2)]);}
+   }
+   const posts=ps.filter(q=>Math.abs(q.box.z1-2.15)<1e-9&&Math.abs(q.box.z0-d.top)<1e-9);
+   if(posts.length!==2||posts.some(q=>local(q.box.x,q.box.y)[1]>0))bad.push([d.kind,'posts not on the stallholder edge']);
+   if(!ps.some(q=>Math.abs(q.box.z0-2.15)<1e-9))bad.push([d.kind,'no awning on the posts']);
+   if(d.items<4)bad.push([d.kind,'bare stall',d.items]);
+  }
+  const vendors=P.filter(o=>o.fig&&o.face&&stalls.some(s=>Math.hypot(s.x-o.x,s.y-o.y)<.7));if(vendors.length<5)bad.push(["stallholders",vendors.length]);
+  for(const v of vendors){
+   const s=stalls.find(s=>Math.hypot(s.x-v.x,s.y-v.y)<.7),d=s.marketStall;if(((v.x-s.x)*-d.s+(v.y-s.y)*d.c)>=0)bad.push([d.kind,'stallholder on the customers\' side']);}
+  if(String(ROOM_DEFS.markethall.props).includes('BX('))bad.push('market hall: a painted box is left');
+  enterRoom('fruitshop',{word:'FRUIT',ret:[100,100,0]},[5,5,0]);
+  const st=room.props.filter(o=>o.produceStand);if(st.length!==2)bad.push(['fruit stands',st.length]);
+  for(const o of st){const front=[o.x+(-o.produceStand.s)*.6,o.y+o.produceStand.c*.6];if(roomAt(front[0],front[1])!=='.'||roomAt(o.x-(-o.produceStand.s)*.6,o.y-o.produceStand.c*.6)!=='#')bad.push('fruit stand not facing the room from its wall');}
+  const mt=room.props.find(o=>o.melonTable);if(!mt)bad.push('no melon table');
+  if(String(ROOM_DEFS.fruitshop.props).includes('BX('))bad.push('fruit shop: a painted box is left');
+  return bad.slice(0,10);
+ });
+ assert.deepEqual(r,[]);
+}));

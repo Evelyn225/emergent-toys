@@ -163,6 +163,7 @@
     "city/corner-shops.js",
     "city/record-shop.js",
     "city/shop-fittings.js",
+    "city/market-hall.js",
     "city/shop-fridges.js",
     "city/shop-display-cases.js",
     "city/izakaya-sake.js",
