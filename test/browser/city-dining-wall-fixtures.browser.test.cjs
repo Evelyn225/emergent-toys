@@ -27,8 +27,16 @@ test('pho fans: plate on the wall, the head clear of it through the whole sweep,
     const plate=parts.filter(q=>q.ray===homeRayWorktop);if(!plate.some(q=>Math.abs(back(q,f.fx,f.fy,f.x,f.y))<1e-6))bad.push(['plate off the wall',t]);
     const b=parts.filter(q=>q.ray===homeClockRayHand).map(q=>q.box.handShape.bz.toFixed(4)).join();if(blades!==null&&b!==blades)moved=true;blades=b;
     const [hx,hy]=phoFanHeading(f.fx,f.fy,t,f.phase);if(hx*f.fx+hy*f.fy<Math.cos(PHO_FAN.sweep)-1e-9)bad.push('sweeps too far');
+    // every grille ring is carried: spokes run from inside the hub out into the rim, and each ring lies along them
+    const spokes=parts.filter(q=>q.ray===homeClockRayHand&&q.box.handShape.r===PHO_FAN.wire).map(q=>{const b=q.box,cu=(b.x-o.x)*hy+(b.y-o.y)*-hx,h=b.handShape;
+     return {v:(b.x-o.x)*hx+(b.y-o.y)*hy,r0:Math.hypot(h.ax+cu,h.az-f.z),r1:Math.hypot(h.bx+cu,h.bz-f.z)};});
+    for(const g of [PHO_FAN.front,PHO_FAN.back]){const on=spokes.filter(q=>Math.abs(q.v-g.v)<1e-6);
+     if(on.length<3)bad.push(['too few spokes',g.v,on.length]);
+     if(on.some(q=>Math.min(q.r0,q.r1)>g.hub+1e-6||Math.max(q.r0,q.r1)<PHO_FAN.cage-.004-1e-6))bad.push(['a spoke short of the hub or the rim',g.v]);
+     if(g.rings.some(r=>on.some(q=>r<Math.min(q.r0,q.r1)||r>Math.max(q.r0,q.r1))))bad.push(['a ring off its spokes',g.v]);}
    }
    if(!moved)bad.push('blades still');
+   if(PHO_FAN.shaft[0]>PHO_FAN.back.v+1e-9||PHO_FAN.shaft[1]<PHO_FAN.spinner[0]-1e-9)bad.push('the spinner is not on its shaft');
   }
   const tip=.03+PHO_FAN.blade+PHO_FAN.width;
   // the old painted fan is plain tiled wall now
@@ -63,6 +71,10 @@ test('roastery plants: pots on brackets clear of the wall, every leaf hanging in
    if(q.pot.v-q.pot.radius<.02)bad.push('pot into the wall');
    for(const part of shapes(o)){const d=back(part,q.fx,q.fy,q.x,q.y);if(d< -1e-6)bad.push(['into the wall',d]);if(part.box.z0<.9)bad.push(['too low',part.box.z0]);}
    for(const l of q.leaves)if(l.z>q.pot.top)bad.push('leaf above the pot');
+   // each vine grows out of the soil and over the rim; no leaf is inside the pot
+   for(const v of q.vines){if(Math.hypot(v.root.u,v.root.v-q.pot.v)>q.pot.inner-.003||Math.abs(v.root.z-q.pot.soil)>.005)bad.push('vine not rooted in the soil');
+    if(Math.hypot(v.rim.u,v.rim.v-q.pot.v)<q.pot.radius+.003||v.rim.z<q.pot.top+.003)bad.push('vine through the rim');}
+   for(const l of q.leaves)if(l.z+.028>q.z&&Math.hypot(l.u,l.v-q.pot.v)<q.pot.radius)bad.push('leaf inside the pot');
    // nothing else in the room stands where the vines hang
    for(const other of room.props)if(other!==o&&other.box&&!other.walk&&other.box.z1>q.z-1&&inBox(other.box,q.x+q.fx*.12,q.y+q.fy*.12,.1))bad.push(['crowded',other.box.x,other.box.y]);
   }
