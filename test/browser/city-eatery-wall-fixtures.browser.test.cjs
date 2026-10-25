@@ -56,3 +56,21 @@ test('the burger pass: frame on the shelf, hood in front of the frame, lamps bet
  })()`);
  assert.deepEqual(r.bad,[]);assert.ok(r.kitchen,'kitchen view through the opening');assert.equal(r.tickets,4);assert.match(r.prompt,/E: shop$/);
 }));
+
+test('the burger pass bounds include its hood, ticket rail and lower brackets, with fixed profiles cached',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  const save=drawBox,parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,ray});try{o.draw(o.x,o.y);}finally{drawBox=save;}return a;},errors=[];projX=10000;
+  for(const[fx,fy]of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const o=BURGER_KITCHEN_PASS(6,6,1,fx,fy),b=o.box;
+   for(const q of parts(o)){const a=q.box,u=(a.x-b.x)*b.c+(a.y-b.y)*b.s,v=-(a.x-b.x)*b.s+(a.y-b.y)*b.c;
+    const hu=Math.abs(a.hl*(a.c*b.c+a.s*b.s))+Math.abs(a.hw*(-a.s*b.c+a.c*b.s)),hv=Math.abs(a.hl*(-a.c*b.s+a.s*b.c))+Math.abs(a.hw*(a.s*b.s+a.c*b.c));
+    if(Math.abs(u)+hu>b.hl+1e-7||Math.abs(v)+hv>b.hw+1e-7||a.z0<b.z0-1e-7||a.z1>b.z1+1e-7)errors.push(['rendered part outside parent bounds',fx,fy,a.z0,a.z1]);
+   }
+  }
+  const rack=ICECREAM_CONE_RACK(1,4,1,0),pass=BURGER_KITCHEN_PASS(6,1,1,0,1),panel=kitchenPanelProfile,top=kitchenTopProfile;let built=0;
+  kitchenPanelProfile=(...a)=>{built++;return panel(...a);};kitchenTopProfile=(...a)=>{built++;return top(...a);};
+  try{parts(rack);parts(pass);}finally{kitchenPanelProfile=panel;kitchenTopProfile=top;}
+  if(built)errors.push(['fixed profiles rebuilt while drawing',built]);
+  return errors.slice(0,20);
+ });assert.deepEqual(bad,[]);
+}));

@@ -340,3 +340,11 @@ separate grille, shaft, root and leaf mutations are rejected. Fan/clock/
 plant close/wide/oblique/above/night views and ABAB costs reviewed. Next
 Codex #219 cone rack/burger pass, then #220 restaurant lamps and shop stack.
 Claude remains on pass12 streets/utilities; no street-only files touched.
+
+#219 Codex review complete (`codex/review-eatery-fixtures-integration`):
+retained Claude's cone seating and pass mounting fixes, expanded the pass
+bounds to its hood/rail plates/braces, and cached fixed profiles. Three
+fixture checks and four bundle/parse checks pass; actual-part containment
+fails before correction. Close/above/wide/front/oblique/under/night views
+and ABAB costs reviewed. Next #220 restaurant lamps, closing pass8 review,
+then the shop stack. Claude owns pass12; no street-only files changed.
