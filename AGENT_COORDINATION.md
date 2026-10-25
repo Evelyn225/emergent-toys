@@ -16,8 +16,8 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/actions.js`, `city/goods.js` and optional storage callbacks in
   `city/goods-ui.js`, plus the home shelf prompt in `city/hud.js` and display
   placement restoration in `city/save.js`. Claude's bar/lantern ownership stays
-  separate. Books and home shelves are complete and locally checked; final PR
-  pending. The user was asked whether public/shop shelves are also in scope;
+  separate. Books and home shelves are complete and locally checked in **PR #206**;
+  focused checks pass, full CI pending. The user was asked whether public/shop shelves are also in scope;
   current chunk covers every physical shelf/board in the four home types.
   #204 palms/balcony cache and #205 wall clock are merged, full CI green.
   #197–#202 full CI are green.
