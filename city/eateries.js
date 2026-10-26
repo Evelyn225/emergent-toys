@@ -108,7 +108,7 @@ function pizzaWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'cotto', ceil: 'pendant', sign: false, wall: pizzaWall, keeper: [6.6, 1.75],
   props: r => [pizzaOven(1.95, 1.85),
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
-    ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
+    ...[4.9, 6.6, 8.3].map(x => HEAT_LAMP(x, 2.45, 1.87)), // the heat lamps
     KITCHEN_SERVICE_COUNTER(8.3,1.4,.55,.35,.9,GRAY,GRAY), // the prep counter at the back, a sack of flour on it
     KITCHEN_UPRIGHT_FLOUR_SACK(8.05, 1.4, 0.9),
     ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
@@ -120,6 +120,7 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
 const shakeMachine = (x, y) => KITCHEN_SHAKE_MACHINE(x,y);
 const sodaFountain = (x, y) => KITCHEN_SODA_FOUNTAIN(x,y);
 const BURGER_COUNTER_Y=2.6; // leave a walkable staff aisle beside the supported machines
+const BURGER_PASS_HALF=1.0; // the pass: over the counter, clear of the shake machine and the soda fountain
 function burgerWall(i, u, uStep, z, d, mx, my, L) {
   const M = 5.7; // (over the counter, clear of the bathroom)
   if (backWall(my)) {
@@ -133,7 +134,7 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
       if (r < 0.18) { const layer = bz > 0.06 ? [ORANGE, 8] : bz > 0.02 ? [GREEN, 6] : bz > -0.02 ? [YEL, 11] : bz > -0.07 ? [BRICK, 3] : [ORANGE, 8]; BG[i] = C(...layer); return set(i, bz > 0.1 && fract(cu * 20) < 0.2 ? '.' : ' ', C(WHITE, 13)), true; }
       return set(i, ' ', 0), true;
     }
-    if (z > 1.0 && z < 1.65 && Math.abs(u - M) < 2.2) { const g = noise(u * 6, z * 6 - T * 2, 90); BG[i] = C(ORANGE, 2 + g * 3); return set(i, g > 0.6 ? '~' : '.', C(YEL, 9)), true; } // the pass, the griddle hot behind it
+    if (burgerPassOpening(u, z, M, BURGER_PASS_HALF)) { const low = clamp(1 - (z - BURGER_PASS.bottom) / 0.25, 0, 1); BG[i] = low > 0 ? C(ORANGE, 0.8 + low * 2.4 + noise(u * 3, T * 0.8, 90) * 0.6) : C(GRAY, 0.7); return set(i, ' ', 0), true; } // through the pass: the kitchen, the griddle glowing low
   }
   if (z < 1.0) { BG[i] = (Math.floor(u * 4) + Math.floor(z * 4)) & 1 ? C(WHITE, 4 + L * 0.2) : C(RED, 3 + L * 0.2); return set(i, ' ', 0), true; } // red and white tiles
   if (z < 1.08) { BG[i] = C(GRAY, 4); return set(i, '=', C(WHITE, 13)), true; } // a chrome strip
@@ -141,7 +142,7 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
   props: r => [KITCHEN_SERVICE_COUNTER(6,BURGER_COUNTER_Y,2.8,.32,1.05,RED,WHITE),
-    { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
+    { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45), BURGER_KITCHEN_PASS(5.7, 1, BURGER_PASS_HALF, 0, 1),
     ...stools(3.6, 8.6, BURGER_COUNTER_Y+.7, 1.0, RED, 0, -1, 0.35),
     ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
     JUKEBOX(11.55, 5.9, -1, 0), ...wcFittings(13)] };
@@ -149,16 +150,7 @@ ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor
 // ---- the taqueria (TACOS): the spit of al pastor turning by the grill, the salsa bar, a cooler of bright sodas,
 // paper flags strung across the ceiling, painted walls with a tiled skirt, picnic tables and a ledge with stools
 const PICADO = [RED, YEL, GREEN, MAG, CYAN, ORANGE, BLUE];
-const papelPicado = (y, x0, x1, z) => ROOM_MODEL((x0 + x1) / 2, y, (vx, vy) => {
-  const hl = (x1 - x0) / 2;
-  rod(vx - hl, vy, z, vx + hl, vy, z, 0.004, GRAY, 0.8);
-  for (let x = -hl + 0.15; x < hl; x += 0.32) {
-    const sag = (1 - (x / hl) ** 2) * 0.12, k = Math.floor((x + hl) / 0.32);
-    drawBox(boxAt(vx + x, vy, 1, 0, 0.13, 0.004, z - sag - 0.3, z - sag), (i, t, L) => {
-      if (fract(HIT.u * 18) < 0.3 && fract(HIT.w * 18) < 0.3) return false; // (cut-outs: they're lace, you see through)
-      BG[i] = C(PICADO[k % PICADO.length], 7 + L * 0.2); return set(i, ' ', 0), true; });
-  }
-});
+const papelPicado = (y,x0,x1,z) => PAPEL_PICADO(y,x0,x1,z);
 const trompo = (x,y) => KITCHEN_SPIT(x,y,'pastor');
 function tacoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.1, room.menu, 1.25, C(GRAY, 0.6), C(YEL, 15), 'TACOS', C(MAG, 15))) return true;
@@ -244,28 +236,19 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
 // ---- the ice cream parlour (ICE CREAM): the dipping case of tubs in every colour, cones racked on the wall, pastel
 // stripes, little marble tables with wire chairs, a big neon cone
 const ICE = [[MAG, 9], [WHITE, 12], [GREEN, 9], [BRICK, 4], [YEL, 12], [ORANGE, 9], [CYAN, 10], [RED, 8]];
-const wireChair = (x, y, fx, fy, col) => { // a parlour chair: a round seat, a heart-shaped wire back
-  const seat = { ...ROOM_MODEL(x, y, (vx, vy) => {
-    drum(vx, vy, 0.2, 0.44, 0.48, (i, t, L) => { BG[i] = C(col, 4 + L * 0.3); return set(i, ' ', 0), true; });
-    for (const [ex, ey] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) rod(vx + ex * 0.14, vy + ey * 0.14, 0, vx + ex * 0.12, vy + ey * 0.12, 0.44, 0.008, WHITE, 1.4);
-    const bx = vx - fx * 0.2, by = vy - fy * 0.2;
-    for (let k = 0; k < 10; k++) { const t0 = k / 10 * Math.PI * 2, t1 = (k + 1) / 10 * Math.PI * 2, r = 0.16; rod(bx - fy * Math.cos(t0) * r, by + fx * Math.cos(t0) * r, 0.75 + Math.sin(t0) * r, bx - fy * Math.cos(t1) * r, by + fx * Math.cos(t1) * r, 0.75 + Math.sin(t1) * r, 0.008, WHITE, 1.4); }
-  }, [0.2, 0.2, 0.48]), seat: true, fx, fy, h: 0.48 };
-  return [seat];
-};
+const wireChair = (x, y, fx, fy, col) => [WIRE_CHAIR(x, y, fx, fy, col)]; // a parlour chair: a round seat, a wire hoop back
 function iceWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.0 && Math.abs(u - 2.0) < 0.6) { // the neon cone
     const cu = u - 2.0, cz = z - 2.0, cone = cz < 0.5 && Math.abs(cu) < cz * 0.35, scoop = Math.hypot(cu, cz - 0.62) < 0.2;
     BG[i] = scoop ? C(MAG, 10) : cone ? C(ORANGE, 9) : C(GRAY, 1); return set(i, cone && fract(cz * 8 + cu * 8) < 0.2 ? 'x' : ' ', C(BRICK, 6)), true;
   }
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.6, 2.0, ['1 SCOOP 3', '2 SCOOPS 5', 'SHAKE 5', 'SUNDAE 7'], 1.2, C(WHITE, 8), C(MAG, 8), room.word, C(CYAN, 7))) return true;
-  if (backWall(my) && z > 1.3 && z < 1.8 && Math.abs(u - 4.2) < 0.9) { BG[i] = C(WHITE, 6); return set(i, fract(u * 6) < 0.5 && fract(z * 6) < 0.5 ? 'V' : ' ', C(ORANGE, 9)), true; } // cones, racked
   if (z < 0.95) { BG[i] = C(WHITE, 5 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(MAG, 6)), true; } // white panelling
   const st = Math.floor(u * 3) % 3; BG[i] = C([MAG, WHITE, GREEN][(st + 3) % 3], [7, 9, 7][(st + 3) % 3] + L * 0.2); return set(i, ' ', 0), true; // candy stripes
 }
 ROOM_FLOORS.pastel = (i, f, wx, wy, r, x, L) => { BG[i] = (Math.floor(wx * 2) + Math.floor(wy * 2)) & 1 ? C(MAG, 5 + f * 3) : C(WHITE, 6 + f * 4); return set(i, ' ', 0); };
 ROOM_DEFS.icecream = { grid: boxRoom(11, 8), light: 1.1, floor: 'pastel', ceil: 'pendant', sign: false, neon: true, wall: iceWall, keeper: [5.5, 1.5],
-  props: r => [KITCHEN_FOOD_CASE(5.5,2.3,2.6,.42,1.1,'icecream',WHITE), { ...standing(5.5, 1.5, MAG), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5.5,2.3,2.6,.42,1.1,'icecream',WHITE), { ...standing(5.5, 1.5, MAG), face: [0, 1] }, ICECREAM_CONE_RACK(4.2, 1, 0, 1), // cones, racked
     ...[[2.0, 4.6], [5.5, 5.4], [9.0, 4.6]].flatMap(([x, y]) => dining(x, y, { hl: 0.32, hw: 0.32, top: solid(WHITE, { top: ' ', bright: 2 }), busy: 0.4, chair: wireChair, chairCol: MAG, h: 0.74 })),
     POT_PLANT(10.2, 6.9, 1.2)] };
 
