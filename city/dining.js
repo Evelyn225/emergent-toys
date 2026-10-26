@@ -207,10 +207,6 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
 
 // ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
-const noodlePuller = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // the dough stretched between the cook's hands, folded, stretched again
-  const s = 0.15 + Math.abs(Math.sin(T * 1.6)) * 0.45;
-  for (let k = 0; k < 5; k++) rod(vx - s, vy + 0.05, 1.25 + k * 0.012, vx + s, vy + 0.05, 1.25 + Math.sin(k) * 0.02 - s * 0.15, 0.006, WHITE, 2);
-});
 function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.6))) return true;
@@ -224,7 +220,7 @@ function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.noodlehouse = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'lantern', sign: false, wall: noodleHouseWall, keeper: [6.6, 1.65],
   props: r => [KITCHEN_SERVICE_COUNTER(6,2.5,2.6,.3,1,RED), { ...standing(6.6, 1.65, RED), face: [0, 1] },
-    KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
+    KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), ...NOODLE_COOK(2.6,2.05), // the noodle maker at work
     stockPot(8.0, 1.45), stockPot(8.75, 1.45),
     ...[[2.5, 4.6, 0.45], [9.5, 4.6, 0.45], [2.5, 6.9, 0.35], [9.5, 6.9, 0.35]].flatMap(([x, y, busy]) => roundTable(x, y, 0.45, 4, { cloth: RED, chair: lowStool, chairCol: BRICK, busy, a0: Math.PI / 4 })),
     roundLantern(4.5, 5.8), roundLantern(7.7, 5.8), ...wcFittings(13)] };

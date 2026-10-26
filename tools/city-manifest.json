@@ -185,6 +185,7 @@
     "city/restaurant-lanterns.js",
     "city/interior-ceiling.js",
     "city/interior-ceiling-lamps.js",
+    "city/interior-cords.js",
     "city/thai-spirit-house.js",
     "city/fern-quality.js",
     "city/home-record-player.js",
