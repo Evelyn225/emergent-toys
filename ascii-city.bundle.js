@@ -20965,11 +20965,19 @@ const fruitTop = seed => (i, t, L) => {
 };
 const fruitTiers = (x, y, hl, s, seed) => [BX(x, y, hl, 0.2, 0, 0.95, fruitTop(seed), 0, 1), BX(x + s * 0.38, y, hl, 0.18, 0, 0.65, fruitTop(seed + 2), 0, 1), BX(x + s * 0.72, y, hl, 0.16, 0, 0.38, fruitTop(seed + 4), 0, 1)];
 const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k++) rod(vx - 0.1 + k * 0.05, vy, z - 0.05, vx - 0.16 + k * 0.08, vy + 0.06, z - 0.35, 0.025, YEL, 1.6); });
+const FRUIT_PAPER = { r: 0.035, leaf: 0.013 }; // the oranges on the wallpaper, and their leaves
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(GREEN, 14), C(WHITE, 7))) return true;
   if (z < 1.0) { BG[i] = C(GREEN, 2.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WHITE, 4)), true; }
-  BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, hash(Math.floor(u * 2), Math.floor(z * 2), 136) > 0.93 ? '@' : ' ', C(ORANGE, 9)), true;
+  // the paper above: a little orange with its leaf here and there on a 25 cm repeat
+  const tu = Math.floor(u * 4), tz = Math.floor(z * 4);
+  if (hash(tu, tz, 136) > 0.55) {
+    const cu = (tu + 0.3 + hash(tu, tz, 137) * 0.4) / 4, cz = (tz + 0.3 + hash(tu, tz, 138) * 0.4) / 4, r = Math.hypot(u - cu, z - cz);
+    if (r < FRUIT_PAPER.r) { BG[i] = Math.hypot(u - cu + FRUIT_PAPER.r * 0.35, z - cz - FRUIT_PAPER.r * 0.35) < FRUIT_PAPER.r * 0.3 ? C(YEL, 9 + L * 0.2) : C(ORANGE, 7 + L * 0.2); return set(i, ' ', 0), true; } // (a glint up on its shoulder)
+    if (Math.hypot(u - cu - FRUIT_PAPER.r * 0.6, z - cz - FRUIT_PAPER.r * 1.2) < FRUIT_PAPER.leaf) { BG[i] = C(GREEN, 3 + L * 0.2); return set(i, ' ', 0), true; }
+  }
+  BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.fruitshop = { grid: boxRoom(10, 8), light: 1.1, floor: 'oak', ceil: 'pendant', sign: false, wall: fruitWall, keeper: [5.0, 1.4],
   props: r => [...counterBox(5.0, 1.8, 1.3), { ...standing(5.0, 1.4, GREEN), face: [0, 1] }, ROOM_MODEL(4.2, 1.8, (vx, vy) => { drum(vx, vy, 0.12, 1.05, 1.12, CHROME); rod(vx, vy, 1.12, vx, vy, 1.3, 0.02, GRAY, 1.2); drum(vx, vy, 0.09, 1.3, 1.42, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, HIT.face === 4 ? '/' : ' ', C(RED, 8)), true; }); }), // the scale
