@@ -156,7 +156,6 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   removed from `city/city-sprites.js`). Next: signal heads and pedestrian
   signals, then wall pipes and meters, then pavement service hatches.
 
-
 - **Claude pass 12, facade utilities:** `claude/facade-utilities` from main (new
   `city/facade-utilities.js` after `world-bootstrap.js`, reading `ARCH_BUILDINGS`
   faces and street geometry; one draw hook in `city/city-sprites.js`). Next:

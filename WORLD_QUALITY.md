@@ -252,7 +252,6 @@ The numbered passes above remain the work queue. The new models establish reusab
   - Drop and lantern: the drop rod runs into the lantern cap. The lantern has six frame bars round its glass, between a domed cap and a finial. It glows warm after dark under the existing halo.
   Past 5 cells the billboard takes over. The neck reads as the same fine arc either side of the switch, and Belle lamps are unchanged. The new browser test fails on a gap in the neck, a drop short of the cap, an untapered pole and unlit glass at night. Median render ABAB vs main: close, whole, night, street and down-street all within noise.
 
-
 - Utilities (pass12), downpipes and meters on the street fronts (Claude, `claude/facade-utilities`): new `city/facade-utilities.js` runs on the assembled city after `world-bootstrap.js` and uses the architecture's own street faces.
   - Placement: a downpipe runs just inside each end of a street front (its corner or party wall), so it never crosses the lettering centred on the front.
   - Route: each pipe works its way up from the pavement. It steps out round a thin string course with offset bends and back in, and stops with its hopper head just under the top cornice or any deep moulding. It keeps the street geometry's own clearance throughout.
