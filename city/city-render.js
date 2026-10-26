@@ -77,7 +77,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
     const doorway = f.sign && SHOP[k].kind !== SHOP_APTS && Math.abs(start + (bay + 0.5) * spacing - f.sign.center) < spacing / 2; // (the arch under the sign: the shop's door, to the pavement)
     if (Math.abs(du) < spacing * 0.35 && (z > 0.045 || doorway) && z < archTop) {
       if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
-      if (doorway && architectureShutter(i, z, SHOP[k], L)) return;
+      if (doorway && architectureShutter(i, z, SHOP[k], L, d, du, -spacing * 0.32, spacing * 0.32, 0, 0.245)) return; // (the shutter's housing fills the arch's head)
       if (doorway) return void doorGlass(i, du, z, openAt(SHOP[k], tod), L, WHITE);
       BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : doorway ? WARM : CYAN, 1 + night * 2);
       return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
@@ -199,7 +199,10 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
-      if (fd > 0.12 && fd < 0.88 && z < 0.3) return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(open ? ORANGE : GRAY, L * 0.7));
+      if (fd > 0.12 && fd < 0.88 && z < 0.3) {
+        if (!open) { const w0 = Math.floor(u * 0.8) / 0.8; return void shopShutter(i, u, z, w0 + 0.15, w0 + 1.1, 0, 0.3, sh, L, d, glassSlopes(u, z)[0]); }
+        return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(ORANGE, L * 0.7));
+      }
       return set(i, '|', C(GRAY, L * 0.8));
     }
     if (sh.kind === SHOP_APTS && sty === 9) { // brownstone stoop: steps up to a raised front door, railings either side
@@ -219,7 +222,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     const fs = fract(u * 2);
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
     if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
-    if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter: vacant, or shut for the night
+    if (!open) { const w0 = Math.floor(u * 2) / 2; return void shopShutter(i, u, z, w0 + 0.04, w0 + 0.5, 0, 0.3, sh, L, d, glassSlopes(u, z)[0]); } // roll-down shutter: vacant, or shut for the night
     if (z > 0.28) return shopfrontFace(side, mx, my, h)?.awning ? set(i, '=', C(GRAY, L * 0.7)) : set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning (or the transom over the window, under a real one)
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
