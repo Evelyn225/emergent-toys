@@ -1202,6 +1202,7 @@ function ceilMask(key, spec) {
     return !tall.some(b => inBox(b, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) / 2 + 0.1));
   };
   const paint = (x0, y0, x1, y1, v, round) => {
+    if(spec.onFitting)spec.onFitting(x0,y0,x1,y1,v,round);
     for (let py = Math.max(0, Math.floor(y0 * CEIL_RES)); py < Math.min(H * CEIL_RES, Math.ceil(y1 * CEIL_RES)); py++)
       for (let qx = Math.max(0, Math.floor(x0 * CEIL_RES)); qx < Math.min(RW, Math.ceil(x1 * CEIL_RES)); qx++) {
         const u = (qx + 0.5) / CEIL_RES, w = (py + 0.5) / CEIL_RES;
@@ -1245,6 +1246,7 @@ function roomCeil(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
   if (ROOM_CEILS[st]) return ROOM_CEILS[st](i, r, x, wx, wy);
+  if(st==='strip'&&prepareInteriorBattens()){BG[i]=C(GRAY,2.3);set(i,' ',0);return;}
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
@@ -1272,6 +1274,7 @@ function roomCeil(i, r, x, rx, ry) {
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
+  prepareInteriorBattens();
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
