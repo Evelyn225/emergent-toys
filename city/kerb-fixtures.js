@@ -10,9 +10,9 @@ const KERB_KINDS = {
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
   cabinet: { hl: .043, hw: .029, h: .141 },
-  shelter: { hl: .155, hw: .07, h: .245, line: .03 },
   pole: { hl: .015, hw: .015, h: .84 },
-  guy: { hl: .032, hw: .008, h: .2 }, // (the foot of a guy wire, where it comes down to its anchor)
+  guy: { hl: .032, hw: .008, h: .2 },
+  shelter: { hl: .155, hw: .07, h: .245, line: .03 },
 };
 // Shelter surface boxes, in outdoor world units. Rendering, collision and
 // rain cover share these exact bounds; the road-facing entrance stays open.
@@ -120,7 +120,8 @@ function poleWireClear(pts, walls = true) {
       if (!ROAD[idx(Math.floor(gx), Math.floor(gy))] || GAS_CELL[idx(Math.floor(gx), Math.floor(gy))]) continue;
       const pts = Array.from({ length: 12 }, (_, n) => { const t = (n + .5) / 12; return [p.x + ux * POLE.guy * t, p.y + uy * POLE.guy * t, p.z + p.h - .05 + (gz - p.z - p.h + .05) * t]; });
       if (!poleWireClear(pts.slice(0, 9))) continue;
-      const g = { x: worldCoord(gx - ux * .026), y: worldCoord(gy - uy * .026), kind: 'guy', c: p.c, s: p.s, fx: p.fx, fy: p.fy, hl: KERB_KINDS.guy.hl, hw: KERB_KINDS.guy.hw, h: KERB_KINDS.guy.h, pole: p, gx, gy, gz };
+      const reach=POLE.guy*Math.min(1,.2/Math.max(.01,p.z+p.h-.05-gz));
+      const g = { x: worldCoord(gx - ux * reach/2), y: worldCoord(gy - uy * reach/2), kind: 'guy', c: p.c, s: p.s, fx: p.fx, fy: p.fy, hl: reach/2+.006, hw: KERB_KINDS.guy.hw, h: KERB_KINDS.guy.h, pole: p, gx, gy, gz };
       if (!kerbClear(g)) continue;
       kerbs.push(g); kerbsB[bi(Math.floor(g.x / 8), Math.floor(g.y / 8))].push(g);
     }
@@ -176,8 +177,17 @@ function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
     const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
     return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
   };
-  if(o.kind==='pole')return over(0,o.h/k)&&Math.hypot(u,v)<=POLE.r0+pad; // (its arm and wires are overhead)
-  if(o.kind==='guy')return over(0,o.h/k)&&rect(0,0,o.hl/k,o.hw/k);
+  if(o.kind==='pole')return Math.hypot(u,v)<=POLE.r0+pad;
+  if(o.kind==='guy'){
+    const anchor=rel(o.gx-o.x)*o.c+rel(o.gy-o.y)*o.s,pole=rel(o.pole.x-o.x)*o.c+rel(o.pole.y-o.y)*o.s,ground=o.gz-terrainHeight(o.x,o.y),rise=o.pole.z+o.pole.h-.05-o.gz;
+    const end=(h)=>anchor+(pole-anchor)*clamp((h-ground)/rise,0,1),segment=(a,b,r)=>Math.hypot(u-clamp(u,Math.min(a,b),Math.max(a,b)),v)<=r+pad;
+    if(lo<=ground+.004&&hi>=ground&&Math.hypot(u-anchor,v)<=.006+pad)return true;
+    const top=Math.min(hi,.2),bottom=Math.max(lo,ground);
+    if(top<bottom)return false;
+    if(segment(end(bottom),end(top),.0012))return true;
+    const a=Math.max(bottom,ground+.004),b=Math.min(top,ground+.16);
+    return a<=b&&segment(end(a),end(b),.0035);
+  }
   if(o.kind==='shelter'){
     const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
     // Grounded walking projects the walls, never the overhead canopy.
