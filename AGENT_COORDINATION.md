@@ -631,3 +631,29 @@ close/wide/oblique/night and ABAB costs reviewed. #230 full CI green. Next
 #232, preserving produce rotations AND all prior cache/contact fixes, then
 closing audit. Do not tick all pass7 merely because BX calls disappeared.
 Claude's active files remain reserved; hotel/motel door decision unchanged.
+
+Codex active `codex/review-market-and-last-shops` (#232): reviewed main through
+#231 integrated. Produce quarter-turns use the cached fruit/shell and correctly
+rotated tray rays/normals; both specialist test groups retained. Reviewing
+`city/market-hall.js`, new `city/shop-fittings.js` builders and callers in
+`city/shops.js`/`city/storefronts.js`, plus the legacy shared armchair and book/
+showroom/realty callers in `city/rooms.js` outside Claude's DINER definition.
+Avoid active bathroom-quality, DINER, world-bootstrap and pass13 facade work.
+Next the recorded interior closing audit and authorized Claude merge chains;
+keep pass7 open for its documented remnants. Pass6 hotel/motel washroom doors
+start closed and auto-close after walking away, per the user decision.
+
+Usage-resume checkpoint (user request): a one-time continuation is scheduled
+for 2026-10-26 07:21:44 UTC (03:21 Toronto). If this session is still working,
+avoid a second copy of its chunk. Current branch is
+`codex/review-market-and-last-shops`; #230 and #231 are merged, #230 full CI
+green. #232 source integration and geometry/cache repairs are implemented;
+new `test/browser/city-market-fittings.browser.test.cjs` covers real shapes.
+Seven focused checks and broad shop regressions are running. Remaining before
+#232 merge: independent negative mutations, close/wide/oblique/night review,
+ABAB render costs, final notes/PR description, latest remote integration and
+push. Ignored review scripts/artifacts live in `work/backlog-review/232-*`.
+Do not merge this checkpoint without finishing that review. Then continue the
+recorded closing audit, authorised merge chains and passes5/6/9. Preserve the
+hotel/motel closed and auto-closing washroom-door decision and Claude's current
+file ownership. Read newer appended notes before resuming.
