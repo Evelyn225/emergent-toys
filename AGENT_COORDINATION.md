@@ -1357,3 +1357,34 @@ front wall and move its cooler beside it facing north, with measured clear
 apron/no overlaps; relocate roastery plant from immediately in front of door
 to a clear corner. CAFE is clear and remains a control. Keep reserved sources
 and unpublished lettering intact, then remaining new reports and passes5/6/9.
+
+#270 fixed shop-section materials merged. Codex active
+`codex/clear-washroom-approaches`: narrow taqueria placement in city/eateries.js
+and roastery plant in city/dining.js, one focused bathroom-access test, bundle
+and shared notes. Keep the door helpers/state and DINER definition untouched.
+Move the salsa bar farther from the door and its cooler to the front wall,
+with actual full-width approach clearance, fixture bounds and sitting/service
+routes checked. Relocate the roastery door-blocking plant to a clear corner;
+CAFE stays a regression control. Then aquarium sign/roof landing and street
+stair/door placement audit, followed by remaining passes5/6/9. Full Node is
+1069/1069 green; no test process remains paused/running from that run.
+
+Washroom approach final review complete. Taqueria salsa moves to(11.63,6.5),
+cooler to front wall(10.1,7.6) facing north; bounds are separate and fully
+inside the walls. Roastery plant moves to(1.4,7.4); both lounge chairs shift
+half a metre left to retain a comfortable full-width door approach. CAFE stays
+unchanged and passes the same route controls. Three focused apron/real E/
+native walking/toilet/return/autoclose/fixture bounds checks, both all-shop
+route/seating sweeps, coffee service and three cooler/salsa/taco controls pass
+(nine unique browser checks), plus two Node bundle/parse files. Old baseline
+and seven independent obstruction/overlap/facing/wall defects fail assertions.
+Fourteen final close/wide/open-oblique/night/fixture/plant views reviewed.
+An initial wide camera touched the same existing roastery table before/after;
+final x9.2 cameras are clear in both. ABAB177x66 main→after: taco-wide2.8→
+2.3–2.5ms, close2.2–2.6→2.0; roastery-wide2.3–2.6→2.1, close2.3–2.4→2.0;
+CAFE-wide1.6→1.5, close1.8→1.8. Layout changes alter what's visible; no general
+render speedup claim. #269 FULL CI GREEN40419236061, superseding #268 partial
+run concern. Full Node1069/1069 already green on unchanged pure sources.
+Ready for final note push/PR/merge. Next aquarium gift-shop sign and missing
+walk-up landing, then street-object entrance/stair clearance audit. Preserve
+reserved bathroom/DINER/world-bootstrap/facade and unpublished lettering work.
