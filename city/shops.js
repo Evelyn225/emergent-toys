@@ -53,8 +53,6 @@ const shoppers = (spots, p) => spots.filter(() => chance(p)).map(([x, y, fx, fy]
 const aisleSign = (x, y, word, bg, col, hl = 0.45) => ({ x, y, draw: (vx, vy) => hallSign(vx, vy, hl, 2.3, 2.45, room.def.height || 3, word, bg, col) });
 // which wall a wall painter's on
 const backWall = my => my === 0, leftWall = mx => mx === 0, rightWall = mx => room && mx === room.W - 1;
-// is the camera in a rectangle of the room (a back room, say)? x0 <= x < x1, y0 <= y < y1
-const viewIn = (x0, y0, x1, y1) => px >= x0 && px < x1 && py >= y0 && py < y1;
 
 // ---- the ways between a shop's rooms. Each fills a gap left in a wall of the grid, across it along (ca, sa), and
 // none of them is in your way (walk: you go through the strips, the beads, the arch's opening)
@@ -190,7 +188,7 @@ Object.assign(ROOM_CEILS, {
 ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#', '#..SS...##.###', '#..SS........#', '#..SS........#', '#............#', '#............#', '#............#', '######DD######'],
   light: 1, floor: 'tile', ceil: 'strip', sign: true, signAt: 6, keeper: [11.45, 7.6], glyphs: 'o#=@',
   wall: (i, u, uStep, z, d, mx, my, L) => {
-    if (viewIn(9, 1, 13, 3.5) && mx >= 8 && my <= 3) { BG[i] = C(GRAY, 1.6); return set(i, fract(u * 2.5 + (Math.floor(z * 5) & 1) * 0.5) < 0.05 || fract(z * 5) < 0.06 ? '+' : ' ', C(GRAY, L * 0.5)), true; } // the stockroom: bare breeze block
+    if (mx >= 8 && my <= 3) { BG[i] = C(GRAY, 1.6); return set(i, fract(u * 2.5 + (Math.floor(z * 5) & 1) * 0.5) < 0.05 || fract(z * 5) < 0.06 ? '+' : ' ', C(GRAY, L * 0.5)), true; } // the stockroom: bare breeze block
     return false; // (the fridges along the left and back walls are built: shop-fridges.js)
   },
   props: r => {
@@ -249,16 +247,16 @@ ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', 
 // the garden centre: lumber, plants, bags of compost, a lawnmower
 function hardwareWall(i, u, uStep, z, d, mx, my, L) {
   // (the aisles of bins are built gondolas: shop-gondolas.js)
+  if (mx >= 13) { // garden walls keep their trellis, including the back wall
+    const lattice = Math.abs(fract((u + z) * 2) - 0.5) < 0.06 || Math.abs(fract((u - z) * 2) - 0.5) < 0.06, leaf = noise(u * 3, z * 3, 61) > 0.62 && z < 2.4;
+    BG[i] = C(leaf ? GREEN : STONE, leaf ? 1.6 : 1.4); return set(i, leaf ? '&' : lattice ? 'x' : ' ', C(leaf ? GREEN : WARM, leaf ? 8 : L * 0.5)), true;
+  }
   if (backWall(my) && z < 2.1) { // paint: shelves of cans, each with its colour on the label
     if (fract(z / 0.42) < 0.1) return set(i, '=', C(GRAY, L)), true;
     const can = fract(u / 0.22), k = hash(Math.floor(u / 0.22), Math.floor(z / 0.42), 5);
     if (can < 0.12 || fract(z / 0.42) > 0.85) return set(i, ' ', 0), true;
     const band = Math.abs(fract(z / 0.42) - 0.45) < 0.15;
     BG[i] = band ? C(ITEM_COL[k * 8 | 0], 3) : C(GRAY, 2.5); return set(i, band ? ' ' : can > 0.85 ? '|' : ' ', C(GRAY, 6)), true;
-  }
-  if (mx >= 13 && viewIn(13, 0, 18, 10)) { // the garden centre: trellis, a climber up it
-    const lattice = Math.abs(fract((u + z) * 2) - 0.5) < 0.06 || Math.abs(fract((u - z) * 2) - 0.5) < 0.06, leaf = noise(u * 3, z * 3, 61) > 0.62 && z < 2.4;
-    BG[i] = C(leaf ? GREEN : STONE, leaf ? 1.6 : 1.4); return set(i, leaf ? '&' : lattice ? 'x' : ' ', C(leaf ? GREEN : WARM, leaf ? 8 : L * 0.5)), true;
   }
   if ((leftWall(mx) || rightWall(mx)) && z > 0.6 && z < 2.3) { // pegboard, hung with tools
     const k = hash(Math.floor(u / 0.3), Math.floor(z / 0.35), mx + 1), tool = fract(u / 0.3) > 0.25 && fract(u / 0.3) < 0.75 && fract(z / 0.35) > 0.2 && k > 0.35;
@@ -719,7 +717,7 @@ ROOM_DEFS.tobacco = { grid: ['############', '#.......W..#', '#..........#', '#.
 function videoWall(i, u, uStep, z, d, mx, my, L) {
   if (leftWall(mx) && my > 0 && z > 2.18 && z < 2.42) return wallText(i, u, uStep, z, d, 'NEW RELEASES', -4.5, 2.3, 0.2, 0.24, C(YEL, 15)) || (set(i, '~', C(RED, 10)), true);
   if (my < room.H - 1 && vhsWall(i, u, z, L, mx * 17 + my)) return true;
-  BG[i] = viewIn(9, 1, 11, 4.4) && mx >= 8 && my <= 4 ? C(RED, 0.9) : C(BLUE, 0.8); // (the back room's lit red)
+  BG[i] = mx >= 8 && my <= 4 ? C(RED, 0.9) : C(BLUE, 0.8); // (the back room's lit red)
   return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 5 ? ' ' : '*', C(YEL, L * 0.4)), true;
 }
 const movie = (i, u, w) => { // on the telly: a car chase at sunset, or near enough
@@ -765,7 +763,7 @@ const sack = (x, y, col, ch) => ROOM_MODEL(x, y, (vx, vy) => drum(vx, vy, 0.24, 
   if (HIT.face === 5) { BG[i] = C(col, 2.5); return set(i, hash(i, 6) > 0.4 ? ch : ' ', C(col, 10)), true; }
   BG[i] = C(WARM, (1.3 + L * 0.2) * drumLit(0.24)); return set(i, HIT.w > 0.43 ? '~' : hash(i, 8) > 0.8 ? '#' : ' ', C(BRICK, 7)), true; }), [0.24, 0.24, 0.5]);
 function herbsWall(i, u, uStep, z, d, mx, my, L) {
-  if (mx >= 10 || mx === 9 && viewIn(10, 0, 15, 8)) { // the tea room: paper screens in a dark wooden lattice
+  if (mx >= 9) { // the tea room: paper screens in a dark wooden lattice
     if (z < 0.25 || z > 2.5) { BG[i] = C(BRICK, 1.2); return set(i, ' ', 0), true; }
     const lat = fract(u / 0.45) < 0.06 || fract(z / 0.55) < 0.05;
     BG[i] = lat ? C(BRICK, 1.4) : C(STONE, 3.6 + L * 0.15); return set(i, ' ', 0), true;
@@ -868,12 +866,8 @@ ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'stri
 // down the side, the counter with its screen of plexiglass, and in the back corner through its glass door the beer
 // cave: a walk-in cold room lined with fridges, cases stacked to the ceiling
 function liquorWall(i, u, uStep, z, d, mx, my, L) {
-  const c = roomAt(mx, my);
-  if (viewIn(1, 1, 4, 3) && mx <= 4 && my <= 3) { // in the cave: frosted insulated panels round its fridges
+  if (mx <= 4 && my <= 3) { // the cold room: frosted insulated panels round its fridges
     // (its back wall's fridges are built; the rest is insulated panelling)
-    BG[i] = C(WHITE, 2.2); return set(i, hash(Math.floor(u * 9), Math.floor(z * 9), 5) > 0.85 ? '.' : ' ', C(CYAN, 9)), true;
-  }
-  if (mx >= 1 && mx <= 4 && my >= 1 && my <= 3) { // the cave from outside: white insulated panels, beaded with cold
     BG[i] = C(WHITE, 2.6 + L * 0.1); return set(i, fract(u / 0.6) < 0.04 ? '|' : hash(Math.floor(u * 12), Math.floor(z * 12), 6) > 0.9 ? '.' : ' ', C(CYAN, 8)), true;
   }
   if (rightWall(mx) && my > 0 && my < room.H - 1) return wineWall(i, u, z, L, mx * 3 + my) || false; // (the middle racks are built gondolas)
