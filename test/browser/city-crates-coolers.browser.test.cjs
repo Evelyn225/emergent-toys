@@ -17,7 +17,7 @@ test('every drinks cooler backs onto its wall and opens into the room, its produ
     if(roomAt(q.x-d.fx*(d.depth+.06),q.y-d.fy*(d.depth+.06))!=='#')bad.push('back off the wall');
     if(roomAt(q.x+d.fx*(d.depth+.3),q.y+d.fy*(d.depth+.3))!=='.')bad.push('doors face a wall');
     drawBox=(box,shade,ray=rayBox)=>shapes.push({box,shade,ray});try{q.draw(0,0);}finally{drawBox=draw;}
-    const at=(u,v)=>[c*u+d.fx*v,s*u+d.fy*v],surfaces=shapes.filter(o=>o.ray===homeRayWorktop);
+    const at=(u,v)=>[c*u+d.fx*v,s*u+d.fy*v],surfaces=shapes.filter(o=>o.ray===homeRayWorktop||o.ray===rayBox&&o.box.hw>.01); // (full-width shelves are plain boxes; the glass is not a surface)
     for(const g of d.goods){
      const [x,y]=at(g.u,g.v);
      if(Math.abs(g.u)+.033>d.half-.03)bad.push(['side',g.u]);
