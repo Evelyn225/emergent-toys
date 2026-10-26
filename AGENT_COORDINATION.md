@@ -906,3 +906,10 @@ Ready to update original #241 branch and merge. Next #246: newest connector
 head is3c98f91 (not the earlier7bcd417); fetch it explicitly before reviewing.
 Other authorized chains, interior remnants and hotel/motel door decision
 remain unchanged. No active Claude/shared helper edits.
+
+#241 final fetch found Claude's concurrent main-integration commit ae39b63.
+Merged it into this review without dropping its ancestry. Its cache port is
+covered by the reviewed model path; retained the tested supported-frame,
+shared-surface collision/rain and glint fixes. Final runtime sources, bundle
+and tests are byte-identical to the reviewed b954d8d versions. Ready to push
+and merge original #241; do not start another shelter chunk. #246 follows.

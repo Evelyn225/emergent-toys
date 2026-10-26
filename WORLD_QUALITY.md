@@ -260,7 +260,6 @@ The numbered passes above remain the work queue. The new models establish reusab
   - The bench inside is a real street bench (sit with C).
   - The back, advert panel and glass screen are solid on foot; the open front lets you in.
   The kerb test now also fails on non-solid walls, rain under the roof, a missing bench and a set-back the wrong way. Median render ABAB vs the cabinets base on a noisy machine: shelter close-ups about +1 ms; wide and down-street within noise.
-
 - Restaurant lamps and wire chairs (pass8), attachment follow-up: every lamp's tassel, caps, shade, cap, cord and rose already meet, and the chair's legs, rings, posts and hoop join. The one gap was the chair back's inner ring, which floated inside the hoop. Four short flat bars in the hoop's plane now hold it. The browser test fails on a floating inner ring (the old code fails it).
 
 - Ice-cream and burger wall fixtures (pass8), attachment follow-up: the burger pass's ticket rail had nothing holding it to the wall. It now has two wall plates with standoffs into the rail. The heat-lamp hood hung 1 mm in front of the hatch frame; its back now meets the frame's face. Stacked wafer cones floated 2 mm above the cavity floor of the cone below; the step is now the cavity floor height, so each tip stands on it. The browser test fails on an unheld rail, a hood off the frame or a floating cone (the old code fails both).
