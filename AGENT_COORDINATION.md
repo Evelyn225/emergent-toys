@@ -151,6 +151,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
+  `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
+  Next: utility cabinets, then bus shelters.
+
 - **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
   `city/kerb-fixtures.js` after `world-bootstrap.js`, new
   `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
@@ -942,3 +946,17 @@ Preserved Claude's1267478 refresh in the #246 review ancestry. Its main merge
 and cached-pole adaptation are covered by the reviewed implementation; final
 runtime sources, bundle and checks are byte-identical to e03a5ac. Ready to
 push/merge original #246. Do not duplicate the overhead review; #239 is next.
+
+#246 merged as33d70e7. Codex active `codex/review-street-drains` (#239),
+starting from c5bf46b. Files: new city/street-drains.js, its ground hook in
+city-render.js, focused browser checks, manifest/bundle and shared notes.
+Check whole grate extents, filtered materials, tree-pit cell boundaries and
+rain only flowing to actual grates. Next #245 service hatches. Reserved
+Claude source/shared helpers remain untouched; retain all remaining queue.
+
+#239 final review complete on `codex/review-street-drains`: whole cached tree
+pits across cell boundaries, no runoff toward absent bridge gullies, smooth
+bar coverage/tones. Four browser checks including actual ground raster, three
+node files, eight negative probes, thirteen clear-floor views and ABAB costs
+recorded. Ready to push original c5bf46b-derived branch and merge; next #245.
+Keep remaining independent chains/interior passes and all reserved ownership.
