@@ -55,3 +55,25 @@ test('shops with display cases still serve at the counter and stay walkable from
  },ROOMS);
  for(const [k,b] of r)assert.equal(b,0,k);
 }));
+
+test('gemstones sit on their ring bands and display-case geometry prepares once',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  enterRoom('jeweler',{word:'JEWELER',ret:[100,100,0]},[5,5,0]);const bad=[];
+  const capture=o=>{const draw=drawBox,out=[];projX=10000;drawBox=(box,shade,ray=rayBox)=>out.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return out;};
+  let rings=0;
+  for(const o of room.props.filter(o=>o.displayCase)){
+   const a=capture(o),b=capture(o),z=o.displayCase.bed;
+   if(a.some((q,k)=>q.box.profile&&q.box.profile!==b[k].box.profile))bad.push('static profiles rebuilt while drawing');
+   for(const band of a.filter(q=>q.ray===coveRayLathe&&Math.abs(q.box.hl-.018)<1e-8)){
+    rings++;const gem=a.find(q=>q.ray===coveRayLathe&&q.box.hl<=.006&&Math.abs(q.box.z0-(z+.006))<1e-8&&Math.hypot(q.box.x-band.box.x,q.box.y-band.box.y)<.03);
+    if(!gem){bad.push('ring lacks its stone');continue;}
+    const foot=gem.box.profile.find(q=>Math.abs(q[0]-gem.box.z0)<1e-8&&q[1]>0)?.[1];
+    for(let k=0;k<8;k++){
+     const angle=k*Math.PI/4,x=gem.box.x+foot*.8*Math.cos(angle),y=gem.box.y+foot*.8*Math.sin(angle),from=gem.box.z0+.05,t=band.ray(x,y,from,0,0,-1,band.box);
+     if(!(t>0&&Math.abs(from-t-gem.box.z0)<1e-7))bad.push('stone floats over ring hole');
+    }
+   }
+  }
+  if(rings<5)bad.push('missing native rings');return bad.slice(0,10);
+ });assert.deepEqual(bad,[]);
+}));

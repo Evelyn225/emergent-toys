@@ -82,3 +82,40 @@ test('wall-shelf stock stands on its shelf, inside its bay and under the shelf a
  },[SHOPS,FRAME]);
  assert.deepEqual(r,[]);
 }));
+
+test('thrift shelf vases have open necks, real inner walls and a closed supported base',()=>fixture(async p=>{
+ const result=await p.evaluate(()=>{
+  enterRoom('thrift',{word:'THRIFT',ret:[100,100,0]},[5,5,0]);const o=room.props.find(p=>p.wallShelves),parts=[],draw=drawBox,bad=[];
+  drawBox=(box,shade,ray=rayBox)=>parts.push({box:{...box},shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}
+  const vases=parts.filter(q=>q.ray===coveRayLathe);
+  for(const q of vases){const b=q.box,from=b.z1+.1,t=q.ray(b.x,b.y,from,0,0,-1,b);
+   if(!(t>0&&Math.abs(from-t-b.z0-.008)<1e-7))bad.push('sealed mouth or missing base');
+   const z=b.z0+(b.z1-b.z0)*.46,inside=q.ray(b.x,b.y,z,1,0,0,b),nx=HIT.nx;
+   const outside=1-q.ray(b.x+1,b.y,z,-1,0,0,b),thickness=outside-inside;
+   if(!(inside>0&&nx<-.5&&thickness>.002&&thickness<.008))bad.push('no thin inward-facing wall');
+   if(!parts.some(s=>s.ray===rayBox&&Math.abs(s.box.z1-b.z0)<1e-8&&inBox(s.box,b.x,b.y,0)))bad.push('base off the shelf');
+  }
+  return{bad:bad.slice(0,8),count:vases.length};
+ });assert.deepEqual(result.bad,[]);assert.ok(result.count>10,'native bric-a-brac vases checked');
+}));
+
+test('bookcase aisles connect the entrance to the reading seat and the till, with real C and E controls',()=>fixture(async p=>{
+ const points=await p.evaluate(()=>{
+  enterRoom('books',{word:'BOOKS',neon:CYAN,ret:[100,100,0]},[5,5.4,0]);body.seat=null;
+  const seat=room.props.find(o=>o.seat),k=room.def.keeper,S=10,W=room.W*S,H=room.H*S,seen=new Uint8Array(W*H),queue=[[Math.round(px*S),Math.round(py*S)]];let chair=null,clerk=null;
+  while(queue.length&&(!chair||!clerk)){
+   const[x,y]=queue.pop();if(x<0||y<0||x>=W||y>=H||seen[y*W+x])continue;seen[y*W+x]=1;
+   const X=x/S,Y=y/S;if(!free(X,Y))continue;
+   const sd=Math.hypot(X-seat.x,Y-seat.y),kd=Math.hypot(X-k[0],Y-k[1]);
+   if(!chair&&sd>.65&&sd<1)chair=[X,Y];
+   if(!clerk&&kd>.8&&kd<1.7){px=X;py=Y;a=Math.atan2(k[1]-Y,k[0]-X);pitch=0;if(nearKeeper())clerk=[X,Y,a];}
+   queue.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+  if(chair){[px,py]=chair;a=Math.atan2(seat.y-py,seat.x-px);pitch=0;}
+  return{chair,clerk,seat:[seat.x,seat.y]};
+ });assert.ok(points.chair,'reading seat reachable on clear floor from the entrance');assert.ok(points.clerk,'till reachable from the entrance');
+ await p.keyboard.press('c');assert.deepEqual(await p.evaluate(()=>body.seat&&[px,py]),points.seat);
+ await p.keyboard.press('c');assert.equal(await p.evaluate(()=>body.seat),null);
+ await p.evaluate(q=>{[px,py,a]=q;pitch=0;},points.clerk);
+ await p.keyboard.press('e');assert.equal(await p.evaluate(()=>shopEl?.style.display),'flex');assert.match(await p.locator('#shop h1').innerText(),/^Books$/);
+}));
