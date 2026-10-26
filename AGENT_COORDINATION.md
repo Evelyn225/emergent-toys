@@ -575,3 +575,24 @@ pass; close/wide/oblique/under/night and ABAB costs reviewed. No active Claude
 or shared helper files edited. Next #230–#232, then closing audit; include the
 legacy gas hubcap/key and security-mirror sprite with the recorded ceiling/
 flag/noodle remnants. User's hotel/motel door decision remains recorded above.
+
+Codex active review `codex/review-specialist-shops` (#230): main through #229
+integrated. `city/record-shop.js`, `city/shop-fittings.js`, specialist-shop test
+and record/tattoo/hardware/pharmacy hooks in `city/shops.js`; shelf stock data
+in `city/shop-gondolas.js`. Prior acrylic/produce/bin/cache fixes retained.
+Next #231–#232, then closing audit. Claude's active bathroom-quality, DINER,
+world-bootstrap and facade work remains reserved.
+
+#230 Codex review complete (`codex/review-specialist-shops`): divider letters
+read forward on both sides; sleeve artwork and the BP idle display scale
+without repeated glyph stamps. The cuff now opens into a closed-back arm
+recess. Hose turns use one clipped round-coil surface with correct inner and
+outer normals, replacing costly per-turn profiles; fixed book/bag materials
+prepare once. Three new native ray/raster/cache checks and six independent
+mutations pass. Specialist and all-shop routes/seating/counter/shelf checks
+plus seven bundle/parse/render checks pass; close/wide/oblique/night views and
+ABAB costs reviewed. #228/#229 final full CI green. No active Claude or shared
+helper edits. Next #231–#232, then closing audit. Add the hardware lawnmower,
+record turntable/headphones and tattoo lollipop jar to its remaining legacy
+props; replacing BX calls alone does not complete the quality pass. Hotel/
+motel closed and auto-closing washroom doors remain queued for pass6.
