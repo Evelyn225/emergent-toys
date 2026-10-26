@@ -1164,3 +1164,23 @@ host tails; no general frame-time gain claimed. Ready for follow-up PR/merge
 and its76984a3 already lies in current main history; don't duplicate it.
 #264 CI Node/browser1/2/3 passed, browser4 still running at last check. Keep
 unpublished Claude lettering and all reserved source/shared helper ownership.
+
+#265 utility follow-up merged as c9af5e3. Codex active
+`codex/integrated-fascia-audit`: read-only review of integrated #248/#249,
+with existing focused tests, bundle-only negative probes and native views.
+Only append shared review notes; do not edit Claude's facade/typography source
+or recreate the unavailable unpublished sign-lettering changes. Next Codex
+implementation is pass5 home openings/trim/layout character, then passes6/9.
+Old home-window work is already merged; preserve hotel door policy and homes.
+
+Integrated fascia audit complete on `codex/integrated-fascia-audit`.
+Ten native facade checks/two node freshness/parse files, seven bundle-only
+negative probes and24 clear-floor views pass. Source, manifest and bundle
+remain identical to c9af5e3; ABAB control costs recorded. This finishes the
+independent #248/#249 baseline review, while pass13 and Claude's inaccessible
+unpublished sign-lettering work remain OPEN. Do not infer a release of reserved
+facade/typography ownership. #264 full CI GREEN (40372798867); #265 queued/run
+40375072462 still in progress. Next Codex pass5 home entrance doors/surrounds
+in a new home-only module and homeDef in rooms.js (no shared door/bath helpers),
+then home layouts, hotels and civic. Preserve homes' washroom state and verify
+the already-implemented hotel/motel closed/auto-closing policy during pass6.
