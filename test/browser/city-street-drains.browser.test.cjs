@@ -92,3 +92,76 @@ test('the native ground renderer visibly draws gullies, tree grates and subway v
   }freecam=null;return out;
  });assert.deepEqual(r.map(x=>x.name),['gully','tree','vent']);for(const x of r){assert.equal(x.clear,true);assert.ok(x.pixels>4,`${x.name} not present in actual ground raster: ${x.pixels}`);}
 }));
+
+test('cellar hatches lie flush beside shop doors, against the wall inside the pavement, clear of the walking line and the machines',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];hatchesNear(0,0);
+  for(const h of HATCHES){
+   const near=doors.filter(d=>Math.abs(rel(d.x-h.nx*.12-h.x))<.3&&Math.abs(rel(d.y-h.ny*.12-h.y))<.3);
+   if(!near.some(d=>d.sh&&d.sh.kind!==SHOP_APTS))bad.push('not beside a shop door');
+   if(!(map[idx(Math.floor(h.x-h.nx*.05),Math.floor(h.y-h.ny*.05))]>0))bad.push('no wall behind');
+   for(const [u,v] of [[-HATCH.hl,HATCH.out0],[HATCH.hl,HATCH.out1],[0,(HATCH.out0+HATCH.out1)/2]]){const x=h.x+h.c*u+h.nx*v,y=h.y+h.s*u+h.ny*v;if(map[idx(Math.floor(x),Math.floor(y))]||!ROAD[idx(Math.floor(x),Math.floor(y))])bad.push('off the pavement');}
+   if(HATCH.out1+.02>.12)bad.push('into the walking line');
+   if(machines.some(m=>Math.abs(rel(m.x-h.x-h.nx*.043))<.12&&Math.abs(rel(m.y-h.y-h.ny*.043))<.12))bad.push('under a vending machine');
+   // painted: the frame, the seam, the plate; the plate an even tone far off
+   const mx=h.x+h.nx*.043,my=h.y+h.ny*.043,seen=new Set();
+   for(let u=-HATCH.hl+.002;u<HATCH.hl-.002;u+=.0021)for(let v=HATCH.out0+.002;v<HATCH.out1-.002;v+=.0023){const c=hatchCell(h.x+h.c*u+h.nx*v,h.y+h.s*u+h.ny*v,8,.0005);if(!c){bad.push('a hole in the hatch');break;}seen.add(c[2]);}
+   const far=new Set();for(const sd of [-1,1])for(let u=.018;u<.034;u+=.0011)far.add(hatchCell(h.x+h.c*u*sd+h.nx*.055,h.y+h.s*u*sd+h.ny*.055,8,.01)?.[2]); // (bare plate: clear of the seam, rings, hinges and frame)
+   if(seen.size<3)bad.push(['too plain up close',seen.size]); // (the seam, the plate and its raised diamonds)
+   if(far.size!==1)bad.push(['plate still patterned far off',far.size]);
+  }
+  return {bad:bad.slice(0,8),n:HATCHES.length};
+ });
+ assert.deepEqual(r.bad,[]);assert.ok(r.n>100,`hatches: ${r.n}`);
+}));
+
+test('hatch indexing covers every actual plate cell and keeps its seam and diamond surface filtered at distance',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  if(typeof hatchPlate!=='function')return {bad:['no continuous hatch surface'],n:0};
+  hatchesNear(0,0);const bad=[],first=hatchCells;let n=0;const test=(yes,why)=>{if(!yes)bad.push(why);};
+  const refs=new Map();for(const list of hatchCells.values())for(const h of list)refs.set(h,(refs.get(h)||0)+1);
+  for(const h of HATCHES){n++;
+   test(refs.get(h)<=4,'hatch index includes unrelated neighbour cells');
+   for(const u of [-HATCH.hl+.001,0,HATCH.hl-.001])for(const v of [HATCH.out0+.001,(HATCH.out0+HATCH.out1)/2,HATCH.out1-.001]){
+    const x=h.x+h.c*u+h.nx*v,y=h.y+h.s*u+h.ny*v;test(hatchesNear(x,y)?.includes(h)&&!!hatchCell(x,y,8,.0005),'hatch clipped at a cell boundary');
+   }
+   test(hatchCells===first,'hatch cell cache rebuilt per sample');
+   const hinge=hatchCell(h.x+h.c*.028+h.nx*.02,h.y+h.s*.028+h.ny*.02,8,.0005);test((hinge[2]&15)>=2,'hinge looks like a black cut-out');
+   const rx=h.x+h.c*.015+h.nx*.043,ry=h.y+h.s*.015+h.ny*.043;test((hatchCell(rx,ry,12,.0005)[2]&15)>(hatchCell(rx,ry,0,.0005)[2]&15),'lifting ring ignores ambient light');
+   for(const [u,v,f]of [[.02,.055,.08],[.015,.043,.03]]){const x=h.x+h.c*u+h.nx*v,y=h.y+h.s*u+h.ny*v;test(hatchCell(x,y,8,f)?.[2]===C(GRAY,1.8),'unfiltered seam or ring persists at distance');}
+   const v=.055;
+   for(const u of [.02,.024,.028]){
+    const x=h.x+h.c*u+h.nx*v,y=h.y+h.s*u+h.ny*v,out=hatchCell(x,y,8,.025),expected=C(GRAY,1.15+8*.08+.3276*.5);
+    test(out?.[2]===expected,'distant material keeps unfiltered rings, ridges or wide seam');
+   }
+  }
+  for(let k=0;k<80;k++){
+   const u=k*.00123,v=.055,a=hatchPlate(u,v,HATCH.plate*(.4-1e-5)),b=hatchPlate(u,v,HATCH.plate*(.4+1e-5));
+   test(Math.abs(a-b)<.001,'diamond plate pops at old distance threshold');
+   test(Math.abs(hatchPlate(u,v,.03)-.3276)<1e-9,'distant ridges do not use their real area average');
+  }
+  return {bad:bad.slice(0,12),n};
+ });assert.deepEqual(r.bad,[]);assert.ok(r.n>100);
+}));
+
+test('native cellar hatch surfaces are visible from clear pavement beside their shop doors',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  mode='walk';room=me=null;rain=snow=0;body.z=0;hatchesNear(0,0);
+  const h=HATCHES.find(h=>free(h.x+h.nx*.16+h.c*.06,h.y+h.ny*.16+h.s*.06));if(!h)throw Error('no clear hatch approach');
+  const x=h.x+h.nx*.043,y=h.y+h.ny*.043;px=h.x+h.nx*.16+h.c*.06;py=h.y+h.ny*.16+h.s*.06;a=Math.atan2(y-py,x-px);
+  const base=terrainHeight(x,y);freecam={z:base+.10};pitch=0;env(0);render(0);pitch=-.10/Math.hypot(x-px,y-py)*projY/rows;
+  const paint=hatchCell;hatchCell=(wx,wy,...args)=>{const v=paint(wx,wy,...args);return v&&Math.abs(rel(wx-x))<.09&&Math.abs(rel(wy-y))<.09?[' ',0,C(MAG,15)]:v;};
+  try{render(0);return {clear:free(px,py),pixels:Array.from(BG).filter(c=>c===C(MAG,15)).length};}finally{hatchCell=paint;freecam=null;}
+ });assert.equal(r.clear,true);assert.ok(r.pixels>4,'hatch absent from actual ground raster');
+}));
+
+test('the apartment exception removes a hatch even when the same door otherwise has valid wall and pavement clearance',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  hatchesNear(0,0);const h=HATCHES[0];
+  const owner=doors.find(d=>{
+   if(!d.sh||d.sh.kind===SHOP_APTS)return false;const n=Math.hypot(d.nx,d.ny)||1,nx=-d.nx/n,ny=-d.ny/n,c=Math.abs(ny),s=Math.abs(nx),side=hash(Math.floor(d.x*5),Math.floor(d.y*5),1461)<.5?-1:1;
+   return Math.hypot(rel(d.x-nx*.12+c*side*HATCH.along-h.x),rel(d.y-ny*.12+s*side*HATCH.along-h.y))<1e-8;
+  });if(!owner)return {owner:false};
+  const original=owner.sh;try{owner.sh={...original,kind:SHOP_APTS};hatchCount=-1;hatchesNear(0,0);return {owner:true,removed:!HATCHES.some(q=>Math.hypot(rel(q.x-h.x),rel(q.y-h.y))<1e-8)};}finally{owner.sh=original;hatchCount=-1;hatchesNear(0,0);}
+ });assert.equal(r.owner,true,'an actually placed hatch has a native owning door');assert.equal(r.removed,true,'apartment door gets cellar hatch');
+}));

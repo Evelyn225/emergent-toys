@@ -154,6 +154,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
   `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
   Next: utility cabinets, then bus shelters.
+- **Claude pass 12, service hatches:** `claude/service-hatches`, stacked on
+  `claude/street-drains` (`city/street-drains.js` only). Next: overhead cables
+  from main.
+
 
 - **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
   `city/kerb-fixtures.js` after `world-bootstrap.js`, new
@@ -976,3 +980,24 @@ gain/pan/ice defects still fail unchanged assertions; three node files pass.
 Only the test and shared notes changed. Ready to push/open/merge this small
 CI repair, then resume #245 from main including #239. #246 full CI failure
 is diagnosed rather than retried blindly; verify the repaired full run later.
+
+#263 fishing clock repair merged as9ea30c9. Codex active
+`codex/review-service-hatches` (#245), integrating latest main into Claude's
+8e5c5bd-derived branch. Files: street-drains module and focused tests plus
+shared bundle/notes. Preserve whole tree grates, no bridge runoff and smooth
+coverage from #239. Review hatch floor attachment/placement, cached cell bounds
+and close/far material transitions. Next #242/#243/#244 then #248→#249 and
+passes5/6/9. No reserved Claude/shared home/hotel helper edits planned.
+
+#245 source checkpoint: eight focused native drain/hatch checks, three node
+files and nine independent defects verified; eleven final clear-floor views
+reviewed. Hardware no longer resembles dark holes and follows ambient light.
+Final ABAB run/notes and original-branch push/merge still pending. Checkpoint
+on Codex's backup branch only; do not merge it before the final review note.
+
+#245 final review complete; supersedes ba7448d checkpoint's pending status.
+Eight native checks, three node files, nine mutations and eleven final views
+pass; ABAB costs recorded. A longer isolated wide-view repeat does not
+reproduce the10.8ms outlier (4.9–5.7→4.9–5.1ms). Original remote head remains
+8e5c5bd; ready to update/merge it. #263 full CI queued at last check. Next
+#242/#243/#244, then #248→#249 and passes5/6/9, preserving ownership/remnants.
