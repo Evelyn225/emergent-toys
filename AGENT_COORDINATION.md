@@ -677,3 +677,30 @@ and passes5/6/9. Keep pass7/8 open for remaining ceiling fittings, cords/noodle
 strands and legacy small props/stock electronics; add the old 24/7 slushie
 machine's rendering to that inventory. The scheduled continuation and user's
 hotel/motel door decision above stand; read newer notes before resuming.
+
+#232 merged as3759fec. Codex active `codex/interior-ceiling-quality`: first
+closing-audit chunk replaces strip/tin ceiling glyphs in shops/restaurants
+with fitted battens. New `city/interior-ceiling.js`, generic `ceilMask` paint
+callback and `roomCeil`/`roomSprites` hooks in `city/rooms.js` outside the
+reserved DINER definition, plus a focused browser test and shared manifest/
+bundle/notes. Home/hotel/civic/transport ceilings and existing feature lamps
+stay outside this first chunk. Pendants/spots and the recorded small-prop/
+cord/noodle remnants follow. No shared home/hotel helper edits planned.
+
+Ceiling chunk scope correction: tin is a custom pressed-tin renderer with
+round hanging lamps, not the fluorescent layout. This first chunk covers
+only `ceil:'strip'` in the shop/restaurant whitelist. Tin stays with the next
+pendant/spotlight chunk, preserving its existing finish and layout. Existing
+lantern/home/hotel/civic/rail controls pass; no DINER definition edits.
+
+Codex fluorescent closing-audit chunk complete on `codex/interior-ceiling-quality`:
+new `city/interior-ceiling.js`, three generic room rendering/layout hooks outside
+the reserved DINER definition, focused ceiling test, shared manifest/bundle/notes.
+Mounted closed housing/diffuser/clips, cached partition-aware layouts and surfaces;
+12 browser checks across final focused/integration runs, seven node checks and
+six negative probes pass. Twelve clear-floor views and ABAB costs recorded in
+WORLD_QUALITY; control images match main exactly. First chunk is strip only,
+including gas; tin/pendant/spots follow. #232 final CI has one stale minimum60
+staff-view assertion with all57 native views fully visible. Fix separately next,
+then continue the recorded closing audit and authorized Claude PR chains. All
+active ownership and hotel/motel closed/auto-closing door decisions stand.

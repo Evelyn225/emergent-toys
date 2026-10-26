@@ -183,6 +183,7 @@
     "city/cathedral-fittings.js",
     "city/izakaya-sake.js",
     "city/restaurant-lanterns.js",
+    "city/interior-ceiling.js",
     "city/thai-spirit-house.js",
     "city/fern-quality.js",
     "city/home-record-player.js",
