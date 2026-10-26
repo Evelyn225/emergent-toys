@@ -239,10 +239,12 @@ function tankCell(i, su, uStep, z, d, side, mx, my, L, c, u) {
 function aquaWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(BLUE, 1);
   if (Math.abs(z - 2.65) < 0.08) return set(i, fract(u * 2.5 + T * 0.1) < 0.5 ? '~' : '-', C(CYAN, Math.max(L, 9))), true;
-  const sign = mx === room.W - 1 ? [['GIFT SHOP', 13.4], ['CORAL REEF', 7.5]] : mx === 0 ? [['JELLYFISH', 4.6], ['SEAHORSES', 13]] : my === room.H - 1 ? [['THANK YOU FOR VISITING', 6]] : [];
+  // Interior left/front faces run in negative wall coordinates so lettering
+  // reads toward the viewer. The gift label sits above its actual counter.
+  const sign = mx === room.W - 1 ? [['CORAL REEF', 7.5]] : mx === 0 ? [['JELLYFISH', -4.6], ['SEAHORSES', -13]] : my === room.H - 1 ? [['THANK YOU FOR VISITING', -6], ['GIFT SHOP', -room.def.keeper[0]]] : [];
   for (const [s, u0] of sign) if (wallText(i, u, uStep, z, d, s, u0, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
   if (my === 1 || my === 2 && (mx === 0 || mx === room.W - 1)) // the hall's side walls, by the big window
-    if (wallText(i, u, uStep, z, d, 'OPEN OCEAN', 2.6, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
+    if (wallText(i, u, uStep, z, d, 'OPEN OCEAN', mx === 0 ? -2.6 : 2.6, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
   return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(BLUE, L * 0.5)), true;
 }
 // one of the big ones as you see it from underneath, in solid colour: along 0 its snout .. 1 its tail, across -1 .. 1
