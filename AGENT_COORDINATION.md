@@ -1388,3 +1388,37 @@ run concern. Full Node1069/1069 already green on unchanged pure sources.
 Ready for final note push/PR/merge. Next aquarium gift-shop sign and missing
 walk-up landing, then street-object entrance/stair clearance audit. Preserve
 reserved bathroom/DINER/world-bootstrap/facade and unpublished lettering work.
+
+#271 washroom approaches merged as22096d6. Codex active
+`codex/aquarium-gift-sign`: narrow aquarium interior wayfinding correction in
+city/aquarium.js, one focused native sign visibility/access test, bundle and
+shared notes. The right-wall GIFT SHOP lettering overlaps the isolated reef
+tank at(22,12); inspect actual native rays, then put the label over the gift
+counter on the front wall, retaining existing scalable lettering. Preserve
+fish/animal code and reserved facade/global lettering. Then the walk-up's
+missing stair landing and street-object clearance at doors/stairs, followed
+by remaining passes5/6/9. #269 full CI and full Node1069/1069 are green;
+#270 CI was still running at the last check. No parallel Codex chunks active.
+
+Aquarium sign final review complete. GIFT SHOP now sits on the solid front
+wall above keeper/counter X, away from the isolated reef tank. Native rays
+also exposed wrong-signed left/front wall anchors; these and the left ocean
+hall label now use the proper interior-facing signs. All gift letters are
+visible from four clear native approaches including night, and enlarge up
+close. Exit and both ocean-hall faces have native visibility checks; other
+gallery anchors are retained with corrected left-face coordinates. Tank hood
+labels and fish geometry stay unchanged. Three focused checks, two aquarium/
+touch-pool/plush controls and two Node bundle/parse files pass across final
+runs. Old baseline plus nine independent mounting/duplication/missing/height/
+signed-face/scale defects fail assertions through isolated browser bundles.
+Nine clear-floor wide/close/oblique/night/old-side/service/exit/gallery/reef
+views reviewed. ABAB177x66 main→after: wide2.3–3.5→2.0–3.0ms, close1.7–1.8→
+1.7–2.0, oblique2.0–2.1→2.0–2.4, exit1.3→1.3–1.9. Newly visible glyphs
+change work; broad performance gain is not claimed. #270 and #271 FULL CI
+GREEN40420200068/40421294748; full Node1069/1069 already green. Ready for
+final note push/PR/merge. Next missing walk-up stair landing: real stairRise
+clamps to1m between stair topY2.6 and doorY1, but stairSteps only builds
+Y2.6..7.6. Supply supported closed geometry connecting top tread to roof door,
+including the landing banister feet; preserve E/return. Then street-object
+stair/door clearance audit and remaining passes5/6/9. Keep reserved bathroom/
+DINER/world-bootstrap/facade and unpublished Claude lettering untouched.
