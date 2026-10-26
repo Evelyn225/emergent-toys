@@ -1105,3 +1105,13 @@ integration/views and ABAB against new main before merging #242. The remaining
 than duplicate merges. Claude also implemented the approved hotel/motel
 closed/auto-closing washroom policy in #262; verify it in pass6, do not repeat
 its implementation. Keep homes unchanged and reserved ownership intact.
+
+#242 post-#262 integration review complete on `codex/review-street-lamps`.
+Nine browser checks/four node files and fourteen updated views pass; Belle
+pixels identical, fresh ABAB against731b1c9 recorded. Thirteen defect probes
+cover unchanged lamp source. #262 full CI GREEN (40337743373), superseding
+the #245 cancelled PR run. Original #242 remains open because its head now
+contains reviewed fixes absent from the bulk integration; merge that follow-up.
+#243/#244/#248/#249 already merged: review them on new branches, opening small
+follow-up PRs only as warranted. Hotel/motel closed/auto-closing doors are
+already implemented by Claude; verify in pass6. Keep homes/ownership intact.
