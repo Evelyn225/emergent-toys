@@ -937,3 +937,8 @@ to1267478 (main integration only); preserve it before final push. Next #239
 then #245, followed by #242/#243/#244 and #248→#249, then passes5/6/9. All
 reserved source/shared helpers untouched; retain interior audit remnants and
 hotel/motel closed/auto-closing door decision without changing homes.
+
+Preserved Claude's1267478 refresh in the #246 review ancestry. Its main merge
+and cached-pole adaptation are covered by the reviewed implementation; final
+runtime sources, bundle and checks are byte-identical to e03a5ac. Ready to
+push/merge original #246. Do not duplicate the overhead review; #239 is next.
