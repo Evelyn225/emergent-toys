@@ -601,3 +601,24 @@ helper edits. Next #231–#232, then closing audit. Add the hardware lawnmower,
 record turntable/headphones and tattoo lollipop jar to its remaining legacy
 props; replacing BX calls alone does not complete the quality pass. Hotel/
 motel closed and auto-closing washroom doors remain queued for pass6.
+
+Codex active `codex/review-more-shop-fittings` (#231): main through #230
+integrated, both corner-shop test groups retained. Reviewing new returns box,
+queue display, dresser, sewing machine, record crate, tea table/cushions and
+counter callers in `city/shop-fittings.js`, `city/corner-shops.js` and
+`city/shops.js`. Prior BP/record/hose/produce/acrylic fixes remain. Next #232,
+then the recorded closing audit and authorised merge chains. No active Claude
+bathroom-quality/DINER/world-bootstrap/facade edits planned.
+
+#231 Codex review complete (`codex/review-more-shop-fittings`): LP crate floor/
+rim support and fixed shell preparation corrected; pawn TVs sit on the mat
+and both lower cases, facing the aisle. Returns slot now has closed recessed
+inner walls, and the queue board uses steady scaled lettering. Sewing machine
+has a supported needle plate/fabric, presser foot, mounted spool/thread guide
+and continuous needle travel to the fabric. Three new actual-shape/raster/
+motion checks and seven negative mutations pass. All21 current corner/small/
+specialist/shop-route/seating checks and seven bundle/parse/render checks pass;
+close/wide/oblique/night and ABAB costs reviewed. #230 full CI green. Next
+#232, preserving produce rotations AND all prior cache/contact fixes, then
+closing audit. Do not tick all pass7 merely because BX calls disappeared.
+Claude's active files remain reserved; hotel/motel door decision unchanged.
