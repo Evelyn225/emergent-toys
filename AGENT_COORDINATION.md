@@ -764,3 +764,14 @@ measurements and final probe rerun are being completed before publication.
 staff coverage; only karaoke test fails. Its13.9s sample is fully sung by the
 actual lyric clock (1.3x progress), so it must not expect unsung letters there.
 Fix that separately next, preserving start/mid/end colour coverage and seating.
+
+Cord/noodle chunk final review complete on
+`codex/interior-cord-noodle-quality` (source2432655): three focused and all
+shop routes/seating/lantern regressions pass (11 across final runs), seven node
+checks and nine independent mutations pass. Thirteen clear-floor views and
+static/moving ABAB costs are recorded in WORLD_QUALITY; control image identical.
+No pending geometry adjustment or helper edit. Publish/merge, then repair the
+separate karaoke start/mid/end sampling assertion. This supersedes the earlier
+WIP checkpoint. Continue legacy prop/electronics audit and authorized Claude
+chains, preserving active ownership and the hotel/motel closed/auto-close
+washroom-door decision. Latest branch and tests are pushed for usage handoff.
