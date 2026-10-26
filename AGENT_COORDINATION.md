@@ -1221,3 +1221,29 @@ this supersedes #265 cancelled-run concern. Next home interior passage
 surrounds/trim, remaining layouts, then passes6/9. Do not duplicate completed
 home windows or hotel washroom policy; preserve homes' bathroom state and all
 reserved/unpublished Claude source. No shared door/bath helper changes.
+
+#267 home entrance doors merged as ba55690. Codex active
+`codex/home-passage-surrounds` (pass5): new city/home-passages.js, only homePlan/
+homeDef in rooms.js, focused native home-passage test and shared manifest/
+bundle/notes. Derive the loft/Belle bedroom/study openings from the same cut
+measurements as their native grids; build closed supported reveals, surrounds
+on both wall faces and overhead infill while retaining wide walk-throughs.
+Each collider must follow its actual rendered part; no full-opening bounding
+collider. Studio/Fern/Cabin, balcony openings, bathroom state/helpers, hotel/
+shop helpers and reserved/unpublished Claude lettering remain untouched.
+Next remaining home trim/layout character, then hotel/civic passes6/9.
+
+Passage source checkpoint: three focused geometry/collision/native-render
+checks pass on final source. HomePlan shares the exact cut measurements with
+closed reveals, two-faced casings and overhead infill; each prop collider is
+its rendered box, leaving the1.9m centre open. Native wall paint/ceiling bands
+and live light changes continue across the infill; buried end caps defer to
+native walls at the joins. Twenty clear-floor views generated/reviewed;
+eight prior home-entry/layout controls and four node files passed before
+final material/joint refinements. A too-long straight study test met the same
+existing dining chair before/after at(13,8.8); the focused route now spans the
+whole wall depth and both immediate approaches, without testing a walk into
+that chair. Remaining: bundle-only negative probes, final integration/node
+checks, ABAB, final notes and PR/merge. Backup checkpoint, NOT ready to merge.
+#267 entrance full CI GREEN (40380569613). Keep all ownership and remaining
+home/hotel/civic work, including the unavailable Claude lettering branch.
