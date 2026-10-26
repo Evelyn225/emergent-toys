@@ -79,6 +79,10 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE)) return; // (where the walk-ups have theirs)
     else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L)) return;
+      if (d < SHOP_WINDOW.near && z < 0.3 && Math.abs(local) >= f.spacing * 0.03 && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+        const e = Math.sign(local), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + center + e * f.spacing * 0.03), ub = sg * (f.start + center + e * f.spacing * 0.39);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.3, sh, openAt(sh, tod), L, sk + unit * 2 + (e > 0 ? 1 : 0))) return;
+      }
       BG[i] = C(CYAN, 1 + night * 2);
       return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
     } else if (brownstoneWindow(i, local, z, f.spacing * 0.15, 0.13, 0.3, hash(unit, 5, sk) > litT, L, STONE)) return;
@@ -114,6 +118,10 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
       if (architectureShutter(i, z, sh, L)) return;
+      if (!lobby && d < SHOP_WINDOW.near && z < 0.245 && sh.kind !== SHOP_APTS && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+        const a0 = 0.06 + (bay + 0.16) * spacing, a1 = 0.06 + (bay + 0.84) * spacing, sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.245, sh, openAt(sh, tod), L, sk0(b.seed) + bay)) return;
+      }
       BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);
       return set(i, fu < 0.08 || fu > 0.92 || Math.abs(z - 0.26) < 0.014 ? '|' : ':', C(WHITE, Math.max(L * 0.65, night * 10)));
     }

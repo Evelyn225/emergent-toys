@@ -129,6 +129,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   generic sign band and awning in `city/city-render.js`, and `SHOPFRONT_FACES` in
   `world-bootstrap.js`'s face remap. Next: Chinatown's painted vertical signs and the
   remaining shopfront details (shutters, windows, displays).
+- **Claude pass 13, shop window displays:** `claude/shop-windows`, stacked on #249:
+  new `city/shop-windows.js` (after `city-render.js` in the manifest) and one call in
+  each family's shop window (`architecture-render.js` brownstone and downtown,
+  `residential-render.js` housing, `city-render.js` generic). Next: the pass 13
+  closing audit (shutters, doors, district-specific typography).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

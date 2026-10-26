@@ -57,6 +57,7 @@
   "dom": [
     "city/screen.js",
     "city/city-render.js",
+    "city/shop-windows.js",
     "city/graffiti.js",
     "city/belle.js",
     "city/architecture-render.js",

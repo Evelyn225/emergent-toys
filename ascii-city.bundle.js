@@ -12281,6 +12281,8 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
+    if (on && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON && sh.kind !== SHOP_APTS && sty !== 8) // up close, the display behind the glass (shop-windows.js)
+      if (shopWindow(i, u, z, Math.floor(u * 2) / 2 + 0.04, Math.floor(u * 2) / 2 + 0.5, 0.02, 0.28, sh, open, L, sk + Math.floor(u * 2))) return;
     if (sh.kind === SHOP_NEON) return set(i, on ? (fract(z * 30) < 0.5 ? ':' : '.') : '.', C(on ? sh.neon : GRAY, on ? Math.max(L, glowL) : L * 0.3));
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
@@ -12915,6 +12917,55 @@ const onLine = (off, du, dz, slope) => Math.abs(off) < Math.max(du, dz * Math.ab
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
+// Shop windows with depth: behind the glass, a display bay 70 cm deep with its floor raised as a plinth, the shop's
+// goods standing on it at their own depth (so they slide against the back as you walk past), and the lit shop beyond.
+// Shared by every facade family's shop windows up close (SHOP_WINDOW.near); further off they stay flat glass.
+// u0..u1: the pane in the wall's u; z0..z1: its glass.
+const SHOP_WINDOW = { near: 3.5, dep: .07, plinth: .035, goods: .45, spacing: .085 };
+const SHOP_DISPLAYS = { // what a shop puts in its window: [shape, height, half width]
+  food: ['loaf', .03, .028], clothes: ['mannequin', .17, .022], books: ['stack', .05, .026], screens: ['screen', .06, .03],
+  bottles: ['bottle', .07, .01], flowers: ['bunch', .08, .024], goods: ['box', .05, .025],
+};
+const SHOP_DISPLAY_FOR = {
+  BAKERY: 'food', BAGELS: 'food', DONUTS: 'food', CAKES: 'food', DELI: 'food', DELICATESSEN: 'food', BURGERS: 'food', DINER: 'food', PIZZA: 'food',
+  CAFE: 'food', COFFEE: 'food', KISSATEN: 'food', 'ICE CREAM': 'food', DUMPLINGS: 'food', BENTO: 'food', CHICKEN: 'food', KEBAB: 'food',
+  THRIFT: 'clothes', BOUTIQUE: 'clothes', TAILOR: 'clothes', SHOES: 'clothes', BARBER: 'clothes', JEWELER: 'clothes',
+  BOOKS: 'books', MANGA: 'books', VIDEO: 'screens', RECORDS: 'screens', ARCADE: 'screens', PHONES: 'screens',
+  LIQUOR: 'bottles', BAR: 'bottles', JUICE: 'bottles', DRUGSTORE: 'bottles', FLORIST: 'flowers', HERBS: 'flowers',
+};
+const shopDisplay = sh => SHOP_DISPLAYS[SHOP_DISPLAY_FOR[sh.word] || 'goods'];
+// does a point on the goods' plane fall on one of them? (du from the item's middle, h up from the plinth)
+function shopGoodsCell(shape, du, h, ht, hw) {
+  const a = Math.abs(du);
+  if (h < 0 || h > ht || a > hw) return false;
+  if (shape === 'loaf') return a < hw * Math.sqrt(1 - (h / ht) ** 2); // a round top
+  if (shape === 'mannequin') return h > ht * .86 ? Math.hypot(du, h - ht * .93) < ht * .07 : h > ht * .45 ? a < hw * (h > ht * .8 ? .45 : 1) : a < hw * .25; // head, body, stand
+  if (shape === 'bottle') return h > ht * .6 ? a < hw * .4 : true;
+  if (shape === 'bunch') return h > ht * .45 ? Math.hypot(du / hw, (h - ht * .72) / (ht * .28)) < 1 : a < hw * .3; // the flowers on their stems
+  return true; // a stack, a screen, a box
+}
+function shopWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
+  const w = SHOP_WINDOW, base = z0 + w.plinth, [su, sz] = glassSlopes(u, z), lit = open && (night > .3 || overcast > .6);
+  if (z < base) { BG[i] = C(sh.neon, .8 + L * .05); return set(i, ' ', 0), true; } // the plinth's front, in its own shadow behind the glass
+  const b = boxBehind(u, z, u0, u1, base, z1, w.dep), qg = w.dep * w.goods, n = Math.max(1, Math.round((u1 - u0) / w.spacing)), step = (u1 - u0) / n;
+  if (b.q > qg) { // the goods, standing on the plinth, before the back
+    const pu = u + su * qg, pz = z + sz * qg, [shape, ht, hw] = shopDisplay(sh);
+    const k = clamp(Math.floor((pu - u0) / step), 0, n - 1), du = pu - (u0 + (k + .5) * step), tall = ht * (.75 + hash(seed, k, 1490) * .5);
+    if (pz >= base && pz < z1 && shopGoodsCell(shape, du, pz - base, tall, hw)) {
+      const col = shape === 'screen' ? CYAN : shape === 'mannequin' ? WHITE : ITEM_COL[(hash(seed, k, 1491) * 8) | 0];
+      if (shape === 'screen') { BG[i] = C(BLUE, 4 + Math.sin(T * 5 + k) * 2 + (lit ? 3 : 0)); return set(i, Math.abs(du) > hw - .004 || pz - base < .004 ? '|' : ' ', C(GRAY, 3)), true; }
+      if (shape === 'stack') { BG[i] = C(ITEM_COL[(Math.floor((pz - base) * 120) + k) & 7], 2.4 + L * .15); return set(i, fract((pz - base) * 120) < .2 ? '_' : ' ', C(GRAY, 2)), true; }
+      BG[i] = C(col, (shape === 'mannequin' ? 3.2 : 2.4) + L * .18 + (lit ? 1.5 : 0)); return set(i, ' ', 0), true;
+    }
+  }
+  if (b.s === 'floor') { BG[i] = C(sh.neon, 1.6 + L * .12 + (lit ? 1 : 0)); return set(i, ' ', 0), true; } // the plinth's cloth
+  if (b.s === 'side') { BG[i] = C(GRAY, 1.2 + L * .1); return set(i, ' ', 0), true; }
+  if (b.s === 'ceil') { const spot = lit && Math.abs(fract((b.u - u0) / step) - .5) < .12; BG[i] = spot ? C(YEL, 12) : C(GRAY, .8); return set(i, ' ', 0), true; } // spotlights
+  // the back: the shop beyond, its shelves and its light
+  const shelf = fract((b.z - base) * 40) < .12;
+  BG[i] = C(WARM, (lit ? 2.2 + night * 2.5 : open ? 1.4 + day : .6) + (shelf ? .5 : 0));
+  return set(i, shelf ? '=' : ' ', C(BRICK, L * .4)), true;
+}
 // ===== graffiti: murals painted across some buildings' upper floors, each district in its own style (rust and anchors on
 // the docks, dragons in Chinatown, flowers in the Brownstones, a lone stencil downtown), quick tags low on the shutters, and the tags
 // you spray yourself with a can from the hardware store. Police don't like it: spraying is vandalism, and if a cop
@@ -13447,6 +13498,10 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE)) return; // (where the walk-ups have theirs)
     else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L)) return;
+      if (d < SHOP_WINDOW.near && z < 0.3 && Math.abs(local) >= f.spacing * 0.03 && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+        const e = Math.sign(local), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + center + e * f.spacing * 0.03), ub = sg * (f.start + center + e * f.spacing * 0.39);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.3, sh, openAt(sh, tod), L, sk + unit * 2 + (e > 0 ? 1 : 0))) return;
+      }
       BG[i] = C(CYAN, 1 + night * 2);
       return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
     } else if (brownstoneWindow(i, local, z, f.spacing * 0.15, 0.13, 0.3, hash(unit, 5, sk) > litT, L, STONE)) return;
@@ -13482,6 +13537,10 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
       if (architectureShutter(i, z, sh, L)) return;
+      if (!lobby && d < SHOP_WINDOW.near && z < 0.245 && sh.kind !== SHOP_APTS && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+        const a0 = 0.06 + (bay + 0.16) * spacing, a1 = 0.06 + (bay + 0.84) * spacing, sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.245, sh, openAt(sh, tod), L, sk0(b.seed) + bay)) return;
+      }
       BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);
       return set(i, fu < 0.08 || fu > 0.92 || Math.abs(z - 0.26) < 0.014 ? '|' : ':', C(WHITE, Math.max(L * 0.65, night * 10)));
     }
@@ -13620,6 +13679,10 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   if (along > .14 && along < width - .14 && z < .31) {
     if (architectureShutter(i, z, sh, L)) return;
     const mullion = Math.abs(fract((along - .14) / .48) - .5) > .47;
+    if (!mullion && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+      const a0 = .14 + Math.floor((along - .14) / .48) * .48, a1 = Math.min(a0 + .48, width - .14), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+      if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .045, .31, sh, open, L, sk0(b.seed) + Math.floor(a0 * 9))) return;
+    }
     BG[i] = C(sh.kind === SHOP_NEON ? sh.neon : CYAN, 1 + night * 2);
     return set(i, mullion ? '|' : ':', C(mullion ? trim : WARM, Math.max(L * .65, night * 11)));
   }
