@@ -151,6 +151,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 12 (street lights and utilities):** the turned street lamp on
+  `claude/street-lamps` from main (new `city/street-lamps.js`; `drawLamp3D`
+  removed from `city/city-sprites.js`). Next: signal heads and pedestrian
+  signals, then wall pipes and meters, then pavement service hatches.
+
 - **Claude pass 12, facade utilities:** `claude/facade-utilities` from main (new
   `city/facade-utilities.js` after `world-bootstrap.js`, reading `ARCH_BUILDINGS`
   faces and street geometry; one draw hook in `city/city-sprites.js`). Next:
@@ -1059,3 +1064,53 @@ pass; ABAB costs recorded. A longer isolated wide-view repeat does not
 reproduce the10.8ms outlier (4.9–5.7→4.9–5.1ms). Original remote head remains
 8e5c5bd; ready to update/merge it. #263 full CI queued at last check. Next
 #242/#243/#244, then #248→#249 and passes5/6/9, preserving ownership/remnants.
+
+#245 merged as094a819. #263's fishing-clock repair full CI is GREEN (run
+40332262062), superseding the earlier queued status. Codex active
+`codex/review-street-lamps` (#242), starting from831d99f. Files: new
+city/street-lamps.js, lamp draw relocation in city-sprites.js, focused tests
+and shared manifest/bundle/notes. Preserve the shared STEEL helpers and Belle
+lamps. Review cached fixed profiles, connected neck/drop/lantern surfaces,
+terrain offsets and near/far continuity. Next #243 signals, #244 utilities,
+#248→#249, then passes5/6/9. Reserved Claude source/shared helpers untouched.
+
+#242 source checkpoint: cached fixed lamp styles and stable moved tube rays,
+physical supported lantern ribs, preserved thin-neck fallback, and standard
+lamp culling includes its visible head while Belle retains its old path.
+Three focused and four native Belle/snow/cover/collision checks plus four node
+files pass. Thirteen independent mutations reject broken geometry, caches,
+lighting, glyph coordinates and culling. All5234 native lamp bases have zero
+terrain height; placements remain unchanged. Belle control pixels identical.
+Final full-height views and ABAB costs are running; backup checkpoint only,
+not yet ready to merge original #242. Next #243 and the remaining queue.
+
+#242 final review complete, superseding adce610's pending checkpoint status.
+Three focused/four native controls, four node files, thirteen defect probes
+and fourteen final views pass. Cached styles, physical supported ribs, real
+head visibility and both thin-line/billboard paths reviewed; Belle pixels
+identical. ABAB and longer warm repeat recorded, with host tails explicit.
+#263 full CI green; #245 PR run cancelled, so watch a later complete run
+including hatches. Ready to push original831d99f-derived #242 and merge.
+Next #243→#244 (independent reviews), then #248→#249 and passes5/6/9; retain
+all ownership, hotel/motel door policy and remaining interior audit notes.
+
+Concurrent main update: Claude's #262 integration merged as731b1c9 while the
+#242 review was finishing. Merging it into this review, preserving all newly
+integrated signal/facade/window/shutter/door/awning/bathroom/wallpaper work and
+both note streams; use main's manifest order (a superset) and rebuild. Lamp
+model and focused checks remain identical to reviewed d7f30d2. Recheck native
+integration/views and ABAB against new main before merging #242. The remaining
+#243/#244/#248/#249 baselines are now integrated; review as follow-ups rather
+than duplicate merges. Claude also implemented the approved hotel/motel
+closed/auto-closing washroom policy in #262; verify it in pass6, do not repeat
+its implementation. Keep homes unchanged and reserved ownership intact.
+
+#242 post-#262 integration review complete on `codex/review-street-lamps`.
+Nine browser checks/four node files and fourteen updated views pass; Belle
+pixels identical, fresh ABAB against731b1c9 recorded. Thirteen defect probes
+cover unchanged lamp source. #262 full CI GREEN (40337743373), superseding
+the #245 cancelled PR run. Original #242 remains open because its head now
+contains reviewed fixes absent from the bulk integration; merge that follow-up.
+#243/#244/#248/#249 already merged: review them on new branches, opening small
+follow-up PRs only as warranted. Hotel/motel closed/auto-closing doors are
+already implemented by Claude; verify in pass6. Keep homes/ownership intact.

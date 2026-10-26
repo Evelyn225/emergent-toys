@@ -184,8 +184,10 @@ function citySprites() {
   }
   forNear(lampsB, ({ x, y, ax, ay, top = LAMP_TOP }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
-    if (depth < 0.05 || depth > vis) return;
-    if (districtAt(x, y) === 'belle') return drawBelleLamp(vx, vy, ax, ay);
+    const lampRadius=REACH+.08;
+    if (depth < -lampRadius || depth > vis+lampRadius) return;
+    if (districtAt(x, y) === 'belle') {if(depth<.05||depth>vis)return;return drawBelleLamp(vx, vy, ax, ay);}
+    if(!inView(vx,vy,lampRadius))return;
     if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay, top); // up close: a real one
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, top + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s, top));
