@@ -162,7 +162,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     // a shop with fascia boards (shopfronts.js): its name once on each street face, on the board up close and painted
     // there further off (where a row can be taller than the band, so wallText decides which row carries it)
     const sf = z > 0.28 ? shopfrontFace(side, mx, my, h) : null, g = sf?.fascia;
-    if (g && d > ARCH_FASCIA_VIS - 1.5 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
+    if (g && archFasciaPainted(g, d) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
       C(sh.neon, open ? Math.max(L, night * 15 * Math.max(fog, 0.5)) : L * 0.5), C(GRAY, 1))) return;
     if (z > 0.32 && sf) return set(i, '-', C(GRAY, L));
     if (z > 0.32) {
