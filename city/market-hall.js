@@ -11,11 +11,12 @@ function MARKET_STALL(x,y,hl,kind,col,fx,fy) {
     add(u,v,c===1&&s===0?base:{...base,c,s,trayShape:base},shade,c===1&&s===0?foodRayTray:grocerTrayRay);};
   const solid=(u,v,a,b,z0,z1,r,shade,list=items)=>list.push({u,v,box:{...boxAt(0,0,c,s,a,b,z0,z1),round:r},shade,ray:r?coveRayRounded:rayBox});
   if(K==='fish'){
+    const fins=paintShade(GRAY,2.6,.25);
     const ice=gondolaFlat(c,s,(i,t,L)=>{const g=hash(Math.floor(HIT.u*60),Math.floor(HIT.v*60),seed)*coveDetail(t,.2);BG[i]=C(g>.6?WHITE:CYAN,3.6+g*1.5+L*.15);set(i,' ',0);return true;});
     tray(0,0,hl-.08,hw-.04,.06,steel);solid(0,0,hl-.09,hw-.05,top+.008,top+.045,0,ice);
     for(let k=0;k<Math.floor((hl*2-.2)/.3);k++)for(const v of [-.12,.12]){
-      const sh=(i,t,L)=>{const belly=HIT.nz>.6&&Math.abs(HIT.v)<.012;BG[i]=C(belly?WHITE:GRAY,(belly?4:2.8)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+hash(k*2+(v>0),1,seed)*.6);set(i,' ',0);return true;};
-      oval(-hl+.25+k*.3,v,top+.045,.13,.035,.045,sh);
+      const sh=(i,t,L)=>{const belly=HIT.nz>.6&&Math.abs(HIT.v)<.012,eye=(HIT.u+.075)**2+(HIT.w-top-.08)**2<.004**2&&Math.abs(HIT.v)>.018;BG[i]=C(eye?GRAY:belly?WHITE:GRAY,eye?.5:(belly?4:2.8)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+hash(k*2+(v>0),1,seed)*.6);set(i,' ',0);return true;};
+      const u=-hl+.25+k*.3;oval(u,v,top+.045,.13,.035,.045,sh);oval(u+.115,v,top+.06,.035,.05,.009,fins);
     }
   }
   if(K==='greens'){const n=Math.floor(hl*2/.5),pitch=hl*2/n;

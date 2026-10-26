@@ -657,3 +657,24 @@ Do not merge this checkpoint without finishing that review. Then continue the
 recorded closing audit, authorised merge chains and passes5/6/9. Preserve the
 hotel/motel closed and auto-closing washroom-door decision and Claude's current
 file ownership. Read newer appended notes before resuming.
+
+#232 Codex review complete (`codex/review-market-and-last-shops`): cached
+produce survives quarter-turns with correct tray normals and fruit axes.
+Market stock is prepared once, supported, nonintersecting and clear of posts;
+framed cloth awnings join their posts. Slicer clears its wall/counter and
+wheels have shafts; steel clears uprights and the gate reaches the floor.
+Curtain tabs join its wall-mounted rail; chair back joins its base. Machine
+openings have real depth, mounted coin/cup fittings, clear brochure pockets
+and scaled surface symbols. Suitcase straps/supports/handles and roller caps
+are bounded correctly. Native 24/7 appliances now fit clear of the register,
+a visual-review defect missed by centre-only tests. All29 relevant browser
+checks pass across final focused/integration runs, plus seven bundle/parse/
+render checks;13 independent negative probes,24 close/wide/oblique/night
+views and ABAB costs reviewed. #230/#231 updated full CI green. No active
+Claude or shared home/hotel helper files edited. Final source ready for latest
+remote integration/push and #232 merge; this supersedes the earlier checkpoint.
+Next the recorded interior closing audit, then authorized Claude merge chains
+and passes5/6/9. Keep pass7/8 open for remaining ceiling fittings, cords/noodle
+strands and legacy small props/stock electronics; add the old 24/7 slushie
+machine's rendering to that inventory. The scheduled continuation and user's
+hotel/motel door decision above stand; read newer notes before resuming.

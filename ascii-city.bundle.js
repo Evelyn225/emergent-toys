@@ -17845,10 +17845,10 @@ const storeProps = ROOM_DEFS.store.props;
 // (the store's right-wall fridges are built: shop-fridges.js)
 ROOM_DEFS.store.props = r => {
   const p = [...storeProps(r), ...SHOP_FRIDGES.store()];
-  if (r.word === '24/7') p.push(ROOM_MODEL(5.75, 1.75, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
+  if (r.word === '24/7') p.push(ROOM_MODEL(5.65, BACK_COUNTER_Y, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
     for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx + e, vy, 0.1, 1.05, 1.45, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
     BXD(vx, vy, 0.24, 0.13, 1.45, 1.55, solid(WHITE, { top: '=' }));
-  }), HOTDOG_ROLLER_AT(4.47, 1.75, 1.05)); // the hot dog roller
+  }), HOTDOG_ROLLER_AT(5, BACK_COUNTER_Y, 1.05)); // the hot dog roller
   if (r.word === 'BODEGA') p.push(figProp(5.65, 1.7, CAT_LOOK, { z: 1.05, h: 0.75 / CAT_LOOK.scale(0), pose: () => fract(T / 5) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 })); // the bodega cat, on the counter
   return p;
 };
@@ -38462,12 +38462,12 @@ function CURTAIN_DRAWN(x,y,hl,z0,z1,col,c=1,s=0,railTo=hl+.05) {
 // A hot-dog roller on a counter at z: a steel tray, the rollers turning, the
 // sausages resting between them.
 function HOTDOG_ROLLER_AT(x,y,z) {
-  const n=6,pitch=.04,r=.012,sr=.021,roll=(i,t,L)=>{const ridge=fract(HIT.u*20+T*2)<.5;BG[i]=C(GRAY,(ridge?3.2:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const n=6,pitch=.04,r=.012,sr=.021,roll=(i,t,L)=>{const ridge=fract(Math.atan2(HIT.nz,HIT.ny)/TAU+T*.3)<.12;BG[i]=C(GRAY,(ridge?3.2:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   const sz=z+.03+r+Math.sqrt((r+sr)**2-(pitch/2)**2); // a sausage's centre, touching both rollers under it
   const sausage=kitchenFoodShade(BRICK),dogs=[0,2,4].map(k=>{const v=(-n/2+k+1)*pitch;return{...boxAt(0,v,1,0,.14+sr,sr,sz-sr,sz+sr),ax:-.14,ay:v,az:sz,bx:.14,by:v,bz:sz,r:sr};});
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const b of dogs)drawBox({...b,x:vx,y:vy+b.y,ax:vx+b.ax,ay:vy+b.ay,bx:vx+b.bx,by:vy+b.by},sausage,coveRayCapsule);
-    for(let k=0;k<n;k++){const v=(-n/2+k+.5)*pitch;drawBox({...boxAt(vx,vy+v,1,0,.18,r,z+.03,z+.03+2*r),ax:vx-.18,ay:vy+v,az:z+.03+r,bx:vx+.18,by:vy+v,bz:z+.03+r,r},roll,coveRayCapsule);}
+    for(let k=0;k<n;k++){const v=(-n/2+k+.5)*pitch;drawBox({...boxAt(vx,vy+v,1,0,.18+r,r,z+.03,z+.03+2*r),ax:vx-.18,ay:vy+v,az:z+.03+r,bx:vx+.18,by:vy+v,bz:z+.03+r,r},roll,coveRayCapsule);}
     coveRound(vx,vy,1,0,.22,.14,z,z+.03,.008,GRAY); // the tray
   }),box:boxAt(x,y,1,0,.22,.14,z,sz+sr),radius:.3,roller:{z}};
 }
@@ -38484,11 +38484,12 @@ function MARKET_STALL(x,y,hl,kind,col,fx,fy) {
     add(u,v,c===1&&s===0?base:{...base,c,s,trayShape:base},shade,c===1&&s===0?foodRayTray:grocerTrayRay);};
   const solid=(u,v,a,b,z0,z1,r,shade,list=items)=>list.push({u,v,box:{...boxAt(0,0,c,s,a,b,z0,z1),round:r},shade,ray:r?coveRayRounded:rayBox});
   if(K==='fish'){
+    const fins=paintShade(GRAY,2.6,.25);
     const ice=gondolaFlat(c,s,(i,t,L)=>{const g=hash(Math.floor(HIT.u*60),Math.floor(HIT.v*60),seed)*coveDetail(t,.2);BG[i]=C(g>.6?WHITE:CYAN,3.6+g*1.5+L*.15);set(i,' ',0);return true;});
     tray(0,0,hl-.08,hw-.04,.06,steel);solid(0,0,hl-.09,hw-.05,top+.008,top+.045,0,ice);
     for(let k=0;k<Math.floor((hl*2-.2)/.3);k++)for(const v of [-.12,.12]){
-      const sh=(i,t,L)=>{const belly=HIT.nz>.6&&Math.abs(HIT.v)<.012;BG[i]=C(belly?WHITE:GRAY,(belly?4:2.8)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+hash(k*2+(v>0),1,seed)*.6);set(i,' ',0);return true;};
-      oval(-hl+.25+k*.3,v,top+.045,.13,.035,.045,sh);
+      const sh=(i,t,L)=>{const belly=HIT.nz>.6&&Math.abs(HIT.v)<.012,eye=(HIT.u+.075)**2+(HIT.w-top-.08)**2<.004**2&&Math.abs(HIT.v)>.018;BG[i]=C(eye?GRAY:belly?WHITE:GRAY,eye?.5:(belly?4:2.8)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+hash(k*2+(v>0),1,seed)*.6);set(i,' ',0);return true;};
+      const u=-hl+.25+k*.3;oval(u,v,top+.045,.13,.035,.045,sh);oval(u+.115,v,top+.06,.035,.05,.009,fins);
     }
   }
   if(K==='greens'){const n=Math.floor(hl*2/.5),pitch=hl*2/n;

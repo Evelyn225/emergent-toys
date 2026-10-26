@@ -444,12 +444,12 @@ function CURTAIN_DRAWN(x,y,hl,z0,z1,col,c=1,s=0,railTo=hl+.05) {
 // A hot-dog roller on a counter at z: a steel tray, the rollers turning, the
 // sausages resting between them.
 function HOTDOG_ROLLER_AT(x,y,z) {
-  const n=6,pitch=.04,r=.012,sr=.021,roll=(i,t,L)=>{const ridge=fract(HIT.u*20+T*2)<.5;BG[i]=C(GRAY,(ridge?3.2:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const n=6,pitch=.04,r=.012,sr=.021,roll=(i,t,L)=>{const ridge=fract(Math.atan2(HIT.nz,HIT.ny)/TAU+T*.3)<.12;BG[i]=C(GRAY,(ridge?3.2:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   const sz=z+.03+r+Math.sqrt((r+sr)**2-(pitch/2)**2); // a sausage's centre, touching both rollers under it
   const sausage=kitchenFoodShade(BRICK),dogs=[0,2,4].map(k=>{const v=(-n/2+k+1)*pitch;return{...boxAt(0,v,1,0,.14+sr,sr,sz-sr,sz+sr),ax:-.14,ay:v,az:sz,bx:.14,by:v,bz:sz,r:sr};});
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const b of dogs)drawBox({...b,x:vx,y:vy+b.y,ax:vx+b.ax,ay:vy+b.ay,bx:vx+b.bx,by:vy+b.by},sausage,coveRayCapsule);
-    for(let k=0;k<n;k++){const v=(-n/2+k+.5)*pitch;drawBox({...boxAt(vx,vy+v,1,0,.18,r,z+.03,z+.03+2*r),ax:vx-.18,ay:vy+v,az:z+.03+r,bx:vx+.18,by:vy+v,bz:z+.03+r,r},roll,coveRayCapsule);}
+    for(let k=0;k<n;k++){const v=(-n/2+k+.5)*pitch;drawBox({...boxAt(vx,vy+v,1,0,.18+r,r,z+.03,z+.03+2*r),ax:vx-.18,ay:vy+v,az:z+.03+r,bx:vx+.18,by:vy+v,bz:z+.03+r,r},roll,coveRayCapsule);}
     coveRound(vx,vy,1,0,.22,.14,z,z+.03,.008,GRAY); // the tray
   }),box:boxAt(x,y,1,0,.22,.14,z,sz+sr),radius:.3,roller:{z}};
 }

@@ -20,7 +20,7 @@ test('rotated produce retains actual crate floors, fruit axes, stable normals an
     const hit=tr.ray(x,y,q.rim+.1,0,0,-1,tr.box),floor=q.rim+.1-hit;
     if(hit<0||Math.abs(floor-q.floor)>1e-8||HIT.nz<.99)bad.push('rotated crate floor wrong');
     const hitWall=tr.ray(x,y,q.rim+.1,-s*.15,c*.15,-.12,tr.box);
-    if(hitWall<0)bad.push('rotated inner wall missing');
+    if(hitWall<0||Math.abs(HIT.nx-s)>.01||Math.abs(HIT.ny+c)>.01)bad.push('rotated inner wall or normal wrong');
     for(const m of q.models){const x1=x+c*m.box.x-s*m.box.y,y1=y+s*m.box.x+c*m.box.y;
      const actual=a.find(p=>p.ray===m.ray&&Math.hypot(p.box.x-x1,p.box.y-y1)<1e-8&&Math.abs(p.box.z0-m.box.z0)<1e-8);
      if(!actual||actual.ray===foodRayEllipsoid&&(Math.abs(actual.box.c-c)>1e-9||Math.abs(actual.box.s-s)>1e-9))bad.push('fruit lost its rotated shape');
@@ -41,9 +41,11 @@ test('market fish rest on the ice and bread rests on baskets without intersectin
   const parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return a;};
   for(const o of room.props.filter(o=>o.marketStall)){
    const d=o.marketStall,a=parts(o),b=parts(o),fruit=a.filter(q=>q.ray===foodRayEllipsoid);
-   if(d.kind==='fish')for(const q of fruit)if(Math.abs(q.box.z0-d.top-.045)>1e-8)bad.push('fish sinks into ice');
+   if(d.kind==='fish')for(const q of fruit.filter(q=>Math.abs(q.box.z1-q.box.z0-.045)<1e-8))if(Math.abs(q.box.z0-d.top-.045)>1e-8)bad.push('fish sinks into ice');
    if(d.kind==='bread'){
-    for(const q of fruit)if(Math.abs(q.box.z0-d.top-.008)>1e-8)bad.push('loaf floats above basket floor');
+    const trays=a.filter(q=>q.ray===foodRayTray||q.ray===grocerTrayRay);
+    for(const q of fruit){if(Math.abs(q.box.z0-d.top-.008)>1e-8)bad.push('loaf floats above basket floor');
+     if(!trays.some(t=>{const A=q.box,B=t.box,dx=A.x-B.x,dy=A.y-B.y;return Math.abs(dx*d.c+dy*d.s)+A.hl<=B.hl-.008+1e-8&&Math.abs(-dx*d.s+dy*d.c)+A.hw<=B.hw-.008+1e-8;}))bad.push('loaf through basket wall');}
     for(let j=0;j<fruit.length;j++)for(let k=0;k<j;k++){const A=fruit[j].box,B=fruit[k].box,dx=A.x-B.x,dy=A.y-B.y;
      if((dx*d.c+dy*d.s)**2/(A.hl+B.hl)**2+(-dx*d.s+dy*d.c)**2/(A.hw+B.hw)**2<1-1e-8)bad.push('loaves intersect');}
    }
@@ -123,7 +125,24 @@ test('each hot dog touches two rollers and the complete display fits its support
   const dogs=ps.filter(q=>q.ray===coveRayCapsule&&q.box.r>.02),rollers=ps.filter(q=>q.ray===coveRayCapsule&&q.box.r<.02);
   if(dogs.length!==3||rollers.length!==6)return ['missing roller surfaces'];
   for(const q of dogs){const d=q.box,contacts=rollers.filter(q=>Math.abs(Math.hypot(d.ay-q.box.ay,d.az-q.box.az)-d.r-q.box.r)<1e-8);if(contacts.length!==2)bad.push('hot dog not supported by two rollers');}
+  for(const q of [...dogs,...rollers]){const b=q.box;if(Math.min(b.ax,b.bx)-b.r<b.x-b.hl-1e-8||Math.max(b.ax,b.bx)+b.r>b.x+b.hl+1e-8)bad.push('rounded roller end clipped');}
   for(const q of ps)if(Math.abs(q.box.x)+q.box.hl>o.box.hl+1e-8||Math.abs(q.box.y)+q.box.hw>o.box.hw+1e-8||q.box.z1>o.box.z1+1e-8)bad.push('display outside tray envelope');
   return bad;
+ });assert.deepEqual(bad,[]);
+}));
+
+test('the native 24/7 roller and slushie machine fit entirely on clear counter space',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  enterRoom('store',{word:'24/7',ret:[100,100,0]},[5,5,0]);projX=10000;const draw=drawBox,bad=[],counter=room.props.find(o=>o.furniture==='counter'),C=counter.box,items=[];
+  const parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return a;};
+  const register=room.props.find(o=>o.box&&o.box.z0===C.z1&&Math.abs(o.x-(counter.x-C.hl*.6))<1e-8),R=register.box;
+  for(const o of room.props.filter(o=>o.draw&&!o.fig&&o!==counter&&o!==register&&Math.abs(o.x-counter.x)<C.hl+.1&&Math.abs(o.y-counter.y)<.6)){
+   const ps=parts(o);if(!ps.length||Math.abs(Math.min(...ps.map(q=>q.box.z0))-C.z1)>1e-8)continue;items.push(o);
+   for(const q of ps){const B=q.box,ex=Math.abs(B.c)*B.hl+Math.abs(B.s)*B.hw,ey=Math.abs(B.s)*B.hl+Math.abs(B.c)*B.hw;
+    if(B.x-ex<C.x-C.hl-1e-8||B.x+ex>C.x+C.hl+1e-8||B.y-ey<C.y-C.hw-1e-8||B.y+ey>C.y+C.hw+1e-8)bad.push('countertop item overhangs its support');
+    if(Math.abs(B.x-R.x)<ex+R.hl-1e-8&&Math.abs(B.y-R.y)<ey+R.hw-1e-8&&B.z0<R.z1&&B.z1>R.z0)bad.push('countertop item intersects register');
+   }
+  }
+  if(items.length!==2)bad.push(['missing counter appliances',items.length]);return bad.slice(0,8);
  });assert.deepEqual(bad,[]);
 }));
