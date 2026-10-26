@@ -194,6 +194,13 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 12, service hatches:** `claude/service-hatches`, stacked on
   `claude/street-drains` (`city/street-drains.js` only). Next: overhead cables
   from main.
+- **Claude pass 13, fascia boards and awnings:** `claude/shop-fascias` from main:
+  `fascia` and `awning` details in `city/architecture.js` (`architectureSignSpec`,
+  `architectureShopfront`), their shading in `city/architecture-render.js`, and the
+  shared sign spec in the three painted-sign calls (`architecture-render.js`,
+  `residential-render.js`). Not touching `city/home-*.js`: the IDEA rename there is
+  handled by refitting the board at draw time. Next: the old-path facades (warehouses,
+  sty 2/15 shops) and Chinatown's painted vertical signs.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
