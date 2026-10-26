@@ -1025,3 +1025,13 @@ lighting, glyph coordinates and culling. All5234 native lamp bases have zero
 terrain height; placements remain unchanged. Belle control pixels identical.
 Final full-height views and ABAB costs are running; backup checkpoint only,
 not yet ready to merge original #242. Next #243 and the remaining queue.
+
+#242 final review complete, superseding adce610's pending checkpoint status.
+Three focused/four native controls, four node files, thirteen defect probes
+and fourteen final views pass. Cached styles, physical supported ribs, real
+head visibility and both thin-line/billboard paths reviewed; Belle pixels
+identical. ABAB and longer warm repeat recorded, with host tails explicit.
+#263 full CI green; #245 PR run cancelled, so watch a later complete run
+including hatches. Ready to push original831d99f-derived #242 and merge.
+Next #243→#244 (independent reviews), then #248→#249 and passes5/6/9; retain
+all ownership, hotel/motel door policy and remaining interior audit notes.
