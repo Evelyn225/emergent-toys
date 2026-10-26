@@ -117,6 +117,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude, washroom doors:** `claude/washroom-doors` from main: public washroom pocket
+  doors start shut and close behind you (`city/bathroom-quality.js`, `pub` doors), now
+  including hotel and motel rooms and the hotel lobby as the user asked (Codex: this is
+  done here, no need to duplicate it in pass 6). Homes keep theirs as left. The diner's
+  washroom door now faces the tables (`city/rooms.js`).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

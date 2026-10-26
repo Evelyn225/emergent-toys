@@ -15981,11 +15981,11 @@ const ROOM_DEFS = {
       p.push(r.neon===CYAN?BAR_MIRRORED_BACK_BAR(6,1,3.7,0,1,r.neon):BAR_BACK_BAR()); // near parts reject hidden shelf pixels first
       return p;
     } },
-  diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
+  diner: { grid: boxRoom(12, 8, { '1,3': 'W', '3,3': 'W', '3,1': 'W', '3,2': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [1, 3, 1.5] /* its door to the tables, not onto the end of the counter */ }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
       p.push(KITCHEN_FLATTOP(10,1.4,1,.35,'burger'));
-      for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
+      for (const [x, y] of [[2.6, 5.6], [9.4, 4.2], [9.4, 6.2]]) { // (one table on the left, clear of the way to the washroom door)
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
           KITCHEN_SETTING(x+s*.4,y,.78,{fx:-Math.sign(s),fy:0,meal:'burger'})); } // (on a stool, at the table)
@@ -16692,7 +16692,8 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
     if (z < 0.95) return set(i, '=', C(GRAY, L));
-    return set(i, '.', C(GRAY, L * 0.3));
+    BG[i] = C(WHITE, 1.1 + L * 0.12); // (a solid painted partition standing in the room, not the dotted dark of the far walls)
+    return set(i, fract(z * 2.4) < 0.04 ? '-' : ' ', C(GRAY, L * 0.3));
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
@@ -35286,7 +35287,9 @@ function BATHROOM_POCKET_DOOR(r,p,index) {
   const cell=u=>vertical?[cross,u]:[u,cross],wallCell=u=>{const [x,y]=cell(u);return '#W'.includes(r.grid[y]?.[x]||' ');};
   const run=dir=>{let n=0;for(let u=dir<0?start-1:end;wallCell(u)&&n<width+1;u+=dir)n++;return n;};
   const dir=run(1)>=run(-1)?1:-1;
-  const home=homeRecord(r),d={...p,index,home,dir,open:home?.bathroomDoors?.[index]===false?0:1};
+  // A washroom you don't live in (a restaurant's, a bar's, a shop's, a hotel or motel room's) keeps its door shut and
+  // slides it closed behind you; your own home leaves its doors however you left them.
+  const home=homeRecord(r),pub=!home&&!r.def.home,d={...p,index,home,pub,dir,open:pub||home?.bathroomDoors?.[index]===false?0:1};
   d.target=d.open;
   const x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5;
   const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
@@ -35319,11 +35322,13 @@ function bathroomDoorUse(prop) {
   if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=d.target===1;saveGame();}
   if(actx){burst(actx.currentTime,.22,[filt('lowpass',1100)],.035);tone(actx.currentTime+.2,95,.035,.025);}
 }
+const BATHROOM_DOOR_CLOSE=1.8;
 function stepBathroomDoors(dt) {
   if(mode!=='room'||!room.bathroomDoors)return;
   for(const prop of room.bathroomDoors) {
     const d=prop.bathroomDoor;
     if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
+    if(d.pub&&d.target===1&&d.open===1&&Math.hypot(px-prop.x,py-prop.y)>BATHROOM_DOOR_CLOSE&&!inWc(px,py))d.target=0; // (left open, it slides shut once you're well clear)
     if(d.open===d.target)continue;
     const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
     if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {

@@ -144,6 +144,7 @@ test('the terminal: in by its doors with E, the departures board keeping time in
       px = 16; py = 12.4; a = -Math.PI / 2; pitch = 0.45; render(0);
       out.seen = CH.join('');
       // every bit of it reachable from the main doors: both doors out to the gates, the café's counter, the toilet
+      for (const d of room.bathroomDoors || []) { d.bathroomDoor.open = d.bathroomDoor.target = 1; d.box = null; } // (the washroom door starts shut: open it, as you would with E)
       const S = 10, W = room.W * S, H = room.H * S, seen = new Uint8Array(W * H), q = [[16 * S, Math.round(12.4 * S)]];
       out.gates = new Set(); out.cafe = false; out.loo = false;
       while (q.length) {

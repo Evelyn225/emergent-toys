@@ -120,6 +120,7 @@ test('motel bathroom opens beside the shower and its television faces the bed an
   paused=false;
   enterRoom('hotelroom',{lobby:{word:'MOTEL',ret:[100,100,0]}},ROOM_DEFS.motelRoom.entry);
   const {tv,tvAngle,tvApproach}=room.def.hotelAmenities,bed=room.props.find(p=>p.furniture==='bed'),head=room.props.find(p=>p.furniture==='headboard'),seat=room.props.find(p=>p.seat);
+  for(const d of room.bathroomDoors||[]){d.bathroomDoor.open=d.bathroomDoor.target=1;d.box=null;} // (the bathroom door starts shut: open it, as you would with E)
   const route=[[4.5,4.8],[5.5,4.8],[6.5,4.8],[6.5,3.5],[8.4,3.5],[8.4,5.4]];
   const clear=route.every(p=>free(...p))&&route.slice(1).every((p,k)=>roomWalkLine(...route[k],...p));
   const ahead=(tv[0]-bed.x)*(bed.x-head.x)+(tv[1]-bed.y)*(bed.y-head.y)>0;
