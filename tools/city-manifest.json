@@ -206,6 +206,7 @@
     "city/home-furniture-render.js",
     "city/home-plush-shark.js",
     "city/home-windows.js",
+    "city/home-entries.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
     "city/facade-utilities.js",

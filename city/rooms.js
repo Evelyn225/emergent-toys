@@ -867,10 +867,11 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, builtWindows:true, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, doorWall:true, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       ...homeWindowCasings(r),
+      HOME_ENTRY_DOOR(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),

@@ -1184,3 +1184,40 @@ facade/typography ownership. #264 full CI GREEN (40372798867); #265 queued/run
 in a new home-only module and homeDef in rooms.js (no shared door/bath helpers),
 then home layouts, hotels and civic. Preserve homes' washroom state and verify
 the already-implemented hotel/motel closed/auto-closing policy during pass6.
+
+#266 integrated fascia audit merged as f4168e3. Codex active
+`codex/home-entry-doors` (pass5): new city/home-entries.js, only native homeDef
+in rooms.js, focused home-entry browser test and shared manifest/bundle/notes.
+Build fitted opaque entrance leaves/surrounds with joined supports, recessed
+panels and mounted hardware for studio/loft/Belle homes; preserve the existing
+exit grid, E interaction and route. Use homeDef's existing doorWall opt-out
+instead of changing the shared roomWall/shop/hotel door painter. Fern, Cabin,
+hotels, washroom helpers/state and Claude's reserved/unpublished lettering stay
+untouched. Next remaining home trim/layouts, then hotel/civic passes6/9.
+
+Home-entry source checkpoint on `codex/home-entry-doors`: fitted studio/loft/
+Belle leaves, surrounds, supports and mounted hardware are implemented;
+both real E and walking exits pass, and home bathroom defaults stay open.
+Two focused geometry/native checks and eight existing home/window/Fern route
+controls pass across runs; four node files passed before the final material
+cleanup. Visual review found flat-looking recesses and subpixel bright trim
+flecks, so panel contrast was corrected, thin ornament removed and fine edge
+lighting filtered without changing geometry. Final24 views generated; all
+camera floor positions clear. Defect probes, final integration/node checks,
+ABAB costs and final note/PR/merge remain pending. This is a backup checkpoint,
+not approval to merge. No reserved files or shared door/bath helpers changed.
+#265 CI Node/browser1/2/3 passed, browser4 cancelled, so verify a subsequent
+complete run including utilities. #264 full CI is green.
+
+Home-entry final review complete; supersedes6afebcb checkpoint's pending status.
+Two focused plus eight home/window/Fern controls, four node files, the old
+painted baseline and sixteen independent defect probes pass. Twenty-four
+final native views reviewed; cached physical panels/frames/hardware and filtered
+fine lighting retain clean close/oblique/night silhouettes. ABAB costs recorded:
+whole normally1.1–1.2ms (one2.3ms tail), macro up to3.6ms, versus old flat paint
+0.4–0.7ms. Added quality has measured cost; no FPS gain claim. Ready for final
+note push/new PR/merge. #266 full CI GREEN (40376308187), including utilities;
+this supersedes #265 cancelled-run concern. Next home interior passage
+surrounds/trim, remaining layouts, then passes6/9. Do not duplicate completed
+home windows or hotel washroom policy; preserve homes' bathroom state and all
+reserved/unpublished Claude source. No shared door/bath helper changes.
