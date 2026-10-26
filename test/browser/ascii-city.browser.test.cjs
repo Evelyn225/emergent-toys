@@ -2561,19 +2561,34 @@ test('the marina: buy a boat, take her out (chase camera and at the helm), tie u
 test('talking to people indoors: walk up to someone in a cafe or a station and they chat (the counter still serves you)', () => withPage(async page => {
   const r = await page.evaluate(() => {
     tod = 14; mode = 'walk';
-    enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a], line: 'What can I get you?' }, [5, 6.3, -Math.PI / 2]);
+    // Populate the authored seats deterministically, including the front row.
+    // The old random first patron could be here: y + .9 put us inside the wall.
+    const rng = Math.random; Math.random = () => .1;
+    try { enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a], line: 'What can I get you?' }, [5, 6.3, -Math.PI / 2]); }
+    finally { Math.random = rng; }
     const k = room.def.keeper;
-    const s = room.props.find(o => isRoomPerson(o) && Math.hypot(o.x - k[0], o.y - k[1]) > 2);
-    px = s.x; py = s.y + 0.9; a = -Math.PI / 2;
-    const prompt = promptText(); interact();
+    const s = room.props.find(o => isRoomPerson(o) && o.y > 6 && Math.hypot(o.x - k[0], o.y - k[1]) > 2);
+    const approach = person => {
+      const seated = typeof person.pose === 'string' && person.pose.startsWith('sit');
+      const z = seated ? (person.seatZ ?? .45) + 1 : 1.6;
+      for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+        px = person.x + Math.cos(angle) * .9; py = person.y + Math.sin(angle) * .9;
+        a = Math.atan2(person.y - py, person.x - px);
+        pitch = (z - interactionEye()) / .9 * projY / rows;
+        if (free(px, py) && interactionClear(person.x, person.y, z)) return true;
+      }
+      return false;
+    };
+    const cafeWalkable = approach(s), prompt = promptText(); interact();
     const cafeLine = msgText;
-    px = k[0]; py = k[1] + 1; a = -Math.PI / 2; const counter = promptText();
+    px = k[0]; py = k[1] + 1; a = -Math.PI / 2; pitch = 0; const counter = promptText();
     leaveRoom(); enterRoom('station', { st: 0, word: stations[0].name, t0: T - 12, ret: [px, py, a] }, [11, 4.8, 0]);
     let sprompt = ''; // (someone the train isn't standing beside: boarding it rightly comes first)
-    for (const p2 of room.props.filter(isRoomPerson)) { px = p2.x + 0.8; py = p2.y; a = Math.PI; sprompt = promptText(); if (sprompt === 'E: talk') break; }
+    for (const p2 of room.props.filter(isRoomPerson)) { if (!approach(p2)) continue; sprompt = promptText(); if (sprompt === 'E: talk') break; }
     interact();
-    return { prompt, cafeLine, counter, sprompt, stationLine: msgText };
+    return { cafeWalkable, prompt, cafeLine, counter, sprompt, stationLine: msgText };
   });
+  assert.strictEqual(r.cafeWalkable, true, 'approach the front-row patron on unobstructed floor');
   assert.strictEqual(r.prompt, 'E: talk');
   assert.ok(await page.evaluate(l => ROOM_TALK.cafe.some(x => l.includes(x)) || l.includes('coffee') || l.startsWith('"'), r.cafeLine), r.cafeLine);
   assert.match(r.counter, /E: shop/);
