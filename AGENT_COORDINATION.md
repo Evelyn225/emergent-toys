@@ -151,6 +151,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
+  `city/kerb-fixtures.js` after `world-bootstrap.js`, new
+  `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
+  `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
+  grates, utility cabinets, then bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
@@ -821,3 +826,41 @@ merge #236, then #238→#240→#241→#246, #239→#245, independent #242/#243/#
 and #248→#249. Newest #249 remote head isd6960f6, not the older1fc/6f refs;
 fetch every head explicitly before review. Preserve remaining interior small-
 prop follow-ups and the hotel/motel closed/auto-closing washroom-door decision.
+
+#236 reviewed vending PR merged as885a1ac. Codex active
+`codex/review-kerb-fixtures` (#238), integrating main through #236. Files:
+`city/kerb-fixtures.js`, `city/kerb-fixtures-render.js`, collision hooks in
+`city/main.js`/`city/goods.js`, render hook in `city/city-sprites.js`, focused
+kerb tests and shared manifest/bundle/notes. Source review found repeated fixed
+profile preparation, the mailbox's full round roof overlapping its carcass,
+and rectangular collision/height checks that need actual-shape review. No
+active bathroom/DINER/world-bootstrap/facade or shared helper edits planned.
+Next #240/#241/#246 as the first dependency chain, then the remaining authorized
+chains/independent PRs. Keep all remaining interior audit follow-ups recorded.
+
+Kerb review update: five native/actual-geometry/cache/footprint checks pass and
+all initial defect probes reject the broken geometry. One reviewed movement
+choice supersedes earlier progress wording: keep main.js's original grounded
+barrier check. Applying player foot-height clearance alone permits landing
+inside props because street fixtures do not yet provide standing surfaces.
+Ball collision keeps its explicit vertical interval, and round props retain
+accurate footprints. Proper player prop-top support belongs with a later
+movement chunk. No moves.js/terrain.js changes. Final scope is static shapes,
+mailbox joins/labels, fixed caches, rounded walking footprints and ball height.
+Visual review and ABAB costs, final probes/integration and push are pending;
+do not merge the #238 baseline checkpoint yet. Original Claude head remains
+33796bc; current review source is local atop checkpoint999af50.
+
+#238 final review complete on `codex/review-kerb-fixtures`: cached fixed shapes
+and translated rays; closed mailbox shell/roof, grounded supports, mounted
+pulls, scaled nonemissive labels; accurate round footprints and finite-height
+ball collisions. Five kerb and five native movement/lamp/ball/vending checks,
+seven node checks and twelve independent mutations pass. Sixteen clear-floor
+views and ABAB costs recorded in WORLD_QUALITY. #236 full CI green. The earlier
+WIP checkpoint is superseded; player walking keeps its original barrier rule,
+with prop-top support explicitly left for a separate movement chunk. No active
+Claude files or shared helper edits. Ready to push original #238 branch/merge,
+then #240→#241→#246. Remaining #239→#245, #242/#243/#244 and #248→#249 remain
+authorized; preserve latest heads/ownership and all interior audit follow-ups.
+Hotel/motel private washrooms remain closed and auto-closing in pass6; homes
+are unchanged by that decision.
