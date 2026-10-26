@@ -1247,3 +1247,16 @@ that chair. Remaining: bundle-only negative probes, final integration/node
 checks, ABAB, final notes and PR/merge. Backup checkpoint, NOT ready to merge.
 #267 entrance full CI GREEN (40380569613). Keep all ownership and remaining
 home/hotel/civic work, including the unavailable Claude lettering branch.
+
+Passage final review complete; supersedes9932c92 checkpoint's pending status.
+Three focused plus ten entrance/window/layout/Fern controls, five node files,
+the old baseline and thirteen independent defect probes pass. Twenty final
+clear-floor views reviewed. Shared cut measurements, closed supported caps,
+two-faced casings, native paint/bands/light and exact part colliders preserve
+the wide route. ABAB costs recorded (+about0.1–0.7ms for added surfaces).
+Ready for final note push/PR/merge. #267 full CI GREEN (40380569613).
+Next pass5: Belle balcony rails/door finish and coherent outside furniture,
+then remaining home trim/layout audit before hotel/civic passes6/9. Existing
+balcony rails are painted both indoors and outside; inspect their shared
+measurements and room/world scaling before changing them. Keep bathroom state,
+shared helper ownership and unpublished Claude lettering reservation intact.
