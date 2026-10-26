@@ -402,33 +402,6 @@ function rod(ax, ay, az, bx, by, bz, r, col = GRAY, k = 1) {
 // a point: a little sphere up close, one character far off (bz nudged so rayRod has an axis to measure along)
 const dot = (x, y, z, r, shade) => drawRod(x, y, z, x, y, z - 0.002, r, shade);
 
-// a traffic signal: a pole and a head of three lamps facing both ways along its street, each under its visor.
-// You see the lamps only from along the street (from the cross street the visors hide them, as they're meant to).
-const SIG = { hl: 0.012, hw: 0.017, z0: 0.29, z1: 0.376 }, SIG_LAMPS = [['R', 0.36, RED], ['Y', 0.333, YEL], ['G', 0.306, GREEN]];
-const SIG_HOUSING = (i, t, L) => { BG[i] = C(GRAY, (0.6 + L * 0.12) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '_' : ' ', C(GRAY, L * 0.5)), true; };
-function drawSignal(s) {
-  const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy);
-  if (d > vis + 1) return;
-  const c = s.vert ? 0 : 1, sn = s.vert ? 1 : 0, on = light(s.bx, s.by, s.vert, T), near = d < 6;
-  rod(vx, vy, 0, vx, vy, SIG.z0, 0.009);
-  if (near) drawBox(boxAt(vx, vy, 1, 0, 0.02, 0.02, 0, 0.025), STEEL.base);
-  drawBox(boxAt(vx, vy, c, sn, SIG.hl, SIG.hw, SIG.z0, SIG.z1), SIG_HOUSING);
-  const k = -(vx * c + vy * sn) / (d || 1); // +1: we're off the head's +u end
-  for (const e of [-1, 1]) {
-    if (e * k < 0.3) continue;
-    const ux = vx + c * e * SIG.hl, uy = vy + sn * e * SIG.hl;
-    // the lit lamp first: far off all three share a character, and it should be the one you see
-    for (const [st, z, col] of [...SIG_LAMPS].sort(a => a[0] === on ? -1 : 1)) {
-      const lit = st === on;
-      dot(ux, uy, z, 0.0095, (i, t, L) => { // up close a lens of solid colour, far off its one character
-        BG[i] = C(col, lit ? 11 : 2.2);
-        return set(i, 0.019 * projX / t > 2 ? ' ' : lit ? 'O' : 'o', C(col, lit ? 15 : 4)), true;
-      });
-      if (near) drawBox(boxAt(ux + c * e * 0.007, uy + sn * e * 0.007, c, sn, 0.007, 0.012, z + 0.0095, z + 0.012), SIG_HOUSING);
-    }
-  }
-}
-
 // a wooden water tank on a steel stand: braced legs, a platform, the barrel with its iron hoops, a conical roof
 const TANK = { r: 0.11, leg: 0.13, top: 0.3, roof: 0.07 };
 function drawTank(o, vx, vy) {

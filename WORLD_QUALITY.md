@@ -343,3 +343,9 @@ The numbered passes above remain the work queue. The new models establish reusab
   - Swan neck: one smooth tube curve in ten joined pieces from the pole top out to the drop.
   - Drop and lantern: the drop rod runs into the lantern cap. The lantern has six frame bars round its glass, between a domed cap and a finial. It glows warm after dark under the existing halo.
   Past 5 cells the billboard takes over. The neck reads as the same fine arc either side of the switch, and Belle lamps are unchanged. The new browser test fails on a gap in the neck, a drop short of the cap, an untapered pole and unlit glass at night. Median render ABAB vs main: close, whole, night, street and down-street all within noise.
+- Street lights (pass12), signals and pedestrian heads (Claude, `claude/street-signals`): `drawSignal` moves to new `city/street-signals.js` and is built.
+  - Pole: up close, a turned pole on a flanged foot meeting the head; a rod further off.
+  - Head: a rounded housing with a backplate on each face (black, with a white border). Each lens sits under a cowl, a hood with two cheeks, open below. You still see the lamps only from along the street.
+  - Pedestrian head: out on a bracket, facing across the junction. A white walking figure shows while walkers may start (`walkSig`). An orange hand flashes for the rest of the green and the amber, and holds steady on red. The figure is drawn dot by dot once its dots are a character or more, otherwise the head shows a solid patch of the lamp's colour.
+  - Push button: a yellow box on the pole at hand height, facing the kerb.
+  The new browser test fails on WALK during the whole green, a pedestrian head facing away, missing cowls, a hand that doesn't flash and a walking figure in orange. The existing signal and traffic tests pass. Median render ABAB vs main: close, corner, junction and avenue all within noise.

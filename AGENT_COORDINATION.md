@@ -180,6 +180,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `claude/street-lamps` from main (new `city/street-lamps.js`; `drawLamp3D`
   removed from `city/city-sprites.js`). Next: signal heads and pedestrian
   signals, then wall pipes and meters, then pavement service hatches.
+- **Claude pass 12, signals:** `claude/street-signals` from main (new
+  `city/street-signals.js`; `drawSignal` and its constants removed from
+  `city/city-sprites.js`). Next: wall pipes and meters, then service hatches.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
