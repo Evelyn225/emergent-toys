@@ -67,6 +67,13 @@ test('formerly blank street sides actually draw visible lettering in each facade
               return drawn;
             };
             try {render(0);}finally{wallText=original;architectureFasciaShade=fascia;}
+            // a board behind a passer-by is never shaded at all: the cells of its lettering a nearer solid owns count as occluded
+            const board=!cells.length&&ARCH_DETAILS.find(o=>o.kind==='fascia'&&o.word===b.sh.word&&Math.abs(rel(o.x-(f.side?mid:f.line)))<.05&&Math.abs(rel(o.y-(f.side?f.line:mid)))<.05);
+            if(board)for(let s=-2;s<=2;s++)for(const zz of [board.zc-board.band/4,board.zc+board.band/4]){
+              const vx=rel(board.x+board.c*s*board.word.length*board.cwid/5-px),vy=rel(board.y+board.s*s*board.word.length*board.cwid/5-py),depth=dx*vx+dy*vy;
+              const col=Math.round(cols/2+(-dy*vx+dx*vy)/depth*projX),row=Math.round(hor-(zz-eye)*projY/depth);
+              if(col>=0&&col<cols&&row>=0&&row<rows&&ZB[row*cols+col]<depth-.001)cells.push({i:row*cols+col,ch:'',d:depth});
+            }
             const visible=cells.filter(p=>CH[p.i]===p.ch&&Math.abs(ZB[p.i]-p.d)<.001).length;
             const occluded=cells.filter(p=>ZB[p.i]<p.d-.001).length;
             results.push({family,hour,distance,word:b.sh.word,visible,occluded,painted:cells.length});
