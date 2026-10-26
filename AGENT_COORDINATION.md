@@ -1260,3 +1260,64 @@ then remaining home trim/layout audit before hotel/civic passes6/9. Existing
 balcony rails are painted both indoors and outside; inspect their shared
 measurements and room/world scaling before changing them. Keep bathroom state,
 shared helper ownership and unpublished Claude lettering reservation intact.
+
+#268 home passage surrounds merged as e02af73. Codex active
+`codex/home-balcony-rails` (pass5), starting with a room/world geometry and route
+audit before editing: home-balcony.js, home-only rail builder, homeDef/homeWall
+B handling in rooms.js, focused tests and shared manifest/bundle/notes.
+Belle rails are currently painted indoors and outdoors; use shared measured
+rails with the existing metre→city mapping and an explicit distant fallback.
+Preserve balcony boarding/return, usable furniture and native footing. Do not
+change shared shop/hotel helpers, washroom state or reserved/unpublished Claude
+lettering. French-door finish and exterior furniture fidelity are separate
+follow-ups; then remaining home trim/layout audit and hotel/civic passes6/9.
+
+Balcony source checkpoint (NOT merge-ready): six focused checks pass on the
+final fitted model, including all three native runs, room/city scaling,
+closed supported geometry, routes and exact row coverage from outside. Visual
+review found two defects during development: subcell tubes disappeared between
+rows, and the old painted B grid could occlude the physical rails. The home-only
+built-rail path now uses measured line colliders, no painted grid height, and
+cached solid thin strokes selected against both screen axes. Fifteen final
+room/city/aerial close/wide/oblique/night/wall/foot views generated and reviewed.
+Standing room/deck cameras are clear; aerial cameras intentionally sit beyond
+the platform. Final home controls are running. Remaining: bundle-only negative
+probes, final bundle/node and native Belle controls, isolated ABAB, final notes
+and PR/merge. No mutants are running at this checkpoint.
+User's new reports are appended in WORLD_QUALITY.md and take priority after
+this checkpoint: fixed physical wall-section materials, taco/coffee washroom
+access, street stair/door clearance, aquarium gift-shop sign and missing roof
+stair landing. Claude is out of usage; preserve unpublished sign-lettering and
+reserved bathroom/DINER/world-bootstrap/facade source. Make narrow follow-up
+fixes in shop/dining files rather than restarting completed quality passes.
+
+Balcony final review complete; supersedes41b6d51 checkpoint's pending status.
+IMPORTANT correction to that checkpoint: the original B grid boundary/height
+is retained. Its north row is2, not3; a correctly targeted negative probe
+showed that the grid-height removal was unnecessary. The final change removes
+only its painted ironwork, and checks no duplicate surface while preserving
+native height1.1. Physical feet/bowed bars stay inside those original edges.
+Six focused geometry/cache/room-city/three-side/thin-row/native checks and
+thirteen home entrance/window/passage/layout/Fern controls pass across final
+runs; both real Belle walk-out/return/reload controls also pass on final source.
+Five Node bundle/parse/render/streetscape/furnishing files pass. The full Node
+suite is still running (93943, scheduler184352, current seeded-minigame
+child188225); it has NOT failed or hung: inspection showed the pachinko test
+loading120 complete seeded cities. Scheduler and child are RESUMED after the
+isolated benchmarks. Do not report full suite green until it finishes.
+Old painted baseline plus17 independent defects fail assertions; mutants were
+served by a browser route from an ignored file, never written into source or
+the saved bundle. Literal-safe replacement fixed a probe runner issue; the
+unnecessary grid-height mutant legitimately survived and prompted the reversal.
+Fifteen final clear-floor/native-deck/aerial views reviewed. ABAB against
+e02af73 adds roughly1–2ms in most views. Room-wide after varies3.6–7.7ms
+versus2.2–2.3ms; aerial oblique initial16ms tail repeated7.8–10.4ms, night
+repeated7.6–7.7ms. Added quality costs time; no general FPS gain claim.
+Ready for final note push/PR/merge. Next: user's six reported fixes, starting
+with fixed shop section materials (five viewIn-dependent painters confirmed),
+then taco/roastery door approaches (salsa bar and plant reproduced; CAFE clear),
+street stairs/door placement audit, aquarium gift-shop lettering and walk-up
+landing. Keep reserved bathroom/DINER/world-bootstrap/facade and unpublished
+Claude lettering untouched. Remaining balcony French-door/exterior furniture
+and passes5/6/9 follow after the new fixes. Artifacts:work/backlog-review/
+home-balcony-rails-*; initial door audit:new-fixes-washroom-baseline.json.
