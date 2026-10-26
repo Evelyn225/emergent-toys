@@ -57,13 +57,16 @@ test('the melon bin, baskets, banana crate, upturned crate and checkout are buil
    if(z>.01&&Math.abs(a.box.x-b.box.x)<a.box.hl+b.box.hl-.01&&Math.abs(a.box.y-b.box.y)<a.box.hw+b.box.hw-.01)bad.push(['overlap',+a.x.toFixed(2),+a.y.toFixed(2),+b.x.toFixed(2),+b.y.toFixed(2)]);
   }
   const bin=room.props.find(o=>o.produceBin).produceBin;
-  for(const m of bin.melons){if(Math.abs(m.u)+m.hr*1.18>bin.hl-GROCER_CRATE.wall+1e-9||Math.abs(m.v)+m.hr>bin.hl-GROCER_CRATE.wall+1e-9)bad.push('melon through the bin');
+  for(const m of bin.melons){if(Math.abs(m.u)+m.hr>bin.hl-GROCER_CRATE.wall+1e-9||Math.abs(m.v)+m.hw>bin.hl-GROCER_CRATE.wall+1e-9)bad.push('melon through the bin');
    if(m.layer===0&&Math.abs(m.z-m.vr-bin.floor)>1e-9)bad.push('melon off the floor');}
   const bk=room.props.find(o=>o.baskets),draw=drawBox,parts=[];projX=10000;
   drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray});try{bk.draw(bk.x,bk.y);}finally{drawBox=draw;}
   const trays=parts.filter(q=>q.ray===foodRayTray).sort((a,b)=>a.box.z0-b.box.z0);
   trays.forEach((q,k)=>{if(Math.abs(q.box.z0-(k?trays[k-1].box.z1:0))>1e-9)bad.push(['basket not resting',k]);});
   for(const h of parts.filter(q=>q.ray===coveRayCapsule))if(Math.abs(h.box.az-h.box.r-trays.at(-1).box.z1)>1e-9||Math.abs(Math.abs(h.box.ay-bk.y)-(bk.baskets.hw-.004))>1e-9)bad.push('handle off the rim');
+  for(const h of parts.filter(q=>q.ray===coveRayCapsule)){const b=h.box;
+   if(Math.max(Math.abs(b.ax-b.x),Math.abs(b.bx-b.x))+b.r>b.hl+1e-9||Math.max(Math.abs(b.ay-b.y),Math.abs(b.by-b.y))+b.r>b.hw+1e-9)bad.push('handle outside its render bounds');
+  }
   // checkout: the till screen faces the cashier (+x), the card reader stands on the customers' side
   const co=room.props.find(o=>o.checkout),keeper=room.def.keeper,cp=[];
   drawBox=(box,shade,ray=rayBox)=>cp.push({box,shade});try{co.draw(co.x,co.y);}finally{drawBox=draw;}
@@ -78,4 +81,41 @@ test('the melon bin, baskets, banana crate, upturned crate and checkout are buil
   return bad.slice(0,10);
  });
  assert.deepEqual(r,[]);
+}));
+
+test('actual melon solids fit the bin, touch the floor or four lower melons, and never intersect',()=>fixture(async p=>{
+ const result=await p.evaluate(()=>{
+  enterRoom('grocer',{word:'GROCERY',ret:[100,100,0]},[5,5,0]);const o=room.props.find(o=>o.produceBin),draw=drawBox,parts=[],bad=[];
+  drawBox=(box,shade,ray=rayBox)=>parts.push({box:{...box},ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}
+  const fruit=parts.filter(q=>q.ray===foodRayEllipsoid).map(q=>q.box),tray=parts.find(q=>q.ray===foodRayTray),from=tray.box.z1+.1,t=tray.ray(o.x,o.y,from,0,0,-1,tray.box),floor=from-t;
+  if(!(t>0&&Math.abs(floor-o.produceBin.floor)<1e-8))bad.push('missing or misplaced real bin floor');
+  const centre=b=>(b.z0+b.z1)/2,vr=b=>(b.z1-b.z0)/2;
+  for(let i=0;i<fruit.length;i++){
+   const b=fruit[i];if(Math.abs(b.x-o.x)+b.hl>o.produceBin.hl-GROCER_CRATE.wall+1e-8||Math.abs(b.y-o.y)+b.hw>o.produceBin.hl-GROCER_CRATE.wall+1e-8)bad.push('melon through wall');
+   let lower=0;
+   for(let j=0;j<fruit.length;j++)if(i!==j){const a=fruit[j],d=((a.x-b.x)/(a.hl+b.hl))**2+((a.y-b.y)/(a.hw+b.hw))**2+((centre(a)-centre(b))/(vr(a)+vr(b)))**2;
+    if(j>i&&d<1-1e-7)bad.push('melon solids overlap');
+    if(centre(a)<centre(b)-.01&&Math.abs(d-1)<1e-7)lower++;
+   }
+   if(Math.abs(b.z0-floor)>1e-7&&lower!==4)bad.push('melon lacks four contacts below');
+  }
+  return{bad:bad.slice(0,8),count:fruit.length};
+ });assert.deepEqual(result.bad,[]);assert.ok(result.count>=12);
+}));
+
+test('plain timber faces retain stable normals and fixed apple profiles are reused between draws',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  enterRoom('grocer',{word:'GROCERY',ret:[100,100,0]},[5,5,0]);const bad=[];
+  const capture=o=>{const draw=drawBox,parts=[];projX=10000;drawBox=(box,shade,ray=rayBox)=>parts.push({box:{...box},shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return parts;};
+  const props=room.props.filter(o=>o.produceStand||o.produceBin||o.draw&&o.box&&Math.abs(o.x-11.5)<.001&&Math.abs(o.y-2.6)<.001);
+  for(const o of props){const a=capture(o),b=capture(o);
+   if(a.some((q,k)=>q.box.profile&&q.box.profile!==b[k].box.profile))bad.push('fixed fruit profiles rebuilt');
+   for(const q of a.filter(q=>q.ray===rayBox&&q.box.z0===0&&q.box.z1>.2)){
+    const b=q.box,z=(b.z0+b.z1)/2,values=[];
+    for(const n of [[1,0,0],[0,0,1]]){[HIT.nx,HIT.ny,HIT.nz]=n;const t=q.ray(b.x,b.y+b.hw+1,z,0,-1,0,b);q.shade(0,t,8);values.push(BG[0]);if(Math.abs(HIT.ny-1)>1e-8)bad.push('timber face has a stale normal');}
+    if(values[0]!==values[1])bad.push('lighting depends on the previous object');
+   }
+  }
+  return bad.slice(0,10);
+ });assert.deepEqual(bad,[]);
 }));

@@ -20,7 +20,7 @@ function RECORD_BIN_UNIT(x,y,hl,seed) {
     const edge=coveGroove(HIT.u+r.len/2,B.pitch,.0015,t/projX)*coveDetail(t,.15);
     BG[i]=C(col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-edge*1.2);set(i,' ',0);return true;});
   const card=q=>flat((i,t,L)=>{BG[i]=C(WHITE,3.6+L*.2);
-    if((HIT.face===1||HIT.face===2)&&wallText(i,HIT.v,t/projX,HIT.w,t,q.letter,0,B.rim+B.sleeve+.03,.025,.04,C(GRAY,1),BG[i]))return true;
+    if((HIT.face===1||HIT.face===2)&&wallText(i,HIT.face===1?-HIT.v:HIT.v,t/projX,HIT.w,t,q.letter,0,B.rim+B.sleeve+.03,.025,.04,C(GRAY,1),BG[i]))return true;
     set(i,' ',0);return true;});
   const runShades=runs.map(sleeves),cardShades=cards.map(card);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
@@ -40,9 +40,10 @@ function RECORD_FACEOUT_WALL(x0,x1,rows=[.4,1.12,1.84]) {
     const col=RECORD_COLS[Math.floor(q.h*RECORD_COLS.length)];BG[i]=C(col,2.4+L*.2);
     if(HIT.face!==3){set(i,' ',0);return true;}
     const cx=(HIT.u)/B.sleeve,cz=(HIT.w-q.z)/B.sleeve-.5,ring=Math.hypot(cx,cz);
-    if(q.h<.4)return set(i,ring<.3&&ring>.12?'O':' ',C(GRAY,1)),true;
-    if(q.h<.7)return set(i,fract(cz*5)<.3?'=':' ',C(WHITE,12)),true;
-    return set(i,ring<.2?'#':' ',C(WHITE,14)),true;};
+    if(q.h<.4){if(ring<.3&&ring>.12)BG[i]=C(GRAY,1+L*.1);}
+    else if(q.h<.7){if(fract(cz*5)<.3)BG[i]=C(WHITE,4.2+L*.2);}
+    else if(wallText(i,HIT.u,t/projX,HIT.w,t,'ABCDEFGHJKLMNPRSTW'[Math.floor(q.h*17)],0,q.z+B.sleeve/2,.12,.16,C(WHITE,4.2+L*.2),BG[i]))return true;
+    set(i,' ',0);return true;};
   const shades=sleeves.map(design),wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,0,HIT.face===3?1:0,HIT.face===5?1:0,73);
   const cx=(x0+x1)/2,cy=1+ledge/2,len=x1-x0;
   return {...ROOM_MODEL(cx,cy,(vx,vy)=>{ // (vx,vy: the model's place relative to the eye)

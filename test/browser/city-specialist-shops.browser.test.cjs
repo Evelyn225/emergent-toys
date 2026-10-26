@@ -75,8 +75,7 @@ test('hardware and pharmacy: counters and what stands on them, the garden corner
   let P=room.props;
   for(const o of P.filter(o=>o.keyCutter||o.till))if(!onTop(P,o))bad.push(['hardware: not on the counter',o.x,o.y]);
   const hose=P.find(o=>o.hose),h=hose.hose;
-  for(const q of parts(hose)){const top=Math.max(...q.box.profile.map(p=>p[0])),bot=Math.min(...q.box.profile.map(p=>p[0]));
-   const k=Math.round((bot-q.box.z0)/(2*h.r));if(Math.abs(bot-q.box.z0-k*2*h.r)>1e-9)bad.push('hose turn not resting');}
+  const coil=parts(hose)[0];if(coil.box.z0!==0||Math.abs(coil.box.z1-h.turns*2*h.r)>1e-9)bad.push('hose not on the floor');
   const lum=P.find(o=>o.lumber);for(const q of parts(lum))if(Math.abs(q.box.x+q.box.hw-17)>.02&&Math.abs(q.box.x+q.box.hl-17)>.02)bad.push(['board off the wall',+q.box.x.toFixed(3)]);
   const bags=P.find(o=>o.bags),bp=parts(bags).sort((a,b)=>a.box.z0-b.box.z0);bp.forEach((q,k)=>{if(Math.abs(q.box.z0-k*bags.bags.h)>1e-9)bad.push('bag not on the one below');});
   if(String(ROOM_DEFS.hardware.props).includes('BX('))bad.push('hardware: a painted box is left');
@@ -169,4 +168,72 @@ test('the last shop rooms: the store roller, reading chair, tailor tables and mi
   return bad;
  });
  assert.deepEqual(r,[]);
+}));
+
+test('record divider letters read forwards from both aisles and sleeve art scales without repeated glyph stamps',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],draw=drawBox,parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return a;};
+  enterRoom('records',{word:'RECORDS',ret:[100,100,0]},[5,5,0]);
+  projX=projY=10000;Object.assign(WH,{dn:1,sl:0,wc:0});
+  const bin=room.props.find(o=>o.recordBin),cards=parts(bin).filter(q=>q.box.hl===.002);
+  let cells=0;
+  for(let k=0;k<cards.length;k++)for(const side of [-1,1])for(let row=0;row<5;row++)for(let col=0;col<4;col++){
+   const q=cards[k],b=q.box,u=side*(b.hl+.1),v=side===1?-((col+.5)/4-.5)*.025:((col+.5)/4-.5)*.025,z=RECORD_BIN.rim+RECORD_BIN.sleeve+.03+(.5-(row+.5)/5)*.04;
+   const t=q.ray(b.x+b.c*u-b.s*v,b.y+b.s*u+b.c*v,z,-side*b.c,-side*b.s,0,b);
+   if(t<0){bad.push('divider missed');continue;}q.shade(0,t,8);cells++;
+   if((CH[0]==='#')!==!!glyphOn(bin.recordBin.cards[k].letter,col,row))bad.push(['mirrored divider',bin.recordBin.cards[k].letter,side,row,col]);
+  }
+  const fo=room.props.find(o=>o.faceOut),sleeves=parts(fo).filter(q=>q.box.hl===RECORD_BIN.sleeve/2);let marks=0;
+  for(const q of sleeves)for(let row=0;row<12;row++)for(let col=0;col<12;col++){
+   const b=q.box,u=((col+.5)/12-.5)*b.hl*2,z=b.z0+(row+.5)/12*(b.z1-b.z0),t=q.ray(b.x+u,b.y+.1,z,0,-1,0,b);
+   q.shade(0,t,8);if(CH[0]!==' '&&CH[0]!=='#')bad.push(['stamped sleeve artwork',CH[0]]);if(CH[0]==='#')marks++;
+  }
+  return {bad:bad.slice(0,8),cells,sleeves:sleeves.length,marks};
+ });
+ assert.deepEqual(r.bad,[]);assert.ok(r.cells>=120&&r.sleeves>=60&&r.marks>0,JSON.stringify(r));
+}));
+
+test('the pharmacy cuff has an open arm recess with inward walls and a closed back, and one readable idle display',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],draw=drawBox,parts=[];enterRoom('pharmacy',{word:'PHARMACY',ret:[100,100,0]},[5,5,0]);projX=projY=10000;
+  const o=room.props.find(o=>o.bpMachine);drawBox=(box,shade,ray=rayBox)=>parts.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}
+  const body=parts.find(q=>q.box.z0===0&&q.box.z1===1.3),b=body.box;
+  const shoot=(u,v,z,du,dv,dz)=>{const t=body.ray(b.x+b.c*u-b.s*v,b.y+b.s*u+b.c*v,z,b.c*du-b.s*dv,b.s*du+b.c*dv,dz,b);return {t,v:HIT.v,w:HIT.w,u:HIT.u,nu:HIT.nx*b.c+HIT.ny*b.s,nz:HIT.nz};};
+  const axis=shoot(0,.5,.75,0,-1,0);if(axis.t<.49||axis.t>.51||Math.abs(axis.v)>.001)bad.push(['cuff blocked or open through back',axis]);
+  const wall=shoot(0,.5,.75,.1,-1,.1);if(wall.t<.42||wall.t>.43||wall.nu>-.6||wall.nz>-.6)bad.push(['missing inward cuff wall',wall]);
+  const solid=shoot(.15,.5,.75,0,-1,0);if(Math.abs(solid.v-.28)>.001)bad.push(['cabinet beside the recess',solid]);
+  const screen=parts.find(q=>q.box.z0===.95&&q.box.z1===1.18),s=screen.box;Object.assign(WH,{dn:1,sl:0,wc:0});let ink=0;
+  // The face sampled on a dense grid must contain one scaled READY line,
+  // rather than the old rows of repeated 1s and 2s.
+  for(let row=0;row<5;row++)for(let col=0;col<20;col++){
+   const u=((col+.5)/4-2.5)*.036,z=1.115+(.5-(row+.5)/5)*.045;
+   const t=screen.ray(s.x+s.c*u-s.s*.1,s.y+s.s*u+s.c*.1,z,s.s,-s.c,0,s);screen.shade(0,t,8);
+   const expected=glyphOn('READY'[Math.floor(col/4)],col%4,row);if(CH[0]==='#')ink++;
+   if((CH[0]==='#')!==!!expected)bad.push(['unreadable idle display',row,col,CH[0]]);
+  }
+  return {bad:bad.slice(0,8),ink};
+ });
+ assert.deepEqual(r.bad,[]);assert.ok(r.ink>20,JSON.stringify(r));
+}));
+
+test('garden hose turns keep their prepared surfaces and touch the floor and each other',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],draw=drawBox;enterRoom('hardware',{word:'HARDWARE',ret:[100,100,0]},[5,5,0]);const o=room.props.find(o=>o.hose);
+  const capture=()=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return a;},a=capture(),b=capture();
+  if(a.length!==1||!a[0].box.hoseShape)return ['missing prepared coil surface'];
+  const q=a[0],h=o.hose;
+  if(q.box.hoseShape!==b[0].box.hoseShape||q.shade!==b[0].shade)bad.push('hose surface rebuilt');
+  for(let k=0;k<h.turns;k++){
+   const z=h.r*(1+2*k),outer=q.ray(q.box.x+.8,q.box.y,z,-1,0,0,q.box),nx=HIT.nx,u=HIT.u;
+   const inner=q.ray(q.box.x,q.box.y,z,1,0,0,q.box);
+   if(outer<0||inner<0||nx<.99||HIT.nx>-.99||Math.abs(u-h.R-h.r)>.001||Math.abs(HIT.u-h.R+h.r)>.001)bad.push(['hose tube surface',k,nx,HIT.nx,u,HIT.u]);
+  }
+  // The top and bottom are rounded closed tube, while the central hole stays open.
+  const top=q.ray(q.box.x+h.R,q.box.y,1,0,0,-1,q.box),zt=HIT.w,nz=HIT.nz;
+  const bottom=q.ray(q.box.x+h.R,q.box.y,-.1,0,0,1,q.box),zb=HIT.w;
+  if(top<0||bottom<0||Math.abs(zt-h.turns*2*h.r)>.001||Math.abs(zb)>.001||nz<.99||HIT.nz>-.99)bad.push('hose not rounded or grounded');
+  if(q.ray(q.box.x,q.box.y,1,0,0,-1,q.box)>=0)bad.push('hose centre filled');
+  for(let k=1;k<h.turns;k++)if(q.ray(q.box.x+.8,q.box.y,k*2*h.r,-1,0,0,q.box)<0)bad.push('gap between hose turns');
+  return bad;
+ });assert.deepEqual(r,[]);
 }));

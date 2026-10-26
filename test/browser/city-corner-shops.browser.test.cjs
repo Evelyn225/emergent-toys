@@ -121,3 +121,37 @@ test('phones, pawn, thrift trades and herbalist: counters, the dresser on the wa
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the bodega clerk serves through the clear screen from the customer side with E',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  enterRoom('bodega',{word:'BODEGA',ret:[100,100,0]},[5,5,0]);const screen=room.props.find(o=>o.plexi),k=room.def.keeper;
+  px=screen.x-.75;py=k[1];a=0;pitch=(1.6-interactionEye())/(k[0]-px)*projY/rows;
+  return{free:free(px,py),prompt:promptText()};
+ });assert.ok(r.free,'customer stands outside the counter');assert.match(r.prompt,/E: shop/);
+ await p.keyboard.press('e');assert.equal(await p.evaluate(()=>shopEl?.style.display),'flex');
+}));
+
+test('the paper rack trays connect to grounded feet rather than floating in front of the uprights',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  enterRoom('gas',{word:'GAS',ret:[100,100,0]},[5,5,0]);const o=room.props.find(o=>o.newsRack),draw=drawBox,out=[],bad=[];
+  drawBox=(box,shade,ray=rayBox)=>out.push({box:{...box},ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}
+  const d=o.newsRack,B=o.box,c=B.c,s=B.s;
+  const parts=out.filter(q=>!d.papers.some(p=>Math.abs(q.box.z0-p.z)<1e-8&&Math.abs(q.box.hl-.11)<1e-8)).map(q=>({u:(q.box.x-o.x)*c+(q.box.y-o.y)*s,v:-(q.box.x-o.x)*s+(q.box.y-o.y)*c,...q.box}));
+  const joined=(a,b)=>Math.abs(a.u-b.u)<=a.hl+b.hl+1e-8&&Math.abs(a.v-b.v)<=a.hw+b.hw+1e-8&&a.z0<=b.z1+1e-8&&b.z0<=a.z1+1e-8;
+  const reached=new Set(parts.map((p,k)=>Math.abs(p.z0)<1e-8?k:-1).filter(k=>k>=0)),queue=[...reached];
+  while(queue.length){const k=queue.pop();parts.forEach((p,j)=>{if(!reached.has(j)&&joined(parts[k],p)){reached.add(j);queue.push(j);}});}
+  if(parts.filter(p=>Math.abs(p.z0)<1e-8&&p.hl<.03&&p.hw>.12).length<2)bad.push('missing fore/aft floor feet');
+  for(const[z]of d.tiers){const k=parts.findIndex(p=>Math.abs(p.z0-z)<1e-8&&Math.abs(p.hl-.24)<1e-8);if(k<0||!reached.has(k))bad.push('tray disconnected from the floor');}
+  return bad;
+ });assert.deepEqual(bad,[]);
+}));
+
+test('the nested cups have an open top cup and fixed turned fittings reuse their profiles',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  const draw=drawBox,bad=[];const capture=o=>{const out=[];drawBox=(box,shade,ray=rayBox)=>out.push({box:{...box},ray});try{o.draw(0,0);}finally{drawBox=draw;}return out;};
+  const cup=CUP_STACK(0,0,0,6),P=capture(cup),shape=P.find(p=>p.ray===coveRayLathe),b=shape.box,t=shape.ray(0,0,b.z1+.1,0,0,-1,b),floor=b.z1+.1-t;
+  if(!(t>0&&floor>.08&&floor<.15&&b.z1-floor>.06))bad.push('top cup has a solid lid or no nested floor');
+  for(const o of [cup,JERKY_JAR(0,0,1),WET_FLOOR_CONE(0,0)]){const a=capture(o),b=capture(o);if(a.some((q,k)=>q.box.profile&&q.box.profile!==b[k].box.profile))bad.push('fixed turned profiles rebuilt');}
+  return bad;
+ });assert.deepEqual(bad,[]);
+}));

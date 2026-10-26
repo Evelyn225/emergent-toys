@@ -6,8 +6,8 @@ function BOOK_STACK(x,y,z,books,c=1,s=0) {
   const tops=[];let h=z;for(const b of books){tops.push(h);h+=b[2];}
   const cover=col=>(i,t,L)=>{const edge=HIT.face!==5&&HIT.face!==6&&Math.abs(HIT.nz)<.5&&(HIT.face===1||HIT.face===2);
     BG[i]=C(edge?WHITE:col,(edge?3.2:2.2)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const hl=Math.max(...books.map(b=>b[0])),hw=Math.max(...books.map(b=>b[1]));
-  return {...ROOM_MODEL(x,y,(vx,vy)=>books.forEach((b,k)=>coveRound(vx,vy,c,s,b[0],b[1],tops[k],tops[k]+b[2],.004,cover(b[3])))),
+  const shades=books.map(b=>cover(b[3])),hl=Math.max(...books.map(b=>b[0])),hw=Math.max(...books.map(b=>b[1]));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>books.forEach((b,k)=>coveRound(vx,vy,c,s,b[0],b[1],tops[k],tops[k]+b[2],.004,shades[k]))),
     box:boxAt(x,y,c,s,hl,hw,z,h),radius:Math.hypot(hl,hw),bookStack:{z,top:h,tops}};
 }
 // A rug on the floor, a border round it: (u, v) from its centre to shade(e, u, v) by e, the distance in from its edge.
@@ -42,20 +42,42 @@ function LUMBER(x,y,boards,c=0,s=1,t=.05,w=.12) {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const [u,bh] of boards)coveRound(vx+c*u,vy+s*u,c,s,w,t,0,bh,.006,shade);}),
     box:boxAt(x,y,c,s,span,t,0,h),radius:span,lumber:{boards,t,w}};
 }
-// Coils of garden hose lying on the floor, turn on turn: each turn a ring.
+// Distance to the nearest turn is enough for the whole coil. A single clipped
+// surface avoids testing every profile segment of every turn for each cell.
+function shopHoseRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,{R,r,turns}=b.hoseShape,speed=Math.hypot(rx,ry,rz);
+  let enter=.01,leave=Infinity;
+  for(const [o,d,lo,hi] of [[x,rx,-b.hl,b.hl],[y,ry,-b.hw,b.hw],[oz,rz,b.z0,b.z1]]){
+    if(Math.abs(d)<1e-10){if(o<lo||o>hi)return -1;continue;}
+    const a=(lo-o)/d,z=(hi-o)/d;enter=Math.max(enter,Math.min(a,z));leave=Math.min(leave,Math.max(a,z));
+  }
+  if(enter>leave)return -1;
+  for(let t=enter,k=0;k<64&&t<=leave+.00001;k++){
+    const u=x+rx*t,v=y+ry*t,w=oz+rz*t,rho=Math.hypot(u,v),dr=rho-R;
+    const zc=r+clamp(Math.round((w-r)/(2*r)),0,turns-1)*2*r,dz=w-zc,len=Math.hypot(dr,dz),dist=len-r;
+    if(dist<Math.max(.00008,t/projX*.1)){
+      const radial=rho>1e-10?dr/(rho*len):0;
+      HIT.u=u;HIT.v=v;HIT.w=w;HIT.nx=u*radial;HIT.ny=v*radial;HIT.nz=dz/len;
+      HIT.face=Math.abs(HIT.nz)>.7?(HIT.nz>0?5:6):Math.abs(HIT.nx)>Math.abs(HIT.ny)?(HIT.nx>0?1:2):(HIT.ny>0?3:4);
+      return t;
+    }
+    t+=Math.max(.00002,dist)/speed;
+  }
+  return -1;
+}
+// Six continuous, round turns of hose, each touching its neighbours.
 function HOSE_COILS(x,y,R=.34,turns=6,r=.022,col=GREEN) {
-  // (an octagon of tube section: a finer one costs more than it shows at this size)
-  const ring=k=>{const zc=r+k*2*r,pts=[];for(let j=0;j<=8;j++){const a=Math.PI/2-j*Math.PI/4;pts.push([zc+r*Math.sin(a),R+r*Math.cos(a)]);}return pts;};
-  const rings=Array.from({length:turns},(_,k)=>ring(k));
+  const shape={R,r,turns},box={...boxAt(0,0,1,0,R+r,R+r,0,turns*2*r),hoseShape:shape};
   const shade=(i,t,L)=>{BG[i]=C(col,2.2+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(let k=turns-1;k>=0;k--)coveLathe(vx,vy,0,rings[k],shade);}),
-    box:boxAt(x,y,1,0,R+r,R+r,0,turns*2*r),radius:R+r,hose:{R,r,turns}};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox({...box,x:vx,y:vy},shade,shopHoseRay)),
+    box:boxAt(x,y,1,0,R+r,R+r,0,turns*2*r),radius:R+r,hose:shape};
 }
 // Bags of compost lying flat, one on another: plump rounded slabs with a printed band.
 function COMPOST_BAGS(x,y,n=4,hl=.4,hw=.28,h=.16) {
   const shade=k=>(i,t,L)=>{const band=Math.abs(HIT.nz)<.6&&Math.abs(HIT.u)<.15&&HIT.face!==5;
     BG[i]=C(band?YEL:k&1?GREEN:BRICK,(band?3:1.8)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(let k=n-1;k>=0;k--)coveRound(vx,vy,1,0,hl-k*.01,hw-k*.008,k*h,(k+1)*h,.05,shade(k));}),
+  const shades=Array.from({length:n},(_,k)=>shade(k));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(let k=n-1;k>=0;k--)coveRound(vx,vy,1,0,hl-k*.01,hw-k*.008,k*h,(k+1)*h,.05,shades[k]);}),
     box:boxAt(x,y,1,0,hl,hw,0,n*h),radius:Math.hypot(hl,hw),bags:{n,h}};
 }
 // A plain bulkhead hanging from the ceiling over an opening.
@@ -63,16 +85,42 @@ function BULKHEAD(x,y,hl,hw,z0,z1,c=1,s=0) {
   const shade=gondolaFlat(c,s,(i,t,L)=>{BG[i]=C(GRAY,1.8+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox(boxAt(vx,vy,c,s,hl,hw,z0,z1),shade)),box:{...boxAt(x,y,c,s,hl,hw,z0,z1)},overhead:true};
 }
+// A rounded cabinet with a real circular arm recess behind the cuff. Only
+// rays through the opening need the cylinder intersection; the surrounding
+// housing keeps its usual rounded surface. The recess ends inside the cabinet.
+function bpCabinetRay(ox,oy,oz,rx,ry,rz,b) {
+  HIT.bpInner=false;
+  const outer=coveRayRounded(ox,oy,oz,rx,ry,rz,b);
+  if(outer<0||HIT.face!==3||HIT.u*HIT.u+(HIT.w-.75)**2>=.06**2)return outer;
+  const u0=(ox-b.x)*b.c+(oy-b.y)*b.s,v0=-(ox-b.x)*b.s+(oy-b.y)*b.c;
+  const du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c,w0=oz-.75;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  if(dv<0){const t=-v0/dv;if(t>=outer&&(u0+du*t)**2+(w0+rz*t)**2<=.06**2){best=t;nv=1;}}
+  const a=du*du+rz*rz,q=2*(u0*du+w0*rz),d=q*q-4*a*(u0*u0+w0*w0-.06**2);
+  if(a>1e-12&&d>=0)for(const t of [(-q-Math.sqrt(d))/(2*a),(-q+Math.sqrt(d))/(2*a)]){
+    const v=v0+dv*t;
+    if(t>=outer&&t<best&&v>=0&&v<=b.hw){best=t;nu=-(u0+du*t)/.06;nv=0;nz=-(w0+rz*t)/.06;}
+  }
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u0+du*best;HIT.v=v0+dv*best;HIT.w=oz+rz*best;
+  HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.bpInner=true;
+  HIT.face=Math.abs(nz)>.7?(nz>0?5:6):Math.abs(nu)>.7?(nu>0?1:2):3;
+  return best;
+}
 // The blood-pressure machine facing (fx,fy): a white cabinet, the cuff's
 // ring on the front at arm height, the readout above it.
 function BP_MACHINE(x,y,fx,fy) {
-  const c=fy,s=-fx,ring=[[-.03,.06],[-.03,.09],[.03,.09],[.03,.06],[-.03,.06]];
-  const white=(i,t,L)=>{BG[i]=C(WHITE,2.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const readout=(i,t,L)=>{BG[i]=C(CYAN,3);return set(i,HIT.face===3&&coveDetail(t,.1)>.3?(HIT.w>1.08?'1':'2'):' ',C(WHITE,14)),true;};
+  const c=fy,s=-fx,ring=[[-.02,.06],[-.02,.09],[.03,.09],[.03,.06],[-.02,.06]];
+  const white=(i,t,L)=>{BG[i]=C(WHITE,(HIT.bpInner?1.7:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const readout=(i,t,L)=>{BG[i]=C(CYAN,2.4);
+    if(HIT.face===3&&(wallText(i,HIT.u,t/projX,HIT.w,t,'READY',0,1.115,.036,.045,C(WHITE,6),BG[i])||
+      wallText(i,HIT.u,t/projX,HIT.w,t,'--',0,1.015,.04,.04,C(WHITE,6),BG[i])))return true;
+    set(i,' ',0);return true;};
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
-    part(0,0,.3,.28,0,1.3,white,.03); // the cabinet
+    drawBox({...boxAt(vx,vy,c,s,.3,.28,0,1.3),round:.03},white,bpCabinetRay); // the cabinet and arm recess
     part(0,.282,.12,.003,.95,1.18,readout); // the readout
-    shopDisc(vx-s*.3,vy+c*.3,c,s,.75,ring,(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY)); // the cuff's ring, standing proud
+    shopDisc(vx-s*.3,vy+c*.3,c,s,.75,ring,metal); // the cuff's ring, standing proud
   }),box:boxAt(x,y,c,s,.3,.33,0,1.3),radius:.45,bpMachine:{fx,fy}};
 }
 // A small desk: a top on two side panels and a modesty panel; (fx,fy) is the
@@ -99,26 +147,44 @@ function FLOOR_MAT(x,y,hl,hw,h=.03,col=GRAY,c=1,s=0) {
   const shade=(i,t,L)=>{BG[i]=C(col,1+L*.15*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,c,s,hl,hw,0,h,Math.min(.012,h*.45),shade)),box:boxAt(x,y,c,s,hl,hw,0,h),mat:true};
 }
-// A video store's returns box facing (fx,fy): a steel drop box on its foot,
-// a hooded slot with its flap, RETURNS over it.
+// The housing owns the lip and the recessed inner walls of the return slot.
+function shopReturnsRay(ox,oy,oz,rx,ry,rz,b) {
+  HIT.slotInner=false;const outer=coveRayRounded(ox,oy,oz,rx,ry,rz,b);
+  if(outer<0||HIT.face!==3||Math.abs(HIT.u)>=.14||HIT.w<=.66||HIT.w>=.7)return outer;
+  const u=(ox-b.x)*b.c+(oy-b.y)*b.s,v=-(ox-b.x)*b.s+(oy-b.y)*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  const take=(t,x,y,z)=>{const uu=u+du*t,vv=v+dv*t,zz=oz+rz*t;
+    if(t<outer||t>=best||Math.abs(uu)>.14+1e-8||vv<.12-1e-8||vv>.2+1e-8||zz<.66-1e-8||zz>.7+1e-8)return;
+    best=t;nu=x;nv=y;nz=z;};
+  if(Math.abs(dv)>1e-10)take((.12-v)/dv,0,1,0);
+  if(Math.abs(du)>1e-10)for(const side of [-1,1])take((side*.14-u)/du,-side,0,0);
+  if(Math.abs(rz)>1e-10){take((.66-oz)/rz,0,0,1);take((.7-oz)/rz,0,0,-1);}
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u+du*best;HIT.v=v+dv*best;HIT.w=oz+rz*best;HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.slotInner=true;HIT.face=nv?3:nz?(nz>0?5:6):(nu>0?1:2);return best;
+}
+// A steel returns box: closed foot and housing, a recessed slot under its
+// rain hood, and a label seated against the front face.
 function RETURNS_BOX(x,y,fx,fy) {
-  const c=fy,s=-fx,blue=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);
+  const c=fy,s=-fx,blue=(i,t,L)=>{if(HIT.slotInner){BG[i]=C(BLUE,.8+L*.12*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);};
+  const hood=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);
   const label=(i,t,L)=>{BG[i]=C(WHITE,4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'RETURNS',0,.8,.018,.03,C(BLUE,3),BG[i]))return true;set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
-    part(0,0,.25,.2,.06,.9,blue,.03); // the box
-    part(0,0,.22,.17,0,.06,GRAY,.01); // its foot
-    part(0,.205,.14,.005,.66,.7,(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;}); // the slot's flap, dark
-    part(0,.22,.16,.02,.7,.72,blue,.006); // the hood over it
-    part(0,.202,.12,.002,.76,.84,label); // the label
+    drawBox({...boxAt(vx,vy,c,s,.25,.2,.06,.9),round:.03},blue,shopReturnsRay);
+    part(0,0,.22,.17,0,.06,GRAY,.01);
+    part(0,.22,.16,.02,.7,.72,hood,.006);
+    part(0,.202,.12,.002,.76,.84,label);
   }),box:boxAt(x,y,c,s,.25,.24,0,.9),radius:.35,returnsBox:{fx,fy}};
 }
-// The queue-ticket screen on its pole, facing (fx,fy), the number blinking.
+// One steady, scaled service number, with its heading above it.
 function QUEUE_SCREEN(x,y,fx,fy) {
-  const c=fy,s=-fx,screen=(i,t,L)=>{if(HIT.face!==3){BG[i]=C(GRAY,1.6);set(i,' ',0);return true;}BG[i]=C(CYAN,4);return set(i,fract(T)<.5&&coveDetail(t,.1)>.3?'#':' ',C(WHITE,13)),true;};
+  const c=fy,s=-fx,screen=(i,t,L)=>{BG[i]=C(HIT.face===3?CYAN:GRAY,HIT.face===3?2.8:1.6);
+    if(HIT.face===3&&(wallText(i,HIT.u,t/projX,HIT.w,t,'NOW SERVING',0,1.455,.028,.035,C(WHITE,6),BG[i])||
+      wallText(i,HIT.u,t/projX,HIT.w,t,'01',0,1.335,.08,.1,C(WHITE,7),BG[i])))return true;
+    set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
-    part(0,0,.12,.12,0,.02,GRAY,.006); // the foot
-    part(0,0,.018,.018,.02,1.22,GRAY,.008); // the pole
-    part(0,0,.18,.03,1.2,1.5,screen); // the screen
+    part(0,0,.12,.12,0,.02,GRAY,.006);
+    part(0,0,.018,.018,.02,1.22,GRAY,.008);
+    part(0,0,.18,.03,1.2,1.5,screen);
   }),box:boxAt(x,y,c,s,.18,.12,0,1.5),radius:.25};
 }
 // A chest of drawers against a wall, its fronts to (fx,fy): a plinth, the
@@ -138,23 +204,36 @@ function DRESSER(x,y,hl,hw,h,fx,fy) {
 // pillar, the arm across, the head with the needle going.
 function SEWING_MACHINE(x,y,z,c=1,s=0) {
   const body=(i,t,L)=>{BG[i]=C(GRAY,1.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s),up=fract(T*6)<.5?.01:0;
-    part(0,0,.2,.1,z,z+.04,body,.01); // the bed
-    part(-.15,0,.04,.06,z+.04,z+.2,body,.015); // the pillar
-    part(-.01,0,.18,.045,z+.16,z+.22,body,.02); // the arm across
-    part(.14,0,.04,.05,z+.09,z+.22,body,.015); // the head
-    part(.14,.02,.003,.003,z+.05+up,z+.09,(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),.002); // the needle, going
-  }),box:boxAt(x,y,c,s,.2,.1,z,z+.22),radius:.25,sewing:{z}};
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),cloth=(i,t,L)=>{BG[i]=C(BLUE,2.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const thread=(i,t,L)=>{BG[i]=C(STONE,3.5+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz)-coveGroove(HIT.w-z,.003,.001,t/projX)*coveDetail(t,.03)*.4);set(i,' ',0);return true;};
+  const spool=homeLampPart('spool',z+.22,[[0,0],[0,.018],[.002,.018],[.002,.013],[.028,.013],[.028,.018],[.03,.018],[.03,.003],[.04,.003],[.04,0]]).box;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s),up=.006*(1+Math.sin(T*TAU*3));
+    part(0,0,.2,.1,z,z+.04,body,.01);
+    part(-.15,0,.04,.06,z+.04,z+.2,body,.015);
+    part(-.01,0,.18,.045,z+.16,z+.22,body,.02);
+    part(.14,0,.04,.05,z+.09,z+.22,body,.015);
+    part(.09,.02,.092,.057,z+.04,z+.041,metal,.0004); // needle plate on the bed
+    part(.09,.02,.09,.055,z+.041,z+.043,cloth,.0005);
+    part(.14,.02,.003,.003,z+.043+up,z+.09,metal,.002);
+    part(.12,.02,.002,.003,z+.046,z+.09,metal,.001); // presser-foot stem
+    part(.12,.02,.003,.015,z+.046,z+.049,metal,.001);
+    for(const e of [-1,1])part(.14,.02+e*.012,.02,.003,z+.043,z+.046,metal,.001);
+    drawBox({...spool,x:vx-c*.15+s*.015,y:vy-s*.15-c*.015},thread,coveRayLathe);
+    const line=(u,v,h,uu,vv,hh)=>coveTube(vx+c*u-s*v,vy+s*u+c*v,z+h,vx+c*uu-s*vv,vy+s*uu+c*vv,z+hh,.0008,STONE);
+    part(.03,.02,.002,.002,z+.22,z+.237,metal,.001);
+    line(-.137,-.015,.235,.03,.02,.235);line(.03,.02,.235,.14,.05,.205);line(.14,.05,.205,.14,.05,.11);line(.14,.05,.11,.14,.02,.09);
+  }),box:boxAt(x,y,c,s,.2,.1,z,z+.26),radius:.25,sewing:{z}};
 }
 // A slatted crate of LPs, their top edges each a colour.
 function RECORD_CRATE(x,y,hl,hw,seed) {
-  const depth=.32,slats=grocerSlats(),sleeve=RECORD_BIN.sleeve,pitch=RECORD_BIN.pitch,len=hl*2-.04;
+  const depth=.26,floor=.008,slats=grocerSlats(),sleeve=RECORD_BIN.sleeve,pitch=RECORD_BIN.pitch,len=hl*2-.04;
   const edges=gondolaFlat(1,0,(i,t,L)=>{const j=Math.floor((HIT.u+len/2)/pitch),col=RECORD_COLS[Math.floor(hash(j,seed,72)*RECORD_COLS.length)];
     BG[i]=C(col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-coveGroove(HIT.u+len/2,pitch,.0015,t/projX)*coveDetail(t,.15)*1.2);set(i,' ',0);return true;});
+  const tray={...boxAt(0,0,1,0,hl,hw,0,depth),...kitchenTopProfile(hl,hw,0,depth,.002)};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    drawBox(boxAt(vx,vy,1,0,len/2,Math.min(hw-.02,sleeve/2),.012,.012+sleeve),edges); // the LPs, on edge
-    foodTray(vx,vy,0,hl,hw,depth,slats);
-  }),box:boxAt(x,y,1,0,hl,hw,0,.012+sleeve),radius:Math.hypot(hl,hw),recordCrate:{hl,hw,depth}};
+    drawBox(boxAt(vx,vy,1,0,len/2,Math.min(hw-.02,sleeve/2),floor,floor+sleeve),edges); // the LPs, on edge
+    drawBox({...tray,x:vx,y:vy},slats,foodRayTray);
+  }),box:boxAt(x,y,1,0,hl,hw,0,floor+sleeve),radius:Math.hypot(hl,hw),recordCrate:{hl,hw,depth}};
 }
 // A low tea table: a top with an apron on four short legs.
 function TEA_TABLE(x,y,hl,hw,h) {
