@@ -23,6 +23,10 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   if (along > .14 && along < width - .14 && z < .31) {
     if (architectureShutter(i, z, sh, L)) return;
     const mullion = Math.abs(fract((along - .14) / .48) - .5) > .47;
+    if (!mullion && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+      const a0 = .14 + Math.floor((along - .14) / .48) * .48, a1 = Math.min(a0 + .48, width - .14), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+      if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .045, .31, sh, open, L, sk0(b.seed) + Math.floor(a0 * 9))) return;
+    }
     BG[i] = C(sh.kind === SHOP_NEON ? sh.neon : CYAN, 1 + night * 2);
     return set(i, mullion ? '|' : ':', C(mullion ? trim : WARM, Math.max(L * .65, night * 11)));
   }

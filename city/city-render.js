@@ -224,6 +224,8 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
+    if (on && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON && sh.kind !== SHOP_APTS && sty !== 8) // up close, the display behind the glass (shop-windows.js)
+      if (shopWindow(i, u, z, Math.floor(u * 2) / 2 + 0.04, Math.floor(u * 2) / 2 + 0.5, 0.02, 0.28, sh, open, L, sk + Math.floor(u * 2))) return;
     if (sh.kind === SHOP_NEON) return set(i, on ? (fract(z * 30) < 0.5 ? ':' : '.') : '.', C(on ? sh.neon : GRAY, on ? Math.max(L, glowL) : L * 0.3));
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
