@@ -156,6 +156,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
   `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
   grates, utility cabinets, then bus shelters.
+- **Claude pass 11, utility cabinets:** `claude/utility-cabinets`, stacked on
+  `claude/kerb-fixtures` (#238): a `cabinet` kind in `city/kerb-fixtures.js` and
+  its model in `city/kerb-fixtures-render.js`. Next: bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
@@ -864,3 +867,20 @@ then #240→#241→#246. Remaining #239→#245, #242/#243/#244 and #248→#249 r
 authorized; preserve latest heads/ownership and all interior audit follow-ups.
 Hotel/motel private washrooms remain closed and auto-closing in pass6; homes
 are unchanged by that decision.
+
+#238 merged as97064be. Codex active `codex/review-utility-cabinets` (#240),
+merging main into Claude's8424597 without replacing either agent's history.
+Files: `city/kerb-fixtures.js`, `city/kerb-fixtures-render.js`, kerb browser
+checks and shared bundle/notes. Integrate cabinets into the reviewed cached
+model path, retain actual kerb footprints/ball heights and original grounded
+walking rule. Cabinet collision must use the cabinet rather than the hydrant
+fallback; inspect joined door hardware, mounts and scaled labels. Next #241
+then #246 in the first chain. Reserved Claude source/shared helpers untouched.
+
+#240 final review on `codex/review-utility-cabinets`: six focused and five
+native integration checks, three node files, nine defect probes, twelve
+clear-floor views and ABAB costs complete. Cabinets use cached fixed surfaces,
+joined hardware and actual cabinet-sized/height-aware collisions; preserve
+#238's grounded walking decision. Ready to update the original PR branch and
+merge, then #241→#246. No active Claude/shared helper edits. All remaining
+interior audit and hotel/motel door decisions stay recorded.

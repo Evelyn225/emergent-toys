@@ -65,6 +65,20 @@ function buildKerbModel(o,near) {
       const [wx,wy]=at(0,.25);flat('label',wx,wy,.2,.001,.38,.52,(i,t,L)=>{BG[i]=C(o.col,2+L*.2);return set(i,worldText('MAIL',HIT.u*fs,HIT.w,t,i,view.x+wx,view.y+wy,view.z+.45*k,c*fs,s*fs,.07*k,.1*k),C(WHITE,3+L*.5)),true;});
     }
     add('body',{...boxAt(0,0,c,s,.22*k,.25*k,.22*k,1.27*k),mailboxShape:{base:.22*k,shoulder:1.05*k,r:.22*k}},paint,kerbMailboxRay);
+  }else if(o.kind==='cabinet'){
+    const slab=(role,a0,a1,v0,v1,z0,z1,shade,round=0)=>{const[x,y]=at((a0+a1)/2,(v0+v1)/2);flat(role,x,y,(a1-a0)/2,(v1-v0)/2,z0,z1,shade,round);};
+    if(near){
+      for(const e of [-1,1])slab('door',e>0?.005:-.38,e>0?.38:-.005,.25,.256,.16,1.3,kerbPaint(o.col,2.2));
+      for(const zz of [.3,1.1])for(const e of [-1,1])slab('hinge',e*.375-.014,e*.375+.014,.254,.264,zz,zz+.08,metal);
+      for(const zz of [.65,.79]){const A=at(.315,.256),B=at(.315,.28);tube('handle-mount',[...A,zz*k],[...B,zz*k],.005*k,metal);}
+      const H=at(.315,.28);tube('handle',[...H,.65*k],[...H,.79*k],.005*k,metal);
+      const [lx,ly]=at(-.21,.257);
+      slab('label',-.3,-.12,.256,.258,1.05,1.17,(i,t,L)=>{BG[i]=C(WHITE,2.5+L*.25);set(i,worldText(o.signal?'POWER':'TEL',HIT.u*fs,HIT.w,t,i,view.x+lx,view.y+ly,view.z+1.11*k,c*fs,s*fs,.027*k,.065*k),C(GRAY,1+L*.1));return true;});
+      for(const e of [-1,1])for(let n=0;n<5;n++){const zz=1+n*.055;slab('louvre',e*.4-(e>0?0:.012),e*.4+(e>0?.012:0),-.18,.18,zz,zz+.022,kerbPaint(o.col,1.4));}
+    }
+    flat('cap',0,0,.43,.28,1.35,1.41,paint,.012);
+    flat('body',0,0,.4,.25,.1,1.35,paint,.02);
+    flat('plinth',0,0,.42,.27,0,.1,kerbPaint(STONE,2.6));
   }else{
     lathe('body',0,0,0,KERB_BOLLARD,(i,t,L)=>{const w=(HIT.w-view.z)/k,band=near&&w>.62&&w<.7;BG[i]=band?C(YEL,4+L*.25):C(GRAY,1.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   }
@@ -73,6 +87,6 @@ function buildKerbModel(o,near) {
 }
 const KERB_MODELS=new WeakMap();
 function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
-const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant;
-const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard};
+const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant;
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet};
 function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});}

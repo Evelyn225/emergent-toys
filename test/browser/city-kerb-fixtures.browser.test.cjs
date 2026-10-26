@@ -20,7 +20,8 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
    for(const l of lamps)if(Math.abs(rel(l.x-o.x))<.06&&Math.abs(rel(l.y-o.y))<.06)bad.push([o.kind,'against a lamp']);
    for(const m of machines)if(Math.hypot(rel(m.x-o.x),rel(m.y-o.y))<.08)bad.push([o.kind,'against a vending machine']);
    for(const s of stations)if(Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.3)bad.push([o.kind,'at a subway entrance']);
-   const face=Math.sign(o.c?o.fy:o.fx),road=across<1?1:-1;if(o.kind==='mailbox'?face!==-road:face!==road)bad.push([o.kind,'facing the wrong way']);
+   const face=Math.sign(o.c?o.fy:o.fx),road=across<1?1:-1;if(['mailbox','cabinet'].includes(o.kind)?face!==-road:face!==road)bad.push([o.kind,'facing the wrong way']); // (doors and slots to the pavement)
+   if(o.signal&&!lights.some(l=>Math.hypot(rel(l.x-o.x),rel(l.y-o.y))<.8))bad.push('a signal cabinet away from any signal');
   }
   for(let i=0;i<kerbs.length;i++)for(let j=i+1;j<kerbs.length;j++){const a_=kerbs[i],b=kerbs[j];if(Math.abs(rel(a_.x-b.x))<a_.hl+b.hl+.01&&Math.abs(rel(a_.y-b.y))<a_.hl+b.hl+.01&&Math.hypot(rel(a_.x-b.x),rel(a_.y-b.y))<Math.max(a_.hl,a_.hw)+Math.max(b.hl,b.hw)+.01)bad.push(['two fixtures overlap',a_.kind,b.kind]);}
   const indexed=kerbsB.flat().length===kerbs.length&&kerbs.every(o=>kerbsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].includes(o));
@@ -28,7 +29,7 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
  });
  assert.deepEqual(r.bad,[]);
  assert.equal(r.indexed,true);
- for(const k of ['hydrant','bin','mailbox','bollard'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
+ for(const k of ['hydrant','bin','mailbox','bollard','cabinet'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
 }));
 
 test('each fixture is built inside its box, and on foot you walk round it while the walking line stays open',()=>fixture(async p=>{
@@ -47,7 +48,7 @@ test('each fixture is built inside its box, and on foot you walk round it while 
   return {bad:bad.slice(0,10),kinds:Object.keys(seen).length};
  });
  assert.deepEqual(r.bad,[]);
- assert.ok(r.kinds>=8,'every kind in more than one facing was built');
+ assert.ok(r.kinds>=10,'every kind in more than one facing was built');
 }));
 
 test('kerb surfaces stay cached through translation and terrain height changes; bins have open mouths and mailbox roofs form one closed shell',()=>fixture(async p=>{
@@ -114,4 +115,43 @@ test('round kerb collisions leave empty corners clear and use actual heights for
   if(!heights.some(([z,height])=>Math.abs(z-.035)<1e-8&&Math.abs(height-.03)<1e-8))bad.push('kicked ball uses an infinite-height collider');
   return bad.slice(0,12);
  });assert.deepEqual(r,[]);
+}));
+
+test('utility cabinets have supported doors, joined hardware and real cabinet-sized collision at each height',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  if(typeof kerbModel!=='function')return {bad:['cabinet not prepared'],checked:0};
+  const bad=[],seen=new Set();let checked=0;
+  const local=(b,o)=>({u:b.x*o.c+b.y*o.s,v:(-b.x*o.s+b.y*o.c)*(Math.sign(-o.s*o.fx+o.c*o.fy)||1),a:Math.abs(b.c*o.c+b.s*o.s)*b.hl+Math.abs(-b.s*o.c+b.c*o.s)*b.hw,b:Math.abs(-b.c*o.s+b.s*o.c)*b.hl+Math.abs(b.s*o.s+b.c*o.c)*b.hw,z0:b.z0,z1:b.z1});
+  const test=(yes,why)=>{if(!yes)bad.push(why);};
+  for(const o of kerbs.filter(o=>o.kind==='cabinet')){
+   const id=[o.c,o.s,o.fx,o.fy,!!o.signal].join(',');if(seen.has(id))continue;seen.add(id);checked++;
+   for(const near of [false,true]){
+    const m=kerbModel(o,near),part=role=>m.parts.filter(p=>p.role===role),body=part('body')[0],cap=part('cap')[0],base=part('plinth')[0];
+    if(!body||!cap||!base){bad.push('missing supported cabinet shell');continue;}
+    test(base.box.z0===0&&base.box.z1===body.box.z0&&body.box.z1===cap.box.z0,'cabinet body/cap/plinth disconnected');
+    for(const q of [body,base,cap]){
+     const B=q.box,z=(B.z0+B.z1)/2,t=q.ray(B.x-o.fx*.1,B.y-o.fy*.1,z,o.fx,o.fy,0,B);
+     test(t>0&&Math.abs(t-(.1-B.hw))<.0002,'cabinet shell has an open back');
+    }
+    if(!near){test(part('door').length===0&&part('louvre').length===0,'far cabinet keeps tiny hardware');continue;}
+    const doors=part('door'),hinges=part('hinge'),vents=part('louvre'),bar=part('handle')[0],mounts=part('handle-mount');
+    test(doors.length===2&&hinges.length===4&&vents.length===10&&!!bar&&mounts.length===2,'missing cabinet door hardware');
+    for(const door of doors){const D=local(door.box,o),B=local(body.box,o);test(Math.abs(D.v-D.b-B.b)<1e-8&&D.z0>B.z0&&D.z1<B.z1,'door not seated on cabinet');}
+    for(const h of hinges){const H=local(h.box,o);test(doors.some(q=>{const D=local(q.box,o);return Math.abs(D.u-H.u)<D.a+H.a&&H.v-H.b<D.v+D.b&&H.v+H.b>D.v-D.b&&H.z0>=D.z0&&H.z1<=D.z1;}),'door hinge floats');}
+    if(bar&&mounts.length===2){
+     const H=local(bar.box,o),D=local(doors[1].box,o);
+     test(H.v-H.b-(D.v+D.b)>.001,'cabinet pull has no finger clearance');
+     for(const q of mounts){const M=local(q.box,o);test(M.v-M.b<=D.v+D.b&&M.v+M.b>=H.v-H.b&&M.z0<=H.z1&&M.z1>=H.z0,'cabinet pull mount detached');}
+    }
+    for(const vent of vents){const V=local(vent.box,o),B=local(body.box,o);test(Math.abs(Math.abs(V.u)-V.a-B.a)<1e-8&&V.z0>B.z0&&V.z1<B.z1&&V.b<B.b,'vent detached from end panel');}
+    const label=part('label')[0];if(label){label.shade(0,.1,1);const low=BG[0]&15;label.shade(0,.1,12);test((BG[0]&15)>low,'cabinet label emits fixed light');}else bad.push('missing cabinet label');
+   }
+   for(const [u,v,lo,hi,wanted]of [[.035,0,.06,.08,true],[.041,0,.002,.008,true],[.0425,0,.137,.139,true],[.041,0,.06,.08,false],[.0398,.0248,.06,.08,false],[0,0,.15,.16,false]]){
+    test(kerbFootprint(o,u,v,0,lo,hi)===wanted,'cabinet collision does not follow its actual shell heights');
+   }
+   const z=terrainHeight(o.x,o.y),u=.035,x=o.x+o.c*u,y=o.y+o.s*u;
+   test(kerbAt(x,y,.0001,z+.08,.01)===o,'cabinet uses hydrant collision or no collision');
+  }
+  return {bad:bad.slice(0,14),checked};
+ });assert.deepEqual(r.bad,[]);assert.ok(r.checked>=6,'both cabinet types and street facings were checked');
 }));

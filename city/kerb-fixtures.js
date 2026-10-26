@@ -9,6 +9,7 @@ const KERB_KINDS = {
   bin: { hl: .027, hw: .027, h: .09 },
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
+  cabinet: { hl: .043, hw: .029, h: .141 },
 };
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
@@ -54,6 +55,7 @@ for (const o of [CURB, 2 - CURB]) {
     if (dist !== 'industrial' && r(1402) < ({ downtown: .75, chinatown: .75, shotengai: .8 }[dist] || .55))
       addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
     if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
+    if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
     if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
       for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
   }
@@ -78,6 +80,15 @@ function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
     const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
     return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
   };
+  if(o.kind==='cabinet'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
+    if(over(0,.1)&&rect(0,0,.42,.27)||over(.1,1.35)&&rounded(.4,.25,.02)||over(1.35,1.41)&&rounded(.43,.28,.012))return true;
+    if(over(.16,1.3)&&rect(0,.253*fs*k,.38,.003))return true;
+    if(over(.645,.795)&&rect(.315*k,.28*fs*k,.005,.005))return true;
+    for(const z of [.65,.79])if(over(z-.005,z+.005)&&rect(.315*k,.268*fs*k,.005,.017))return true;
+    return over(1,1.242)&&rect(0,0,.412,.18);
+  }
   if(o.kind==='mailbox'){
     const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
     if(over(0,.23))for(const a of [-.19,.19])for(const b of [-.22,.22])if(rect(a*k,b*fs*k,.02,.02))return true;
@@ -106,4 +117,16 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     const lo=z===null?0:z-terrainHeight(o.x,o.y);
     if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
   }return null;
+}
+// A signal controller cabinet at most junctions: on the kerb beside the first
+// signal pole, half a cell back from the corner, its doors to the pavement.
+{
+  const done = new Set();
+  for (const l of lights) {
+    const ix = Math.floor(l.bx / 8), iy = Math.floor(l.by / 8), key = bi(ix, iy);
+    if (done.has(key) || hash(ix, iy, 1406) > .6) continue;
+    const e = l.vert ? mod(l.x, 8) : mod(l.y, 8), ax = l.vert ? (e < 1 ? 1 : -1) : 0, ay = l.vert ? 0 : (e < 1 ? 1 : -1);
+    const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
+    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
+  }
 }

@@ -15544,6 +15544,20 @@ function buildKerbModel(o,near) {
       const [wx,wy]=at(0,.25);flat('label',wx,wy,.2,.001,.38,.52,(i,t,L)=>{BG[i]=C(o.col,2+L*.2);return set(i,worldText('MAIL',HIT.u*fs,HIT.w,t,i,view.x+wx,view.y+wy,view.z+.45*k,c*fs,s*fs,.07*k,.1*k),C(WHITE,3+L*.5)),true;});
     }
     add('body',{...boxAt(0,0,c,s,.22*k,.25*k,.22*k,1.27*k),mailboxShape:{base:.22*k,shoulder:1.05*k,r:.22*k}},paint,kerbMailboxRay);
+  }else if(o.kind==='cabinet'){
+    const slab=(role,a0,a1,v0,v1,z0,z1,shade,round=0)=>{const[x,y]=at((a0+a1)/2,(v0+v1)/2);flat(role,x,y,(a1-a0)/2,(v1-v0)/2,z0,z1,shade,round);};
+    if(near){
+      for(const e of [-1,1])slab('door',e>0?.005:-.38,e>0?.38:-.005,.25,.256,.16,1.3,kerbPaint(o.col,2.2));
+      for(const zz of [.3,1.1])for(const e of [-1,1])slab('hinge',e*.375-.014,e*.375+.014,.254,.264,zz,zz+.08,metal);
+      for(const zz of [.65,.79]){const A=at(.315,.256),B=at(.315,.28);tube('handle-mount',[...A,zz*k],[...B,zz*k],.005*k,metal);}
+      const H=at(.315,.28);tube('handle',[...H,.65*k],[...H,.79*k],.005*k,metal);
+      const [lx,ly]=at(-.21,.257);
+      slab('label',-.3,-.12,.256,.258,1.05,1.17,(i,t,L)=>{BG[i]=C(WHITE,2.5+L*.25);set(i,worldText(o.signal?'POWER':'TEL',HIT.u*fs,HIT.w,t,i,view.x+lx,view.y+ly,view.z+1.11*k,c*fs,s*fs,.027*k,.065*k),C(GRAY,1+L*.1));return true;});
+      for(const e of [-1,1])for(let n=0;n<5;n++){const zz=1+n*.055;slab('louvre',e*.4-(e>0?0:.012),e*.4+(e>0?.012:0),-.18,.18,zz,zz+.022,kerbPaint(o.col,1.4));}
+    }
+    flat('cap',0,0,.43,.28,1.35,1.41,paint,.012);
+    flat('body',0,0,.4,.25,.1,1.35,paint,.02);
+    flat('plinth',0,0,.42,.27,0,.1,kerbPaint(STONE,2.6));
   }else{
     lathe('body',0,0,0,KERB_BOLLARD,(i,t,L)=>{const w=(HIT.w-view.z)/k,band=near&&w>.62&&w<.7;BG[i]=band?C(YEL,4+L*.25):C(GRAY,1.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   }
@@ -15552,8 +15566,8 @@ function buildKerbModel(o,near) {
 }
 const KERB_MODELS=new WeakMap();
 function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
-const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant;
-const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard};
+const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant;
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet};
 function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
@@ -41390,6 +41404,7 @@ const KERB_KINDS = {
   bin: { hl: .027, hw: .027, h: .09 },
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
+  cabinet: { hl: .043, hw: .029, h: .141 },
 };
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
@@ -41435,6 +41450,7 @@ for (const o of [CURB, 2 - CURB]) {
     if (dist !== 'industrial' && r(1402) < ({ downtown: .75, chinatown: .75, shotengai: .8 }[dist] || .55))
       addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
     if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
+    if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
     if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
       for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
   }
@@ -41459,6 +41475,15 @@ function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
     const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
     return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
   };
+  if(o.kind==='cabinet'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
+    if(over(0,.1)&&rect(0,0,.42,.27)||over(.1,1.35)&&rounded(.4,.25,.02)||over(1.35,1.41)&&rounded(.43,.28,.012))return true;
+    if(over(.16,1.3)&&rect(0,.253*fs*k,.38,.003))return true;
+    if(over(.645,.795)&&rect(.315*k,.28*fs*k,.005,.005))return true;
+    for(const z of [.65,.79])if(over(z-.005,z+.005)&&rect(.315*k,.268*fs*k,.005,.017))return true;
+    return over(1,1.242)&&rect(0,0,.412,.18);
+  }
   if(o.kind==='mailbox'){
     const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
     if(over(0,.23))for(const a of [-.19,.19])for(const b of [-.22,.22])if(rect(a*k,b*fs*k,.02,.02))return true;
@@ -41487,6 +41512,18 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     const lo=z===null?0:z-terrainHeight(o.x,o.y);
     if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
   }return null;
+}
+// A signal controller cabinet at most junctions: on the kerb beside the first
+// signal pole, half a cell back from the corner, its doors to the pavement.
+{
+  const done = new Set();
+  for (const l of lights) {
+    const ix = Math.floor(l.bx / 8), iy = Math.floor(l.by / 8), key = bi(ix, iy);
+    if (done.has(key) || hash(ix, iy, 1406) > .6) continue;
+    const e = l.vert ? mod(l.x, 8) : mod(l.y, 8), ax = l.vert ? (e < 1 ? 1 : -1) : 0, ay = l.vert ? 0 : (e < 1 ? 1 : -1);
+    const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
+    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
+  }
 }
 // Window-local geometry. Static solids are built once and indexed by bounds;
 // a pane cell visits only nearby leaves instead of testing every miniature.
