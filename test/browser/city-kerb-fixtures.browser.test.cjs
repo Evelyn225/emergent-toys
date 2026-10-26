@@ -39,8 +39,9 @@ test('each fixture is built inside its box, and on foot you walk round it while 
   for(const o of kerbs){if(seen[o.kind+o.c+o.fx+o.fy])continue;seen[o.kind+o.c+o.fx+o.fy]=1;
    px=o.x-o.fx*.15;py=o.y-o.fy*.15;const z=terrainHeight(o.x,o.y),out=[],draw=drawBox;
    drawBox=(box)=>out.push(box);try{KERB_DRAW[o.kind](o,o.x-px,o.y-py,z,true);}finally{drawBox=draw;}
-   const vx=o.x-px,vy=o.y-py;if(out.length<(o.kind==='bollard'?1:4)&&o.kind!=='bollard')bad.push([o.kind,'no fittings up close',out.length]);
-   for(const q of out){const c=Math.abs(q.c??1),s=Math.abs(q.s??0),ex=q.hl*c+q.hw*s,ey=q.hl*s+q.hw*c,bx=o.hl*o.c+o.hw*o.s,by=o.hl*o.s+o.hw*o.c;
+   const vx=o.x-px,vy=o.y-py;if(out.length<4&&!['bollard','guy'].includes(o.kind))bad.push([o.kind,'no fittings up close',out.length]);
+   for(const q of out){if(o.kind==='pole'&&q.z0>z+.3||o.kind==='guy'&&q.az!=null&&Math.max(q.az,q.bz)>z+o.h)continue; // (overhead, the arm and its wires reach out over the road; the guy wire runs up to its pole: city-overhead-lines checks those)
+const c=Math.abs(q.c??1),s=Math.abs(q.s??0),ex=q.hl*c+q.hw*s,ey=q.hl*s+q.hw*c,bx=o.hl*o.c+o.hw*o.s,by=o.hl*o.s+o.hw*o.c;
     if(Math.abs(q.x-vx)+ex>bx+1e-6||Math.abs(q.y-vy)+ey>by+1e-6||q.z1>z+o.h+1e-6||q.z0<z-1e-6)bad.push([o.kind,'a part outside its box',+((Math.abs(q.x-vx)+ex)*1000).toFixed(1),+((Math.abs(q.y-vy)+ey)*1000).toFixed(1),+(q.z1-z).toFixed(4)]);}
    mode='walk';const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1,lp=(a,v)=>[o.x+o.c*a-o.s*v*fs,o.y+o.s*a+o.c*v*fs];
    if(o.kind!=='shelter'&&free(o.x,o.y))bad.push([o.kind,'walked through']);

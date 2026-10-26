@@ -103,7 +103,86 @@ function buildKerbModel(o,near) {
   return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
-function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
+function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
 const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
-const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
+// A timber pole (creosoted, tapering, its top chamfered), the crossarm reaching out over the road on a steel brace,
+// a porcelain insulator under each wire, the telephone cable on its bracket, and on some a transformer can on the
+// building side, its leads jumping up beside the pole to the first wire. Service drops run back to a wall bracket.
+const POLE_TIMBER = (i, t, L) => {
+  const grain = coveDetail(t, .3) ? Math.sin(HIT.w * 900 + Math.atan2(HIT.v, HIT.u) * 3) * .12 : 0;
+  BG[i] = C(BRICK, .9 + (1.1 + L * .2) * coveLight(HIT.nx, HIT.ny, HIT.nz) + grain); return set(i, ' ', 0), true;
+};
+const POLE_INSULATOR = [[0, 0], [0, .0025], [.004, .0055], [.006, .0035], [.009, .005], [.012, .003], [.014, 0]];
+const POLE_BUSHING=[[0,0],[0,.0025],[.001,.0032],[.003,.0025],[.005,.003],[.007,.002],[.008,.0012],[.008,0]];
+const POLE_CAN = [[0, 0], [0, .024], [.004, .027], [.1, .027], [.104, .024], [.11, .012], [.112, 0]];
+// a wire: a near-black line, dark against the sky and the walls alike; solid once it's wider than a character
+const wire = (pts, r, k) => { for (let n = 0; n + 1 < pts.length; n++) { const [ax, ay, az] = pts[n], [bx, by, bz] = pts[n + 1];
+  drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
+    if (r * 2 * projX / t > 1.2) BG[i] = C(GRAY, .3 + L * k * .1);
+    return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(GRAY, .4 + L * k * .1)), true;
+  }); } };
+function drawPoleParts(o, vx, vy, z, near) {
+  const plate=kerbPaint(GRAY,1.6),wall=kerbPaint(GRAY,1.8),plateShade=(i,t,L)=>{vmNormal(o.fx,o.fy);return plate(i,t,L);},wallShade=(i,t,L)=>{vmNormal(o.fx,o.fy);return wall(i,t,L);};
+  const top = z + o.h, at = (off, a = 0) => [vx + o.fx * off + o.c * a, vy + o.fy * off + o.s * a];
+  coveLathe(vx, vy, z, [[0, 0], [0, POLE.r0], [o.h - .004, POLE.r1], [o.h, .006], [o.h, 0]], POLE_TIMBER);
+  coveRound(...at(.09), o.fx, o.fy, .11, .0055, top - .04, top - .03, .002, POLE_TIMBER); // the crossarm
+  if (o.can) coveLathe(...at(-.042), top - .2, POLE_CAN, kerbPaint(GRAY, 2.4));
+  if (!near) return;
+  coveTube(...at(.012), top - .11, ...at(.1), top - .04, .0025, GRAY); // the arm's brace
+  for (const w of POLE_WIRES) if (!w.tel) coveLathe(...at(w.off), top - .03, POLE_INSULATOR, kerbPaint(WHITE, 2.8));
+  drawBox(boxAt(...at(.02), o.fx, o.fy, .022, .004, top - .086, top - .078), plateShade); // the cable bracket
+  if (o.can) {
+    drawBox(boxAt(...at(-.016), o.fx, o.fy, .006, .02, top - .17, top - .15), plateShade); // its hanger
+    for (const a of [-.01, .01]) {coveLathe(...at(-.042,a),top-.094,POLE_BUSHING,kerbPaint(WHITE,2.8));wire([[...at(-.042, a), top - .086], [...at(-.018, a + Math.sign(a) * .008), top - .02], [...at(.045, Math.sign(a) * .018), top - .02], [...at(.06), top - .018]], .0012, .14);}
+  }
+  if (o.drop) { // the service drop, sagging to its bracket on the wall
+    const w = POLE_WIRES[3], ex = vx + rel(o.drop.x - o.x), ey = vy + rel(o.drop.y - o.y), z0 = top - w.dz, dz = o.drop.z - o.z - o.h;
+    wire(Array.from({ length: 5 }, (_, n) => { const t = n / 4, [sx, sy] = at(w.off); return [sx + (ex - sx) * t, sy + (ey - sy) * t, z0 + (top + dz - z0) * t - .04 * t * (1 - t)]; }), .0015, .12);
+    drawBox(boxAt(ex + o.fx * .002, ey + o.fy * .002, o.fx, o.fy, .004, .008, top + dz - .004, top + dz + .012), wallShade);
+  }
+}
+// a guy wire from near the top of an end pole down to its anchor, a yellow guard sleeve over its foot (z: the anchor's)
+function drawGuyParts(o, vx, vy, z, near) {
+  const gx = vx + rel(o.gx - o.x), gy = vy + rel(o.gy - o.y), px_ = vx + rel(o.pole.x - o.x), py_ = vy + rel(o.pole.y - o.y), top = z + o.pole.z + o.pole.h - .05 - o.gz;
+  wire([[px_, py_, top], [gx, gy, z]], .0012, .14);
+  const lift = .004 / (top - z); // (the sleeve's rounded foot rests on the ground)
+  coveTube(gx + (px_ - gx) * (.16/(top-z)), gy + (py_ - gy) * (.16/(top-z)), z + (top - z) * (.16/(top-z)), gx + (px_ - gx) * lift, gy + (py_ - gy) * lift, z + .004, .0035, YEL);
+  coveLathe(gx, gy, z, [[0, 0], [0, .006], [.004, .004], [.004, 0]], kerbPaint(GRAY, 1.4)); // the anchor eye
+}
+// Poles and guys prepare once too: their parts are drawn once at the fixture's own place and replayed moved, each
+// ray started from the place it would have been in the prepared model (so rays with absolute ends, rods and capsules,
+// move with it)
+function buildPoleModel(o, near) {
+  const parts = [], draw = drawBox, z = o.kind === 'guy' ? o.gz : o.z;
+  drawBox = (box, shade, ray = rayBox) => parts.push({ box, shade, ray });
+  try { (o.kind === 'guy' ? drawGuyParts : drawPoleParts)(o, 0, 0, z, near); } finally { drawBox = draw; }
+  return polePartsModel(parts,z);
+}
+function polePartsModel(parts,z){
+  for(const p of parts)p.moved=(ox,oy,oz,rx,ry,rz,B)=>{
+    const mz=B.z0-p.box.z0,t=p.ray(ox-(B.x-p.box.x),oy-(B.y-p.box.y),oz-mz,rx,ry,rz,p.box);
+    if(t>=0){HIT.w+=mz;if(p.ray===rayRod||p.ray===coveRayCapsule){HIT.u+=B.x-p.box.x;HIT.v+=B.y-p.box.y;}}return t;
+  };
+  return {parts,draw(x,y,zz){const mz=zz-z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:p.box.z0+mz,z1:p.box.z1+mz},p.shade,p.moved);}};
+}
+const drawKerbPole=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,o.kind==='guy'?o.gz:z);
+const POLE_SPAN_MODELS=new WeakMap();
+function poleSpanModel(sp,n){
+  let cache=POLE_SPAN_MODELS.get(sp);if(!cache)POLE_SPAN_MODELS.set(sp,cache=[]);
+  if(cache[n])return cache[n];
+  const parts=[],draw=drawBox;drawBox=(box,shade,ray=rayBox)=>parts.push({box,shade,ray});
+  try{for(const w of POLE_WIRES)wire(Array.from({length:n+1},(_,k)=>{const[x,y,z]=poleWirePoint(sp,w,k/n);return [rel(x-sp.p.x),rel(y-sp.p.y),z];}),w.tel?.0028:.0016,w.tel?.1:.14);}finally{drawBox=draw;}
+  return cache[n]=polePartsModel(parts,0);
+}
+// the wires, span by span: sampled finer up close; past POLE_WIRE_VIS (100 m) a wire is too fine to see at all
+const POLE_WIRE_VIS = 10;
+function drawPoleSpans() {
+  forNear(poleSpansB, sp => {
+    const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
+    if (d > Math.min(vis, POLE_WIRE_VIS) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
+    const n = d < 3 ? 12 : d < 6 ? 6 : 3;
+    poleSpanModel(sp,n).draw(ax,ay,0);
+  });
+}
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
