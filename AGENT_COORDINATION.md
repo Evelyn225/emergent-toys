@@ -211,6 +211,19 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   each family's shop window (`architecture-render.js` brownstone and downtown,
   `residential-render.js` housing, `city-render.js` generic). Next: the pass 13
   closing audit (shutters, doors, district-specific typography).
+- **Claude pass 13, roller shutters:** `claude/shop-shutters`, stacked on #252: new
+  `city/shop-shutters.js` (after `shop-windows.js` in the manifest); `architectureShutter` and
+  `shopDoor` in `architecture-render.js` now take the opening (and `d`), and their callers in
+  `architecture-render.js`, `residential-render.js`, `pavilion-render.js` and `city-render.js`
+  (Belle doorways, generic fronts, warehouse doors) pass it. Next: doors, typography and mounts.
+- **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
+  `city/kerb-fixtures.js` after `world-bootstrap.js`, new
+  `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
+  `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
+  grates, utility cabinets, then bus shelters.
+- **Claude pass 11, utility cabinets:** `claude/utility-cabinets`, stacked on
+  `claude/kerb-fixtures` (#238): a `cabinet` kind in `city/kerb-fixtures.js` and
+  its model in `city/kerb-fixtures-render.js`. Next: bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

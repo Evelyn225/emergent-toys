@@ -59,6 +59,7 @@
     "city/city-render.js",
     "city/street-drains.js",
     "city/shop-windows.js",
+    "city/shop-shutters.js",
     "city/graffiti.js",
     "city/belle.js",
     "city/architecture-render.js",
