@@ -36,6 +36,25 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   #221, #222 and #226 because they all edit `city/shops.js` (#228). Gas
   station and bodega on `claude/shop-boxes-2` (new `city/corner-shops.js`;
   the gas def in `city/shops.js`, the bodega def in `city/storefronts.js`),
+  stacked on #228 (#229). Record shop, tattoo parlour, hardware and pharmacy
+  on `claude/shop-boxes-3` (new `city/record-shop.js`, `city/shop-fittings.js`;
+  their defs and painters in `city/shops.js`), stacked on #229 (#230). Toys,
+  sports, video, liquor, phones, pawn, the thrift room's three trades and the
+  herbalist on `claude/shop-boxes-4`, stacked on #230 (#231). The market
+  hall, fruit shop, motel office, welder's, tyre shop, gacha arcade, both
+  delis, tailor, antiques, store roller, showroom and estate agent's desks and
+  the shared `armchair` on `claude/shop-boxes-5` (new `city/market-hall.js`;
+  defs in `city/storefronts.js`, `city/shops.js` and the showroom, realty and
+  books defs in `city/rooms.js`), stacked on #231. With that stack merged no
+  shop def paints a box; pass 7 can be ticked. Claude's next: pass 10
+  (leisure interiors). `city/home-*.js` stays with Codex. `city/home-*.js` stays with Codex.
+  herbalist on `claude/shop-boxes-4`, stacked on #230. Next: the market hall,
+  motel office, welder's, tyre shop, delis, fruit shop and gacha machines. `city/home-*.js` stays with Codex.
+
+  their defs and painters in `city/shops.js`), stacked on #229. Next: the
+  other shops' painted boxes group by group (markethall, motel, welding, toys,
+  phones, thrift, herbs, deli, tireshop, tailor, liquor and the rest). `city/home-*.js` stays with Codex.
+
   stacked on #228. Next: the other shops' painted boxes group by group. `city/home-*.js` stays with Codex.
 
   #221, #222 and #226 because they all edit `city/shops.js`. Next: the other
@@ -573,3 +592,91 @@ flag/noodle remnants. User's hotel/motel door decision remains recorded above.
 - **Claude, fruit shop wallpaper:** `claude/fruit-wallpaper` off main: `fruitWall` in
   `city/storefronts.js` only (small oranges in a half-drop repeat instead of whole squares of `@`),
   new `city-fruit-wallpaper` browser test.
+Codex active review `codex/review-specialist-shops` (#230): main through #229
+integrated. `city/record-shop.js`, `city/shop-fittings.js`, specialist-shop test
+and record/tattoo/hardware/pharmacy hooks in `city/shops.js`; shelf stock data
+in `city/shop-gondolas.js`. Prior acrylic/produce/bin/cache fixes retained.
+Next #231–#232, then closing audit. Claude's active bathroom-quality, DINER,
+world-bootstrap and facade work remains reserved.
+
+#230 Codex review complete (`codex/review-specialist-shops`): divider letters
+read forward on both sides; sleeve artwork and the BP idle display scale
+without repeated glyph stamps. The cuff now opens into a closed-back arm
+recess. Hose turns use one clipped round-coil surface with correct inner and
+outer normals, replacing costly per-turn profiles; fixed book/bag materials
+prepare once. Three new native ray/raster/cache checks and six independent
+mutations pass. Specialist and all-shop routes/seating/counter/shelf checks
+plus seven bundle/parse/render checks pass; close/wide/oblique/night views and
+ABAB costs reviewed. #228/#229 final full CI green. No active Claude or shared
+helper edits. Next #231–#232, then closing audit. Add the hardware lawnmower,
+record turntable/headphones and tattoo lollipop jar to its remaining legacy
+props; replacing BX calls alone does not complete the quality pass. Hotel/
+motel closed and auto-closing washroom doors remain queued for pass6.
+
+Codex active `codex/review-more-shop-fittings` (#231): main through #230
+integrated, both corner-shop test groups retained. Reviewing new returns box,
+queue display, dresser, sewing machine, record crate, tea table/cushions and
+counter callers in `city/shop-fittings.js`, `city/corner-shops.js` and
+`city/shops.js`. Prior BP/record/hose/produce/acrylic fixes remain. Next #232,
+then the recorded closing audit and authorised merge chains. No active Claude
+bathroom-quality/DINER/world-bootstrap/facade edits planned.
+
+#231 Codex review complete (`codex/review-more-shop-fittings`): LP crate floor/
+rim support and fixed shell preparation corrected; pawn TVs sit on the mat
+and both lower cases, facing the aisle. Returns slot now has closed recessed
+inner walls, and the queue board uses steady scaled lettering. Sewing machine
+has a supported needle plate/fabric, presser foot, mounted spool/thread guide
+and continuous needle travel to the fabric. Three new actual-shape/raster/
+motion checks and seven negative mutations pass. All21 current corner/small/
+specialist/shop-route/seating checks and seven bundle/parse/render checks pass;
+close/wide/oblique/night and ABAB costs reviewed. #230 full CI green. Next
+#232, preserving produce rotations AND all prior cache/contact fixes, then
+closing audit. Do not tick all pass7 merely because BX calls disappeared.
+Claude's active files remain reserved; hotel/motel door decision unchanged.
+
+Codex active `codex/review-market-and-last-shops` (#232): reviewed main through
+#231 integrated. Produce quarter-turns use the cached fruit/shell and correctly
+rotated tray rays/normals; both specialist test groups retained. Reviewing
+`city/market-hall.js`, new `city/shop-fittings.js` builders and callers in
+`city/shops.js`/`city/storefronts.js`, plus the legacy shared armchair and book/
+showroom/realty callers in `city/rooms.js` outside Claude's DINER definition.
+Avoid active bathroom-quality, DINER, world-bootstrap and pass13 facade work.
+Next the recorded interior closing audit and authorized Claude merge chains;
+keep pass7 open for its documented remnants. Pass6 hotel/motel washroom doors
+start closed and auto-close after walking away, per the user decision.
+
+Usage-resume checkpoint (user request): a one-time continuation is scheduled
+for 2026-10-26 07:21:44 UTC (03:21 Toronto). If this session is still working,
+avoid a second copy of its chunk. Current branch is
+`codex/review-market-and-last-shops`; #230 and #231 are merged, #230 full CI
+green. #232 source integration and geometry/cache repairs are implemented;
+new `test/browser/city-market-fittings.browser.test.cjs` covers real shapes.
+Seven focused checks and broad shop regressions are running. Remaining before
+#232 merge: independent negative mutations, close/wide/oblique/night review,
+ABAB render costs, final notes/PR description, latest remote integration and
+push. Ignored review scripts/artifacts live in `work/backlog-review/232-*`.
+Do not merge this checkpoint without finishing that review. Then continue the
+recorded closing audit, authorised merge chains and passes5/6/9. Preserve the
+hotel/motel closed and auto-closing washroom-door decision and Claude's current
+file ownership. Read newer appended notes before resuming.
+
+#232 Codex review complete (`codex/review-market-and-last-shops`): cached
+produce survives quarter-turns with correct tray normals and fruit axes.
+Market stock is prepared once, supported, nonintersecting and clear of posts;
+framed cloth awnings join their posts. Slicer clears its wall/counter and
+wheels have shafts; steel clears uprights and the gate reaches the floor.
+Curtain tabs join its wall-mounted rail; chair back joins its base. Machine
+openings have real depth, mounted coin/cup fittings, clear brochure pockets
+and scaled surface symbols. Suitcase straps/supports/handles and roller caps
+are bounded correctly. Native 24/7 appliances now fit clear of the register,
+a visual-review defect missed by centre-only tests. All29 relevant browser
+checks pass across final focused/integration runs, plus seven bundle/parse/
+render checks;13 independent negative probes,24 close/wide/oblique/night
+views and ABAB costs reviewed. #230/#231 updated full CI green. No active
+Claude or shared home/hotel helper files edited. Final source ready for latest
+remote integration/push and #232 merge; this supersedes the earlier checkpoint.
+Next the recorded interior closing audit, then authorized Claude merge chains
+and passes5/6/9. Keep pass7/8 open for remaining ceiling fittings, cords/noodle
+strands and legacy small props/stock electronics; add the old 24/7 slushie
+machine's rendering to that inventory. The scheduled continuation and user's
+hotel/motel door decision above stand; read newer notes before resuming.
