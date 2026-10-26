@@ -167,8 +167,8 @@ ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'sa
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.6,2.7,.32,1,BLUE,GRAY,true),
     { ...standing(5.2, 1.55, ORANGE), face: [0, 1] }, trompo(2.9, 1.4), standing(3.6, 1.4, WHITE),
     KITCHEN_FLATTOP(7.6,1.4),
-    KITCHEN_SALSA_BAR(),
-    KITCHEN_DRINKS_COOLER(11.6, 7.4, 0.5, 0.35, -1, 0), // the cooler faces into the room and stays inside the wall
+    KITCHEN_SALSA_BAR(11.63,6.5), // leave the full washroom approach clear
+    KITCHEN_DRINKS_COOLER(10.1,7.6,0.5,0.35,0,-1), // front wall, facing the room, clear of the salsa bar
     ...dining(3.0, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(ORANGE, { top: '=' }), chairCol: BLUE, busy: 0.4 }), ...dining(7.2, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(GREEN, { top: '=' }), chairCol: RED, busy: 0.35 }),
     KITCHEN_WALL_LEDGE(1.2,6.75,1.05,.2,1.06,1,0), ...[5.9,6.75,7.6].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge and all three stools stay inside the walls
     papelPicado(3.4, 1, 12, 2.7), papelPicado(5.6, 1, 12, 2.75), papelPicado(7.6, 1, 12, 2.7), ...wcFittings(13)] };
