@@ -17,12 +17,14 @@ async function fixture(run){
 }
 
 test('ramen and other back-counter staff retain their full heads from either side of the counter',()=>fixture(async page=>{
- const result=await page.evaluate(()=>{
-  const results=[];
-  for(const kind of ['noodle','store','bar','diner','petshop','florist','cafe','tea','deli','pharmacy','herbs','jeweler','fruitshop','drugstore','markethall']){
+ const kinds=['noodle','store','bar','diner','petshop','florist','cafe','tea','deli','pharmacy','herbs','jeweler','fruitshop','drugstore','markethall'];
+ const result=await page.evaluate(kinds=>{
+  const results=[],coverage=[];
+  for(const kind of kinds){
    enterRoom(kind,{word:kind==='noodle'?'RAMEN':'SHOP',neon:CYAN,ret:[px,py,a]},[6,4,0]);
    const keeper=room.def.keeper;
    const targets=room.props.filter(p=>p.fig&&!p.still&&(p.y<1.45||keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12));
+   coverage.push({kind,count:targets.length,keeper:!!keeper&&targets.some(p=>Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)});
    // Keep the real counters/walls, excluding patrons who can legitimately hide a clerk.
    room.props=room.props.filter(p=>!p.fig||targets.includes(p));
    for(const p of targets)for(const side of [-1,0,1]){
@@ -36,15 +38,24 @@ test('ramen and other back-counter staff retain their full heads from either sid
      if(z<1.45||z>1.8)continue;
      expected++;if(Math.abs(actual[i]-depth)<.0001)visible++;
     }
-    results.push({kind,side,x:p.x,expected,visible});
+    results.push({kind,side,x:p.x,y:p.y,expected,visible});
    }
   }
-  return results;
- });
- assert.ok(result.length>=60,JSON.stringify(result));
+  return {results,coverage};
+ },kinds);
+ // Coverage follows the native room staff, not a total that changes when a
+ // clerk moves or a room layout is updated. Every shop still needs its keeper.
+ assert.deepEqual(result.coverage.map(r=>r.kind),kinds);
+ for(const r of result.coverage){
+  assert.ok(r.count>0&&r.keeper,JSON.stringify(r));
+  const views=result.results.filter(v=>v.kind===r.kind),staff=new Map();
+  for(const v of views){const key=v.x+':'+v.y;if(!staff.has(key))staff.set(key,[]);staff.get(key).push(v.side);}
+  assert.equal(staff.size,r.count,JSON.stringify(r));
+  for(const sides of staff.values())assert.deepEqual(sides.sort((a,b)=>a-b),[-1,0,1],r.kind+' missing staff angle');
+ }
  // A shelf can cover a couple of edge cells in an oblique shop view; a wall
  // must never remove a whole side of the head or the entire frontal figure.
- assert.ok(result.every(r=>r.expected>=5&&r.visible/r.expected>.95),JSON.stringify(result.filter(r=>r.expected<5||r.visible/r.expected<=.95)));
+ assert.ok(result.results.every(r=>r.expected>=5&&r.visible/r.expected>.95),JSON.stringify(result.results.filter(r=>r.expected<5||r.visible/r.expected<=.95)));
 }));
 
 test('merchant signs, roofs and projecting details stay attached across every moved neighborhood boundary',()=>fixture(async page=>{
