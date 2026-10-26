@@ -611,6 +611,9 @@ or shared helper files edited. Next #230–#232, then closing audit; include the
 legacy gas hubcap/key and security-mirror sprite with the recorded ceiling/
 flag/noodle remnants. User's hotel/motel door decision remains recorded above.
 
+- **Claude, fruit shop wallpaper:** `claude/fruit-wallpaper` off main: `fruitWall` in
+  `city/storefronts.js` only (small oranges in a half-drop repeat instead of whole squares of `@`),
+  new `city-fruit-wallpaper` browser test.
 Codex active review `codex/review-specialist-shops` (#230): main through #229
 integrated. `city/record-shop.js`, `city/shop-fittings.js`, specialist-shop test
 and record/tattoo/hardware/pharmacy hooks in `city/shops.js`; shelf stock data
