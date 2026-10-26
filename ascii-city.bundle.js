@@ -20970,10 +20970,11 @@ function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(GREEN, 14), C(WHITE, 7))) return true;
   if (z < 1.0) { BG[i] = C(GREEN, 2.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WHITE, 4)), true; }
-  // the paper above: a little orange with its leaf here and there on a 25 cm repeat
+  // the paper above: a little orange with its leaf in every other 25 cm square, each row half a step along from the
+  // last (a half-drop repeat)
   const tu = Math.floor(u * 4), tz = Math.floor(z * 4);
-  if (hash(tu, tz, 136) > 0.55) {
-    const cu = (tu + 0.3 + hash(tu, tz, 137) * 0.4) / 4, cz = (tz + 0.3 + hash(tu, tz, 138) * 0.4) / 4, r = Math.hypot(u - cu, z - cz);
+  if (((tu + tz) & 1) === 0) {
+    const cu = (tu + 0.5) / 4, cz = (tz + 0.5) / 4, r = Math.hypot(u - cu, z - cz);
     if (r < FRUIT_PAPER.r) { BG[i] = Math.hypot(u - cu + FRUIT_PAPER.r * 0.35, z - cz - FRUIT_PAPER.r * 0.35) < FRUIT_PAPER.r * 0.3 ? C(YEL, 9 + L * 0.2) : C(ORANGE, 7 + L * 0.2); return set(i, ' ', 0), true; } // (a glint up on its shoulder)
     if (Math.hypot(u - cu - FRUIT_PAPER.r * 0.6, z - cz - FRUIT_PAPER.r * 1.2) < FRUIT_PAPER.leaf) { BG[i] = C(GREEN, 3 + L * 0.2); return set(i, ' ', 0), true; }
   }

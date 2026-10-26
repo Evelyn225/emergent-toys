@@ -571,5 +571,5 @@ legacy gas hubcap/key and security-mirror sprite with the recorded ceiling/
 flag/noodle remnants. User's hotel/motel door decision remains recorded above.
 
 - **Claude, fruit shop wallpaper:** `claude/fruit-wallpaper` off main: `fruitWall` in
-  `city/storefronts.js` only (small oranges on a 25 cm repeat instead of whole squares of `@`),
+  `city/storefronts.js` only (small oranges in a half-drop repeat instead of whole squares of `@`),
   new `city-fruit-wallpaper` browser test.

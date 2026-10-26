@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),path=requir
 const {pathToFileURL}=require('node:url'),{chromium}=require('playwright');
 let browser;test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
 
-test('the fruit shop wallpaper has small oranges with leaves dotted about, not whole squares of fruit',async()=>{
+test('the fruit shop wallpaper has small oranges with leaves in a repeating pattern, not whole squares of fruit',async()=>{
  const p=await browser.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
  try{
   await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
@@ -16,6 +16,8 @@ test('the fruit shop wallpaper has small oranges with leaves dotted about, not w
     for(let u=su;u<su+.5;u+=.01)for(let z=sz;z<Math.min(sz+.5,2.2);z+=.01){const b=at(u,z);m++;if(b!==paper)k++;if(b===orange)fruit++;if(b===leaf)leaves++;}
     worst=Math.max(worst,k/m);n+=m;}
    if(worst>.2)bad.push(['a square mostly fruit',worst]);
+   // a repeat, not a scatter: the same paper half a metre along or up, and a quarter along and up (the half drop)
+   for(let u=.003;u<3;u+=.011)for(let z=1.003;z<1.6;z+=.013){const b=at(u,z);if(b!==at(u+.5,z)||b!==at(u,z+.5)||b!==at(u+.25,z+.25)){bad.push(['not a repeating pattern',+u.toFixed(3),+z.toFixed(3)]);u=9;break;}}
    if(fruit/n<.01||leaves/n<.001)bad.push(['no fruit on the paper',fruit/n,leaves/n]);
    return bad;
   });
