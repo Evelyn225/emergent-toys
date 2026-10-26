@@ -38,6 +38,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   the gas def in `city/shops.js`, the bodega def in `city/storefronts.js`),
   stacked on #228 (#229). Record shop, tattoo parlour, hardware and pharmacy
   on `claude/shop-boxes-3` (new `city/record-shop.js`, `city/shop-fittings.js`;
+  their defs and painters in `city/shops.js`), stacked on #229 (#230). Toys,
+  sports, video, liquor, phones, pawn, the thrift room's three trades and the
+  herbalist on `claude/shop-boxes-4`, stacked on #230. Next: the market hall,
+  motel office, welder's, tyre shop, delis, fruit shop and gacha machines. `city/home-*.js` stays with Codex.
+
   their defs and painters in `city/shops.js`), stacked on #229. Next: the
   other shops' painted boxes group by group (markethall, motel, welding, toys,
   phones, thrift, herbs, deli, tireshop, tailor, liquor and the rest). `city/home-*.js` stays with Codex.
@@ -596,3 +601,24 @@ helper edits. Next #231–#232, then closing audit. Add the hardware lawnmower,
 record turntable/headphones and tattoo lollipop jar to its remaining legacy
 props; replacing BX calls alone does not complete the quality pass. Hotel/
 motel closed and auto-closing washroom doors remain queued for pass6.
+
+Codex active `codex/review-more-shop-fittings` (#231): main through #230
+integrated, both corner-shop test groups retained. Reviewing new returns box,
+queue display, dresser, sewing machine, record crate, tea table/cushions and
+counter callers in `city/shop-fittings.js`, `city/corner-shops.js` and
+`city/shops.js`. Prior BP/record/hose/produce/acrylic fixes remain. Next #232,
+then the recorded closing audit and authorised merge chains. No active Claude
+bathroom-quality/DINER/world-bootstrap/facade edits planned.
+
+#231 Codex review complete (`codex/review-more-shop-fittings`): LP crate floor/
+rim support and fixed shell preparation corrected; pawn TVs sit on the mat
+and both lower cases, facing the aisle. Returns slot now has closed recessed
+inner walls, and the queue board uses steady scaled lettering. Sewing machine
+has a supported needle plate/fabric, presser foot, mounted spool/thread guide
+and continuous needle travel to the fabric. Three new actual-shape/raster/
+motion checks and seven negative mutations pass. All21 current corner/small/
+specialist/shop-route/seating checks and seven bundle/parse/render checks pass;
+close/wide/oblique/night and ABAB costs reviewed. #230 full CI green. Next
+#232, preserving produce rotations AND all prior cache/contact fixes, then
+closing audit. Do not tick all pass7 merely because BX calls disappeared.
+Claude's active files remain reserved; hotel/motel door decision unchanged.

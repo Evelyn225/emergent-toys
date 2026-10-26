@@ -442,9 +442,9 @@ const ballBin = (x, y, kinds) => ROOM_MODEL(x, y, (vx, vy) => { // a wire bin, h
 }, [0.45, 0.45, 0.95]);
 ROOM_DEFS.sports = { grid: boxRoom(14, 9), light: 1, floor: 'court', ceil: 'strip', sign: true, signAt: 7, wall: sportsWall, keeper: [11.2, 6.6],
   props: r => {
-    const p = [BX(11.2, 7.25, 1.1, 0.3, 0, 1.0, solid(BLUE, { panel: 0.55, trim: 0.96, top: '=' })), standing(11.2, 6.6, BLUE),
+    const p = [SHOP_COUNTER(11.2, 7.25, 1.1, 0.3, 1.0, 1, 0, BLUE), standing(11.2, 6.6, BLUE),
       ballBin(4, 5.5, [[ORANGE, 0.12], [WHITE, 0.11]]), ballBin(9.8, 4.2, [[YEL, 0.035], [WHITE, 0.11], [ORANGE, 0.12]]),
-      bike(7, 2.6, RED), BX(7, 2.6, 0.9, 0.3, 0, 0.04, solid(GRAY)), TREADMILL(12.4, 2.4), WEIGHT_RACK(3, 1.35)];
+      bike(7, 2.6, RED), FLOOR_MAT(7, 2.6, 0.9, 0.3, 0.04), TREADMILL(12.4, 2.4), WEIGHT_RACK(3, 1.35)];
     p.push(...shoppers([[2.2, 4.4, -1, 0], [5.6, 3.3, 0, -1], [8.6, 6, 1, -0.5]], 0.45));
     return p;
   } };
@@ -491,7 +491,7 @@ function toysWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.toys = { grid: boxRoom(12, 9, { '2,2': 'S', '3,2': 'S', '2,3': 'S', '3,3': 'S' }), light: 1, floor: 'kids', ceil: 'strip', sign: true, signAt: 6, wall: toysWall, keeper: [2.6, 6.55], glyphs: '@&*%o8',
   props: r => {
-    const p = [BX(2.6, 7.25, 1.2, 0.3, 0, 0.95, (i, t, L) => { const f = HIT.face; BG[i] = C(f === 5 ? YEL : [RED, BLUE, GREEN, YEL][Math.floor((HIT.u + 1.2) / 0.6) & 3], (2 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '=' : ' ', C(WHITE, L * 0.5)), true; }),
+    const p = [SHOP_COUNTER(2.6, 7.25, 1.2, 0.3, 0.95, 1, 0, [RED, BLUE, GREEN, YEL]),
       standing(2.6, 6.55, YEL), trainSet(6.4, 4.4), teddy(10.6, 1.6), rockingHorse(9.6, 6.4)];
     for (const [x, y, col] of [[5.2, 2.2, RED], [6, 1.6, YEL], [7.4, 2.4, CYAN], [8.6, 3.8, MAG], [4.4, 5.6, GREEN], [7.6, 6.4, BLUE]]) p.push(balloon(x, y, col));
     if (chance(0.8)) p.push(figProp(7.65, 4.6, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.15, face: [-1, -0.2] })); // a kid watching the train go round
@@ -559,19 +559,19 @@ function oldWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', to: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
   props: r => {
-    const w = r.word, p = [BX(9.8, 7.25, 1.0, 0.3, 0, 0.95, solid(BRICK, { panel: 0.5, trim: 0.9, top: '=' })), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
+    const w = r.word, p = [SHOP_COUNTER(9.8, 7.25, 1.0, 0.3, 0.95, 1, 0, BRICK), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
       clothCurtain(10.02, 1.5, 0.5, w === 'TAILOR' ? GRAY : RED), clothCurtain(10.02, 3.5, 0.5, w === 'TAILOR' ? GRAY : RED)]; // the fitting rooms
     if (w === 'ANTIQUES') {
       p.push(clockTall(1.5, 1.35), ...armchair(3.6, 4.6, 1, 0, RED), ...armchair(5.6, 4.6, -1, 0, GREEN), ...tableBox(4.6, 4.6, 0.3, 0.3), lampStand(2.6, 3.2), lampStand(8.7, 3.3),
-        BX(7.8, 1.45, 0.9, 0.35, 0, 1.0, solid(BRICK, { panel: 0.45, trim: 0.95, top: '=' })), // a dresser
+        DRESSER(7.8, 1.36, 0.9, 0.34, 1.0, 0, 1), // a dresser, against the back wall
         hung(6, 4.6, 2.3, (vx, vy, z) => { for (let k = 0; k < 6; k++) { const an = k / 6 * TAU; dot(vx + Math.cos(an) * 0.3, vy + Math.sin(an) * 0.3, z - 0.15, 0.04, (i, t, L) => { BG[i] = C(YEL, 10); return set(i, '*', C(WHITE, 15)), true; }); rod(vx, vy, z, vx + Math.cos(an) * 0.3, vy + Math.sin(an) * 0.3, z - 0.12, 0.008, YEL, 1.2); } })); // a little chandelier
     } else if (w === 'TAILOR') {
       p.push(dressForm(3, 3, BLUE), dressForm(4.4, 3, GRAY), dressForm(7.4, 3.2, RED), clothesRack(7.2, 5.6, 1.0, 74, [GRAY, BLUE, GRAY, BRICK], true),
-        ...tableBox(2.6, 5.8, 0.6, 0.45), BX(2.5, 5.8, 0.2, 0.1, 0.78, 1.0, (i, t, L) => { BG[i] = C(GRAY, 1.5 + L * 0.2); return set(i, HIT.face === 3 && fract(T * 6) < 0.5 ? '|' : ' ', C(WHITE, 12)), true; })); // the sewing machine
+        ...tableBox(2.6, 5.8, 0.6, 0.45), SEWING_MACHINE(2.5, 5.8, 0.78)); // the sewing machine
     } else {
       p.push(clothesRack(3.8, 3.4, 1.3, 75), clothesRack(3.8, 5.6, 1.3, 76, [BRICK, GREEN, GRAY, YEL, BLUE, MAG]), clothesRack(7.6, 3.4, 1.1, 77, [RED, GRAY, BLUE, WHITE], true),
         mannequin(7.4, 5.4, 'jacket', 'skirt', ORANGE), mannequin(1.4, 7.4, 'dress', 'pants', MAG, 1, 0), ...armchair(10.4, 5.45, -1, 0, GREEN), lampStand(1.4, 3),
-        BX(7.6, 6.9, 0.45, 0.3, 0, 0.55, (i, t, L) => { const f = HIT.face; if (f === 5) { BG[i] = C(GRAY, 0.6); return set(i, fract(HIT.u * 18) < 0.4 ? '|' : ' ', C(ITEM_COL[Math.floor(HIT.u * 18) & 7], 12)), true; } BG[i] = C(BRICK, (1.4 + L * 0.2) * shadeFace(f)); return set(i, ' ', 0), true; })); // a crate of records
+        RECORD_CRATE(7.6, 6.9, 0.45, 0.3, 78)); // a crate of records
     }
     p.push(...shoppers([[5.6, 4.4, 0, -1], [2.2, 4.6, 1, 0], [8.4, 4.6, 0, -1]], 0.4));
     if (chance(0.3)) p.push(shopper(10.5, 3.5, 1, 0)); // trying something on
@@ -739,10 +739,9 @@ const popcornMachine = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
 ROOM_DEFS.video = { grid: ['############', '#.......#..#', '#.SS.SS.#..#', '#.SS.SS.#..#', '#.SS.SS.#.##', '#.SS.SS....#', '#..........#', '#..........#', '#..........#', '#####DD#####'],
   light: 0.85, floor: 'carpet', ceil: 'strip', sign: true, signAt: 4.5, wall: videoWall, keeper: [9.8, 6.75],
   props: r => {
-    const p = [BX(9.8, 7.45, 1.15, 0.3, 0, 1.0, solid(BLUE, { panel: 0.5, trim: 0.96, top: '=' })), standing(9.8, 6.75, r.neon),
+    const p = [SHOP_COUNTER(9.8, 7.45, 1.15, 0.3, 1.0, 1, 0, BLUE), standing(9.8, 6.75, r.neon),
       tvSet(9.15, 7.45, 1.0, 0, 1, 0.24, movie), popcornMachine(10.6, 7.45, 1.0),
-      BX(1.6, 8.2, 0.3, 0.25, 0, 0.9, (i, t, L) => { if (HIT.face === 1 && Math.abs(HIT.w - 0.7) < 0.03 && Math.abs(HIT.v) < 0.15) return set(i, '=', C(GRAY, 1)), true; // the returns box
-        BG[i] = C(BLUE, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
+      RETURNS_BOX(1.6, 8.2, 1, 0), // the returns box
       figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true, cutout: true }), // a cardboard action hero
       aisleSign(3, 3.6, 'ACTION', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6, 3.6, 'HORROR', C(GRAY, 1), C(RED, 15), 0.4),
       beadCurtain(9.5, 4.5, 0.5), lintelSign(9.5, 4.5, 0.5, '18+', C(GRAY, 0.5), C(RED, 15)), // the way through to the back
@@ -781,17 +780,17 @@ function herbsWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.herbs = { grid: ['###############', '#........#....#', '#........#....#', '#.............#', '#.............#', '#........#....#', '#........#....#', '######DD#######'],
   light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 5, wall: herbsWall, keeper: [5, 1.4],
   props: r => {
-    const p = [BX(5, 2.1, 2, 0.3, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' })), standing(5, 1.4, RED),
+    const p = [SHOP_COUNTER(5, 2.1, 2, 0.3, 1.0, 1, 0, BRICK), standing(5, 1.4, RED),
       jar(3.4, 2.05, 1.0, RED), jar(3.75, 2.15, 1.0, YEL), jar(6.4, 2.1, 1.0, BRICK), brassScale(5.7, 2.1, 1.0),
       ...glassCase(1.75, 4.2, 0.7, 0.3, 1.0, caseGoods('herbs', [WARM, YEL, BRICK], false, 95), BRICK, 0, 1),
       sack(1.7, 5.75, BRICK, '@'), sack(1.7, 6.4, RED, 'o'), sack(2.35, 6.45, YEL, '*'), sack(3.0, 6.45, GREEN, '%'),
       ...moonGate(9.5, 4, 1, 0, 1), // through to the tea room
-      BX(11.8, 3.5, 0.45, 0.35, 0.28, 0.36, solid(BRICK, { top: '=' })), BX(11.8, 3.5, 0.3, 0.2, 0, 0.28, solid(BRICK)), // its low table
+      TEA_TABLE(11.8, 3.5, 0.45, 0.35, 0.36), // its low table
       ROOM_MODEL(11.8, 3.5, (vx, vy) => { // a tea set: the pot, four cups
         drum(vx, vy, 0.07, 0.36, 0.48, (i, t, L) => { BG[i] = C(WHITE, 3.5 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(BLUE, 8)), true; });
         for (const [e, w] of [[-0.25, -0.15], [0.25, -0.15], [-0.25, 0.15], [0.25, 0.15]]) drum(vx + e, vy + w, 0.03, 0.36, 0.41, (i, t, L) => { BG[i] = C(WHITE, 3); return set(i, ' ', 0), true; });
       }),
-      ...[[11.0, 3.5, 1, 0], [12.6, 3.5, -1, 0], [11.8, 2.7, 0, 1], [11.8, 4.3, 0, -1]].map(([x, y, fx, fy]) => ({ ...BX(x, y, 0.25, 0.25, 0, 0.1, solid(RED, { top: '#', bright: 1.5 })), walk: true, seat: true, x, y, fx, fy, h: 0.12 })), // cushions
+      ...[[11.0, 3.5, 1, 0], [12.6, 3.5, -1, 0], [11.8, 2.7, 0, 1], [11.8, 4.3, 0, -1]].map(([x, y, fx, fy]) => ({ ...FLOOR_CUSHION(x, y, 0.25, 0.25, 0.12, RED), walk: true, seat: true, x, y, fx, fy, h: 0.12 })), // cushions
       POT_PLANT(13.4, 1.5, 1.4), POT_PLANT(13.4, 6.4, 1.1)];
     for (const [x, y] of [[3, 3.4], [4.2, 4.2], [5.6, 3.4], [6.8, 4.4], [4.6, 5.4], [6, 5.6]]) p.push(hung(x, y, 2.35, herbBundle));
     if (chance(0.6)) p.push({ ...sitting(11.0, 3.5, shirt(), 0.12), face: [1, 0] }, { ...sitting(12.6, 3.5, shirt(), 0.12), face: [-1, 0] }); // two over a pot of tea
@@ -823,12 +822,12 @@ const phoneTable = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.75, 0.4, 0.9]);
 ROOM_DEFS.phones = { grid: boxRoom(12, 8), light: 1.1, floor: 'marble', ceil: 'spots', sign: true, signAt: 6, wall: phonesWall, keeper: [8.8, 1.25],
   props: r => {
-    const p = [BX(8.8, 1.95, 1.2, 0.3, 0, 1.0, solid(WHITE, { trim: 0.96, top: '=', bright: 1.5 })), standing(8.8, 1.25, GRAY),
+    const p = [SHOP_COUNTER(8.8, 1.95, 1.2, 0.3, 1.0, 1, 0, WHITE), standing(8.8, 1.25, GRAY),
       phoneTable(3.8, 4.1), phoneTable(8.2, 4.1),
-      BX(1.5, 5.3, 0.9, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.45 }), 0, 1), STOOL(2.25, 5.3, GRAY, 0.6), // the repairs bench
+      SMALL_DESK(1.5, 5.3, 0.9, 0.35, 0.9, -1, 0, GRAY), STOOL(2.25, 5.3, GRAY, 0.6), // the repairs bench
       ROOM_MODEL(1.5, 5.3, (vx, vy) => { rod(vx - 0.2, vy, 0.9, vx + 0.05, vy, 1.4, 0.01, GRAY, 1.2); rod(vx + 0.05, vy, 1.4, vx + 0.3, vy, 1.2, 0.01, GRAY, 1.2);
         dot(vx + 0.32, vy, 1.15, 0.07, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, 'O', C(GRAY, 6)), true; }); }), // its magnifier lamp
-      BX(10.7, 6.3, 0.1, 0.1, 0, 1.2, solid(GRAY)), BX(10.7, 6.3, 0.18, 0.06, 1.2, 1.5, (i, t, L) => { if (HIT.face === 3) { BG[i] = C(CYAN, 4); return set(i, fract(T) < 0.5 ? '#' : ' ', C(WHITE, 13)), true; } BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; })]; // the queue ticket screen
+      QUEUE_SCREEN(10.7, 6.3, 0, 1)]; // the queue ticket screen
     if (chance(0.7)) p.push({ ...sitting(2.25, 5.3, BLUE, 0.6), face: [-1, 0], chat: false }); // the repair tech, at it
     p.push(...shoppers([[3.8, 4.8, 0, -1], [8.2, 4.8, 0, -1], [8.9, 3.4, 0, 1], [8.4, 2.7, 0, -1]], 0.4));
     return p;
@@ -862,8 +861,8 @@ ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'stri
     const p = [...glassCase(6, 2.4, 2.1, 0.35, 1.0, caseGoods('jewellery', [YEL, WHITE, YEL, CYAN], true, 97), GRAY), grille(6, 2.1, 2.1, 1.0, 2.25), standing(6, 1.55, r.neon),
       guitar(1.03, 3.2, RED), guitar(1.03, 4.0, BRICK), guitar(1.03, 4.8, YEL), guitar(1.03, 5.6, BLUE),
       ...glassCase(10.55, 5.2, 1.2, 0.35, 1.0, caseGoods('watches', [YEL, WHITE, GRAY], true, 98), GRAY, 0, 1),
-      tvSet(10.75, 1.55, 0, -1, 0.3, 0.35), tvSet(10.75, 2.35, 0, -1, 0.3, 0.35), tvSet(10.75, 1.95, 0.55, -1, 0.3, 0.35, movie),
-      BX(10.75, 1.95, 0.25, 0.75, 0, 0.0001, solid(GRAY)), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)];
+      tvSet(10.75, 1.55, 0.012, -1, 0, 0.35), tvSet(10.75, 2.35, 0.012, -1, 0, 0.35), tvSet(10.75, 1.95, 0.012 + 0.35 * 1.5, -1, 0, 0.35, movie),
+      FLOOR_MAT(10.75, 1.95, 0.25, 0.75, 0.012), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)]; // (the tellies stand on a mat)
     p.push(...shoppers([[4.1, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
     return p;
   } };
@@ -900,9 +899,8 @@ const beerCases = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => { for (let k = 0; k 
 ROOM_DEFS.liquor = { grid: ['############', '#...#......#', '#...#......#', '##.##.SS...#', '#.....SS...#', '#..........#', '#..........#', '#..........#', '#####DD#####'],
   light: 0.9, floor: 'tile', ceil: 'strip', sign: true, signAt: 7.5, wall: liquorWall, keeper: [9.6, 5.55],
   props: r => {
-    const p = [BX(9.6, 6.25, 1.0, 0.3, 0, 1.0, solid(GRAY, { panel: 0.5, trim: 0.96, top: '=' })), standing(9.6, 5.55, r.neon),
-      BX(9.6, 6.1, 1.0, 0.015, 1.0, 1.95, (i, t, L) => { if (Math.abs(HIT.u) < 0.3 && HIT.w < 1.3) return false; BG[i] = C(CYAN, 0.6); return set(i, fract((HIT.u + HIT.w) * 2) < 0.05 ? '/' : ' ', C(WHITE, 7)), true; }), // the plexiglass
-      BX(10.35, 6.25, 0.18, 0.15, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 3 ? '$' : '#', C(GREEN, L)), true; }),
+    const p = [SHOP_COUNTER(9.6, 6.25, 1.0, 0.3, 1.0, 1, 0, GRAY), standing(9.6, 5.55, r.neon),
+      PLEXI_SCREEN(9.6, 6.1, 1.0, 1.0, 0.95, 1, 0), GAS_TILL(10.35, 6.25, 1.0, 0, -1), // the plexiglass; the till, to the clerk
       caveDoor(2.5, 3.5, 0.5), lintelSign(2.5, 3.5, 0.5, 'BEER', C(BLUE, 3), C(WHITE, 15), WHITE), // the way into the beer cave
       beerCases(1.5, 1.62, 6), beerCases(3.4, 1.62, 7), ...SHOP_FRIDGES.liquor(), beerCases(3.45, 2.4, 5), beerCases(1.7, 7.2, 4), beerCases(2.4, 7.2, 3)];
     p.push(...shoppers([[8.4, 3.6, -1, 0], [7.6, 2, 0, -1], [2.4, 5.4, 0, -1]], 0.4));

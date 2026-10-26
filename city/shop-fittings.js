@@ -142,3 +142,110 @@ function DESK_MONITOR(x,y,z,fx,fy) {
     part(0,0,.15,.012,z+.08,z+.27,screen); // the screen
   }),box:boxAt(x,y,c,s,.15,.06,z,z+.27),radius:.2,monitor:{z}};
 }
+// A rubber mat on the floor with rounded edges.
+function FLOOR_MAT(x,y,hl,hw,h=.03,col=GRAY,c=1,s=0) {
+  const shade=(i,t,L)=>{BG[i]=C(col,1+L*.15*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,c,s,hl,hw,0,h,Math.min(.012,h*.45),shade)),box:boxAt(x,y,c,s,hl,hw,0,h),mat:true};
+}
+// The housing owns the lip and the recessed inner walls of the return slot.
+function shopReturnsRay(ox,oy,oz,rx,ry,rz,b) {
+  HIT.slotInner=false;const outer=coveRayRounded(ox,oy,oz,rx,ry,rz,b);
+  if(outer<0||HIT.face!==3||Math.abs(HIT.u)>=.14||HIT.w<=.66||HIT.w>=.7)return outer;
+  const u=(ox-b.x)*b.c+(oy-b.y)*b.s,v=-(ox-b.x)*b.s+(oy-b.y)*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  const take=(t,x,y,z)=>{const uu=u+du*t,vv=v+dv*t,zz=oz+rz*t;
+    if(t<outer||t>=best||Math.abs(uu)>.14+1e-8||vv<.12-1e-8||vv>.2+1e-8||zz<.66-1e-8||zz>.7+1e-8)return;
+    best=t;nu=x;nv=y;nz=z;};
+  if(Math.abs(dv)>1e-10)take((.12-v)/dv,0,1,0);
+  if(Math.abs(du)>1e-10)for(const side of [-1,1])take((side*.14-u)/du,-side,0,0);
+  if(Math.abs(rz)>1e-10){take((.66-oz)/rz,0,0,1);take((.7-oz)/rz,0,0,-1);}
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u+du*best;HIT.v=v+dv*best;HIT.w=oz+rz*best;HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.slotInner=true;HIT.face=nv?3:nz?(nz>0?5:6):(nu>0?1:2);return best;
+}
+// A steel returns box: closed foot and housing, a recessed slot under its
+// rain hood, and a label seated against the front face.
+function RETURNS_BOX(x,y,fx,fy) {
+  const c=fy,s=-fx,blue=(i,t,L)=>{if(HIT.slotInner){BG[i]=C(BLUE,.8+L*.12*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);};
+  const hood=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);
+  const label=(i,t,L)=>{BG[i]=C(WHITE,4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'RETURNS',0,.8,.018,.03,C(BLUE,3),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    drawBox({...boxAt(vx,vy,c,s,.25,.2,.06,.9),round:.03},blue,shopReturnsRay);
+    part(0,0,.22,.17,0,.06,GRAY,.01);
+    part(0,.22,.16,.02,.7,.72,hood,.006);
+    part(0,.202,.12,.002,.76,.84,label);
+  }),box:boxAt(x,y,c,s,.25,.24,0,.9),radius:.35,returnsBox:{fx,fy}};
+}
+// One steady, scaled service number, with its heading above it.
+function QUEUE_SCREEN(x,y,fx,fy) {
+  const c=fy,s=-fx,screen=(i,t,L)=>{BG[i]=C(HIT.face===3?CYAN:GRAY,HIT.face===3?2.8:1.6);
+    if(HIT.face===3&&(wallText(i,HIT.u,t/projX,HIT.w,t,'NOW SERVING',0,1.455,.028,.035,C(WHITE,6),BG[i])||
+      wallText(i,HIT.u,t/projX,HIT.w,t,'01',0,1.335,.08,.1,C(WHITE,7),BG[i])))return true;
+    set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.12,.12,0,.02,GRAY,.006);
+    part(0,0,.018,.018,.02,1.22,GRAY,.008);
+    part(0,0,.18,.03,1.2,1.5,screen);
+  }),box:boxAt(x,y,c,s,.18,.12,0,1.5),radius:.25};
+}
+// A chest of drawers against a wall, its fronts to (fx,fy): a plinth, the
+// carcass, three rows of drawers each with two knobs, a top.
+function DRESSER(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,11),rows=3,rh=(h-.14)/rows;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,-.01,hl-.03,hw-.04,0,.08,wood,.006); // the plinth
+    part(0,-.01,hl-.01,hw-.02,.07,h-.03,wood,.01); // the carcass
+    for(let k=0;k<rows;k++){const z=.09+k*rh;
+      part(0,hw-.02,hl-.04,.012,z+.01,z+rh-.01,wood,.006); // a drawer front
+      for(const u of [-hl*.45,hl*.45])part(u,hw-.002,.012,.012,z+rh/2-.012,z+rh/2+.012,(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL),.008);} // its knobs
+    part(0,0,hl,hw,h-.035,h,wood,.012); // the top
+  }),box:boxAt(x,y,c,s,hl,hw+.01,0,h),radius:Math.hypot(hl,hw)};
+}
+// A sewing machine on a table top at z, its needle end along +u: the bed, the
+// pillar, the arm across, the head with the needle going.
+function SEWING_MACHINE(x,y,z,c=1,s=0) {
+  const body=(i,t,L)=>{BG[i]=C(GRAY,1.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),cloth=(i,t,L)=>{BG[i]=C(BLUE,2.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const thread=(i,t,L)=>{BG[i]=C(STONE,3.5+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz)-coveGroove(HIT.w-z,.003,.001,t/projX)*coveDetail(t,.03)*.4);set(i,' ',0);return true;};
+  const spool=homeLampPart('spool',z+.22,[[0,0],[0,.018],[.002,.018],[.002,.013],[.028,.013],[.028,.018],[.03,.018],[.03,.003],[.04,.003],[.04,0]]).box;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s),up=.006*(1+Math.sin(T*TAU*3));
+    part(0,0,.2,.1,z,z+.04,body,.01);
+    part(-.15,0,.04,.06,z+.04,z+.2,body,.015);
+    part(-.01,0,.18,.045,z+.16,z+.22,body,.02);
+    part(.14,0,.04,.05,z+.09,z+.22,body,.015);
+    part(.09,.02,.092,.057,z+.04,z+.041,metal,.0004); // needle plate on the bed
+    part(.09,.02,.09,.055,z+.041,z+.043,cloth,.0005);
+    part(.14,.02,.003,.003,z+.043+up,z+.09,metal,.002);
+    part(.12,.02,.002,.003,z+.046,z+.09,metal,.001); // presser-foot stem
+    part(.12,.02,.003,.015,z+.046,z+.049,metal,.001);
+    for(const e of [-1,1])part(.14,.02+e*.012,.02,.003,z+.043,z+.046,metal,.001);
+    drawBox({...spool,x:vx-c*.15+s*.015,y:vy-s*.15-c*.015},thread,coveRayLathe);
+    const line=(u,v,h,uu,vv,hh)=>coveTube(vx+c*u-s*v,vy+s*u+c*v,z+h,vx+c*uu-s*vv,vy+s*uu+c*vv,z+hh,.0008,STONE);
+    part(.03,.02,.002,.002,z+.22,z+.237,metal,.001);
+    line(-.137,-.015,.235,.03,.02,.235);line(.03,.02,.235,.14,.05,.205);line(.14,.05,.205,.14,.05,.11);line(.14,.05,.11,.14,.02,.09);
+  }),box:boxAt(x,y,c,s,.2,.1,z,z+.26),radius:.25,sewing:{z}};
+}
+// A slatted crate of LPs, their top edges each a colour.
+function RECORD_CRATE(x,y,hl,hw,seed) {
+  const depth=.26,floor=.008,slats=grocerSlats(),sleeve=RECORD_BIN.sleeve,pitch=RECORD_BIN.pitch,len=hl*2-.04;
+  const edges=gondolaFlat(1,0,(i,t,L)=>{const j=Math.floor((HIT.u+len/2)/pitch),col=RECORD_COLS[Math.floor(hash(j,seed,72)*RECORD_COLS.length)];
+    BG[i]=C(col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-coveGroove(HIT.u+len/2,pitch,.0015,t/projX)*coveDetail(t,.15)*1.2);set(i,' ',0);return true;});
+  const tray={...boxAt(0,0,1,0,hl,hw,0,depth),...kitchenTopProfile(hl,hw,0,depth,.002)};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,len/2,Math.min(hw-.02,sleeve/2),floor,floor+sleeve),edges); // the LPs, on edge
+    drawBox({...tray,x:vx,y:vy},slats,foodRayTray);
+  }),box:boxAt(x,y,1,0,hl,hw,0,floor+sleeve),radius:Math.hypot(hl,hw),recordCrate:{hl,hw,depth}};
+}
+// A low tea table: a top with an apron on four short legs.
+function TEA_TABLE(x,y,hl,hw,h) {
+  const wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,5);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,h-.04,h,.01,wood); // the top
+    coveRound(vx,vy,1,0,hl-.04,hw-.04,h-.09,h-.04,.006,wood); // the apron
+    for(const e of [-1,1])for(const f of [-1,1])coveRound(vx+e*(hl-.07),vy+f*(hw-.07),1,0,.03,.03,0,h-.09,.008,wood); // the legs
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),teaTable:{h}};
+}
+// A floor cushion, plump, its piping a darker band.
+function FLOOR_CUSHION(x,y,hl,hw,h,col) {
+  const shade=(i,t,L)=>{const piping=Math.abs(HIT.w-h/2)<.008&&Math.abs(HIT.nz)<.6;BG[i]=C(col,(piping?1.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,hl,hw,0,h,Math.min(.045,h*.45),shade)),box:boxAt(x,y,1,0,hl,hw,0,h),cushion:true};
+}
