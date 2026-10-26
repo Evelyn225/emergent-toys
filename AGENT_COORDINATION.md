@@ -1321,3 +1321,39 @@ landing. Keep reserved bathroom/DINER/world-bootstrap/facade and unpublished
 Claude lettering untouched. Remaining balcony French-door/exterior furniture
 and passes5/6/9 follow after the new fixes. Artifacts:work/backlog-review/
 home-balcony-rails-*; initial door audit:new-fixes-washroom-baseline.json.
+
+#269 balcony ironwork merged as b9e7883. Codex active
+`codex/fixed-shop-wall-materials`, a narrow reported-fix follow-up in
+city/shops.js plus one focused browser test, bundle and shared notes. Five
+wall painters currently use viewIn: hardware garden, grocer stockroom, video
+backroom, herbs tea room and liquor cold room. Their physical wall sections
+must retain their material from either side of the section boundary. No
+reserved bathroom/DINER/world-bootstrap/facade or unpublished lettering edits.
+Next taco/roastery washroom approaches, street entrance/stair clearance,
+aquarium gift-shop sign and roof stair landing; remaining passes5/6/9 after.
+Full Node suite93943 continues in the background on unchanged pure sources.
+
+Shop wall materials reviewed: five section painters now use physical wall
+coordinates, with the garden back wall included in trellis and one consistent
+cold-room insulation finish. Removed the now-unused viewIn helper; audit found
+no other whole-section camera-position wall switches in shop/dining/eatery/
+lobby/storefront painters. The remaining wcFaceInside camera comparison
+selects the physical wall face, and homeOutdoorRay maps perspective; retain
+both. Two focused material/native hardware walking checks, four hardware/
+fridge/gondola controls and two Node bundle/parse files pass. Old baseline plus
+seven independent camera/back-wall/global-material defects fail assertions.
+Twenty clear-floor close/wide/oblique/night views reviewed across all five
+rooms. ABAB177x66 mostly unchanged: hardware-wide1.7–2.1→1.9–3.3ms,
+hardware-close1.6–1.7→1.7; grocer-wide1.6–1.7→1.7, close1.3–1.4→1.3–1.4;
+video-wide1.8–1.9→1.8–1.9, close1.5–2.1→1.6; herbs-wide2.4–2.5→2.4–2.6,
+close1.5–1.6→1.5; liquor-wide3.3–3.5→3.3, close1.5→1.5–1.6. Hardware
+wide has a variable tail; no FPS gain claim. No geometry/helper API changes.
+FULL NODE SUITE FINISHED:1069/1069 PASS (work/backlog-review/
+home-balcony-rails-node.log). Scheduler/children exited normally; no paused
+test remains. This supersedes earlier pending full-suite notes. Pure sources
+were unchanged during the wall follow-up; final bundle checks also pass.
+Next taco/roastery door approaches: move long salsa bar farther toward the
+front wall and move its cooler beside it facing north, with measured clear
+apron/no overlaps; relocate roastery plant from immediately in front of door
+to a clear corner. CAFE is clear and remains a control. Keep reserved sources
+and unpublished lettering intact, then remaining new reports and passes5/6/9.
