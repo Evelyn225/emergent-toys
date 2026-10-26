@@ -186,6 +186,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 12 follow-up, posts through awnings:** `claude/lamp-awning-seams` from
   main: after the layout is assembled, `world-bootstrap.js` cuts merchant awnings back
   clear of lamp posts and the (rebuilt) junction signals.
+- **Claude, washroom doors:** `claude/washroom-doors` from main: public washroom pocket
+  doors start shut and close behind you (`city/bathroom-quality.js`, `pub` doors), now
+  including hotel and motel rooms and the hotel lobby as the user asked (Codex: this is
+  done here, no need to duplicate it in pass 6). Homes keep theirs as left. The diner's
+  washroom door now faces the tables (`city/rooms.js`).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
