@@ -740,3 +740,38 @@ Claude file or shared helper edits. Ready to publish/merge, then the detached
 paper-flag/noodle joins, legacy small props and stock electronics closing audit;
 continue authorized Claude PR chains and passes5/6/9 afterward. Hotel/motel
 doors remain queued closed and auto-closing; homes unchanged by that decision.
+
+#259 pendant/tin/track fittings merged aseb02dac. Codex active
+`codex/interior-cord-noodle-quality`: new `city/interior-cords.js`, papelPicado
+wrapper in `city/eateries.js`, noodlehouse worker/strand caller in
+`city/dining.js`, focused tests and shared manifest/bundle/notes. Shared curve
+joins for hanging paper flags; dough endpoints derive from the posed cook's
+actual hand shapes. No figures.js, shared home/hotel/kitchen helper or active
+Claude DINER/bathroom/world-bootstrap/facade edits. Next legacy small props/
+stock electronics, then authorized Claude chains and passes5/6/9.
+
+Cord/noodle review update: flag tops and cord share exact sampled joins, with
+real thin paper/cut-out inner edges and wall mounts. Close visual review caught
+that separate world-space noodles do not match the cached human sprite's
+perspective. Held dough now belongs to eight prepared human figure bodies,
+primed under a private actor cache key; hands and dough share the exact raster,
+and only this worker refines the whole body up close. No figures.js/shared
+helper edits. All11 cord/route/seating/lantern checks and seven node checks
+pass; nine independent negative probes pass. A final strand radius/readability
+adjustment passes the three focused checks; final13-view/static+moving ABAB
+measurements and final probe rerun are being completed before publication.
+#258 and #259 full CI: node and three browser shards pass, including repaired
+staff coverage; only karaoke test fails. Its13.9s sample is fully sung by the
+actual lyric clock (1.3x progress), so it must not expect unsung letters there.
+Fix that separately next, preserving start/mid/end colour coverage and seating.
+
+Cord/noodle chunk final review complete on
+`codex/interior-cord-noodle-quality` (source2432655): three focused and all
+shop routes/seating/lantern regressions pass (11 across final runs), seven node
+checks and nine independent mutations pass. Thirteen clear-floor views and
+static/moving ABAB costs are recorded in WORLD_QUALITY; control image identical.
+No pending geometry adjustment or helper edit. Publish/merge, then repair the
+separate karaoke start/mid/end sampling assertion. This supersedes the earlier
+WIP checkpoint. Continue legacy prop/electronics audit and authorized Claude
+chains, preserving active ownership and the hotel/motel closed/auto-close
+washroom-door decision. Latest branch and tests are pushed for usage handoff.
