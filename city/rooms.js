@@ -202,15 +202,6 @@ const BARBER_CHAIR = (x, y) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy - 0.42, 1, 0, 0.18, 0.06, 0.13, 0.17), CHROME);
   for (const e of [-1, 1]) rod(vx + e * 0.12, vy - 0.42, 0.15, vx + e * 0.12, vy - 0.2, 0.32, 0.012, GRAY, 1.2);
 }, [0.34, 0.3, 1.25]), seat: true, fx: 0, fy: -1, h: 0.45 });
-// a PA speaker on the floor, facing (0, 1): a black cabinet, the woofer and tweeter on its front in rings
-const SPEAKER = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.28, 0.2, 0, 0.9), (i, t, L) => {
-    BG[i] = C(GRAY, (0.8 + L * 0.15) * shadeFace(HIT.face));
-    if (HIT.face !== 3) return set(i, ' ', 0), true;
-    for (const [w, r] of [[0.3, 0.17], [0.7, 0.07]]) { const d = Math.hypot(HIT.u, HIT.w - w); if (d < r) { BG[i] = C(GRAY, d > r * 0.8 ? 2.5 : d < r * 0.25 ? 2 : 0.4); return set(i, d > r * 0.8 ? 'o' : ' ', C(GRAY, L)), true; } }
-    return set(i, ' ', 0), true;
-  });
-}, [0.28, 0.2, 0.9]);
 // a bouquet in a glass vase: stems fanning up, a flower head on each in the bloom's colour
 const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
   drum(vx, vy, 0.09, 0, 0.32, (i, t, L) => { BG[i] = C(CYAN, (1.6 + L * 0.3) * drumLit(0.09)); return set(i, HIT.face === 5 ? '~' : ':', C(WHITE, L * 0.6)), true; });
@@ -339,12 +330,9 @@ function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind th
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
   return false;
 }
-function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves of coloured spines
-  if (z > 2.6 || (my === room.H - 1)) return false;
-  if (fract(z / 0.42) < 0.12) { set(i, '=', C(BRICK, L)); return true; }
-  const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my);
-  set(i, k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L)); BG[i] = C(BRICK, 1); return true;
-}
+// Tall timber bookcases round the walls; the right-hand run stops short of the till.
+const BOOKS_CASE = { kind: 'books', timber: true, height: 2.15, levels: [0.15, 0.55, 0.95, 1.35, 1.75] };
+const BOOKS_CASES = [BOOKS_CASE, { ...BOOKS_CASE, wall: 'left', from: 1.2, to: 6 }, { ...BOOKS_CASE, wall: 'right', from: 1.2, to: 4.3 }];
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind real pots, red walls hung with signs
   if (my === 0 && mx < 11 && z < 1.4) {
     const seam=coveGroove(u,.6,.003,uStep);
@@ -382,8 +370,8 @@ const CAFE_BAR={x:4.6,y:2.15,half:1.4,height:1,keeperY:1.45,espressoX:5.25,caseX
 const BACK_COUNTER_STAFF_Y=1.4,BACK_COUNTER_Y=2.05;
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
-    props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6
+    light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'grocery', to: 8.64 }, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
+    props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6 (the wall shelves stop where the right-hand fridges start)
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', sign: true, neon: true, keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon),
@@ -495,9 +483,9 @@ const ROOM_DEFS = {
   karaoke: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
     wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
-      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
+      const p = [KARAOKE_STAGE_PLATFORM(r.neon), KARAOKE_MONITOR(6, 2.66, KARAOKE.stage.top), KARAOKE_SCREEN(1), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
-                 SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
+                 KARAOKE_SPEAKER(3.5, 2.3), KARAOKE_SPEAKER(8.5, 2.3)];
       const seats = [...couch(3.2, 6.3, 1.1, 0, -1, MAG), ...couch(10.0, 6.3, 1.1, 0, -1, MAG), ...[3.0, 4.6, 7.4, 9.0].map(x => POUF(x, 4.4, r.neon, 0, -1))];
       p.push(...fillSeats(seats, barCrowd()));
       return p;
@@ -506,7 +494,7 @@ const ROOM_DEFS = {
     props: r => [...counterBox(5, BACK_COUNTER_Y, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon),
                  ...petCage(2.2, 4, KITTEN_LOOK, () => fract(T / 6 + 0.4) < 0.04 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
                  figProp(4.2, 5.3, dogLook(BRICK), { h: 1.22 / 2, pose: () => 'f' + (5 + ((T * 2) & 1)), face: [0, 0], chat: false, light: 6 })] }, // a kitten, a puppy, and the shop dog
-  florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, BACK_COUNTER_STAFF_Y],
+  florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: { kind: 'florist', timber: true }, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, BACK_COUNTER_STAFF_Y],
     props: r => {
       const p = [...counterBox(5, BACK_COUNTER_Y, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon)];
       for (let k = 0; k < 7; k++) {
@@ -547,9 +535,9 @@ const ROOM_DEFS = {
       return p;
     } },
   books: { grid: ['##########', '#........#', '#.SS..SS.#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
-    light: 0.8, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, glyphs: '|]|[', wall: booksWall, keeper: [7.8, 4.6],
+    light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', shelves: BOOKS_CASES, keeper: [7.8, 4.6],
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
-      BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), SEAT(2.2, 5.05, 0, 1), // a reading chair
+      ...armchair(2.2, 5, 0, 1, RED), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
   // the noodle bar: one long counter in front of the open kitchen, stools along it, a narrow WC past its far end
   noodle: { grid: ['###############', '#..........W..#', '#..........W..#', '#..........W..#', '#.............#', '#..........WWW#', '######DD#######'],
@@ -622,11 +610,11 @@ const ROOM_DEFS = {
     ] },
   // a car lot's showroom: polished floor, three cars on display, the salesman at his desk
   showroom: { grid: boxRoom(12, 9), light: 1, floor: 'marble', ceil: 'strip', sign: true, signAt: 2.6, keeper: [9.6, 2.2],
-    props: r => [BX(9.6, 1.5, 1.0, 0.35, 0, 0.8, solid(GRAY, { panel: 0.4, top: '=' })), standing(9.6, 2.2, BLUE),
+    props: r => [SMALL_DESK(9.6, 1.5, 1.0, 0.35, 0.8, 0, -1, GRAY), standing(9.6, 2.2, BLUE),
       ...[[2.5, 3.5, GREEN], [5.6, 5.4, BLUE], [2.6, 7.0, RED]].flatMap(([x, y, col]) => showCar(x, y, col))] },
   // an estate agent's: listings in the window, a desk
   realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
-    props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
+    props: r => [SMALL_DESK(4.5, 1.4, 1.2, 0.35, 0.8, 0, -1, BRICK), standing(4.5, 2.0, GREEN),
       POT_PLANT(1.3, 1.3, 1.2), BENCHP(7.2, 4.6, -1, 0)] },
   home: homeDef(...HOME_ROOM_SIZE.home_studio, 0), loft: homeDef(...HOME_ROOM_SIZE.home_loft, 1), bellehome: homeDef(...HOME_ROOM_SIZE.home_belle, 2),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
@@ -646,6 +634,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  r.props.push(...shopGondolas(r), ...shopWallShelves(r)); // shelf islands ('S' cells) and back-wall shelves are built: shop-gondolas.js
   if(def.wc){
     const frames=bathroomSurrounds(r);r.props.push(...frames);
     r.bathroomDoors=frames.map((frame,index)=>BATHROOM_POCKET_DOOR(r,frame.bathroomOpening,index));
@@ -1014,18 +1003,7 @@ function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0) return false; // back wall: the sign
   set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
 }
-const KARAOKE_STAGE = 6; // (the stage's middle, and the screen's over it)
-function karaokeWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - KARAOKE_STAGE) < 3) { // lyrics screen: the sung part lights up
-    BG[i] = C(BLUE, 2);
-    const line = LYRICS[Math.floor(T / 5) % LYRICS.length], sung = fract(T / 5) * 1.3 * line.length;
-    const q = (u - KARAOKE_STAGE) / 0.28 + line.length / 2, p = Math.floor(q);
-    if (Math.abs(z - 1.9) < 0.15 && p >= 0 && p < line.length) {
-      const on = (uStep >= 0.28 || oneCell((fract(q) - 0.5) * 0.28, uStep)) && oneCell(z - 1.9, d / projY);
-      set(i, on ? line[p] : ' ', C(p < sung ? MAG : WHITE, 15)); return true;
-    }
-    set(i, ' ', 0); return true;
-  }
+function karaokeWall(i, u, uStep, z, d, mx, my, L) { // the lyrics are on the mounted screen (karaoke-stage.js)
   set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 9 ? ' ' : '*', C(NEON[(Math.floor(u) + (T * 2 | 0)) & 3], 8)); return true; // glitter
 }
 function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
@@ -1117,14 +1095,6 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-  if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
-    if (z < 0.15) return set(i, '_', C(GRAY, L * 0.6));
-    if (fract(z / 0.45) < 0.14) return set(i, '=', C(WHITE, L * 0.7));
-    const glyphs = D.glyphs || R.glyphs || 'o#=@';
-    const hh = hash(Math.floor(u * 7), Math.floor(z / 0.45), mx * 31 + my), fu = fract(u * 7), fz = fract(z / 0.45);
-    if (hh < 0.2 || fu < 0.2 || fu > 0.8 || fz > 0.7) return set(i, ' ', 0); // gaps between products
-    return set(i, glyphs[hh * 97 % glyphs.length | 0], C(ITEM_COL[hh * 13 % ITEM_COL.length | 0], D.neon ? 14 : L));
-  }
   if (D.neon && z > 2.75 && z < 2.85) return set(i, '=', C(R.neon, 15));
   if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6)); // wainscot
   if (z < 0.95) return set(i, '=', C(GRAY, L));
@@ -1232,6 +1202,7 @@ function ceilMask(key, spec) {
     return !tall.some(b => inBox(b, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) / 2 + 0.1));
   };
   const paint = (x0, y0, x1, y1, v, round) => {
+    if(spec.onFitting)spec.onFitting(x0,y0,x1,y1,v,round);
     for (let py = Math.max(0, Math.floor(y0 * CEIL_RES)); py < Math.min(H * CEIL_RES, Math.ceil(y1 * CEIL_RES)); py++)
       for (let qx = Math.max(0, Math.floor(x0 * CEIL_RES)); qx < Math.min(RW, Math.ceil(x1 * CEIL_RES)); qx++) {
         const u = (qx + 0.5) / CEIL_RES, w = (py + 0.5) / CEIL_RES;
@@ -1275,6 +1246,7 @@ function roomCeil(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
   if (ROOM_CEILS[st]) return ROOM_CEILS[st](i, r, x, wx, wy);
+  if(st==='strip'&&prepareInteriorBattens()){BG[i]=C(GRAY,2.3);set(i,' ',0);return;}
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
@@ -1282,6 +1254,7 @@ function roomCeil(i, r, x, rx, ry) {
     return set(i,' ',0); // Light comes from the fitted pendant model below.
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
+    if(prepareInteriorHanging()){BG[i]=C(BRICK,2);return set(i,' ',0);}
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
@@ -1302,6 +1275,7 @@ function roomCeil(i, r, x, rx, ry) {
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
+  prepareInteriorBattens();prepareInteriorHanging();
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
