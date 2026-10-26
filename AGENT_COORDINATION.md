@@ -1114,3 +1114,32 @@ contains reviewed fixes absent from the bulk integration; merge that follow-up.
 #243/#244/#248/#249 already merged: review them on new branches, opening small
 follow-up PRs only as warranted. Hotel/motel closed/auto-closing doors are
 already implemented by Claude; verify in pass6. Keep homes/ownership intact.
+
+#242 reviewed lamp follow-up merged as dbdd74c. Codex active
+`codex/review-street-signals`, reviewing the already-integrated #243 baseline.
+Files: city/street-signals.js and its focused browser test, bundle/shared notes.
+Cache fixed signal profiles, housing/cowl/button/bracket preparation while
+keeping vehicle state, pedestrian walk/flash/stop and face/LOD visibility live.
+Review actual contacts, translated rays and native close/wide/oblique/night
+rasters against dbdd74c. Next facade utilities, integrated facade audit and
+passes5/6/9. Keep reserved Claude files/shared helpers untouched; private hotel
+washroom policy is already implemented and needs verification, homes unchanged.
+
+User update: Claude is out of weekly usage, paused before committing
+`claude/sign-lettering` while its mutation run was active. Neither that branch
+on origin nor a local worktree/process is available in this workspace as of
+this check. Do not recreate/overwrite its unpublished lettering changes or
+claim its mutation run finished. Preserve the typography/facade ownership;
+resume that work once its clean source is pushed. Codex continues independent
+signal/utilities and home/hotel/civic chunks.
+
+Signal follow-up review complete on `codex/review-street-signals`, from dbdd74c.
+Fixed four-style geometry/material/ray/lamp-order cache retains live states,
+face selection and near/far fallback. Four focused plus four lamp/awning native
+controls, four node files and thirteen defect probes pass. Thirteen final
+clear-floor views match main pixel for pixel. ABAB costs recorded, broadly
+unchanged with a small hood-view increase; no broad FPS claim. Ready for a new
+follow-up PR/merge (original #243 is already integrated). Next facade utilities,
+then integrated fascia audit and passes5/6/9. #242 CI Node/browser1/2/4 passed,
+shard3 cancelled; watch a subsequent complete run. Keep unpublished Claude
+lettering and all reserved ownership untouched.
