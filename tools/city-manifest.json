@@ -208,6 +208,7 @@
     "city/home-windows.js",
     "city/home-entries.js",
     "city/home-passages.js",
+    "city/home-balcony-rails.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
     "city/facade-utilities.js",

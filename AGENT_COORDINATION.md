@@ -1260,3 +1260,33 @@ then remaining home trim/layout audit before hotel/civic passes6/9. Existing
 balcony rails are painted both indoors and outside; inspect their shared
 measurements and room/world scaling before changing them. Keep bathroom state,
 shared helper ownership and unpublished Claude lettering reservation intact.
+
+#268 home passage surrounds merged as e02af73. Codex active
+`codex/home-balcony-rails` (pass5), starting with a room/world geometry and route
+audit before editing: home-balcony.js, home-only rail builder, homeDef/homeWall
+B handling in rooms.js, focused tests and shared manifest/bundle/notes.
+Belle rails are currently painted indoors and outdoors; use shared measured
+rails with the existing metre→city mapping and an explicit distant fallback.
+Preserve balcony boarding/return, usable furniture and native footing. Do not
+change shared shop/hotel helpers, washroom state or reserved/unpublished Claude
+lettering. French-door finish and exterior furniture fidelity are separate
+follow-ups; then remaining home trim/layout audit and hotel/civic passes6/9.
+
+Balcony source checkpoint (NOT merge-ready): six focused checks pass on the
+final fitted model, including all three native runs, room/city scaling,
+closed supported geometry, routes and exact row coverage from outside. Visual
+review found two defects during development: subcell tubes disappeared between
+rows, and the old painted B grid could occlude the physical rails. The home-only
+built-rail path now uses measured line colliders, no painted grid height, and
+cached solid thin strokes selected against both screen axes. Fifteen final
+room/city/aerial close/wide/oblique/night/wall/foot views generated and reviewed.
+Standing room/deck cameras are clear; aerial cameras intentionally sit beyond
+the platform. Final home controls are running. Remaining: bundle-only negative
+probes, final bundle/node and native Belle controls, isolated ABAB, final notes
+and PR/merge. No mutants are running at this checkpoint.
+User's new reports are appended in WORLD_QUALITY.md and take priority after
+this checkpoint: fixed physical wall-section materials, taco/coffee washroom
+access, street stair/door clearance, aquarium gift-shop sign and missing roof
+stair landing. Claude is out of usage; preserve unpublished sign-lettering and
+reserved bathroom/DINER/world-bootstrap/facade source. Make narrow follow-up
+fixes in shop/dining files rather than restarting completed quality passes.

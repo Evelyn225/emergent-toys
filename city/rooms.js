@@ -868,12 +868,13 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, builtWindows:true, doorWall:true, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       ...homeWindowCasings(r),
       HOME_ENTRY_DOOR(r),
       ...homePassageSurrounds(r),
+      ...homeBalconyRails(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
@@ -975,6 +976,7 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
 function homeWall(i, u, uStep, z, d, mx, my, L) {
   const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : my===room.H-1?'south':null, along = Math.abs(u);
   if (roomAt(mx, my) === 'B') { // the balcony's iron rail: open air between slim, curved balusters
+    if(def.builtBalconyRails){homeOutdoorRay(i);return true;}
     if (z > 1.03 || z < 0.14 || Math.abs(fract(along * 4) - 0.5) < 0.06 || Math.abs(fract(along * 2) - 0.5) < 0.025 + Math.sin(z * Math.PI) * 0.09) {
       BG[i] = C(GRAY, 1); return set(i, z > 1.03 ? '=' : '|', C(GRAY, L)), true;
     }
@@ -1310,6 +1312,6 @@ function roomSprites() {
 }
 const ROOMW = { cell: (x, y) => {
                   if (room.def.balcony && (x < 0 || y < 0 || x >= room.W || y >= room.H)) return 0;
-                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? 1.1 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
+                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? (room.def.builtBalconyRails?0:1.1) : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
                 },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };

@@ -17265,12 +17265,13 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, builtWindows:true, doorWall:true, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       ...homeWindowCasings(r),
       HOME_ENTRY_DOOR(r),
       ...homePassageSurrounds(r),
+      ...homeBalconyRails(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
@@ -17372,6 +17373,7 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
 function homeWall(i, u, uStep, z, d, mx, my, L) {
   const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : my===room.H-1?'south':null, along = Math.abs(u);
   if (roomAt(mx, my) === 'B') { // the balcony's iron rail: open air between slim, curved balusters
+    if(def.builtBalconyRails){homeOutdoorRay(i);return true;}
     if (z > 1.03 || z < 0.14 || Math.abs(fract(along * 4) - 0.5) < 0.06 || Math.abs(fract(along * 2) - 0.5) < 0.025 + Math.sin(z * Math.PI) * 0.09) {
       BG[i] = C(GRAY, 1); return set(i, z > 1.03 ? '=' : '|', C(GRAY, L)), true;
     }
@@ -17707,7 +17709,7 @@ function roomSprites() {
 }
 const ROOMW = { cell: (x, y) => {
                   if (room.def.balcony && (x < 0 || y < 0 || x >= room.W || y >= room.H)) return 0;
-                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? 1.1 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
+                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? (room.def.builtBalconyRails?0:1.1) : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
                 },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 // ===== the specialist shops: what's behind the doors that used to open on the one convenience store (rooms.js has
@@ -20429,7 +20431,7 @@ function homeBalconyFree(x, y) {
   if (x < b.x0 + .015) return false;
   if (body.z < 1.1 && (x > b.x1 - .035 || y < b.y0 + .035 || y > b.y1 - .035)) return false;
   const rx = 19 + (x - b.x0) * 10, ry = 10 + (y - b.y) * 10;
-  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && inBox(o.box,rx,ry,.2))) return false;
+  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && (!o.homeBalconyRail||body.z<o.box.z1) && inBox(o.box,rx,ry,.2))) return false;
   return roofHeightAt(x,y) <= roofH + ROOF_STEP + body.z / 10;
 }
 function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
@@ -20456,6 +20458,7 @@ function drawHomeBalconies() {
     let model = homeBalconyModels.get(home);
     if (!model) {
       model = makeRoom('bellehome',{ cell: [home.cell % N,Math.floor(home.cell / N)] }).props.filter(o => {
+        if(o.homeBalconyRail)return true;
         const p = o.box || o;
         return p.x >= 20 && p.y >= 3 && p.y < 17;
       });
@@ -20467,17 +20470,9 @@ function drawHomeBalconies() {
       return true;
     };
     drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);
-    const rail = (i,t,L) => {
-      const along = HIT.face <= 2 ? HIT.v : HIT.u;
-      if (HIT.w > b.z + .095 || HIT.w < b.z + .012 || Math.abs(fract(along * 27) - .5) < .13) {
-        BG[i] = C(GRAY,1); set(i,HIT.w > b.z + .095 ? '=' : '|',C(GRAY,L)); return true;
-      }
-      return false;
-    };
-    drawBox(boxAt(rel(b.x1 - px),rel(b.y - py),1,0,.01,.7,b.z,b.z + .11),rail);
-    for (const y of [b.y0,b.y1]) drawBox(boxAt(rel(b.x0 + .3 - px),rel(y - py),1,0,.3,.01,b.z,b.z + .11),rail);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
+      if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       if(o.homePlant){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
       if (o.box && shade) {
@@ -41537,6 +41532,94 @@ function homePassageSurrounds(r) {
     }
   }
   return props;
+}
+// One measured ironwork model for the room (metres) and its real city balcony
+// (one tenth scale). Foot flanges stay inside the deck; the east run owns both
+// corner posts, and side runs finish on wall plates and those same corners.
+const HOME_BALCONY_IRON={height:1.1,inset:.06,pitch:.24,postStep:1.4};
+const HOME_BALCONY_POST=[[0,0],[0,.06],[.015,.06],[.035,.045],[.06,.027],[.99,.022],[1.035,.035],[1.065,.035],[1.085,.022],[1.095,.012],[1.1,.012],[1.1,0]];
+function HOME_BALCONY_RAIL(x,y,c,s,length,endPosts,wallEnd=-1){
+  const half=length/2,spans=Math.ceil(length/HOME_BALCONY_IRON.postStep),postUs=[],skeleton=[],variants=new Map();
+  for(let j=endPosts?0:1;j<=(endPosts?spans:spans-1);j++)postUs.push(-half+j*length/spans);
+  const xy=(u,v)=>[c*u-s*v,s*u+c*v];
+  const tube=(role,A,B,r)=>{const[u,v,az]=A,[uu,vv,bz]=B,[ax,ay]=xy(u,v),[bx,by]=xy(uu,vv);skeleton.push({role,kind:'tube',ax,ay,az,bx,by,bz,r});};
+  for(const u of postUs){const[x,y]=xy(u,0);skeleton.push({role:'post',kind:'post',x,y});}
+  // The side runs extend a short way into their wall plates.
+  const from=-half+(!endPosts&&wallEnd<0?.02:0),to=half-(!endPosts&&wallEnd>0?.02:0);
+  tube('handrail',[from,0,1.045],[to,0,1.045],.028);
+  tube('lower-rail',[from,0,.14],[to,0,.14],.018);
+  const count=Math.ceil(length/HOME_BALCONY_IRON.pitch),pitch=length/count;
+  for(let j=1;j<count;j++){
+    const u=-half+j*pitch;if(postUs.some(p=>Math.abs(p-u)<.075))continue;
+    // A gentle outward bow has connected rounded segments at either knee.
+    const points=[[u,0,.14],[u,-.035,.43],[u,-.03,.74],[u,0,1.045]];
+    for(let k=1;k<points.length;k++)tube('baluster',points[k-1],points[k],.011);
+  }
+  if(!endPosts)for(const z of [.14,1.045]){
+    const[px,py]=xy(wallEnd*(half-.01),0);skeleton.push({role:'wall-plate',kind:'plate',x:px,y:py,z});
+  }
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  function prepare(scale,base){
+    const parts=[];
+    for(const p of skeleton){let b,ray;
+      if(p.kind==='post'){
+        const profile=HOME_BALCONY_POST.map(([z,r])=>[base+z*scale,r*scale]);
+        b={...boxAt(p.x*scale,p.y*scale,1,0,.06*scale,.06*scale,base,base+HOME_BALCONY_IRON.height*scale),profile};ray=coveRayLathe;
+      }else if(p.kind==='tube'){
+        const ax=p.ax*scale,ay=p.ay*scale,az=base+p.az*scale,bx=p.bx*scale,by=p.by*scale,bz=base+p.bz*scale,r=p.r*scale;
+        b={...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r};ray=coveRayCapsule;
+      }else{
+        b=boxAt(p.x*scale,p.y*scale,c,s,.01*scale,.04*scale,base+(p.z-.05)*scale,base+(p.z+.05)*scale);ray=rayBox;
+      }
+      const shade=ray===rayBox?(i,t,L)=>{
+        const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;
+        HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return metal(i,t,L);
+      }:metal;
+      const lineShade=p.kind==='tube'?(i,t,L)=>{
+        // Subcell metal keeps joined coverage instead of sparkling into
+        // isolated hits. The analytic rounded surface returns up close.
+        BG[i]=C(GRAY,2.5+L*.12);return set(i,' ',0),true;
+      }:null;
+      parts.push({role:p.role,local:b,view:{...b},ray,shade,lineShade,tube:p.kind==='tube'});
+    }
+    return parts;
+  }
+  function variant(scale,base){
+    const key=scale+':'+base;let v=variants.get(key);
+    if(!v){if(variants.size>=2)variants.clear();v={parts:null,far:boxAt(0,0,c,s,(half+.06)*scale,.06*scale,base,base+HOME_BALCONY_IRON.height*scale)};v.view={...v.far};
+      v.shade=(i,t,L)=>{
+        const u=HIT.u/scale,z=(HIT.w-base)/scale,du=t/projX/scale,dz=t/projY/scale;
+        const top=Math.abs(z-1.045)<Math.max(.028,dz*.45),bottom=Math.abs(z-.14)<Math.max(.018,dz*.25);
+        let post=false;const pr=Math.max(z<.06?.06:z>1.03?.035:.025,du*.25);
+        for(const p of postUs)if(Math.abs(u-p)<pr){post=true;break;}
+        const bars=pitch/du>1.2&&coveGroove(u+half,pitch,.022,du)>.35;
+        if(!top&&!bottom&&!post&&!bars)return false;
+        BG[i]=C(GRAY,1+L*.24);set(i,top||bottom?'=':'|',C(GRAY,L));return true;
+      };variants.set(key,v);
+    }return v;
+  }
+  function draw(vx,vy,scale=1,base=0){
+    const v=variant(scale,base),near=Math.max(.05,dx*vx+dy*vy-Math.abs(dx*c+dy*s)*half*scale);
+    if(pitch*scale*projX/near<2){const b=v.view;b.x=vx;b.y=vy;drawBox(b,v.shade);return;}
+    v.parts||=prepare(scale,base);
+    for(const p of v.parts){const b=p.view,q=p.local;b.x=vx+q.x;b.y=vy+q.y;
+      if(p.tube){b.ax=vx+q.ax;b.ay=vy+q.ay;b.bx=vx+q.bx;b.by=vy+q.by;}
+      // Character cells are taller than they are wide. A horizontal tube can
+      // cover a column yet fall wholly between rows; use the smaller axis.
+      const thin=p.tube&&b.r*2*Math.min(projX,projY)/Math.max(.05,dx*b.x+dy*b.y)<1.5;
+      drawBox(b,thin?p.lineShade:p.shade,thin?rayRod:p.ray);
+    }
+  }
+  return {...ROOM_MODEL(x,y,(vx,vy)=>draw(vx,vy)),drawScaled:draw,
+    box:boxAt(x,y,c,s,half+.06,.06,0,HOME_BALCONY_IRON.height),radius:half+.15,
+    homeBalconyRail:{c,s,length,half,pitch,postUs,skeleton,variants,endPosts,wallEnd}};
+}
+function homeBalconyRails(r){
+  const b=r.def.balcony;if(!b||!r.def.builtBalconyRails)return[];
+  const inset=HOME_BALCONY_IRON.inset,east=b.x1-inset,north=b.y0+inset,south=b.y1-inset,wall=b.x0-1;
+  return [HOME_BALCONY_RAIL(east,(north+south)/2,0,1,south-north,true),
+    HOME_BALCONY_RAIL((wall+east)/2,north,1,0,east-wall,false),
+    HOME_BALCONY_RAIL((wall+east)/2,south,-1,0,east-wall,false,1)];
 }
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {

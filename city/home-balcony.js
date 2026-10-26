@@ -29,7 +29,7 @@ function homeBalconyFree(x, y) {
   if (x < b.x0 + .015) return false;
   if (body.z < 1.1 && (x > b.x1 - .035 || y < b.y0 + .035 || y > b.y1 - .035)) return false;
   const rx = 19 + (x - b.x0) * 10, ry = 10 + (y - b.y) * 10;
-  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && inBox(o.box,rx,ry,.2))) return false;
+  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && (!o.homeBalconyRail||body.z<o.box.z1) && inBox(o.box,rx,ry,.2))) return false;
   return roofHeightAt(x,y) <= roofH + ROOF_STEP + body.z / 10;
 }
 function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
@@ -56,6 +56,7 @@ function drawHomeBalconies() {
     let model = homeBalconyModels.get(home);
     if (!model) {
       model = makeRoom('bellehome',{ cell: [home.cell % N,Math.floor(home.cell / N)] }).props.filter(o => {
+        if(o.homeBalconyRail)return true;
         const p = o.box || o;
         return p.x >= 20 && p.y >= 3 && p.y < 17;
       });
@@ -67,17 +68,9 @@ function drawHomeBalconies() {
       return true;
     };
     drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);
-    const rail = (i,t,L) => {
-      const along = HIT.face <= 2 ? HIT.v : HIT.u;
-      if (HIT.w > b.z + .095 || HIT.w < b.z + .012 || Math.abs(fract(along * 27) - .5) < .13) {
-        BG[i] = C(GRAY,1); set(i,HIT.w > b.z + .095 ? '=' : '|',C(GRAY,L)); return true;
-      }
-      return false;
-    };
-    drawBox(boxAt(rel(b.x1 - px),rel(b.y - py),1,0,.01,.7,b.z,b.z + .11),rail);
-    for (const y of [b.y0,b.y1]) drawBox(boxAt(rel(b.x0 + .3 - px),rel(y - py),1,0,.3,.01,b.z,b.z + .11),rail);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
+      if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       if(o.homePlant){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
       if (o.box && shade) {
