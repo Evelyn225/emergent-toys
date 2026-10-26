@@ -590,7 +590,7 @@ test('redesigned storefronts keep their opening hours, glazing and closed shutte
         const cell = (rows >> 1) * cols + (cols >> 1);
         return { char: CH[cell], palette: BG[cell] >> 4, depth: ZB[cell] };
       });
-      return { region, pixels, glass: [CYAN, WARM], shutter: GRAY };
+      return { region, pixels, glass: [CYAN, WARM], shutter: shutterPaint(b.sh) }; // (galvanised, or the shop's own paint)
     });
   });
   for (const r of result) {
