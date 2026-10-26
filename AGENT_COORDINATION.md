@@ -994,3 +994,10 @@ files and nine independent defects verified; eleven final clear-floor views
 reviewed. Hardware no longer resembles dark holes and follows ambient light.
 Final ABAB run/notes and original-branch push/merge still pending. Checkpoint
 on Codex's backup branch only; do not merge it before the final review note.
+
+#245 final review complete; supersedes ba7448d checkpoint's pending status.
+Eight native checks, three node files, nine mutations and eleven final views
+pass; ABAB costs recorded. A longer isolated wide-view repeat does not
+reproduce the10.8ms outlier (4.9–5.7→4.9–5.1ms). Original remote head remains
+8e5c5bd; ready to update/merge it. #263 full CI queued at last check. Next
+#242/#243/#244, then #248→#249 and passes5/6/9, preserving ownership/remnants.
