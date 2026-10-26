@@ -183,6 +183,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 12, signals:** `claude/street-signals` from main (new
   `city/street-signals.js`; `drawSignal` and its constants removed from
   `city/city-sprites.js`). Next: wall pipes and meters, then service hatches.
+- **Claude pass 12 follow-up, posts through awnings:** `claude/lamp-awning-seams` from
+  main: after the layout is assembled, `world-bootstrap.js` cuts merchant awnings back
+  clear of lamp posts and the (rebuilt) junction signals.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
