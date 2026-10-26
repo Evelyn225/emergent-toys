@@ -1254,6 +1254,7 @@ function roomCeil(i, r, x, rx, ry) {
     return set(i,' ',0); // Light comes from the fitted pendant model below.
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
+    if(prepareInteriorHanging()){BG[i]=C(BRICK,2);return set(i,' ',0);}
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
@@ -1274,7 +1275,7 @@ function roomCeil(i, r, x, rx, ry) {
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
-  prepareInteriorBattens();
+  prepareInteriorBattens();prepareInteriorHanging();
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
