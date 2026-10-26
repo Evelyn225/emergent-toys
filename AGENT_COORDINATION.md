@@ -1208,3 +1208,16 @@ ABAB costs and final note/PR/merge remain pending. This is a backup checkpoint,
 not approval to merge. No reserved files or shared door/bath helpers changed.
 #265 CI Node/browser1/2/3 passed, browser4 cancelled, so verify a subsequent
 complete run including utilities. #264 full CI is green.
+
+Home-entry final review complete; supersedes6afebcb checkpoint's pending status.
+Two focused plus eight home/window/Fern controls, four node files, the old
+painted baseline and sixteen independent defect probes pass. Twenty-four
+final native views reviewed; cached physical panels/frames/hardware and filtered
+fine lighting retain clean close/oblique/night silhouettes. ABAB costs recorded:
+whole normally1.1–1.2ms (one2.3ms tail), macro up to3.6ms, versus old flat paint
+0.4–0.7ms. Added quality has measured cost; no FPS gain claim. Ready for final
+note push/new PR/merge. #266 full CI GREEN (40376308187), including utilities;
+this supersedes #265 cancelled-run concern. Next home interior passage
+surrounds/trim, remaining layouts, then passes6/9. Do not duplicate completed
+home windows or hotel washroom policy; preserve homes' bathroom state and all
+reserved/unpublished Claude source. No shared door/bath helper changes.
