@@ -16384,7 +16384,7 @@ const ROOM_DEFS = {
   books: { grid: ['##########', '#........#', '#.SS..SS.#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 0.8, floor: 'wood', ceil: 'pendant', sign: true, glyphs: '|]|[', shelves: BOOKS_CASES, keeper: [7.8, 4.6],
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
-      BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), SEAT(2.2, 5.05, 0, 1), // a reading chair
+      ...armchair(2.2, 5, 0, 1, RED), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
   // the noodle bar: one long counter in front of the open kitchen, stools along it, a narrow WC past its far end
   noodle: { grid: ['###############', '#..........W..#', '#..........W..#', '#..........W..#', '#.............#', '#..........WWW#', '######DD#######'],
@@ -16457,11 +16457,11 @@ const ROOM_DEFS = {
     ] },
   // a car lot's showroom: polished floor, three cars on display, the salesman at his desk
   showroom: { grid: boxRoom(12, 9), light: 1, floor: 'marble', ceil: 'strip', sign: true, signAt: 2.6, keeper: [9.6, 2.2],
-    props: r => [BX(9.6, 1.5, 1.0, 0.35, 0, 0.8, solid(GRAY, { panel: 0.4, top: '=' })), standing(9.6, 2.2, BLUE),
+    props: r => [SMALL_DESK(9.6, 1.5, 1.0, 0.35, 0.8, 0, -1, GRAY), standing(9.6, 2.2, BLUE),
       ...[[2.5, 3.5, GREEN], [5.6, 5.4, BLUE], [2.6, 7.0, RED]].flatMap(([x, y, col]) => showCar(x, y, col))] },
   // an estate agent's: listings in the window, a desk
   realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
-    props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
+    props: r => [SMALL_DESK(4.5, 1.4, 1.2, 0.35, 0.8, 0, -1, BRICK), standing(4.5, 2.0, GREEN),
       POT_PLANT(1.3, 1.3, 1.2), BENCHP(7.2, 4.6, -1, 0)] },
   home: homeDef(...HOME_ROOM_SIZE.home_studio, 0), loft: homeDef(...HOME_ROOM_SIZE.home_loft, 1), bellehome: homeDef(...HOME_ROOM_SIZE.home_belle, 2),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
@@ -17384,14 +17384,11 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(STONE, 1.6); return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 7 ? ' ' : '.', C(GRAY, L * 0.3)), true;
 }
 ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', '#............#', '#.........W.W#', '#.........W..#', '#.........W..#', '#.........W..#', '######DD######'],
-  wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
+  wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.52],
   props: r => {
-    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE), ...SHOP_FRIDGES.deli(),
-      BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
-        if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
-        BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      BX(7, 0.8, 4.5, 0.3, 0, 0.95, solid(GRAY, { top: '=', panel: 0.8 })), // the back counter
-      BX(2.2, 3.6, 0.07, 0.07, 0, 1.15, solid(GRAY)), BX(2.2, 3.6, 0.12, 0.1, 1.15, 1.35, (i, t, L) => { BG[i] = C(RED, 4 + L * 0.2); return set(i, HIT.face === 3 ? '#' : ' ', C(WHITE, 13)), true; }), // take a number
+    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.52, WHITE), standing(5, 1.52, WHITE), ...SHOP_FRIDGES.deli(),
+      SHOP_COUNTER(7, 1.18, 4.5, 0.18, 0.95, 1, 0, GRAY), MEAT_SLICER(9.2, 1.18, 0.95, 0, 1), // the back counter, on the wall now, and the slicer on it
+      TICKET_DISPENSER(2.2, 3.6, 0, 1), // take a number
       ...toilet(12.3, 7.55, 1, porcelain), washbasin(11.3, 6.1, 1, 0), // the toilet
     ];
     for (let k = 0; k < 7; k++) p.push(hung(4.4 + k * 0.85, 2.15, 2.3, k % 3 === 1 ? cheeseWheel : salami));
@@ -17439,18 +17436,15 @@ ROOM_DEFS.hardware = { grid: ['##################', '#............#...#', '#...S
     '#............#...#', '#............#...#', '#............#...#', '########DD########'],
   light: 0.9, floor: 'concrete', ceil: 'strip', sign: true, signAt: 7, wall: hardwareWall, keeper: [2.6, 6.8],
   props: r => {
-    const p = [BX(2.6, 7.5, 1.3, 0.32, 0, 1.0, solid(ORANGE, { panel: 0.6, trim: 0.96, top: '=' })), standing(2.6, 6.8, ORANGE),
-      BX(1.8, 7.55, 0.18, 0.15, 1.0, 1.3, (i, t, L) => { // the key cutter: a little machine with its wheel going
-        if (HIT.face === 3 && Math.hypot(HIT.u, HIT.w - 1.16) < 0.08) return set(i, '-\\|/'[Math.floor(T * 10) & 3], C(WHITE, 14)), true;
-        BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      BX(3.4, 7.55, 0.15, 0.12, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 3 ? '$' : '#', C(GREEN, L)), true; }),
+    const p = [SHOP_COUNTER(2.6, 7.5, 1.3, 0.32, 1.0, 1, 0, ORANGE), standing(2.6, 6.8, ORANGE),
+      KEY_CUTTER(1.8, 7.55, 1.0, 0, 1), GAS_TILL(3.4, 7.55, 1.0, 0, -1), // the key cutter, wheel to the customer; the till, to the clerk
       paintPyramid(10.6, 7.4), ladder(1.25, 3, 2.3, 0.25), ladder(1.25, 4.1, 1.9, 0.2, GRAY),
-      { ...BX(13.5, 4.5, 1.5, 0.5, 2.3, 3, solid(GRAY, { bright: 0.8 }), 0, 1) }, // the beam over the opening
+      BULKHEAD(13.5, 4.5, 1.5, 0.5, 2.3, 3, 0, 1), // the beam over the opening
       aisleSign(15.5, 3.4, 'GARDEN', C(GREEN, 4), C(WHITE, 15), 0.4)];
-    for (let k = 0; k < 7; k++) p.push(BX(16.65, 1.6 + k * 0.27, 0.05, 0.12, 0, 2.5 - (k % 3) * 0.2, solid(WARM, { panel: 0.4 }))); // lumber, stood on end against the wall
-    p.push(BX(16.3, 5.4, 0.45, 0.45, 0, 0.55, (i, t, L) => { BG[i] = C(GREEN, 1.6 + L * 0.2); return set(i, HIT.face === 5 ? '@' : 'O', C(GREEN, L)), true; })); // coils of garden hose
+    p.push(LUMBER(16.945, 2.41, Array.from({ length: 7 }, (_, k) => [-0.81 + k * 0.27, 2.5 - (k % 3) * 0.2]), 0, 1, 0.05, 0.12)); // lumber, stood on end against the wall
+    p.push(HOSE_COILS(16.3, 5.4)); // coils of garden hose
     for (const [x, y, h] of [[14.4, 1.5, 1.4], [15.2, 1.45, 1.0], [14.5, 6.4, 1.6], [16.4, 6.6, 1.2]]) p.push(POT_PLANT(x, y, h));
-    for (let k = 0; k < 4; k++) p.push(BX(16.2, 8.25, 0.4, 0.28, k * 0.16, k * 0.16 + 0.15, (i, t, L) => { BG[i] = C(k & 1 ? GREEN : BRICK, (1.6 + L * 0.25) * shadeFace(HIT.face)); return set(i, HIT.face === 3 && Math.abs(HIT.u) < 0.15 ? '%' : ' ', C(YEL, 10)), true; })); // bags of compost
+    p.push(COMPOST_BAGS(16.2, 8.25)); // bags of compost
     p.push(ROOM_MODEL(14.6, 8.1, (vx, vy) => { // a lawnmower: the red deck on its wheels, the handle back up to waist height
       BXD(vx, vy, 0.28, 0.24, 0.08, 0.32, (i, t, L) => { BG[i] = C(RED, (2.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? 'o' : ' ', C(GRAY, 6)), true; });
       for (const [e, w] of [[-0.22, -0.2], [-0.22, 0.2], [0.22, -0.2], [0.22, 0.2]]) dot(vx + e, vy + w, 0.07, 0.07, (i, t, L) => { BG[i] = C(GRAY, 0.8); return set(i, 'o', C(GRAY, 5)), true; });
@@ -17599,9 +17593,9 @@ const ballBin = (x, y, kinds) => ROOM_MODEL(x, y, (vx, vy) => { // a wire bin, h
 }, [0.45, 0.45, 0.95]);
 ROOM_DEFS.sports = { grid: boxRoom(14, 9), light: 1, floor: 'court', ceil: 'strip', sign: true, signAt: 7, wall: sportsWall, keeper: [11.2, 6.6],
   props: r => {
-    const p = [BX(11.2, 7.25, 1.1, 0.3, 0, 1.0, solid(BLUE, { panel: 0.55, trim: 0.96, top: '=' })), standing(11.2, 6.6, BLUE),
+    const p = [SHOP_COUNTER(11.2, 7.25, 1.1, 0.3, 1.0, 1, 0, BLUE), standing(11.2, 6.6, BLUE),
       ballBin(4, 5.5, [[ORANGE, 0.12], [WHITE, 0.11]]), ballBin(9.8, 4.2, [[YEL, 0.035], [WHITE, 0.11], [ORANGE, 0.12]]),
-      bike(7, 2.6, RED), BX(7, 2.6, 0.9, 0.3, 0, 0.04, solid(GRAY)), TREADMILL(12.4, 2.4), WEIGHT_RACK(3, 1.35)];
+      bike(7, 2.6, RED), FLOOR_MAT(7, 2.6, 0.9, 0.3, 0.04), TREADMILL(12.4, 2.4), WEIGHT_RACK(3, 1.35)];
     p.push(...shoppers([[2.2, 4.4, -1, 0], [5.6, 3.3, 0, -1], [8.6, 6, 1, -0.5]], 0.45));
     return p;
   } };
@@ -17648,7 +17642,7 @@ function toysWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.toys = { grid: boxRoom(12, 9, { '2,2': 'S', '3,2': 'S', '2,3': 'S', '3,3': 'S' }), light: 1, floor: 'kids', ceil: 'strip', sign: true, signAt: 6, wall: toysWall, keeper: [2.6, 6.55], glyphs: '@&*%o8',
   props: r => {
-    const p = [BX(2.6, 7.25, 1.2, 0.3, 0, 0.95, (i, t, L) => { const f = HIT.face; BG[i] = C(f === 5 ? YEL : [RED, BLUE, GREEN, YEL][Math.floor((HIT.u + 1.2) / 0.6) & 3], (2 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '=' : ' ', C(WHITE, L * 0.5)), true; }),
+    const p = [SHOP_COUNTER(2.6, 7.25, 1.2, 0.3, 0.95, 1, 0, [RED, BLUE, GREEN, YEL]),
       standing(2.6, 6.55, YEL), trainSet(6.4, 4.4), teddy(10.6, 1.6), rockingHorse(9.6, 6.4)];
     for (const [x, y, col] of [[5.2, 2.2, RED], [6, 1.6, YEL], [7.4, 2.4, CYAN], [8.6, 3.8, MAG], [4.4, 5.6, GREEN], [7.6, 6.4, BLUE]]) p.push(balloon(x, y, col));
     if (chance(0.8)) p.push(figProp(7.65, 4.6, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.15, face: [-1, -0.2] })); // a kid watching the train go round
@@ -17679,8 +17673,7 @@ const clockTall = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a grandfather cloc
     BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '^' : fract(w * 2) < 0.04 ? '-' : ' ', C(YEL, L * 0.6)), true;
   });
 }, [0.24, 0.16, 2.1]);
-const armchair = (x, y, fx, fy, col = BRICK) => [{ ...BX(x, y, 0.4, 0.38, 0, 0.42, solid(col, { top: '=', bright: 1.4 }), fx, fy), seat: true, x, y, fx, fy, h: 0.42 }, BX(x - fx * 0.32, y - fy * 0.32, 0.08, 0.4, 0.42, 1.0, solid(col, { bright: 1.4 }), fx, fy),
-  ...[-1, 1].map(e => BX(x + fy * e * 0.36, y - fx * e * 0.36, 0.38, 0.06, 0.42, 0.62, solid(col, { top: '=', bright: 1.4 }), fx, fy))];
+const armchair = (x, y, fx, fy, col = BRICK) => [ARMCHAIR(x, y, fx, fy, col), SEAT(x, y, fx, fy, 0.42)]; // (built: shop-fittings.js)
 const lampStand = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a standard lamp: a fringed shade, glowing
   rod(vx, vy, 0, vx, vy, 1.45, 0.012, BRICK, 1.2); drum(vx, vy, 0.14, 0, 0.03, solid(BRICK));
   BXD(vx, vy, 0.2, 0.2, 1.35, 1.65, (i, t, L) => { if (Math.hypot(HIT.u, HIT.v) > 0.2 - (HIT.w - 1.35) * 0.3 && HIT.face < 5) return false; BG[i] = C(WARM, 7); return set(i, HIT.w < 1.38 ? "'" : ' ', C(YEL, 13)), true; });
@@ -17716,19 +17709,19 @@ function oldWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.thrift = { grid: ['############', '#..........#', '#........###', '#..........#', '#........###', '#..........#', '#..........#', '#..........#', '#####DD#####'], light: 0.8, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, shelves: r => r.word === 'THRIFT' && { kind: 'thrift', to: 8.6, timber: true }, glyphs: '&%@o*', wall: oldWall, keeper: [9.8, 6.55],
   props: r => {
-    const w = r.word, p = [BX(9.8, 7.25, 1.0, 0.3, 0, 0.95, solid(BRICK, { panel: 0.5, trim: 0.9, top: '=' })), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
+    const w = r.word, p = [SHOP_COUNTER(9.8, 7.25, 1.0, 0.3, 0.95, 1, 0, BRICK), standing(9.8, 6.55, w === 'TAILOR' ? GRAY : r.neon),
       clothCurtain(10.02, 1.5, 0.5, w === 'TAILOR' ? GRAY : RED), clothCurtain(10.02, 3.5, 0.5, w === 'TAILOR' ? GRAY : RED)]; // the fitting rooms
     if (w === 'ANTIQUES') {
       p.push(clockTall(1.5, 1.35), ...armchair(3.6, 4.6, 1, 0, RED), ...armchair(5.6, 4.6, -1, 0, GREEN), ...tableBox(4.6, 4.6, 0.3, 0.3), lampStand(2.6, 3.2), lampStand(8.7, 3.3),
-        BX(7.8, 1.45, 0.9, 0.35, 0, 1.0, solid(BRICK, { panel: 0.45, trim: 0.95, top: '=' })), // a dresser
+        DRESSER(7.8, 1.36, 0.9, 0.34, 1.0, 0, 1), // a dresser, against the back wall
         hung(6, 4.6, 2.3, (vx, vy, z) => { for (let k = 0; k < 6; k++) { const an = k / 6 * TAU; dot(vx + Math.cos(an) * 0.3, vy + Math.sin(an) * 0.3, z - 0.15, 0.04, (i, t, L) => { BG[i] = C(YEL, 10); return set(i, '*', C(WHITE, 15)), true; }); rod(vx, vy, z, vx + Math.cos(an) * 0.3, vy + Math.sin(an) * 0.3, z - 0.12, 0.008, YEL, 1.2); } })); // a little chandelier
     } else if (w === 'TAILOR') {
       p.push(dressForm(3, 3, BLUE), dressForm(4.4, 3, GRAY), dressForm(7.4, 3.2, RED), clothesRack(7.2, 5.6, 1.0, 74, [GRAY, BLUE, GRAY, BRICK], true),
-        ...tableBox(2.6, 5.8, 0.6, 0.45), BX(2.5, 5.8, 0.2, 0.1, 0.78, 1.0, (i, t, L) => { BG[i] = C(GRAY, 1.5 + L * 0.2); return set(i, HIT.face === 3 && fract(T * 6) < 0.5 ? '|' : ' ', C(WHITE, 12)), true; })); // the sewing machine
+        ...tableBox(2.6, 5.8, 0.6, 0.45), SEWING_MACHINE(2.5, 5.8, 0.78)); // the sewing machine
     } else {
       p.push(clothesRack(3.8, 3.4, 1.3, 75), clothesRack(3.8, 5.6, 1.3, 76, [BRICK, GREEN, GRAY, YEL, BLUE, MAG]), clothesRack(7.6, 3.4, 1.1, 77, [RED, GRAY, BLUE, WHITE], true),
         mannequin(7.4, 5.4, 'jacket', 'skirt', ORANGE), mannequin(1.4, 7.4, 'dress', 'pants', MAG, 1, 0), ...armchair(10.4, 5.45, -1, 0, GREEN), lampStand(1.4, 3),
-        BX(7.6, 6.9, 0.45, 0.3, 0, 0.55, (i, t, L) => { const f = HIT.face; if (f === 5) { BG[i] = C(GRAY, 0.6); return set(i, fract(HIT.u * 18) < 0.4 ? '|' : ' ', C(ITEM_COL[Math.floor(HIT.u * 18) & 7], 12)), true; } BG[i] = C(BRICK, (1.4 + L * 0.2) * shadeFace(f)); return set(i, ' ', 0), true; })); // a crate of records
+        RECORD_CRATE(7.6, 6.9, 0.45, 0.3, 78)); // a crate of records
     }
     p.push(...shoppers([[5.6, 4.4, 0, -1], [2.2, 4.6, 1, 0], [8.4, 4.6, 0, -1]], 0.4));
     if (chance(0.3)) p.push(shopper(10.5, 3.5, 1, 0)); // trying something on
@@ -17755,14 +17748,12 @@ const sunglassSpinner = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.2, 0.2, 1.75]);
 ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#..........#', '#.SS....SS.#', '####....SS.#', '#..........#', '#..#.......#', '#####DD#####'], light: 1.1, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pharmacyWall, keeper: [6, 1.4],
   props: r => {
-    const p = [BX(6, 2.15, 2.4, 0.32, 0, 1.15, solid(WHITE, { panel: 0.8, trim: 1.1, top: '=' })), standing(6, 1.4, WHITE), standing(4.4, 1.4, WHITE), // the pharmacist, and one counting pills
+    const p = [SHOP_COUNTER(6, 2.15, 2.4, 0.32, 1.15, 1, 0, WHITE), standing(6, 1.4, WHITE), standing(4.4, 1.4, WHITE), // the pharmacist, and one counting pills
       { x: 6, y: 2.4, draw: (vx, vy) => hallSign(vx, vy, 0.95, 1.94, 2.12, 3, 'PRESCRIPTIONS', C(GREEN, 4), C(WHITE, 15)) },
       aisleSign(2.9, 4.95, 'COLD & FLU', C(BLUE, 4), C(WHITE, 15), 0.6), aisleSign(9.1, 4.95, 'VITAMINS', C(ORANGE, 4), C(WHITE, 15), 0.5),
-      BX(10.8, 7.4, 0.3, 0.3, 0, 1.3, (i, t, L) => { if (HIT.face === 2 && HIT.w > 0.9 && HIT.w < 1.2) { BG[i] = C(CYAN, 3); return set(i, HIT.w > 1.05 ? '1' : '2', C(WHITE, 14)), true; } // the blood pressure machine
-        BG[i] = C(WHITE, (2.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 2 && Math.abs(HIT.w - 0.75) < 0.05 ? 'O' : ' ', C(GRAY, 6)), true; }),
-      { ...BX(10.15, 7.4, 0.25, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seat: true, x: 10.15, y: 7.4, fx: 1, fy: 0, h: 0.45 }, sunglassSpinner(4.5, 7.5),
-      BX(1.5, 6.5, 0.35, 0.3, 0, 0.75, solid(WHITE, { top: '=', panel: 0.35 })), STOOL(1.5, 7.4, BLUE, 0.5), // the consultation room: a desk, a stool
-      BX(1.35, 6.5, 0.12, 0.1, 0.75, 1.0, (i, t, L) => { BG[i] = HIT.face === 1 ? C(CYAN, 4) : C(GRAY, 1.5); return set(i, ' ', 0), true; })]; // and its screen
+      BP_MACHINE(10.8, 7.4, -1, 0), // the blood pressure machine
+      STOOL(10.15, 7.4, BLUE, 0.45), SEAT(10.15, 7.4, 1, 0, 0.45), sunglassSpinner(4.5, 7.5),
+      SMALL_DESK(1.5, 6.5, 0.35, 0.3, 0.75, 0, -1), STOOL(1.5, 7.4, BLUE, 0.5), DESK_MONITOR(1.4, 6.45, 0.75, 0, 1)]; // the consultation room: a desk, a stool, its screen
     p.push(...shoppers([[6, 3.1, 0, -1], [6.3, 3.9, 0, -1], [4.8, 4.6, -1, 0], [7.2, 6.2, 1, 0]], 0.45));
     if (chance(0.4)) p.push({ ...sitting(10.15, 7.45, shirt(), 0.45), face: [1, 0] });
     return p;
@@ -17898,10 +17889,9 @@ const popcornMachine = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
 ROOM_DEFS.video = { grid: ['############', '#.......#..#', '#.SS.SS.#..#', '#.SS.SS.#..#', '#.SS.SS.#.##', '#.SS.SS....#', '#..........#', '#..........#', '#..........#', '#####DD#####'],
   light: 0.85, floor: 'carpet', ceil: 'strip', sign: true, signAt: 4.5, wall: videoWall, keeper: [9.8, 6.75],
   props: r => {
-    const p = [BX(9.8, 7.45, 1.15, 0.3, 0, 1.0, solid(BLUE, { panel: 0.5, trim: 0.96, top: '=' })), standing(9.8, 6.75, r.neon),
+    const p = [SHOP_COUNTER(9.8, 7.45, 1.15, 0.3, 1.0, 1, 0, BLUE), standing(9.8, 6.75, r.neon),
       tvSet(9.15, 7.45, 1.0, 0, 1, 0.24, movie), popcornMachine(10.6, 7.45, 1.0),
-      BX(1.6, 8.2, 0.3, 0.25, 0, 0.9, (i, t, L) => { if (HIT.face === 1 && Math.abs(HIT.w - 0.7) < 0.03 && Math.abs(HIT.v) < 0.15) return set(i, '=', C(GRAY, 1)), true; // the returns box
-        BG[i] = C(BLUE, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
+      RETURNS_BOX(1.6, 8.2, 1, 0), // the returns box
       figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true, cutout: true }), // a cardboard action hero
       aisleSign(3, 3.6, 'ACTION', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6, 3.6, 'HORROR', C(GRAY, 1), C(RED, 15), 0.4),
       beadCurtain(9.5, 4.5, 0.5), lintelSign(9.5, 4.5, 0.5, '18+', C(GRAY, 0.5), C(RED, 15)), // the way through to the back
@@ -17940,17 +17930,17 @@ function herbsWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.herbs = { grid: ['###############', '#........#....#', '#........#....#', '#.............#', '#.............#', '#........#....#', '#........#....#', '######DD#######'],
   light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 5, wall: herbsWall, keeper: [5, 1.4],
   props: r => {
-    const p = [BX(5, 2.1, 2, 0.3, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' })), standing(5, 1.4, RED),
+    const p = [SHOP_COUNTER(5, 2.1, 2, 0.3, 1.0, 1, 0, BRICK), standing(5, 1.4, RED),
       jar(3.4, 2.05, 1.0, RED), jar(3.75, 2.15, 1.0, YEL), jar(6.4, 2.1, 1.0, BRICK), brassScale(5.7, 2.1, 1.0),
       ...glassCase(1.75, 4.2, 0.7, 0.3, 1.0, caseGoods('herbs', [WARM, YEL, BRICK], false, 95), BRICK, 0, 1),
       sack(1.7, 5.75, BRICK, '@'), sack(1.7, 6.4, RED, 'o'), sack(2.35, 6.45, YEL, '*'), sack(3.0, 6.45, GREEN, '%'),
       ...moonGate(9.5, 4, 1, 0, 1), // through to the tea room
-      BX(11.8, 3.5, 0.45, 0.35, 0.28, 0.36, solid(BRICK, { top: '=' })), BX(11.8, 3.5, 0.3, 0.2, 0, 0.28, solid(BRICK)), // its low table
+      TEA_TABLE(11.8, 3.5, 0.45, 0.35, 0.36), // its low table
       ROOM_MODEL(11.8, 3.5, (vx, vy) => { // a tea set: the pot, four cups
         drum(vx, vy, 0.07, 0.36, 0.48, (i, t, L) => { BG[i] = C(WHITE, 3.5 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(BLUE, 8)), true; });
         for (const [e, w] of [[-0.25, -0.15], [0.25, -0.15], [-0.25, 0.15], [0.25, 0.15]]) drum(vx + e, vy + w, 0.03, 0.36, 0.41, (i, t, L) => { BG[i] = C(WHITE, 3); return set(i, ' ', 0), true; });
       }),
-      ...[[11.0, 3.5, 1, 0], [12.6, 3.5, -1, 0], [11.8, 2.7, 0, 1], [11.8, 4.3, 0, -1]].map(([x, y, fx, fy]) => ({ ...BX(x, y, 0.25, 0.25, 0, 0.1, solid(RED, { top: '#', bright: 1.5 })), walk: true, seat: true, x, y, fx, fy, h: 0.12 })), // cushions
+      ...[[11.0, 3.5, 1, 0], [12.6, 3.5, -1, 0], [11.8, 2.7, 0, 1], [11.8, 4.3, 0, -1]].map(([x, y, fx, fy]) => ({ ...FLOOR_CUSHION(x, y, 0.25, 0.25, 0.12, RED), walk: true, seat: true, x, y, fx, fy, h: 0.12 })), // cushions
       POT_PLANT(13.4, 1.5, 1.4), POT_PLANT(13.4, 6.4, 1.1)];
     for (const [x, y] of [[3, 3.4], [4.2, 4.2], [5.6, 3.4], [6.8, 4.4], [4.6, 5.4], [6, 5.6]]) p.push(hung(x, y, 2.35, herbBundle));
     if (chance(0.6)) p.push({ ...sitting(11.0, 3.5, shirt(), 0.12), face: [1, 0] }, { ...sitting(12.6, 3.5, shirt(), 0.12), face: [-1, 0] }); // two over a pot of tea
@@ -17982,12 +17972,12 @@ const phoneTable = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.75, 0.4, 0.9]);
 ROOM_DEFS.phones = { grid: boxRoom(12, 8), light: 1.1, floor: 'marble', ceil: 'spots', sign: true, signAt: 6, wall: phonesWall, keeper: [8.8, 1.25],
   props: r => {
-    const p = [BX(8.8, 1.95, 1.2, 0.3, 0, 1.0, solid(WHITE, { trim: 0.96, top: '=', bright: 1.5 })), standing(8.8, 1.25, GRAY),
+    const p = [SHOP_COUNTER(8.8, 1.95, 1.2, 0.3, 1.0, 1, 0, WHITE), standing(8.8, 1.25, GRAY),
       phoneTable(3.8, 4.1), phoneTable(8.2, 4.1),
-      BX(1.5, 5.3, 0.9, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.45 }), 0, 1), STOOL(2.25, 5.3, GRAY, 0.6), // the repairs bench
+      SMALL_DESK(1.5, 5.3, 0.9, 0.35, 0.9, -1, 0, GRAY), STOOL(2.25, 5.3, GRAY, 0.6), // the repairs bench
       ROOM_MODEL(1.5, 5.3, (vx, vy) => { rod(vx - 0.2, vy, 0.9, vx + 0.05, vy, 1.4, 0.01, GRAY, 1.2); rod(vx + 0.05, vy, 1.4, vx + 0.3, vy, 1.2, 0.01, GRAY, 1.2);
         dot(vx + 0.32, vy, 1.15, 0.07, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, 'O', C(GRAY, 6)), true; }); }), // its magnifier lamp
-      BX(10.7, 6.3, 0.1, 0.1, 0, 1.2, solid(GRAY)), BX(10.7, 6.3, 0.18, 0.06, 1.2, 1.5, (i, t, L) => { if (HIT.face === 3) { BG[i] = C(CYAN, 4); return set(i, fract(T) < 0.5 ? '#' : ' ', C(WHITE, 13)), true; } BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; })]; // the queue ticket screen
+      QUEUE_SCREEN(10.7, 6.3, 0, 1)]; // the queue ticket screen
     if (chance(0.7)) p.push({ ...sitting(2.25, 5.3, BLUE, 0.6), face: [-1, 0], chat: false }); // the repair tech, at it
     p.push(...shoppers([[3.8, 4.8, 0, -1], [8.2, 4.8, 0, -1], [8.9, 3.4, 0, 1], [8.4, 2.7, 0, -1]], 0.4));
     return p;
@@ -18021,8 +18011,8 @@ ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'stri
     const p = [...glassCase(6, 2.4, 2.1, 0.35, 1.0, caseGoods('jewellery', [YEL, WHITE, YEL, CYAN], true, 97), GRAY), grille(6, 2.1, 2.1, 1.0, 2.25), standing(6, 1.55, r.neon),
       guitar(1.03, 3.2, RED), guitar(1.03, 4.0, BRICK), guitar(1.03, 4.8, YEL), guitar(1.03, 5.6, BLUE),
       ...glassCase(10.55, 5.2, 1.2, 0.35, 1.0, caseGoods('watches', [YEL, WHITE, GRAY], true, 98), GRAY, 0, 1),
-      tvSet(10.75, 1.55, 0, -1, 0.3, 0.35), tvSet(10.75, 2.35, 0, -1, 0.3, 0.35), tvSet(10.75, 1.95, 0.55, -1, 0.3, 0.35, movie),
-      BX(10.75, 1.95, 0.25, 0.75, 0, 0.0001, solid(GRAY)), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)];
+      tvSet(10.75, 1.55, 0.012, -1, 0, 0.35), tvSet(10.75, 2.35, 0.012, -1, 0, 0.35), tvSet(10.75, 1.95, 0.012 + 0.35 * 1.5, -1, 0, 0.35, movie),
+      FLOOR_MAT(10.75, 1.95, 0.25, 0.75, 0.012), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)]; // (the tellies stand on a mat)
     p.push(...shoppers([[4.1, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
     return p;
   } };
@@ -18059,9 +18049,8 @@ const beerCases = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => { for (let k = 0; k 
 ROOM_DEFS.liquor = { grid: ['############', '#...#......#', '#...#......#', '##.##.SS...#', '#.....SS...#', '#..........#', '#..........#', '#..........#', '#####DD#####'],
   light: 0.9, floor: 'tile', ceil: 'strip', sign: true, signAt: 7.5, wall: liquorWall, keeper: [9.6, 5.55],
   props: r => {
-    const p = [BX(9.6, 6.25, 1.0, 0.3, 0, 1.0, solid(GRAY, { panel: 0.5, trim: 0.96, top: '=' })), standing(9.6, 5.55, r.neon),
-      BX(9.6, 6.1, 1.0, 0.015, 1.0, 1.95, (i, t, L) => { if (Math.abs(HIT.u) < 0.3 && HIT.w < 1.3) return false; BG[i] = C(CYAN, 0.6); return set(i, fract((HIT.u + HIT.w) * 2) < 0.05 ? '/' : ' ', C(WHITE, 7)), true; }), // the plexiglass
-      BX(10.35, 6.25, 0.18, 0.15, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 3 ? '$' : '#', C(GREEN, L)), true; }),
+    const p = [SHOP_COUNTER(9.6, 6.25, 1.0, 0.3, 1.0, 1, 0, GRAY), standing(9.6, 5.55, r.neon),
+      PLEXI_SCREEN(9.6, 6.1, 1.0, 1.0, 0.95, 1, 0), GAS_TILL(10.35, 6.25, 1.0, 0, -1), // the plexiglass; the till, to the clerk
       caveDoor(2.5, 3.5, 0.5), lintelSign(2.5, 3.5, 0.5, 'BEER', C(BLUE, 3), C(WHITE, 15), WHITE), // the way into the beer cave
       beerCases(1.5, 1.62, 6), beerCases(3.4, 1.62, 7), ...SHOP_FRIDGES.liquor(), beerCases(3.45, 2.4, 5), beerCases(1.7, 7.2, 4), beerCases(2.4, 7.2, 3)];
     p.push(...shoppers([[8.4, 3.6, -1, 0], [7.6, 2, 0, -1], [2.4, 5.4, 0, -1]], 0.4));
@@ -18102,12 +18091,10 @@ const storeProps = ROOM_DEFS.store.props;
 // (the store's right-wall fridges are built: shop-fridges.js)
 ROOM_DEFS.store.props = r => {
   const p = [...storeProps(r), ...SHOP_FRIDGES.store()];
-  if (r.word === '24/7') p.push(ROOM_MODEL(5.75, 1.75, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
+  if (r.word === '24/7') p.push(ROOM_MODEL(5.65, BACK_COUNTER_Y, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
     for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx + e, vy, 0.1, 1.05, 1.45, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
     BXD(vx, vy, 0.24, 0.13, 1.45, 1.55, solid(WHITE, { top: '=' }));
-  }), BX(4.47, 1.75, 0.22, 0.14, 1.05, 1.15, (i, t, L) => { // the hot dog roller
-    if (HIT.face === 5) { BG[i] = C(BRICK, 3); return set(i, fract(HIT.u * 8 + T * 0.5) < 0.5 ? '=' : '-', C(ORANGE, 12)), true; }
-    BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }));
+  }), HOTDOG_ROLLER_AT(5, BACK_COUNTER_Y, 1.05)); // the hot dog roller
   if (r.word === 'BODEGA') p.push(figProp(5.65, 1.7, CAT_LOOK, { z: 1.05, h: 0.75 / CAT_LOOK.scale(0), pose: () => fract(T / 5) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 })); // the bodega cat, on the counter
   return p;
 };
@@ -18240,16 +18227,7 @@ Object.assign(ROOM_FOR, { GAS: 'gas' });
 // of them; a wall of sleeves face-out at the back, gig posters down the left, CDs and tapes racked on the right; a
 // listening station with its headphones; and the counter by the door, a record going round on the deck behind it
 const RECORD_COLS = [RED, ORANGE, YEL, GREEN, CYAN, BLUE, MAG, WHITE, BRICK];
-const recordBin = (x, y, hl, seed) => [ // along y; waist high, the sleeves standing in it as a row of spines
-  BX(x, y, hl, 0.42, 0, 0.62, solid(BRICK, { panel: 0.8, trim: 0.58, top: '=' }), 0, 1),
-  BX(x, y, hl - 0.04, 0.36, 0.62, 0.9, (i, t, L) => {
-    if (HIT.face !== 5) { BG[i] = C(GRAY, 0.8 + L * 0.1); return set(i, fract(HIT.u * 9) < 0.4 ? '|' : ' ', C(RECORD_COLS[hash(Math.floor(HIT.u * 9), seed, 71) * 9 | 0], L * 0.9)), true; }
-    const s = Math.floor((HIT.u + hl) * 14), col = RECORD_COLS[hash(s, seed, 72) * 9 | 0]; // the sleeves' top edges, one after another
-    BG[i] = C(col, 1.6 + L * 0.3); return set(i, fract((HIT.u + hl) * 14) < 0.25 ? '|' : ' ', C(GRAY, 1)), true;
-  }, 0, 1),
-  ...[-0.55, 0.55].map((f, k) => BX(x, y + f * hl, 0.02, 0.36, 0.9, 1.05, (i, t, L) => { // divider cards: A-K, L-Z
-    BG[i] = C(WHITE, 3.4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.98) < 0.03 ? (k ? 'L' : 'A') : ' ', C(GRAY, 1)), true; }, 0, 1)),
-];
+// (the bins, the face-out wall, the counter and the listening cabinet are built: record-shop.js)
 // a turntable on top of something z high: the platter going round, the tonearm across it
 const turntable = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy, 1, 0, 0.22, 0.17, z, z + 0.06), solid(GRAY, { top: ' ' }));
@@ -18263,39 +18241,25 @@ const turntable = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
   rod(vx + 0.15, vy - 0.12, z + 0.11, vx - 0.02, vy - 0.05, z + 0.085, 0.006, WHITE, 1.3); // the tonearm
 });
 function recordsWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 0.4 && z < 2.6) { // sleeves face out, three rows of them on narrow ledges
-    if (wallText(i, u, uStep, z, d, 'NEW IN', 2.4, 2.75, 0.18, 0.25, C(YEL, 15))) return true;
-    const row = Math.floor((z - 0.4) / 0.72), cu = Math.floor(u / 0.36), fu = fract(u / 0.36), fz = fract((z - 0.4) / 0.72);
-    if (fz < 0.08) { BG[i] = C(BRICK, 1.4); return set(i, '=', C(WARM, L)), true; } // the ledge
-    if (fu < 0.07 || fz > 0.9) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
-    const h = hash(cu, row, 73), col = RECORD_COLS[h * 9 | 0], cx = fu - 0.53, cz = fz - 0.5, ring = Math.hypot(cx, cz);
-    BG[i] = C(col, 2.4 + L * 0.2); // a sleeve: its colour, and a design on it (a disc, stripes or a block letter)
-    if (h < 0.4) return set(i, ring < 0.3 && ring > 0.12 ? 'O' : ' ', C(GRAY, 1)), true;
-    if (h < 0.7) return set(i, fract(cz * 5) < 0.3 ? '=' : ' ', C(WHITE, 12)), true;
-    return set(i, ring < 0.2 ? '#' : ' ', C(WHITE, 14)), true;
-  }
+  if (backWall(my) && wallText(i, u, uStep, z, d, 'NEW IN', 2.4, 2.75, 0.18, 0.25, C(YEL, 15))) return true; // (the sleeves under it are built)
   if (leftWall(mx) && z > 0.9 && z < 2.5) { // gig posters and flyers, pasted over each other
     const pu = Math.floor(u / 0.7), pz = Math.floor((z - 0.9) / 0.8), h = hash(pu, pz, 74), col = RECORD_COLS[h * 9 | 0];
     if (fract(u / 0.7) < 0.08 || fract((z - 0.9) / 0.8) < 0.06) return false;
     BG[i] = C(col, 2.2 + L * 0.2);
     return set(i, fract((z - 0.9) / 0.8) > 0.75 ? (fract(u * 9) < 0.6 ? '#' : ' ') : fract(z * 9) < 0.25 ? '-' : ' ', C(h > 0.5 ? WHITE : GRAY, h > 0.5 ? 13 : 1)), true;
   }
-  if (rightWall(mx) && u < 4.6 && z > 0.3 && z < 2.3) { // CDs and tapes, spines out
-    if (fract((z - 0.3) / 0.4) < 0.12) { BG[i] = C(GRAY, 1.6); return set(i, '=', C(GRAY, L)), true; }
-    const k = hash(Math.floor(u * 30), Math.floor((z - 0.3) / 0.4), 75);
-    BG[i] = C(GRAY, 0.6); return set(i, '|', C(RECORD_COLS[k * 9 | 0], L * 1.1)), true;
-  }
   if (z < 1.0) { BG[i] = C(GRAY, 0.6 + L * 0.1); return set(i, ' ', 0), true; }
   BG[i] = C(MAG, 0.8 + L * 0.12); return set(i, ' ', 0), true; // painted a deep purple, the way record shops are
 }
 ROOM_DEFS.records = { grid: boxRoom(12, 9), light: 0.75, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, wall: recordsWall, keeper: [10.35, 6.2],
+  shelves: { kind: 'cds', wall: 'right', from: 1, to: 4.6, levels: [0.3, 0.7, 1.1, 1.5, 1.9], height: 2.3 }, // CDs and tapes on the right
   props: r => {
-    const p = [...recordBin(3.3, 3.7, 1.7, 1), ...recordBin(6.1, 3.7, 1.7, 2),
-      BX(9.6, 6.2, 1.25, 0.32, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' }), 0, 1), // the counter by the door,
+    const p = [RECORD_BIN_UNIT(3.3, 3.7, 1.7, 1), RECORD_BIN_UNIT(6.1, 3.7, 1.7, 2), RECORD_FACEOUT_WALL(1, 11),
+      SHOP_COUNTER(9.6, 6.2, 1.25, 0.32, 1.0, 0, 1, BRICK), // the counter by the door,
       { ...standing(10.35, 6.2, r.neon), face: [-1, 0] }, // and behind it, facing the shop
-      BX(9.6, 7.0, 0.16, 0.2, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 2 ? '$' : '#', C(GREEN, L)), true; }, 0, 1), // the till
+      GAS_TILL(9.6, 7.0, 1.0, 1, 0), // the till
       turntable(9.6, 5.5, 1.0), // what's playing
-      BX(1.35, 6.6, 0.4, 0.28, 0, 0.9, solid(GRAY, { top: '=' }), 0, 1), turntable(1.35, 6.6, 0.9), STOOL(2.1, 6.6, RED, 0.62), // the listening station
+      SHOP_COUNTER(1.35, 6.6, 0.4, 0.28, 0.9, 0, -1, GRAY), turntable(1.35, 6.6, 0.9), STOOL(2.1, 6.6, RED, 0.62), // the listening station
       ROOM_MODEL(1.35, 6.25, (vx, vy) => { rod(vx - 0.08, vy, 1.05, vx + 0.08, vy, 1.05, 0.01, GRAY, 1); for (const e of [-1, 1]) dot(vx + e * 0.09, vy, 0.98, 0.04, solid(GRAY)); }), // its headphones
       aisleSign(3.3, 3.7, 'ROCK  SOUL', C(GRAY, 1), C(YEL, 15), 0.6), aisleSign(6.1, 3.7, 'JAZZ  DUB', C(GRAY, 1), C(CYAN, 15), 0.6)];
     p.push(...shoppers([[2.4, 3.2, 1, 0], [4.2, 4.4, -1, 0], [5.2, 2.6, 1, 0], [7.0, 4.6, -1, 0]], 0.4)); // crate diggers, heads down
@@ -18412,12 +18376,11 @@ ROOM_DEFS.tattoo = { grid: boxRoom(14, 11), light: 0.85, floor: 'checker', ceil:
       ...[2.6, 7.0, 11.4].flatMap(sx => [tattooStation(sx, 2.3), SEAT(sx - 0.1, 2.3, 1, 0, 0.6), SEAT(sx + 0.25, 3.05, 0, -1, 0.52)]), // (sit in the chair, or on the artist's stool)
       ...glassCase(10.2, 7.45, 1.5, 0.34, 1.0, caseGoods('piercing', [YEL, WHITE, GRAY, CYAN], true, 84), GRAY), // the counter: rings, studs, barbells
       { ...artist(10.2, 6.75, (r.cell ? r.cell[0] * 31 + r.cell[1] : 7) | 0, { face: [0, 1] }) }, // behind it
-      BX(11.2, 7.45, 0.18, 0.15, 1.0, 1.24, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; }), // the till
-      BX(9.3, 7.4, 0.14, 0.2, 1.0, 1.08, solid(GRAY, { top: '#' })), BX(9.3, 7.4, 0.14, 0.2, 1.08, 1.14, solid(RED, { top: '=' })), // portfolios
+      GAS_TILL(11.2, 7.45, 1.0, 0, -1), BOOK_STACK(9.3, 7.4, 1.0, [[0.14, 0.2, 0.08, GRAY], [0.14, 0.2, 0.06, RED]]), // the till; portfolios
       ROOM_MODEL(9.8, 7.5, (vx, vy) => drum(vx, vy, 0.07, 1.0, 1.18, (i, t, L) => { BG[i] = C(CYAN, 1); const k = hash(Math.floor(HIT.u * 40), Math.floor(HIT.w * 30), 85); return set(i, k > 0.55 ? 'o' : ' ', C(INK_COLS[k * 9 | 0], 13)), true; })), // a jar of lollipops
       ...chesterfield(1.4, 8.0, 1.2), JUKEBOX(1.35, 5.6, 1, 0), POT_PLANT(5.4, 9.4, 1.5),
-      BX(2.75, 8.0, 0.35, 0.55, 0, 0.42, solid(GRAY, { top: '=' }), 0, 1), BX(2.75, 7.8, 0.12, 0.16, 0.42, 0.47, solid(MAG, { top: '#' })), BX(2.7, 8.3, 0.12, 0.16, 0.42, 0.46, solid(BLUE, { top: '#' })), // the low table and its binders
-      BX(2.6, 8.0, 1.25, 1.0, 0, 0.012, (i, t, L) => { const e = Math.min(1.25 - Math.abs(HIT.u), 1.0 - Math.abs(HIT.v)); BG[i] = C(e < 0.12 ? YEL : RED, e < 0.12 ? 3 : 1.6 + L * 0.2); return set(i, e > 0.12 && fract((HIT.u + HIT.v) * 3) < 0.15 ? '+' : ' ', C(ORANGE, 6)), true; }, 0, 1)]; // the rug
+      FURNITURE_EAT_TABLE(2.75, 8.0, 0.55, 0.35, GRAY, 0.42), BOOK_STACK(2.75, 7.8, 0.42, [[0.12, 0.16, 0.05, MAG]]), BOOK_STACK(2.7, 8.3, 0.42, [[0.12, 0.16, 0.04, BLUE]]), // the low table and its binders
+      FLOOR_RUG(2.6, 8.0, 1.25, 1.0, RED, YEL, 0, 1)]; // the rug
     let seed = 11;
     for (const sx of [2.6, 7.0, 11.4]) if (chance(0.55)) p.push( // someone in the chair, and their artist hunched over the work
       { ...sitting(sx - 0.2, 2.3, shirt(), 0.62), face: [1, 0] }, artist(sx + 0.25, 3.05, seed++, { pose: 'sit6', face: [0, -1] }));
@@ -21172,16 +21135,8 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
 // cheese, flowers, bread), a coffee stand with stools, benches back to back down the middle
-const stallTop = kind => (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 6) < 0.15 ? '=' : ' ', C(WARM, L * 0.5)), true; }
-  const k = hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 134 + kind), [c, lv, g] = [[WHITE, 8, '<'], [GREEN, 5, 'o'], [RED, 5, '~'], [YEL, 8, 'O'], [MAG, 8, '*'], [ORANGE, 6, ')']][kind];
-  if (kind === 0) { BG[i] = C(CYAN, 4); return set(i, k > 0.55 ? '<' : ' ', C(GRAY, 9)), true; } // fish on ice
-  const col = kind === 1 ? [GREEN, RED, ORANGE][k * 3 | 0] : kind === 4 ? [RED, YEL, WHITE, MAG][k * 4 | 0] : c;
-  BG[i] = C(col, lv * (0.7 + k * 0.5)); return set(i, k > 0.55 ? g : ' ', C(WHITE, 9)), true;
-};
-const stallAwning = (x, y, hl, col, ca = 1, sa = 0) => BX(x, y, hl, 0.6, 2.15, 2.22, (i, t, L) => { BG[i] = fract(HIT.u * 2.5) < 0.5 ? C(col, 4 + L * 0.2) : C(WHITE, 5 + L * 0.2); return set(i, HIT.face <= 4 ? 'v' : ' ', C(GRAY, 4)), true; }, ca, sa);
-const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [BX(x, y, hl, 0.35, 0, 0.9, stallTop(kind), ca, sa), stallAwning(x - sa * 0.1, y - ca * 0.1, hl + 0.1, col, ca, sa),
-  ...[-1, 1].map(e => BX(x + ca * e * hl - sa * 0.3, y + sa * e * hl - ca * 0.3, 0.03, 0.03, 0.9, 2.15, solid(GRAY))), // its posts
+// a stall along (ca, sa), its customers on (sa, ca) and its stallholder behind: built in market-hall.js
+const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
   ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || set(i, ' ', 0), true; }
@@ -21196,20 +21151,14 @@ function marketWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 'concrete', ceil: 'strip', sign: false, wall: marketWall, keeper: [8.0, 1.4],
   props: r => [...stall(3.5, 2.0, 1.4, 0, BLUE, WHITE), ...stall(8.0, 2.0, 1.6, 1, GREEN, r.neon), ...stall(12.5, 2.0, 1.4, 3, YEL, BRICK), // fish, the greengrocer, cheese
     ...stall(2.0, 5.5, 1.2, 2, RED, WHITE, 0, 1), ...stall(2.0, 8.6, 1.2, 4, MAG, shirt(), 0, 1), ...stall(14.0, 8.6, 1.2, 5, ORANGE, shirt(), 0, -1), // the butcher, flowers, bread
-    BX(14.0, 5.0, 1.0, 0.35, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(14.1, 4.6, 0.2, 0.18, 1.0, 1.4, solid(GRAY, { top: 'o', trim: 1.34 })), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
+    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
     ...stoolsY(13.25, 4.3, 5.7, 0.7, GRAY, 1, 0.4),
     ...plainBench(8.0, 6.3, 1.1, 0, -1, BRICK, 0.4), ...plainBench(8.0, 6.75, 1.1, 0, 1, BRICK, 0.4),
-    ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => BX(x, y, 0.32, 0.25, 0, 0.55, crateShade(BRICK)))] };
+    ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => KITCHEN_BEER_CRATE(x, y, { levels: 2, hl: 0.32, hw: 0.25, h: 0.275, col: BRICK }))] }; // crates, stacked
 
 // ---- the fruit shop (FRUIT): tiered stands heaped with fruit down both walls, melons on the table in the middle,
 // bananas hung up behind the counter, the scale; a bench by the window
-const FRUITS = [[ORANGE, 8, 'o'], [RED, 6, 'o'], [GREEN, 6, 'o'], [YEL, 9, ')'], [MAG, 5, '%'], [GREEN, 4, 'O']];
-const fruitTop = seed => (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 5) < 0.2 ? '=' : ' ', C(WARM, L * 0.5)), true; }
-  const [c, lv, g] = FRUITS[(Math.floor((HIT.u + 3) / 0.6) + seed) % FRUITS.length], k = hash(Math.floor(HIT.u * 14), Math.floor(HIT.v * 14), 135);
-  BG[i] = C(c, lv * (0.7 + k * 0.5)); return set(i, k > 0.55 ? g : ' ', C(c, lv + 5)), true;
-};
-const fruitTiers = (x, y, hl, s, seed) => [BX(x, y, hl, 0.2, 0, 0.95, fruitTop(seed), 0, 1), BX(x + s * 0.38, y, hl, 0.18, 0, 0.65, fruitTop(seed + 2), 0, 1), BX(x + s * 0.72, y, hl, 0.16, 0, 0.38, fruitTop(seed + 4), 0, 1)];
+// (the tiered stands are the grocer's, turned to face the room; the melon table is built: market-hall.js)
 const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k++) rod(vx - 0.1 + k * 0.05, vy, z - 0.05, vx - 0.16 + k * 0.08, vy + 0.06, z - 0.35, 0.025, YEL, 1.6); });
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -21220,11 +21169,8 @@ function fruitWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.fruitshop = { grid: boxRoom(10, 8), light: 1.1, floor: 'oak', ceil: 'pendant', sign: false, wall: fruitWall, keeper: [5.0, 1.4],
   props: r => [...counterBox(5.0, 1.8, 1.3), { ...standing(5.0, 1.4, GREEN), face: [0, 1] }, ROOM_MODEL(4.2, 1.8, (vx, vy) => { drum(vx, vy, 0.12, 1.05, 1.12, CHROME); rod(vx, vy, 1.12, vx, vy, 1.3, 0.02, GRAY, 1.2); drum(vx, vy, 0.09, 1.3, 1.42, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, HIT.face === 4 ? '/' : ' ', C(RED, 8)), true; }); }), // the scale
     bananas(3.6), bananas(6.4),
-    ...fruitTiers(1.3, 3.9, 1.6, 1, 0), ...fruitTiers(8.7, 3.9, 1.6, -1, 3),
-    BX(5.0, 4.3, 0.75, 0.45, 0, 0.7, (i, t, L) => { // melons and pineapples on the table
-      if (HIT.face !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-      const k = Math.floor((HIT.u + 1) / 0.3), cu = fract((HIT.u + 1) / 0.3) - 0.5, cv = fract((HIT.v + 1) / 0.3) - 0.5, r = Math.hypot(cu, cv);
-      BG[i] = r < 0.45 ? C(k & 1 ? YEL : GREEN, k & 1 ? 7 : 4) : C(BRICK, 2); return set(i, r < 0.45 && (k & 1 ? fract((cu + cv) * 6) < 0.3 : fract(cu * 5) < 0.2) ? (k & 1 ? '#' : '|') : ' ', C(k & 1 ? GREEN : GREEN, 8)), true; }),
+    PRODUCE_STAND(1.55, 3.9, 1.6, 21, 1, 0), PRODUCE_STAND(8.45, 3.9, 1.6, 24, -1, 0),
+    MELON_TABLE(5.0, 4.3, 0.75, 0.45, 0.7), // melons and pineapples on the table
     ...plainBench(2.4, 6.65, 0.8, 0, -1, BRICK, 0.35)] };
 
 // ---- the motel office (MOTEL): the desk with its bell, the room keys on their hooks, the ice machine, the soda machine,
@@ -21253,11 +21199,11 @@ const motelStairs = (i, u, uStep, z, d, mx, my, L) => { // the back door out to 
 ROOM_DEFS.motel = { grid: boxRoom(10, 8, { '7,0': 'E', '8,0': 'E' }), light: 0.85, floor: 'lino', ceil: 'strip', sign: false, wall: motelWall, keeper: [3.0, 1.7],
   ex: 8.0, exReach: 1.0, liftWall: motelStairs, upPrompt: 'E: the back stairs up to the roof', upSay: 'Out the back door and up the iron stairs past the room doors, onto the roof.',
   rent: true, rentBack: [5.5, 3.6, Math.PI / 2],
-  props: r => [BX(3.0, 2.4, 1.3, 0.32, 0, 1.1, solid(BRICK, { top: '=', panel: 0.45, trim: 1.04 })), { ...standing(3.0, 1.7, r.neon), face: [0, 1] },
+  props: r => [SHOP_COUNTER(3.0, 2.4, 1.3, 0.32, 1.1, 1, 0, BRICK), { ...standing(3.0, 1.7, r.neon), face: [0, 1] },
     ROOM_MODEL(3.6, 2.35, (vx, vy) => { drum(vx, vy, 0.05, 1.1, 1.13, solid(GRAY)); dot(vx, vy, 1.15, 0.035, (i, t, L) => { BG[i] = C(YEL, 8); return set(i, ' ', 0), true; }); }), // the bell
-    BX(6.1, 1.4, 0.4, 0.35, 0, 1.5, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * shadeFace(HIT.face)); if (HIT.face <= 4 && HIT.w > 1.15 && HIT.w < 1.4) { BG[i] = C(BLUE, 5); return set(i, '*', C(WHITE, 14)), true; } return set(i, HIT.face <= 4 && Math.abs(HIT.w - 0.7) < 0.03 ? '=' : ' ', C(GRAY, 6)), true; }), // the ice machine, a snowflake band on it
-    sodaCooler(8.6, 3.0, 0.45, 0.35, -1, 0), BX(8.75, 4.4, 0.4, 0.15, 0, 1.4, (i, t, L) => { BG[i] = C(BRICK, 1.5); return set(i, HIT.face === 1 || HIT.face === 2 ? (fract(HIT.w * 4) < 0.6 ? '#' : '=') : ' ', C([YEL, CYAN, MAG, GREEN][Math.floor(HIT.v * 6 + HIT.w * 4 + 9) & 3], 10)), true; }, 0, 1), // brochures
-    ...couch(1.5, 6.0, 0.9, 1, 0, BRICK), ...(chance(0.4) ? [{ ...sitting(1.55, 6.5, shirt(), 0.42), face: [1, 0] }] : []), BX(3.0, 6.0, 0.4, 0.3, 0, 0.45, solid(BRICK, { top: '=' }), 0, 1), // the couch, the coffee table
+    ICE_MACHINE(6.1, 1.4, 0, 1), // the ice machine
+    sodaCooler(8.6, 3.0, 0.45, 0.35, -1, 0), BROCHURE_RACK(8.86, 4.4, 0.4, -1, 0), // brochures
+    ...couch(1.5, 6.0, 0.9, 1, 0, BRICK), ...(chance(0.4) ? [{ ...sitting(1.55, 6.5, shirt(), 0.42), face: [1, 0] }] : []), TEA_TABLE(3.0, 6.0, 0.3, 0.4, 0.45), // the couch, the coffee table
     POT_PLANT(8.5, 6.8, 1.3)] };
 
 // ---- the welder's (WELDING): somebody at the bench in a shower of sparks, gas bottles chained to the wall, a rack of
@@ -21280,12 +21226,12 @@ function weldWall(i, u, uStep, z, d, mx, my, L) {
 }
 const WELDING_STOCK = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, fract(HIT.w * 5) < 0.3 ? '=' : ' ', C(GRAY, 9)), true; };
 ROOM_DEFS.welding = { grid: boxRoom(12, 9), light: 0.8, floor: 'concrete', ceil: 'strip', sign: false, wall: weldWall, keeper: [9.4, 6.3],
-  props: r => [BX(4.0, 2.4, 1.0, 0.45, 0, 0.85, solid(GRAY, { top: '#', panel: 0.5 })), { ...figProp(4.0, 1.6, figAnyone(GRAY, { top: 'jacket', bot: 'pants' }), { pose: 'stand', face: [0, 1], chat: false }) }, sparks(4.1, 2.35, 0.95), // the bench, the welder, the sparks
+  props: r => [WORKBENCH(4.0, 2.4, 1.0, 0.45, 0.85), { ...figProp(4.0, 1.6, figAnyone(GRAY, { top: 'jacket', bot: 'pants' }), { pose: 'stand', face: [0, 1], chat: false }) }, sparks(4.1, 2.35, 0.95), // the bench, the welder, the sparks
     gasBottle(1.4, 1.35, GREEN), gasBottle(1.75, 1.35, RED), STOOL(2.6, 2.6, GRAY, 0.62),
-    BX(10.65, 3.6, 2.0, 0.3, 0, 1.8, WELDING_STOCK, 0, 1), // the rack of steel
-    BX(1.15, 5.6, 1.2, 0.04, 0, 1.6, (i, t, L) => { const s = Math.abs(fract(HIT.u * 2.5) - 0.5) < 0.04 || Math.abs(HIT.w - 0.8 - Math.sin(HIT.u * 6) * 0.25) < 0.04 || HIT.w > 1.55 || HIT.w < 0.05; return s ? (BG[i] = C(GRAY, 1), set(i, '@', C(GRAY, 6)), true) : false; }, 0, 1), // a gate, half made
-    BX(7.2, 1.4, 0.6, 0.3, 0, 0.9, solid(GRAY, { top: '=' })), ROOM_MODEL(7.0, 1.4, (vx, vy) => { drawBox(boxAt(vx, vy, 1, 0, 0.12, 0.1, 0.9, 1.1), solid(BLUE)); drum(vx + 0.25, vy, 0.12, 0.9, 1.15, solid(GRAY)); }), // the vice, the grinder
-    BX(9.4, 7.0, 0.6, 0.35, 0, 0.75, solid(BRICK, { top: '=' })), { ...standing(9.4, 6.3, ORANGE), face: [0, -1] }, ...carSeat(7.6, 7.2, 1, 0)] };
+    STEEL_RACK(10.7, 3.6, 2.0, -1, 0), // the rack of steel
+    GATE_FRAME(1.015, 5.6, 1.2, 1.6, 0, 1), // a gate, half made
+    WORKBENCH(7.2, 1.4, 0.6, 0.3, 0.9), VICE_AND_GRINDER(7.1, 1.4, 0.9), // the vice, the grinder
+    SMALL_DESK(9.4, 7.0, 0.6, 0.35, 0.75, 0, 1, BRICK), { ...standing(9.4, 6.3, ORANGE), face: [0, -1] }, ...carSeat(7.6, 7.2, 1, 0)] };
 
 // ---- the tyre shop (TIRES): tyres stacked up everywhere, the changer and the balancer, the counter with its screen, a
 // row of chairs and the coffee machine for waiting
@@ -21303,21 +21249,14 @@ ROOM_DEFS.tireshop = { grid: boxRoom(12, 9), light: 0.95, floor: 'concrete', cei
   props: r => [...[1.5, 2.2, 2.9, 3.6].map((x, k) => tyreStack(x, 1.4, 4 + (k & 1) * 2)), ...[2.3, 3.0, 3.7].map((y, k) => tyreStack(1.4, y + 0.6, 3 + k)),
     ROOM_MODEL(6.4, 2.6, (vx, vy) => { drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.3, 0, 0.8), solid(RED, { panel: 0.3 })); drum(vx, vy, 0.3, 0.8, 0.85, solid(GRAY, { top: '+' })); rod(vx + 0.3, vy - 0.2, 0.8, vx + 0.3, vy - 0.2, 1.6, 0.03, GRAY, 1.2); rod(vx + 0.3, vy - 0.2, 1.6, vx, vy, 1.3, 0.025, GRAY, 1.2); }, [0.35, 0.3, 0.85]), // the changer
     ROOM_MODEL(9.0, 2.6, (vx, vy) => { drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.3, 0, 0.9), solid(BLUE, { panel: 0.3 })); rod(vx - 0.35, vy, 1.0, vx - 0.6, vy, 1.0, 0.03, GRAY, 1.2); drawBox(boxAt(vx - 0.68, vy, 1, 0, 0.1, 0.32, 0.68, 1.32), (i, t, L) => { BG[i] = C(GRAY, 0.8); return set(i, HIT.face <= 2 ? (Math.hypot(HIT.v, HIT.w - 1.0) < 0.15 ? 'O' : '#') : '=', C(GRAY, 6)), true; }); }, [0.7, 0.35, 1.32]), // the balancer, a wheel on it
-    BX(9.5, 6.6, 1.0, 0.3, 0, 1.05, solid(GRAY, { top: '=', panel: 0.5 })), BX(9.2, 6.6, 0.22, 0.04, 1.05, 1.4, (i, t, L) => { BG[i] = C(HIT.face === 4 ? CYAN : GRAY, HIT.face === 4 ? 3 : 1); return set(i, ' ', 0), true; }), { ...standing(9.5, 7.3, BLUE), face: [0, -1] },
-    ...[5.4, 6.1, 6.8].flatMap(y => { const q = shellChair(1.5, y, 1, 0, BLUE); if (chance(0.35)) q.push({ ...sitting(1.5, y, shirt(), 0.47), face: [1, 0] }); return q; }), BX(1.45, 7.6, 0.25, 0.25, 0, 1.1, solid(GRAY, { top: 'o', trim: 1.0 }))] };
+    SHOP_COUNTER(9.5, 6.6, 1.0, 0.3, 1.05, -1, 0, GRAY), DESK_MONITOR(9.2, 6.6, 1.05, 0, 1), { ...standing(9.5, 7.3, BLUE), face: [0, -1] },
+    ...[5.4, 6.1, 6.8].flatMap(y => { const q = shellChair(1.5, y, 1, 0, BLUE); if (chance(0.35)) q.push({ ...sitting(1.5, y, shirt(), 0.47), face: [1, 0] }); return q; }), COFFEE_VENDING(1.35, 7.6, 1, 0)] }; // the coffee machine
 
 // ---- the tailor (TAILOR): the cutting table with a pattern chalked out, two sewing machines going, dress forms, bolts of
 // cloth up the wall, the fitting mirror; an armchair to wait in
-const cuttingTop = (i, t, L) => {
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-  const cloth = Math.abs(HIT.u) < 0.9 && Math.abs(HIT.v) < 0.4, chalk = cloth && (Math.abs(Math.abs(HIT.u - 0.2) - 0.5) < 0.015 || Math.abs(HIT.v - Math.sin(HIT.u * 3) * 0.1) < 0.015);
-  BG[i] = cloth ? C(BLUE, 2.2 + L * 0.2) : C(STONE, 3); return set(i, chalk ? '.' : !cloth && fract(HIT.u * 10) < 0.08 ? '|' : ' ', C(WHITE, 12)), true; // (and a measuring rule along the edge)
-};
-const sewingMachine = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, -fy, fx, 0.45, 0.3, 0, 0.75), solid(BRICK, { top: '=' }));
-  drawBox(boxAt(vx - fx * 0.05, vy - fy * 0.05, -fy, fx, 0.2, 0.08, 0.75, 0.95), solid(WHITE, { bright: 2 }));
-  rod(vx - fy * 0.18 + fx * 0.05, vy + fx * 0.18 + fy * 0.05, 0.95, vx - fy * 0.18 + fx * 0.05, vy + fx * 0.18 + fy * 0.05, 0.78 + Math.abs(Math.sin(T * 20)) * 0.04, 0.008, GRAY, 1.5); // the needle, going
-}, [0.45, 0.3, 0.95]);
+// a sewing machine on its own table, its user on (fx, fy): built (shop-fittings.js)
+const sewingMachine = (x, y, fx, fy) => [ROOM_MODEL(x, y, (vx, vy) => drawFurnitureTable(vx, vy, Math.abs(fy) * 0.45 + Math.abs(fx) * 0.3, Math.abs(fx) * 0.45 + Math.abs(fy) * 0.3, 0.75), [Math.abs(fy) * 0.45 + Math.abs(fx) * 0.3, Math.abs(fx) * 0.45 + Math.abs(fy) * 0.3, 0.75]),
+  SEWING_MACHINE(x, y, 0.75, -fy, fx)];
 function tailorWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 0.9 && z < 2.3 && u > 3.0 && u < 8.0) { // bolts of cloth, end on, on their shelves
@@ -21330,12 +21269,12 @@ function tailorWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(STONE, 3.8 + L * 0.15); return set(i, fract(u / 0.12) < 0.08 ? ':' : ' ', C(GRAY, 4)), true; // pinstripe
 }
 ROOM_DEFS.tailor = { grid: boxRoom(11, 8), light: 0.95, floor: 'oak', ceil: 'pendant', sign: false, wall: tailorWall, keeper: [5.5, 2.9],
-  props: r => [BX(5.5, 3.6, 1.3, 0.55, 0, 0.9, cuttingTop), { ...standing(5.5, 2.9, r.neon), face: [0, 1] },
-    sewingMachine(1.5, 2.4, 1, 0), ...homeChair(2.3, 2.4, -1, 0, BRICK), { ...sitting(2.3, 2.4, shirt(), 0.48), face: [-1, 0], chat: false },
-    sewingMachine(1.5, 4.4, 1, 0), ...homeChair(2.3, 4.4, -1, 0, BRICK), ...(chance(0.6) ? [{ ...sitting(2.3, 4.4, shirt(), 0.48), face: [-1, 0] }] : []),
+  props: r => [CUTTING_TABLE(5.5, 3.6, 1.3, 0.55, 0.9), { ...standing(5.5, 2.9, r.neon), face: [0, 1] },
+    ...sewingMachine(1.5, 2.4, 1, 0), ...homeChair(2.3, 2.4, -1, 0, BRICK), { ...sitting(2.3, 2.4, shirt(), 0.48), face: [-1, 0], chat: false },
+    ...sewingMachine(1.5, 4.4, 1, 0), ...homeChair(2.3, 4.4, -1, 0, BRICK), ...(chance(0.6) ? [{ ...sitting(2.3, 4.4, shirt(), 0.48), face: [-1, 0] }] : []),
     mannequin(8.6, 2.0, 'jacket', 'pants', GRAY), mannequin(9.5, 2.8, 'dress', 'skirt', RED), mannequin(8.4, 3.6, 'jacket', 'pants', BLUE),
-    BX(9.7, 6.2, 0.04, 0.6, 0, 2.0, (i, t, L) => { BG[i] = C(CYAN, 1.4 + (HIT.w * 0.6)); return set(i, fract((HIT.v + HIT.w) * 2) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }), // the fitting mirror
-    BX(9.0, 5.45, 0.65, 0.03, 0.05, 2.1, (i, t, L) => { BG[i] = C(RED, 1.8 + L * 0.2); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L)), true; }), // the curtain, drawn back
+    FITTING_MIRROR(9.7, 6.2, 0.6, 2.0, -1, 0), // the fitting mirror
+    CURTAIN_DRAWN(9.0, 5.45, 0.65, 0.05, 2.1, RED, 1, 0, 1), // the curtain, drawn back
     ...armchair(2.0, 6.4, 1, 0, GREEN)] };
 
 // ---- antiques (ANTIQUES): the grandfather clock ticking, a gramophone, chandeliers, glass cabinets of trinkets, two
@@ -21371,9 +21310,9 @@ function antiqueWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 'pendant', sign: false, wall: antiqueWall, keeper: [9.6, 1.6],
   props: r => [...counterBox(9.6, 2.3, 1.1), { ...standing(9.6, 1.6, GRAY), face: [0, 1] }, grandfatherClock(1.45, 1.35), gramophone(6.4, 1.45),
     ...glassCase(3.6, 1.6, 1.2, 0.35, 1.2, caseGoods('trinkets', [YEL, WHITE, CYAN, MAG], true, 7), BRICK), ...glassCase(10.6, 5.4, 1.0, 0.35, 1.2, caseGoods('trinkets', [YEL, WHITE, GREEN], true, 9), BRICK, 0, 1),
-    ...armchair(4.4, 6.6, 1, 0, GREEN), ...armchair(7.2, 6.6, -1, 0, RED), BX(5.8, 6.6, 0.3, 0.3, 0, 0.55, solid(BRICK, { top: '=' })), // two armchairs over a little table
+    ...armchair(4.4, 6.6, 1, 0, GREEN), ...armchair(7.2, 6.6, -1, 0, RED), TEA_TABLE(5.8, 6.6, 0.3, 0.3, 0.55), // two armchairs over a little table
     ...(chance(0.4) ? [{ ...sitting(7.2, 6.6, shirt(), 0.42), face: [-1, 0] }] : []),
-    ...[[1.5, 6.2, 0.4], [1.5, 6.2, 0.75], [1.55, 7.3, 0.3]].map(([x, y, z], k) => BX(x, y, 0.4, 0.28, z - (k === 1 ? 0.35 : z), z, solid([BRICK, ORANGE, GREEN][k], { top: '=', panel: 0.3 }))), // old suitcases piled up
+    SUITCASE_PILE([[1.5, 6.2, 0, 0.4, BRICK], [1.5, 6.2, 0.4, 0.75, ORANGE]]), SUITCASE_PILE([[1.55, 7.3, 0, 0.3, GREEN]]), // old suitcases piled up
     chandelier(4.0, 4.0), chandelier(8.0, 4.0)] };
 
 // ---- the drugstore (DRUGSTORE): bright as day, aisles of everything in loud packets, signs hung over them, the
@@ -21409,9 +21348,9 @@ function delicatessenWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.delicatessen = { grid: boxRoom(11, 8), light: 0.95, floor: 'checker', ceil: 'tin', sign: false, wall: delicatessenWall, keeper: [5.5, 1.7],
   props: r => [KITCHEN_FOOD_CASE(5.5, 2.4, 2.4, 0.34, 1.15, 'deli', WHITE), { ...standing(5.5, 1.7, WHITE), face: [0, 1] },
     ...[3.6, 4.2, 4.8, 5.4, 6.0, 6.6, 7.2].map((x, k) => hangingMeat(x, k % 3 === 1)),
-    BX(8.6, 1.35, 0.5, 0.3, 0, 0.9, solid(GRAY, { top: '=' })), ROOM_MODEL(8.6, 1.35, (vx, vy) => { drawBox(boxAt(vx, vy, 1, 0, 0.2, 0.15, 0.9, 1.0), solid(GRAY)); drum(vx + 0.05, vy + 0.05, 0.15, 1.0, 1.04, (i, t, L) => { BG[i] = C(GRAY, 4); return set(i, '-', C(WHITE, 10)), true; }); }), // the slicer
+    SHOP_COUNTER(8.6, 1.35, 0.5, 0.3, 0.9, 1, 0, GRAY), MEAT_SLICER(8.6, 1.35, 0.9, 0, 1), // the slicer
     ROOM_MODEL(9.7, 2.6, (vx, vy) => { for (let k = 0; k < 4; k++) drum(vx, vy, 0.28 - k * 0.03, k * 0.16, k * 0.16 + 0.15, (i, t, L) => { BG[i] = C(YEL, (5 + L * 0.3) * drumLit(0.28)); return set(i, HIT.face === 5 ? ' ' : '=', C(ORANGE, 8)), true; }); }, [0.28, 0.28, 0.64]), // cheeses, stacked
-    BX(2.4, 6.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })), ...stools(1.7, 3.2, 6.3, 0.75, GREEN, 0, 1, 0.35),
+    KITCHEN_WALL_LEDGE(2.4, 6.78, 1.35, 0.17, 1.04, 0, -1), ...stools(1.7, 3.2, 6.3, 0.75, GREEN, 0, 1, 0.35),
     ...dining(8.6, 5.4, { hl: 0.32, hw: 0.32, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.35 })] };
 
 // ---- gacha (GACHA): walls of capsule-toy machines, two high, a toy in every capsule; a change machine; turn a handle
@@ -21449,7 +21388,7 @@ ROOM_DEFS.gacha = { grid: boxRoom(10, 8), light: 1.15, floor: 'kids', ceil: 'str
     for (let x = 1.5; x <= 8.6; x += 0.55) p.push(gachaMachine(x, 1.3, 0, 1, k++)); // along the back
     for (let y = 2.4; y <= 5.4; y += 0.55) p.push(gachaMachine(1.3, y, 1, 0, k++), gachaMachine(8.7, y, -1, 0, k++)); // down the sides
     for (let x = 3.9; x <= 6.2; x += 0.55) p.push(gachaMachine(x, 3.75, 0, -1, k++), gachaMachine(x, 4.25, 0, 1, k++)); // back to back in the middle
-    p.push(BX(2.0, 6.75, 0.3, 0.2, 0, 1.4, (i, t, L) => { BG[i] = C(GRAY, (2.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 && Math.abs(HIT.w - 1.1) < 0.1 ? '$' : HIT.face === 4 && Math.abs(HIT.w - 0.6) < 0.05 ? '=' : ' ', C(YEL, 12)), true; })); // the change machine
+    p.push(CHANGE_MACHINE(2.0, 6.75, 0, -1)); // the change machine
     p.push(...plainBench(7.4, 6.7, 0.7, 0, -1, MAG, 0.3));
     for (const [x, y] of [[3.0, 2.6], [6.8, 5.2]]) if (chance(0.6)) p.push({ ...figProp(x, y, figAnyone(shirt(), { kid: chance(0.5), bot: 'shorts' }), { h: 1.4 }), face: [0, -1] });
     return p;
@@ -37766,6 +37705,7 @@ const GONDOLA_STOCK={
   wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
   toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
   oil:{widths:[.07,.07,.09,.13],cols:[YEL,GRAY,RED,BLUE,BLUE],label:true}, // quarts of motor oil, jugs of screenwash
+  cds:{widths:[.01,.01,.014],cols:[RED,ORANGE,YEL,GREEN,CYAN,BLUE,MAG,WHITE,BRICK],spines:true}, // CDs and tapes, spines out
   florist:{widths:[.12,.14,.16],cols:[RED,MAG,YEL,WHITE,ORANGE],pots:true}, // potted plants in bloom
   thrift:{widths:[.08,.11,.14,.18],cols:[BRICK,GREEN,BLUE,YEL,GRAY,WHITE,MAG],mixed:true}, // bric-a-brac: boxes, jugs and vases
 };
@@ -38000,18 +37940,28 @@ function grocerCrate(kind,hl,hw,rim) {
   const shell={...boxAt(0,0,1,0,hl,hw,base,rim),...kitchenTopProfile(hl,hw,base,rim,.002)};
   return {kind,hl,hw,rim,base,floor,fruit,top:Math.max(...fruit.map(q=>q.z+q.vr)),shades,apple,models,shell};
 }
-function drawGrocerCrate(vx,vy,q,slats) {
-  // top layer first: the depth test turns away most of the fruit beneath
-  for(let k=q.models.length-1;k>=0;k--){const p=q.models[k];drawBox({...p.box,x:vx+p.box.x,y:vy+p.box.y},p.shade,p.ray);}
-  drawBox({...q.shell,x:vx,y:vy},slats,foodRayTray);
+// Rotate the cached closed tray into its local axes before intersecting it;
+// its recess helper expects an axis-aligned tray. Return world-space normals.
+function grocerTrayRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,c=b.c,s=b.s;
+  const t=foodRayTray(x*c+y*s,-x*s+y*c,oz,rx*c+ry*s,-rx*s+ry*c,rz,b.trayShape);
+  if(t<0)return t;
+  const nx=HIT.nx,ny=HIT.ny;HIT.nx=c*nx-s*ny;HIT.ny=s*nx+c*ny;return t;
+}
+function drawGrocerCrate(vx,vy,q,slats,c=1,s=0) {
+  for(let k=q.models.length-1;k>=0;k--){const p=q.models[k],b=p.box;
+    drawBox({...b,x:vx+c*b.x-s*b.y,y:vy+s*b.x+c*b.y,c:c*b.c-s*b.s,s:s*b.c+c*b.s},p.shade,p.ray);}
+  if(c===1&&s===0)drawBox({...q.shell,x:vx,y:vy},slats,foodRayTray);
+  else drawBox({...q.shell,x:vx,y:vy,c,s,trayShape:q.shell},slats,grocerTrayRay);
 }
 const grocerCard=(i,t,L)=>{ // a white price card, the price a dark line across it
   const line=Math.abs(HIT.w-HIT.z0mid)<.006&&coveDetail(t,.1)>.3;
   BG[i]=C(line?GRAY:WHITE,line?2:5+L*.15);set(i,' ',0);return true;};
-// A stand along x: three tiers of crates stepping up away from the door (+y),
+// A stand: three tiers of crates stepping down toward its customers (fx,fy),
 // each tier's crates on a timber riser. hl: half its length.
-function PRODUCE_STAND(x,y,hl,seed) {
-  const W=GROCER_CRATE,tiers=[],slats=grocerSlats(),riser=gondolaFlat(1,0,grocerSlats(BRICK));
+function PRODUCE_STAND(x,y,hl,seed,fx=0,fy=1) {
+  const W=GROCER_CRATE,tiers=[],slats=grocerSlats(),c=fy,s=-fx;
+  const riser=gondolaFlat(c,s,grocerSlats(BRICK)),at=(vx,vy,u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
   for(let k=0;k<3;k++){
     const n=Math.max(1,Math.floor(hl*2/.5)),pitch=hl*2/n,rim=W.rims[k],v=-W.tier+k*W.tier,crates=[];
     for(let j=0;j<n;j++){const kind=GROCER_PRODUCE_KINDS[Math.floor(hash(j,k,seed)*GROCER_PRODUCE_KINDS.length)];
@@ -38024,12 +37974,12 @@ function PRODUCE_STAND(x,y,hl,seed) {
   const cardShades=cards.map(cardShade);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const t of tiers){
-      for(const q of t.crates)drawGrocerCrate(vx+q.u,vy+t.v,q,slats);
-      drawBox(boxAt(vx,vy+t.v,1,0,hl,W.tier/2,0,t.base),riser); // the riser the crates stand on
+      for(const q of t.crates){const [cx,cy]=at(vx,vy,q.u,t.v);drawGrocerCrate(cx,cy,q,slats,c,s);}
+      const [rx,ry]=at(vx,vy,0,t.v);drawBox(boxAt(rx,ry,c,s,hl,W.tier/2,0,t.base),riser); // the riser the crates stand on
     }
-    for(let k=0;k<cards.length;k++){const c=cards[k];drawBox(boxAt(vx+c.u,vy+c.v,1,0,.03,.0015,c.z0,c.z1),cardShades[k]);} // clipped to each crate's front
-  }),box:boxAt(x,y,1,0,hl,W.tier*1.5,0,W.rims[0]),radius:Math.hypot(hl,W.tier*1.5)+.1,
-    produceStand:{tiers,hl,cards}};
+    for(let k=0;k<cards.length;k++){const q=cards[k],[cx,cy]=at(vx,vy,q.u,q.v);drawBox(boxAt(cx,cy,c,s,.03,.0015,q.z0,q.z1),cardShades[k]);}
+  }),box:boxAt(x,y,c,s,hl,W.tier*1.5,0,W.rims[0]),radius:Math.hypot(hl,W.tier*1.5)+.1,
+    produceStand:{tiers,hl,cards,c,s}};
 }
 // A slatted bin of watermelons, a false floor halfway down.
 function WATERMELON_BIN(x,y,h=.8) {
@@ -38111,14 +38061,14 @@ function drawCornerProfiles(vx,vy,parts) {
 }
 // A shop counter along u (c,s), the customers on +v: a set-back plinth, a
 // laminate carcass with a panel per metre on the customers' face and an
-// overhanging top.
+// overhanging top. col: one colour, or a list the panels take in turn.
 function SHOP_COUNTER(x,y,hl,hw,h,c,s,col=GRAY) {
-  const panels=Math.max(1,Math.ceil(hl*2/1)),pw=hl/panels;
-  const lam=gasPaint(col,1.8),top=gasPaint(STONE,3.6,.25),kick=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.06);set(i,' ',0);return true;};
+  const cols=[].concat(col),panels=Math.max(cols.length>1?Math.round(hl*2/.6):1,Math.ceil(hl*2/1)),pw=hl/panels;
+  const lam=gasPaint(cols[0],1.8),panelLam=cols.map(c=>gasPaint(c,1.8)),top=gasPaint(STONE,3.6,.25),kick=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.06);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
     part(0,0,hl-.04,hw-.05,0,.1,kick,.008); // the plinth
     part(0,-.01,hl-.02,hw-.03,.08,h-.035,lam,.012); // the carcass
-    for(let k=0;k<panels;k++)part(-hl+pw*(2*k+1),hw-.02,pw-.04,.012,.18,h-.12,lam,.008); // panels on the customers' face
+    for(let k=0;k<panels;k++)part(-hl+pw*(2*k+1),hw-.02,pw-.04,.012,.18,h-.12,panelLam[k%cols.length],.008); // panels on the customers' face
     part(0,0,hl,hw,h-.035,h,top,.012); // the top
   }),box:boxAt(x,y,c,s,hl,hw,0,h),radius:Math.hypot(hl,hw),shopCounter:{hl,hw,h,c,s}};
 }
@@ -38258,6 +38208,587 @@ function PLEXI_SCREEN(x,y,hl,z,h,c,s) {
     part(0,0,hl,.015,z+h-.03,z+h,GRAY,.006); // the head rail
     part(0,0,panes[1].hl,.015,z+gap-.012,z+gap,GRAY,.004); // the rail over the pass-through
   }),box:boxAt(x,y,c,s,hl,.015,z,z+h),shotPermeable:true,radius:hl,plexi:{z,h,gap,panes}};
+}
+// The record shop, built: LP bins down the middle, two rows of sleeves
+// standing in a sunk trough with divider cards between the sections; sleeves
+// face-out on ledges across the back wall; the counter, its till and the
+// listening station's cabinet. (CDs and tapes are a wall-shelf run.)
+const RECORD_BIN={rim:.62,lip:.14,wall:.018,sleeve:.31,pitch:.012,run:.42};
+// A bin along y: a timber cabinet with a trough let into its top, the LPs
+// stood in it in runs (a run is one solid: every sleeve its own colour across
+// the top and ends), a divider card between each run.
+function RECORD_BIN_UNIT(x,y,hl,seed) {
+  const B=RECORD_BIN,hw=.42,c=0,s=1,inner=hw-B.wall,rows=[-1,1].map(e=>e*inner/2),runs=[],cards=[];
+  const len=hl*2-2*B.wall-.02,n=Math.max(1,Math.floor(len/(B.run+.006)));
+  const runLen=len/n-.006;
+  for(let k=0;k<n;k++){const u=-len/2+(len/n)*(k+.5);
+    for(const v of rows)runs.push({u,v,len:runLen,seed:seed*31+k*7+(v>0)});
+    if(k)cards.push({u:-len/2+(len/n)*k,letter:'ABCDEFGHJKLMNPRSTW'[(seed*5+k*3)%18]});}
+  const flat=shade=>gondolaFlat(c,s,shade);
+  const wood=flat((i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed));
+  const sleeves=r=>flat((i,t,L)=>{ // the edges of the sleeves, one after another along the run
+    const j=Math.floor((HIT.u+r.len/2)/B.pitch),col=RECORD_COLS[Math.floor(hash(j,r.seed,72)*RECORD_COLS.length)];
+    const edge=coveGroove(HIT.u+r.len/2,B.pitch,.0015,t/projX)*coveDetail(t,.15);
+    BG[i]=C(col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-edge*1.2);set(i,' ',0);return true;});
+  const card=q=>flat((i,t,L)=>{BG[i]=C(WHITE,3.6+L*.2);
+    if((HIT.face===1||HIT.face===2)&&wallText(i,HIT.face===1?-HIT.v:HIT.v,t/projX,HIT.w,t,q.letter,0,B.rim+B.sleeve+.03,.025,.04,C(GRAY,1),BG[i]))return true;
+    set(i,' ',0);return true;});
+  const runShades=runs.map(sleeves),cardShades=cards.map(card);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,a,b,z0,z1,shade)=>drawBox(boxAt(vx-s*v+c*u,vy+c*v+s*u,c,s,a,b,z0,z1),shade);
+    runs.forEach((r,n)=>part(r.u,r.v,r.len/2,inner/2-.012,B.rim,B.rim+B.sleeve,runShades[n]));
+    cards.forEach((q,n)=>part(q.u,0,.002,inner-.01,B.rim,B.rim+B.sleeve+.06,cardShades[n]));
+    for(const e of [-1,1]){part(0,e*(hw-B.wall/2),hl,B.wall/2,B.rim,B.rim+B.lip,wood);part(e*(hl-B.wall/2),0,B.wall/2,inner,B.rim,B.rim+B.lip,wood);} // the trough's sides
+    coveRound(vx,vy,c,s,hl,hw,.08,B.rim,.012,(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed)); // the cabinet
+    coveRound(vx,vy,c,s,hl-.04,hw-.05,0,.1,.008,(i,t,L)=>{BG[i]=C(GRAY,.7+L*.05);set(i,' ',0);return true;}); // its plinth
+  }),box:boxAt(x,y,c,s,hl,hw,0,B.rim+B.sleeve+.06),radius:Math.hypot(hl,hw),recordBin:{runs,cards,hl,hw,inner}};
+}
+// Sleeves face-out on narrow ledges across the back wall (its face at y=1).
+function RECORD_FACEOUT_WALL(x0,x1,rows=[.4,1.12,1.84]) {
+  const B=RECORD_BIN,pitch=.36,ledge=.06,lip=.02,sleeves=[];
+  rows.forEach((z,row)=>{for(let u=x0+.03;u+B.sleeve<=x1-.02;u+=pitch)sleeves.push({x:u+B.sleeve/2,z:z+.025,row,h:hash(Math.floor(u/pitch),row,73)});});
+  const design=q=>(i,t,L)=>{ // its colour, and a disc, stripes or a block letter on it
+    const col=RECORD_COLS[Math.floor(q.h*RECORD_COLS.length)];BG[i]=C(col,2.4+L*.2);
+    if(HIT.face!==3){set(i,' ',0);return true;}
+    const cx=(HIT.u)/B.sleeve,cz=(HIT.w-q.z)/B.sleeve-.5,ring=Math.hypot(cx,cz);
+    if(q.h<.4){if(ring<.3&&ring>.12)BG[i]=C(GRAY,1+L*.1);}
+    else if(q.h<.7){if(fract(cz*5)<.3)BG[i]=C(WHITE,4.2+L*.2);}
+    else if(wallText(i,HIT.u,t/projX,HIT.w,t,'ABCDEFGHJKLMNPRSTW'[Math.floor(q.h*17)],0,q.z+B.sleeve/2,.12,.16,C(WHITE,4.2+L*.2),BG[i]))return true;
+    set(i,' ',0);return true;};
+  const shades=sleeves.map(design),wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,0,HIT.face===3?1:0,HIT.face===5?1:0,73);
+  const cx=(x0+x1)/2,cy=1+ledge/2,len=x1-x0;
+  return {...ROOM_MODEL(cx,cy,(vx,vy)=>{ // (vx,vy: the model's place relative to the eye)
+    sleeves.forEach((q,n)=>drawBox(boxAt(vx+q.x-cx,vy+1.008-cy,1,0,B.sleeve/2,.002,q.z,q.z+B.sleeve),shades[n])); // stood on the ledge against the wall
+    for(const z of rows){drawBox(boxAt(vx,vy,1,0,len/2,ledge/2,z,z+.025),wood);drawBox(boxAt(vx,vy+ledge/2-.006,1,0,len/2,.006,z+.025,z+.025+lip),wood);} // ledge and lip
+  }),box:boxAt(cx,cy,1,0,len/2,ledge/2,rows[0],rows.at(-1)+.025+B.sleeve),radius:len/2+.1,faceOut:{sleeves,rows,ledge,lip}};
+}
+// Small shop fittings shared between rooms: a stack of binders or books lying
+// flat, and a rug on the floor.
+// A stack lying flat at z: each [hl, hw, thickness, colour], bottom first,
+// each resting on the one beneath, the spines along u (c, s).
+function BOOK_STACK(x,y,z,books,c=1,s=0) {
+  const tops=[];let h=z;for(const b of books){tops.push(h);h+=b[2];}
+  const cover=col=>(i,t,L)=>{const edge=HIT.face!==5&&HIT.face!==6&&Math.abs(HIT.nz)<.5&&(HIT.face===1||HIT.face===2);
+    BG[i]=C(edge?WHITE:col,(edge?3.2:2.2)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const shades=books.map(b=>cover(b[3])),hl=Math.max(...books.map(b=>b[0])),hw=Math.max(...books.map(b=>b[1]));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>books.forEach((b,k)=>coveRound(vx,vy,c,s,b[0],b[1],tops[k],tops[k]+b[2],.004,shades[k]))),
+    box:boxAt(x,y,c,s,hl,hw,z,h),radius:Math.hypot(hl,hw),bookStack:{z,top:h,tops}};
+}
+// A rug on the floor, a border round it: (u, v) from its centre to shade(e, u, v) by e, the distance in from its edge.
+function FLOOR_RUG(x,y,hl,hw,field,border,c=1,s=0) {
+  const shade=(i,t,L)=>{const e=Math.min(hl-Math.abs(HIT.u),hw-Math.abs(HIT.v));
+    BG[i]=C(e<.12?border:field,e<.12?3:1.6+L*.2);return set(i,e>.12&&fract((HIT.u+HIT.v)*3)<.15?'+':' ',C(border,7)),true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox(boxAt(vx,vy,c,s,hl,hw,0,.012),gondolaFlat(c,s,shade))),rug:true};
+}
+// A disc standing on edge, its axis along v (facing fx,fy): a side-on lathe.
+function shopDisc(vx,vy,c,s,z,profile,shade) {
+  const r=Math.max(...profile.map(p=>p[1])),d=Math.max(...profile.map(p=>Math.abs(p[0])));
+  drawBox({...boxAt(vx,vy,c,s,r,d,z-r,z+r),centerZ:z,clockShape:{x:0,y:0,profile}},shade,homeClockRay);
+}
+// The key cutter on a counter top at z: a cast base, the vice carriage, the
+// motor housing, and the cutting wheel on edge turning, to the customer (fx,fy).
+function KEY_CUTTER(x,y,z,fx,fy) {
+  const c=fy,s=-fx,wheel=[[-.006,0],[-.006,.055],[.006,.055],[.006,0]];
+  const spin=(i,t,L)=>{const a=Math.atan2(HIT.w-(z+.17),HIT.u)+T*25,tooth=fract(a/TAU*24)<.5&&Math.hypot(HIT.u,HIT.w-(z+.17))>.045;
+    BG[i]=C(GRAY,(tooth?3.6:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.18,.15,z,z+.05,GRAY,.012); // the base
+    part(.06,-.05,.08,.07,z+.05,z+.25,GRAY,.02); // the motor housing
+    part(0,.037,.008,.017,z+.162,z+.178,GRAY,.004); // the spindle out to the wheel
+    part(-.07,.05,.06,.05,z+.05,z+.1,(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE),.008); // the vice carriage
+    shopDisc(vx-s*.06-c*.0,vy+c*.06,c,s,z+.17,wheel,spin); // the wheel, turning
+  }),box:boxAt(x,y,c,s,.18,.15,z,z+.25),radius:.25,keyCutter:{z}};
+}
+// Boards stood on end against a wall: [u, height] along u (c,s) from (x, y).
+function LUMBER(x,y,boards,c=0,s=1,t=.05,w=.12) {
+  const shade=(i,tt,L)=>coveTimber(i,HIT.u,HIT.w,L,tt,HIT.nx,HIT.ny,HIT.nz,7);
+  const span=Math.max(...boards.map(b=>Math.abs(b[0])))+w,h=Math.max(...boards.map(b=>b[1]));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const [u,bh] of boards)coveRound(vx+c*u,vy+s*u,c,s,w,t,0,bh,.006,shade);}),
+    box:boxAt(x,y,c,s,span,t,0,h),radius:span,lumber:{boards,t,w}};
+}
+// Distance to the nearest turn is enough for the whole coil. A single clipped
+// surface avoids testing every profile segment of every turn for each cell.
+function shopHoseRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,{R,r,turns}=b.hoseShape,speed=Math.hypot(rx,ry,rz);
+  let enter=.01,leave=Infinity;
+  for(const [o,d,lo,hi] of [[x,rx,-b.hl,b.hl],[y,ry,-b.hw,b.hw],[oz,rz,b.z0,b.z1]]){
+    if(Math.abs(d)<1e-10){if(o<lo||o>hi)return -1;continue;}
+    const a=(lo-o)/d,z=(hi-o)/d;enter=Math.max(enter,Math.min(a,z));leave=Math.min(leave,Math.max(a,z));
+  }
+  if(enter>leave)return -1;
+  for(let t=enter,k=0;k<64&&t<=leave+.00001;k++){
+    const u=x+rx*t,v=y+ry*t,w=oz+rz*t,rho=Math.hypot(u,v),dr=rho-R;
+    const zc=r+clamp(Math.round((w-r)/(2*r)),0,turns-1)*2*r,dz=w-zc,len=Math.hypot(dr,dz),dist=len-r;
+    if(dist<Math.max(.00008,t/projX*.1)){
+      const radial=rho>1e-10?dr/(rho*len):0;
+      HIT.u=u;HIT.v=v;HIT.w=w;HIT.nx=u*radial;HIT.ny=v*radial;HIT.nz=dz/len;
+      HIT.face=Math.abs(HIT.nz)>.7?(HIT.nz>0?5:6):Math.abs(HIT.nx)>Math.abs(HIT.ny)?(HIT.nx>0?1:2):(HIT.ny>0?3:4);
+      return t;
+    }
+    t+=Math.max(.00002,dist)/speed;
+  }
+  return -1;
+}
+// Six continuous, round turns of hose, each touching its neighbours.
+function HOSE_COILS(x,y,R=.34,turns=6,r=.022,col=GREEN) {
+  const shape={R,r,turns},box={...boxAt(0,0,1,0,R+r,R+r,0,turns*2*r),hoseShape:shape};
+  const shade=(i,t,L)=>{BG[i]=C(col,2.2+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox({...box,x:vx,y:vy},shade,shopHoseRay)),
+    box:boxAt(x,y,1,0,R+r,R+r,0,turns*2*r),radius:R+r,hose:shape};
+}
+// Bags of compost lying flat, one on another: plump rounded slabs with a printed band.
+function COMPOST_BAGS(x,y,n=4,hl=.4,hw=.28,h=.16) {
+  const shade=k=>(i,t,L)=>{const band=Math.abs(HIT.nz)<.6&&Math.abs(HIT.u)<.15&&HIT.face!==5;
+    BG[i]=C(band?YEL:k&1?GREEN:BRICK,(band?3:1.8)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const shades=Array.from({length:n},(_,k)=>shade(k));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(let k=n-1;k>=0;k--)coveRound(vx,vy,1,0,hl-k*.01,hw-k*.008,k*h,(k+1)*h,.05,shades[k]);}),
+    box:boxAt(x,y,1,0,hl,hw,0,n*h),radius:Math.hypot(hl,hw),bags:{n,h}};
+}
+// A plain bulkhead hanging from the ceiling over an opening.
+function BULKHEAD(x,y,hl,hw,z0,z1,c=1,s=0) {
+  const shade=gondolaFlat(c,s,(i,t,L)=>{BG[i]=C(GRAY,1.8+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawBox(boxAt(vx,vy,c,s,hl,hw,z0,z1),shade)),box:{...boxAt(x,y,c,s,hl,hw,z0,z1)},overhead:true};
+}
+// A rounded cabinet with a real circular arm recess behind the cuff. Only
+// rays through the opening need the cylinder intersection; the surrounding
+// housing keeps its usual rounded surface. The recess ends inside the cabinet.
+function bpCabinetRay(ox,oy,oz,rx,ry,rz,b) {
+  HIT.bpInner=false;
+  const outer=coveRayRounded(ox,oy,oz,rx,ry,rz,b);
+  if(outer<0||HIT.face!==3||HIT.u*HIT.u+(HIT.w-.75)**2>=.06**2)return outer;
+  const u0=(ox-b.x)*b.c+(oy-b.y)*b.s,v0=-(ox-b.x)*b.s+(oy-b.y)*b.c;
+  const du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c,w0=oz-.75;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  if(dv<0){const t=-v0/dv;if(t>=outer&&(u0+du*t)**2+(w0+rz*t)**2<=.06**2){best=t;nv=1;}}
+  const a=du*du+rz*rz,q=2*(u0*du+w0*rz),d=q*q-4*a*(u0*u0+w0*w0-.06**2);
+  if(a>1e-12&&d>=0)for(const t of [(-q-Math.sqrt(d))/(2*a),(-q+Math.sqrt(d))/(2*a)]){
+    const v=v0+dv*t;
+    if(t>=outer&&t<best&&v>=0&&v<=b.hw){best=t;nu=-(u0+du*t)/.06;nv=0;nz=-(w0+rz*t)/.06;}
+  }
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u0+du*best;HIT.v=v0+dv*best;HIT.w=oz+rz*best;
+  HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.bpInner=true;
+  HIT.face=Math.abs(nz)>.7?(nz>0?5:6):Math.abs(nu)>.7?(nu>0?1:2):3;
+  return best;
+}
+// The blood-pressure machine facing (fx,fy): a white cabinet, the cuff's
+// ring on the front at arm height, the readout above it.
+function BP_MACHINE(x,y,fx,fy) {
+  const c=fy,s=-fx,ring=[[-.02,.06],[-.02,.09],[.03,.09],[.03,.06],[-.02,.06]];
+  const white=(i,t,L)=>{BG[i]=C(WHITE,(HIT.bpInner?1.7:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const readout=(i,t,L)=>{BG[i]=C(CYAN,2.4);
+    if(HIT.face===3&&(wallText(i,HIT.u,t/projX,HIT.w,t,'READY',0,1.115,.036,.045,C(WHITE,6),BG[i])||
+      wallText(i,HIT.u,t/projX,HIT.w,t,'--',0,1.015,.04,.04,C(WHITE,6),BG[i])))return true;
+    set(i,' ',0);return true;};
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    drawBox({...boxAt(vx,vy,c,s,.3,.28,0,1.3),round:.03},white,bpCabinetRay); // the cabinet and arm recess
+    part(0,.282,.12,.003,.95,1.18,readout); // the readout
+    shopDisc(vx-s*.3,vy+c*.3,c,s,.75,ring,metal); // the cuff's ring, standing proud
+  }),box:boxAt(x,y,c,s,.3,.33,0,1.3),radius:.45,bpMachine:{fx,fy}};
+}
+// A small desk: a top on two side panels and a modesty panel; (fx,fy) is the
+// way its sitter faces, the modesty panel on the far side.
+function SMALL_DESK(x,y,hl,hw,h,fx,fy,col=WHITE) {
+  const c=fy,s=-fx,lam=(i,t,L)=>{BG[i]=C(col,2.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,hl,hw,h-.03,h,lam,.008); // the top
+    for(const e of [-1,1])part(e*(hl-.015),0,.015,hw-.02,0,h-.03,lam,.004); // the side panels
+    part(0,hw-.03,hl-.03,.008,.3,h-.03,lam,.003); // the modesty panel
+  }),box:boxAt(x,y,c,s,hl,hw,0,h),radius:Math.hypot(hl,hw),desk:{h}};
+}
+// A flat monitor on a desk top at z, its screen to (fx,fy).
+function DESK_MONITOR(x,y,z,fx,fy) {
+  const c=fy,s=-fx,screen=(i,t,L)=>{if(HIT.face!==3){BG[i]=C(GRAY,1.1);set(i,' ',0);return true;}BG[i]=C(CYAN,3.2);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.08,.06,z,z+.012,GRAY,.004); // the foot
+    part(0,-.02,.012,.01,z+.012,z+.1,GRAY,.004); // the neck
+    part(0,0,.15,.012,z+.08,z+.27,screen); // the screen
+  }),box:boxAt(x,y,c,s,.15,.06,z,z+.27),radius:.2,monitor:{z}};
+}
+// A rubber mat on the floor with rounded edges.
+function FLOOR_MAT(x,y,hl,hw,h=.03,col=GRAY,c=1,s=0) {
+  const shade=(i,t,L)=>{BG[i]=C(col,1+L*.15*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,c,s,hl,hw,0,h,Math.min(.012,h*.45),shade)),box:boxAt(x,y,c,s,hl,hw,0,h),mat:true};
+}
+// The housing owns the lip and the recessed inner walls of the return slot.
+function shopReturnsRay(ox,oy,oz,rx,ry,rz,b) {
+  HIT.slotInner=false;const outer=coveRayRounded(ox,oy,oz,rx,ry,rz,b);
+  if(outer<0||HIT.face!==3||Math.abs(HIT.u)>=.14||HIT.w<=.66||HIT.w>=.7)return outer;
+  const u=(ox-b.x)*b.c+(oy-b.y)*b.s,v=-(ox-b.x)*b.s+(oy-b.y)*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  const take=(t,x,y,z)=>{const uu=u+du*t,vv=v+dv*t,zz=oz+rz*t;
+    if(t<outer||t>=best||Math.abs(uu)>.14+1e-8||vv<.12-1e-8||vv>.2+1e-8||zz<.66-1e-8||zz>.7+1e-8)return;
+    best=t;nu=x;nv=y;nz=z;};
+  if(Math.abs(dv)>1e-10)take((.12-v)/dv,0,1,0);
+  if(Math.abs(du)>1e-10)for(const side of [-1,1])take((side*.14-u)/du,-side,0,0);
+  if(Math.abs(rz)>1e-10){take((.66-oz)/rz,0,0,1);take((.7-oz)/rz,0,0,-1);}
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u+du*best;HIT.v=v+dv*best;HIT.w=oz+rz*best;HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.slotInner=true;HIT.face=nv?3:nz?(nz>0?5:6):(nu>0?1:2);return best;
+}
+// A steel returns box: closed foot and housing, a recessed slot under its
+// rain hood, and a label seated against the front face.
+function RETURNS_BOX(x,y,fx,fy) {
+  const c=fy,s=-fx,blue=(i,t,L)=>{if(HIT.slotInner){BG[i]=C(BLUE,.8+L*.12*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);};
+  const hood=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE);
+  const label=(i,t,L)=>{BG[i]=C(WHITE,4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'RETURNS',0,.8,.018,.03,C(BLUE,3),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    drawBox({...boxAt(vx,vy,c,s,.25,.2,.06,.9),round:.03},blue,shopReturnsRay);
+    part(0,0,.22,.17,0,.06,GRAY,.01);
+    part(0,.22,.16,.02,.7,.72,hood,.006);
+    part(0,.202,.12,.002,.76,.84,label);
+  }),box:boxAt(x,y,c,s,.25,.24,0,.9),radius:.35,returnsBox:{fx,fy}};
+}
+// One steady, scaled service number, with its heading above it.
+function QUEUE_SCREEN(x,y,fx,fy) {
+  const c=fy,s=-fx,screen=(i,t,L)=>{BG[i]=C(HIT.face===3?CYAN:GRAY,HIT.face===3?2.8:1.6);
+    if(HIT.face===3&&(wallText(i,HIT.u,t/projX,HIT.w,t,'NOW SERVING',0,1.455,.028,.035,C(WHITE,6),BG[i])||
+      wallText(i,HIT.u,t/projX,HIT.w,t,'01',0,1.335,.08,.1,C(WHITE,7),BG[i])))return true;
+    set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.12,.12,0,.02,GRAY,.006);
+    part(0,0,.018,.018,.02,1.22,GRAY,.008);
+    part(0,0,.18,.03,1.2,1.5,screen);
+  }),box:boxAt(x,y,c,s,.18,.12,0,1.5),radius:.25};
+}
+// A chest of drawers against a wall, its fronts to (fx,fy): a plinth, the
+// carcass, three rows of drawers each with two knobs, a top.
+function DRESSER(x,y,hl,hw,h,fx,fy) {
+  const c=fy,s=-fx,wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,11),rows=3,rh=(h-.14)/rows;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,-.01,hl-.03,hw-.04,0,.08,wood,.006); // the plinth
+    part(0,-.01,hl-.01,hw-.02,.07,h-.03,wood,.01); // the carcass
+    for(let k=0;k<rows;k++){const z=.09+k*rh;
+      part(0,hw-.02,hl-.04,.012,z+.01,z+rh-.01,wood,.006); // a drawer front
+      for(const u of [-hl*.45,hl*.45])part(u,hw-.002,.012,.012,z+rh/2-.012,z+rh/2+.012,(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL),.008);} // its knobs
+    part(0,0,hl,hw,h-.035,h,wood,.012); // the top
+  }),box:boxAt(x,y,c,s,hl,hw+.01,0,h),radius:Math.hypot(hl,hw)};
+}
+// A sewing machine on a table top at z, its needle end along +u: the bed, the
+// pillar, the arm across, the head with the needle going.
+function SEWING_MACHINE(x,y,z,c=1,s=0) {
+  const body=(i,t,L)=>{BG[i]=C(GRAY,1.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),cloth=(i,t,L)=>{BG[i]=C(BLUE,2.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const thread=(i,t,L)=>{BG[i]=C(STONE,3.5+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz)-coveGroove(HIT.w-z,.003,.001,t/projX)*coveDetail(t,.03)*.4);set(i,' ',0);return true;};
+  const spool=homeLampPart('spool',z+.22,[[0,0],[0,.018],[.002,.018],[.002,.013],[.028,.013],[.028,.018],[.03,.018],[.03,.003],[.04,.003],[.04,0]]).box;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s),up=.006*(1+Math.sin(T*TAU*3));
+    part(0,0,.2,.1,z,z+.04,body,.01);
+    part(-.15,0,.04,.06,z+.04,z+.2,body,.015);
+    part(-.01,0,.18,.045,z+.16,z+.22,body,.02);
+    part(.14,0,.04,.05,z+.09,z+.22,body,.015);
+    part(.09,.02,.092,.057,z+.04,z+.041,metal,.0004); // needle plate on the bed
+    part(.09,.02,.09,.055,z+.041,z+.043,cloth,.0005);
+    part(.14,.02,.003,.003,z+.043+up,z+.09,metal,.002);
+    part(.12,.02,.002,.003,z+.046,z+.09,metal,.001); // presser-foot stem
+    part(.12,.02,.003,.015,z+.046,z+.049,metal,.001);
+    for(const e of [-1,1])part(.14,.02+e*.012,.02,.003,z+.043,z+.046,metal,.001);
+    drawBox({...spool,x:vx-c*.15+s*.015,y:vy-s*.15-c*.015},thread,coveRayLathe);
+    const line=(u,v,h,uu,vv,hh)=>coveTube(vx+c*u-s*v,vy+s*u+c*v,z+h,vx+c*uu-s*vv,vy+s*uu+c*vv,z+hh,.0008,STONE);
+    part(.03,.02,.002,.002,z+.22,z+.237,metal,.001);
+    line(-.137,-.015,.235,.03,.02,.235);line(.03,.02,.235,.14,.05,.205);line(.14,.05,.205,.14,.05,.11);line(.14,.05,.11,.14,.02,.09);
+  }),box:boxAt(x,y,c,s,.2,.1,z,z+.26),radius:.25,sewing:{z}};
+}
+// A slatted crate of LPs, their top edges each a colour.
+function RECORD_CRATE(x,y,hl,hw,seed) {
+  const depth=.26,floor=.008,slats=grocerSlats(),sleeve=RECORD_BIN.sleeve,pitch=RECORD_BIN.pitch,len=hl*2-.04;
+  const edges=gondolaFlat(1,0,(i,t,L)=>{const j=Math.floor((HIT.u+len/2)/pitch),col=RECORD_COLS[Math.floor(hash(j,seed,72)*RECORD_COLS.length)];
+    BG[i]=C(col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-coveGroove(HIT.u+len/2,pitch,.0015,t/projX)*coveDetail(t,.15)*1.2);set(i,' ',0);return true;});
+  const tray={...boxAt(0,0,1,0,hl,hw,0,depth),...kitchenTopProfile(hl,hw,0,depth,.002)};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,len/2,Math.min(hw-.02,sleeve/2),floor,floor+sleeve),edges); // the LPs, on edge
+    drawBox({...tray,x:vx,y:vy},slats,foodRayTray);
+  }),box:boxAt(x,y,1,0,hl,hw,0,floor+sleeve),radius:Math.hypot(hl,hw),recordCrate:{hl,hw,depth}};
+}
+// A low tea table: a top with an apron on four short legs.
+function TEA_TABLE(x,y,hl,hw,h) {
+  const wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,5);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,h-.04,h,.01,wood); // the top
+    coveRound(vx,vy,1,0,hl-.04,hw-.04,h-.09,h-.04,.006,wood); // the apron
+    for(const e of [-1,1])for(const f of [-1,1])coveRound(vx+e*(hl-.07),vy+f*(hw-.07),1,0,.03,.03,0,h-.09,.008,wood); // the legs
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),teaTable:{h}};
+}
+// A floor cushion, plump, its piping a darker band.
+function FLOOR_CUSHION(x,y,hl,hw,h,col) {
+  const shade=(i,t,L)=>{const piping=Math.abs(HIT.w-h/2)<.008&&Math.abs(HIT.nz)<.6;BG[i]=C(col,(piping?1.4:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,hl,hw,0,h,Math.min(.045,h*.45),shade)),box:boxAt(x,y,1,0,hl,hw,0,h),cushion:true};
+}
+const paintShade=(col,base,spread=.3)=>(i,t,L)=>{BG[i]=C(col,base+L*spread*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+// The motel's ice machine facing (fx,fy): a white cabinet, the bin door
+// below with its handle, the snowflake panel above.
+function ICE_MACHINE(x,y,fx,fy) {
+  const c=fy,s=-fx,white=paintShade(WHITE,2.8),flake=(i,t,L)=>{const u=HIT.u,w=HIT.w-1.275,arm=Math.min(Math.abs(u),Math.abs(u*.5+w*.866),Math.abs(u*.5-w*.866))<.004&&Math.hypot(u,w)<.065;
+    BG[i]=C(HIT.face===3&&arm?WHITE:BLUE,4.5+L*.15);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.4,.35,.05,1.5,white,.03); part(0,0,.37,.32,0,.06,GRAY,.01); // cabinet and foot
+    part(0,.352,.3,.004,.25,.8,white);
+    for(const u of [-.15,.15])part(u,.366,.008,.01,.682,.708,GRAY,.004);
+    part(0,.382,.18,.006,.68,.71,GRAY,.005); // the bin door, its handle
+    part(0,.352,.2,.003,1.15,1.4,flake); // the panel
+  }),box:boxAt(x,y,c,s,.4,.39,0,1.5),radius:.55};
+}
+// A wall rack of brochures facing (fx,fy): a back board and four tiers of
+// pockets, a fan of leaflets standing in each.
+function BROCHURE_RACK(x,y,hl,fx,fy) {
+  const c=fy,s=-fx,board=paintShade(BRICK,1.6),cols=[YEL,CYAN,MAG,GREEN],n=Math.max(2,Math.floor(hl*2/.22)),papers=cols.map(col=>paintShade(col,3.2,.25));
+  const clear=(i,t,L)=>{const glint=coveGroove(HIT.u+HIT.w*.65,.6,.002,t/projX)*coveDetail(t,.2);if(glint<.65)return false;BG[i]=C(CYAN,1.8+L*.1);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,-.12,hl,.02,0,1.4,board,.006); // the back board
+    for(const e of [-1,1])part(e*(hl-.008),-.052,.008,.052,.49,1.365,board,.003);
+    for(let row=0;row<4;row++){const z=.5+row*.22;
+      for(let k=0;k<n;k++){const u=-hl+hl/n*(2*k+1);
+        part(u,-.064,hl/n-.02,.036,z+.005,z+.2,papers[(k+row)&3]); // the leaflets, against the board
+        part(u,-.02,hl/n-.012,.008,z+.005,z+.1,clear,.003);} // the clear pocket front
+      part(0,-.06,hl,.045,z-.01,z+.005,board,.003);} // its shelf
+  }),box:boxAt(x,y,c,s,hl,.15,0,1.4),radius:hl+.1,brochures:true};
+}
+// A steel workbench: a thick top, four angle legs, a shelf low down.
+function WORKBENCH(x,y,hl,hw,h,col=GRAY) {
+  const top=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,col);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,h-.05,h,.008,top); // the top
+    for(const e of [-1,1])for(const f of [-1,1])coveRound(vx+e*(hl-.05),vy+f*(hw-.05),1,0,.025,.025,0,h-.05,.004,top); // the legs
+    coveRound(vx,vy,1,0,hl-.05,hw-.05,.15,.18,.004,top); // the shelf
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),bench:{h}};
+}
+// A bench vice and a grinder on a bench top at z: the vice's jaws and screw,
+// the grinder's motor and two wheels on edge.
+function VICE_AND_GRINDER(x,y,z) {
+  const blue=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,BLUE),wheel=[[-.012,0],[-.012,.09],[.012,.09],[.012,0]];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx-.2,vy,1,0,.08,.07,z,z+.06,.01,blue); // the vice's body
+    for(const e of [-1,1])coveRound(vx-.2,vy+e*.03,1,0,.06,.012,z+.06,z+.14,.004,blue); // its jaws
+    coveTube(vx-.2,vy-.07,z+.08,vx-.2,vy-.18,z+.08,.008); // the screw handle
+    coveRound(vx+.2,vy,1,0,.07,.06,z,z+.16,.02,GRAY); // the grinder's motor
+    coveTube(vx+.2,vy-.09,z+.12,vx+.2,vy+.09,z+.12,.008);
+    for(const e of [-1,1])shopDisc(vx+.2,vy+e*.09,1,0,z+.12,wheel,(i,t,L)=>{BG[i]=C(GRAY,1.6+L*.2);set(i,' ',0);return true;});
+  }),box:boxAt(x,y,1,0,.3,.2,z,z+.21),radius:.4,vice:{z}};
+}
+// A cantilever rack of steel stock against a wall, facing (fx,fy): uprights,
+// arms out from them, bars lying across the arms.
+function STEEL_RACK(x,y,hl,fx,fy,h=1.8) {
+  const c=fy,s=-fx,ups=[-hl+.05,0,hl-.05],arms=[.35,.75,1.15,1.55];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    for(const u of ups){part(u,-.2,.04,.06,0,h,GRAY,.008);for(const z of arms)part(u,0,.02,.26,z-.03,z,GRAY,.004);} // uprights and arms
+    for(const [k,z] of arms.entries())for(let j=0;j<4;j++){const v=-.1+j*.105,r=.012+((k+j)%3)*.006;
+      const [ax,ay]=[vx+c*(-hl)-s*v,vy+s*(-hl)+c*v],[bx,by]=[vx+c*hl-s*v,vy+s*hl+c*v];coveTube(ax,ay,z+r,bx,by,z+r,r);} // the bars, resting on the arms
+  }),box:boxAt(x,y,c,s,hl,.3,0,h),radius:hl+.1,steelRack:{arms}};
+}
+// A gate half made, stood against a wall: a frame of tube, bars across it,
+// a scroll along the middle.
+function GATE_FRAME(x,y,hl,h,c=0,s=1) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const P=(u,z)=>[vx+c*u,vy+s*u,z],tube=(a,b)=>coveTube(...P(...a),...P(...b),.015);
+    tube([-hl,.015],[hl,.015]);tube([-hl,h-.015],[hl,h-.015]);tube([-hl,.015],[-hl,h-.015]);tube([hl,.015],[hl,h-.015]); // the frame
+    for(let u=-hl+.4;u<hl-.1;u+=.4)tube([u,.015],[u,h-.015]); // bars
+    for(let k=0;k<12;k++){const u0=-hl+k*hl/6,u1=u0+hl/6;tube([u0,.8+Math.sin(u0*6)*.25],[u1,.8+Math.sin(u1*6)*.25]);} // the scroll
+  }),box:boxAt(x,y,c,s,hl,.03,0,h),radius:hl,gate:{h}};
+}
+// Closed rectangular recesses in a rounded cabinet. Each opening lists its
+// half width, floor, ceiling and back plane in the cabinet's local axes.
+function shopCabinetRay(ox,oy,oz,rx,ry,rz,b) {
+  HIT.cabinetInner=false;const outer=coveRayRounded(ox,oy,oz,rx,ry,rz,b);
+  if(outer<0||HIT.face!==3)return outer;
+  const hole=b.recesses.find(q=>Math.abs(HIT.u)<q[0]&&HIT.w>q[1]&&HIT.w<q[2]);if(!hole)return outer;
+  const [half,lo,hi,back]=hole,u=(ox-b.x)*b.c+(oy-b.y)*b.s,v=-(ox-b.x)*b.s+(oy-b.y)*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  const take=(t,x,y,z)=>{const uu=u+du*t,vv=v+dv*t,w=oz+rz*t;
+    if(t<outer||t>=best||Math.abs(uu)>half+1e-8||vv<back-1e-8||vv>b.hw+1e-8||w<lo-1e-8||w>hi+1e-8)return;
+    best=t;nu=x;nv=y;nz=z;};
+  if(Math.abs(dv)>1e-10)take((back-v)/dv,0,1,0);
+  if(Math.abs(du)>1e-10)for(const e of [-1,1])take((e*half-u)/du,-e,0,0);
+  if(Math.abs(rz)>1e-10){take((lo-oz)/rz,0,0,1);take((hi-oz)/rz,0,0,-1);}
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u+du*best;HIT.v=v+dv*best;HIT.w=oz+rz*best;HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.cabinetInner=true;HIT.face=nv?3:nz?(nz>0?5:6):(nu>0?1:2);return best;
+}
+const shopCabinetShade=(i,t,L)=>{if(HIT.cabinetInner){BG[i]=C(GRAY,.7+L*.12*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);};
+function COFFEE_VENDING(x,y,fx,fy) {
+  const c=fy,s=-fx,recesses=[[.08,.38,.56,.13]],cup=homeLampPart('cup',.38,[[0,0],[0,.025],[.09,.03],[.09,.027],[.002,.022],[.002,0]]).box;
+  const porcelain=paintShade(WHITE,3,.25),panel=(i,t,L)=>{BG[i]=C(BRICK,3);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'COFFEE',0,.98,.02,.035,C(WHITE,6),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    drawBox({...boxAt(vx,vy,c,s,.25,.25,0,1.1),round:.02,recesses},shopCabinetShade,shopCabinetRay);
+    part(0,.252,.18,.003,.82,1.06,panel);
+    part(.15,.258,.04,.008,.7,.74,GRAY,.004);
+    part(0,.2,.012,.012,.54,.56,GRAY,.004); // nozzle inside the bay ceiling
+    drawBox({...cup,x:vx-s*.2,y:vy+c*.2},porcelain,coveRayLathe);
+  }),box:boxAt(x,y,c,s,.25,.29,0,1.1),radius:.4};
+}
+function CHANGE_MACHINE(x,y,fx,fy) {
+  const c=fy,s=-fx,recesses=[[.08,1.05,1.07,.14]],cup=homeLampPart('coin-cup',.55,[[0,0],[0,.07],[.06,.075],[.06,.065],[.01,.06],[.01,0]]).box;
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz),sign=(i,t,L)=>{BG[i]=C(YEL,4);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'CHANGE',0,1.25,.02,.035,C(GRAY,1),BG[i]))return true;set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    drawBox({...boxAt(vx,vy,c,s,.3,.2,0,1.4),round:.02,recesses},shopCabinetShade,shopCabinetRay);
+    part(0,.202,.2,.003,1.18,1.32,sign);
+    part(0,.2145,.04,.0145,.56,.58,GRAY,.004); // bracket to the back of the cup
+    drawBox({...cup,x:vx-s*.3,y:vy+c*.3},metal,coveRayLathe);
+  }),box:boxAt(x,y,c,s,.3,.38,0,1.4),radius:.5};
+}
+// A meat slicer on a counter top at z, its blade on edge to (fx,fy) turning.
+function MEAT_SLICER(x,y,z,fx,fy) {
+  const c=fy,s=-fx,blade=[[-.004,0],[-.004,.12],[.004,.12],[.004,0]];
+  const spin=(i,t,L)=>{const a=Math.atan2(HIT.w-(z+.17),HIT.u)+T*30,glint=fract(a/TAU*3)<.1;BG[i]=C(GRAY,(glint?5:3)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.22,.17,z,z+.05,GRAY,.015); // the base
+    part(-.04,-.04,.1,.06,z+.05,z+.22,GRAY,.02); // the motor housing behind the blade
+    part(0,.03,.008,.012,z+.162,z+.178,GRAY,.004); // blade spindle, joined to the housing
+    shopDisc(vx-s*.04,vy+c*.04,c,s,z+.17,blade,spin); // the blade
+    part(.09,.09,.08,.05,z+.05,z+.08,GRAY,.008); // the carriage
+  }),box:boxAt(x,y,c,s,.22,.17,z,z+.29),radius:.3,slicer:{z}};
+}
+// A take-a-number dispenser on its pole, the tickets to (fx,fy).
+function TICKET_DISPENSER(x,y,fx,fy) {
+  const c=fy,s=-fx,red=paintShade(RED,4,.2);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,.12,.12,0,.02,GRAY,.006); part(0,0,.016,.016,.02,1.16,GRAY,.006); // foot and pole
+    part(0,0,.1,.08,1.15,1.35,red,.03); // the dispenser
+    part(0,.084,.025,.004,1.2,1.25,(i,t,L)=>{BG[i]=C(WHITE,5);set(i,' ',0);return true;}); // the ticket sticking out
+  }),box:boxAt(x,y,c,s,.12,.12,0,1.35),radius:.2};
+}
+// An upholstered armchair facing (fx,fy), its seat at h: four feet, a base,
+// one seat cushion, a back cushion, two arms joined to base and back.
+function ARMCHAIR(x,y,fx,fy,col=BRICK,h=.42) {
+  const c=-fy,s=fx,cloth=furnitureCloth(col),at=(u,v)=>[x+c*u+fx*v,y+s*u+fy*v],hl=.38;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,a,b,z0,z1,r,mat='wood')=>coveRound(vx+c*u+fx*v,vy+s*u+fy*v,c,s,a,b,z0,z1,r,mat);
+    for(const u of [-hl+.1,hl-.1])for(const v of [-.27,.27])part(u,v,.035,.035,0,.12,.012); // the feet
+    part(0,0,hl-.04,.36,.1,h-.15,.03); // the base
+    part(0,.04,hl-.16,.32,h-.15,h,.06,cloth); // the seat cushion
+    part(0,-.31,hl-.16,.08,h-.15,.95,.06,cloth); // the back
+    for(const e of [-1,1])part(e*(hl-.08),0,.08,.38,h-.18,h+.22,.06,cloth); // the arms
+  }),box:boxAt(x,y,c,s,hl,.4,0,.95),radius:.55,armchair:{fx,fy,h}};
+}
+// Old suitcases lying one on another: [x, y, z0, z1, colour] each, a handle
+// on the front and two straps round each.
+function SUITCASE_PILE(cases) {
+  const x=cases[0][0],y=cases[0][1],top=Math.max(...cases.map(q=>q[3]));
+  const shades=cases.map(q=>paintShade(q[4],2.2,.3)),leather=paintShade(BRICK,1.2,.2);
+  const x0=Math.min(...cases.map(q=>q[0]-.4)),x1=Math.max(...cases.map(q=>q[0]+.4)),y0=Math.min(...cases.map(q=>q[1]-.285)),y1=Math.max(...cases.map(q=>q[1]+.35));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{cases.forEach(([cx,cy,z0,z1],k)=>{const px=vx+cx-x,py=vy+cy-y,h=z1-z0;
+    coveRound(px,py,1,0,.4,.28,z0,z1-.004,.03,shades[k]);
+    for(const e of [-.22,.22])coveRound(px+e,py,1,0,.025,.285,z0+.005,z1,.004,leather);
+    for(const e of [-1,1])coveTube(px+e*.07,py+.28,z0+h*.55,px+e*.07,py+.34,z0+h*.55,.01,BRICK);
+    coveTube(px-.07,py+.34,z0+h*.55,px+.07,py+.34,z0+h*.55,.01,BRICK);
+  });}),box:boxAt((x0+x1)/2,(y0+y1)/2,1,0,(x1-x0)/2,(y1-y0)/2,0,top),radius:Math.max(...cases.map(q=>Math.hypot(q[0]-x,q[1]-y)+.55)),suitcases:{cases}};
+}
+// The tailor's cutting table: a top on four legs, a length of cloth laid on
+// it with the pattern chalked, a rule along the front edge.
+function CUTTING_TABLE(x,y,hl,hw,h,col=BLUE) {
+  const wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,13);
+  const cloth=(i,t,L)=>{const u=HIT.u,v=HIT.v,chalk=Math.abs(Math.abs(u-.2)-.5)<.012||Math.abs(v-Math.sin(u*3)*.1)<.012;
+    BG[i]=C(chalk&&coveDetail(t,.1)>.3?WHITE:col,chalk?4+L*.2:2.2+L*.2);set(i,' ',0);return true;};
+  const rule=(i,t,L)=>{const tick=coveGroove(HIT.u,.1,.003,t/projX)*coveDetail(t,.1);BG[i]=C(tick>.5?GRAY:YEL,tick>.5?2:4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,.9,.4,h,h+.004),gondolaFlat(1,0,cloth)); // the cloth, flat on the top
+    drawBox(boxAt(vx,vy+hw-.025,1,0,hl-.05,.02,h,h+.003),gondolaFlat(1,0,rule)); // the rule
+    coveRound(vx,vy,1,0,hl,hw,h-.04,h,.01,wood);
+    for(const e of [-1,1])for(const f of [-1,1])coveRound(vx+e*(hl-.08),vy+f*(hw-.08),1,0,.035,.035,0,h-.04,.01,wood);
+    coveRound(vx,vy,1,0,hl-.1,hw-.1,.12,.15,.006,wood); // the shelf low down
+  }),box:boxAt(x,y,1,0,hl,hw,0,h+.004),radius:Math.hypot(hl,hw),cuttingTable:{h}};
+}
+// A fitting mirror standing on its feet, the glass to (fx,fy).
+function FITTING_MIRROR(x,y,hl,h,fx,fy) {
+  const c=fy,s=-fx,glass=(i,t,L)=>{if(HIT.face!==3){BG[i]=C(BRICK,1.8);set(i,' ',0);return true;}BG[i]=C(CYAN,1.4+(HIT.w*.6));if(coveGroove(HIT.u+HIT.w,.5,.002,t/projX)*coveDetail(t,.2)>.65)BG[i]=C(WHITE,4);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    part(0,0,hl,.02,.08,h,glass); // the glass in its frame
+    for(const e of [-1,1]){part(e*(hl+.015),0,.015,.03,0,h,'wood',.006);part(e*hl,0,.04,.15,0,.04,'wood',.01);} // the frame's sides, the feet
+    part(0,0,hl+.03,.03,h,h+.03,'wood',.008); // its head
+  }),box:boxAt(x,y,c,s,hl+.04,.15,0,h+.03),radius:hl+.1,mirror:{fx,fy}};
+}
+// A curtain drawn back on its rail: the folds bunched as soft columns, along u (c,s).
+function CURTAIN_DRAWN(x,y,hl,z0,z1,col,c=1,s=0,railTo=hl+.05) {
+  const n=Math.max(3,Math.round(hl*2/.12)),shades=Array.from({length:n},(_,k)=>paintShade(col,1.6+(k&1)*.6,.25));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=0;k<n;k++){const u=-hl+hl/n*(2*k+1),v=(k&1)?.012:-.012;
+      coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl/n+.004,.03,z0,z1,.028,shades[k]);
+      coveTube(vx+c*u-s*v,vy+s*u+c*v,z1-.006,vx+c*u-s*v,vy+s*u+c*v,z1+.03,.003);
+    }
+    coveTube(vx-c*(hl+.05),vy-s*(hl+.05),z1+.03,vx+c*(railTo-.012),vy+s*(railTo-.012),z1+.03,.012);
+    coveRound(vx+c*(railTo-.012),vy+s*(railTo-.012),c,s,.012,.04,z1-.01,z1+.07,.004,GRAY);
+  }),box:boxAt(x,y,c,s,hl,.045,0,z1+.07),radius:Math.max(hl+.1,Math.abs(railTo)+.05),curtain:true};
+}
+// A hot-dog roller on a counter at z: a steel tray, the rollers turning, the
+// sausages resting between them.
+function HOTDOG_ROLLER_AT(x,y,z) {
+  const n=6,pitch=.04,r=.012,sr=.021,roll=(i,t,L)=>{const ridge=fract(Math.atan2(HIT.nz,HIT.ny)/TAU+T*.3)<.12;BG[i]=C(GRAY,(ridge?3.2:2.4)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const sz=z+.03+r+Math.sqrt((r+sr)**2-(pitch/2)**2); // a sausage's centre, touching both rollers under it
+  const sausage=kitchenFoodShade(BRICK),dogs=[0,2,4].map(k=>{const v=(-n/2+k+1)*pitch;return{...boxAt(0,v,1,0,.14+sr,sr,sz-sr,sz+sr),ax:-.14,ay:v,az:sz,bx:.14,by:v,bz:sz,r:sr};});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const b of dogs)drawBox({...b,x:vx,y:vy+b.y,ax:vx+b.ax,ay:vy+b.ay,bx:vx+b.bx,by:vy+b.by},sausage,coveRayCapsule);
+    for(let k=0;k<n;k++){const v=(-n/2+k+.5)*pitch;drawBox({...boxAt(vx,vy+v,1,0,.18+r,r,z+.03,z+.03+2*r),ax:vx-.18,ay:vy+v,az:z+.03+r,bx:vx+.18,by:vy+v,bz:z+.03+r,r},roll,coveRayCapsule);}
+    coveRound(vx,vy,1,0,.22,.14,z,z+.03,.008,GRAY); // the tray
+  }),box:boxAt(x,y,1,0,.22,.14,z,sz+sr),radius:.3,roller:{z}};
+}
+// Supported, prepared stock under framed cloth awnings. Local +v faces the
+// customer. The same cached shapes serve the quarter-turned side stalls.
+const MARKET_KINDS=['fish','greens','butcher','cheese','flowers','bread'];
+function MARKET_STALL(x,y,hl,kind,col,fx,fy) {
+  const c=fy,s=-fx,hw=.35,top=.9,K=MARKET_KINDS[kind],seed=kind*17+Math.round(x*3+y*5),items=[],crates=[],frame=[];
+  const steel=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+  const add=(u,v,box,shade,ray=rayBox)=>items.push({u,v,box,shade,ray});
+  const oval=(u,v,z,a,b,h,shade)=>add(u,v,boxAt(0,0,c,s,a,b,z,z+h),shade,foodRayEllipsoid);
+  const turned=(u,v,z,profile,shade)=>add(u,v,homeLampPart('stock',z,profile).box,shade,coveRayLathe);
+  const tray=(u,v,a,b,h,shade)=>{const base={...boxAt(0,0,1,0,a,b,top,top+h),...kitchenTopProfile(a,b,top,top+h,.002)};
+    add(u,v,c===1&&s===0?base:{...base,c,s,trayShape:base},shade,c===1&&s===0?foodRayTray:grocerTrayRay);};
+  const solid=(u,v,a,b,z0,z1,r,shade,list=items)=>list.push({u,v,box:{...boxAt(0,0,c,s,a,b,z0,z1),round:r},shade,ray:r?coveRayRounded:rayBox});
+  if(K==='fish'){
+    const fins=paintShade(GRAY,2.6,.25);
+    const ice=gondolaFlat(c,s,(i,t,L)=>{const g=hash(Math.floor(HIT.u*60),Math.floor(HIT.v*60),seed)*coveDetail(t,.2);BG[i]=C(g>.6?WHITE:CYAN,3.6+g*1.5+L*.15);set(i,' ',0);return true;});
+    tray(0,0,hl-.08,hw-.04,.06,steel);solid(0,0,hl-.09,hw-.05,top+.008,top+.045,0,ice);
+    for(let k=0;k<Math.floor((hl*2-.2)/.3);k++)for(const v of [-.12,.12]){
+      const sh=(i,t,L)=>{const belly=HIT.nz>.6&&Math.abs(HIT.v)<.012,eye=(HIT.u+.075)**2+(HIT.w-top-.08)**2<.004**2&&Math.abs(HIT.v)>.018;BG[i]=C(eye?GRAY:belly?WHITE:GRAY,eye?.5:(belly?4:2.8)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+hash(k*2+(v>0),1,seed)*.6);set(i,' ',0);return true;};
+      const u=-hl+.25+k*.3;oval(u,v,top+.045,.13,.035,.045,sh);oval(u+.115,v,top+.06,.035,.05,.009,fins);
+    }
+  }
+  if(K==='greens'){const n=Math.floor(hl*2/.5),pitch=hl*2/n;
+    for(let k=0;k<n;k++)crates.push({u:-hl+pitch*(k+.5),q:grocerCrate(GROCER_PRODUCE_KINDS[Math.floor(hash(k,2,seed)*GROCER_PRODUCE_KINDS.length)],pitch/2-.06,hw-.06,top+GROCER_CRATE.depth),shade:grocerSlats()});
+  }
+  if(K==='butcher'){const n=Math.floor(hl*2/.6),pitch=hl*2/n;
+    for(let k=0;k<n;k++){const u=-hl+pitch*(k+.5);tray(u,0,pitch/2-.07,hw-.05,.03,steel);
+      for(const du of [-.12,0,.12])for(const v of [-.12,.12]){const id=k*7+Math.round(du*10)+(v>0),sh=(i,t,L)=>{const fat=HIT.nz<.5&&HIT.nz>-.2;BG[i]=C(fat?WHITE:id%3?RED:BRICK,(fat?3.6:2.2)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};oval(u+du,v,top+.008,.055,.08,.03,sh);}
+    }
+  }
+  if(K==='cheese'){const rind=[[0,0],[0,.115],[.01,.12],[.07,.12],[.08,.115],[.08,0]],wheel=(i,t,L)=>{const cut=HIT.face===5;BG[i]=C(cut?YEL:ORANGE,(cut?4.2:2.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    for(let k=0;k<Math.floor(hl*2/.3);k++){const u=-hl+.15+k*.3,stack=1+Math.floor(hash(k,3,seed)*2);for(let j=0;j<stack;j++)turned(u,-.1,top+j*.08,rind,wheel);
+      if(k%2===0)solid(u,.17,.07,.04,top,top+.06,.008,paintShade(YEL,4,.3));}
+  }
+  if(K==='flowers'){const bucket=[[0,0],[0,.09],[.22,.11],[.22,.1],[.01,.08],[.01,0]],stems=[[0,0],[0,.075],[.24,.07],[.24,0]];
+    for(let k=0;k<Math.floor(hl*2/.28);k++){const u=-hl+.14+k*.28,v=k%2?.1:-.1,bloom=[RED,MAG,YEL,WHITE,ORANGE][Math.floor(hash(k,4,seed)*5)],petal=paintShade(bloom,3.4,.35);
+      turned(u,v,top,bucket,steel);turned(u,v,top+.01,stems,paintShade(GREEN,1.4,.2));
+      for(let j=0;j<5;j++){const a=j*TAU/5+k;oval(u+Math.cos(a)*.05,v+Math.sin(a)*.05,top+.24+(j%2)*.03,.035,.035,.05,petal);}
+    }
+  }
+  if(K==='bread'){const wicker=(i,t,L)=>{const w=coveGroove(HIT.u+HIT.w*2,.02,.004,t/projX)*coveDetail(t,.2);BG[i]=C(WARM,2.4-w+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const n=Math.floor(hl*2/.6),pitch=hl*2/n;
+    for(let k=0;k<n;k++){const u=-hl+pitch*(k+.5),bh=pitch/2-.07,r=Math.min(.09,(bh-.008)/3);tray(u,0,bh,hw-.06,.08,wicker);
+      for(let j=-1;j<=1;j++)for(const v of [-.1,.1]){const id=k*5+j+(v>0),sh=(i,t,L)=>{const score=HIT.nz>.7&&fract((HIT.u+HIT.v)*12)<.15;BG[i]=C(id%2?BRICK:ORANGE,(score?3.4:2.2)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};oval(u+j*2*r,v,top+.008,r,.05,.07,sh);}
+    }
+  }
+  const canopy=gondolaFlat(c,s,(i,t,L)=>{const stripe=fract((HIT.u+hl)*2.5)<.5;BG[i]=C(stripe?col:WHITE,(stripe?4:5)+L*.2);set(i,' ',0);return true;});
+  const wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed);
+  for(const e of [-1,1])solid(e*(hl-.03),-.3,.025,.025,top,2.15,.008,wood,frame);
+  for(const v of [-.685,-.3,.485])solid(0,v,hl+.1,.015,2.15,2.18,.004,steel,frame);
+  for(const e of [-1,1])solid(e*(hl+.085),-.1,.015,.6,2.15,2.18,.004,steel,frame);
+  solid(0,-.1,hl+.1,.6,2.18,2.188,0,canopy,frame);
+  solid(0,.49,hl+.1,.01,2,2.18,0,canopy,frame);
+  const draw=(vx,vy,q)=>drawBox({...q.box,x:vx+c*q.u-s*q.v,y:vy+s*q.u+c*q.v},q.shade,q.ray);
+  return [SHOP_COUNTER(x,y,hl,hw,top,c,s,BRICK),{...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const q of items)draw(vx,vy,q);
+    for(const q of crates)drawGrocerCrate(vx+c*q.u,vy+s*q.u,q.q,q.shade,c,s);
+    for(const q of frame)draw(vx,vy,q);
+  }),marketStall:{kind:K,hl,hw,top,c,s,items:items.length+crates.length}}];
+}
+// The fruit shop's table of melons and pineapples: a table, the fruit lying on it.
+function MELON_TABLE(x,y,hl,hw,h) {
+  const melon=k=>(i,t,L)=>{const stripe=Math.sin(Math.atan2(HIT.v,HIT.u)*7+k)>.35;BG[i]=C(GREEN,(stripe?1.8:3.4)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const pine=(i,t,L)=>{const d=fract((HIT.w*14)+Math.atan2(HIT.v,HIT.u)*1.6)<.25;BG[i]=C(d?BRICK:YEL,(d?2:3.6)+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const crown=(i,t,L)=>{BG[i]=C(GREEN,2.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const fruit=[];for(let k=0;k<Math.floor(hl*2/.3);k++)for(const v of [-.18,.18])fruit.push({u:-hl+.15+k*.3,v,pine:k%2===1});
+  const melonShades=fruit.map((_,k)=>melon(k)),crownBox=homeLampPart('crown',h+.19,[[0,0],[0,.05],[.12,.01],[.12,0]]).box;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const [k,f] of fruit.entries()){const px=vx+f.u,py=vy+f.v;
+      if(f.pine){foodOval(px,py,h,.07,.07,.2,pine);drawBox({...crownBox,x:px,y:py},crown,coveRayLathe);}
+      else foodOval(px,py,h,.13,.1,.19,melonShades[k],1,0);}
+    drawFurnitureTable(vx,vy,hl,hw,h);
+  }),box:boxAt(x,y,1,0,hl,hw,0,h),radius:Math.hypot(hl,hw),melonTable:{h,fruit}};
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on
