@@ -168,6 +168,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `shopDoor` in `architecture-render.js` now take the opening (and `d`), and their callers in
   `architecture-render.js`, `residential-render.js`, `pavilion-render.js` and `city-render.js`
   (Belle doorways, generic fronts, warehouse doors) pass it. Next: doors, typography and mounts.
+- **Claude pass 13, generic shop doors:** `claude/generic-doors`, stacked on #253:
+  `city/city-render.js` generic ground floor only (a `shopDoor` under each board, the painted awning
+  band now a transom), new `city-generic-doors` browser test.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
