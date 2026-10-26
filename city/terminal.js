@@ -189,7 +189,7 @@ ROOM_DEFS.terminal = { grid: TERMINAL_GRID, height: 5, light: 1.15, floor: 'terr
         BG[i] = C(GRAY, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
       BX(23.5, 11.3, 2.2, 0.35, 0, 1.05, counter), { ...standing(23.5, 12.2, WHITE), face: [0, -1] }, // the café, and its barista
       BX(22.4, 11.3, 0.3, 0.22, 1.05, 1.55, (i, t, L) => { BG[i] = C(GRAY, (2.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 && HIT.w > 1.35 ? 'o' : ' ', C(RED, 13)), true; }), // the espresso machine
-      ...glassCase(24.8, 11.3, 0.6, 0.3, 1.5, caseGoods('@o%', [WARM, BRICK, YEL], false, 7), BRICK),
+      ...glassCase(24.8, 11.3, 0.6, 0.3, 1.5, caseGoods('pastry', [WARM, BRICK, YEL], false, 7), BRICK),
       aisleSign(23.5, 11.3, 'CAFE  GLYPH', C(WARM, 4), C(BRICK, 15), 0.75),
       departuresBoard(16, 9.4), aisleSign(16, 7.3, 'SECURITY', C(GRAY, 4), C(WHITE, 15), 0.6),
       glassScreen(1, 13.35), detector(14), detector(18), glassScreen(18.65, 31),
