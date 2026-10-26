@@ -66,6 +66,7 @@
     "city/landmark-render.js",
     "city/pavilion-render.js",
     "city/city-sprites.js",
+    "city/street-vending.js",
     "city/jail.js",
     "city/rooms.js",
     "city/shops.js",
