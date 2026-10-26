@@ -222,8 +222,13 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     const fs = fract(u * 2);
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
     if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
+    const face = shopfrontFace(side, mx, my, h);
+    if (face) { // the shop's door, in the bay under its board (shopfronts.js)
+      const sg = Math.sign(u * wc) || 1, bay = Math.round((sg * (face.start + face.end) / 2 - 0.27) * 2); // (the bay nearest its middle)
+      if (Math.floor(u * 2) === bay && shopDoor(i, sg * (u - bay / 2 - 0.27), z, sh, L, GRAY, d)) return;
+    }
     if (!open) { const w0 = Math.floor(u * 2) / 2; return void shopShutter(i, u, z, w0 + 0.04, w0 + 0.5, 0, 0.3, sh, L, d, glassSlopes(u, z)[0]); } // roll-down shutter: vacant, or shut for the night
-    if (z > 0.28) return shopfrontFace(side, mx, my, h)?.awning ? set(i, '=', C(GRAY, L * 0.7)) : set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning (or the transom over the window, under a real one)
+    if (z > 0.28) return set(i, '=', C(GRAY, L * 0.7)); // the transom over the window (the awnings are built, in shopfronts.js)
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
