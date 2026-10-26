@@ -173,6 +173,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   the wires in `city/kerb-fixtures-render.js` (`drawPoleSpans`, called from
   `drawKerbFixtures`). That completes the pass 12 list with #242–#245. Next:
   pass 13 (signs and shopfronts).
+- **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
+  `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
+  Next: utility cabinets, then bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

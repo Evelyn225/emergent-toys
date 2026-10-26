@@ -645,6 +645,8 @@ function floorBaseCell(i, r, x, rx, ry) {
     const e = road === 1 ? lx : ly, along = road === 1 ? wy : wx, bridge = road === 1 && onBridge(bx, by);
     const mh = manholeCell(wx, wy, L); // a manhole cover
     if (mh) { set(i, mh[0], mh[1]); BG[i] = mh[2]; return; }
+    const gr = streetGrateCell(wx, wy, L, d, road, bx, by); // a gully, tree or vent grate (street-drains.js)
+    if (gr) { set(i, gr[0], gr[1]); BG[i] = gr[2]; return; }
     if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
     else if (e < 0.3 || e > 1.7) { ch = bridge ? '=' : ','; k = 1.3; } // sidewalk (on a bridge, a walkway of plates)
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
