@@ -201,7 +201,9 @@ function BATHROOM_POCKET_DOOR(r,p,index) {
   const cell=u=>vertical?[cross,u]:[u,cross],wallCell=u=>{const [x,y]=cell(u);return '#W'.includes(r.grid[y]?.[x]||' ');};
   const run=dir=>{let n=0;for(let u=dir<0?start-1:end;wallCell(u)&&n<width+1;u+=dir)n++;return n;};
   const dir=run(1)>=run(-1)?1:-1;
-  const home=homeRecord(r),d={...p,index,home,dir,open:home?.bathroomDoors?.[index]===false?0:1};
+  // A washroom you don't live in (a restaurant's, a bar's, a shop's, a hotel or motel room's) keeps its door shut and
+  // slides it closed behind you; your own home leaves its doors however you left them.
+  const home=homeRecord(r),pub=!home&&!r.def.home,d={...p,index,home,pub,dir,open:pub||home?.bathroomDoors?.[index]===false?0:1};
   d.target=d.open;
   const x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5;
   const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
@@ -234,11 +236,13 @@ function bathroomDoorUse(prop) {
   if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=d.target===1;saveGame();}
   if(actx){burst(actx.currentTime,.22,[filt('lowpass',1100)],.035);tone(actx.currentTime+.2,95,.035,.025);}
 }
+const BATHROOM_DOOR_CLOSE=1.8;
 function stepBathroomDoors(dt) {
   if(mode!=='room'||!room.bathroomDoors)return;
   for(const prop of room.bathroomDoors) {
     const d=prop.bathroomDoor;
     if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
+    if(d.pub&&d.target===1&&d.open===1&&Math.hypot(px-prop.x,py-prop.y)>BATHROOM_DOOR_CLOSE&&!inWc(px,py))d.target=0; // (left open, it slides shut once you're well clear)
     if(d.open===d.target)continue;
     const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
     if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {

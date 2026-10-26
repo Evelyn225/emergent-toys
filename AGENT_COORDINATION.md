@@ -156,12 +156,13 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   removed from `city/city-sprites.js`). Next: signal heads and pedestrian
   signals, then wall pipes and meters, then pavement service hatches.
 
+- **Claude pass 12, facade utilities:** `claude/facade-utilities` from main (new
+  `city/facade-utilities.js` after `world-bootstrap.js`, reading `ARCH_BUILDINGS`
+  faces and street geometry; one draw hook in `city/city-sprites.js`). Next:
+  pavement service hatches and overhead cables.
 - **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
   `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
   Next: utility cabinets, then bus shelters.
-- **Claude pass 12, service hatches:** `claude/service-hatches`, stacked on
-  `claude/street-drains` (`city/street-drains.js` only). Next: overhead cables
-  from main.
 
 
 - **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
@@ -182,6 +183,60 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   the wires in `city/kerb-fixtures-render.js` (`drawPoleSpans`, called from
   `drawKerbFixtures`). That completes the pass 12 list with #242–#245. Next:
   pass 13 (signs and shopfronts).
+- **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
+  `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
+  Next: utility cabinets, then bus shelters.
+- **Claude pass 12 (street lights and utilities):** the turned street lamp on
+  `claude/street-lamps` from main (new `city/street-lamps.js`; `drawLamp3D`
+  removed from `city/city-sprites.js`). Next: signal heads and pedestrian
+  signals, then wall pipes and meters, then pavement service hatches.
+- **Claude pass 12, signals:** `claude/street-signals` from main (new
+  `city/street-signals.js`; `drawSignal` and its constants removed from
+  `city/city-sprites.js`). Next: wall pipes and meters, then service hatches.
+- **Claude pass 12 follow-up, posts through awnings:** `claude/lamp-awning-seams` from
+  main: after the layout is assembled, `world-bootstrap.js` cuts merchant awnings back
+  clear of lamp posts and the (rebuilt) junction signals.
+- **Claude, washroom doors:** `claude/washroom-doors` from main: public washroom pocket
+  doors start shut and close behind you (`city/bathroom-quality.js`, `pub` doors), now
+  including hotel and motel rooms and the hotel lobby as the user asked (Codex: this is
+  done here, no need to duplicate it in pass 6). Homes keep theirs as left. The diner's
+  washroom door now faces the tables (`city/rooms.js`).
+- **Claude pass 12, service hatches:** `claude/service-hatches`, stacked on
+  `claude/street-drains` (`city/street-drains.js` only). Next: overhead cables
+  from main.
+- **Claude pass 13, fascia boards and awnings:** `claude/shop-fascias` from main:
+  `fascia` and `awning` details in `city/architecture.js` (`architectureSignSpec`,
+  `architectureShopfront`), their shading in `city/architecture-render.js`, and the
+  shared sign spec in the three painted-sign calls (`architecture-render.js`,
+  `residential-render.js`). Not touching `city/home-*.js`: the IDEA rename there is
+  handled by refitting the board at draw time. Next: the old-path facades (warehouses,
+  sty 2/15 shops) and Chinatown's painted vertical signs.
+- **Claude pass 13, generic shopfronts:** `claude/oldpath-shopfronts`, stacked on
+  #248: new pure `city/shopfronts.js` (after `pavilions.js` in the manifest), the
+  generic sign band and awning in `city/city-render.js`, and `SHOPFRONT_FACES` in
+  `world-bootstrap.js`'s face remap. Next: Chinatown's painted vertical signs and the
+  remaining shopfront details (shutters, windows, displays).
+- **Claude pass 13, shop window displays:** `claude/shop-windows`, stacked on #249:
+  new `city/shop-windows.js` (after `city-render.js` in the manifest) and one call in
+  each family's shop window (`architecture-render.js` brownstone and downtown,
+  `residential-render.js` housing, `city-render.js` generic). Next: the pass 13
+  closing audit (shutters, doors, district-specific typography).
+- **Claude pass 13, roller shutters:** `claude/shop-shutters`, stacked on #252: new
+  `city/shop-shutters.js` (after `shop-windows.js` in the manifest); `architectureShutter` and
+  `shopDoor` in `architecture-render.js` now take the opening (and `d`), and their callers in
+  `architecture-render.js`, `residential-render.js`, `pavilion-render.js` and `city-render.js`
+  (Belle doorways, generic fronts, warehouse doors) pass it. Next: doors, typography and mounts.
+- **Claude pass 13, generic shop doors:** `claude/generic-doors`, stacked on #253:
+  `city/city-render.js` generic ground floor only (a `shopDoor` under each board, the painted awning
+  band now a transom), new `city-generic-doors` browser test.
+- **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
+  `city/kerb-fixtures.js` after `world-bootstrap.js`, new
+  `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
+  `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
+  grates, utility cabinets, then bus shelters.
+- **Claude pass 11, utility cabinets:** `claude/utility-cabinets`, stacked on
+  `claude/kerb-fixtures` (#238): a `cabinet` kind in `city/kerb-fixtures.js` and
+  its model in `city/kerb-fixtures-render.js`. Next: bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
@@ -625,6 +680,9 @@ or shared helper files edited. Next #230–#232, then closing audit; include the
 legacy gas hubcap/key and security-mirror sprite with the recorded ceiling/
 flag/noodle remnants. User's hotel/motel door decision remains recorded above.
 
+- **Claude, fruit shop wallpaper:** `claude/fruit-wallpaper` off main: `fruitWall` in
+  `city/storefronts.js` only (small oranges in a half-drop repeat instead of whole squares of `@`),
+  new `city-fruit-wallpaper` browser test.
 Codex active review `codex/review-specialist-shops` (#230): main through #229
 integrated. `city/record-shop.js`, `city/shop-fittings.js`, specialist-shop test
 and record/tattoo/hardware/pharmacy hooks in `city/shops.js`; shelf stock data

@@ -79,7 +79,7 @@ function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}
   }
   ARCH_DETAILS.push(o);
   if (kind === 'step') { ARCH_STEPS.push(o); ARCH_BLOCKERS.push(o); }
-  else if (z0 < 0.28) ARCH_BLOCKERS.push(o);
+  else if (z0 < 0.28 && kind !== 'awning') ARCH_BLOCKERS.push(o); // (you walk under an awning)
   return o;
 }
 function brownstoneDetails(b) {
@@ -125,6 +125,42 @@ function downtownDetails(b) {
   c.planes = [[1,0,0,c.hl],[-1,0,0,c.hl],[0,1,0,c.hw],[0,-1,0,c.hw],[0,0,1,c.z1],[0,0,-1,-c.z0],
     [slope,0,1,c.z0+slope*c.hl],[-slope,0,1,c.z0+slope*c.hl],[0,slope,1,c.z0+slope*c.hw],[0,-slope,1,c.z0+slope*c.hw]];
 }
+// Where a shop's name goes on a face (the same on the fascia board up close and the lettering seen from further off):
+// its centre height, letter width and band, the board's margin round it, and how the board is made.
+const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painted on the wall behind it)
+// Is a board too small on screen to draw (under a row tall, so it can fall between rows), its lettering painted on the wall
+// instead? Otherwise a board between two rows would leave no name at all. g: its sign spec; d: distance.
+const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
+function architectureSignSpec(b, f, sh) {
+  const width = f.end - f.start, n = sh.word.length;
+  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .38, cmax: .067, margin: .3, band: .043, edge: .012, style: 'board' }
+    : b.region === 'brownstones' ? { zc: .39, cmax: .07, margin: .25, band: .038, edge: .012, style: 'painted' }
+    : { zc: .36, cmax: .085, margin: .3, band: .055, edge: .014, style: 'box' };
+  return { ...g, width, cwid: Math.min(g.cmax, (width - g.margin) / n) };
+}
+// A shop's fascia board on each face that carries its name, standing off the wall over the window, and on some
+// brownstone and midtown shops a striped awning over the window below it: a sloping canopy on its frame, a valance
+// along the front. (Downtown towers and the apartment blocks with entrance canopies get no awning.)
+const ARCH_FASCIA = { depth: .012, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
+function architectureShopfront(b) {
+  const sh = b.sh;
+  if (sh.kind === SHOP_APTS) return;
+  for (const f of b.faces) {
+    if (f.low || !architectureSignedFace(f, sh)) continue;
+    const g = architectureSignSpec(b, f, sh), center = (f.start + f.end) / 2;
+    if (g.cwid < .03 || g.zc + g.band / 2 + g.edge > f.height - .07) continue; // (too narrow for a board, or too low: up into the cornice)
+    const o = architectureDetail(b, f, center, ARCH_FASCIA.depth / 2, sh.word.length * g.cwid / 2 + g.edge * 2.5, ARCH_FASCIA.depth / 2, g.zc - g.band / 2 - g.edge, g.zc + g.band / 2 + g.edge,
+      'fascia', { word: sh.word, zc: g.zc, cwid: g.cwid, band: g.band, edge: g.edge, style: g.style, width: g.width, cmax: g.cmax, margin: g.margin, outSign: f.ny * (f.side ? 1 : 0) - f.nx * (f.side ? 0 : 1), detailDistance: ARCH_FASCIA_VIS });
+    f.fascia = true;
+    const a = ARCH_FASCIA.awning, half = Math.min(.42, (f.end - f.start) / 2 - .14);
+    if (!f.front || b.profile || g.style === 'box' || half < .15 || hash(Math.floor(b.x * 7), Math.floor(b.y * 7), 1480) > a.keep) continue;
+    const out = o.outSign, hw = a.out / 2, slope = a.drop / a.out, z1 = a.top, th = a.thick, front = z1 - a.drop;
+    architectureDetail(b, f, center, hw, half, hw, front - th, z1, 'awning', { outSign: out, slope, part: 'canopy', detailDistance: 14,
+      planes: [[1, 0, 0, half, 1], [-1, 0, 0, half, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4],
+        [0, slope * out, 1, z1 - slope * hw, 5], [0, -slope * out, -1, -(z1 - slope * hw - th), 6]] }); // (a sheet falling away from the wall)
+    architectureDetail(b, f, center, a.out - .002, half, .002, front - a.valance, front + .002, 'awning', { outSign: out, part: 'valance', detailDistance: 14 });
+  }
+}
 {
   const lots = new Map(), pending = [];
   for (let k = 0; k < map.length; k++) {
@@ -165,6 +201,7 @@ function downtownDetails(b) {
     if (b.profile) residentialDetails(b);
     else if (b.region === 'brownstones') brownstoneDetails(b);
     else downtownDetails(b);
+    architectureShopfront(b);
     // Keep metadata serializable: faces and roof data never contain their owning shop.
     const { sh: ignoredShop, ...metadata } = b;
     b.sh.architecture = metadata;

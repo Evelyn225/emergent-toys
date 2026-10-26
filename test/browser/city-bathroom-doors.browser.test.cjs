@@ -7,17 +7,19 @@ test('real E opens and closes privacy doors from either side, matching passage a
  for(const kind of ['bar','noodle','motelRoom']){
  await p.evaluate(kind=>enterRoom(kind,{ret:[100,100,0]},[6,3,0]),kind);
  for(const side of [-1,1]){
-  const r=await aim(p,side);assert.ok(r.free,JSON.stringify(r));assert.match(r.prompt,/close bathroom door/);
+  // (a washroom you don't live in starts shut)
+  const r=await aim(p,side);assert.ok(r.free,JSON.stringify(r));assert.match(r.prompt,/open bathroom door/);
   await p.keyboard.press('e');
+  const open=await p.evaluate(()=>{stepBathroomDoors(2);const prop=room.bathroomDoors[0];return{open:prop.bathroomDoor.open,clear:free(prop.x,prop.y)};});assert.deepEqual(open,{open:1,clear:true});
+  assert.match((await aim(p,side)).prompt,/close bathroom door/);await p.keyboard.press('e');
   const shut=await p.evaluate(()=>{stepBathroomDoors(2);const prop=room.bathroomDoors[0];return{open:prop.bathroomDoor.open,blocked:!free(prop.x,prop.y),through:interactionClear(prop.x,prop.y+(py<prop.y?1.1:-1.1),1.5)};});
   assert.deepEqual(shut,{open:0,blocked:true,through:false});
-  assert.match((await aim(p,side)).prompt,/open bathroom door/);await p.keyboard.press('e');
-  const open=await p.evaluate(()=>{stepBathroomDoors(2);const prop=room.bathroomDoors[0];return{open:prop.bathroomDoor.open,clear:free(prop.x,prop.y)};});assert.deepEqual(open,{open:1,clear:true});
  }}
 }));
 test('a closing pocket door reopens around a person, and its rail cannot show through the opaque shut leaf',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   enterRoom('bar',{ret:[100,100,0]},[2.5,3,Math.PI/2]);const prop=room.bathroomDoors[0],d=prop.bathroomDoor;
+  bathroomDoorUse(prop);stepBathroomDoors(2); // (open it first: it starts shut)
   px=prop.x;py=prop.y;bathroomDoorUse(prop);stepBathroomDoors(2);const safe=d.target===1&&free(px,py);
   px=2.5;py=3;bathroomDoorUse(prop);stepBathroomDoors(2);
   const draw=drawBox,shapes=[];drawBox=(box,shade,ray=rayBox)=>shapes.push({box,shade,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}
@@ -36,14 +38,14 @@ test('home bathroom privacy state survives leave/re-entry and save/reload',()=>f
 test('phone E uses the same bathroom door target and action',()=>fixture(async p=>{
  await p.evaluate(()=>enterRoom('bar',{ret:[100,100,0]},[2.5,3.4,Math.PI/2]));await aim(p,-1);await p.evaluate(()=>showTouch());
  await p.tap('#touch [data-key="KeyE"]');
- assert.equal(await p.evaluate(()=>room.bathroomDoors[0].bathroomDoor.target),0);
- await p.evaluate(()=>{stepBathroomDoors(2);render(0);showTouch();});
- await p.tap('#touch [data-key="KeyE"]');assert.equal(await p.evaluate(()=>room.bathroomDoors[0].bathroomDoor.target),1);
+ assert.equal(await p.evaluate(()=>room.bathroomDoors[0].bathroomDoor.target),1); // (opened: it starts shut)
+ await p.evaluate(()=>stepBathroomDoors(2));await aim(p,-1);await p.evaluate(()=>{render(0);showTouch();}); // (open, its handle's at the leaf's edge)
+ await p.tap('#touch [data-key="KeyE"]');assert.equal(await p.evaluate(()=>room.bathroomDoors[0].bathroomDoor.target),0);
 },true));
 
 test('closed privacy doors remain routable and an approaching pursuing officer opens them',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
-  enterRoom('bar',{ret:[100,100,0]},[2.5,3,Math.PI/2]);const prop=room.bathroomDoors[0];bathroomDoorUse(prop);stepBathroomDoors(2);
+  enterRoom('bar',{ret:[100,100,0]},[2.5,3,Math.PI/2]);const prop=room.bathroomDoors[0]; // (shut, as a bar's washroom starts)
   const closed=prop.bathroomDoor.open===0,path=roomPath(2.5,3,2.5,5.5),blocked=!free(prop.x,prop.y);
   wanted.stars=2;searchedRoom=room;roomCops.push({x:2.5,y:3.4});stepBathroomDoors(2);
   return{closed,path:path.length,blocked,open:prop.bathroomDoor.open,clear:free(prop.x,prop.y)};
@@ -73,4 +75,35 @@ test('every WC has one door system, with a full solid wall pocket on the chosen 
   }
   return{bad,positive,negative};
  });assert.deepEqual(r.bad,[]);assert.ok(r.positive>0&&r.negative>0,JSON.stringify(r));
+}));
+
+test('a washroom you do not live in starts shut and slides closed once you are well clear; your own home keeps its doors as left',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];
+  for(const kind of ['diner','bar','pizzeria','gas','hotel','hotelroom','motelRoom']){
+   enterRoom(kind,{ret:[100,100,0],word:kind.toUpperCase()},[6,4,0]);const prop=room.bathroomDoors[0],d=prop.bathroomDoor;
+   if(d.open!==0||free(prop.x,prop.y))bad.push([kind,'not shut on the way in']);
+   const w=room.def.wc,inside=[(w.x0+w.x1)/2,(w.y0+w.y1)/2],len=Math.hypot(prop.x-inside[0],prop.y-inside[1]),ux=(prop.x-inside[0])/len,uy=(prop.y-inside[1])/len;
+   [px,py]=[prop.x+ux*.7,prop.y+uy*.7];bathroomDoorUse(prop);stepBathroomDoors(2);if(d.open!==1)bad.push([kind,'would not open']);
+   [px,py]=inside;for(let k=0;k<5;k++)stepBathroomDoors(1);if(d.open!==1)bad.push([kind,'closed on you inside']);
+   [px,py]=[prop.x+ux*1.2,prop.y+uy*1.2];stepBathroomDoors(1);if(d.target!==1)bad.push([kind,'closed while you were still by it']);
+   [px,py]=[prop.x+ux*(BATHROOM_DOOR_CLOSE+.3),prop.y+uy*(BATHROOM_DOOR_CLOSE+.3)];
+   for(let k=0;k<5;k++)stepBathroomDoors(1);if(d.open!==0||free(prop.x,prop.y))bad.push([kind,'left standing open behind you']);
+  }
+  // somebody else's flat (no home record) is still a home: left as it was
+  for(const kind of ['loft','bellehome']){enterRoom(kind,{ret:[100,100,0]},[3,3,0]);const d=room.bathroomDoors[0].bathroomDoor;if(d.pub||d.open!==1)bad.push([kind,'a home treated as public']);}
+  return bad;
+ });assert.deepEqual(r,[]);
+}));
+
+test('the diner washroom opens onto the tables, not the end of the counter, with a clear way to it from the street door',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  enterRoom('diner',{ret:[100,100,0],word:'DINER'},[6,6,0]);const prop=room.bathroomDoors[0],d=prop.bathroomDoor,w=room.def.wc;
+  const inside=[(w.x0+w.x1)/2,(w.y0+w.y1)/2],dx_=prop.x-inside[0],dy_=prop.y-inside[1],ox=Math.abs(dx_)>Math.abs(dy_)?Math.sign(dx_):0,oy=ox?0:Math.sign(dy_);
+  d.open=d.target=1;prop.box=null;
+  const counter=room.props.filter(q=>q.box&&Math.abs(q.box.y-BACK_COUNTER_Y)<.2&&q.box.hl>1).map(q=>q.box);
+  const step=[prop.x+ox*.8,prop.y+oy*.8],nearCounter=counter.some(b=>inBox(b,...step,.6));
+  const path=roomPath(6,6.4,inside[0],inside[1]);
+  return {faces:[ox,oy],counters:counter.length,nearCounter,path:path.length>0};
+ });assert.deepEqual(r,{faces:[0,1],counters:1,nearCounter:false,path:true});
 }));

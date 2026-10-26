@@ -202,7 +202,7 @@ function assembleArchipelago() {
     geometry(p);
     if (Array.isArray(p.shop.pad)) point(p.shop.pad);
   }
-  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES]) {
+  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES, ...SHOPFRONT_FACES]) {
     for (const f of faces) geometry(f);
     sparseCells(faces);
   }
@@ -322,6 +322,23 @@ function assembleArchipelago() {
   // Opposite source blocks may now be on separate headlands. Validate against
   // the finished building map before rebuilding the renderer's spatial buckets.
   for (let i = lanterns.length - 1; i >= 0; i--) if (!lanternAnchored(lanterns[i])) lanterns.splice(i, 1);
+  // Lamps were fitted round the merchants' awnings in the source layout, but a lamp and an awning from different
+  // source blocks can meet again at a seam, and the junctions' signals are rebuilt above, never fitted at all. Where
+  // a lamp post or a signal (its pole and head) stands in an awning, cut the awning back to clear it by a hand's
+  // width: its end pulled in, or its front edge drawn back, whichever keeps more of it. The posts stay put.
+  const posts = [...lamps.map(l => [l.x, l.y, .012]), ...lights.map(l => [l.x, l.y, .045])]; // (x, y, half width)
+  for (const o of PAVILION_SOLIDS) {
+    if (o.kind !== 'awning' && !(o.kind === 'eave' && o.z1 < LAMP_TOP) || !o.f) continue;
+    const nx = o.f.nx, ny = o.f.ny, ax = o.c, ay = o.s; // (out of the wall; along it)
+    for (const [x, y, r] of posts) {
+      if (Math.abs(rel(x - o.x)) > o.hl + o.hw + .5 || Math.abs(rel(y - o.y)) > o.hl + o.hw + .5) continue;
+      const u = rel(x - o.x) * ax + rel(y - o.y) * ay, v = rel(x - o.x) * nx + rel(y - o.y) * ny, gap = r + .015;
+      if (Math.abs(u) >= o.hl + gap || Math.abs(v) >= o.hw + gap) continue;
+      const depth = v + o.hw - gap, length = o.hl + Math.abs(u) - gap; // (what's left either way: the reach from the wall, the length along it)
+      if (depth * o.hl * 2 >= length * o.hw * 2) { const d = Math.max(.04, depth); o.x -= nx * (o.hw - d / 2); o.y -= ny * (o.hw - d / 2); o.hw = d / 2; }
+      else { const l = Math.max(.1, length), e = -Math.sign(u) || 1; o.x += ax * e * (o.hl - l / 2); o.y += ay * e * (o.hl - l / 2); o.hl = l / 2; }
+    }
+  }
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
