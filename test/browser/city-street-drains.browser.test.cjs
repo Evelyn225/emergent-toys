@@ -50,3 +50,25 @@ test('rain runs along the gutter into the grates, and only in the rain; street t
  });
  assert.deepEqual(r.bad,[]);assert.ok(r.trees>20);
 }));
+
+test('cellar hatches lie flush beside shop doors, against the wall inside the pavement, clear of the walking line and the machines',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];hatchesNear(0,0);
+  for(const h of HATCHES){
+   const near=doors.filter(d=>Math.abs(rel(d.x-h.nx*.12-h.x))<.3&&Math.abs(rel(d.y-h.ny*.12-h.y))<.3);
+   if(!near.some(d=>d.sh&&d.sh.kind!==SHOP_APTS))bad.push('not beside a shop door');
+   if(!(map[idx(Math.floor(h.x-h.nx*.05),Math.floor(h.y-h.ny*.05))]>0))bad.push('no wall behind');
+   for(const [u,v] of [[-HATCH.hl,HATCH.out0],[HATCH.hl,HATCH.out1],[0,(HATCH.out0+HATCH.out1)/2]]){const x=h.x+h.c*u+h.nx*v,y=h.y+h.s*u+h.ny*v;if(map[idx(Math.floor(x),Math.floor(y))]||!ROAD[idx(Math.floor(x),Math.floor(y))])bad.push('off the pavement');}
+   if(HATCH.out1+.02>.12)bad.push('into the walking line');
+   if(machines.some(m=>Math.abs(rel(m.x-h.x-h.nx*.043))<.12&&Math.abs(rel(m.y-h.y-h.ny*.043))<.12))bad.push('under a vending machine');
+   // painted: the frame, the seam, the plate; the plate an even tone far off
+   const mx=h.x+h.nx*.043,my=h.y+h.ny*.043,seen=new Set();
+   for(let u=-HATCH.hl+.002;u<HATCH.hl-.002;u+=.0021)for(let v=HATCH.out0+.002;v<HATCH.out1-.002;v+=.0023){const c=hatchCell(h.x+h.c*u+h.nx*v,h.y+h.s*u+h.ny*v,8,.0005);if(!c){bad.push('a hole in the hatch');break;}seen.add(c[2]);}
+   const far=new Set();for(const sd of [-1,1])for(let u=.018;u<.034;u+=.0011)far.add(hatchCell(h.x+h.c*u*sd+h.nx*.055,h.y+h.s*u*sd+h.ny*.055,8,.01)?.[2]); // (bare plate: clear of the seam, rings, hinges and frame)
+   if(seen.size<3)bad.push(['too plain up close',seen.size]); // (the seam, the plate and its raised diamonds)
+   if(far.size!==1)bad.push(['plate still patterned far off',far.size]);
+  }
+  return {bad:bad.slice(0,8),n:HATCHES.length};
+ });
+ assert.deepEqual(r.bad,[]);assert.ok(r.n>100,`hatches: ${r.n}`);
+}));

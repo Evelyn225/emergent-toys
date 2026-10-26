@@ -191,6 +191,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   including hotel and motel rooms and the hotel lobby as the user asked (Codex: this is
   done here, no need to duplicate it in pass 6). Homes keep theirs as left. The diner's
   washroom door now faces the tables (`city/rooms.js`).
+- **Claude pass 12, service hatches:** `claude/service-hatches`, stacked on
+  `claude/street-drains` (`city/street-drains.js` only). Next: overhead cables
+  from main.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
