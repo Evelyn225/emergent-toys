@@ -202,7 +202,7 @@ function assembleArchipelago() {
     geometry(p);
     if (Array.isArray(p.shop.pad)) point(p.shop.pad);
   }
-  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES]) {
+  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES, ...SHOPFRONT_FACES]) {
     for (const f of faces) geometry(f);
     sparseCells(faces);
   }

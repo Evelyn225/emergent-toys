@@ -18,6 +18,7 @@
     "city/architecture.js",
     "city/landmarks.js",
     "city/pavilions.js",
+    "city/shopfronts.js",
     "city/traffic.js",
     "city/gas.js",
     "city/damage.js",

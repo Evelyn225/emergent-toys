@@ -159,6 +159,12 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
+    // a shop with fascia boards (shopfronts.js): its name once on each street face, on the board up close and painted
+    // there further off (where a row can be taller than the band, so wallText decides which row carries it)
+    const sf = z > 0.28 ? shopfrontFace(side, mx, my, h) : null, g = sf?.fascia;
+    if (g && archFasciaPainted(g, d) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
+      C(sh.neon, open ? Math.max(L, night * 15 * Math.max(fog, 0.5)) : L * 0.5), C(GRAY, 1))) return;
+    if (z > 0.32 && sf) return set(i, '-', C(GRAY, L));
     if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
@@ -214,7 +220,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
     if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
     if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter: vacant, or shut for the night
-    if (z > 0.28) return set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning
+    if (z > 0.28) return shopfrontFace(side, mx, my, h)?.awning ? set(i, '=', C(GRAY, L * 0.7)) : set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning (or the transom over the window, under a real one)
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25;

@@ -201,6 +201,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `residential-render.js`). Not touching `city/home-*.js`: the IDEA rename there is
   handled by refitting the board at draw time. Next: the old-path facades (warehouses,
   sty 2/15 shops) and Chinatown's painted vertical signs.
+- **Claude pass 13, generic shopfronts:** `claude/oldpath-shopfronts`, stacked on
+  #248: new pure `city/shopfronts.js` (after `pavilions.js` in the manifest), the
+  generic sign band and awning in `city/city-render.js`, and `SHOPFRONT_FACES` in
+  `world-bootstrap.js`'s face remap. Next: Chinatown's painted vertical signs and the
+  remaining shopfront details (shutters, windows, displays).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
