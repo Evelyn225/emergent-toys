@@ -1143,3 +1143,24 @@ follow-up PR/merge (original #243 is already integrated). Next facade utilities,
 then integrated fascia audit and passes5/6/9. #242 CI Node/browser1/2/4 passed,
 shard3 cancelled; watch a subsequent complete run. Keep unpublished Claude
 lettering and all reserved ownership untouched.
+
+#264 signal follow-up merged as bbe44ce. Codex active
+`codex/review-facade-utilities`, independently reviewing integrated #244.
+Files: city/facade-utilities.js and its focused browser test, bundle/notes.
+Audit actual wall/pipe/bracket/hopper/shoe/meter contacts and native clearance;
+cache fixed preparation if it preserves the reviewed geometry and LODs.
+Do not edit reserved architecture/world-bootstrap/lettering helpers or Claude's
+unpublished sign-lettering work. Next integrated fascia audit, then passes5/6/9;
+verify the already-implemented hotel/motel door policy, leave homes unchanged.
+
+Utility follow-up complete on `codex/review-facade-utilities` from bbe44ce.
+Lazy fixed models preserve2470 native routes, supports, meters and runoff;
+no placement changes were needed. Three utility plus awning/two fascia browser
+checks, four node files and thirteen independent defect probes pass. Sixteen
+native views match main pixel for pixel. ABAB/longer repeat recorded, including
+host tails; no general frame-time gain claimed. Ready for follow-up PR/merge
+(original #244 is already integrated). Next finish the read-only integrated
+#248/#249 fascia review, then passes5/6/9. Old home-window worktree is clean
+and its76984a3 already lies in current main history; don't duplicate it.
+#264 CI Node/browser1/2/3 passed, browser4 still running at last check. Keep
+unpublished Claude lettering and all reserved source/shared helper ownership.
