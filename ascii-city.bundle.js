@@ -17054,6 +17054,7 @@ function ceilMask(key, spec) {
     return !tall.some(b => inBox(b, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) / 2 + 0.1));
   };
   const paint = (x0, y0, x1, y1, v, round) => {
+    if(spec.onFitting)spec.onFitting(x0,y0,x1,y1,v,round);
     for (let py = Math.max(0, Math.floor(y0 * CEIL_RES)); py < Math.min(H * CEIL_RES, Math.ceil(y1 * CEIL_RES)); py++)
       for (let qx = Math.max(0, Math.floor(x0 * CEIL_RES)); qx < Math.min(RW, Math.ceil(x1 * CEIL_RES)); qx++) {
         const u = (qx + 0.5) / CEIL_RES, w = (py + 0.5) / CEIL_RES;
@@ -17097,6 +17098,7 @@ function roomCeil(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
   if (ROOM_CEILS[st]) return ROOM_CEILS[st](i, r, x, wx, wy);
+  if(st==='strip'&&prepareInteriorBattens()){BG[i]=C(GRAY,2.3);set(i,' ',0);return;}
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
@@ -17104,6 +17106,7 @@ function roomCeil(i, r, x, rx, ry) {
     return set(i,' ',0); // Light comes from the fitted pendant model below.
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
+    if(prepareInteriorHanging()){BG[i]=C(BRICK,2);return set(i,' ',0);}
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
@@ -17124,6 +17127,7 @@ function roomCeil(i, r, x, rx, ry) {
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
+  prepareInteriorBattens();prepareInteriorHanging();
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
@@ -17331,11 +17335,12 @@ Object.assign(ROOM_FLOORS, {
 const CEIL_SPOTS = { s: 2, r: 1.2, track: true };
 Object.assign(ROOM_CEILS, {
   tin: (i, r, x, wx, wy) => { // pressed tin: a square motif on a grid, a lamp every 2m
-    if (ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) return set(i, 'o', C(WARM, 15));
+    if (!prepareInteriorHanging() && ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) return set(i, 'o', C(WARM, 15));
     const u = fract(wx / 0.6) - 0.5, v = fract(wy / 0.6) - 0.5, m = Math.abs(u) + Math.abs(v);
     BG[i] = C(STONE, 2); return set(i, Math.abs(u) > 0.46 || Math.abs(v) > 0.46 ? '+' : Math.abs(m - 0.28) < 0.05 ? '.' : ' ', C(GRAY, 6));
   },
   spots: (i, r, x, wx, wy) => { // black, with tracks of little spotlights
+    if(prepareInteriorHanging()){BG[i]=C(GRAY,.7);return set(i,' ',0);}
     const k = ceilAt('spots', CEIL_SPOTS, wx, wy);
     return set(i, k === 1 ? 'o' : k === 2 ? '-' : ' ', k === 1 ? C(WHITE, 15) : C(GRAY, 4));
   },
@@ -19107,16 +19112,7 @@ ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor
 // ---- the taqueria (TACOS): the spit of al pastor turning by the grill, the salsa bar, a cooler of bright sodas,
 // paper flags strung across the ceiling, painted walls with a tiled skirt, picnic tables and a ledge with stools
 const PICADO = [RED, YEL, GREEN, MAG, CYAN, ORANGE, BLUE];
-const papelPicado = (y, x0, x1, z) => ROOM_MODEL((x0 + x1) / 2, y, (vx, vy) => {
-  const hl = (x1 - x0) / 2;
-  rod(vx - hl, vy, z, vx + hl, vy, z, 0.004, GRAY, 0.8);
-  for (let x = -hl + 0.15; x < hl; x += 0.32) {
-    const sag = (1 - (x / hl) ** 2) * 0.12, k = Math.floor((x + hl) / 0.32);
-    drawBox(boxAt(vx + x, vy, 1, 0, 0.13, 0.004, z - sag - 0.3, z - sag), (i, t, L) => {
-      if (fract(HIT.u * 18) < 0.3 && fract(HIT.w * 18) < 0.3) return false; // (cut-outs: they're lace, you see through)
-      BG[i] = C(PICADO[k % PICADO.length], 7 + L * 0.2); return set(i, ' ', 0), true; });
-  }
-});
+const papelPicado = (y,x0,x1,z) => PAPEL_PICADO(y,x0,x1,z);
 const trompo = (x,y) => KITCHEN_SPIT(x,y,'pastor');
 function tacoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.1, room.menu, 1.25, C(GRAY, 0.6), C(YEL, 15), 'TACOS', C(MAG, 15))) return true;
@@ -21086,10 +21082,6 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
 
 // ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
-const noodlePuller = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // the dough stretched between the cook's hands, folded, stretched again
-  const s = 0.15 + Math.abs(Math.sin(T * 1.6)) * 0.45;
-  for (let k = 0; k < 5; k++) rod(vx - s, vy + 0.05, 1.25 + k * 0.012, vx + s, vy + 0.05, 1.25 + Math.sin(k) * 0.02 - s * 0.15, 0.006, WHITE, 2);
-});
 function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.6))) return true;
@@ -21103,7 +21095,7 @@ function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.noodlehouse = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'lantern', sign: false, wall: noodleHouseWall, keeper: [6.6, 1.65],
   props: r => [KITCHEN_SERVICE_COUNTER(6,2.5,2.6,.3,1,RED), { ...standing(6.6, 1.65, RED), face: [0, 1] },
-    KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
+    KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), ...NOODLE_COOK(2.6,2.05), // the noodle maker at work
     stockPot(8.0, 1.45), stockPot(8.75, 1.45),
     ...[[2.5, 4.6, 0.45], [9.5, 4.6, 0.45], [2.5, 6.9, 0.35], [9.5, 6.9, 0.35]].flatMap(([x, y, busy]) => roundTable(x, y, 0.45, 4, { cloth: RED, chair: lowStool, chairCol: BRICK, busy, a0: Math.PI / 4 })),
     roundLantern(4.5, 5.8), roundLantern(7.7, 5.8), ...wcFittings(13)] };
@@ -39956,6 +39948,169 @@ function restaurantCeilingLanterns(r) {
     if(fits)fixtures.push({...PAPER_LANTERN(x,y,{ceiling,top,height,radius}),ceilingLantern:true});
   }
   return fixtures;
+}
+// The shop/restaurant closing pass starts with the fluorescent strip ceilings.
+// Other room families and authored hanging lamps keep their own renderers.
+const INTERIOR_BATTEN_ROOMS=new Set(['store','gas','grocer','deli','hardware','sports','toys','thrift','pharmacy','tobacco','video','records','tattoo','herbs','phones','pawn','liquor','jeweler','bodega','markethall','fruitshop','motel','welding','tireshop','tailor','antiques','drugstore','delicatessen','gacha','showroom','realty','books','florist','petshop','barber','cafe','bar','diner','noodle','tea','karaoke','pizzeria','burgerjoint','taqueria','sushibar','icecream','bakery','chickenshop','kebabshop','bento','takoyaki','yakitori','donutshop','juicebar','bagelshop','thai','pho','dumplings','dimsum','kissaten','izakaya','mahjong','roastery','noodlehouse']);
+// Closed bevels on both faces. All clipping planes and normals prepare once;
+// the existing convex-surface ray is used unchanged.
+function ceilingBattenPrism(half,width,z0,z1,bevel) {
+  const p=kitchenTopProfile(half,width,z0,z1,bevel);
+  for(const [nx,ny,d,id]of [[1,0,half-z0-bevel,11],[-1,0,half-z0-bevel,12],[0,1,width-z0-bevel,13],[0,-1,width-z0-bevel,14]]){
+    p.planes.push([nx,ny,-1,d,id]);p.normals[id]=[nx/Math.SQRT2,ny/Math.SQRT2,-1/Math.SQRT2];
+  }
+  return {...boxAt(0,0,0,1,half,width,z0,z1),...p};
+}
+function CEILING_BATTEN(x,y,length,ceiling) {
+  const n=Math.max(1,Math.ceil(length/1.8)),pitch=length/n,half=Math.min(1.4,pitch-.12)/2,parts=[];
+  const metal=(i,t,L)=>{BG[i]=C(WHITE,2.3+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const glass=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12);set(i,' ',0);return true;};
+  const clip=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  const add=(u,a,b,z0,z1,bevel,shade)=>parts.push({box:{...ceilingBattenPrism(a,b,z0,z1,bevel),y:u},shade});
+  for(let k=0;k<n;k++){const u=-length/2+pitch*(k+.5);
+    // The lower clips and diffuser reject hidden housing pixels first.
+    for(const e of [-1,1])add(u+e*(half-.08),.012,.18,ceiling-.064,ceiling-.052,.002,clip);
+    add(u,half-.028,.17,ceiling-.061,ceiling-.052,.002,glass);
+    add(u,half,.2,ceiling-.055,ceiling,.008,metal);
+  }
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const p of parts)drawBox({...p.box,x:vx,y:vy+p.box.y},p.shade,homeRayWorktop);}),
+    box:boxAt(x,y,0,1,length/2,.2,ceiling-.064,ceiling),walk:true,overhead:true,radius:Math.hypot(length/2,.2),ceilingBatten:{ceiling,length,modules:n}};
+}
+// This runs after the current room has been assigned. Reuse the existing
+// partition-aware ceiling layout, including its doorway and tall-prop gaps.
+function prepareInteriorBattens() {
+  const R=room,style=R?.def.ceil;
+  if(!R||!INTERIOR_BATTEN_ROOMS.has(R.kind)||style!=='strip'||ROOM_CEILS[style])return false;
+  if(R.interiorBattens)return true;
+  const runs=[],spec={...CEIL_STRIP,onFitting:(x0,y0,x1,y1,value)=>{if(value===1)runs.push({x:(x0+x1)/2,y:(y0+y1)/2,length:y1-y0});}};
+  const mask=ceilMask('physical-strip',spec),ceiling=R.def.height||3;
+  const fixtures=runs.map(q=>CEILING_BATTEN(q.x,q.y,q.length,ceiling));
+  R.interiorBattens={mask,fixtures};R.props.push(...fixtures);return true;
+}
+// Shop/restaurant ceiling fixtures. Existing home and feature-lamp builders
+// are reused unchanged; their authored positions remain clear of new shades.
+const INTERIOR_HANGING_ROOMS=new Set([...INTERIOR_BATTEN_ROOMS,'skate']);
+function CEILING_TRACK(x,y,length,ceiling,spots) {
+  const parts=[],half=length/2;
+  const dark=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.16*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7?12:3.5);set(i,' ',0);return true;};
+  parts.push({role:'track',box:{...ceilingBattenPrism(half,.04,ceiling-.045,ceiling,.004),c:1,s:0},shade:dark,ray:homeRayWorktop});
+  for(const sx of spots){
+    const add=(p,shade)=>parts.push({...p,box:{...p.box,x:sx-x},shade,ray:coveRayLathe});
+    add(homeLampCylinder('stem',ceiling-.125,ceiling-.045,.013),dark);
+    add(homeLampPart('head',ceiling-.24,[[0,.06],[0,.075],[.10,.075],[.12,.064],[.12,0],[.11,0],[.11,.06],[0,.06]]),dark);
+    add(homeLampCylinder('lens',ceiling-.241,ceiling-.232,.06),lens);
+  }
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const p of parts)drawBox({...p.box,x:vx+p.box.x,y:vy},p.shade,p.ray);}),
+    box:boxAt(x,y,1,0,half,.075,ceiling-.241,ceiling),walk:true,overhead:true,radius:Math.hypot(half,.075),ceilingTrack:{ceiling,length,spots:spots.slice(),parts}};
+}
+function prepareInteriorHanging() {
+  const R=room,style=R?.def.ceil;
+  if(!R||!INTERIOR_HANGING_ROOMS.has(R.kind)||(style!=='pendant'&&style!=='tin'&&style!=='spots'))return false;
+  if(R.interiorHanging)return true;
+  const ceiling=R.def.height||3,runs=[],spots=[];
+  const spec={...(style==='spots'?CEIL_SPOTS:CEIL_PENDANT),onFitting:(x0,y0,x1,y1,value)=>{
+    const q={x:(x0+x1)/2,y:(y0+y1)/2,length:x1-x0};(value===2?runs:spots).push(q);
+  }};
+  const mask=ceilMask('physical-'+style,spec),fixtures=[];
+  if(style==='spots'){
+    for(const q of runs)fixtures.push(CEILING_TRACK(q.x,q.y,q.length,ceiling,spots.filter(p=>Math.abs(p.y-q.y)<1e-8&&Math.abs(p.x-q.x)<q.length/2).map(p=>p.x)));
+  }else{
+    const feature=R.props.filter(p=>p.tiffanyLamp||p.heatLamp||p.roundLantern||p.paperLantern);
+    const tall=R.props.filter(p=>p.box&&p.box.z1>ceiling-.72&&p.box.z0<ceiling);
+    for(const q of spots){
+      if(feature.some(p=>Math.hypot(p.x-q.x,p.y-q.y)<.7)||tall.some(p=>inBox(p.box,q.x,q.y,.28)))continue;
+      fixtures.push({...homeLampModel(q.x,q.y,'pendant',ceiling,()=>true),overhead:true,ceilingPendant:{ceiling}});
+    }
+  }
+  R.interiorHanging={mask,fixtures};R.props.push(...fixtures);return true;
+}
+// A cord and everything it supports share their exact sampled joins. Parts
+// prepare once; only the selected cached noodle-pulling frame changes.
+function interiorCordSegment(a,b,r,role) {
+  return {...boxAt((a[0]+b[0])/2,(a[1]+b[1])/2,1,0,Math.abs(b[0]-a[0])/2+r,Math.abs(b[1]-a[1])/2+r,Math.min(a[2],b[2])-r,Math.max(a[2],b[2])+r),ax:a[0],ay:a[1],az:a[2],bx:b[0],by:b[1],bz:b[2],r,cordRole:role};
+}
+function interiorCordDraw(box,vx,vy,shade) {
+  drawBox({...box,x:vx+box.x,y:vy+box.y,ax:vx+box.ax,ay:vy+box.ay,bx:vx+box.bx,by:vy+box.by},shade,coveRayCapsule);
+}
+// Closed thin paper with real diamond cut-outs, including the inside edges.
+function picadoRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,P=b.paper;
+  let best=Infinity,nx=0,ny=0,nz=0;
+  const inBody=(u,v,z)=>Math.abs(u)<=b.hl+1e-8&&Math.abs(v)<=b.hw+1e-8&&z<=P.top+P.slope*u+1e-8&&z>=P.top+P.slope*u-.3-1e-8;
+  const inHole=(u,z,h)=>Math.abs(u-h.x)+Math.abs(z-P.slope*u-P.top-h.z)<=h.r+1e-8;
+  for(const plane of P.planes){
+    const den=plane[0]*rx+plane[1]*ry+plane[2]*rz;if(Math.abs(den)<1e-12)continue;
+    const t=(plane[3]-plane[0]*x-plane[1]*y-plane[2]*oz)/den;if(t<=.01||t>=best)continue;
+    const u=x+rx*t,v=y+ry*t,z=oz+rz*t;if(!inBody(u,v,z)||P.holes.some(h=>inHole(u,z,h)))continue;
+    best=t;nx=plane[0];ny=plane[1];nz=plane[2];
+  }
+  for(const h of P.holes)for(const plane of h.planes){
+    const den=plane[0]*rx+plane[2]*rz;if(Math.abs(den)<1e-12)continue;
+    const t=(plane[3]-plane[0]*x-plane[2]*oz)/den;if(t<=.01||t>=best)continue;
+    const u=x+rx*t,v=y+ry*t,z=oz+rz*t;if(!inBody(u,v,z)||!inHole(u,z,h))continue;
+    best=t;nx=-plane[0];ny=0;nz=-plane[2];
+  }
+  if(!Number.isFinite(best))return -1;
+  const norm=Math.hypot(nx,ny,nz);HIT.nx=nx/norm;HIT.ny=ny/norm;HIT.nz=nz/norm;HIT.face=0;
+  HIT.u=x+rx*best;HIT.v=y+ry*best;HIT.w=oz+rz*best;return best;
+}
+function PAPEL_PICADO(y,x0,x1,z) {
+  const half=(x1-x0)/2,cord=[],flags=[],xs=[-half,half],top=x=>z-(1-(x/half)**2)*.12;
+  const dark=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.14*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  for(let x=-half+.15,k=0;x+.13<=half;x+=.32,k++){
+    const left=x-.13,right=x+.13,a=top(left),b=top(right),slope=(b-a)/.26,mid=(a+b)/2;
+    xs.push(left,right);
+    const planes=[[1,0,0,.13],[-1,0,0,.13],[0,1,0,.001],[0,-1,0,.001],[-slope,0,1,mid],[slope,0,-1,.3-mid]],holes=[];
+    for(const u of [-.08,0,.08])for(const w of [-.075,-.15,-.225]){
+      const r=.025,cut=[];
+      for(const sx of [-1,1])for(const sz of [-1,1])cut.push([sx-sz*slope,0,sz,sx*u+sz*(mid+w)+r]);
+      holes.push({x:u,z:w,r,planes:cut});
+    }
+    const colour=PICADO[k%PICADO.length],shade=(i,t,L)=>{BG[i]=C(colour,4.5+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    flags.push({box:{...boxAt(x,0,1,0,.13,.001,Math.min(a,b)-.3,Math.max(a,b)),paper:{top:mid,slope,planes,holes}},shade,left:[left,0,a],right:[right,0,b]});
+  }
+  xs.sort((a,b)=>a-b);for(let k=1;k<xs.length;k++)cord.push(interiorCordSegment([xs[k-1],0,top(xs[k-1])],[xs[k],0,top(xs[k])],.004,'flag-cord'));
+  const mounts=[-1,1].map(e=>boxAt(e*(half-.008),0,1,0,.008,.025,z-.025,z+.025));
+  return {...ROOM_MODEL((x0+x1)/2,y,(vx,vy)=>{
+    for(const q of flags)drawBox({...q.box,x:vx+q.box.x,y:vy},q.shade,picadoRay);
+    for(const q of cord)interiorCordDraw(q,vx,vy,dark);
+    for(const q of mounts)drawBox({...q,x:vx+q.x,y:vy},dark);
+  }),box:boxAt((x0+x1)/2,y,1,0,half+.004,.025,z-.424,z+.025),radius:Math.hypot(half+.004,.025),walk:true,overhead:true,picado:{flags,cord,mounts,x0,x1,z}};
+}
+// A small set of real figure poses keeps both hands and the stretched dough
+// in the same frame, while retaining the normal worker's look/interactions.
+FIG_POSES.noodlepull=f=>{const q=f/7;return {...FIG_STAND,arms:[[1.3,.15+q*.6,1.5,.08+q*.9],[1.3,.15+q*.6,1.5,.08+q*.9]]};};
+const noodlePullFrame=()=>Math.round((.5-.5*Math.cos(T*1.6))*7);
+function NOODLE_COOK(x,y) {
+  const worker={...standing(x,y,WHITE),face:[0,-1],pose:()=> 'noodlepull'+noodlePullFrame()},source=worker.fig,frames=[],role=()=>FR.MIC;
+  const unit=worker.h/FIG_TALL;
+  for(let f=0;f<8;f++){
+    const key='noodlepull'+f,body=figBody(source,key),grips=body.parts.filter(p=>p.k===0&&p.r.every(r=>Math.abs(r-.95)<1e-8)&&p.role({})===FR.SKIN).map(p=>p.c);
+    grips.sort((a,b)=>a[0]-b[0]);
+    const strands=[],sag=(.08+f/7*.04)/unit;
+    for(let k=0;k<5;k++){
+      const a=grips[0],b=grips[1],points=[];
+      for(let j=0;j<=8;j++){const t=j/8,spread=(k-2)*.015/unit;points.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t-4*t*(1-t)*sag+spread]);}
+      const parts=[];for(let j=1;j<points.length;j++){const part=figCap(points[j-1],points[j],.006/unit,role);parts.push(part);body.parts.push(part);}
+      strands.push({points,parts});
+    }
+    body.face=null; // close views refine the held strands as well as the head
+    frames.push({key,grips,strands,body});
+  }
+  // The figure is projected into a cached view sprite. Including its held
+  // dough in that same body keeps the visible hand/strand joins exact even
+  // in close oblique views; a separate world mesh has different perspective.
+  const base=source.base.slice(),lvl=source.lvl.slice();base[FR.MIC]=WHITE;lvl[FR.MIC]=13;
+  worker.fig={...source,shape:source.shape+'|noodle-cook',base,lvl};
+  worker.pose=()=>{
+    const frame=frames[noodlePullFrame()],id=worker.fig.shape+'|'+frame.key;
+    // Prime the normal human figure cache with this prepared held-object body.
+    // Reinstall after eviction without rebuilding it or changing shared helpers.
+    if(figCache.get(id)!==frame.body)figCache.set(id,frame.body);
+    return frame.key;
+  };
+  worker.noodleCook=true;worker.noodleStretch={frames,unit,source};return [worker];
 }
 // The roof panels share one folded profile. Gables meet its underside; the
 // garland and blossoms share seven points, attached to the real tray face.
