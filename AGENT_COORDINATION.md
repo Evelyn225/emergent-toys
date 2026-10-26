@@ -159,6 +159,7 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
   Next: utility cabinets, then bus shelters.
 
+
 - **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
   `city/kerb-fixtures.js` after `world-bootstrap.js`, new
   `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
@@ -1021,3 +1022,40 @@ bar coverage/tones. Four browser checks including actual ground raster, three
 node files, eight negative probes, thirteen clear-floor views and ABAB costs
 recorded. Ready to push original c5bf46b-derived branch and merge; next #245.
 Keep remaining independent chains/interior passes and all reserved ownership.
+
+#239 merged as0a35222. Codex active `codex/fishing-audio-clock-test`, a small
+CI repair before dependent #245. #246 full CI passed Node and browser1/3/4;
+browser2 failed only the bobber audio delay assertion (0.0419s measured versus
+~0.0533s expected). Its mocked callback subtracts a live audio clock, making
+browser preemption alter the assertion. Reproduce with controlled clock
+advance, keep all distance/gain/pan/ice/cast checks, and restore the live clock
+after the intercepted-voice test. Files: activity-feedback browser test and
+shared notes only; no runtime/audio or reserved Claude source edits planned.
+
+Fishing clock repair complete: old test fails under a controlled40ms callback
+stall, corrected fixture survives it and passes two normal runs. Four timing/
+gain/pan/ice defects still fail unchanged assertions; three node files pass.
+Only the test and shared notes changed. Ready to push/open/merge this small
+CI repair, then resume #245 from main including #239. #246 full CI failure
+is diagnosed rather than retried blindly; verify the repaired full run later.
+
+#263 fishing clock repair merged as9ea30c9. Codex active
+`codex/review-service-hatches` (#245), integrating latest main into Claude's
+8e5c5bd-derived branch. Files: street-drains module and focused tests plus
+shared bundle/notes. Preserve whole tree grates, no bridge runoff and smooth
+coverage from #239. Review hatch floor attachment/placement, cached cell bounds
+and close/far material transitions. Next #242/#243/#244 then #248→#249 and
+passes5/6/9. No reserved Claude/shared home/hotel helper edits planned.
+
+#245 source checkpoint: eight focused native drain/hatch checks, three node
+files and nine independent defects verified; eleven final clear-floor views
+reviewed. Hardware no longer resembles dark holes and follows ambient light.
+Final ABAB run/notes and original-branch push/merge still pending. Checkpoint
+on Codex's backup branch only; do not merge it before the final review note.
+
+#245 final review complete; supersedes ba7448d checkpoint's pending status.
+Eight native checks, three node files, nine mutations and eleven final views
+pass; ABAB costs recorded. A longer isolated wide-view repeat does not
+reproduce the10.8ms outlier (4.9–5.7→4.9–5.1ms). Original remote head remains
+8e5c5bd; ready to update/merge it. #263 full CI queued at last check. Next
+#242/#243/#244, then #248→#249 and passes5/6/9, preserving ownership/remnants.
