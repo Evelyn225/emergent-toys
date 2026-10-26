@@ -31,6 +31,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   gone (#224). Books bookcases on `claude/books-bookcases`, stacked on #224:
   the wall unit takes `wall: 'left'|'right'`, taller levels, and a list of
   runs; `booksWall` is gone. Earlier pass 7 PRs: #221 display cases, #222
+  fridge walls. Grocer floor on `claude/grocer-produce` (new
+  `city/grocer-produce.js`; the grocer def in `city/shops.js`), stacked on
+  #221, #222 and #226 because they all edit `city/shops.js`. Next: the other
+  shops' painted boxes group by group. `city/home-*.js` stays with Codex.
+
   fridge walls. Next: the shops' painted boxes group by group.
   `city/home-*.js` stays with Codex.
 
@@ -506,3 +511,37 @@ corner/underside/close/wide/oblique/night and ABAB costs reviewed. No shared
 helper edits. #247 full CI green. Next Codex #228 produce, then #229–#232;
 #232 already upgrades the remaining painted reading chair, so do not duplicate
 it. Claude keeps pass12 lights/utilities and his street PRs.
+
+Codex active review `codex/review-grocer-produce` (#228): main through #226
+integrated, preserving reviewed fixtures and test repairs. `city/grocer-produce.js`
+and its browser test; reviewing actual melon packing, stable face lighting and
+fixed fruit/profile preparation. Next #229 corner shops, then #230–#232.
+Claude retains pass12; no street-only or shared helper edits planned.
+
+Updated user handoff (2026-10-25 Toronto): Codex completes #228–#232 and the
+interior closing audit, then reviews/merges #236 and the open #238–#249 set.
+Respect these dependency chains: #238 -> #240 -> #241 -> #246;
+#239 -> #245; #248 -> #249. #247 is already merged (Codex's CI fixture fix).
+Then Codex takes passes5,6,9 (homes, hotels, civic). For pass6, decide private
+hotel/motel pocket-door defaults and auto-close separately from public rooms.
+Claude now owns active `city/bathroom-quality.js`, the DINER definition in
+`city/rooms.js`, `city/world-bootstrap.js` (Chinatown awning/lamp clearance)
+and pass13 facade files. Avoid those active edits; this supersedes the older
+pass12-only split. Shared notes/module lists remain additive; rebuild bundles.
+Current Codex branch remains `codex/review-grocer-produce`, files above.
+
+User decision for pass6: hotel AND motel washroom pocket doors should also
+start closed and slide shut when the player walks away, matching Claude's
+public-washroom behavior. Implement for guest rooms during the hotel pass;
+Claude's current bathroom-quality edits remain reserved. Homes are unchanged
+by this request.
+
+#228 Codex review complete (`codex/review-grocer-produce`): actual two-axis
+melon packing/contact corrected; plain timber face lighting made independent
+of previous HIT normals; fruit/apple/crate geometry and materials prepared
+once; handle render bounds corrected. Two new actual-geometry/cache checks
+and four mutation probes pass. All12 produce/shop-route/seating plus seven
+bundle/parse/render checks pass; close/oblique/wide/night views and ABAB costs
+reviewed. #224/#226 final CI green. No shared helper or active Claude file
+edits. Next #229 corner shops, #230–#232, then the recorded interior closing
+audit and updated merge chains. Latest hotel/motel door decision above stands.
