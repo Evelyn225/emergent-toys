@@ -25,6 +25,7 @@ test('the bar has a built back bar on its back wall in place of painted shelves,
   // the staff aisle stays open from end to end, between the back bar and the counter
   let aisle=true;for(let x=1.3;x<=10.7;x+=.05)aisle&&=free(x,1.4)||free(x,1.45)||free(x,1.5);
   let stools=true;for(let x=3;x<=9;x+=.05)stools&&=free(x,3.2);
+  for(const d of room.bathroomDoors||[]){d.bathroomDoor.open=d.bathroomDoor.target=1;d.box=null;} // (the washroom door starts shut: open it, as you would with E)
   const wcDoor=free(2.5,4.5)&&free(2.5,5.2),jukebox=room.props.some(o=>o.box&&Math.abs(o.x-10.55)<.01);
   px=6;py=3.1;a=Math.atan2(k[1]-py,k[0]-px);render(0);
   return{bad,painted:!!room.def.shelves,aisle,stools,wcDoor,jukebox,prompt:promptText(),bays:d.bays,bottles:d.stock.length};

@@ -31,6 +31,7 @@ async function walkRooms(page) {
       const kind = ROOM_FOR[word] || 'store';
       enterRoom(kind, { word, neon: CYAN, ret: [px, py, a], line: '' }, [0, 0, -Math.PI / 2]);
       [px, py] = room.def.spawn || [room.W / 2, room.H - 1.6];
+      for (const d of room.bathroomDoors || []) { d.bathroomDoor.open = d.bathroomDoor.target = 1; d.box = null; } // (a washroom door starts shut: open it, as you would with E)
       const spawn = [px, py], k = room.def.keeper, open = free(px, py);
       const S = 10, W = room.W * S, H = room.H * S, seen = new Uint8Array(W * H), q = [[Math.round(px * S), Math.round(py * S)]];
       let clerk = null, door = false, wc = null;

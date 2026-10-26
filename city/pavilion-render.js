@@ -20,11 +20,11 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
     const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
-      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L,d,door,-doorHalf - .012,doorHalf + .012,0,.27)) return true;
       if (Math.abs(door) > doorHalf || z > .255) { BG[i] = C(p.trim,1 + L * .2); set(i,z > .255 ? '=' : '|',C(p.trim,L)); return true; }
     }
     if (f.front && Math.abs(local) < width / 2 - .15 && (z > .03 || Math.abs(door) < doorHalf) && z < .32) {
-      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L,d,local,.15 - width / 2,width / 2 - .15,.03,.32)) return true;
       if (Math.abs(door) < doorHalf && z < .255) {
         if (japan && z > .225) {
           BG[i] = C(p.trim,2 + L * .22);

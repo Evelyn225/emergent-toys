@@ -194,6 +194,7 @@ function citySprites() {
   fairSprites();
   gasSprites(); // (the drivers at the pumps: gas-render.js)
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
+  drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
@@ -379,39 +380,11 @@ function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
   return false;
 }
 
-// a lamp up close, built from boxes so it's solid from any side: a flared base, the pole with its collar, the swan
-// neck as a chain of short pieces round the half circle, and the lantern hanging off the end (glowing after dark).
-// Further off the billboard (lampCell) looks the same and costs far less.
-const LAMP_3D = 5, NECK_BITS = 7;
+// a lamp up close is turned and built (drawLamp3D, street-lamps.js); further off the billboard (lampCell) looks the
+// same and costs far less. STEEL: plain steel parts shared by the signals, the el and the bridges.
+const LAMP_3D = 5;
 const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
 const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
-function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
-  const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
-  B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
-  B(0, 0.06, top, 0.01, 0.01, STEEL.pole);
-  B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
-  for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
-    const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
-    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
-    B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
-  }
-  const hu = 2 * NECK;
-  B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
-  B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
-  B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
-    if (HIT.face === 6) { BG[i] = C(GRAY, 1); return set(i, 'v', C(GRAY, L)), true; }
-    const edge = Math.abs(Math.abs(HIT.face <= 2 ? HIT.v : HIT.u) - 0.024) < 0.004;
-    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
-    return set(i, edge ? '|' : lit ? '#' : ':', lit && !edge ? C(WARM, 15) : C(GRAY, L * 0.8)), true;
-  });
-  B(hu, top - 0.14, top - 0.125, 0.008, 0.008, STEEL.pole);
-  if (lit) drawShape(vx + ax * hu, vy + ay * hu, top - 0.16, 0.075, 0.13, (i, u, z, du, dz) => { // the soft glow round the lantern
-    const halo = Math.hypot(u / 0.075, (z - 0.065) / 0.065);
-    if (halo >= 1) return false;
-    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
-  });
-}
-
 // ---- signals and roof clutter as real 3D parts. Poles, masts, legs and wires are rods (rayRod, courier-ui.js): round
 // up close and never thinner than a character far off, so they hold the skyline at any distance. a, b camera-relative.
 function drawRod(ax, ay, az, bx, by, bz, r, shade) {
@@ -428,33 +401,6 @@ function rod(ax, ay, az, bx, by, bz, r, col = GRAY, k = 1) {
 }
 // a point: a little sphere up close, one character far off (bz nudged so rayRod has an axis to measure along)
 const dot = (x, y, z, r, shade) => drawRod(x, y, z, x, y, z - 0.002, r, shade);
-
-// a traffic signal: a pole and a head of three lamps facing both ways along its street, each under its visor.
-// You see the lamps only from along the street (from the cross street the visors hide them, as they're meant to).
-const SIG = { hl: 0.012, hw: 0.017, z0: 0.29, z1: 0.376 }, SIG_LAMPS = [['R', 0.36, RED], ['Y', 0.333, YEL], ['G', 0.306, GREEN]];
-const SIG_HOUSING = (i, t, L) => { BG[i] = C(GRAY, (0.6 + L * 0.12) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '_' : ' ', C(GRAY, L * 0.5)), true; };
-function drawSignal(s) {
-  const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy);
-  if (d > vis + 1) return;
-  const c = s.vert ? 0 : 1, sn = s.vert ? 1 : 0, on = light(s.bx, s.by, s.vert, T), near = d < 6;
-  rod(vx, vy, 0, vx, vy, SIG.z0, 0.009);
-  if (near) drawBox(boxAt(vx, vy, 1, 0, 0.02, 0.02, 0, 0.025), STEEL.base);
-  drawBox(boxAt(vx, vy, c, sn, SIG.hl, SIG.hw, SIG.z0, SIG.z1), SIG_HOUSING);
-  const k = -(vx * c + vy * sn) / (d || 1); // +1: we're off the head's +u end
-  for (const e of [-1, 1]) {
-    if (e * k < 0.3) continue;
-    const ux = vx + c * e * SIG.hl, uy = vy + sn * e * SIG.hl;
-    // the lit lamp first: far off all three share a character, and it should be the one you see
-    for (const [st, z, col] of [...SIG_LAMPS].sort(a => a[0] === on ? -1 : 1)) {
-      const lit = st === on;
-      dot(ux, uy, z, 0.0095, (i, t, L) => { // up close a lens of solid colour, far off its one character
-        BG[i] = C(col, lit ? 11 : 2.2);
-        return set(i, 0.019 * projX / t > 2 ? ' ' : lit ? 'O' : 'o', C(col, lit ? 15 : 4)), true;
-      });
-      if (near) drawBox(boxAt(ux + c * e * 0.007, uy + sn * e * 0.007, c, sn, 0.007, 0.012, z + 0.0095, z + 0.012), SIG_HOUSING);
-    }
-  }
-}
 
 // a wooden water tank on a steel stand: braced legs, a platform, the barrel with its iron hoops, a conical roof
 const TANK = { r: 0.11, leg: 0.13, top: 0.3, roof: 0.07 };

@@ -2,11 +2,12 @@
 const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
-  if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
-    Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
+  const g = architectureSignSpec(b, f, sh);
+  if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
+    g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
-  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)
+  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim, d)) return; // (the shop's door, to the pavement)
   if (z > .325 || z < .045 && !(f.front && sh.kind === SHOP_APTS && door < doorHalf)) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   if (f.front && sh.kind === SHOP_APTS) {
     if (door < doorHalf && z < .30) { // (the lobby doors, to the pavement)
@@ -20,8 +21,13 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
     return set(i, ' ', C(wall, L));
   }
   if (along > .14 && along < width - .14 && z < .31) {
-    if (architectureShutter(i, z, sh, L)) return;
+    const w0 = .14 + Math.floor((along - .14) / .48) * .48;
+    if (architectureShutter(i, z, sh, L, d, along, w0, Math.min(w0 + .48, width - .14), .045, .31)) return;
     const mullion = Math.abs(fract((along - .14) / .48) - .5) > .47;
+    if (!mullion && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+      const a0 = .14 + Math.floor((along - .14) / .48) * .48, a1 = Math.min(a0 + .48, width - .14), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+      if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .045, .31, sh, open, L, sk0(b.seed) + Math.floor(a0 * 9))) return;
+    }
     BG[i] = C(sh.kind === SHOP_NEON ? sh.neon : CYAN, 1 + night * 2);
     return set(i, mullion ? '|' : ':', C(mullion ? trim : WARM, Math.max(L * .65, night * 11)));
   }
