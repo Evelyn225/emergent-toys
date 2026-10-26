@@ -775,3 +775,22 @@ separate karaoke start/mid/end sampling assertion. This supersedes the earlier
 WIP checkpoint. Continue legacy prop/electronics audit and authorized Claude
 chains, preserving active ownership and the hotel/motel closed/auto-close
 washroom-door decision. Latest branch and tests are pushed for usage handoff.
+
+#260 cord/noodle contact repair merged as04e7dda. Codex active test-only
+`codex/karaoke-progress-test`: `city-karaoke-stage.browser.test.cjs` samples
+start/mid/end at10/12.5/13.9 seconds and reads only the actual screen plane.
+The old13.9s expectation incorrectly required unsung letters after progress
+already exceeded the full line. Retain both colour directions, nonempty actual
+lyric pixels, clear-floor camera and seating. No runtime edits. Next resume
+the documented closing-audit follow-ups and authorized Claude review queue.
+
+Karaoke test-only repair verified: all four stage checks plus repeated actual
+screen start/mid/end sampling pass; four progress/text mutations and four node
+checks pass. No runtime edits. Publish/merge, then Codex takes review #236 and
+the recorded #238–#249 dependency chains. Ceiling marks and detached flag/
+noodle joins are closed by #257/#259/#260. Small legacy optics/turntables/
+headphones/mower/key/hubcap/lollipop/floor-lamp/clock/fan follow-ups remain
+explicit in WORLD_QUALITY, with passes7/8 open; do not erase these while
+integrating Claude's notes. Preserve active bathroom-quality, DINER,
+world-bootstrap and current facade ownership; rebuild bundles. Hotel/motel
+washroom doors remain queued closed and auto-closing in pass6; homes unchanged.
