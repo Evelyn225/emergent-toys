@@ -176,6 +176,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 13, generic shop doors:** `claude/generic-doors`, stacked on #253:
   `city/city-render.js` generic ground floor only (a `shopDoor` under each board, the painted awning
   band now a transom), new `city-generic-doors` browser test.
+- **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
+  `city/kerb-fixtures.js` after `world-bootstrap.js`, new
+  `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
+  `city/main.js` `free` and `city/goods.js` `ballBlocked`). Next: drains and
+  grates, utility cabinets, then bus shelters.
+- **Claude pass 11, utility cabinets:** `claude/utility-cabinets`, stacked on
+  `claude/kerb-fixtures` (#238): a `cabinet` kind in `city/kerb-fixtures.js` and
+  its model in `city/kerb-fixtures-render.js`. Next: bus shelters.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
@@ -846,3 +854,58 @@ merge #236, then #238→#240→#241→#246, #239→#245, independent #242/#243/#
 and #248→#249. Newest #249 remote head isd6960f6, not the older1fc/6f refs;
 fetch every head explicitly before review. Preserve remaining interior small-
 prop follow-ups and the hotel/motel closed/auto-closing washroom-door decision.
+
+#236 reviewed vending PR merged as885a1ac. Codex active
+`codex/review-kerb-fixtures` (#238), integrating main through #236. Files:
+`city/kerb-fixtures.js`, `city/kerb-fixtures-render.js`, collision hooks in
+`city/main.js`/`city/goods.js`, render hook in `city/city-sprites.js`, focused
+kerb tests and shared manifest/bundle/notes. Source review found repeated fixed
+profile preparation, the mailbox's full round roof overlapping its carcass,
+and rectangular collision/height checks that need actual-shape review. No
+active bathroom/DINER/world-bootstrap/facade or shared helper edits planned.
+Next #240/#241/#246 as the first dependency chain, then the remaining authorized
+chains/independent PRs. Keep all remaining interior audit follow-ups recorded.
+
+Kerb review update: five native/actual-geometry/cache/footprint checks pass and
+all initial defect probes reject the broken geometry. One reviewed movement
+choice supersedes earlier progress wording: keep main.js's original grounded
+barrier check. Applying player foot-height clearance alone permits landing
+inside props because street fixtures do not yet provide standing surfaces.
+Ball collision keeps its explicit vertical interval, and round props retain
+accurate footprints. Proper player prop-top support belongs with a later
+movement chunk. No moves.js/terrain.js changes. Final scope is static shapes,
+mailbox joins/labels, fixed caches, rounded walking footprints and ball height.
+Visual review and ABAB costs, final probes/integration and push are pending;
+do not merge the #238 baseline checkpoint yet. Original Claude head remains
+33796bc; current review source is local atop checkpoint999af50.
+
+#238 final review complete on `codex/review-kerb-fixtures`: cached fixed shapes
+and translated rays; closed mailbox shell/roof, grounded supports, mounted
+pulls, scaled nonemissive labels; accurate round footprints and finite-height
+ball collisions. Five kerb and five native movement/lamp/ball/vending checks,
+seven node checks and twelve independent mutations pass. Sixteen clear-floor
+views and ABAB costs recorded in WORLD_QUALITY. #236 full CI green. The earlier
+WIP checkpoint is superseded; player walking keeps its original barrier rule,
+with prop-top support explicitly left for a separate movement chunk. No active
+Claude files or shared helper edits. Ready to push original #238 branch/merge,
+then #240→#241→#246. Remaining #239→#245, #242/#243/#244 and #248→#249 remain
+authorized; preserve latest heads/ownership and all interior audit follow-ups.
+Hotel/motel private washrooms remain closed and auto-closing in pass6; homes
+are unchanged by that decision.
+
+#238 merged as97064be. Codex active `codex/review-utility-cabinets` (#240),
+merging main into Claude's8424597 without replacing either agent's history.
+Files: `city/kerb-fixtures.js`, `city/kerb-fixtures-render.js`, kerb browser
+checks and shared bundle/notes. Integrate cabinets into the reviewed cached
+model path, retain actual kerb footprints/ball heights and original grounded
+walking rule. Cabinet collision must use the cabinet rather than the hydrant
+fallback; inspect joined door hardware, mounts and scaled labels. Next #241
+then #246 in the first chain. Reserved Claude source/shared helpers untouched.
+
+#240 final review on `codex/review-utility-cabinets`: six focused and five
+native integration checks, three node files, nine defect probes, twelve
+clear-floor views and ABAB costs complete. Cabinets use cached fixed surfaces,
+joined hardware and actual cabinet-sized/height-aware collisions; preserve
+#238's grounded walking decision. Ready to update the original PR branch and
+merge, then #241→#246. No active Claude/shared helper edits. All remaining
+interior audit and hotel/motel door decisions stay recorded.
