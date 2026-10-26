@@ -20,6 +20,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 11 (street objects):** vending machines on `claude/street-vending`
+  from main (new `city/street-vending.js`; `drawVending` moved out of
+  `city/city-sprites.js`). Next: kerb fixtures (bins, hydrants, mailboxes,
+  bollards) in new modules, with placement in `city/props.js`/`city/streetscape.js`.
+
 - **Claude pass 7 (shop interiors):** shelf islands on
   `claude/shop-shelf-islands` (new `city/shop-gondolas.js`; one line in
   `makeRoom` in `city/rooms.js` turns 'S' cells into floor plus gondolas; the
@@ -794,3 +799,25 @@ explicit in WORLD_QUALITY, with passes7/8 open; do not erase these while
 integrating Claude's notes. Preserve active bathroom-quality, DINER,
 world-bootstrap and current facade ownership; rebuild bundles. Hotel/motel
 washroom doors remain queued closed and auto-closing in pass6; homes unchanged.
+
+#261 karaoke sampling repair merged as662d24d. Codex active review
+`codex/review-street-vending` (#236), integrating main into Claude's original
+`claude/street-vending` ancestry. Files: new `city/street-vending.js`, the old
+vending renderer removal from `city/city-sprites.js`, focused vending tests and
+shared manifest/bundle/notes. Review fixes target cached fixed profiles/materials,
+nonoverlapping stock, proper scaled READY text and actual coin-return depth.
+No active Claude bathroom/DINER/world-bootstrap/facade or shared helper edits.
+Next the authorized #238→#240→#241→#246, #239→#245 and #248→#249 chains, plus
+independent #242/#243/#244. Preserve remaining interior legacy-prop follow-ups.
+
+#236 Codex review complete on `codex/review-street-vending`: integrated main
+through #261, retained Claude's cabinet/layout and added lazy prepared surfaces,
+stock clearance, scaled READY, calm surface LOD/glints, a true closed coin
+recess and a mounted flap hinge. Four focused plus five native purchase/club
+checks, seven node checks and nine negative probes pass. Thirteen clear-floor
+views and ABAB costs recorded in WORLD_QUALITY. #261 full CI green. No active
+Claude/shared helper edits. Ready to push the reviewed original PR branch and
+merge #236, then #238→#240→#241→#246, #239→#245, independent #242/#243/#244,
+and #248→#249. Newest #249 remote head isd6960f6, not the older1fc/6f refs;
+fetch every head explicitly before review. Preserve remaining interior small-
+prop follow-ups and the hotel/motel closed/auto-closing washroom-door decision.

@@ -1237,38 +1237,6 @@ function drawFootbridge() {
   });
 }
 
-// a vending machine: a lit header, a glass front with shelves of goods, a keypad and coin slot down the right,
-// the flap you reach into at the bottom. Glows after dark.
-const VM_COL = { DRINKS: RED, SNACKS: BLUE, CIGARETTES: GRAY };
-const VM_GOODS = { DRINKS: ['o', [RED, BLUE, GREEN, YEL, WHITE]], SNACKS: ['#', [YEL, ORANGE, RED, GREEN, MAG]], CIGARETTES: ['=', [WHITE, RED, YEL, WHITE, CYAN]] };
-function drawVending(m, vx, vy, sc = 1) { // sc: 10 indoors (metres, not cells)
-  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind], HL = VM_HL * sc, HH = VM_H * sc;
-  drawBox(boxAt(vx, vy, m.c, m.s, HL, VM_HW * sc, 0, HH), (i, t, L) => {
-    const f = HIT.face, front = (f === 3 || f === 4) && Math.sign(HIT.v) === m.fs;
-    if (!front) { BG[i] = C(body, (1.5 + L * 0.35) * shadeFace(f)); return set(i, f === 5 ? ' ' : HIT.w < 0.01 ? '_' : ' ', C(GRAY, L * 0.4)), true; }
-    const q = (HIT.u * m.fs / HL + 1) / 2, z = HIT.w / HH; // across the front 0..1 (left to right), up it 0..1
-    if (z > 0.85) { // the lit header, with what it sells across it
-      BG[i] = C(body, 5 + glow * 7);
-      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * HL) * n;
-      const letter = Math.abs(z - 0.925) < t / projY / HH / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
-      return set(i, letter ? name[k] : ' ', C(WHITE, 15)), true;
-    }
-    if (q > 0.72) { // the control column: keypad, coin slot
-      BG[i] = C(GRAY, 2 + L * 0.1);
-      return set(i, z > 0.55 && z < 0.72 ? ':' : z > 0.44 && z < 0.5 ? '-' : ' ', z > 0.5 ? C(WHITE, Math.max(L, glow * 11)) : C(YEL, 12)), true;
-    }
-    if (z < 0.17) { BG[i] = C(GRAY, 1); return set(i, z > 0.05 && z < 0.12 ? '_' : ' ', C(GRAY, L * 0.5)), true; } // the flap
-    if (z < 0.22) { BG[i] = C(body, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
-    // the window: four shelves of goods behind glass
-    const sz = (z - 0.22) / 0.63 * 4, row = Math.floor(sz), sq = q / 0.72 * 5, k = Math.floor(sq);
-    BG[i] = C(CYAN, 1 + glow * 2.5);
-    if (fract(sz) < 0.12) return set(i, '_', C(GRAY, Math.max(L * 0.7, glow * 8))), true; // the shelf
-    const item = fract(sq) > 0.18 && fract(sq) < 0.82 && fract(sz) < 0.8; // each thing on it, glass between
-    if (item) BG[i] = C(cols_[(k + row * 2) % 5], 2 + glow * 3);
-    return set(i, item ? g_ : ' ', C(cols_[(k + row * 2) % 5], Math.max(L, glow * 13))), true;
-  });
-}
-
 // The shared slatted bench; s=.01 outdoors in cells and .1 indoors in metres.
 function drawBench(vx,vy,fx,fy,s,base=0) {
   drawFurnitureBench(vx,vy,.75,fx,fy,BRICK,true,s/.1,base);
