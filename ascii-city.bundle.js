@@ -6696,7 +6696,7 @@ const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
 let ball = null; // { x, y, vx, vy, z, vz }
 // what stops it: buildings (unless it's sailing over a low one), and everything solid at street level: fences,
 // containers, booths, lamp posts, vending machines
-const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || fairBlocked(x, y, 0.015));
+const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || typeof kerbAt === 'function' && kerbAt(x, y, 0.015,z-.015,.03) || fairBlocked(x, y, 0.015));
 function kickBall(x, y, a, power = 2.6) {
   let d = 0; // set down just in front of you, short of any wall you're standing against
   while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;
@@ -14034,6 +14034,7 @@ function citySprites() {
   fairSprites();
   gasSprites(); // (the drivers at the pumps: gas-render.js)
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
+  drawKerbFixtures(); // (kerb-fixtures-render.js)
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
@@ -15476,6 +15477,98 @@ function fairSprites() {
     return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
   });
 }
+// Fixed kerb parts prepare once per object/detail level. Camera translation
+// and the fixture's terrain height are applied when drawing.
+const KERB_K=.1,KERB_NEAR=2.5;
+const kerbPaint=(col,base=2.2)=>(i,t,L)=>{BG[i]=C(col,base+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+const KERB_HYDRANT=[[0,0],[0,.15],[.04,.15],[.05,.12],[.08,.115],[.5,.105],[.52,.125],[.56,.125],[.58,.11],[.66,.1],[.7,.07],[.72,.035],[.72,0]];
+const KERB_NUT=[[0,0],[0,.03],[.05,.026],[.05,0]];
+const KERB_BIN=[[0,0],[0,.2],[.03,.22],[.82,.25],[.84,.26],[.88,.26],[.88,.232],[.84,.228],[.64,.218],[.64,0]];
+const KERB_BOLLARD=[[0,0],[0,.1],[.74,.1],[.8,.095],[.86,.07],[.9,.03],[.905,0]];
+// One closed D-shaped extrusion replaces the intersecting box/full-cylinder
+// mailbox. Its front/back caps and curved roof share the same shoulder/radius.
+function kerbMailboxRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,u=x*b.c+y*b.s,v=-x*b.s+y*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c,P=b.mailboxShape;
+  let best=Infinity,nu=0,nv=0,nz=0;
+  const take=(t,a,d,w)=>{if(t<=.01||t>=best)return;const U=u+du*t,V=v+dv*t,Z=oz+rz*t;
+    if(Math.abs(U)>P.r+1e-9||Math.abs(V)>b.hw+1e-9||Z<P.base-1e-9||Z>P.shoulder&&U*U+(Z-P.shoulder)**2>P.r*P.r+1e-10)return;
+    best=t;nu=a;nv=d;nz=w;};
+  if(Math.abs(dv)>1e-12)for(const e of [-1,1])take((e*b.hw-v)/dv,0,e,0);
+  if(Math.abs(du)>1e-12)for(const e of [-1,1]){const t=(e*P.r-u)/du;if(oz+rz*t<=P.shoulder+1e-9)take(t,e,0,0);}
+  if(Math.abs(rz)>1e-12)take((P.base-oz)/rz,0,0,-1);
+  const w=oz-P.shoulder,A=du*du+rz*rz,B=u*du+w*rz,Cc=u*u+w*w-P.r*P.r,D=B*B-A*Cc;
+  if(A>1e-16&&D>=0)for(const e of [-1,1]){const t=(-B+e*Math.sqrt(D))/A,Z=oz+rz*t;if(Z>=P.shoulder-1e-9)take(t,(u+du*t)/P.r,0,(Z-P.shoulder)/P.r);}
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u+du*best;HIT.v=v+dv*best;HIT.w=oz+rz*best;HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;HIT.face=nv?(nv>0?3:4):nz<-.99?6:Math.abs(nu)>.99?(nu>0?1:2):5;return best;
+}
+function buildKerbModel(o,near) {
+  const k=KERB_K,c=o.c,s=o.s,fs=Math.sign(-s*o.fx+c*o.fy)||1,parts=[],view={x:0,y:0,z:0};
+  const paint=kerbPaint(o.col),metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  const add=(role,box,shade,ray=rayBox)=>parts.push({role,box,shade,ray});
+  const at=(a,v)=>[(c*a-s*v*fs)*k,(s*a+c*v*fs)*k];
+  const flat=(role,x,y,a,b,z0,z1,shade,round=0)=>{
+    const B={...boxAt(x,y,c,s,a*k,b*k,z0*k,z1*k),round:Math.min(round*k,a*k*.98,b*k*.98,(z1-z0)*k*.49)};
+    add(role,B,round?shade:(i,t,L)=>{vmNormal(c,s);return shade(i,t,L);},round?coveRayRounded:rayBox);
+  };
+  const lathe=(role,x,y,z,profile,shade)=>{const points=profile.map(([h,r])=>[(z+h)*k,r*k]),r=Math.max(...points.map(p=>p[1]));add(role,{...boxAt(x,y,1,0,r,r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),profile:points},shade,coveRayLathe);};
+  const tube=(role,a,b,r,shade)=>{const x=(a[0]+b[0])/2,y=(a[1]+b[1])/2;add(role,{...boxAt(x,y,1,0,Math.abs(a[0]-b[0])/2+r,Math.abs(a[1]-b[1])/2+r,Math.min(a[2],b[2])-r,Math.max(a[2],b[2])+r),handRatio:1,handShape:{ax:a[0]-x,ay:a[1]-y,az:a[2],bx:b[0]-x,by:b[1]-y,bz:b[2],r}},shade,homeClockRayHand);};
+  if(o.kind==='hydrant'){
+    if(near){
+      lathe('nut',0,0,.72,KERB_NUT,metal);
+      const outlet=(ux,uy,z,a,b,r,cap)=>{
+        const point=t=>[ux*t*k,uy*t*k,z*k];
+        tube('outlet',point(a),point(b-.02),r*k,paint);tube('cap',point(b-.02),point(b),cap*k,paint);
+      };
+      for(const e of [-1,1])outlet(c*e,s*e,.42,.08,.16,.032,.042);
+      outlet(o.fx,o.fy,.34,.08,.18,.045,.056);
+    }
+    lathe('body',0,0,0,KERB_HYDRANT,kerbPaint(o.col,2.3));
+  }else if(o.kind==='bin'){
+    const body=(i,t,L)=>{
+      const w=(HIT.w-view.z)/k,a=Math.atan2(HIT.v,HIT.u);
+      if(w>.835){BG[i]=C(GRAY,.8+L*.15);set(i,' ',0);return true;}
+      if(w>.63&&w<.66&&HIT.nz>.5){BG[i]=C(GRAY,.6+hash(Math.floor(HIT.u*400),Math.floor(HIT.v*400),1410)*.9);set(i,' ',0);return true;}
+      const rib=coveGroove(a*.25/Math.PI*8,1,.18,t/projX/(.25*k)*2)*coveDetail(t,.05);
+      BG[i]=C(o.col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*.7);set(i,' ',0);return true;
+    };
+    if(near)for(let n=0;n<3;n++){const a=o.seed*20+n*2.1,r=.1*k;add('litter',boxAt(Math.cos(a)*r,Math.sin(a)*r,1,0,.04*k,.03*k,.64*k,.67*k),kerbPaint(n===1?RED:WHITE,2.4),foodRayEllipsoid);}
+    lathe('body',0,0,0,KERB_BIN,body);
+  }else if(o.kind==='mailbox'){
+    // Supports remain in both detail levels; a far mailbox must not float.
+    for(const a of [-.19,.19])for(const v of [-.22,.22]){const[x,y]=at(a,v);flat('leg',x,y,.02,.02,0,.23,paint,.006);}
+    if(near){
+      let[x,y]=at(0,.25);flat('chute',x,y,.16,.01,.78,1,kerbPaint(o.col,2.6),.006);
+      for(const a of [-.09,.09]){[x,y]=at(a,.271);flat('handle-mount',x,y,.01,.011,.964,.976,metal,.003);}
+      const A=at(-.10,.282),B=at(.10,.282);tube('handle',[...A,.97*k],[...B,.97*k],.005*k,metal);
+      [x,y]=at(0,.252);flat('collection',x,y,.1,.004,.6,.7,(i,t,L)=>{BG[i]=C(WHITE,1.5+L*.2);return set(i,worldText('18:00',HIT.u*fs,HIT.w,t,i,view.x+x,view.y+y,view.z+.65*k,c*fs,s*fs,.032*k,.06*k),C(GRAY,1)),true;});
+      const [wx,wy]=at(0,.25);flat('label',wx,wy,.2,.001,.38,.52,(i,t,L)=>{BG[i]=C(o.col,2+L*.2);return set(i,worldText('MAIL',HIT.u*fs,HIT.w,t,i,view.x+wx,view.y+wy,view.z+.45*k,c*fs,s*fs,.07*k,.1*k),C(WHITE,3+L*.5)),true;});
+    }
+    add('body',{...boxAt(0,0,c,s,.22*k,.25*k,.22*k,1.27*k),mailboxShape:{base:.22*k,shoulder:1.05*k,r:.22*k}},paint,kerbMailboxRay);
+  }else if(o.kind==='cabinet'){
+    const slab=(role,a0,a1,v0,v1,z0,z1,shade,round=0)=>{const[x,y]=at((a0+a1)/2,(v0+v1)/2);flat(role,x,y,(a1-a0)/2,(v1-v0)/2,z0,z1,shade,round);};
+    if(near){
+      for(const e of [-1,1])slab('door',e>0?.005:-.38,e>0?.38:-.005,.25,.256,.16,1.3,kerbPaint(o.col,2.2));
+      for(const zz of [.3,1.1])for(const e of [-1,1])slab('hinge',e*.375-.014,e*.375+.014,.254,.264,zz,zz+.08,metal);
+      for(const zz of [.65,.79]){const A=at(.315,.256),B=at(.315,.28);tube('handle-mount',[...A,zz*k],[...B,zz*k],.005*k,metal);}
+      const H=at(.315,.28);tube('handle',[...H,.65*k],[...H,.79*k],.005*k,metal);
+      const [lx,ly]=at(-.21,.257);
+      slab('label',-.3,-.12,.256,.258,1.05,1.17,(i,t,L)=>{BG[i]=C(WHITE,2.5+L*.25);set(i,worldText(o.signal?'POWER':'TEL',HIT.u*fs,HIT.w,t,i,view.x+lx,view.y+ly,view.z+1.11*k,c*fs,s*fs,.027*k,.065*k),C(GRAY,1+L*.1));return true;});
+      for(const e of [-1,1])for(let n=0;n<5;n++){const zz=1+n*.055;slab('louvre',e*.4-(e>0?0:.012),e*.4+(e>0?.012:0),-.18,.18,zz,zz+.022,kerbPaint(o.col,1.4));}
+    }
+    flat('cap',0,0,.43,.28,1.35,1.41,paint,.012);
+    flat('body',0,0,.4,.25,.1,1.35,paint,.02);
+    flat('plinth',0,0,.42,.27,0,.1,kerbPaint(STONE,2.6));
+  }else{
+    lathe('body',0,0,0,KERB_BOLLARD,(i,t,L)=>{const w=(HIT.w-view.z)/k,band=near&&w>.62&&w<.7;BG[i]=band?C(YEL,4+L*.25):C(GRAY,1.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
+  }
+  for(const p of parts){const local={...p.box};p.shiftedRay=(ox,oy,oz,rx,ry,rz,B)=>{const height=B.z0-p.box.z0;local.x=B.x;local.y=B.y;const t=p.ray(ox,oy,oz-height,rx,ry,rz,local);if(t>=0)HIT.w+=height;return t;};}
+  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
+}
+const KERB_MODELS=new WeakMap();
+function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
+const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant;
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet};
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
 // stock, the control column (display, keypad, coin and note slots, the coin
@@ -41309,6 +41402,138 @@ function assembleArchipelago() {
 }
 let CITY_LAYOUT_CHECKPOINT=null;
 assembleArchipelago();
+// Kerb fixtures: fire hydrants, litter bins, mailboxes and bollards on the
+// sidewalk's kerb line, where the lamps stand (CURB), clear of the walking line
+// (0.12) and of everything already on the street. Placed on the finished
+// city, so they're laid out on the assembled streets. Sizes in the models are
+// metres; outdoors is 1/10 scale. {x, y, kind, c, s: along the kerb, fx, fy:
+// the way it faces, hl, hw, h: its box, col, seed}
+const KERB_KINDS = {
+  hydrant: { hl: .024, hw: .024, h: .077 },
+  bin: { hl: .027, hw: .027, h: .09 },
+  mailbox: { hl: .023, hw: .029, h: .127 },
+  bollard: { hl: .011, hw: .011, h: .091 },
+  cabinet: { hl: .043, hw: .029, h: .141 },
+};
+const kerbs = [];
+// Anything already standing on the sidewalk, with how far a fixture keeps from it.
+function kerbCrowded(x, y, r) {
+  const near = (list, gap) => list.some(o => Math.abs(rel(o.x - x)) < gap && Math.abs(rel(o.y - y)) < gap);
+  const bx = Math.floor(x / 8), by = Math.floor(y / 8), around = b => { const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) out.push(...b[bi(bx + i, by + j)]); return out; };
+  return near(around(lampsB), r + .045) || near(around(treesB), r + .06) || near(around(benchesB), r + .2) || near(around(machinesB), r + .07)
+    || near(around(lightsB), r + .05) || near(around(elPillarsB), r + .06) || near(around(kerbsB), r + .03)
+    || near(vendors, r + .32) || near(stations, r + .3) || elStairLocal(x, y);
+}
+function kerbClear(o) {
+  const cell = idx(Math.floor(o.x), Math.floor(o.y));
+  if (!ROAD[cell] || isWater(o.x, o.y) || seaAt(o.x, o.y) || GAS_CELL[cell] || GAS_CELL[idx(Math.floor(o.x - o.fx * .4), Math.floor(o.y - o.fy * .4))]) return false;
+  const box = { x: o.x, y: o.y, c: o.c, s: o.s, hl: o.hl, hw: o.hw, z0: 0, z1: o.h };
+  return !streetGeometryCollision(box, true) && !kerbCrowded(o.x, o.y, Math.max(o.hl, o.hw));
+}
+const kerbsB = bucketed([]);
+const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
+function addKerb(x, y, kind, ax, ay, extra) {
+  const k = KERB_KINDS[kind], c = Math.abs(ay), s = Math.abs(ax); // (the box runs along the kerb)
+  const o = { x: worldCoord(x), y: worldCoord(y), kind, c, s, fx: ax, fy: ay, hl: k.hl, hw: k.hw, h: k.h, seed: hash(Math.floor(x * 10), Math.floor(y * 10), 1407), ...extra };
+  KERB_REPORT.tried++;
+  for (const along of [0, -.15, .15, -.3, .3]) {
+    const sx = o.x, sy = o.y;
+    o.x = worldCoord(x + c * along); o.y = worldCoord(y + s * along);
+    if (kerbClear(o)) { kerbs.push(o); kerbsB[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); KERB_REPORT.placed++; if (along) KERB_REPORT.moved++; return o; }
+    o.x = sx; o.y = sy;
+  }
+  return null;
+}
+// Down each side of each street: a hydrant near the corner, a bin beside the
+// first lamp, now and then a mailbox beside the second, and a row of bollards
+// in front of a landmark. (ax, ay) points from the buildings into the road;
+// hydrant outlets face the road, mailboxes face the people walking past.
+for (const o of [CURB, 2 - CURB]) {
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) for (const ori of ['h', 'v']) {
+    if (!(ori === 'h' ? hseg(bx, by) : vseg(bx, by))) continue;
+    const ax = ori === 'v' ? (o < 1 ? 1 : -1) : 0, ay = ori === 'h' ? (o < 1 ? 1 : -1) : 0;
+    const at = s => ori === 'h' ? [bx * 8 + s, by * 8 + o] : [bx * 8 + o, by * 8 + s];
+    const [lx, ly] = at(5), lot = [lx - ax * .6, ly - ay * .6], dist = districtAt(...lot), r = n => hash(bx * 2 + (o < 1 ? 0 : 1), by * 2 + (ori === 'h' ? 0 : 1), n);
+    if (blockKind(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8)) === 'park' && r(1400) < .7) continue;
+    if (r(1401) < (dist === 'industrial' ? .6 : .4)) addKerb(...at(2.6), 'hydrant', ax, ay, { col: dist === 'industrial' ? YEL : RED });
+    if (dist !== 'industrial' && r(1402) < ({ downtown: .75, chinatown: .75, shotengai: .8 }[dist] || .55))
+      addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
+    if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
+    if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
+    if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
+      for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
+  }
+}
+// on foot, they're solid; a kicked ball stops at them too
+// The same lathe profiles used for rendering bound the part of a round
+// fixture in the caller's height interval (walking body, or a kicked ball).
+function kerbProfileRadius(profile,lo,hi) {
+  let radius=0;
+  for(let j=1;j<profile.length;j++){
+    const [za,ra]=profile[j-1],[zb,rb]=profile[j],a=Math.max(lo/KERB_K,Math.min(za,zb)),b=Math.min(hi/KERB_K,Math.max(za,zb));
+    if(a>b)continue;if(Math.abs(zb-za)<1e-9){radius=Math.max(radius,ra,rb);continue;}
+    radius=Math.max(radius,ra+(rb-ra)*(a-za)/(zb-za),ra+(rb-ra)*(b-za)/(zb-za));
+  }return radius*KERB_K;
+}
+function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
+  if(hi<0||lo>o.h)return false;
+  const k=KERB_K,over=(a,b)=>hi>=a*k&&lo<=b*k;
+  const rect=(x,y,a,b)=>Math.hypot(Math.max(0,Math.abs(u-x)-a*k),Math.max(0,Math.abs(v-y)-b*k))<=pad;
+  const cap=(ax,ay,bx,by,z,r)=>{
+    const dz=Math.max(lo-z*k,z*k-hi,0);if(dz>r*k)return false;
+    const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
+    return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
+  };
+  if(o.kind==='cabinet'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
+    if(over(0,.1)&&rect(0,0,.42,.27)||over(.1,1.35)&&rounded(.4,.25,.02)||over(1.35,1.41)&&rounded(.43,.28,.012))return true;
+    if(over(.16,1.3)&&rect(0,.253*fs*k,.38,.003))return true;
+    if(over(.645,.795)&&rect(.315*k,.28*fs*k,.005,.005))return true;
+    for(const z of [.65,.79])if(over(z-.005,z+.005)&&rect(.315*k,.268*fs*k,.005,.017))return true;
+    return over(1,1.242)&&rect(0,0,.412,.18);
+  }
+  if(o.kind==='mailbox'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    if(over(0,.23))for(const a of [-.19,.19])for(const b of [-.22,.22])if(rect(a*k,b*fs*k,.02,.02))return true;
+    if(over(.22,1.27)){
+      const h=Math.max(lo,1.05*k)-1.05*k,r=Math.sqrt(Math.max(0,(.22*k)**2-h*h));
+      if(rect(0,0,r/k,.25))return true;
+    }
+    if(over(.78,1)&&rect(0,.25*fs*k,.16,.01))return true;
+    if(over(.964,.976)){
+      if(rect(0,.282*fs*k,.1,.005))return true;
+      for(const a of [-.09,.09])if(rect(a*k,.271*fs*k,.01,.011))return true;
+    }
+    return over(.6,.7)&&rect(0,.252*fs*k,.1,.004);
+  }
+  const profile=o.kind==='bin'?KERB_BIN:o.kind==='bollard'?KERB_BOLLARD:KERB_HYDRANT;
+  const radius=Math.max(kerbProfileRadius(profile,lo,hi),o.kind==='hydrant'?kerbProfileRadius(KERB_NUT,lo-.72*k,hi-.72*k):0);if(radius>0&&Math.hypot(u,v)<=radius+pad)return true;
+  if(o.kind!=='hydrant')return false;
+  const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+  for(const e of [-1,1])if(cap(e*.08,0,e*.14,0,.42,.032)||cap(e*.14,0,e*.16,0,.42,.042))return true;
+  return cap(0,fs*.08,0,fs*.16,.34,.045)||cap(0,fs*.16,0,fs*.18,.34,.056);
+}
+function kerbAt(x,y,pad,z=null,height=Infinity) {
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of kerbsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    const x_=rel(x-o.x),y_=rel(y-o.y),u=x_*o.c+y_*o.s,v=-x_*o.s+y_*o.c;
+    if(Math.abs(u)>o.hl+pad||Math.abs(v)>o.hw+pad)continue;
+    const lo=z===null?0:z-terrainHeight(o.x,o.y);
+    if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
+  }return null;
+}
+// A signal controller cabinet at most junctions: on the kerb beside the first
+// signal pole, half a cell back from the corner, its doors to the pavement.
+{
+  const done = new Set();
+  for (const l of lights) {
+    const ix = Math.floor(l.bx / 8), iy = Math.floor(l.by / 8), key = bi(ix, iy);
+    if (done.has(key) || hash(ix, iy, 1406) > .6) continue;
+    const e = l.vert ? mod(l.x, 8) : mod(l.y, 8), ax = l.vert ? (e < 1 ? 1 : -1) : 0, ay = l.vert ? 0 : (e < 1 ? 1 : -1);
+    const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
+    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
+  }
+}
 // Window-local geometry. Static solids are built once and indexed by bounds;
 // a pane cell visits only nearby leaves instead of testing every miniature.
 let RAILWAY_TREE=null;
@@ -42382,7 +42607,7 @@ const free = (x, y) => {
   } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
