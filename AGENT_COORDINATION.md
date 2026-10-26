@@ -550,3 +550,22 @@ bundle/parse/render checks pass; close/oblique/wide/night views and ABAB costs
 reviewed. #224/#226 final CI green. No shared helper or active Claude file
 edits. Next #229 corner shops, #230–#232, then the recorded interior closing
 audit and updated merge chains. Latest hotel/motel door decision above stands.
+
+Codex active review `codex/review-corner-shops` (#229): main through #228
+integrated. `city/corner-shops.js`, corner-shop/wall-shelf tests, gas/store
+hooks in `city/shops.js` and `city/shop-gondolas.js` (oil/front-wall shelf
+option). Reviewing physical supports, frame bounds, directions and real
+service routes; preserve previous produce/bin/cache work. Next #230–#232.
+Claude's active bathroom-quality, diner, world-bootstrap and facade files
+remain reserved, per the latest user split above.
+
+#229 Codex review complete (`codex/review-corner-shops`): clear acrylic
+permits sight/shot rays but retains movement collision, restoring customer-side
+E service. Added rack support arms/floor feet, a real top-cup cavity and cached
+turned profiles; scaled console/till labels and filtered pane reflections.
+Three new actual-geometry/E checks plus four defect mutations verified.
+All18 corner/shelf/produce/routes/seating and seven bundle/parse/render checks
+pass; close/wide/oblique/under/night and ABAB costs reviewed. No active Claude
+or shared helper files edited. Next #230–#232, then closing audit; include the
+legacy gas hubcap/key and security-mirror sprite with the recorded ceiling/
+flag/noodle remnants. User's hotel/motel door decision remains recorded above.
