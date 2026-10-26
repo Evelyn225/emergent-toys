@@ -79,14 +79,31 @@ function buildKerbModel(o,near) {
     flat('cap',0,0,.43,.28,1.35,1.41,paint,.012);
     flat('body',0,0,.4,.25,.1,1.35,paint,.02);
     flat('plinth',0,0,.42,.27,0,.1,kerbPaint(STONE,2.6));
+  }else if(o.kind==='shelter'){
+    view.glow=0;
+    const glass=(i,t,L)=>{
+      const w=(HIT.w-view.z)/k;
+      if(w>1&&w<1.12){BG[i]=C(WHITE,2.6+L*.1);set(i,' ',0);return true;}
+      const glint=near?coveGroove(HIT.u/k+w,1/.6,.025,t/(projX*k))*coveDetail(t,.025):0;
+      if(glint<.65)return false;BG[i]=C(WHITE,2+L*.25);set(i,' ',0);return true;
+    };
+    const word=(o.word||'DRINK COLA').split(' ')[0];
+    const advert=(i,t,L)=>{
+      const w=(HIT.w-view.z)/k,face=HIT.face;
+      if(face!==1&&face!==2||w<.3||w>2.1){BG[i]=C(GRAY,1.4+L*.2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+      BG[i]=C(BLUE,3+view.glow*6);if(!near){set(i,' ',0);return true;}
+      const e=face===1?1:-1,[ex,ey]=at(1.45,-.13),tx=-s*fs*e,ty=c*fs*e;
+      set(i,worldText(word,HIT.v*e*fs,HIT.w,t,i,view.x+ex,view.y+ey,view.z+1.3*k,tx,ty,.14*k,.22*k),C(WHITE,14));return true;
+    };
+    for(const q of SHELTER_PARTS){const[x,y]=at(q.a/k,q.v/k);flat(q.role,x,y,q.hl/k,q.hw/k,q.z0/k,q.z1/k,q.material==='metal'?metal:q.material==='glass'?glass:q.material==='advert'?advert:kerbPaint(GRAY,1.6),q.round?q.round/k:0);}
   }else{
     lathe('body',0,0,0,KERB_BOLLARD,(i,t,L)=>{const w=(HIT.w-view.z)/k,band=near&&w>.62&&w<.7;BG[i]=band?C(YEL,4+L*.25):C(GRAY,1.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   }
   for(const p of parts){const local={...p.box};p.shiftedRay=(ox,oy,oz,rx,ry,rz,B)=>{const height=B.z0-p.box.z0;local.x=B.x;local.y=B.y;const t=p.ray(ox,oy,oz-height,rx,ry,rz,local);if(t>=0)HIT.w+=height;return t;};}
-  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
+  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
 function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
-const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant;
-const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet};
+const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter};
 function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});}

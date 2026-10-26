@@ -13,7 +13,8 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
   const bad=[],count={};
   for(const o of kerbs){count[o.kind]=(count[o.kind]||0)+1;
    const across=o.c?mod(o.y,8):mod(o.x,8); // (a kerb runs along x when its box does)
-   if(Math.abs(across-CURB)>1e-9&&Math.abs(across-(2-CURB))>1e-9)bad.push([o.kind,'off the kerb line',+across.toFixed(3)]);
+   const line=CURB-(KERB_KINDS[o.kind].line||0); // (a shelter stands set back from the kerb line)
+   if(Math.abs(across-line)>1e-9&&Math.abs(across-(2-line))>1e-9)bad.push([o.kind,'off the kerb line',+across.toFixed(3)]);
    if(Math.min(Math.abs(across-.12),Math.abs(across-1.88))<o.hw+.02)bad.push([o.kind,'in the walking line']);
    if(!ROAD[idx(Math.floor(o.x),Math.floor(o.y))]||isWater(o.x,o.y))bad.push([o.kind,'not on a street']);
    const hit=streetGeometryCollision({x:o.x,y:o.y,c:o.c,s:o.s,hl:o.hl,hw:o.hw,z0:0,z1:o.h},true);if(hit)bad.push([o.kind,'inside',hit.kind]);
@@ -29,7 +30,7 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
  });
  assert.deepEqual(r.bad,[]);
  assert.equal(r.indexed,true);
- for(const k of ['hydrant','bin','mailbox','bollard','cabinet'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
+ for(const k of ['hydrant','bin','mailbox','bollard','cabinet','shelter'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
 }));
 
 test('each fixture is built inside its box, and on foot you walk round it while the walking line stays open',()=>fixture(async p=>{
@@ -41,14 +42,20 @@ test('each fixture is built inside its box, and on foot you walk round it while 
    const vx=o.x-px,vy=o.y-py;if(out.length<(o.kind==='bollard'?1:4)&&o.kind!=='bollard')bad.push([o.kind,'no fittings up close',out.length]);
    for(const q of out){const c=Math.abs(q.c??1),s=Math.abs(q.s??0),ex=q.hl*c+q.hw*s,ey=q.hl*s+q.hw*c,bx=o.hl*o.c+o.hw*o.s,by=o.hl*o.s+o.hw*o.c;
     if(Math.abs(q.x-vx)+ex>bx+1e-6||Math.abs(q.y-vy)+ey>by+1e-6||q.z1>z+o.h+1e-6||q.z0<z-1e-6)bad.push([o.kind,'a part outside its box',+((Math.abs(q.x-vx)+ex)*1000).toFixed(1),+((Math.abs(q.y-vy)+ey)*1000).toFixed(1),+(q.z1-z).toFixed(4)]);}
-   mode='walk';if(free(o.x,o.y))bad.push([o.kind,'walked through']);
+   mode='walk';const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1,lp=(a,v)=>[o.x+o.c*a-o.s*v*fs,o.y+o.s*a+o.c*v*fs];
+   if(o.kind!=='shelter'&&free(o.x,o.y))bad.push([o.kind,'walked through']);
+   if(o.kind==='shelter'){ // its walls are solid, its inside open and roofed, its bench inside
+    if(free(...lp(0,-.056)))bad.push('walked through the shelter back');if(free(...lp(.145,0)))bad.push('walked through the advert panel');
+    if(!free(...lp(0,.02)))bad.push('no way into the shelter');
+    if(!shelterRoofAt(...lp(0,.02),.17))bad.push('rain under the shelter roof');if(shelterRoofAt(...lp(0,.12),.17))bad.push('roof past the shelter');
+    if(!benches.some(b=>b.shelter===o&&shelterRoofAt(b.x,b.y,.05)))bad.push('no bench in the shelter');}
    const across=o.c?mod(o.y,8):mod(o.x,8),walk=across<1?.12:1.88,wx=o.c?o.x:o.x-across+walk,wy=o.c?o.y-across+walk:o.y;
    if(kerbAt(wx,wy,.02))bad.push([o.kind,'blocks the walking line']);
   }
   return {bad:bad.slice(0,10),kinds:Object.keys(seen).length};
  });
  assert.deepEqual(r.bad,[]);
- assert.ok(r.kinds>=10,'every kind in more than one facing was built');
+ assert.ok(r.kinds>=12,'every kind in more than one facing was built');
 }));
 
 test('kerb surfaces stay cached through translation and terrain height changes; bins have open mouths and mailbox roofs form one closed shell',()=>fixture(async p=>{
@@ -60,7 +67,7 @@ test('kerb surfaces stay cached through translation and terrain height changes; 
    const model=kerbModel(o,true),saved=model.parts.slice(),a=capture(o,.2,.1,0),b=capture(o,.3,.2,.4),c=capture(o,.35,.25,.4);
    if(kerbModel(o,true)!==model||model.parts.some((p,j)=>p!==saved[j])||a.length!==b.length||b.length!==c.length)bad.push([o.kind,'model rebuilt']);
    for(let i=0;i<a.length;i++)if(a[i].shade!==b[i].shade||b[i].ray!==c[i].ray||a[i].box.profile!==b[i].box.profile||a[i].box.mailboxShape!==b[i].box.mailboxShape||a[i].box.handShape!==b[i].box.handShape)bad.push([o.kind,'fixed shapes/materials/rays rebuilt']);
-   const index=model.parts.findIndex(p=>p.role==='body'),body=c[index],B=body.box;
+   const index=model.parts.findIndex(p=>p.role==='body');if(index<0)continue;const body=c[index],B=body.box;
    if(o.kind==='bin'){
     const t=body.ray(B.x,B.y,.6,0,0,-1,B);if(Math.abs(HIT.w-.464)>1e-7||Math.abs(t-.136)>1e-7||HIT.nz<.99)bad.push('bin mouth sealed or floor missing on terrain');
     const z=.475,inside=body.ray(B.x,B.y,z,1,0,0,B);if(inside<0||HIT.nx>-.5)bad.push('bin inner wall missing');
@@ -154,4 +161,66 @@ test('utility cabinets have supported doors, joined hardware and real cabinet-si
   }
   return {bad:bad.slice(0,14),checked};
  });assert.deepEqual(r.bad,[]);assert.ok(r.checked>=6,'both cabinet types and street facings were checked');
+}));
+
+test('shelter glass and advertising have real supports; surface bounds also govern posts, roof and rain on elevated ground',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  if(typeof kerbModel!=='function'||typeof SHELTER_PARTS==='undefined')return {bad:['no shared shelter surfaces'],checked:0};
+  const bad=[],seen=new Set();let checked=0;
+  const test=(yes,why)=>{if(!yes)bad.push(why);};
+  const box=(b,o)=>({u:b.x*o.c+b.y*o.s,v:(-b.x*o.s+b.y*o.c)*(Math.sign(-o.s*o.fx+o.c*o.fy)||1),a:Math.abs(b.c*o.c+b.s*o.s)*b.hl+Math.abs(-b.s*o.c+b.c*o.s)*b.hw,b:Math.abs(-b.c*o.s+b.s*o.c)*b.hl+Math.abs(b.s*o.s+b.c*o.c)*b.hw,z0:b.z0,z1:b.z1});
+  for(const o of kerbs.filter(o=>o.kind==='shelter')){
+   const id=[o.c,o.s,o.fx,o.fy].join(',');if(seen.has(id))continue;seen.add(id);checked++;
+   const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1,world=(u,v)=>[o.x+o.c*u-o.s*v*fs,o.y+o.s*u+o.c*v*fs];
+   for(const near of [false,true]){
+    const model=kerbModel(o,near),part=role=>model.parts.find(p=>p.role===role);
+    test(model.parts.length===SHELTER_PARTS.length,'shelter drops supports at a distance');
+    for(const q of SHELTER_PARTS){
+     const p=part(q.role);if(!p){bad.push('missing shelter surface '+q.role);continue;}
+     // Four posts share a role; check their individual box centres below.
+     if(q.role!=='post'){
+      const B=box(p.box,o);test(Math.abs(B.u-q.a)<1e-9&&Math.abs(B.v-q.v)<1e-9&&Math.abs(B.a-q.hl)<1e-9&&Math.abs(B.b-q.hw)<1e-9&&Math.abs(B.z0-q.z0)<1e-9&&Math.abs(B.z1-q.z1)<1e-9,'collision/render bounds drift');
+     }
+    }
+    const A=part('advert'),F=part('advert-foot'),H=part('advert-head'),roof=part('roof'),glass=part('end-glass'),edge=part('end-frame');
+    if(!A||!F||!H||!roof||!glass||!edge){bad.push('unsupported advert or end glass');continue;}
+    test(F.box.z0===0&&F.box.z1===A.box.z0&&A.box.z1===H.box.z0&&H.box.z1===roof.box.z0,'advert floats between floor and canopy');
+    for(const [support,z]of [[F,.01],[H,.227]]){const B=support.box,t=support.ray(B.x-o.c*.1,B.y-o.s*.1,z,o.c,o.s,0,B);test(t>0&&Math.abs(t-(.1-B.hl))<.0002,'advert support has no real closed back');}
+    const G=box(glass.box,o),E=box(edge.box,o),lower=part('end-lower-rail'),upper=part('end-upper-rail');
+    test(Math.abs(G.v+G.b-(E.v-E.b))<1e-9&&Math.abs(G.z0-lower.box.z1)<1e-9&&Math.abs(G.z1-upper.box.z0)<1e-9&&upper.box.z1===roof.box.z0,'end glass edge/frame disconnected');
+    const posts=model.parts.filter(p=>p.role==='post');test(posts.length===4&&posts.every(p=>p.box.z0===0&&p.box.z1===roof.box.z0),'canopy posts float');
+    for(const p of posts){const P=box(p.box,o);test(!!kerbAt(...world(P.u,P.v),.0001,terrainHeight(o.x,o.y)+.12,.01),'can walk through shelter post');}
+    const savedNight=night,savedOvercast=overcast,draw=drawBox;drawBox=()=>{};
+    try{night=overcast=0;model.draw(0,0,0);HIT.face=1;HIT.w=.13;HIT.v=0;A.shade(0,.1,4);const low=BG[0]&15;night=1;model.draw(0,0,0);HIT.face=1;HIT.w=.13;HIT.v=0;A.shade(0,.1,4);test((BG[0]&15)>low,'cached advert ignores night lighting');}finally{night=savedNight;overcast=savedOvercast;drawBox=draw;}
+    const shade=glass.shade;HIT.w=.15;HIT.u=.004;HIT.face=3;for(const t of [.04,.2,1]){CH[0]=' ';shade(0,t,4);test(CH[0]===' ','glass glint uses repeated slash glyphs');}
+   }
+   test(!kerbAt(...world(0,.02),.02),'canopy blocks open entrance');
+   test(!kerbAt(...world(0,0),.001,terrainHeight(o.x,o.y)+.25,.02),'shelter blocks above its roof');
+   test(kerbAt(...world(0,0),.001,terrainHeight(o.x,o.y)+.239,.002)===o,'ball passes through canopy');
+   const terrain=terrainHeight;try{
+    terrainHeight=()=>.4;
+    test(shelterRoofAt(...world(0,0),.56)===o,'elevated shelter lets rain through');
+    test(!shelterRoofAt(...world(0,0),.65),'shelter blocks rain above canopy');
+    test(!shelterRoofAt(...world(0,.0695),.56),'rain cover wider than actual canopy');
+   }finally{terrainHeight=terrain;}
+  }return {bad:bad.slice(0,12),checked};
+ });assert.deepEqual(r.bad,[]);assert.equal(r.checked,4);
+}));
+
+test('a shelter bench is reachable through its open front and C seats and restores the approach under real rain cover',()=>fixture(async p=>{
+ const pos=await p.evaluate(()=>{
+  mode='walk';room=me=null;fx.skating=false;body.z=body.vz=0;
+  const b=benches.find(b=>b.shelter&&free(b.x+b.fx*.1,b.y+b.fy*.1));if(!b)throw Error('no shelter bench approach');
+  px=b.x+b.fx*.1;py=b.y+b.fy*.1;a=Math.atan2(-b.fy,-b.fx);env(0);render(0);return {from:[px,py],b:[b.x,b.y]};
+ });
+ await p.keyboard.press('c');
+ assert.deepEqual(await p.evaluate(()=>[px,py]),pos.b);assert.equal(await p.evaluate(()=>!!body.seat?.shelter),true);
+ assert.equal(await p.evaluate(()=>!!shelterRoofAt(px,py,terrainHeight(px,py)+.12)),true);
+ await p.keyboard.press('c');assert.deepEqual(await p.evaluate(()=>[px,py]),pos.from);assert.equal(await p.evaluate(()=>body.seat),null);
+ const rain=await p.evaluate(()=>{
+  const o=kerbs.find(o=>o.kind==='shelter'),base=terrainHeight(o.x,o.y);
+  rain=1;snow=0;eye=base+.16;mode='walk';
+  px=o.x;py=o.y;CH.fill(' ');rainFx(0);const inside=CH.filter(c=>c!==' ').length;
+  px=o.x+o.fx*.12;py=o.y+o.fy*.12;CH.fill(' ');rainFx(0);return {inside,outside:CH.filter(c=>c!==' ').length};
+ });assert.equal(rain.inside,0);assert.ok(rain.outside>0,'rain resumes outside the actual roof');
 }));

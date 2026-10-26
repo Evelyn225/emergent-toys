@@ -12798,7 +12798,7 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye); // covered ferry lounge, Shotengai or airport
+  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && shelterRoofAt(px, py, eye); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
@@ -15558,16 +15558,33 @@ function buildKerbModel(o,near) {
     flat('cap',0,0,.43,.28,1.35,1.41,paint,.012);
     flat('body',0,0,.4,.25,.1,1.35,paint,.02);
     flat('plinth',0,0,.42,.27,0,.1,kerbPaint(STONE,2.6));
+  }else if(o.kind==='shelter'){
+    view.glow=0;
+    const glass=(i,t,L)=>{
+      const w=(HIT.w-view.z)/k;
+      if(w>1&&w<1.12){BG[i]=C(WHITE,2.6+L*.1);set(i,' ',0);return true;}
+      const glint=near?coveGroove(HIT.u/k+w,1/.6,.025,t/(projX*k))*coveDetail(t,.025):0;
+      if(glint<.65)return false;BG[i]=C(WHITE,2+L*.25);set(i,' ',0);return true;
+    };
+    const word=(o.word||'DRINK COLA').split(' ')[0];
+    const advert=(i,t,L)=>{
+      const w=(HIT.w-view.z)/k,face=HIT.face;
+      if(face!==1&&face!==2||w<.3||w>2.1){BG[i]=C(GRAY,1.4+L*.2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+      BG[i]=C(BLUE,3+view.glow*6);if(!near){set(i,' ',0);return true;}
+      const e=face===1?1:-1,[ex,ey]=at(1.45,-.13),tx=-s*fs*e,ty=c*fs*e;
+      set(i,worldText(word,HIT.v*e*fs,HIT.w,t,i,view.x+ex,view.y+ey,view.z+1.3*k,tx,ty,.14*k,.22*k),C(WHITE,14));return true;
+    };
+    for(const q of SHELTER_PARTS){const[x,y]=at(q.a/k,q.v/k);flat(q.role,x,y,q.hl/k,q.hw/k,q.z0/k,q.z1/k,q.material==='metal'?metal:q.material==='glass'?glass:q.material==='advert'?advert:kerbPaint(GRAY,1.6),q.round?q.round/k:0);}
   }else{
     lathe('body',0,0,0,KERB_BOLLARD,(i,t,L)=>{const w=(HIT.w-view.z)/k,band=near&&w>.62&&w<.7;BG[i]=band?C(YEL,4+L*.25):C(GRAY,1.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   }
   for(const p of parts){const local={...p.box};p.shiftedRay=(ox,oy,oz,rx,ry,rz,B)=>{const height=B.z0-p.box.z0;local.x=B.x;local.y=B.y;const t=p.ray(ox,oy,oz-height,rx,ry,rz,local);if(t>=0)HIT.w+=height;return t;};}
-  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
+  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
 function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
-const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant;
-const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet};
+const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter};
 function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
@@ -41405,7 +41422,24 @@ const KERB_KINDS = {
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
   cabinet: { hl: .043, hw: .029, h: .141 },
+  shelter: { hl: .155, hw: .07, h: .245, line: .03 },
 };
+// Shelter surface boxes, in outdoor world units. Rendering, collision and
+// rain cover share these exact bounds; the road-facing entrance stays open.
+const SHELTER_PARTS=[
+  {role:'roof',a:0,v:0,hl:.155,hw:.069,z0:.235,z1:.245,material:'roof',round:.002},
+  ...[-.145,.145].flatMap(a=>[-.06,.06].map(v=>({role:'post',a,v,hl:.003,hw:.003,z0:0,z1:.235,material:'metal',round:.001}))),
+  {role:'back-lower-rail',a:0,v:-.056,hl:.142,hw:.004,z0:.008,z1:.014,material:'metal'},
+  {role:'back-upper-rail',a:0,v:-.056,hl:.142,hw:.004,z0:.222,z1:.235,material:'metal'},
+  {role:'back-glass',a:0,v:-.056,hl:.142,hw:.0005,z0:.014,z1:.222,material:'glass'},
+  {role:'end-glass',a:-.145,v:-.022,hl:.0005,hw:.034,z0:.014,z1:.222,material:'glass'},
+  {role:'end-lower-rail',a:-.145,v:-.0225,hl:.003,hw:.0375,z0:.008,z1:.014,material:'metal'},
+  {role:'end-upper-rail',a:-.145,v:-.0225,hl:.003,hw:.0375,z0:.222,z1:.235,material:'metal'},
+  {role:'end-frame',a:-.145,v:.0135,hl:.003,hw:.0015,z0:.008,z1:.235,material:'metal'},
+  {role:'advert-foot',a:.145,v:-.013,hl:.006,hw:.0435,z0:0,z1:.02,material:'metal'},
+  {role:'advert',a:.145,v:-.013,hl:.006,hw:.0435,z0:.02,z1:.22,material:'advert'},
+  {role:'advert-head',a:.145,v:-.013,hl:.006,hw:.0435,z0:.22,z1:.235,material:'metal'}
+];
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
 function kerbCrowded(x, y, r) {
@@ -41425,6 +41459,7 @@ const kerbsB = bucketed([]);
 const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
 function addKerb(x, y, kind, ax, ay, extra) {
   const k = KERB_KINDS[kind], c = Math.abs(ay), s = Math.abs(ax); // (the box runs along the kerb)
+  if(k.line){x-=ax*k.line;y-=ay*k.line;}
   const o = { x: worldCoord(x), y: worldCoord(y), kind, c, s, fx: ax, fy: ay, hl: k.hl, hw: k.hw, h: k.h, seed: hash(Math.floor(x * 10), Math.floor(y * 10), 1407), ...extra };
   KERB_REPORT.tried++;
   for (const along of [0, -.15, .15, -.3, .3]) {
@@ -41451,6 +41486,10 @@ for (const o of [CURB, 2 - CURB]) {
       addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
     if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
     if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
+    if (['downtown', 'midtown', 'chinatown', 'waterfront'].includes(dist) && r(1408) < .18) { // a shelter, open to the road, its bench inside
+      const sh = addKerb(...at(5.9), 'shelter', ax, ay, { word: ADS[Math.floor(r(1409) * ADS.length)] });
+      if (sh) { const b = { x: worldCoord(sh.x - ax * .03), y: worldCoord(sh.y - ay * .03), fx: ax, fy: ay, shelter: sh }; benches.push(b); benchesB[bi(Math.floor(b.x / 8), Math.floor(b.y / 8))].push(b); }
+    }
     if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
       for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
   }
@@ -41475,6 +41514,11 @@ function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
     const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
     return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
   };
+  if(o.kind==='shelter'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    // Grounded walking projects the walls, never the overhead canopy.
+    return SHELTER_PARTS.some(q=>(q.role!=='roof'||Number.isFinite(hi))&&hi>=q.z0&&lo<=q.z1&&Math.hypot(Math.max(0,Math.abs(u-q.a)-q.hl+(q.round||0)),Math.max(0,Math.abs(v*fs-q.v)-q.hw+(q.round||0)))<=(q.round||0)+pad);
+  }
   if(o.kind==='cabinet'){
     const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
     const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
@@ -41524,6 +41568,16 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
     if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
   }
+}
+
+// Exact roof footprint, with the fixture's real terrain elevation.
+function shelterRoofAt(x,y,z){
+  const roof=SHELTER_PARTS[0];
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const q of kerbsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    if(q.kind!=='shelter'||z>terrainHeight(q.x,q.y)+roof.z1)continue;
+    const x_=rel(x-q.x),y_=rel(y-q.y),u=x_*q.c+y_*q.s,v=-x_*q.s+y_*q.c;
+    if(Math.hypot(Math.max(0,Math.abs(u)-roof.hl+roof.round),Math.max(0,Math.abs(v)-roof.hw+roof.round))<=roof.round)return q;
+  }return null;
 }
 // Window-local geometry. Static solids are built once and indexed by bounds;
 // a pane cell visits only nearby leaves instead of testing every miniature.

@@ -10,7 +10,24 @@ const KERB_KINDS = {
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
   cabinet: { hl: .043, hw: .029, h: .141 },
+  shelter: { hl: .155, hw: .07, h: .245, line: .03 },
 };
+// Shelter surface boxes, in outdoor world units. Rendering, collision and
+// rain cover share these exact bounds; the road-facing entrance stays open.
+const SHELTER_PARTS=[
+  {role:'roof',a:0,v:0,hl:.155,hw:.069,z0:.235,z1:.245,material:'roof',round:.002},
+  ...[-.145,.145].flatMap(a=>[-.06,.06].map(v=>({role:'post',a,v,hl:.003,hw:.003,z0:0,z1:.235,material:'metal',round:.001}))),
+  {role:'back-lower-rail',a:0,v:-.056,hl:.142,hw:.004,z0:.008,z1:.014,material:'metal'},
+  {role:'back-upper-rail',a:0,v:-.056,hl:.142,hw:.004,z0:.222,z1:.235,material:'metal'},
+  {role:'back-glass',a:0,v:-.056,hl:.142,hw:.0005,z0:.014,z1:.222,material:'glass'},
+  {role:'end-glass',a:-.145,v:-.022,hl:.0005,hw:.034,z0:.014,z1:.222,material:'glass'},
+  {role:'end-lower-rail',a:-.145,v:-.0225,hl:.003,hw:.0375,z0:.008,z1:.014,material:'metal'},
+  {role:'end-upper-rail',a:-.145,v:-.0225,hl:.003,hw:.0375,z0:.222,z1:.235,material:'metal'},
+  {role:'end-frame',a:-.145,v:.0135,hl:.003,hw:.0015,z0:.008,z1:.235,material:'metal'},
+  {role:'advert-foot',a:.145,v:-.013,hl:.006,hw:.0435,z0:0,z1:.02,material:'metal'},
+  {role:'advert',a:.145,v:-.013,hl:.006,hw:.0435,z0:.02,z1:.22,material:'advert'},
+  {role:'advert-head',a:.145,v:-.013,hl:.006,hw:.0435,z0:.22,z1:.235,material:'metal'}
+];
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
 function kerbCrowded(x, y, r) {
@@ -30,6 +47,7 @@ const kerbsB = bucketed([]);
 const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
 function addKerb(x, y, kind, ax, ay, extra) {
   const k = KERB_KINDS[kind], c = Math.abs(ay), s = Math.abs(ax); // (the box runs along the kerb)
+  if(k.line){x-=ax*k.line;y-=ay*k.line;}
   const o = { x: worldCoord(x), y: worldCoord(y), kind, c, s, fx: ax, fy: ay, hl: k.hl, hw: k.hw, h: k.h, seed: hash(Math.floor(x * 10), Math.floor(y * 10), 1407), ...extra };
   KERB_REPORT.tried++;
   for (const along of [0, -.15, .15, -.3, .3]) {
@@ -56,6 +74,10 @@ for (const o of [CURB, 2 - CURB]) {
       addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
     if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
     if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
+    if (['downtown', 'midtown', 'chinatown', 'waterfront'].includes(dist) && r(1408) < .18) { // a shelter, open to the road, its bench inside
+      const sh = addKerb(...at(5.9), 'shelter', ax, ay, { word: ADS[Math.floor(r(1409) * ADS.length)] });
+      if (sh) { const b = { x: worldCoord(sh.x - ax * .03), y: worldCoord(sh.y - ay * .03), fx: ax, fy: ay, shelter: sh }; benches.push(b); benchesB[bi(Math.floor(b.x / 8), Math.floor(b.y / 8))].push(b); }
+    }
     if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
       for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
   }
@@ -80,6 +102,11 @@ function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
     const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
     return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
   };
+  if(o.kind==='shelter'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    // Grounded walking projects the walls, never the overhead canopy.
+    return SHELTER_PARTS.some(q=>(q.role!=='roof'||Number.isFinite(hi))&&hi>=q.z0&&lo<=q.z1&&Math.hypot(Math.max(0,Math.abs(u-q.a)-q.hl+(q.round||0)),Math.max(0,Math.abs(v*fs-q.v)-q.hw+(q.round||0)))<=(q.round||0)+pad);
+  }
   if(o.kind==='cabinet'){
     const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
     const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
@@ -129,4 +156,14 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
     if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
   }
+}
+
+// Exact roof footprint, with the fixture's real terrain elevation.
+function shelterRoofAt(x,y,z){
+  const roof=SHELTER_PARTS[0];
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const q of kerbsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    if(q.kind!=='shelter'||z>terrainHeight(q.x,q.y)+roof.z1)continue;
+    const x_=rel(x-q.x),y_=rel(y-q.y),u=x_*q.c+y_*q.s,v=-x_*q.s+y_*q.c;
+    if(Math.hypot(Math.max(0,Math.abs(u)-roof.hl+roof.round),Math.max(0,Math.abs(v)-roof.hw+roof.round))<=roof.round)return q;
+  }return null;
 }
