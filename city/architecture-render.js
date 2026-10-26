@@ -64,7 +64,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
-    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || d > ARCH_FASCIA_VIS - 1.5) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
+    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
       g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     if (f.front && sh.kind === SHOP_APTS) {
@@ -107,7 +107,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
-    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || d > ARCH_FASCIA_VIS - 1.5) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
+    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
       g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
@@ -135,6 +135,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
 // box lit from inside after dark; midtown a board in the shop's colour.
 const FASCIA_BOARDS = [GREEN, BLUE, GRAY, BLACK];
 function architectureFasciaShade(o, i, t, L) {
+  if ((o.band + o.edge * 2) * projY / t < 1) return false; // (too small to draw: its lettering is painted on the wall behind)
   const sh = SHOP[o.ownerCell];
   if (sh.word !== o.word) { // a shop renamed after it was built (the hardware store that became IDEA): refit its name to the board
     o.word = sh.word; o.cwid = Math.min(o.cmax, (o.width - o.margin) / o.word.length, (o.hl - o.edge * 2.5) * 2 / o.word.length);
