@@ -3182,7 +3182,7 @@ function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}
   }
   ARCH_DETAILS.push(o);
   if (kind === 'step') { ARCH_STEPS.push(o); ARCH_BLOCKERS.push(o); }
-  else if (z0 < 0.28) ARCH_BLOCKERS.push(o);
+  else if (z0 < 0.28 && kind !== 'awning') ARCH_BLOCKERS.push(o); // (you walk under an awning)
   return o;
 }
 function brownstoneDetails(b) {
@@ -3228,6 +3228,42 @@ function downtownDetails(b) {
   c.planes = [[1,0,0,c.hl],[-1,0,0,c.hl],[0,1,0,c.hw],[0,-1,0,c.hw],[0,0,1,c.z1],[0,0,-1,-c.z0],
     [slope,0,1,c.z0+slope*c.hl],[-slope,0,1,c.z0+slope*c.hl],[0,slope,1,c.z0+slope*c.hw],[0,-slope,1,c.z0+slope*c.hw]];
 }
+// Where a shop's name goes on a face (the same on the fascia board up close and the lettering seen from further off):
+// its centre height, letter width and band, the board's margin round it, and how the board is made.
+const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painted on the wall behind it)
+// Is a board too small on screen to draw (under a row tall, so it can fall between rows), its lettering painted on the wall
+// instead? Otherwise a board between two rows would leave no name at all. g: its sign spec; d: distance.
+const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
+function architectureSignSpec(b, f, sh) {
+  const width = f.end - f.start, n = sh.word.length;
+  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .38, cmax: .067, margin: .3, band: .043, edge: .012, style: 'board' }
+    : b.region === 'brownstones' ? { zc: .39, cmax: .07, margin: .25, band: .038, edge: .012, style: 'painted' }
+    : { zc: .36, cmax: .085, margin: .3, band: .055, edge: .014, style: 'box' };
+  return { ...g, width, cwid: Math.min(g.cmax, (width - g.margin) / n) };
+}
+// A shop's fascia board on each face that carries its name, standing off the wall over the window, and on some
+// brownstone and midtown shops a striped awning over the window below it: a sloping canopy on its frame, a valance
+// along the front. (Downtown towers and the apartment blocks with entrance canopies get no awning.)
+const ARCH_FASCIA = { depth: .012, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
+function architectureShopfront(b) {
+  const sh = b.sh;
+  if (sh.kind === SHOP_APTS) return;
+  for (const f of b.faces) {
+    if (f.low || !architectureSignedFace(f, sh)) continue;
+    const g = architectureSignSpec(b, f, sh), center = (f.start + f.end) / 2;
+    if (g.cwid < .03 || g.zc + g.band / 2 + g.edge > f.height - .07) continue; // (too narrow for a board, or too low: up into the cornice)
+    const o = architectureDetail(b, f, center, ARCH_FASCIA.depth / 2, sh.word.length * g.cwid / 2 + g.edge * 2.5, ARCH_FASCIA.depth / 2, g.zc - g.band / 2 - g.edge, g.zc + g.band / 2 + g.edge,
+      'fascia', { word: sh.word, zc: g.zc, cwid: g.cwid, band: g.band, edge: g.edge, style: g.style, width: g.width, cmax: g.cmax, margin: g.margin, outSign: f.ny * (f.side ? 1 : 0) - f.nx * (f.side ? 0 : 1), detailDistance: ARCH_FASCIA_VIS });
+    f.fascia = true;
+    const a = ARCH_FASCIA.awning, half = Math.min(.42, (f.end - f.start) / 2 - .14);
+    if (!f.front || b.profile || g.style === 'box' || half < .15 || hash(Math.floor(b.x * 7), Math.floor(b.y * 7), 1480) > a.keep) continue;
+    const out = o.outSign, hw = a.out / 2, slope = a.drop / a.out, z1 = a.top, th = a.thick, front = z1 - a.drop;
+    architectureDetail(b, f, center, hw, half, hw, front - th, z1, 'awning', { outSign: out, slope, part: 'canopy', detailDistance: 14,
+      planes: [[1, 0, 0, half, 1], [-1, 0, 0, half, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4],
+        [0, slope * out, 1, z1 - slope * hw, 5], [0, -slope * out, -1, -(z1 - slope * hw - th), 6]] }); // (a sheet falling away from the wall)
+    architectureDetail(b, f, center, a.out - .002, half, .002, front - a.valance, front + .002, 'awning', { outSign: out, part: 'valance', detailDistance: 14 });
+  }
+}
 {
   const lots = new Map(), pending = [];
   for (let k = 0; k < map.length; k++) {
@@ -3268,6 +3304,7 @@ function downtownDetails(b) {
     if (b.profile) residentialDetails(b);
     else if (b.region === 'brownstones') brownstoneDetails(b);
     else downtownDetails(b);
+    architectureShopfront(b);
     // Keep metadata serializable: faces and roof data never contain their owning shop.
     const { sh: ignoredShop, ...metadata } = b;
     b.sh.architecture = metadata;
@@ -3608,6 +3645,55 @@ function pavilionRoofHeight(x, y) {
   return height;
 }
 for (const o of roofs) o.z = Math.max(o.z,pavilionRoofHeight(o.x,o.y));
+// Fascia boards and awnings for the shops still drawn by the generic facade (city-render.js): the Docks' warehouses
+// and workshops, and the plain brick and stucco shops of midtown and the brownstones (styles 2, 8 and 15). They used
+// to paint their name over and over round every wall and an awning on the wall below it. Now each street face carries
+// one board with the name on it, built like the architecture families' (architectureShopfront), and the open shops
+// an awning. Faces come from the same face finder; SHOPFRONT_FACES indexes them by direction and cell like ARCH_FACES.
+const SHOPFRONT_FACES = Array.from({ length: 4 }, () => new Array(N * N));
+const SHOPFRONT_SPEC = { zc: .36, band: .08, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
+const SHOPFRONT_AWNING = { top: .31, out: .1, drop: .04, valance: .015, thick: .005, keep: .7 };
+const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
+{
+  const lots = new Map();
+  for (let k = 0; k < map.length; k++) {
+    const sh = SHOP[k], sty = STY[k];
+    if (!sh || !map[k] || !(sty in SHOPFRONT_STYLES) || sh.architecture || sh.base || sh.aqua || sh.gas || sh.courier || sh.wilderness || MERCHANT_BY_SHOP.get(sh)) continue;
+    if (!lots.has(sh)) lots.set(sh, []);
+    lots.get(sh).push(k);
+  }
+  for (const [sh, cells] of lots) {
+    if (sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT) continue; // (flats have no shop name; a shop closed for good shows FOR LEASE)
+    const refX = cells[0] % N, refY = Math.floor(cells[0] / N), xs = cells.map(k => refX + rel(k % N - refX)), ys = cells.map(k => refY + rel(Math.floor(k / N) - refY));
+    const sty = STY[cells[0]], b = { x0: Math.min(...xs), y0: Math.min(...ys), x: (Math.min(...xs) + Math.max(...xs) + 1) / 2, y: (Math.min(...ys) + Math.max(...ys) + 1) / 2,
+      sh, region: districtAt(refX, refY), material: 0, seed: SEED[cells[0]] };
+    for (const f of architectureFaces(b, cells, SHOPFRONT_FACES)) {
+      const mid = (f.start + f.end) / 2; // (world-bootstrap.js moves a face with the cell behind its middle)
+      f.ownerCell = idx(Math.floor((f.side ? mid : f.line) - f.nx * .1), Math.floor((f.side ? f.line : mid) - f.ny * .1));
+      if (f.low || !architectureSignedFace(f, sh)) continue;
+      const width = f.end - f.start, g = { ...SHOPFRONT_SPEC, width, cwid: Math.min(SHOPFRONT_SPEC.cmax, (width - SHOPFRONT_SPEC.margin) / sh.word.length) };
+      if (g.cwid < .03 || g.zc + g.band / 2 + g.edge > f.height - .05) continue;
+      const center = (f.start + f.end) / 2, outSign = f.ny * (f.side ? 1 : 0) - f.nx * (f.side ? 0 : 1);
+      architectureDetail(b, f, center, ARCH_FASCIA.depth / 2, sh.word.length * g.cwid / 2 + g.edge * 2.5, ARCH_FASCIA.depth / 2, g.zc - g.band / 2 - g.edge, g.zc + g.band / 2 + g.edge,
+        'fascia', { word: sh.word, zc: g.zc, cwid: g.cwid, band: g.band, edge: g.edge, style: SHOPFRONT_STYLES[sty], width, cmax: g.cmax, margin: g.margin, outSign, detailDistance: ARCH_FASCIA_VIS });
+      f.fascia = g;
+      const a = SHOPFRONT_AWNING, half = Math.min(.42, width / 2 - .14);
+      if (sty === 8 || half < .15 || hash(Math.floor(b.x * 7), Math.floor(b.y * 7) + f.dir, 1481) > a.keep) continue; // (no awnings over a warehouse's loading doors)
+      const hw = a.out / 2, slope = a.drop / a.out, z1 = a.top, front = z1 - a.drop;
+      architectureDetail(b, f, center, hw, half, hw, front - a.thick, z1, 'awning', { outSign, slope, part: 'canopy', detailDistance: 14,
+        planes: [[1, 0, 0, half, 1], [-1, 0, 0, half, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4],
+          [0, slope * outSign, 1, z1 - slope * hw, 5], [0, -slope * outSign, -1, -(z1 - slope * hw - a.thick), 6]] });
+      architectureDetail(b, f, center, a.out - .002, half, .002, front - a.valance, front + .002, 'awning', { outSign, part: 'valance', detailDistance: 14 });
+      f.awning = true;
+    }
+  }
+  // (world-bootstrap.js rebuckets ARCH_DETAILS, these with them)
+}
+// the face of a generic shop the ray hit (side, cell, its height), if it carries a board
+function shopfrontFace(side, mx, my, h) {
+  const k = idx(mx, my), dir = side ? (rel(py - my) < 0 ? 0 : 1) : (rel(px - mx) < 0 ? 2 : 3), f = SHOPFRONT_FACES[dir][k];
+  return f && f.height === h ? f : null;
+}
 // ---- traffic lights, at intersections where three or four streets meet (corners and the bridges just flow).
 // 16s cycle: vertical green 0-6, yellow 6-7, all red 7-8, horizontal green 8-14, yellow, all red.
 // Intersections are addressed by their base cell (x, y multiples of 8).
@@ -12048,7 +12134,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
     const doorway = f.sign && SHOP[k].kind !== SHOP_APTS && Math.abs(start + (bay + 0.5) * spacing - f.sign.center) < spacing / 2; // (the arch under the sign: the shop's door, to the pavement)
     if (Math.abs(du) < spacing * 0.35 && (z > 0.045 || doorway) && z < archTop) {
       if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
-      if (doorway && architectureShutter(i, z, SHOP[k], L)) return;
+      if (doorway && architectureShutter(i, z, SHOP[k], L, d, du, -spacing * 0.32, spacing * 0.32, 0, 0.245)) return; // (the shutter's housing fills the arch's head)
       if (doorway) return void doorGlass(i, du, z, openAt(SHOP[k], tod), L, WHITE);
       BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : doorway ? WARM : CYAN, 1 + night * 2);
       return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
@@ -12130,6 +12216,12 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
+    // a shop with fascia boards (shopfronts.js): its name once on each street face, on the board up close and painted
+    // there further off (where a row can be taller than the band, so wallText decides which row carries it)
+    const sf = z > 0.28 ? shopfrontFace(side, mx, my, h) : null, g = sf?.fascia;
+    if (g && archFasciaPainted(g, d) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
+      C(sh.neon, open ? Math.max(L, night * 15 * Math.max(fog, 0.5)) : L * 0.5), C(GRAY, 1))) return;
+    if (z > 0.32 && sf) return set(i, '-', C(GRAY, L));
     if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
@@ -12164,7 +12256,10 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
-      if (fd > 0.12 && fd < 0.88 && z < 0.3) return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(open ? ORANGE : GRAY, L * 0.7));
+      if (fd > 0.12 && fd < 0.88 && z < 0.3) {
+        if (!open) { const w0 = Math.floor(u * 0.8) / 0.8; return void shopShutter(i, u, z, w0 + 0.15, w0 + 1.1, 0, 0.3, sh, L, d, glassSlopes(u, z)[0]); }
+        return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(ORANGE, L * 0.7));
+      }
       return set(i, '|', C(GRAY, L * 0.8));
     }
     if (sh.kind === SHOP_APTS && sty === 9) { // brownstone stoop: steps up to a raised front door, railings either side
@@ -12184,11 +12279,18 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     const fs = fract(u * 2);
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
     if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
-    if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter: vacant, or shut for the night
-    if (z > 0.28) return set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning
+    const face = shopfrontFace(side, mx, my, h);
+    if (face) { // the shop's door, in the bay under its board (shopfronts.js)
+      const sg = Math.sign(u * wc) || 1, bay = Math.round((sg * (face.start + face.end) / 2 - 0.27) * 2); // (the bay nearest its middle)
+      if (Math.floor(u * 2) === bay && shopDoor(i, sg * (u - bay / 2 - 0.27), z, sh, L, GRAY, d)) return;
+    }
+    if (!open) { const w0 = Math.floor(u * 2) / 2; return void shopShutter(i, u, z, w0 + 0.04, w0 + 0.5, 0, 0.3, sh, L, d, glassSlopes(u, z)[0]); } // roll-down shutter: vacant, or shut for the night
+    if (z > 0.28) return set(i, '=', C(GRAY, L * 0.7)); // the transom over the window (the awnings are built, in shopfronts.js)
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
+    if (on && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON && sh.kind !== SHOP_APTS && sty !== 8) // up close, the display behind the glass (shop-windows.js)
+      if (shopWindow(i, u, z, Math.floor(u * 2) / 2 + 0.04, Math.floor(u * 2) / 2 + 0.5, 0.02, 0.28, sh, open, L, sk + Math.floor(u * 2))) return;
     if (sh.kind === SHOP_NEON) return set(i, on ? (fract(z * 30) < 0.5 ? ':' : '.') : '.', C(on ? sh.neon : GRAY, on ? Math.max(L, glowL) : L * 0.3));
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
@@ -12616,6 +12718,8 @@ function floorBaseCell(i, r, x, rx, ry) {
     const e = road === 1 ? lx : ly, along = road === 1 ? wy : wx, bridge = road === 1 && onBridge(bx, by);
     const mh = manholeCell(wx, wy, L); // a manhole cover
     if (mh) { set(i, mh[0], mh[1]); BG[i] = mh[2]; return; }
+    const gr = streetGrateCell(wx, wy, L, d, road, bx, by); // a gully, tree or vent grate (street-drains.js)
+    if (gr) { set(i, gr[0], gr[1]); BG[i] = gr[2]; return; }
     if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
     else if (e < 0.3 || e > 1.7) { ch = bridge ? '=' : ','; k = 1.3; } // sidewalk (on a bridge, a walkway of plates)
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
@@ -12823,6 +12927,228 @@ const onLine = (off, du, dz, slope) => Math.abs(off) < Math.max(du, dz * Math.ab
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
+// Ironwork set flush in the ground, drawn into the floor like the manhole
+// covers: gully grates in the gutter beside the kerb (rain runs along the
+// gutter into them), cast-iron grates round the street trees, and the
+// ventilation grates in the pavement beside the subway entrances, and the cellar hatches beside shop doors.
+// Every pattern filters to an even tone once its bars are smaller than a cell.
+const GULLY = { at: [2.45, 5.45], half: .028, e0: .302, e1: .338, bar: .007, keep: .85 };
+const TREE_GRATE = { half: .045, frame: .005, ring: .01, hole: .022 }; // (a 90 cm pit on the kerb line, inside the pavement; soil showing round the trunk)
+const VENT_GRATE = { off: .45, hl: .1, hw: .035, bar: .006 };
+const HATCH = { along: .18, hl: .04, out0: .008, out1: .078, plate: .011 }; // a cellar hatch beside a shop door: its half length, its span out from the wall
+// The gully grate the road point (e across the street from its base, s along
+// the block) is on: [u along, v across, its side's kerb e] or null.
+function gullyAt(road, e, s, bx, by) {
+  if (road !== 1 && road !== 2 || road === 1 && onBridge(bx, by)) return null;
+  const near = e < 1, v0 = near ? GULLY.e0 : 2 - GULLY.e1, v1 = near ? GULLY.e1 : 2 - GULLY.e0;
+  if (e < v0 || e > v1) return null;
+  for (const [k, a] of GULLY.at.entries()) {
+    if (Math.abs(s - a) > GULLY.half || hash(bx * 2 + (near ? 0 : 1), by * 2 + (road === 1 ? 0 : 1), 1450 + k) > GULLY.keep) continue;
+    return [s - a, near ? e - GULLY.e0 : 2 - GULLY.e0 - e];
+  }
+  return null;
+}
+// bars across a grate: 1 on a bar, 0 in a slot, blending to the mean as they shrink below a cell
+const grateBars = (q, period, footprint) => footprint > period * .35 ? .55 : fract(q / period) < .45 ? 1 : 0;
+function grateTone(bar, frame, L) { // solid iron for the frame and bars, near-black slots, an even mid-tone once they blend
+  return frame ? [' ', 0, C(GRAY, 1.7 + L * .08)] : bar >= 1 ? [' ', 0, C(GRAY, 1.3 + L * .1)] : bar <= 0 ? [' ', 0, C(GRAY, .25)] : [' ', 0, C(GRAY, .8 + L * .05)];
+}
+// Water running along the gutter to the nearest grate in the rain: [ch, col, bg] or null.
+function gutterRunoff(road, e, s, bx, by, L) {
+  if (rain < .12 || road !== 1 && road !== 2) return null;
+  const near = e < 1, w = near ? e - .3 : 1.7 - e;
+  if (w < 0 || w > .012) return null; // (a thin rivulet against the kerb)
+  for (const [k, a] of GULLY.at.entries()) {
+    const d = s - a;
+    if (Math.abs(d) > .5 || hash(bx * 2 + (near ? 0 : 1), by * 2 + (road === 1 ? 0 : 1), 1450 + k) > GULLY.keep) continue;
+    const flow = fract(Math.abs(d) * 14 + T * 1.6 * rain); // (ripples travelling in to the grate)
+    return flow < .35 ? ['~', C(CYAN, Math.max(L, 5)), C(GRAY, 1.1)] : null;
+  }
+  return null;
+}
+// Street trees standing on the pavement, by cell, for their grates. (A tree the
+// street fitting left in the road gets none: its pit would lie in the road.)
+function treeHasPit(t) {
+  const road = ROAD[idx(Math.floor(t.x), Math.floor(t.y))];
+  if (road !== 1 && road !== 2 || isWater(t.x, t.y)) return false;
+  const e = road === 1 ? mod(t.x, 8) : mod(t.y, 8);
+  return Math.min(e, 2 - e) + TREE_GRATE.half <= .3 + 1e-9;
+}
+let treePitCells = null, treePitCount = -1;
+function treePitsNear(wx, wy) {
+  if (treePitCount !== trees.length) {
+    treePitCells = new Map(); treePitCount = trees.length;
+    for (const t of trees) if (treeHasPit(t)) {
+      const cell = idx(Math.floor(t.x), Math.floor(t.y));
+      (treePitCells.get(cell) || treePitCells.set(cell, []).get(cell)).push(t);
+    }
+  }
+  return treePitCells.get(idx(Math.floor(wx), Math.floor(wy)));
+}
+// Cellar hatches in the pavement beside some shop doors, against the wall, by cell: a pair of diamond-plate leaves
+// with a seam down the middle, hinges at their ends and a lifting ring. {x, y: on the wall line, c, s: along it,
+// nx, ny: out of it}
+let hatchCells = null, hatchCount = -1;
+const HATCHES = [];
+function hatchesNear(wx, wy) {
+  if (hatchCount !== doors.length) {
+    hatchCells = new Map(); hatchCount = doors.length; HATCHES.length = 0;
+    for (const d of doors) {
+      if (!d.sh || d.sh.kind === SHOP_APTS || hash(Math.floor(d.x * 5), Math.floor(d.y * 5), 1460) > .35) continue;
+      const n = Math.hypot(d.nx, d.ny) || 1, nx = -d.nx / n, ny = -d.ny / n, c = Math.abs(ny), s = Math.abs(nx), side = hash(Math.floor(d.x * 5), Math.floor(d.y * 5), 1461) < .5 ? -1 : 1;
+      const x = worldCoord(d.x - nx * .12 + c * side * HATCH.along), y = worldCoord(d.y - ny * .12 + s * side * HATCH.along); // (on the wall, beside the door)
+      const mid = [x + nx * (HATCH.out0 + HATCH.out1) / 2, y + ny * (HATCH.out0 + HATCH.out1) / 2];
+      if (!map[idx(Math.floor(x - nx * .05), Math.floor(y - ny * .05))] || map[idx(Math.floor(mid[0]), Math.floor(mid[1]))] || !ROAD[idx(Math.floor(mid[0]), Math.floor(mid[1]))]) continue; // (a wall behind, pavement under it)
+      if (machines.some(m => Math.abs(rel(m.x - mid[0])) < .15 && Math.abs(rel(m.y - mid[1])) < .15) || doors.some(e => e !== d && Math.abs(rel(e.x - nx * .12 - x)) < .1 && Math.abs(rel(e.y - ny * .12 - y)) < .1)) continue; // (clear of machines and other doors)
+      const h = { x, y, c, s, nx, ny };
+      HATCHES.push(h);
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const cell = idx(Math.floor(mid[0]) + i, Math.floor(mid[1]) + j); (hatchCells.get(cell) || hatchCells.set(cell, []).get(cell)).push(h); }
+    }
+  }
+  return hatchCells.get(idx(Math.floor(wx), Math.floor(wy)));
+}
+function hatchCell(wx, wy, L, footprint) {
+  const hs = hatchesNear(wx, wy);
+  if (hs) for (const h of hs) {
+    const dx = rel(wx - h.x), dy = rel(wy - h.y), u = dx * h.c + dy * h.s, v = dx * h.nx + dy * h.ny;
+    if (Math.abs(u) > HATCH.hl || v < HATCH.out0 || v > HATCH.out1) continue;
+    const frame = Math.abs(u) > HATCH.hl - .004 || v < HATCH.out0 + .004 || v > HATCH.out1 - .004;
+    if (frame) return [' ', 0, C(GRAY, 1.6 + L * .08)];
+    if (Math.abs(u) < Math.max(.0015, footprint / 2)) return [' ', 0, C(GRAY, .3)]; // the seam between the leaves
+    if (Math.abs(Math.abs(u) - HATCH.hl + .012) < .006 && Math.abs(v - (HATCH.out0 + HATCH.out1) / 2) > .018) return [' ', 0, C(GRAY, .6)]; // a hinge at each end
+    if (Math.abs(Math.hypot(Math.abs(u) - .01, v - (HATCH.out0 + HATCH.out1) / 2) - .005) < .0015) return [' ', 0, C(GRAY, 2.4)]; // the lifting rings, one each side of the seam
+    const plate = footprint > HATCH.plate * .4 ? .3 : (fract((u + v) / HATCH.plate) < .18 || fract((u - v) / HATCH.plate) < .18 ? 1 : 0); // the diamond plate, an even sheen far off
+    return [' ', 0, C(GRAY, 1.15 + L * .08 + plate * .5)];
+  }
+  return null;
+}
+// The ironwork at a road or pavement point, or null: [ch, col, bg].
+function streetGrateCell(wx, wy, L, d, road, bx, by) {
+  const lx = mod(wx, 8), ly = mod(wy, 8), e = road === 1 ? lx : ly, s = road === 1 ? ly : lx, footprint = d / projX;
+  if (Math.min(e, 2 - e) > GULLY.e1) return null; // (the lanes: no ironwork there)
+  const g = gullyAt(road, e, s, bx, by);
+  if (g) { // bars run across the gutter, toward the kerb
+    const frame = Math.abs(g[0]) > GULLY.half - .004 || g[1] < .004 || g[1] > GULLY.e1 - GULLY.e0 - .004;
+    return grateTone(grateBars(g[0], GULLY.bar, footprint), frame, L);
+  }
+  const run = gutterRunoff(road, e, s, bx, by, L);
+  if (run) return run;
+  if (Math.min(e, 2 - e) < HATCH.out1 + .002) { const h = hatchCell(wx, wy, L, footprint); if (h) return h; }
+  const pits = treePitsNear(wx, wy);
+  if (pits) for (const t of pits) {
+    const u = rel(wx - t.x), v = rel(wy - t.y), H = TREE_GRATE.half;
+    if (Math.abs(u) > H || Math.abs(v) > H) continue;
+    const r = Math.hypot(u, v);
+    if (r < TREE_GRATE.hole) return [':', C(BRICK, L * .7), C(BRICK, .8)]; // the soil round the trunk
+    const frame = Math.max(Math.abs(u), Math.abs(v)) > H - TREE_GRATE.frame;
+    return grateTone(grateBars(r, TREE_GRATE.ring, footprint), frame, L);
+  }
+  if (road === 2) { const st = STATION_AT.get(bi(bx, by)); // the subway's ventilation grate, along the pavement past its entrance
+    if (st) { const u = rel(wx - st.x - VENT_GRATE.off), v = rel(wy - st.y);
+      if (Math.abs(u) < VENT_GRATE.hl && Math.abs(v) < VENT_GRATE.hw) {
+        const frame = Math.abs(u) > VENT_GRATE.hl - .004 || Math.abs(v) > VENT_GRATE.hw - .004;
+        return grateTone(grateBars(v, VENT_GRATE.bar, footprint), frame, L);
+      } } }
+  return null;
+}
+// Shop windows with depth: behind the glass, a display bay 70 cm deep with its floor raised as a plinth, the shop's
+// goods standing on it at their own depth (so they slide against the back as you walk past), and the lit shop beyond.
+// Shared by every facade family's shop windows up close (SHOP_WINDOW.near); further off they stay flat glass.
+// u0..u1: the pane in the wall's u; z0..z1: its glass.
+const SHOP_WINDOW = { near: 3.5, dep: .07, plinth: .035, goods: .45, spacing: .085 };
+const SHOP_DISPLAYS = { // what a shop puts in its window: [shape, height, half width]
+  food: ['loaf', .03, .028], clothes: ['mannequin', .17, .022], books: ['stack', .05, .026], screens: ['screen', .06, .03],
+  bottles: ['bottle', .07, .01], flowers: ['bunch', .08, .024], goods: ['box', .05, .025],
+};
+const SHOP_DISPLAY_FOR = {
+  BAKERY: 'food', BAGELS: 'food', DONUTS: 'food', CAKES: 'food', DELI: 'food', DELICATESSEN: 'food', BURGERS: 'food', DINER: 'food', PIZZA: 'food',
+  CAFE: 'food', COFFEE: 'food', KISSATEN: 'food', 'ICE CREAM': 'food', DUMPLINGS: 'food', BENTO: 'food', CHICKEN: 'food', KEBAB: 'food',
+  THRIFT: 'clothes', BOUTIQUE: 'clothes', TAILOR: 'clothes', SHOES: 'clothes', BARBER: 'clothes', JEWELER: 'clothes',
+  BOOKS: 'books', MANGA: 'books', VIDEO: 'screens', RECORDS: 'screens', ARCADE: 'screens', PHONES: 'screens',
+  LIQUOR: 'bottles', BAR: 'bottles', JUICE: 'bottles', DRUGSTORE: 'bottles', FLORIST: 'flowers', HERBS: 'flowers',
+};
+const shopDisplay = sh => SHOP_DISPLAYS[SHOP_DISPLAY_FOR[sh.word] || 'goods'];
+// does a point on the goods' plane fall on one of them? (du from the item's middle, h up from the plinth)
+function shopGoodsCell(shape, du, h, ht, hw) {
+  const a = Math.abs(du);
+  if (h < 0 || h > ht || a > hw) return false;
+  if (shape === 'loaf') return a < hw * Math.sqrt(1 - (h / ht) ** 2); // a round top
+  if (shape === 'mannequin') return h > ht * .86 ? Math.hypot(du, h - ht * .93) < ht * .07 : h > ht * .45 ? a < hw * (h > ht * .8 ? .45 : 1) : a < hw * .25; // head, body, stand
+  if (shape === 'bottle') return h > ht * .6 ? a < hw * .4 : true;
+  if (shape === 'bunch') return h > ht * .45 ? Math.hypot(du / hw, (h - ht * .72) / (ht * .28)) < 1 : a < hw * .3; // the flowers on their stems
+  return true; // a stack, a screen, a box
+}
+function shopWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
+  const w = SHOP_WINDOW, base = z0 + w.plinth, [su, sz] = glassSlopes(u, z), lit = open && (night > .3 || overcast > .6);
+  if (z < base) { BG[i] = C(sh.neon, .8 + L * .05); return set(i, ' ', 0), true; } // the plinth's front, in its own shadow behind the glass
+  const b = boxBehind(u, z, u0, u1, base, z1, w.dep), qg = w.dep * w.goods, n = Math.max(1, Math.round((u1 - u0) / w.spacing)), step = (u1 - u0) / n;
+  if (b.q > qg) { // the goods, standing on the plinth, before the back
+    const pu = u + su * qg, pz = z + sz * qg, [shape, ht, hw] = shopDisplay(sh);
+    const k = clamp(Math.floor((pu - u0) / step), 0, n - 1), du = pu - (u0 + (k + .5) * step), tall = ht * (.75 + hash(seed, k, 1490) * .5);
+    if (pz >= base && pz < z1 && shopGoodsCell(shape, du, pz - base, tall, hw)) {
+      const col = shape === 'screen' ? CYAN : shape === 'mannequin' ? WHITE : ITEM_COL[(hash(seed, k, 1491) * 8) | 0];
+      if (shape === 'screen') { BG[i] = C(BLUE, 4 + Math.sin(T * 5 + k) * 2 + (lit ? 3 : 0)); return set(i, Math.abs(du) > hw - .004 || pz - base < .004 ? '|' : ' ', C(GRAY, 3)), true; }
+      if (shape === 'stack') { BG[i] = C(ITEM_COL[(Math.floor((pz - base) * 120) + k) & 7], 2.4 + L * .15); return set(i, fract((pz - base) * 120) < .2 ? '_' : ' ', C(GRAY, 2)), true; }
+      BG[i] = C(col, (shape === 'mannequin' ? 3.2 : 2.4) + L * .18 + (lit ? 1.5 : 0)); return set(i, ' ', 0), true;
+    }
+  }
+  if (b.s === 'floor') { BG[i] = C(sh.neon, 1.6 + L * .12 + (lit ? 1 : 0)); return set(i, ' ', 0), true; } // the plinth's cloth
+  if (b.s === 'side') { BG[i] = C(GRAY, 1.2 + L * .1); return set(i, ' ', 0), true; }
+  if (b.s === 'ceil') { const spot = lit && Math.abs(fract((b.u - u0) / step) - .5) < .12; BG[i] = spot ? C(YEL, 12) : C(GRAY, .8); return set(i, ' ', 0), true; } // spotlights
+  // the back: the shop beyond, its shelves and its light
+  const shelf = fract((b.z - base) * 40) < .12;
+  BG[i] = C(WARM, (lit ? 2.2 + night * 2.5 : open ? 1.4 + day : .6) + (shelf ? .5 : 0));
+  return set(i, shelf ? '=' : ' ', C(BRICK, L * .4)), true;
+}
+// Roller shutters: a shop shut for the night (or for good) pulls a slatted steel curtain down over its windows and
+// door. It runs in guide rails set 8 cm back in the reveal, from the housing box it rolls up into at the head of the
+// opening: ribbed slats, each lip catching the light and the crease under it in shadow, a heavier bottom bar with the
+// padlock in the middle. Most are galvanised; some are painted green, blue or red. Further off the slats blur into
+// an even ribbed texture. Shared by every facade family (through architectureShutter, or directly).
+// a: across the opening (the caller's along-the-wall coordinate), a0..a1 its sides; z0..z1 its sill and head;
+// sa: how far a ray drifts along a per unit of depth (WH.sl when a runs with the wall's u, as every facade's along does)
+const SHOP_SHUTTER = { dep: .008, slat: .009, housing: .022, rail: .004, bar: .012, lock: .006 };
+const SHUTTER_PAINT = [GRAY, GRAY, GRAY, GRAY, GREEN, BLUE, BRICK], SHUTTER_PAINT_OF = new WeakMap();
+function shutterPaint(sh) { // one colour for all of a shop's shutters: from its name and its building
+  let p = SHUTTER_PAINT_OF.get(sh);
+  if (p === undefined) {
+    let h = Math.floor((sh.architecture?.seed ?? 0) * 1e3);
+    for (const ch of sh.word) h = (h * 31 + ch.charCodeAt(0)) | 0;
+    SHUTTER_PAINT_OF.set(sh, p = SHUTTER_PAINT[(hash(h & 0xffff, (h >>> 16) & 0xffff, 1501) * SHUTTER_PAINT.length) | 0]);
+  }
+  return p;
+}
+function shopShutter(i, a, z, a0, a1, z0, z1, sh, L, d, sa = WH.sl) {
+  const w = SHOP_SHUTTER, paint = shutterPaint(sh), top = z1 - w.housing;
+  if (z > top) { // the housing, its lower lip
+    BG[i] = C(GRAY, 1.5 + L * .12 + day * .3);
+    return set(i, z - top < .004 ? '_' : ' ', C(GRAY, L * .6)), true;
+  }
+  let ca = a, cz = z;
+  if (d < SHOP_WINDOW.near) { // up close: set back in the reveal, the rails and the head either side of it
+    const sz = (z - eye) / WH.dn;
+    let q = w.dep, s = 'back';
+    if (sa > 1e-6 && (a1 - a) / sa < q) { q = (a1 - a) / sa; s = 'side'; }
+    if (sa < -1e-6 && (a0 - a) / sa < q) { q = (a0 - a) / sa; s = 'side'; }
+    if (sz > 1e-6 && (top - z) / sz < q) { q = (top - z) / sz; s = 'ceil'; }
+    if (sz < -1e-6 && (z0 - z) / sz < q) { q = (z0 - z) / sz; s = 'floor'; }
+    if (s === 'side') { BG[i] = C(GRAY, .9 + L * .1); return set(i, '|', C(GRAY, L * .5)), true; } // the guide rail's channel
+    if (s === 'ceil') { BG[i] = C(GRAY, .5); return set(i, ' ', 0), true; } // under the housing
+    if (s === 'floor') { BG[i] = C(GRAY, 1 + L * .1); return set(i, '_', C(GRAY, L * .5)), true; } // the sill
+    ca = a + sa * q; cz = z + sz * q;
+  }
+  const fine = w.slat * projY / d; // (rows a slat spans on screen)
+  if (ca - a0 < w.rail || a1 - ca < w.rail) { BG[i] = C(GRAY, 1.2 + L * .12); return set(i, '|', C(GRAY, L * .7)), true; } // its edges in the rails
+  if (cz - z0 < w.bar) { // the bottom bar, the padlock through it
+    const lock = fine > 1 && Math.abs(ca - (a0 + a1) / 2) < w.lock && cz - z0 > .002 && cz - z0 < w.bar - .002;
+    BG[i] = lock ? C(YEL, 1.4 + L * .08) : C(paint, 1.8 + L * .15);
+    return set(i, lock ? 'o' : cz - z0 < .002 ? '_' : '=', C(lock ? GRAY : paint, L * .8)), true;
+  }
+  if (fine < 2) { BG[i] = C(paint, 1.2 + L * .12 + day * .4); return set(i, '=', C(paint, L * .6)), true; } // too far to make out each slat: their ribs as one texture
+  const q = fract((top - cz) / w.slat), lip = q < .22, crease = q > .84;
+  BG[i] = C(paint, (crease ? .7 : lip ? 1.9 : 1.3) + L * .12 + day * .4);
+  return set(i, crease ? '_' : lip ? '-' : ' ', C(paint, L * .5)), true;
+}
 // ===== graffiti: murals painted across some buildings' upper floors, each district in its own style (rust and anchors on
 // the docks, dragons in Chinatown, flowers in the Brownstones, a lone stencil downtown), quick tags low on the shutters, and the tags
 // you spray yourself with a can from the hardware store. Police don't like it: spraying is vandalism, and if a cop
@@ -13300,9 +13626,9 @@ function brownstoneWindow(i, du, z, half, z0, z1, lit, L, base) {
 // a shop's way in, down to the pavement: du across it (0 its middle), up to SHOP_DOOR_TOP (clear of the awnings and
 // signs above). Glass in a frame, a kick plate, a push bar; lit from inside when it's open. True if it drew (i)
 const SHOP_DOOR_HALF = 0.055, SHOP_DOOR_TOP = 0.26;
-function shopDoor(i, du, z, sh, L, trim) {
+function shopDoor(i, du, z, sh, L, trim, d) {
   if (Math.abs(du) > SHOP_DOOR_HALF + 0.012 || z > SHOP_DOOR_TOP + 0.014) return false;
-  if (architectureShutter(i, z, sh, L)) return true;
+  if (architectureShutter(i, z, sh, L, d, du, -SHOP_DOOR_HALF - 0.012, SHOP_DOOR_HALF + 0.012, 0, SHOP_DOOR_TOP + 0.014)) return true;
   if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1 + L * 0.2); return set(i, z > SHOP_DOOR_TOP ? '=' : '|', C(trim, L)), true; }
   return doorGlass(i, du, z, openAt(sh, tod), L, trim);
 }
@@ -13317,11 +13643,10 @@ function doorGlass(i, du, z, open, L, trim) {
   BG[i] = warm ? C(WARM, 1.2 + night * 3.2) : C(CYAN, 0.55 + day * 1.25);
   return set(i, streak ? '/' : warm && hash(Math.floor(du * 60), Math.floor(z * 50), 377) > 0.86 ? '.' : ' ', C(warm ? YEL : WHITE, warm ? Math.max(L * 0.5, night * 8) : 4 + day * 7)), true;
 }
-function architectureShutter(i, z, sh, L) {
-  if (openAt(sh, tod)) return false;
-  BG[i] = C(GRAY, 1 + day);
-  set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6));
-  return true;
+// a shop's opening when it's shut: the roller shutter (shop-shutters.js), a across the opening, a0..a1 and z0..z1 its
+// sides and its sill and head, along the wall. True if it drew (i)
+function architectureShutter(i, z, sh, L, d, a, a0, a1, z0, z1) {
+  return !openAt(sh, tod) && shopShutter(i, a, z, a0, a1, z0, z1, sh, L, d);
 }
 function architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L) {
   if (!f.front || sh.kind !== SHOP_SHUT) return false;
@@ -13339,8 +13664,9 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (b.h - z < 0.12 || Math.abs(z - 0.44) < 0.025) return set(i, '=', C(stone ? WHITE : STONE, L));
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
-    if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), 0.39,
-      Math.min(0.07, (f.end - f.start - 0.25) / sh.word.length), 0.038, C(STONE, signLight), C(base, 2))) return;
+    const g = architectureSignSpec(b, f, sh);
+    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
+      g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     if (f.front && sh.kind === SHOP_APTS) {
       const door = local + f.spacing * 0.24, half = f.spacing * 0.125;
@@ -13351,9 +13677,13 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         return set(i, z > 0.3 ? ':' : Math.abs(door) < 0.01 ? '|' : z < 0.15 ? '=' : '#', C(z > 0.3 ? WARM : BRICK, z > 0.3 ? Math.max(L, night * 11) : L * 0.65));
       }
       if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE)) return;
-    } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE)) return; // (where the walk-ups have theirs)
+    } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE, d)) return; // (where the walk-ups have theirs)
     else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
-      if (architectureShutter(i, z, sh, L)) return;
+      if (architectureShutter(i, z, sh, L, d, local, -f.spacing * 0.39, f.spacing * 0.39, 0.04, 0.34)) return;
+      if (d < SHOP_WINDOW.near && z < 0.3 && Math.abs(local) >= f.spacing * 0.03 && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+        const e = Math.sign(local), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + center + e * f.spacing * 0.03), ub = sg * (f.start + center + e * f.spacing * 0.39);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.3, sh, openAt(sh, tod), L, sk + unit * 2 + (e > 0 ? 1 : 0))) return;
+      }
       BG[i] = C(CYAN, 1 + night * 2);
       return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
     } else if (brownstoneWindow(i, local, z, f.spacing * 0.15, 0.13, 0.3, hash(unit, 5, sk) > litT, L, STONE)) return;
@@ -13381,13 +13711,19 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (corner < 0.06) return set(i, '|', C(stone ? base : GRAY, L));
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
-    if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), 0.36,
-      Math.min(0.085, (width - 0.3) / sh.word.length), 0.055, C(sh.neon, signLight), C(GRAY, 1))) return;
+    const g = architectureSignSpec(b, f, sh);
+    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
+      g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
-    if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
+    if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY, d)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
-      if (architectureShutter(i, z, sh, L)) return;
+      const lw = Math.min(0.7, width * 0.25), s0 = lobby ? width / 2 - lw : 0.06 + (bay + 0.16) * spacing, s1 = lobby ? width / 2 + lw : 0.06 + (bay + 0.84) * spacing;
+      if (architectureShutter(i, z, sh, L, d, along, s0, s1, 0.04, 0.31)) return;
+      if (!lobby && d < SHOP_WINDOW.near && z < 0.245 && sh.kind !== SHOP_APTS && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+        const a0 = 0.06 + (bay + 0.16) * spacing, a1 = 0.06 + (bay + 0.84) * spacing, sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.245, sh, openAt(sh, tod), L, sk0(b.seed) + bay)) return;
+      }
       BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);
       return set(i, fu < 0.08 || fu > 0.92 || Math.abs(z - 0.26) < 0.014 ? '|' : ':', C(WHITE, Math.max(L * 0.65, night * 10)));
     }
@@ -13404,7 +13740,42 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   BG[i] = C(lit ? WARM : b.sty === 1 ? BLUE : CYAN, lit ? 1.8 + night * 4 : 0.7 + day * 1.1);
   return set(i, lit ? ' ' : b.sty === 1 && fract((along + z * 0.5) * 5) < 0.05 ? '/' : ':', C(lit ? WARM : CYAN, Math.max(L * 0.45, lit ? night * 12 : 0)));
 }
+// A shop's fascia board (architecture.js): its name across the front, in the same lettering that's painted on the wall
+// past ARCH_FASCIA_VIS, and a frame round it. Brownstones paint theirs, gold leaf on a dark board; downtown it's a
+// box lit from inside after dark; midtown a board in the shop's colour.
+const FASCIA_BOARDS = [GREEN, BLUE, GRAY, BLACK];
+function architectureFasciaShade(o, i, t, L) {
+  if ((o.band + o.edge * 2) * projY / t < 1) return false; // (too small to draw: its lettering is painted on the wall behind)
+  const sh = SHOP[o.ownerCell];
+  if (sh.word !== o.word) { // a shop renamed after it was built (the hardware store that became IDEA): refit its name to the board
+    o.word = sh.word; o.cwid = Math.min(o.cmax, (o.width - o.margin) / o.word.length, (o.hl - o.edge * 2.5) * 2 / o.word.length);
+  }
+  const open = openAt(sh, tod), front = HIT.face === (o.outSign > 0 ? 3 : 4);
+  const board = o.style === 'painted' ? FASCIA_BOARDS[Math.floor(fract(o.seed * 13) * 4)] : o.style === 'box' ? GRAY : sh.neon;
+  const base = o.style === 'box' ? .8 + L * .08 + (open ? night * 1.4 : 0) : 1.3 + L * .14;
+  if (!front || o.hl - Math.abs(HIT.u) < o.edge * .6 || Math.abs(HIT.w - o.zc) > o.band / 2 + o.edge * .4) { // the frame, top and ends
+    BG[i] = C(o.style === 'painted' ? board : GRAY, (base + .7) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+  BG[i] = C(board, base);
+  const ink = o.style === 'painted' ? YEL : o.style === 'box' ? sh.neon : WHITE, lit = open ? Math.max(L, night * (o.style === 'box' ? 14 : 10)) : L * .5;
+  const [ex, ey] = faceDir(o.c, o.s);
+  return set(i, worldText(o.word, HIT.face === 3 ? HIT.u : -HIT.u, HIT.w, t, i, rel(o.x - px), rel(o.y - py), o.zc, ex, ey, o.cwid, o.band), C(ink, lit)), true;
+}
+// a shop's awning: a striped sheet sloping out from the wall (darker underneath) and a valance along its front with a
+// scalloped hem
+function architectureAwningShade(o, i, t, L) {
+  const sh = SHOP[o.ownerCell], col = sh.neon === WHITE ? RED : sh.neon;
+  const stripe = fract(HIT.u * 20 + .25) < .5 ? col : WHITE;
+  if (o.part === 'valance') {
+    const x = fract(HIT.u * 25) - .5, hem = HIT.w - o.z0;
+    if (hem < .006 * 4 * x * x) return false; // (between the scallops)
+    BG[i] = C(stripe, (1.6 + L * .2) * shadeFace(HIT.face)); return set(i, ' ', 0), true;
+  }
+  BG[i] = C(stripe, HIT.face === 5 ? 1.9 + L * .24 : HIT.face === 6 ? .8 + L * .06 : 1.5 + L * .18);
+  return set(i, ' ', 0), true;
+}
 function architectureDetailShade(o, i, t, L) {
+  if (o.kind === 'fascia') return architectureFasciaShade(o, i, t, L);
+  if (o.kind === 'awning') return architectureAwningShade(o, i, t, L);
   if (o.profile) return residentialDetailShade(o, i, t, L);
   const z = HIT.w, base = o.region === 'brownstones' ? BROWNSTONE_MATERIALS[o.material] : [STONE, WHITE, STONE, WARM, GRAY][o.material];
   if (o.kind === 'rail') {
@@ -13470,11 +13841,12 @@ function drawArchitecture() {
 const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
-  if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
-    Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
+  const g = architectureSignSpec(b, f, sh);
+  if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
+    g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
-  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)
+  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim, d)) return; // (the shop's door, to the pavement)
   if (z > .325 || z < .045 && !(f.front && sh.kind === SHOP_APTS && door < doorHalf)) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   if (f.front && sh.kind === SHOP_APTS) {
     if (door < doorHalf && z < .30) { // (the lobby doors, to the pavement)
@@ -13488,8 +13860,13 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
     return set(i, ' ', C(wall, L));
   }
   if (along > .14 && along < width - .14 && z < .31) {
-    if (architectureShutter(i, z, sh, L)) return;
+    const w0 = .14 + Math.floor((along - .14) / .48) * .48;
+    if (architectureShutter(i, z, sh, L, d, along, w0, Math.min(w0 + .48, width - .14), .045, .31)) return;
     const mullion = Math.abs(fract((along - .14) / .48) - .5) > .47;
+    if (!mullion && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+      const a0 = .14 + Math.floor((along - .14) / .48) * .48, a1 = Math.min(a0 + .48, width - .14), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
+      if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .045, .31, sh, open, L, sk0(b.seed) + Math.floor(a0 * 9))) return;
+    }
     BG[i] = C(sh.kind === SHOP_NEON ? sh.neon : CYAN, 1 + night * 2);
     return set(i, mullion ? '|' : ':', C(mullion ? trim : WARM, Math.max(L * .65, night * 11)));
   }
@@ -13718,11 +14095,11 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
     const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
-      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L,d,door,-doorHalf - .012,doorHalf + .012,0,.27)) return true;
       if (Math.abs(door) > doorHalf || z > .255) { BG[i] = C(p.trim,1 + L * .2); set(i,z > .255 ? '=' : '|',C(p.trim,L)); return true; }
     }
     if (f.front && Math.abs(local) < width / 2 - .15 && (z > .03 || Math.abs(door) < doorHalf) && z < .32) {
-      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L,d,local,.15 - width / 2,width / 2 - .15,.03,.32)) return true;
       if (Math.abs(door) < doorHalf && z < .255) {
         if (japan && z > .225) {
           BG[i] = C(p.trim,2 + L * .22);
@@ -14034,6 +14411,7 @@ function citySprites() {
   fairSprites();
   gasSprites(); // (the drivers at the pumps: gas-render.js)
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
+  drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
@@ -14219,39 +14597,11 @@ function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
   return false;
 }
 
-// a lamp up close, built from boxes so it's solid from any side: a flared base, the pole with its collar, the swan
-// neck as a chain of short pieces round the half circle, and the lantern hanging off the end (glowing after dark).
-// Further off the billboard (lampCell) looks the same and costs far less.
-const LAMP_3D = 5, NECK_BITS = 7;
+// a lamp up close is turned and built (drawLamp3D, street-lamps.js); further off the billboard (lampCell) looks the
+// same and costs far less. STEEL: plain steel parts shared by the signals, the el and the bridges.
+const LAMP_3D = 5;
 const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
 const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
-function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
-  const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
-  B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
-  B(0, 0.06, top, 0.01, 0.01, STEEL.pole);
-  B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
-  for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
-    const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
-    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
-    B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
-  }
-  const hu = 2 * NECK;
-  B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
-  B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
-  B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
-    if (HIT.face === 6) { BG[i] = C(GRAY, 1); return set(i, 'v', C(GRAY, L)), true; }
-    const edge = Math.abs(Math.abs(HIT.face <= 2 ? HIT.v : HIT.u) - 0.024) < 0.004;
-    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
-    return set(i, edge ? '|' : lit ? '#' : ':', lit && !edge ? C(WARM, 15) : C(GRAY, L * 0.8)), true;
-  });
-  B(hu, top - 0.14, top - 0.125, 0.008, 0.008, STEEL.pole);
-  if (lit) drawShape(vx + ax * hu, vy + ay * hu, top - 0.16, 0.075, 0.13, (i, u, z, du, dz) => { // the soft glow round the lantern
-    const halo = Math.hypot(u / 0.075, (z - 0.065) / 0.065);
-    if (halo >= 1) return false;
-    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
-  });
-}
-
 // ---- signals and roof clutter as real 3D parts. Poles, masts, legs and wires are rods (rayRod, courier-ui.js): round
 // up close and never thinner than a character far off, so they hold the skyline at any distance. a, b camera-relative.
 function drawRod(ax, ay, az, bx, by, bz, r, shade) {
@@ -14268,33 +14618,6 @@ function rod(ax, ay, az, bx, by, bz, r, col = GRAY, k = 1) {
 }
 // a point: a little sphere up close, one character far off (bz nudged so rayRod has an axis to measure along)
 const dot = (x, y, z, r, shade) => drawRod(x, y, z, x, y, z - 0.002, r, shade);
-
-// a traffic signal: a pole and a head of three lamps facing both ways along its street, each under its visor.
-// You see the lamps only from along the street (from the cross street the visors hide them, as they're meant to).
-const SIG = { hl: 0.012, hw: 0.017, z0: 0.29, z1: 0.376 }, SIG_LAMPS = [['R', 0.36, RED], ['Y', 0.333, YEL], ['G', 0.306, GREEN]];
-const SIG_HOUSING = (i, t, L) => { BG[i] = C(GRAY, (0.6 + L * 0.12) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '_' : ' ', C(GRAY, L * 0.5)), true; };
-function drawSignal(s) {
-  const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy);
-  if (d > vis + 1) return;
-  const c = s.vert ? 0 : 1, sn = s.vert ? 1 : 0, on = light(s.bx, s.by, s.vert, T), near = d < 6;
-  rod(vx, vy, 0, vx, vy, SIG.z0, 0.009);
-  if (near) drawBox(boxAt(vx, vy, 1, 0, 0.02, 0.02, 0, 0.025), STEEL.base);
-  drawBox(boxAt(vx, vy, c, sn, SIG.hl, SIG.hw, SIG.z0, SIG.z1), SIG_HOUSING);
-  const k = -(vx * c + vy * sn) / (d || 1); // +1: we're off the head's +u end
-  for (const e of [-1, 1]) {
-    if (e * k < 0.3) continue;
-    const ux = vx + c * e * SIG.hl, uy = vy + sn * e * SIG.hl;
-    // the lit lamp first: far off all three share a character, and it should be the one you see
-    for (const [st, z, col] of [...SIG_LAMPS].sort(a => a[0] === on ? -1 : 1)) {
-      const lit = st === on;
-      dot(ux, uy, z, 0.0095, (i, t, L) => { // up close a lens of solid colour, far off its one character
-        BG[i] = C(col, lit ? 11 : 2.2);
-        return set(i, 0.019 * projX / t > 2 ? ' ' : lit ? 'O' : 'o', C(col, lit ? 15 : 4)), true;
-      });
-      if (near) drawBox(boxAt(ux + c * e * 0.007, uy + sn * e * 0.007, c, sn, 0.007, 0.012, z + 0.0095, z + 0.012), SIG_HOUSING);
-    }
-  }
-}
 
 // a wooden water tank on a steel stand: braced legs, a platform, the barrel with its iron hoops, a conical roof
 const TANK = { r: 0.11, leg: 0.13, top: 0.3, roof: 0.07 };
@@ -15783,6 +16106,112 @@ function vendingModel(m,sc=1) {
   let model=scales.get(sc);if(!model)scales.set(sc,model=buildVending(m,sc));return model;
 }
 function drawVending(m,vx,vy,sc=1) {vendingModel(m,sc).draw(vx,vy);}
+// The street lamp up close, turned rather than boxed: a flared cast base, a
+// fluted pole tapering to its finial with a collar part way up, the swan neck
+// as one smooth curve of tube, the drop rod, and the lantern itself: a ribbed
+// glass body between a domed cap and a finial, glowing after dark. Further off
+// the billboard (lampCell) stands in for it at a fraction of the cost.
+const LAMP_NECK_BITS = 10;
+const LAMP_BASE = [[0, 0], [0, .028], [.008, .028], [.012, .025], [.03, .019], [.05, .015], [.058, .0125], [.062, .0115], [.062, 0]];
+const LAMP_LANTERN = [[0, 0], [0, .004], [.012, .008], [.02, .014], [.026, .02], [.03, .02], [.09, .024], [.092, .031], [.098, .031], [.108, .018], [.116, .008], [.12, 0]]; // from its finial up to the cap
+const lampSteel = (i, t, L) => {
+  const flute = coveGroove(Math.atan2(HIT.v, HIT.u) * 12 / TAU, 1, .3, t / projX * 80) * coveDetail(t, .02); // the pole's flutes, gone far off
+  BG[i] = C(GRAY, .9 + L * .28 * coveLight(HIT.nx, HIT.ny, HIT.nz) - flute * .35); return set(i, ' ', 0), true;
+};
+function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
+  const lit = lampsOn > .3, metal = (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY);
+  coveLathe(vx, vy, 0, LAMP_BASE, metal);
+  coveLathe(vx, vy, .062, [[0, 0], [0, .0105], [top - .062, .0078], [top - .062, 0]], lampSteel); // the pole, tapering
+  coveLathe(vx, vy, .41, [[0, 0], [0, .014], [.006, .0165], [.014, .0165], [.02, .014], [.02, 0]], metal); // its collar
+  coveLathe(vx, vy, top - .004, [[0, 0], [0, .0095], [.008, .011], [.016, .007], [.024, 0]], metal); // the finial on top
+  for (let k = 0; k < LAMP_NECK_BITS; k++) { // the swan neck: up and over from the pole top out to the drop
+    const t0 = Math.PI * (1 - k / LAMP_NECK_BITS), t1 = Math.PI * (1 - (k + 1) / LAMP_NECK_BITS);
+    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
+    coveTube(vx + ax * u0, vy + ay * u0, z0, vx + ax * u1, vy + ay * u1, z1, .0075, GRAY);
+  }
+  const hx = vx + ax * 2 * NECK, hy = vy + ay * 2 * NECK, base = top - .15;
+  coveTube(hx, hy, top, hx, hy, base + .116, .003, GRAY); // the drop
+  coveLathe(hx, hy, base, LAMP_LANTERN, (i, t, L) => {
+    const w = HIT.w - base, glass = w > .03 && w < .09;
+    if (!glass) return metal(i, t, L);
+    const rib = coveGroove(Math.atan2(HIT.v, HIT.u) * 6 / TAU, 1, .08, t / projX * 25) * coveDetail(t, .03); // six frame bars
+    if (rib > .5) return metal(i, t, L);
+    BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(CYAN, 1 + L * .12); return set(i, ' ', 0), true;
+  });
+  if (lit) drawShape(hx, hy, top - .16, .075, .13, (i, u, z, du, dz) => { // the soft glow round the lantern
+    const halo = Math.hypot(u / .075, (z - .065) / .065);
+    if (halo >= 1) return false;
+    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
+  });
+}
+// A traffic signal, built: a turned pole on a flanged foot with a push-button
+// box for the crossing; a two-faced head (lamps toward both ends of its street)
+// on a rounded housing, each face on a backplate with a white border, each lamp
+// a lens under a cowl visor; and a pedestrian head facing across the junction:
+// the walking figure while walkers may start, the hand flashing as the green
+// runs out, the hand steady on red. You see the lamps only from along the
+// street (the visors hide them from the cross street, as they're meant to).
+const SIG = { hl: 0.012, hw: 0.017, z0: 0.29, z1: 0.376 }, SIG_LAMPS = [['R', 0.36, RED], ['Y', 0.333, YEL], ['G', 0.306, GREEN]];
+const SIG_PED = { z0: .205, z1: .245, hw: .016, d: .012, out: .02 }; // the pedestrian head, out from the pole
+const SIG_HOUSING = (i, t, L) => { BG[i] = C(GRAY, (0.6 + L * 0.12) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '_' : ' ', C(GRAY, L * 0.5)), true; };
+const SIG_POLE = [[0, 0], [0, .02], [.006, .02], [.014, .013], [.024, .0095], [.03, .0088], [SIG.z0 - .004, .0082], [SIG.z0, .0095], [SIG.z0, 0]];
+// The pedestrian state at a signal's corner: 'walk', 'flash' or 'stop'.
+function pedestrianSignal(s, t) {
+  if (walkSig(s.bx, s.by, s.vert, t)) return 'walk';
+  return light(s.bx, s.by, s.vert, t) === 'R' ? 'stop' : 'flash';
+}
+// The walking figure and the raised hand, 5 wide by 7 high.
+const SIG_FIGURES = { walk: ['..#..', '.###.', '#.#.#', '..#..', '.#.#.', '#...#', '#...#'], stop: ['#.#.#', '#.#.#', '#####', '#####', '.####', '.###.', '..#..'] };
+function drawSignal(s) {
+  const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy);
+  if (d > vis + 1) return;
+  const c = s.vert ? 0 : 1, sn = s.vert ? 1 : 0, on = light(s.bx, s.by, s.vert, T), near = d < 6;
+  if (near) coveLathe(vx, vy, 0, SIG_POLE, (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY));
+  else rod(vx, vy, 0, vx, vy, SIG.z0, 0.009);
+  coveRound(vx, vy, c, sn, SIG.hl, SIG.hw, SIG.z0, SIG.z1, .004, (i, t, L) => { BG[i] = C(GRAY, .55 + L * .14 * coveLight(HIT.nx, HIT.ny, HIT.nz)); return set(i, ' ', 0), true; });
+  const k = -(vx * c + vy * sn) / (d || 1); // +1: we're off the head's +u end
+  for (const e of [-1, 1]) {
+    if (near) { // the backplate, a white border round its black face
+      const bx = vx + c * e * (SIG.hl + .0015), by = vy + sn * e * (SIG.hl + .0015);
+      drawBox(boxAt(bx, by, c, sn, .0015, SIG.hw + .01, SIG.z0 - .008, SIG.z1 + .008), (i, t, L) => {
+        const edge = Math.abs(HIT.v) > SIG.hw + .007 || HIT.w < SIG.z0 - .005 || HIT.w > SIG.z1 + .005;
+        BG[i] = edge ? C(WHITE, 3 + L * .1) : C(GRAY, .35); return set(i, ' ', 0), true; });
+    }
+    if (e * k < 0.3) continue;
+    const ux = vx + c * e * (SIG.hl + .003), uy = vy + sn * e * (SIG.hl + .003);
+    // the lit lamp first: far off all three share a character, and it should be the one you see
+    for (const [st, z, col] of [...SIG_LAMPS].sort(a => a[0] === on ? -1 : 1)) {
+      const lit = st === on;
+      dot(ux, uy, z, 0.0095, (i, t, L) => { // up close a lens of solid colour, far off its one character
+        BG[i] = C(col, lit ? 11 : 2.2);
+        return set(i, 0.019 * projX / t > 2 ? ' ' : lit ? 'O' : 'o', C(col, lit ? 15 : 4)), true;
+      });
+      if (near) { // the cowl: a hood over the lens and its two cheeks, open below
+        const hx = ux + c * e * .007, hy = uy + sn * e * .007;
+        drawBox(boxAt(hx, hy, c, sn, .007, .012, z + .0095, z + .0115), SIG_HOUSING);
+        for (const f of [-1, 1]) drawBox(boxAt(hx - sn * f * .011, hy + c * f * .011, c, sn, .007, .001, z - .004, z + .0095), SIG_HOUSING);
+      }
+    }
+  }
+  if (!near) return;
+  // the pedestrian head, facing across the junction (toward its middle), and the push button facing the kerb
+  const away = Math.sign(s.vert ? s.y - (s.by + 1) : s.x - (s.bx + 1)) || 1, nx = -c * away, ny = -sn * away;
+  const ped = pedestrianSignal(s, T), lit = ped === 'walk' || ped === 'stop' || fract(T) < .5, fig = SIG_FIGURES[ped === 'walk' ? 'walk' : 'stop'];
+  const px_ = vx + nx * SIG_PED.out, py_ = vy + ny * SIG_PED.out;
+  coveTube(vx, vy, (SIG_PED.z0 + SIG_PED.z1) / 2, px_ - nx * SIG_PED.d, py_ - ny * SIG_PED.d, (SIG_PED.z0 + SIG_PED.z1) / 2, .003, GRAY); // its bracket
+  drawBox(boxAt(px_, py_, c, sn, SIG_PED.d, SIG_PED.hw, SIG_PED.z0, SIG_PED.z1), (i, t, L) => {
+    const front = HIT.face === (away < 0 ? 1 : 2); // (the face toward the junction)
+    if (!front) return SIG_HOUSING(i, t, L);
+    const q = (HIT.v * (away < 0 ? -1 : 1) * (s.vert ? -1 : 1) / SIG_PED.hw + 1) / 2, zz = (HIT.w - SIG_PED.z0) / (SIG_PED.z1 - SIG_PED.z0);
+    const col = ped === 'walk' ? WHITE : ORANGE, cx = Math.floor(q * 7) - 1, cz = 6 - Math.floor(zz * 9 - 1);
+    const on = lit && cx >= 0 && cx < 5 && cz >= 0 && cz < 7 && fig[cz][cx] === '#';
+    const big = SIG_PED.hw * 2 / 7 * projX / t > 1; // (the figure once its dots are a character or more, else the lamp's colour)
+    BG[i] = !lit ? C(GRAY, .4) : big ? (on ? C(col, 12) : C(GRAY, .4)) : C(col, 6); return set(i, ' ', 0), true;
+  });
+  const bx = vx - nx * .011, by = vy - ny * .011;
+  drawBox(boxAt(bx, by, c, sn, .003, .008, .1, .125), (i, t, L) => { // the push button box, yellow, a black button in it
+    const btn = Math.hypot(HIT.v, HIT.w - .114) < .003; BG[i] = btn ? C(GRAY, .3) : C(YEL, 3 + L * .2 * coveLight(0, 0, 1)); return set(i, ' ', 0), true; });
+}
 // ===== the cell block: where you end up if you can't pay the fine. Your cell is the middle one of a row of three;
 // through its bars, a corridor, a guard walking up and down it, a desk at one end and the steel door out at the
 // other, and three cells across the way with their own bars and their own unlucky tenants. The bars are real
@@ -16256,11 +16685,11 @@ const ROOM_DEFS = {
       p.push(r.neon===CYAN?BAR_MIRRORED_BACK_BAR(6,1,3.7,0,1,r.neon):BAR_BACK_BAR()); // near parts reject hidden shelf pixels first
       return p;
     } },
-  diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
+  diner: { grid: boxRoom(12, 8, { '1,3': 'W', '3,3': 'W', '3,1': 'W', '3,2': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [1, 3, 1.5] /* its door to the tables, not onto the end of the counter */ }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
       p.push(KITCHEN_FLATTOP(10,1.4,1,.35,'burger'));
-      for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
+      for (const [x, y] of [[2.6, 5.6], [9.4, 4.2], [9.4, 6.2]]) { // (one table on the left, clear of the way to the washroom door)
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
           KITCHEN_SETTING(x+s*.4,y,.78,{fx:-Math.sign(s),fy:0,meal:'burger'})); } // (on a stool, at the table)
@@ -16967,7 +17396,8 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
     if (z < 0.95) return set(i, '=', C(GRAY, L));
-    return set(i, '.', C(GRAY, L * 0.3));
+    BG[i] = C(WHITE, 1.1 + L * 0.12); // (a solid painted partition standing in the room, not the dotted dark of the far walls)
+    return set(i, fract(z * 2.4) < 0.04 ? '-' : ' ', C(GRAY, L * 0.3));
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
@@ -21181,11 +21611,20 @@ ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 
 // bananas hung up behind the counter, the scale; a bench by the window
 // (the tiered stands are the grocer's, turned to face the room; the melon table is built: market-hall.js)
 const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k++) rod(vx - 0.1 + k * 0.05, vy, z - 0.05, vx - 0.16 + k * 0.08, vy + 0.06, z - 0.35, 0.025, YEL, 1.6); });
+const FRUIT_PAPER = { r: 0.035, leaf: 0.013 }; // the oranges on the wallpaper, and their leaves
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(GREEN, 14), C(WHITE, 7))) return true;
   if (z < 1.0) { BG[i] = C(GREEN, 2.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WHITE, 4)), true; }
-  BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, hash(Math.floor(u * 2), Math.floor(z * 2), 136) > 0.93 ? '@' : ' ', C(ORANGE, 9)), true;
+  // the paper above: a little orange with its leaf in every other 25 cm square, each row half a step along from the
+  // last (a half-drop repeat)
+  const tu = Math.floor(u * 4), tz = Math.floor(z * 4);
+  if (((tu + tz) & 1) === 0) {
+    const cu = (tu + 0.5) / 4, cz = (tz + 0.5) / 4, r = Math.hypot(u - cu, z - cz);
+    if (r < FRUIT_PAPER.r) { BG[i] = Math.hypot(u - cu + FRUIT_PAPER.r * 0.35, z - cz - FRUIT_PAPER.r * 0.35) < FRUIT_PAPER.r * 0.3 ? C(YEL, 9 + L * 0.2) : C(ORANGE, 7 + L * 0.2); return set(i, ' ', 0), true; } // (a glint up on its shoulder)
+    if (Math.hypot(u - cu - FRUIT_PAPER.r * 0.6, z - cz - FRUIT_PAPER.r * 1.2) < FRUIT_PAPER.leaf) { BG[i] = C(GREEN, 3 + L * 0.2); return set(i, ' ', 0), true; }
+  }
+  BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.fruitshop = { grid: boxRoom(10, 8), light: 1.1, floor: 'oak', ceil: 'pendant', sign: false, wall: fruitWall, keeper: [5.0, 1.4],
   props: r => [...counterBox(5.0, 1.8, 1.3), { ...standing(5.0, 1.4, GREEN), face: [0, 1] }, ROOM_MODEL(4.2, 1.8, (vx, vy) => { drum(vx, vy, 0.12, 1.05, 1.12, CHROME); rod(vx, vy, 1.12, vx, vy, 1.3, 0.02, GRAY, 1.2); drum(vx, vy, 0.09, 1.3, 1.42, (i, t, L) => { BG[i] = C(WHITE, 6); return set(i, HIT.face === 4 ? '/' : ' ', C(RED, 8)), true; }); }), // the scale
@@ -35442,7 +35881,9 @@ function BATHROOM_POCKET_DOOR(r,p,index) {
   const cell=u=>vertical?[cross,u]:[u,cross],wallCell=u=>{const [x,y]=cell(u);return '#W'.includes(r.grid[y]?.[x]||' ');};
   const run=dir=>{let n=0;for(let u=dir<0?start-1:end;wallCell(u)&&n<width+1;u+=dir)n++;return n;};
   const dir=run(1)>=run(-1)?1:-1;
-  const home=homeRecord(r),d={...p,index,home,dir,open:home?.bathroomDoors?.[index]===false?0:1};
+  // A washroom you don't live in (a restaurant's, a bar's, a shop's, a hotel or motel room's) keeps its door shut and
+  // slides it closed behind you; your own home leaves its doors however you left them.
+  const home=homeRecord(r),pub=!home&&!r.def.home,d={...p,index,home,pub,dir,open:pub||home?.bathroomDoors?.[index]===false?0:1};
   d.target=d.open;
   const x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5;
   const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
@@ -35475,11 +35916,13 @@ function bathroomDoorUse(prop) {
   if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=d.target===1;saveGame();}
   if(actx){burst(actx.currentTime,.22,[filt('lowpass',1100)],.035);tone(actx.currentTime+.2,95,.035,.025);}
 }
+const BATHROOM_DOOR_CLOSE=1.8;
 function stepBathroomDoors(dt) {
   if(mode!=='room'||!room.bathroomDoors)return;
   for(const prop of room.bathroomDoors) {
     const d=prop.bathroomDoor;
     if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
+    if(d.pub&&d.target===1&&d.open===1&&Math.hypot(px-prop.x,py-prop.y)>BATHROOM_DOOR_CLOSE&&!inWc(px,py))d.target=0; // (left open, it slides shut once you're well clear)
     if(d.open===d.target)continue;
     const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
     if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {
@@ -41325,7 +41768,7 @@ function assembleArchipelago() {
     geometry(p);
     if (Array.isArray(p.shop.pad)) point(p.shop.pad);
   }
-  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES]) {
+  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES, ...SHOPFRONT_FACES]) {
     for (const f of faces) geometry(f);
     sparseCells(faces);
   }
@@ -41445,6 +41888,23 @@ function assembleArchipelago() {
   // Opposite source blocks may now be on separate headlands. Validate against
   // the finished building map before rebuilding the renderer's spatial buckets.
   for (let i = lanterns.length - 1; i >= 0; i--) if (!lanternAnchored(lanterns[i])) lanterns.splice(i, 1);
+  // Lamps were fitted round the merchants' awnings in the source layout, but a lamp and an awning from different
+  // source blocks can meet again at a seam, and the junctions' signals are rebuilt above, never fitted at all. Where
+  // a lamp post or a signal (its pole and head) stands in an awning, cut the awning back to clear it by a hand's
+  // width: its end pulled in, or its front edge drawn back, whichever keeps more of it. The posts stay put.
+  const posts = [...lamps.map(l => [l.x, l.y, .012]), ...lights.map(l => [l.x, l.y, .045])]; // (x, y, half width)
+  for (const o of PAVILION_SOLIDS) {
+    if (o.kind !== 'awning' && !(o.kind === 'eave' && o.z1 < LAMP_TOP) || !o.f) continue;
+    const nx = o.f.nx, ny = o.f.ny, ax = o.c, ay = o.s; // (out of the wall; along it)
+    for (const [x, y, r] of posts) {
+      if (Math.abs(rel(x - o.x)) > o.hl + o.hw + .5 || Math.abs(rel(y - o.y)) > o.hl + o.hw + .5) continue;
+      const u = rel(x - o.x) * ax + rel(y - o.y) * ay, v = rel(x - o.x) * nx + rel(y - o.y) * ny, gap = r + .015;
+      if (Math.abs(u) >= o.hl + gap || Math.abs(v) >= o.hw + gap) continue;
+      const depth = v + o.hw - gap, length = o.hl + Math.abs(u) - gap; // (what's left either way: the reach from the wall, the length along it)
+      if (depth * o.hl * 2 >= length * o.hw * 2) { const d = Math.max(.04, depth); o.x -= nx * (o.hw - d / 2); o.y -= ny * (o.hw - d / 2); o.hw = d / 2; }
+      else { const l = Math.max(.1, length), e = -Math.sign(u) || 1; o.x += ax * e * (o.hl - l / 2); o.y += ay * e * (o.hl - l / 2); o.hl = l / 2; }
+    }
+  }
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
@@ -41476,6 +41936,88 @@ function assembleArchipelago() {
 }
 let CITY_LAYOUT_CHECKPOINT=null;
 assembleArchipelago();
+// Utilities on the building fronts along the streets, placed on the finished
+// city: downpipes from the roof to the pavement (a hopper head under the
+// parapet, a bracket every couple of metres, a shoe at the foot that pours in
+// the rain) and, beside some of them, an electric or a gas meter at hand
+// height. Clear of doors, vending machines and anything on the facade.
+// {x, y, ax, ay: out of the wall, c, s: along it, h: its top, meter}
+const PIPE = { r: .005, off: .011, bracket: .2, head: .03, gap: .013 }; // (gap: the street geometry's clearance pad, and a little)
+const facadePipes = [];
+// The pipe's way up the wall from (wx, wy) on the face (n out of it) toward height h: [{z, out}] points from the
+// shoe to the hopper head, stepping out round a thin moulding and back, stopping under a deep one or the cornice;
+// or null if there's no clear run of at least two metres.
+function pipeRoute(wx, wy, nx, ny, h) {
+  const c = Math.abs(ny), s = Math.abs(nx), x = wx + nx * PIPE.off, y = wy + ny * PIPE.off;
+  if (doors.some(d => Math.abs(rel(d.x - x)) < .4 && Math.abs(rel(d.y - y)) < .4 && Math.abs(rel(d.x - x) * c + rel(d.y - y) * s) < .09)) return null; // (not across a door)
+  if (machines.some(m => Math.abs(rel(m.x - x)) < .12 && Math.abs(rel(m.y - y)) < .12)) return null;
+  const col = { x, y, c, s, hl: .009, hw: PIPE.off - .002, z0: .02, z1: h }, seen = new Set(), bands = [];
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of streetGeometryCells[idx(Math.floor(x) + i, Math.floor(y) + j)] || []) {
+    if (seen.has(o) || o.ownerCell != null && map[o.ownerCell] !== o.ownerHeight) continue;
+    seen.add(o);
+    const reach = rel(o.x - wx) * nx + rel(o.y - wy) * ny + Math.abs(o.hl * (o.c * nx + o.s * ny)) + Math.abs(o.hw * (-o.s * nx + o.c * ny)); // (how far out of the wall it stands)
+    if (streetBoxesOverlap({ ...col, hl: .016, hw: PIPE.off + PIPE.r + .002 }, o)) bands.push({ z0: o.z0, z1: o.z1, reach }); // (as wide as the hopper head)
+  }
+  bands.sort((a, b) => a.z0 - b.z0);
+  const pts = [{ z: .03, out: PIPE.off }];
+  let top = h;
+  for (const b of bands) {
+    if (b.z1 < .03) continue;
+    if (b.z0 > top) break;
+    if (b.z1 - b.z0 < .06 && b.reach < .06 && b.z0 > pts[pts.length - 1].z + .06 && b.z1 + .06 < top) { // a thin moulding: step out round it
+      const out = b.reach + PIPE.r + PIPE.gap;
+      pts.push({ z: b.z0 - .04, out: PIPE.off }, { z: b.z0 - PIPE.gap - .003, out }, { z: b.z1 + PIPE.gap + .003, out }, { z: b.z1 + .04, out: PIPE.off });
+    } else { top = Math.min(top, b.z0 - PIPE.gap); break; } // a cornice: the hopper head goes under it
+  }
+  if (top - PIPE.head < .2) return null;
+  pts.push({ z: top - PIPE.head, out: PIPE.off });
+  return { pts: pts.filter(q => q.z <= top - PIPE.head + 1e-9), top };
+}
+const facadePipesB = bucketed([]);
+// Down each street front's two ends (its corners and party walls), clear of the lettering centred on it.
+for (const bld of ARCH_BUILDINGS) for (const f of bld.faces || []) {
+  if (!f.street || f.low || f.height < .3) continue;
+  for (const [end, along] of [[-1, f.start + .06], [1, f.end - .06]]) {
+    const wx = f.side ? along : f.line, wy = f.side ? f.line : along, key = Math.floor(wx * 7) * 7919 + Math.floor(wy * 7);
+    if (districtAt(wx, wy) === 'belle' || landmarkOf.has(bi(Math.floor(wx / 8), Math.floor(wy / 8)))) continue; // (they have their own detailing)
+    if (hash(Math.floor(wx * 3), Math.floor(wy * 3), 1500) > .45 || !ROAD[idx(Math.floor(wx + f.nx * .1), Math.floor(wy + f.ny * .1))]) continue; // (a street in front)
+    const x = worldCoord(wx + f.nx * PIPE.off), y = worldCoord(wy + f.ny * PIPE.off);
+    if (facadePipes.some(q => Math.abs(rel(q.x - x)) < .25 && Math.abs(rel(q.y - y)) < .25)) continue;
+    const route = pipeRoute(worldCoord(wx), worldCoord(wy), f.nx, f.ny, f.height - .015);
+    if (!route) continue;
+    const r = hash(Math.floor(wx * 3), Math.floor(wy * 3), 1510);
+    const p = { x, y, ax: f.nx, ay: f.ny, c: Math.abs(f.ny), s: Math.abs(f.nx), h: route.top, pts: route.pts, meter: r < .3 ? 'electric' : r < .5 ? 'gas' : null, side: -end }; // (the meter on the front's side)
+    facadePipes.push(p); facadePipesB[bi(Math.floor(x / 8), Math.floor(y / 8))].push(p);
+  }
+}
+// The pipe's parts in the frame of its wall: a along the wall, v out of it (0 is the wall face), z up.
+function drawFacadePipe(p, vx, vy) {
+  const d = Math.hypot(vx, vy), near = d < 3, k = PIPE, wx = vx - p.ax * k.off, wy = vy - p.ay * k.off; // (the wall face behind it)
+  const at = (a, v) => [wx + p.c * a + p.ax * v, wy + p.s * a + p.ay * v], paint = (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY);
+  for (let n = 1; n < p.pts.length; n++) { const a0 = p.pts[n - 1], a1 = p.pts[n], [x0, y0] = at(0, a0.out), [x1, y1] = at(0, a1.out); coveTube(x0, y0, a0.z, x1, y1, a1.z, k.r, GRAY); } // the pipe, stepping round any moulding
+  if (!near) return;
+  const [hx, hy] = at(0, k.off + .002);
+  coveRound(hx, hy, p.c, p.s, .016, .013, p.h - k.head, p.h, .004, paint); // the hopper head under the parapet
+  for (let z = .15; z < p.h - k.head - .05; z += k.bracket) { if (p.pts.some((q, n) => n && q.out !== k.off && Math.abs(q.z - z) < .05)) continue; const [bx, by] = at(0, k.off / 2); drawBox(boxAt(bx, by, p.c, p.s, .007, k.off / 2 + k.r, z, z + .005), (i, t, L) => (HIT.nx = p.ax, HIT.ny = p.ay, HIT.nz = 0, paint(i, t, L))); } // brackets
+  const [sx, sy] = at(0, k.off + .022);
+  coveTube(vx, vy, .034, sx, sy, .012, k.r, GRAY); // the shoe, turned out at the foot
+  if (rain > .2) drawShape(sx, sy, 0, .02, .02, (i, u, z, du, dz) => { // water pouring from it
+    if (Math.abs(u) > .006 + du || fract(z * 40 - T * 6) > .5) return false;
+    BG[i] = C(CYAN, 3); return set(i, z < .004 ? '~' : '|', C(WHITE, 9)), true;
+  });
+  if (p.meter) { // a meter beside it at hand height
+    const [mx, my] = at(p.side * .05, .008);
+    if (p.meter === 'gas') { const [gx, gy] = at(p.side * .05, .016); coveTube(gx, gy, 0, gx, gy, .085, .003, YEL); } // the gas pipe up out of the pavement
+    drawBox(boxAt(mx, my, p.c, p.s, .014, .008, .085, .125), (i, t, L) => {
+      HIT.nx = HIT.face === 3 || HIT.face === 4 ? p.ax : 0; HIT.ny = HIT.face === 3 || HIT.face === 4 ? p.ay : 0; HIT.nz = HIT.face === 5 ? 1 : 0;
+      const dial = Math.hypot(HIT.u, HIT.w - .11) < .006 && (HIT.face === 3 || HIT.face === 4);
+      BG[i] = dial ? C(WHITE, 3.4) : C(p.meter === 'gas' ? YEL : GRAY, (p.meter === 'gas' ? 2 : 1.6) + L * .25 * coveLight(HIT.nx, HIT.ny, HIT.nz)); return set(i, ' ', 0), true;
+    });
+  }
+}
+function drawFacadeUtilities() {
+  forNear(facadePipesB, p => { const [vx, vy] = R(p.x, p.y); if (Math.hypot(vx, vy) < vis && inView(vx, vy, .05)) drawFacadePipe(p, vx, vy); });
+}
 // Kerb fixtures: fire hydrants, litter bins, mailboxes and bollards on the
 // sidewalk's kerb line, where the lamps stand (CURB), clear of the walking line
 // (0.12) and of everything already on the street. Placed on the finished
