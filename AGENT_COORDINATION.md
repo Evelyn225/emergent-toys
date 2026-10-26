@@ -48,7 +48,6 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   books defs in `city/rooms.js`), stacked on #231. With that stack merged no
   shop def paints a box; pass 7 can be ticked. Claude's next: pass 10
   (leisure interiors). `city/home-*.js` stays with Codex. `city/home-*.js` stays with Codex.
-
   herbalist on `claude/shop-boxes-4`, stacked on #230. Next: the market hall,
   motel office, welder's, tyre shop, delis, fruit shop and gacha machines. `city/home-*.js` stays with Codex.
 
