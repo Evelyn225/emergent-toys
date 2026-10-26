@@ -6,6 +6,7 @@ const COOLER_HEIGHT=1.95,COOLER_LEVELS=[.12,.44,.76,1.08,1.40],COOLER_TOP=1.75,C
 const COOLER_COLOURS=[RED,GREEN,ORANGE,WHITE,YEL,CYAN,BLUE,MAG];
 const COOLER_CAN=[[0,0],[0,.030],[.004,.033],[.112,.033],[.120,.026],[.122,.026],[.122,0]];
 const COOLER_BOTTLE=[[0,0],[0,.027],[.005,.030],[.15,.030],[.20,.014],[.25,.012],[.255,.014],[.262,.013],[.262,0]];
+const COOLER_POT=[[0,0],[0,.026],[.004,.03],[.07,.034],[.072,.036],[.072,0]];
 const CRATE_BOTTLE=[[0,0],[0,.033],[.006,.036],[.19,.036],[.235,.016],[.275,.014],[.282,.016],[.29,.014],[.29,0]];
 function coolerCanShade(col,top) {
   return (i,t,L)=>{
@@ -21,8 +22,12 @@ function coolerBottleShade(col,glass,base) {
     BG[i]=z>.06&&z<.13?C(col,4.4+L*.42*light):C(glass,2.2+L*.3*light);set(i,' ',0);return true;
   };
 }
+function coolerCartonShade(col,base) { // a milk carton: white board, a coloured band, the gable folded at the top
+  return (i,t,L)=>{const z=HIT.w-base,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    BG[i]=C(z>.06&&z<.12?col:WHITE,(z>.06&&z<.12?4:6)+L*.3*light);set(i,' ',0);return true;};
+}
 // (fx,fy) points out of the doors into the room; the back stands at the wall.
-function KITCHEN_DRINKS_COOLER(x,y,half,depth,fx,fy) {
+function KITCHEN_DRINKS_COOLER(x,y,half,depth,fx,fy,{label='COLD DRINKS',stock='drinks'}={}) {
   const c=-fy,s=fx,doors=Math.max(2,Math.round(half*2/.6)),pitch=half*2/doors,steel=kitchenSteel;
   const panel=(hl,hw,z0,z1)=>({...kitchenPanelProfile(hl,hw,z0,z1,.004)});
   const facing=()=>HIT.nx*fx+HIT.ny*fy>.6;
@@ -30,7 +35,7 @@ function KITCHEN_DRINKS_COOLER(x,y,half,depth,fx,fy) {
   const header=(i,t,L)=>{
     if(!facing())return steel(i,t,L);
     BG[i]=C(WHITE,9+L*.2);
-    set(i,worldText('COLD DRINKS',-HIT.u,HIT.w,t,i,headerX,headerY,COOLER_TOP+.1,ex,ey,.055,.075),C(BLACK,0));return true;
+    set(i,worldText(label,-HIT.u,HIT.w,t,i,headerX,headerY,COOLER_TOP+.1,ex,ey,.055,.075),C(BLACK,0));return true;
   };
   const grille=(i,t,L)=>{
     if(!facing())return steel(i,t,L);
@@ -45,13 +50,23 @@ function KITCHEN_DRINKS_COOLER(x,y,half,depth,fx,fy) {
   // shelves, grouped in facings of three.
   const goods=[],inner=half-COOLER_WALL-.01;
   for(const [row,z]of COOLER_LEVELS.entries()) {
-    const can=row%2===0,spacing=can?.074:.068,n=Math.floor(inner*2/spacing);
+    const can=row%2===0,dairy=stock==='dairy',spacing=dairy?(can?.08:.075):can?.074:.068,n=Math.floor(inner*2/spacing);
     for(let k=0;k<n;k++) {
-      const col=COOLER_COLOURS[Math.floor(hash(Math.floor(k/3),row,x*7+y,601)*COOLER_COLOURS.length)];
-      const glassCol=[GREEN,BRICK,WHITE][Math.floor(k/3+row)%3];
-      goods.push({u:(k-(n-1)/2)*spacing,v:depth-.12,z,can,shade:can?coolerCanShade(col,z+.122):coolerBottleShade(col,glassCol,z)});
+      const col=stock==='beer'?[BRICK,GREEN,YEL][Math.floor(hash(Math.floor(k/3),row,x*7+y,601)*3)]:COOLER_COLOURS[Math.floor(hash(Math.floor(k/3),row,x*7+y,601)*COOLER_COLOURS.length)];
+      const glassCol=stock==='beer'?BRICK:[GREEN,BRICK,WHITE][Math.floor(k/3+row)%3];
+      // dairy: milk cartons on the can shelves, yoghurt pots on the others
+      const kind=dairy?(can?'carton':'pot'):can?'can':'bottle';
+      const shade=kind==='carton'?coolerCartonShade(col,z):kind==='pot'?coolerCanShade(col,z+.07):can?coolerCanShade(col,z+.122):coolerBottleShade(col,glassCol,z);
+      const u=(k-(n-1)/2)*spacing,v=depth-.12,profile=kind==='pot'?COOLER_POT:can?COOLER_CAN:COOLER_BOTTLE,r=Math.max(...profile.map(p=>p[1]));
+      const box=kind==='carton'?{...boxAt(0,0,c,s,.03,.03,z,z+.2),...kitchenTopProfile(.03,.03,z,z+.2,.012)}
+        :{...boxAt(0,0,1,0,r,r,z,z+profile.at(-1)[0]),profile:profile.map(([h,q])=>[h+z,q])};
+      goods.push({u,v,z,can,kind,shade,ox:c*u+fx*v,oy:s*u+fy*v,box,ray:kind==='carton'?homeRayWorktop:coveRayLathe});
     }
   }
+  // Long runs (shop fridge walls) make the full-width rails, shelves, header,
+  // grille and back the costly parts: they are plain boxes the renderer clips
+  // column by column, with face normals for the lighting.
+  const flat=shade=>(i,t,L)=>{const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;HIT.nx=c*nu-s*nv;HIT.ny=s*nu+c*nv;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
     [headerX,headerY]=at(0,depth-.01);
@@ -65,27 +80,27 @@ function KITCHEN_DRINKS_COOLER(x,y,half,depth,fx,fy) {
       drawBox({...boxAt(sx,sy,c,s,w,.015,COOLER_LEVELS[0],COOLER_TOP),...panel(w,.015,COOLER_LEVELS[0],COOLER_TOP)},steel,homeRayWorktop);
     }
     for(const [z0,z1]of [[COOLER_LEVELS[0],COOLER_LEVELS[0]+.04],[COOLER_TOP-.04,COOLER_TOP]]) {
-      const [rx,ry]=at(0,depth-.015);drawBox({...boxAt(rx,ry,c,s,half,.015,z0,z1),...panel(half,.015,z0,z1)},steel,homeRayWorktop);
+      const [rx,ry]=at(0,depth-.015);drawBox(boxAt(rx,ry,c,s,half,.015,z0,z1),flat(steel));
     }
     const [wx,wy]=at(0,depth-.015);drawBox(boxAt(wx,wy,c,s,half-.02,.004,COOLER_LEVELS[0]+.04,COOLER_TOP-.04),glass);
-    for(const q of goods) {
-      const [gx,gy]=at(q.u,q.v);coveLathe(gx,gy,q.z,q.can?COOLER_CAN:COOLER_BOTTLE,q.shade);
-    }
+    // Products are pre-built once (a fridge wall holds hundreds); each frame
+    // only moves its box to the viewer's frame.
+    for(const q of goods){q.box.x=vx+q.ox;q.box.y=vy+q.oy;drawBox(q.box,q.shade,q.ray);}
     for(const z of COOLER_LEVELS.slice(1)) {
       const [sx,sy]=at(0,-.03);
-      drawBox({...boxAt(sx,sy,c,s,half-COOLER_WALL,depth-.08,z-.015,z),...kitchenTopProfile(half-COOLER_WALL,depth-.08,z-.015,z,.003)},steel,homeRayWorktop);
+      drawBox(boxAt(sx,sy,c,s,half-COOLER_WALL,depth-.08,z-.015,z),flat(steel));
     }
     const [hx,hy]=at(0,0);
-    drawBox({...boxAt(hx,hy,c,s,half,depth,COOLER_TOP,COOLER_HEIGHT),...kitchenTopProfile(half,depth,COOLER_TOP,COOLER_HEIGHT,.01)},header,homeRayWorktop);
-    drawBox({...boxAt(hx,hy,c,s,half,depth,0,COOLER_LEVELS[0]),...panel(half,depth,0,COOLER_LEVELS[0])},grille,homeRayWorktop);
+    drawBox(boxAt(hx,hy,c,s,half,depth,COOLER_TOP,COOLER_HEIGHT),flat(header));
+    drawBox(boxAt(hx,hy,c,s,half,depth,0,COOLER_LEVELS[0]),flat(grille));
     for(const side of [-1,1]) {
       const [sx,sy]=at(side*(half-COOLER_WALL/2),0);
       drawBox({...boxAt(sx,sy,c,s,COOLER_WALL/2,depth,COOLER_LEVELS[0],COOLER_TOP),...panel(COOLER_WALL/2,depth,COOLER_LEVELS[0],COOLER_TOP)},steel,homeRayWorktop);
     }
     const [bx,by]=at(0,-depth+COOLER_WALL/2);
-    drawBox({...boxAt(bx,by,c,s,half,COOLER_WALL/2,COOLER_LEVELS[0],COOLER_TOP),...panel(half,COOLER_WALL/2,COOLER_LEVELS[0],COOLER_TOP)},carcass,homeRayWorktop);
+    drawBox(boxAt(bx,by,c,s,half,COOLER_WALL/2,COOLER_LEVELS[0],COOLER_TOP),flat(carcass));
   }),box:boxAt(x,y,c,s,half,depth,0,COOLER_HEIGHT),radius:Math.hypot(half,depth)+.05,
-    drinksCooler:{half,depth,fx,fy,doors,goods:goods.map(({u,v,z,can})=>({u,v,z,can}))}};
+    drinksCooler:{half,depth,fx,fy,doors,label,stock,goods:goods.map(({u,v,z,can,kind})=>({u,v,z,can,kind}))}};
 }
 
 // ---- sacks

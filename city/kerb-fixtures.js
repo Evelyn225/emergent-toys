@@ -144,15 +144,68 @@ for (const o of [CURB, 2 - CURB]) {
   }
 }
 // on foot, they're solid; a kicked ball stops at them too
-function kerbAt(x, y, pad) {
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of kerbsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    const qx = rel(x - o.x), qy = rel(y - o.y), u = qx * o.c + qy * o.s, v = -qx * o.s + qy * o.c;
-    if (Math.abs(u) >= o.hl + pad || Math.abs(v) >= o.hw + pad) continue;
-    if (o.kind !== 'shelter') return o;
-    const fs = Math.sign(-o.s * o.fx + o.c * o.fy) || 1; // (a shelter blocks only at its walls)
-    for (const q of SHELTER_PARTS) if (Math.abs(u - q.a) < q.hl + pad && Math.abs(v * fs - q.v) < q.hw + pad) return o;
+// The same lathe profiles used for rendering bound the part of a round
+// fixture in the caller's height interval (walking body, or a kicked ball).
+function kerbProfileRadius(profile,lo,hi) {
+  let radius=0;
+  for(let j=1;j<profile.length;j++){
+    const [za,ra]=profile[j-1],[zb,rb]=profile[j],a=Math.max(lo/KERB_K,Math.min(za,zb)),b=Math.min(hi/KERB_K,Math.max(za,zb));
+    if(a>b)continue;if(Math.abs(zb-za)<1e-9){radius=Math.max(radius,ra,rb);continue;}
+    radius=Math.max(radius,ra+(rb-ra)*(a-za)/(zb-za),ra+(rb-ra)*(b-za)/(zb-za));
+  }return radius*KERB_K;
+}
+function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
+  if(hi<0||lo>o.h)return false;
+  const k=KERB_K,over=(a,b)=>hi>=a*k&&lo<=b*k;
+  if(o.kind==='shelter'){ // (a shelter blocks only at its walls; its front is open and its bench is a street bench)
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    return SHELTER_PARTS.some(q=>Math.abs(u-q.a)<q.hl+pad&&Math.abs(v*fs-q.v)<q.hw+pad);
   }
-  return null;
+  const rect=(x,y,a,b)=>Math.hypot(Math.max(0,Math.abs(u-x)-a*k),Math.max(0,Math.abs(v-y)-b*k))<=pad;
+  const cap=(ax,ay,bx,by,z,r)=>{
+    const dz=Math.max(lo-z*k,z*k-hi,0);if(dz>r*k)return false;
+    const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
+    return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
+  };
+  if(o.kind==='pole')return over(0,o.h/k)&&Math.hypot(u,v)<=POLE.r0+pad; // (its arm and wires are overhead)
+  if(o.kind==='guy')return over(0,o.h/k)&&rect(0,0,o.hl/k,o.hw/k);
+  if(o.kind==='cabinet'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
+    if(over(0,.1)&&rect(0,0,.42,.27)||over(.1,1.35)&&rounded(.4,.25,.02)||over(1.35,1.41)&&rounded(.43,.28,.012))return true;
+    if(over(.16,1.3)&&rect(0,.253*fs*k,.38,.003))return true;
+    if(over(.645,.795)&&rect(.315*k,.28*fs*k,.005,.005))return true;
+    for(const z of [.65,.79])if(over(z-.005,z+.005)&&rect(.315*k,.268*fs*k,.005,.017))return true;
+    return over(1,1.242)&&rect(0,0,.412,.18);
+  }
+  if(o.kind==='mailbox'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    if(over(0,.23))for(const a of [-.19,.19])for(const b of [-.22,.22])if(rect(a*k,b*fs*k,.02,.02))return true;
+    if(over(.22,1.27)){
+      const h=Math.max(lo,1.05*k)-1.05*k,r=Math.sqrt(Math.max(0,(.22*k)**2-h*h));
+      if(rect(0,0,r/k,.25))return true;
+    }
+    if(over(.78,1)&&rect(0,.25*fs*k,.16,.01))return true;
+    if(over(.964,.976)){
+      if(rect(0,.282*fs*k,.1,.005))return true;
+      for(const a of [-.09,.09])if(rect(a*k,.271*fs*k,.01,.011))return true;
+    }
+    return over(.6,.7)&&rect(0,.252*fs*k,.1,.004);
+  }
+  const profile=o.kind==='bin'?KERB_BIN:o.kind==='bollard'?KERB_BOLLARD:KERB_HYDRANT;
+  const radius=Math.max(kerbProfileRadius(profile,lo,hi),o.kind==='hydrant'?kerbProfileRadius(KERB_NUT,lo-.72*k,hi-.72*k):0);if(radius>0&&Math.hypot(u,v)<=radius+pad)return true;
+  if(o.kind!=='hydrant')return false;
+  const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+  for(const e of [-1,1])if(cap(e*.08,0,e*.14,0,.42,.032)||cap(e*.14,0,e*.16,0,.42,.042))return true;
+  return cap(0,fs*.08,0,fs*.16,.34,.045)||cap(0,fs*.16,0,fs*.18,.34,.056);
+}
+function kerbAt(x,y,pad,z=null,height=Infinity) {
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of kerbsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    const x_=rel(x-o.x),y_=rel(y-o.y),u=x_*o.c+y_*o.s,v=-x_*o.s+y_*o.c;
+    if(Math.abs(u)>o.hl+pad||Math.abs(v)>o.hw+pad)continue;
+    const lo=z===null?0:z-terrainHeight(o.x,o.y);
+    if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
+  }return null;
 }
 // A signal controller cabinet at most junctions: on the kerb beside the first
 // signal pole, half a cell back from the corner, its doors to the pavement.
