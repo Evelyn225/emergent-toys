@@ -59,14 +59,14 @@ test('speakers stand on the floor beside the stage; the screen hangs on the back
 test('the sung part of the line lights magenta on the screen as the song goes on, and the room stays walkable to its seats',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   const S=room.props.find(o=>o.karaokeScreen).karaokeScreen;
-  // stand in front of the screen, mid-line, and read the colours across it
-  // (with plain ceiling lights: the disco spots also shine full magenta)
-  const def=room.def;room.def={...def,ceil:'strip'};px=S.x;py=4.2;a=-Math.PI/2;pitch=.12;const out=[];
-  for(const t of [10,13.9]){T=t;render(0);const cols=new Set();for(let i=0;i<CH.length;i++)if(CH[i]&&CH[i]!==' '&&BG[i]!==undefined&&(COL[i]===C(MAG,15)||COL[i]===C(WHITE,15)))cols.add(COL[i]===C(MAG,15)?'sung':'unsung');out.push([...cols].sort());}
+  // Read only the real picture plane, so ceiling/sign colours cannot satisfy
+  // a missing lyric colour. Sample the start, middle and completed line.
+  const def=room.def;room.def={...def,ceil:'strip'};px=S.x;py=4.2;a=-Math.PI/2;pitch=.12;const out=[],samples=[],cameraFree=free(px,py),depth=py-(S.y+S.depth/2+.001);
+  for(const t of [10,12.5,13.9]){T=t;render(0);const colours=new Set();let letters=0;for(let i=0;i<CH.length;i++)if(Math.abs(ZB[i]-depth)<.0001&&CH[i]&&CH[i]!==' '&&(COL[i]===C(MAG,15)||COL[i]===C(WHITE,15))){letters++;colours.add(COL[i]===C(MAG,15)?'sung':'unsung');}samples.push(letters);out.push([...colours].sort());}
   room.def=def;let seats=true;for(const q of room.props.filter(o=>o.seat))seats&&=[[0,.6],[0,-.6],[.6,0],[-.6,0]].some(([dx,dy])=>free(q.x+dx,q.y+dy));
-  return{out,seats};
+  return{out,seats,samples,cameraFree};
  });
- assert.deepEqual(r.out[0],['unsung']);assert.deepEqual(r.out[1],['sung','unsung']);assert.ok(r.seats);
+ assert.deepEqual(r.out[0],['unsung']);assert.deepEqual(r.out[1],['sung','unsung']);assert.deepEqual(r.out[2],['sung']);assert.ok(r.samples.every(n=>n>=4),JSON.stringify(r));assert.ok(r.cameraFree);assert.ok(r.seats);
 }));
 
 test('karaoke fixtures contain their rendered hardware, cache fixed profiles and show valid lyrics before time zero',()=>fixture(async p=>{

@@ -699,3 +699,120 @@ and passes5/6/9. Keep pass7/8 open for remaining ceiling fittings, cords/noodle
 strands and legacy small props/stock electronics; add the old 24/7 slushie
 machine's rendering to that inventory. The scheduled continuation and user's
 hotel/motel door decision above stand; read newer notes before resuming.
+
+#232 merged as3759fec. Codex active `codex/interior-ceiling-quality`: first
+closing-audit chunk replaces strip/tin ceiling glyphs in shops/restaurants
+with fitted battens. New `city/interior-ceiling.js`, generic `ceilMask` paint
+callback and `roomCeil`/`roomSprites` hooks in `city/rooms.js` outside the
+reserved DINER definition, plus a focused browser test and shared manifest/
+bundle/notes. Home/hotel/civic/transport ceilings and existing feature lamps
+stay outside this first chunk. Pendants/spots and the recorded small-prop/
+cord/noodle remnants follow. No shared home/hotel helper edits planned.
+
+Ceiling chunk scope correction: tin is a custom pressed-tin renderer with
+round hanging lamps, not the fluorescent layout. This first chunk covers
+only `ceil:'strip'` in the shop/restaurant whitelist. Tin stays with the next
+pendant/spotlight chunk, preserving its existing finish and layout. Existing
+lantern/home/hotel/civic/rail controls pass; no DINER definition edits.
+
+Codex fluorescent closing-audit chunk complete on `codex/interior-ceiling-quality`:
+new `city/interior-ceiling.js`, three generic room rendering/layout hooks outside
+the reserved DINER definition, focused ceiling test, shared manifest/bundle/notes.
+Mounted closed housing/diffuser/clips, cached partition-aware layouts and surfaces;
+12 browser checks across final focused/integration runs, seven node checks and
+six negative probes pass. Twelve clear-floor views and ABAB costs recorded in
+WORLD_QUALITY; control images match main exactly. First chunk is strip only,
+including gas; tin/pendant/spots follow. #232 final CI has one stale minimum60
+staff-view assertion with all57 native views fully visible. Fix separately next,
+then continue the recorded closing audit and authorized Claude PR chains. All
+active ownership and hotel/motel closed/auto-closing door decisions stand.
+
+#257 fluorescent ceiling fixtures merged as05e97ae. Codex active test-only
+`codex/staff-visibility-coverage`: `city-placement.browser.test.cjs` replaces
+the stale minimum60 head views with explicit named-room/native-keeper and
+three-angle coverage, retaining the actual raster visibility threshold. No
+runtime edits. After verification/negative probes, resume pendant/tin/track
+closing audit and the authorized review queue; active Claude files reserved.
+
+Staff coverage repair verified: original main reproduces the stale60-view
+failure; explicit15-room/native-keeper/three-angle check passes twice, with
+missing-clerk/missing-angle/hidden-head mutations rejected. Four bundle/parser
+checks pass. No runtime changes or visibility threshold relaxation. Ready to
+publish/merge separately; next pendant/tin/track fixtures, shared helpers used
+unchanged, all reserved ownership and hotel/motel door decisions preserved.
+
+#258 staff coverage repair merged asdca3b8e. Codex active
+`codex/interior-pendant-track-quality`: new `city/interior-ceiling-lamps.js`,
+generic pendant/render hooks in `city/rooms.js` outside DINER, tin/spot ceiling
+painter hooks only in `city/shops.js`, focused ceiling tests and shared manifest/
+bundle/notes. Reuse homeLampModel/homeLampPart/homeRayWorktop unchanged; no
+shared helper edits. Preserve authored Tiffany/heat/lantern lamps, room routes
+and homes/hotel/civic scope. Next recorded cords/noodles and legacy small props,
+then authorized Claude chains. Active Claude files remain reserved.
+
+Codex pendant/tin/track chunk reviewed on
+`codex/interior-pendant-track-quality`: mounted hollow enamel pendants reuse
+homeLampModel unchanged, with tall-stock/feature-lamp clearance. Tracks have
+closed rails, stems, recessed metal heads and luminous fitted lenses. Four new
+native actual-ray/cache/scope checks plus existing route/seating/home/feature/
+fluorescent checks pass (18 across final runs), seven node checks and eight
+independent defect probes pass. Fifteen clear-floor views and ABAB costs are
+recorded in WORLD_QUALITY; home/strip control images unchanged. No active
+Claude file or shared helper edits. Ready to publish/merge, then the detached
+paper-flag/noodle joins, legacy small props and stock electronics closing audit;
+continue authorized Claude PR chains and passes5/6/9 afterward. Hotel/motel
+doors remain queued closed and auto-closing; homes unchanged by that decision.
+
+#259 pendant/tin/track fittings merged aseb02dac. Codex active
+`codex/interior-cord-noodle-quality`: new `city/interior-cords.js`, papelPicado
+wrapper in `city/eateries.js`, noodlehouse worker/strand caller in
+`city/dining.js`, focused tests and shared manifest/bundle/notes. Shared curve
+joins for hanging paper flags; dough endpoints derive from the posed cook's
+actual hand shapes. No figures.js, shared home/hotel/kitchen helper or active
+Claude DINER/bathroom/world-bootstrap/facade edits. Next legacy small props/
+stock electronics, then authorized Claude chains and passes5/6/9.
+
+Cord/noodle review update: flag tops and cord share exact sampled joins, with
+real thin paper/cut-out inner edges and wall mounts. Close visual review caught
+that separate world-space noodles do not match the cached human sprite's
+perspective. Held dough now belongs to eight prepared human figure bodies,
+primed under a private actor cache key; hands and dough share the exact raster,
+and only this worker refines the whole body up close. No figures.js/shared
+helper edits. All11 cord/route/seating/lantern checks and seven node checks
+pass; nine independent negative probes pass. A final strand radius/readability
+adjustment passes the three focused checks; final13-view/static+moving ABAB
+measurements and final probe rerun are being completed before publication.
+#258 and #259 full CI: node and three browser shards pass, including repaired
+staff coverage; only karaoke test fails. Its13.9s sample is fully sung by the
+actual lyric clock (1.3x progress), so it must not expect unsung letters there.
+Fix that separately next, preserving start/mid/end colour coverage and seating.
+
+Cord/noodle chunk final review complete on
+`codex/interior-cord-noodle-quality` (source2432655): three focused and all
+shop routes/seating/lantern regressions pass (11 across final runs), seven node
+checks and nine independent mutations pass. Thirteen clear-floor views and
+static/moving ABAB costs are recorded in WORLD_QUALITY; control image identical.
+No pending geometry adjustment or helper edit. Publish/merge, then repair the
+separate karaoke start/mid/end sampling assertion. This supersedes the earlier
+WIP checkpoint. Continue legacy prop/electronics audit and authorized Claude
+chains, preserving active ownership and the hotel/motel closed/auto-close
+washroom-door decision. Latest branch and tests are pushed for usage handoff.
+
+#260 cord/noodle contact repair merged as04e7dda. Codex active test-only
+`codex/karaoke-progress-test`: `city-karaoke-stage.browser.test.cjs` samples
+start/mid/end at10/12.5/13.9 seconds and reads only the actual screen plane.
+The old13.9s expectation incorrectly required unsung letters after progress
+already exceeded the full line. Retain both colour directions, nonempty actual
+lyric pixels, clear-floor camera and seating. No runtime edits. Next resume
+the documented closing-audit follow-ups and authorized Claude review queue.
+
+Karaoke test-only repair verified: all four stage checks plus repeated actual
+screen start/mid/end sampling pass; four progress/text mutations and four node
+checks pass. No runtime edits. Publish/merge, then Codex takes review #236 and
+the recorded #238–#249 dependency chains. Ceiling marks and detached flag/
+noodle joins are closed by #257/#259/#260. Small legacy optics/turntables/
+headphones/mower/key/hubcap/lollipop/floor-lamp/clock/fan follow-ups remain
+explicit in WORLD_QUALITY, with passes7/8 open; do not erase these while
+integrating Claude's notes. Preserve active bathroom-quality, DINER,
+world-bootstrap and current facade ownership; rebuild bundles. Hotel/motel
+washroom doors remain queued closed and auto-closing in pass6; homes unchanged.

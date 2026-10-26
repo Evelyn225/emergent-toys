@@ -150,16 +150,7 @@ ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor
 // ---- the taqueria (TACOS): the spit of al pastor turning by the grill, the salsa bar, a cooler of bright sodas,
 // paper flags strung across the ceiling, painted walls with a tiled skirt, picnic tables and a ledge with stools
 const PICADO = [RED, YEL, GREEN, MAG, CYAN, ORANGE, BLUE];
-const papelPicado = (y, x0, x1, z) => ROOM_MODEL((x0 + x1) / 2, y, (vx, vy) => {
-  const hl = (x1 - x0) / 2;
-  rod(vx - hl, vy, z, vx + hl, vy, z, 0.004, GRAY, 0.8);
-  for (let x = -hl + 0.15; x < hl; x += 0.32) {
-    const sag = (1 - (x / hl) ** 2) * 0.12, k = Math.floor((x + hl) / 0.32);
-    drawBox(boxAt(vx + x, vy, 1, 0, 0.13, 0.004, z - sag - 0.3, z - sag), (i, t, L) => {
-      if (fract(HIT.u * 18) < 0.3 && fract(HIT.w * 18) < 0.3) return false; // (cut-outs: they're lace, you see through)
-      BG[i] = C(PICADO[k % PICADO.length], 7 + L * 0.2); return set(i, ' ', 0), true; });
-  }
-});
+const papelPicado = (y,x0,x1,z) => PAPEL_PICADO(y,x0,x1,z);
 const trompo = (x,y) => KITCHEN_SPIT(x,y,'pastor');
 function tacoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.1, room.menu, 1.25, C(GRAY, 0.6), C(YEL, 15), 'TACOS', C(MAG, 15))) return true;
