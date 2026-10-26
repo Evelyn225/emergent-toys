@@ -151,6 +151,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 12, facade utilities:** `claude/facade-utilities` from main (new
+  `city/facade-utilities.js` after `world-bootstrap.js`, reading `ARCH_BUILDINGS`
+  faces and street geometry; one draw hook in `city/city-sprites.js`). Next:
+  pavement service hatches and overhead cables.
 - **Claude pass 11, kerb fixtures:** `claude/kerb-fixtures` from main (new
   `city/kerb-fixtures.js` after `world-bootstrap.js`, new
   `city/kerb-fixtures-render.js`; one-line hooks in `city/city-sprites.js`,
