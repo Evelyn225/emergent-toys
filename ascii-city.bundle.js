@@ -3642,6 +3642,55 @@ function pavilionRoofHeight(x, y) {
   return height;
 }
 for (const o of roofs) o.z = Math.max(o.z,pavilionRoofHeight(o.x,o.y));
+// Fascia boards and awnings for the shops still drawn by the generic facade (city-render.js): the Docks' warehouses
+// and workshops, and the plain brick and stucco shops of midtown and the brownstones (styles 2, 8 and 15). They used
+// to paint their name over and over round every wall and an awning on the wall below it. Now each street face carries
+// one board with the name on it, built like the architecture families' (architectureShopfront), and the open shops
+// an awning. Faces come from the same face finder; SHOPFRONT_FACES indexes them by direction and cell like ARCH_FACES.
+const SHOPFRONT_FACES = Array.from({ length: 4 }, () => new Array(N * N));
+const SHOPFRONT_SPEC = { zc: .36, band: .08, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
+const SHOPFRONT_AWNING = { top: .31, out: .1, drop: .04, valance: .015, thick: .005, keep: .7 };
+const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
+{
+  const lots = new Map();
+  for (let k = 0; k < map.length; k++) {
+    const sh = SHOP[k], sty = STY[k];
+    if (!sh || !map[k] || !(sty in SHOPFRONT_STYLES) || sh.architecture || sh.base || sh.aqua || sh.gas || sh.courier || sh.wilderness || MERCHANT_BY_SHOP.get(sh)) continue;
+    if (!lots.has(sh)) lots.set(sh, []);
+    lots.get(sh).push(k);
+  }
+  for (const [sh, cells] of lots) {
+    if (sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT) continue; // (flats have no shop name; a shop closed for good shows FOR LEASE)
+    const refX = cells[0] % N, refY = Math.floor(cells[0] / N), xs = cells.map(k => refX + rel(k % N - refX)), ys = cells.map(k => refY + rel(Math.floor(k / N) - refY));
+    const sty = STY[cells[0]], b = { x0: Math.min(...xs), y0: Math.min(...ys), x: (Math.min(...xs) + Math.max(...xs) + 1) / 2, y: (Math.min(...ys) + Math.max(...ys) + 1) / 2,
+      sh, region: districtAt(refX, refY), material: 0, seed: SEED[cells[0]] };
+    for (const f of architectureFaces(b, cells, SHOPFRONT_FACES)) {
+      const mid = (f.start + f.end) / 2; // (world-bootstrap.js moves a face with the cell behind its middle)
+      f.ownerCell = idx(Math.floor((f.side ? mid : f.line) - f.nx * .1), Math.floor((f.side ? f.line : mid) - f.ny * .1));
+      if (f.low || !architectureSignedFace(f, sh)) continue;
+      const width = f.end - f.start, g = { ...SHOPFRONT_SPEC, width, cwid: Math.min(SHOPFRONT_SPEC.cmax, (width - SHOPFRONT_SPEC.margin) / sh.word.length) };
+      if (g.cwid < .03 || g.zc + g.band / 2 + g.edge > f.height - .05) continue;
+      const center = (f.start + f.end) / 2, outSign = f.ny * (f.side ? 1 : 0) - f.nx * (f.side ? 0 : 1);
+      architectureDetail(b, f, center, ARCH_FASCIA.depth / 2, sh.word.length * g.cwid / 2 + g.edge * 2.5, ARCH_FASCIA.depth / 2, g.zc - g.band / 2 - g.edge, g.zc + g.band / 2 + g.edge,
+        'fascia', { word: sh.word, zc: g.zc, cwid: g.cwid, band: g.band, edge: g.edge, style: SHOPFRONT_STYLES[sty], width, cmax: g.cmax, margin: g.margin, outSign, detailDistance: ARCH_FASCIA_VIS });
+      f.fascia = g;
+      const a = SHOPFRONT_AWNING, half = Math.min(.42, width / 2 - .14);
+      if (sty === 8 || half < .15 || hash(Math.floor(b.x * 7), Math.floor(b.y * 7) + f.dir, 1481) > a.keep) continue; // (no awnings over a warehouse's loading doors)
+      const hw = a.out / 2, slope = a.drop / a.out, z1 = a.top, front = z1 - a.drop;
+      architectureDetail(b, f, center, hw, half, hw, front - a.thick, z1, 'awning', { outSign, slope, part: 'canopy', detailDistance: 14,
+        planes: [[1, 0, 0, half, 1], [-1, 0, 0, half, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4],
+          [0, slope * outSign, 1, z1 - slope * hw, 5], [0, -slope * outSign, -1, -(z1 - slope * hw - a.thick), 6]] });
+      architectureDetail(b, f, center, a.out - .002, half, .002, front - a.valance, front + .002, 'awning', { outSign, part: 'valance', detailDistance: 14 });
+      f.awning = true;
+    }
+  }
+  // (world-bootstrap.js rebuckets ARCH_DETAILS, these with them)
+}
+// the face of a generic shop the ray hit (side, cell, its height), if it carries a board
+function shopfrontFace(side, mx, my, h) {
+  const k = idx(mx, my), dir = side ? (rel(py - my) < 0 ? 0 : 1) : (rel(px - mx) < 0 ? 2 : 3), f = SHOPFRONT_FACES[dir][k];
+  return f && f.height === h ? f : null;
+}
 // ---- traffic lights, at intersections where three or four streets meet (corners and the bridges just flow).
 // 16s cycle: vertical green 0-6, yellow 6-7, all red 7-8, horizontal green 8-14, yellow, all red.
 // Intersections are addressed by their base cell (x, y multiples of 8).
@@ -12164,6 +12213,12 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
+    // a shop with fascia boards (shopfronts.js): its name once on each street face, on the board up close and painted
+    // there further off (where a row can be taller than the band, so wallText decides which row carries it)
+    const sf = z > 0.28 ? shopfrontFace(side, mx, my, h) : null, g = sf?.fascia;
+    if (g && d > ARCH_FASCIA_VIS - 1.5 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
+      C(sh.neon, open ? Math.max(L, night * 15 * Math.max(fog, 0.5)) : L * 0.5), C(GRAY, 1))) return;
+    if (z > 0.32 && sf) return set(i, '-', C(GRAY, L));
     if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
@@ -12219,7 +12274,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
     if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
     if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter: vacant, or shut for the night
-    if (z > 0.28) return set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning
+    if (z > 0.28) return shopfrontFace(side, mx, my, h)?.awning ? set(i, '=', C(GRAY, L * 0.7)) : set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning (or the transom over the window, under a real one)
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
       return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
@@ -40187,7 +40242,7 @@ function assembleArchipelago() {
     geometry(p);
     if (Array.isArray(p.shop.pad)) point(p.shop.pad);
   }
-  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES]) {
+  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES, ...SHOPFRONT_FACES]) {
     for (const f of faces) geometry(f);
     sparseCells(faces);
   }
