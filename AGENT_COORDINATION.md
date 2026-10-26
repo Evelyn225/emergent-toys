@@ -176,6 +176,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 11, drains and grates:** `claude/street-drains` from main (new
   `city/street-drains.js`; one hook in the road branch of `city/city-render.js`).
   Next: utility cabinets, then bus shelters.
+- **Claude pass 12 (street lights and utilities):** the turned street lamp on
+  `claude/street-lamps` from main (new `city/street-lamps.js`; `drawLamp3D`
+  removed from `city/city-sprites.js`). Next: signal heads and pedestrian
+  signals, then wall pipes and meters, then pavement service hatches.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

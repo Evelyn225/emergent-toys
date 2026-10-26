@@ -66,6 +66,7 @@
     "city/city-sprites.js",
     "city/kerb-fixtures-render.js",
     "city/street-vending.js",
+    "city/street-lamps.js",
     "city/jail.js",
     "city/rooms.js",
     "city/shops.js",
