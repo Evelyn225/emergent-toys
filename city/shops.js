@@ -172,11 +172,12 @@ Object.assign(ROOM_FLOORS, {
 const CEIL_SPOTS = { s: 2, r: 1.2, track: true };
 Object.assign(ROOM_CEILS, {
   tin: (i, r, x, wx, wy) => { // pressed tin: a square motif on a grid, a lamp every 2m
-    if (ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) return set(i, 'o', C(WARM, 15));
+    if (!prepareInteriorHanging() && ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) return set(i, 'o', C(WARM, 15));
     const u = fract(wx / 0.6) - 0.5, v = fract(wy / 0.6) - 0.5, m = Math.abs(u) + Math.abs(v);
     BG[i] = C(STONE, 2); return set(i, Math.abs(u) > 0.46 || Math.abs(v) > 0.46 ? '+' : Math.abs(m - 0.28) < 0.05 ? '.' : ' ', C(GRAY, 6));
   },
   spots: (i, r, x, wx, wy) => { // black, with tracks of little spotlights
+    if(prepareInteriorHanging()){BG[i]=C(GRAY,.7);return set(i,' ',0);}
     const k = ceilAt('spots', CEIL_SPOTS, wx, wy);
     return set(i, k === 1 ? 'o' : k === 2 ? '-' : ' ', k === 1 ? C(WHITE, 15) : C(GRAY, 4));
   },

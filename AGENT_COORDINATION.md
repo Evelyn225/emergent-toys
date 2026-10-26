@@ -718,3 +718,25 @@ missing-clerk/missing-angle/hidden-head mutations rejected. Four bundle/parser
 checks pass. No runtime changes or visibility threshold relaxation. Ready to
 publish/merge separately; next pendant/tin/track fixtures, shared helpers used
 unchanged, all reserved ownership and hotel/motel door decisions preserved.
+
+#258 staff coverage repair merged asdca3b8e. Codex active
+`codex/interior-pendant-track-quality`: new `city/interior-ceiling-lamps.js`,
+generic pendant/render hooks in `city/rooms.js` outside DINER, tin/spot ceiling
+painter hooks only in `city/shops.js`, focused ceiling tests and shared manifest/
+bundle/notes. Reuse homeLampModel/homeLampPart/homeRayWorktop unchanged; no
+shared helper edits. Preserve authored Tiffany/heat/lantern lamps, room routes
+and homes/hotel/civic scope. Next recorded cords/noodles and legacy small props,
+then authorized Claude chains. Active Claude files remain reserved.
+
+Codex pendant/tin/track chunk reviewed on
+`codex/interior-pendant-track-quality`: mounted hollow enamel pendants reuse
+homeLampModel unchanged, with tall-stock/feature-lamp clearance. Tracks have
+closed rails, stems, recessed metal heads and luminous fitted lenses. Four new
+native actual-ray/cache/scope checks plus existing route/seating/home/feature/
+fluorescent checks pass (18 across final runs), seven node checks and eight
+independent defect probes pass. Fifteen clear-floor views and ABAB costs are
+recorded in WORLD_QUALITY; home/strip control images unchanged. No active
+Claude file or shared helper edits. Ready to publish/merge, then the detached
+paper-flag/noodle joins, legacy small props and stock electronics closing audit;
+continue authorized Claude PR chains and passes5/6/9 afterward. Hotel/motel
+doors remain queued closed and auto-closing; homes unchanged by that decision.
