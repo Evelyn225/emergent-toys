@@ -704,3 +704,17 @@ including gas; tin/pendant/spots follow. #232 final CI has one stale minimum60
 staff-view assertion with all57 native views fully visible. Fix separately next,
 then continue the recorded closing audit and authorized Claude PR chains. All
 active ownership and hotel/motel closed/auto-closing door decisions stand.
+
+#257 fluorescent ceiling fixtures merged as05e97ae. Codex active test-only
+`codex/staff-visibility-coverage`: `city-placement.browser.test.cjs` replaces
+the stale minimum60 head views with explicit named-room/native-keeper and
+three-angle coverage, retaining the actual raster visibility threshold. No
+runtime edits. After verification/negative probes, resume pendant/tin/track
+closing audit and the authorized review queue; active Claude files reserved.
+
+Staff coverage repair verified: original main reproduces the stale60-view
+failure; explicit15-room/native-keeper/three-angle check passes twice, with
+missing-clerk/missing-angle/hidden-head mutations rejected. Four bundle/parser
+checks pass. No runtime changes or visibility threshold relaxation. Ready to
+publish/merge separately; next pendant/tin/track fixtures, shared helpers used
+unchanged, all reserved ownership and hotel/motel door decisions preserved.
