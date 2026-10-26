@@ -167,6 +167,7 @@
     "city/bar-quality.js",
     "city/shop-gondolas.js",
     "city/grocer-produce.js",
+    "city/corner-shops.js",
     "city/shop-fridges.js",
     "city/shop-display-cases.js",
     "city/restaurant-lamps.js",
