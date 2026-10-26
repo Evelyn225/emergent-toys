@@ -15559,38 +15559,31 @@ function buildKerbModel(o,near) {
     flat('body',0,0,.4,.25,.1,1.35,paint,.02);
     flat('plinth',0,0,.42,.27,0,.1,kerbPaint(STONE,2.6));
   }else if(o.kind==='shelter'){
-    // A street shelter, open to the road: four steel posts, a roof with a lip, a glass back with a frosted band at eye
-    // height, a glass screen at one end and a lit advert panel at the other. (Its bench is a street bench: benches.)
-    const slab=(role,a0,a1,v0,v1,z0,z1,shade,round=0)=>{const[x,y]=at((a0+a1)/2,(v0+v1)/2);flat(role,x,y,(a1-a0)/2,(v1-v0)/2,z0,z1,shade,round);};
-    const glass=(i,t,L)=>{ // clear, but for the frosted band and a glint; the pane's edge is its frame
+    view.glow=0;
+    const glass=(i,t,L)=>{
       const w=(HIT.w-view.z)/k;
       if(w>1&&w<1.12){BG[i]=C(WHITE,2.6+L*.1);set(i,' ',0);return true;}
-      if(near&&Math.abs(fract((HIT.u/k+w)*.6)-.3)<.015){set(i,'/',C(WHITE,6));return true;}
-      return false;
+      const glint=near?coveGroove(HIT.u/k+w,1/.6,.025,t/(projX*k))*coveDetail(t,.025):0;
+      if(glint<.65)return false;BG[i]=C(WHITE,2+L*.25);set(i,' ',0);return true;
     };
-    slab('body',-1.55,1.55,-.69,.69,2.35,2.45,kerbPaint(GRAY,1.6),.02); // the roof
-    for(const a of [-1.45,1.45])for(const v of [-.6,.6])slab('post',a-.03,a+.03,v-.03,v+.03,0,2.35,metal,.01);
-    for(const [z0,z1] of [[.08,.14],[2.22,2.35]])slab('rail',-1.42,1.42,-.6,-.52,z0,z1,metal); // the back's rails, top and bottom
-    slab('glass',-1.42,1.42,-.565,-.555,.14,2.22,glass);
-    slab('screen',-1.48,-1.42,-.57,.1,.14,2.22,glass);
-    const word=(o.word||'DRINK COLA').split(' ')[0],[ex,ey]=at(1.45,-.13);
-    slab('advert',1.39,1.51,-.565,.305,.2,2.2,(i,t,L)=>{ // lit, its word on both broad faces
+    const word=(o.word||'DRINK COLA').split(' ')[0];
+    const advert=(i,t,L)=>{
       const w=(HIT.w-view.z)/k,face=HIT.face;
       if(face!==1&&face!==2||w<.3||w>2.1){BG[i]=C(GRAY,1.4+L*.2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
-      BG[i]=C(BLUE,3+Math.max(night,overcast*.6)*6);
-      if(!near){set(i,' ',0);return true;}
-      const e=face===1?1:-1,tx=-s*fs*e,ty=c*fs*e; // (read left to right from either side)
+      BG[i]=C(BLUE,3+view.glow*6);if(!near){set(i,' ',0);return true;}
+      const e=face===1?1:-1,[ex,ey]=at(1.45,-.13),tx=-s*fs*e,ty=c*fs*e;
       set(i,worldText(word,HIT.v*e*fs,HIT.w,t,i,view.x+ex,view.y+ey,view.z+1.3*k,tx,ty,.14*k,.22*k),C(WHITE,14));return true;
-    });
+    };
+    for(const q of SHELTER_PARTS){const[x,y]=at(q.a/k,q.v/k);flat(q.role,x,y,q.hl/k,q.hw/k,q.z0/k,q.z1/k,q.material==='metal'?metal:q.material==='glass'?glass:q.material==='advert'?advert:kerbPaint(GRAY,1.6),q.round?q.round/k:0);}
   }else{
     lathe('body',0,0,0,KERB_BOLLARD,(i,t,L)=>{const w=(HIT.w-view.z)/k,band=near&&w>.62&&w<.7;BG[i]=band?C(YEL,4+L*.25):C(GRAY,1.2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
   }
   for(const p of parts){const local={...p.box};p.shiftedRay=(ox,oy,oz,rx,ry,rz,B)=>{const height=B.z0-p.box.z0;local.x=B.x;local.y=B.y;const t=p.ray(ox,oy,oz-height,rx,ry,rz,local);if(t>=0)HIT.w+=height;return t;};}
-  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
+  return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
-function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=buildKerbModel(o,near));}
-const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant;
+function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
+const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
 // A timber pole (creosoted, tapering, its top chamfered), the crossarm reaching out over the road on a steel brace,
 // a porcelain insulator under each wire, the telephone cable on its bracket, and on some a transformer can on the
 // building side, its leads jumping up beside the pole to the first wire. Service drops run back to a wall bracket.
@@ -15599,6 +15592,7 @@ const POLE_TIMBER = (i, t, L) => {
   BG[i] = C(BRICK, .9 + (1.1 + L * .2) * coveLight(HIT.nx, HIT.ny, HIT.nz) + grain); return set(i, ' ', 0), true;
 };
 const POLE_INSULATOR = [[0, 0], [0, .0025], [.004, .0055], [.006, .0035], [.009, .005], [.012, .003], [.014, 0]];
+const POLE_BUSHING=[[0,0],[0,.0025],[.001,.0032],[.003,.0025],[.005,.003],[.007,.002],[.008,.0012],[.008,0]];
 const POLE_CAN = [[0, 0], [0, .024], [.004, .027], [.1, .027], [.104, .024], [.11, .012], [.112, 0]];
 // a wire: a near-black line, dark against the sky and the walls alike; solid once it's wider than a character
 const wire = (pts, r, k) => { for (let n = 0; n + 1 < pts.length; n++) { const [ax, ay, az] = pts[n], [bx, by, bz] = pts[n + 1];
@@ -15607,6 +15601,7 @@ const wire = (pts, r, k) => { for (let n = 0; n + 1 < pts.length; n++) { const [
     return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(GRAY, .4 + L * k * .1)), true;
   }); } };
 function drawPoleParts(o, vx, vy, z, near) {
+  const plate=kerbPaint(GRAY,1.6),wall=kerbPaint(GRAY,1.8),plateShade=(i,t,L)=>{vmNormal(o.fx,o.fy);return plate(i,t,L);},wallShade=(i,t,L)=>{vmNormal(o.fx,o.fy);return wall(i,t,L);};
   const top = z + o.h, at = (off, a = 0) => [vx + o.fx * off + o.c * a, vy + o.fy * off + o.s * a];
   coveLathe(vx, vy, z, [[0, 0], [0, POLE.r0], [o.h - .004, POLE.r1], [o.h, .006], [o.h, 0]], POLE_TIMBER);
   coveRound(...at(.09), o.fx, o.fy, .11, .0055, top - .04, top - .03, .002, POLE_TIMBER); // the crossarm
@@ -15614,24 +15609,24 @@ function drawPoleParts(o, vx, vy, z, near) {
   if (!near) return;
   coveTube(...at(.012), top - .11, ...at(.1), top - .04, .0025, GRAY); // the arm's brace
   for (const w of POLE_WIRES) if (!w.tel) coveLathe(...at(w.off), top - .03, POLE_INSULATOR, kerbPaint(WHITE, 2.8));
-  drawBox(boxAt(...at(.02), o.fx, o.fy, .022, .004, top - .086, top - .078), kerbPaint(GRAY, 1.6)); // the cable bracket
+  drawBox(boxAt(...at(.02), o.fx, o.fy, .022, .004, top - .086, top - .078), plateShade); // the cable bracket
   if (o.can) {
-    drawBox(boxAt(...at(-.016), o.fx, o.fy, .006, .02, top - .17, top - .15), kerbPaint(GRAY, 1.6)); // its hanger
-    for (const a of [-.01, .01]) wire([[...at(-.042, a), top - .088], [...at(-.018, a + Math.sign(a) * .008), top - .02], [...at(.045, Math.sign(a) * .018), top - .02], [...at(.06), top - .018]], .0012, .14);
+    drawBox(boxAt(...at(-.016), o.fx, o.fy, .006, .02, top - .17, top - .15), plateShade); // its hanger
+    for (const a of [-.01, .01]) {coveLathe(...at(-.042,a),top-.094,POLE_BUSHING,kerbPaint(WHITE,2.8));wire([[...at(-.042, a), top - .086], [...at(-.018, a + Math.sign(a) * .008), top - .02], [...at(.045, Math.sign(a) * .018), top - .02], [...at(.06), top - .018]], .0012, .14);}
   }
   if (o.drop) { // the service drop, sagging to its bracket on the wall
     const w = POLE_WIRES[3], ex = vx + rel(o.drop.x - o.x), ey = vy + rel(o.drop.y - o.y), z0 = top - w.dz, dz = o.drop.z - o.z - o.h;
     wire(Array.from({ length: 5 }, (_, n) => { const t = n / 4, [sx, sy] = at(w.off); return [sx + (ex - sx) * t, sy + (ey - sy) * t, z0 + (top + dz - z0) * t - .04 * t * (1 - t)]; }), .0015, .12);
-    drawBox(boxAt(ex + o.fx * .004, ey + o.fy * .004, o.fx, o.fy, .004, .008, top + dz - .004, top + dz + .012), kerbPaint(GRAY, 1.8));
+    drawBox(boxAt(ex + o.fx * .002, ey + o.fy * .002, o.fx, o.fy, .004, .008, top + dz - .004, top + dz + .012), wallShade);
   }
 }
 // a guy wire from near the top of an end pole down to its anchor, a yellow guard sleeve over its foot (z: the anchor's)
 function drawGuyParts(o, vx, vy, z, near) {
-  const gx = vx + rel(o.gx - o.x), gy = vy + rel(o.gy - o.y), px_ = vx + rel(o.pole.x - o.x), py_ = vy + rel(o.pole.y - o.y), top = z + o.pole.z + o.pole.h - .05 - o.gz, k = .25;
+  const gx = vx + rel(o.gx - o.x), gy = vy + rel(o.gy - o.y), px_ = vx + rel(o.pole.x - o.x), py_ = vy + rel(o.pole.y - o.y), top = z + o.pole.z + o.pole.h - .05 - o.gz;
   wire([[px_, py_, top], [gx, gy, z]], .0012, .14);
   const lift = .004 / (top - z); // (the sleeve's rounded foot rests on the ground)
-  coveTube(gx + (px_ - gx) * k * .25, gy + (py_ - gy) * k * .25, z + (top - z) * k * .25, gx + (px_ - gx) * lift, gy + (py_ - gy) * lift, z + .004, .0035, YEL);
-  if (near) coveLathe(gx, gy, z, [[0, 0], [0, .006], [.004, .004], [.004, 0]], kerbPaint(GRAY, 1.4)); // the anchor eye
+  coveTube(gx + (px_ - gx) * (.16/(top-z)), gy + (py_ - gy) * (.16/(top-z)), z + (top - z) * (.16/(top-z)), gx + (px_ - gx) * lift, gy + (py_ - gy) * lift, z + .004, .0035, YEL);
+  coveLathe(gx, gy, z, [[0, 0], [0, .006], [.004, .004], [.004, 0]], kerbPaint(GRAY, 1.4)); // the anchor eye
 }
 // Poles and guys prepare once too: their parts are drawn once at the fixture's own place and replayed moved, each
 // ray started from the place it would have been in the prepared model (so rays with absolute ends, rods and capsules,
@@ -15640,13 +15635,24 @@ function buildPoleModel(o, near) {
   const parts = [], draw = drawBox, z = o.kind === 'guy' ? o.gz : o.z;
   drawBox = (box, shade, ray = rayBox) => parts.push({ box, shade, ray });
   try { (o.kind === 'guy' ? drawGuyParts : drawPoleParts)(o, 0, 0, z, near); } finally { drawBox = draw; }
-  for (const p of parts) p.moved = (ox, oy, oz, rx, ry, rz, B) => {
-    const mz = B.z0 - p.box.z0, t = p.ray(ox - (B.x - p.box.x), oy - (B.y - p.box.y), oz - mz, rx, ry, rz, p.box);
-    if (t >= 0) HIT.w += mz; return t;
-  };
-  return { parts, draw(x, y, zz) { const mz = zz - z; for (const p of parts) drawBox({ ...p.box, x: x + p.box.x, y: y + p.box.y, z0: p.box.z0 + mz, z1: p.box.z1 + mz }, p.shade, p.moved); } };
+  return polePartsModel(parts,z);
 }
-const drawKerbPole = (o, x, y, z, near) => { let cache = KERB_MODELS.get(o); if (!cache) KERB_MODELS.set(o, cache = []); (cache[near ? 1 : 0] ||= buildPoleModel(o, near)).draw(x, y, o.kind === 'guy' ? o.gz : z); };
+function polePartsModel(parts,z){
+  for(const p of parts)p.moved=(ox,oy,oz,rx,ry,rz,B)=>{
+    const mz=B.z0-p.box.z0,t=p.ray(ox-(B.x-p.box.x),oy-(B.y-p.box.y),oz-mz,rx,ry,rz,p.box);
+    if(t>=0){HIT.w+=mz;if(p.ray===rayRod||p.ray===coveRayCapsule){HIT.u+=B.x-p.box.x;HIT.v+=B.y-p.box.y;}}return t;
+  };
+  return {parts,draw(x,y,zz){const mz=zz-z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:p.box.z0+mz,z1:p.box.z1+mz},p.shade,p.moved);}};
+}
+const drawKerbPole=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,o.kind==='guy'?o.gz:z);
+const POLE_SPAN_MODELS=new WeakMap();
+function poleSpanModel(sp,n){
+  let cache=POLE_SPAN_MODELS.get(sp);if(!cache)POLE_SPAN_MODELS.set(sp,cache=[]);
+  if(cache[n])return cache[n];
+  const parts=[],draw=drawBox;drawBox=(box,shade,ray=rayBox)=>parts.push({box,shade,ray});
+  try{for(const w of POLE_WIRES)wire(Array.from({length:n+1},(_,k)=>{const[x,y,z]=poleWirePoint(sp,w,k/n);return [rel(x-sp.p.x),rel(y-sp.p.y),z];}),w.tel?.0028:.0016,w.tel?.1:.14);}finally{drawBox=draw;}
+  return cache[n]=polePartsModel(parts,0);
+}
 // the wires, span by span: sampled finer up close; past POLE_WIRE_VIS (100 m) a wire is too fine to see at all
 const POLE_WIRE_VIS = 10;
 function drawPoleSpans() {
@@ -15654,11 +15660,11 @@ function drawPoleSpans() {
     const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
     if (d > Math.min(vis, POLE_WIRE_VIS) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
     const n = d < 3 ? 12 : d < 6 ? 6 : 3;
-    for (const w of POLE_WIRES) wire(Array.from({ length: n + 1 }, (_, k) => { const [x, y, z] = poleWirePoint(sp, w, k / n); return [...R(x, y), z]; }), w.tel ? .0028 : .0016, w.tel ? .1 : .14);
+    poleSpanModel(sp,n).draw(ax,ay,0);
   });
 }
-const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbHydrant,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
 // stock, the control column (display, keypad, coin and note slots, the coin
@@ -41495,13 +41501,26 @@ const KERB_KINDS = {
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
   cabinet: { hl: .043, hw: .029, h: .141 },
-  shelter: { hl: .155, hw: .07, h: .245, line: .03 }, // (line: set back from the kerb line, so its back stays off the walking line)
   pole: { hl: .015, hw: .015, h: .84 },
-  guy: { hl: .032, hw: .008, h: .2 }, // (the foot of a guy wire, where it comes down to its anchor)
+  guy: { hl: .032, hw: .008, h: .2 },
+  shelter: { hl: .155, hw: .07, h: .245, line: .03 },
 };
-// A shelter's solid parts in its own frame (a along the kerb, v out of its open front): the glass back, the advert
-// panel at one end, the glass screen at the other; the front is open, and the bench inside is a street bench.
-const SHELTER_PARTS = [{ a: 0, v: -.056, hl: .145, hw: .004 }, { a: .145, v: -.0125, hl: .006, hw: .0435 }, { a: -.145, v: -.0225, hl: .004, hw: .0335 }];
+// Shelter surface boxes, in outdoor world units. Rendering, collision and
+// rain cover share these exact bounds; the road-facing entrance stays open.
+const SHELTER_PARTS=[
+  {role:'roof',a:0,v:0,hl:.155,hw:.069,z0:.235,z1:.245,material:'roof',round:.002},
+  ...[-.145,.145].flatMap(a=>[-.06,.06].map(v=>({role:'post',a,v,hl:.003,hw:.003,z0:0,z1:.235,material:'metal',round:.001}))),
+  {role:'back-lower-rail',a:0,v:-.056,hl:.142,hw:.004,z0:.008,z1:.014,material:'metal'},
+  {role:'back-upper-rail',a:0,v:-.056,hl:.142,hw:.004,z0:.222,z1:.235,material:'metal'},
+  {role:'back-glass',a:0,v:-.056,hl:.142,hw:.0005,z0:.014,z1:.222,material:'glass'},
+  {role:'end-glass',a:-.145,v:-.022,hl:.0005,hw:.034,z0:.014,z1:.222,material:'glass'},
+  {role:'end-lower-rail',a:-.145,v:-.0225,hl:.003,hw:.0375,z0:.008,z1:.014,material:'metal'},
+  {role:'end-upper-rail',a:-.145,v:-.0225,hl:.003,hw:.0375,z0:.222,z1:.235,material:'metal'},
+  {role:'end-frame',a:-.145,v:.0135,hl:.003,hw:.0015,z0:.008,z1:.235,material:'metal'},
+  {role:'advert-foot',a:.145,v:-.013,hl:.006,hw:.0435,z0:0,z1:.02,material:'metal'},
+  {role:'advert',a:.145,v:-.013,hl:.006,hw:.0435,z0:.02,z1:.22,material:'advert'},
+  {role:'advert-head',a:.145,v:-.013,hl:.006,hw:.0435,z0:.22,z1:.235,material:'metal'}
+];
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
 function kerbCrowded(x, y, r) {
@@ -41521,7 +41540,7 @@ const kerbsB = bucketed([]);
 const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
 function addKerb(x, y, kind, ax, ay, extra) {
   const k = KERB_KINDS[kind], c = Math.abs(ay), s = Math.abs(ax); // (the box runs along the kerb)
-  if (k.line) { x -= ax * k.line; y -= ay * k.line; } // (it faces the road: set back toward the buildings)
+  if(k.line){x-=ax*k.line;y-=ay*k.line;}
   const o = { x: worldCoord(x), y: worldCoord(y), kind, c, s, fx: ax, fy: ay, hl: k.hl, hw: k.hw, h: k.h, seed: hash(Math.floor(x * 10), Math.floor(y * 10), 1407), ...extra };
   KERB_REPORT.tried++;
   for (const along of [0, -.15, .15, -.3, .3]) {
@@ -41592,7 +41611,8 @@ function poleWireClear(pts, walls = true) {
       if (!ROAD[idx(Math.floor(gx), Math.floor(gy))] || GAS_CELL[idx(Math.floor(gx), Math.floor(gy))]) continue;
       const pts = Array.from({ length: 12 }, (_, n) => { const t = (n + .5) / 12; return [p.x + ux * POLE.guy * t, p.y + uy * POLE.guy * t, p.z + p.h - .05 + (gz - p.z - p.h + .05) * t]; });
       if (!poleWireClear(pts.slice(0, 9))) continue;
-      const g = { x: worldCoord(gx - ux * .026), y: worldCoord(gy - uy * .026), kind: 'guy', c: p.c, s: p.s, fx: p.fx, fy: p.fy, hl: KERB_KINDS.guy.hl, hw: KERB_KINDS.guy.hw, h: KERB_KINDS.guy.h, pole: p, gx, gy, gz };
+      const reach=POLE.guy*Math.min(1,.2/Math.max(.01,p.z+p.h-.05-gz));
+      const g = { x: worldCoord(gx - ux * reach/2), y: worldCoord(gy - uy * reach/2), kind: 'guy', c: p.c, s: p.s, fx: p.fx, fy: p.fy, hl: reach/2+.006, hw: KERB_KINDS.guy.hw, h: KERB_KINDS.guy.h, pole: p, gx, gy, gz };
       if (!kerbClear(g)) continue;
       kerbs.push(g); kerbsB[bi(Math.floor(g.x / 8), Math.floor(g.y / 8))].push(g);
     }
@@ -41642,18 +41662,28 @@ function kerbProfileRadius(profile,lo,hi) {
 function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
   if(hi<0||lo>o.h)return false;
   const k=KERB_K,over=(a,b)=>hi>=a*k&&lo<=b*k;
-  if(o.kind==='shelter'){ // (a shelter blocks only at its walls; its front is open and its bench is a street bench)
-    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
-    return SHELTER_PARTS.some(q=>Math.abs(u-q.a)<q.hl+pad&&Math.abs(v*fs-q.v)<q.hw+pad);
-  }
   const rect=(x,y,a,b)=>Math.hypot(Math.max(0,Math.abs(u-x)-a*k),Math.max(0,Math.abs(v-y)-b*k))<=pad;
   const cap=(ax,ay,bx,by,z,r)=>{
     const dz=Math.max(lo-z*k,z*k-hi,0);if(dz>r*k)return false;
     const ex=(bx-ax)*k,ey=(by-ay)*k,x=u-ax*k,y=v-ay*k,t=clamp((x*ex+y*ey)/(ex*ex+ey*ey),0,1);
     return Math.hypot(x-ex*t,y-ey*t)<=Math.sqrt((r*k)**2-dz*dz)+pad;
   };
-  if(o.kind==='pole')return over(0,o.h/k)&&Math.hypot(u,v)<=POLE.r0+pad; // (its arm and wires are overhead)
-  if(o.kind==='guy')return over(0,o.h/k)&&rect(0,0,o.hl/k,o.hw/k);
+  if(o.kind==='pole')return Math.hypot(u,v)<=POLE.r0+pad;
+  if(o.kind==='guy'){
+    const anchor=rel(o.gx-o.x)*o.c+rel(o.gy-o.y)*o.s,pole=rel(o.pole.x-o.x)*o.c+rel(o.pole.y-o.y)*o.s,ground=o.gz-terrainHeight(o.x,o.y),rise=o.pole.z+o.pole.h-.05-o.gz;
+    const end=(h)=>anchor+(pole-anchor)*clamp((h-ground)/rise,0,1),segment=(a,b,r)=>Math.hypot(u-clamp(u,Math.min(a,b),Math.max(a,b)),v)<=r+pad;
+    if(lo<=ground+.004&&hi>=ground&&Math.hypot(u-anchor,v)<=.006+pad)return true;
+    const top=Math.min(hi,.2),bottom=Math.max(lo,ground);
+    if(top<bottom)return false;
+    if(segment(end(bottom),end(top),.0012))return true;
+    const a=Math.max(bottom,ground+.004),b=Math.min(top,ground+.16);
+    return a<=b&&segment(end(a),end(b),.0035);
+  }
+  if(o.kind==='shelter'){
+    const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
+    // Grounded walking projects the walls, never the overhead canopy.
+    return SHELTER_PARTS.some(q=>(q.role!=='roof'||Number.isFinite(hi))&&hi>=q.z0&&lo<=q.z1&&Math.hypot(Math.max(0,Math.abs(u-q.a)-q.hl+(q.round||0)),Math.max(0,Math.abs(v*fs-q.v)-q.hw+(q.round||0)))<=(q.round||0)+pad);
+  }
   if(o.kind==='cabinet'){
     const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1;
     const rounded=(a,b,r)=>Math.hypot(Math.max(0,Math.abs(u)-(a-r)*k),Math.max(0,Math.abs(v)-(b-r)*k))<=r*k+pad;
@@ -41704,14 +41734,15 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
   }
 }
-// under a shelter's roof (the rain stays off you there)
-function shelterRoofAt(x, y, z) {
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const q of kerbsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    if (q.kind !== 'shelter' || z > q.h) continue;
-    const qx = rel(x - q.x), qy = rel(y - q.y);
-    if (Math.abs(qx * q.c + qy * q.s) < q.hl && Math.abs(-qx * q.s + qy * q.c) < q.hw) return q;
-  }
-  return null;
+
+// Exact roof footprint, with the fixture's real terrain elevation.
+function shelterRoofAt(x,y,z){
+  const roof=SHELTER_PARTS[0];
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const q of kerbsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    if(q.kind!=='shelter'||z>terrainHeight(q.x,q.y)+roof.z1)continue;
+    const x_=rel(x-q.x),y_=rel(y-q.y),u=x_*q.c+y_*q.s,v=-x_*q.s+y_*q.c;
+    if(Math.hypot(Math.max(0,Math.abs(u)-roof.hl+roof.round),Math.max(0,Math.abs(v)-roof.hw+roof.round))<=roof.round)return q;
+  }return null;
 }
 // Window-local geometry. Static solids are built once and indexed by bounds;
 // a pane cell visits only nearby leaves instead of testing every miniature.

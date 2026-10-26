@@ -894,3 +894,46 @@ joined hardware and actual cabinet-sized/height-aware collisions; preserve
 #238's grounded walking decision. Ready to update the original PR branch and
 merge, then #241→#246. No active Claude/shared helper edits. All remaining
 interior audit and hotel/motel door decisions stay recorded.
+
+#240 merged as c33235a. Codex active `codex/review-street-shelters` (#241).
+Files: kerb placement/render modules, kerb browser checks, the authored rain
+hook in city-render.js and shared bundle/notes. Integrating reviewed main;
+cache shelter surfaces, physically support the advert and glass end screen,
+share surface/collision bounds including posts and terrain-aware rain cover.
+Next #246 overhead cables. No reserved Claude/shared helper edits planned.
+
+#241 final review complete: eight focused plus three furniture/native C
+checks, three node files, eleven negative probes, eleven clear-floor views
+and ABAB costs recorded. Supported advertising/end glazing, shared actual
+surface collision, cached parts, terrain-aware dry cover and live night
+lighting all checked. #240 full CI green, superseding cancelled #238 run.
+Ready to update original #241 branch and merge. Next #246: newest connector
+head is3c98f91 (not the earlier7bcd417); fetch it explicitly before reviewing.
+Other authorized chains, interior remnants and hotel/motel door decision
+remain unchanged. No active Claude/shared helper edits.
+
+#241 final fetch found Claude's concurrent main-integration commit ae39b63.
+Merged it into this review without dropping its ancestry. Its cache port is
+covered by the reviewed model path; retained the tested supported-frame,
+shared-surface collision/rain and glint fixes. Final runtime sources, bundle
+and tests are byte-identical to the reviewed b954d8d versions. Ready to push
+and merge original #241; do not start another shelter chunk. #246 follows.
+
+#241 merged as d7da37f. Codex active `codex/review-overhead-cables` (#246),
+starting from Claude's latest3c98f91. Files: kerb placement/render modules,
+kerb/overhead browser checks and shared bundle/notes. Preserve #241's supported
+frames/rain/collision fixes while retaining Claude's cached pole port. Review
+fixed span caching, transformer lead contact, service-drop wall mounts and
+actual guy-wire foot clearance. Next #239→#245, then independent #242/#243/
+#244 and #248→#249. No reserved active Claude/shared helper edits planned.
+
+#246 final review on `codex/review-overhead-cables`: cached span detail levels
+and correct moved wire coordinates, transformer bushings/leads, wall-mounted
+drops with attachment-aware culling, supported longer guards and actual guy
+foot clearance. Five focused and eight inherited kerb controls pass across
+final runs, three node files, thirteen mutations and thirteen clear-floor
+views plus ABAB costs recorded. #241 full CI green. Remote Claude head moved
+to1267478 (main integration only); preserve it before final push. Next #239
+then #245, followed by #242/#243/#244 and #248→#249, then passes5/6/9. All
+reserved source/shared helpers untouched; retain interior audit remnants and
+hotel/motel closed/auto-closing door decision without changing homes.
