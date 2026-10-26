@@ -117,6 +117,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
   #233. The conservatory and aviary planting is sprites and goes with pass 18
   (parks and vegetation). Next: pass 11 (street objects).
+- **Claude pass 12 follow-up, posts through awnings:** `claude/lamp-awning-seams` from
+  main: after the layout is assembled, `world-bootstrap.js` cuts merchant awnings back
+  clear of lamp posts and the (rebuilt) junction signals.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
