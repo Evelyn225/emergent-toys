@@ -36,18 +36,28 @@ function grocerCrate(kind,hl,hw,rim) {
   const shell={...boxAt(0,0,1,0,hl,hw,base,rim),...kitchenTopProfile(hl,hw,base,rim,.002)};
   return {kind,hl,hw,rim,base,floor,fruit,top:Math.max(...fruit.map(q=>q.z+q.vr)),shades,apple,models,shell};
 }
-function drawGrocerCrate(vx,vy,q,slats) {
-  // top layer first: the depth test turns away most of the fruit beneath
-  for(let k=q.models.length-1;k>=0;k--){const p=q.models[k];drawBox({...p.box,x:vx+p.box.x,y:vy+p.box.y},p.shade,p.ray);}
-  drawBox({...q.shell,x:vx,y:vy},slats,foodRayTray);
+// Rotate the cached closed tray into its local axes before intersecting it;
+// its recess helper expects an axis-aligned tray. Return world-space normals.
+function grocerTrayRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,c=b.c,s=b.s;
+  const t=foodRayTray(x*c+y*s,-x*s+y*c,oz,rx*c+ry*s,-rx*s+ry*c,rz,b.trayShape);
+  if(t<0)return t;
+  const nx=HIT.nx,ny=HIT.ny;HIT.nx=c*nx-s*ny;HIT.ny=s*nx+c*ny;return t;
+}
+function drawGrocerCrate(vx,vy,q,slats,c=1,s=0) {
+  for(let k=q.models.length-1;k>=0;k--){const p=q.models[k],b=p.box;
+    drawBox({...b,x:vx+c*b.x-s*b.y,y:vy+s*b.x+c*b.y,c:c*b.c-s*b.s,s:s*b.c+c*b.s},p.shade,p.ray);}
+  if(c===1&&s===0)drawBox({...q.shell,x:vx,y:vy},slats,foodRayTray);
+  else drawBox({...q.shell,x:vx,y:vy,c,s,trayShape:q.shell},slats,grocerTrayRay);
 }
 const grocerCard=(i,t,L)=>{ // a white price card, the price a dark line across it
   const line=Math.abs(HIT.w-HIT.z0mid)<.006&&coveDetail(t,.1)>.3;
   BG[i]=C(line?GRAY:WHITE,line?2:5+L*.15);set(i,' ',0);return true;};
-// A stand along x: three tiers of crates stepping up away from the door (+y),
+// A stand: three tiers of crates stepping down toward its customers (fx,fy),
 // each tier's crates on a timber riser. hl: half its length.
-function PRODUCE_STAND(x,y,hl,seed) {
-  const W=GROCER_CRATE,tiers=[],slats=grocerSlats(),riser=gondolaFlat(1,0,grocerSlats(BRICK));
+function PRODUCE_STAND(x,y,hl,seed,fx=0,fy=1) {
+  const W=GROCER_CRATE,tiers=[],slats=grocerSlats(),c=fy,s=-fx;
+  const riser=gondolaFlat(c,s,grocerSlats(BRICK)),at=(vx,vy,u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
   for(let k=0;k<3;k++){
     const n=Math.max(1,Math.floor(hl*2/.5)),pitch=hl*2/n,rim=W.rims[k],v=-W.tier+k*W.tier,crates=[];
     for(let j=0;j<n;j++){const kind=GROCER_PRODUCE_KINDS[Math.floor(hash(j,k,seed)*GROCER_PRODUCE_KINDS.length)];
@@ -60,12 +70,12 @@ function PRODUCE_STAND(x,y,hl,seed) {
   const cardShades=cards.map(cardShade);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const t of tiers){
-      for(const q of t.crates)drawGrocerCrate(vx+q.u,vy+t.v,q,slats);
-      drawBox(boxAt(vx,vy+t.v,1,0,hl,W.tier/2,0,t.base),riser); // the riser the crates stand on
+      for(const q of t.crates){const [cx,cy]=at(vx,vy,q.u,t.v);drawGrocerCrate(cx,cy,q,slats,c,s);}
+      const [rx,ry]=at(vx,vy,0,t.v);drawBox(boxAt(rx,ry,c,s,hl,W.tier/2,0,t.base),riser); // the riser the crates stand on
     }
-    for(let k=0;k<cards.length;k++){const c=cards[k];drawBox(boxAt(vx+c.u,vy+c.v,1,0,.03,.0015,c.z0,c.z1),cardShades[k]);} // clipped to each crate's front
-  }),box:boxAt(x,y,1,0,hl,W.tier*1.5,0,W.rims[0]),radius:Math.hypot(hl,W.tier*1.5)+.1,
-    produceStand:{tiers,hl,cards}};
+    for(let k=0;k<cards.length;k++){const q=cards[k],[cx,cy]=at(vx,vy,q.u,q.v);drawBox(boxAt(cx,cy,c,s,.03,.0015,q.z0,q.z1),cardShades[k]);}
+  }),box:boxAt(x,y,c,s,hl,W.tier*1.5,0,W.rims[0]),radius:Math.hypot(hl,W.tier*1.5)+.1,
+    produceStand:{tiers,hl,cards,c,s}};
 }
 // A slatted bin of watermelons, a false floor halfway down.
 function WATERMELON_BIN(x,y,h=.8) {

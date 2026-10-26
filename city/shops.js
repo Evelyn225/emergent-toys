@@ -230,14 +230,11 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(STONE, 1.6); return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 7 ? ' ' : '.', C(GRAY, L * 0.3)), true;
 }
 ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', '#............#', '#.........W.W#', '#.........W..#', '#.........W..#', '#.........W..#', '######DD######'],
-  wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
+  wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.52],
   props: r => {
-    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE), ...SHOP_FRIDGES.deli(),
-      BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
-        if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
-        BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      BX(7, 0.8, 4.5, 0.3, 0, 0.95, solid(GRAY, { top: '=', panel: 0.8 })), // the back counter
-      BX(2.2, 3.6, 0.07, 0.07, 0, 1.15, solid(GRAY)), BX(2.2, 3.6, 0.12, 0.1, 1.15, 1.35, (i, t, L) => { BG[i] = C(RED, 4 + L * 0.2); return set(i, HIT.face === 3 ? '#' : ' ', C(WHITE, 13)), true; }), // take a number
+    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.52, WHITE), standing(5, 1.52, WHITE), ...SHOP_FRIDGES.deli(),
+      SHOP_COUNTER(7, 1.18, 4.5, 0.18, 0.95, 1, 0, GRAY), MEAT_SLICER(9.2, 1.18, 0.95, 0, 1), // the back counter, on the wall now, and the slicer on it
+      TICKET_DISPENSER(2.2, 3.6, 0, 1), // take a number
       ...toilet(12.3, 7.55, 1, porcelain), washbasin(11.3, 6.1, 1, 0), // the toilet
     ];
     for (let k = 0; k < 7; k++) p.push(hung(4.4 + k * 0.85, 2.15, 2.3, k % 3 === 1 ? cheeseWheel : salami));
@@ -522,8 +519,7 @@ const clockTall = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a grandfather cloc
     BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '^' : fract(w * 2) < 0.04 ? '-' : ' ', C(YEL, L * 0.6)), true;
   });
 }, [0.24, 0.16, 2.1]);
-const armchair = (x, y, fx, fy, col = BRICK) => [{ ...BX(x, y, 0.4, 0.38, 0, 0.42, solid(col, { top: '=', bright: 1.4 }), fx, fy), seat: true, x, y, fx, fy, h: 0.42 }, BX(x - fx * 0.32, y - fy * 0.32, 0.08, 0.4, 0.42, 1.0, solid(col, { bright: 1.4 }), fx, fy),
-  ...[-1, 1].map(e => BX(x + fy * e * 0.36, y - fx * e * 0.36, 0.38, 0.06, 0.42, 0.62, solid(col, { top: '=', bright: 1.4 }), fx, fy))];
+const armchair = (x, y, fx, fy, col = BRICK) => [ARMCHAIR(x, y, fx, fy, col), SEAT(x, y, fx, fy, 0.42)]; // (built: shop-fittings.js)
 const lampStand = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a standard lamp: a fringed shade, glowing
   rod(vx, vy, 0, vx, vy, 1.45, 0.012, BRICK, 1.2); drum(vx, vy, 0.14, 0, 0.03, solid(BRICK));
   BXD(vx, vy, 0.2, 0.2, 1.35, 1.65, (i, t, L) => { if (Math.hypot(HIT.u, HIT.v) > 0.2 - (HIT.w - 1.35) * 0.3 && HIT.face < 5) return false; BG[i] = C(WARM, 7); return set(i, HIT.w < 1.38 ? "'" : ' ', C(YEL, 13)), true; });
@@ -941,12 +937,10 @@ const storeProps = ROOM_DEFS.store.props;
 // (the store's right-wall fridges are built: shop-fridges.js)
 ROOM_DEFS.store.props = r => {
   const p = [...storeProps(r), ...SHOP_FRIDGES.store()];
-  if (r.word === '24/7') p.push(ROOM_MODEL(5.75, 1.75, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
+  if (r.word === '24/7') p.push(ROOM_MODEL(5.65, BACK_COUNTER_Y, (vx, vy) => { // the slushie machine: two tanks churning, red and blue
     for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx + e, vy, 0.1, 1.05, 1.45, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
     BXD(vx, vy, 0.24, 0.13, 1.45, 1.55, solid(WHITE, { top: '=' }));
-  }), BX(4.47, 1.75, 0.22, 0.14, 1.05, 1.15, (i, t, L) => { // the hot dog roller
-    if (HIT.face === 5) { BG[i] = C(BRICK, 3); return set(i, fract(HIT.u * 8 + T * 0.5) < 0.5 ? '=' : '-', C(ORANGE, 12)), true; }
-    BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }));
+  }), HOTDOG_ROLLER_AT(5, BACK_COUNTER_Y, 1.05)); // the hot dog roller
   if (r.word === 'BODEGA') p.push(figProp(5.65, 1.7, CAT_LOOK, { z: 1.05, h: 0.75 / CAT_LOOK.scale(0), pose: () => fract(T / 5) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 })); // the bodega cat, on the counter
   return p;
 };

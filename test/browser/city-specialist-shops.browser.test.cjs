@@ -93,6 +93,83 @@ test('hardware and pharmacy: counters and what stands on them, the garden corner
  assert.deepEqual(r,[]);
 }));
 
+test('market stalls hold their goods on the counter top under the awning, stallholders behind; the fruit shop stands face the room',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const draw=drawBox,parts=o=>{const out=[];drawBox=(box,shade,ray=rayBox)=>out.push({box,ray});try{o.draw(o.x-px,o.y-py);}finally{drawBox=draw;}return out.map(q=>({...q,box:{...q.box,x:q.box.x+px,y:q.box.y+py,ax:q.box.ax+px,ay:q.box.ay+py}}));};
+  enterRoom('markethall',{word:'MARKET',ret:[100,100,0]},[5,5,0]);
+  const P=room.props,stalls=P.filter(o=>o.marketStall);
+  if(stalls.length!==6)bad.push(['stalls',stalls.length]);
+  for(const o of stalls){const d=o.marketStall,c=d.c,s=d.s,ps=parts(o);
+   const local=(x,y)=>[(x-o.x)*c+(y-o.y)*s,-(x-o.x)*s+(y-o.y)*c];
+   const counter=P.find(q=>q.shopCounter&&Math.abs(q.x-o.x)<1e-9&&Math.abs(q.y-o.y)<1e-9);if(!counter){bad.push([d.kind,'no counter']);continue;}
+   for(const q of ps){const [u,v]=local(q.box.x,q.box.y),x=q.box;
+    if(x.z1<=2)// goods: on or above the top, inside the counter's footprint (a rounded allowance for turned crates)
+     {if(x.z0<d.top-1e-6)bad.push([d.kind,'goods below the top',+x.z0.toFixed(3)]);
+      const ext=Math.max(x.hl,x.hw);if(Math.abs(u)>d.hl+1e-6||Math.abs(v)>d.hw+1e-6)bad.push([d.kind,'goods off the counter',+u.toFixed(2),+v.toFixed(2)]);}
+   }
+   const posts=ps.filter(q=>Math.abs(q.box.z1-2.15)<1e-9&&Math.abs(q.box.z0-d.top)<1e-9);
+   if(posts.length!==2||posts.some(q=>local(q.box.x,q.box.y)[1]>0))bad.push([d.kind,'posts not on the stallholder edge']);
+   if(!ps.some(q=>Math.abs(q.box.z0-2.15)<1e-9))bad.push([d.kind,'no awning on the posts']);
+   if(d.items<4)bad.push([d.kind,'bare stall',d.items]);
+  }
+  const vendors=P.filter(o=>o.fig&&o.face&&stalls.some(s=>Math.hypot(s.x-o.x,s.y-o.y)<.7));if(vendors.length<5)bad.push(["stallholders",vendors.length]);
+  for(const v of vendors){
+   const s=stalls.find(s=>Math.hypot(s.x-v.x,s.y-v.y)<.7),d=s.marketStall;if(((v.x-s.x)*-d.s+(v.y-s.y)*d.c)>=0)bad.push([d.kind,'stallholder on the customers\' side']);}
+  if(String(ROOM_DEFS.markethall.props).includes('BX('))bad.push('market hall: a painted box is left');
+  enterRoom('fruitshop',{word:'FRUIT',ret:[100,100,0]},[5,5,0]);
+  const st=room.props.filter(o=>o.produceStand);if(st.length!==2)bad.push(['fruit stands',st.length]);
+  for(const o of st){const front=[o.x+(-o.produceStand.s)*.6,o.y+o.produceStand.c*.6];if(roomAt(front[0],front[1])!=='.'||roomAt(o.x-(-o.produceStand.s)*.6,o.y-o.produceStand.c*.6)!=='#')bad.push('fruit stand not facing the room from its wall');}
+  const mt=room.props.find(o=>o.melonTable);if(!mt)bad.push('no melon table');
+  if(String(ROOM_DEFS.fruitshop.props).includes('BX('))bad.push('fruit shop: a painted box is left');
+  return bad.slice(0,10);
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('motel, welder, tyre shop, gacha, delicatessen and deli: fittings stand on what carries them, racks on their walls, nothing painted left',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const onTop=(P,o)=>P.some(u=>u!==o&&u.box&&inBox(u.box,o.x,o.y,0)&&Math.abs(u.box.z1-o.box.z0)<1e-9);
+  const draw=drawBox,parts=o=>{const out=[];drawBox=(box,shade,ray=rayBox)=>out.push({box,ray});try{o.draw(o.x-px,o.y-py);}finally{drawBox=draw;}return out.map(q=>({...q,box:{...q.box,x:q.box.x+px,y:q.box.y+py,ax:q.box.ax+px,ay:q.box.ay+py,bx:q.box.bx+px,by:q.box.by+py}}));};
+  for(const [kind,word] of [['motel','MOTEL'],['welding','WELDING'],['tireshop','TIRES'],['gacha','GACHA'],['delicatessen','DELICATESSEN'],['deli','DELI']]){
+   enterRoom(kind,{word,ret:[100,100,0]},[5,5,0]);const P=room.props;
+   if(String(ROOM_DEFS[kind].props).includes('BX('))bad.push([kind,'a painted box is left']);
+   for(const o of P.filter(o=>o.slicer||o.vice||o.monitor))if(!onTop(P,o))bad.push([kind,'not resting on its counter or bench',o.x,o.y]);
+   if(kind==='motel'){const b=P.find(o=>o.brochures),edge=b.box.x+(Math.abs(b.box.s??0)>.5?b.box.hw:b.box.hl);if(Math.abs(edge-9)>.02)bad.push(['brochure rack off the wall',edge]);}
+   if(kind==='welding'){const rk=P.find(o=>o.steelRack),ps=parts(rk),bars=ps.filter(q=>q.ray===coveRayCapsule);
+    if(bars.length<12)bad.push(['steel bars',bars.length]);
+    for(const q of bars)if(!rk.steelRack.arms.some(z=>Math.abs(q.box.az-q.box.r-z)<1e-9))bad.push('a bar not lying on the arms');}
+   if(kind==='deli'){const back=P.find(o=>o.shopCounter&&o.box.hl>4);if(!back||back.box.y-back.box.hw<1-1e-9)bad.push('deli back counter in the wall');
+    if(back&&Math.abs(back.box.y-back.box.hw-1)>1e-9)bad.push('deli back counter off the wall');}
+  }
+  return bad.slice(0,10);
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('the last shop rooms: the store roller, reading chair, tailor tables and mirror, suitcases resting, the showroom and agency desks',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  const onTop=(P,o)=>P.some(u=>u!==o&&u.box&&inBox(u.box,o.x,o.y,0)&&Math.abs(u.box.z1-o.box.z0)<1e-9);
+  const rooms=[['store','24/7'],['books','BOOKS'],['tailor','TAILOR'],['antiques','ANTIQUES'],['showroom','CARS'],['realty','REALTY']];
+  for(const [kind,word] of rooms){
+   enterRoom(kind,{word,ret:[100,100,0]},[5,5,0]);const P=room.props;
+   if(String(ROOM_DEFS[kind].props).includes('BX('))bad.push([kind,'a painted box is left']);
+   if(kind==='store'){const ro=P.find(o=>o.roller);if(!ro||!onTop(P,ro))bad.push('roller not on the counter');}
+   if(kind==='books'){const a=P.find(o=>o.armchair),s=P.find(o=>o.seat&&Math.abs(o.x-2.2)<.01);if(!a||!s||Math.abs(s.h-a.armchair.h)>1e-9)bad.push('reading chair seat');}
+   if(kind==='tailor'){const m=P.filter(o=>o.sewing);if(m.length!==2||m.some(o=>!onTop(P,o)))bad.push('sewing machines not on their tables');
+    const mi=P.find(o=>o.mirror);if(!mi||roomAt(mi.x+mi.mirror.fx*.5,mi.y+mi.mirror.fy*.5)!=='.')bad.push('mirror faces a wall');
+    if(!P.some(o=>o.cuttingTable)||!P.some(o=>o.curtain))bad.push('cutting table or curtain missing');}
+   if(kind==='antiques'){for(const o of P.filter(o=>o.suitcases)){const cs=o.suitcases.cases;cs.forEach((q,k)=>{if(Math.abs(q[2]-(k?cs[k-1][3]:0))>1e-9)bad.push('a suitcase not resting');});}
+    for(const a of P.filter(o=>o.armchair)){const s=P.find(o=>o.seat&&Math.abs(o.x-a.x)<.01&&Math.abs(o.y-a.y)<.01);if(!s||s.h!==a.armchair.h)bad.push('armchair seat');}}
+   if(kind==='showroom'||kind==='realty'){if(!P.some(o=>o.desk))bad.push([kind,'no desk']);}
+  }
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
 test('record divider letters read forwards from both aisles and sleeve art scales without repeated glyph stamps',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   const bad=[],draw=drawBox,parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,shade,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}return a;};
