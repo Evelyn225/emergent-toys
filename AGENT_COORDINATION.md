@@ -36,6 +36,12 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   #221, #222 and #226 because they all edit `city/shops.js` (#228). Gas
   station and bodega on `claude/shop-boxes-2` (new `city/corner-shops.js`;
   the gas def in `city/shops.js`, the bodega def in `city/storefronts.js`),
+  stacked on #228 (#229). Record shop, tattoo parlour, hardware and pharmacy
+  on `claude/shop-boxes-3` (new `city/record-shop.js`, `city/shop-fittings.js`;
+  their defs and painters in `city/shops.js`), stacked on #229. Next: the
+  other shops' painted boxes group by group (markethall, motel, welding, toys,
+  phones, thrift, herbs, deli, tireshop, tailor, liquor and the rest). `city/home-*.js` stays with Codex.
+
   stacked on #228. Next: the other shops' painted boxes group by group. `city/home-*.js` stays with Codex.
 
   #221, #222 and #226 because they all edit `city/shops.js`. Next: the other
@@ -569,3 +575,24 @@ pass; close/wide/oblique/under/night and ABAB costs reviewed. No active Claude
 or shared helper files edited. Next #230–#232, then closing audit; include the
 legacy gas hubcap/key and security-mirror sprite with the recorded ceiling/
 flag/noodle remnants. User's hotel/motel door decision remains recorded above.
+
+Codex active review `codex/review-specialist-shops` (#230): main through #229
+integrated. `city/record-shop.js`, `city/shop-fittings.js`, specialist-shop test
+and record/tattoo/hardware/pharmacy hooks in `city/shops.js`; shelf stock data
+in `city/shop-gondolas.js`. Prior acrylic/produce/bin/cache fixes retained.
+Next #231–#232, then closing audit. Claude's active bathroom-quality, DINER,
+world-bootstrap and facade work remains reserved.
+
+#230 Codex review complete (`codex/review-specialist-shops`): divider letters
+read forward on both sides; sleeve artwork and the BP idle display scale
+without repeated glyph stamps. The cuff now opens into a closed-back arm
+recess. Hose turns use one clipped round-coil surface with correct inner and
+outer normals, replacing costly per-turn profiles; fixed book/bag materials
+prepare once. Three new native ray/raster/cache checks and six independent
+mutations pass. Specialist and all-shop routes/seating/counter/shelf checks
+plus seven bundle/parse/render checks pass; close/wide/oblique/night views and
+ABAB costs reviewed. #228/#229 final full CI green. No active Claude or shared
+helper edits. Next #231–#232, then closing audit. Add the hardware lawnmower,
+record turntable/headphones and tattoo lollipop jar to its remaining legacy
+props; replacing BX calls alone does not complete the quality pass. Hotel/
+motel closed and auto-closing washroom doors remain queued for pass6.
