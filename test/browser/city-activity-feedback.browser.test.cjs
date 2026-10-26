@@ -203,6 +203,10 @@ test('fishing: the bobber is heard out where it lands (later, quieter, to its si
   const r = await page.evaluate(async () => {
     audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
     const heard = [], realClip = playClip, realSweep = fishSweep, realNoise = fishNoise;
+    // These voices are intercepted. Hold one audio timestamp while checking
+    // scheduled offsets, so browser preemption cannot subtract from the delay.
+    const clock = Object.getOwnPropertyDescriptor(actx, 'currentTime'), now = actx.currentTime;
+    Object.defineProperty(actx, 'currentTime', { configurable: true, value: now });
     playClip = (name, gain, when, spatial) => heard.push({ what: name, gain, delay: when - actx.currentTime, pan: spatial?.pan });
     fishSweep = (at, f0, f1, len, gain, type, pan) => heard.push({ what: 'sweep', gain, pan });
     fishNoise = (at, len, f0, f1, q, gain, attack, pan) => heard.push({ what: 'noise', gain, pan, delay: at - actx.currentTime });
@@ -213,7 +217,10 @@ test('fishing: the bobber is heard out where it lands (later, quieter, to its si
       fishSfx.push('skitter'); stepFishingUI(); const skitter = heard.splice(0);
       fishSfx.push('whoosh'); stepFishingUI(); const whoosh = heard.splice(0);
       return { plop, skitter, whoosh };
-    } finally { playClip = realClip; fishSweep = realSweep; fishNoise = realNoise; fishing = null; }
+    } finally {
+      if (clock) Object.defineProperty(actx, 'currentTime', clock); else delete actx.currentTime;
+      playClip = realClip; fishSweep = realSweep; fishNoise = realNoise; fishing = null;
+    }
   });
   const drip = r.plop.find(h => h.what === 'water-drip');
   assert.ok(drip && drip.gain < .6 && Math.abs(drip.delay - Math.hypot(.2, 1.8) / 34) < .01 && drip.pan < -.5, 'the plop comes from the bobber: ' + JSON.stringify(r.plop));

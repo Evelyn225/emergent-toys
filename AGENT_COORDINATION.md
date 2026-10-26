@@ -960,3 +960,19 @@ bar coverage/tones. Four browser checks including actual ground raster, three
 node files, eight negative probes, thirteen clear-floor views and ABAB costs
 recorded. Ready to push original c5bf46b-derived branch and merge; next #245.
 Keep remaining independent chains/interior passes and all reserved ownership.
+
+#239 merged as0a35222. Codex active `codex/fishing-audio-clock-test`, a small
+CI repair before dependent #245. #246 full CI passed Node and browser1/3/4;
+browser2 failed only the bobber audio delay assertion (0.0419s measured versus
+~0.0533s expected). Its mocked callback subtracts a live audio clock, making
+browser preemption alter the assertion. Reproduce with controlled clock
+advance, keep all distance/gain/pan/ice/cast checks, and restore the live clock
+after the intercepted-voice test. Files: activity-feedback browser test and
+shared notes only; no runtime/audio or reserved Claude source edits planned.
+
+Fishing clock repair complete: old test fails under a controlled40ms callback
+stall, corrected fixture survives it and passes two normal runs. Four timing/
+gain/pan/ice defects still fail unchanged assertions; three node files pass.
+Only the test and shared notes changed. Ready to push/open/merge this small
+CI repair, then resume #245 from main including #239. #246 full CI failure
+is diagnosed rather than retried blindly; verify the repaired full run later.
