@@ -54,13 +54,19 @@ test('formerly blank street sides actually draw visible lettering in each facade
         for(const distance of [.8,1.2,1.8]) {
           px=(f.side?mid:f.line)+f.nx*distance;py=(f.side?f.line:mid)+f.ny*distance;a=Math.atan2(-f.ny,-f.nx);pitch=.08;
           for(const hour of [12,23]) {
-            tod=hour;env(0);const cells=[],original=wallText;
+            tod=hour;env(0);const cells=[],original=wallText,fascia=architectureFasciaShade;
             wallText=(i,u,us,z,d,text,...args)=>{
               const drawn=original(i,u,us,z,d,text,...args);
               if(drawn&&text===b.sh.word&&Math.abs(d-distance)<.001&&CH[i]!==' ')cells.push({i,ch:CH[i],d});
               return drawn;
             };
-            try {render(0);}finally{wallText=original;}
+            // up close an architecture shop's name is on its fascia board, standing off the wall
+            architectureFasciaShade=(o,i,t,L)=>{
+              const drawn=fascia(o,i,t,L);
+              if(drawn&&o.word===b.sh.word&&CH[i]!==' ')cells.push({i,ch:CH[i],d:t});
+              return drawn;
+            };
+            try {render(0);}finally{wallText=original;architectureFasciaShade=fascia;}
             const visible=cells.filter(p=>CH[p.i]===p.ch&&Math.abs(ZB[p.i]-p.d)<.001).length;
             const occluded=cells.filter(p=>ZB[p.i]<p.d-.001).length;
             results.push({family,hour,distance,word:b.sh.word,visible,occluded,painted:cells.length});

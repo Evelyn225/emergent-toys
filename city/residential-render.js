@@ -2,8 +2,9 @@
 const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
-  if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
-    Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
+  const g = architectureSignSpec(b, f, sh);
+  if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || d > ARCH_FASCIA_VIS - 1.5) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
+    g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
   if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)

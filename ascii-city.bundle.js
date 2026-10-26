@@ -3182,7 +3182,7 @@ function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}
   }
   ARCH_DETAILS.push(o);
   if (kind === 'step') { ARCH_STEPS.push(o); ARCH_BLOCKERS.push(o); }
-  else if (z0 < 0.28) ARCH_BLOCKERS.push(o);
+  else if (z0 < 0.28 && kind !== 'awning') ARCH_BLOCKERS.push(o); // (you walk under an awning)
   return o;
 }
 function brownstoneDetails(b) {
@@ -3228,6 +3228,39 @@ function downtownDetails(b) {
   c.planes = [[1,0,0,c.hl],[-1,0,0,c.hl],[0,1,0,c.hw],[0,-1,0,c.hw],[0,0,1,c.z1],[0,0,-1,-c.z0],
     [slope,0,1,c.z0+slope*c.hl],[-slope,0,1,c.z0+slope*c.hl],[0,slope,1,c.z0+slope*c.hw],[0,-slope,1,c.z0+slope*c.hw]];
 }
+// Where a shop's name goes on a face (the same on the fascia board up close and the lettering seen from further off):
+// its centre height, letter width and band, the board's margin round it, and how the board is made.
+const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painted on the wall behind it)
+function architectureSignSpec(b, f, sh) {
+  const width = f.end - f.start, n = sh.word.length;
+  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .38, cmax: .067, margin: .3, band: .043, edge: .012, style: 'board' }
+    : b.region === 'brownstones' ? { zc: .39, cmax: .07, margin: .25, band: .038, edge: .012, style: 'painted' }
+    : { zc: .36, cmax: .085, margin: .3, band: .055, edge: .014, style: 'box' };
+  return { ...g, width, cwid: Math.min(g.cmax, (width - g.margin) / n) };
+}
+// A shop's fascia board on each face that carries its name, standing off the wall over the window, and on some
+// brownstone and midtown shops a striped awning over the window below it: a sloping canopy on its frame, a valance
+// along the front. (Downtown towers and the apartment blocks with entrance canopies get no awning.)
+const ARCH_FASCIA = { depth: .012, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
+function architectureShopfront(b) {
+  const sh = b.sh;
+  if (sh.kind === SHOP_APTS) return;
+  for (const f of b.faces) {
+    if (f.low || !architectureSignedFace(f, sh)) continue;
+    const g = architectureSignSpec(b, f, sh), center = (f.start + f.end) / 2;
+    if (g.cwid < .03 || g.zc + g.band / 2 + g.edge > f.height - .07) continue; // (too narrow for a board, or too low: up into the cornice)
+    const o = architectureDetail(b, f, center, ARCH_FASCIA.depth / 2, sh.word.length * g.cwid / 2 + g.edge * 2.5, ARCH_FASCIA.depth / 2, g.zc - g.band / 2 - g.edge, g.zc + g.band / 2 + g.edge,
+      'fascia', { word: sh.word, zc: g.zc, cwid: g.cwid, band: g.band, edge: g.edge, style: g.style, width: g.width, cmax: g.cmax, margin: g.margin, outSign: f.ny * (f.side ? 1 : 0) - f.nx * (f.side ? 0 : 1), detailDistance: ARCH_FASCIA_VIS });
+    f.fascia = true;
+    const a = ARCH_FASCIA.awning, half = Math.min(.42, (f.end - f.start) / 2 - .14);
+    if (!f.front || b.profile || g.style === 'box' || half < .15 || hash(Math.floor(b.x * 7), Math.floor(b.y * 7), 1480) > a.keep) continue;
+    const out = o.outSign, hw = a.out / 2, slope = a.drop / a.out, z1 = a.top, th = a.thick, front = z1 - a.drop;
+    architectureDetail(b, f, center, hw, half, hw, front - th, z1, 'awning', { outSign: out, slope, part: 'canopy', detailDistance: 14,
+      planes: [[1, 0, 0, half, 1], [-1, 0, 0, half, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4],
+        [0, slope * out, 1, z1 - slope * hw, 5], [0, -slope * out, -1, -(z1 - slope * hw - th), 6]] }); // (a sheet falling away from the wall)
+    architectureDetail(b, f, center, a.out - .002, half, .002, front - a.valance, front + .002, 'awning', { outSign: out, part: 'valance', detailDistance: 14 });
+  }
+}
 {
   const lots = new Map(), pending = [];
   for (let k = 0; k < map.length; k++) {
@@ -3268,6 +3301,7 @@ function downtownDetails(b) {
     if (b.profile) residentialDetails(b);
     else if (b.region === 'brownstones') brownstoneDetails(b);
     else downtownDetails(b);
+    architectureShopfront(b);
     // Keep metadata serializable: faces and roof data never contain their owning shop.
     const { sh: ignoredShop, ...metadata } = b;
     b.sh.architecture = metadata;
@@ -13339,8 +13373,9 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (b.h - z < 0.12 || Math.abs(z - 0.44) < 0.025) return set(i, '=', C(stone ? WHITE : STONE, L));
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
-    if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), 0.39,
-      Math.min(0.07, (f.end - f.start - 0.25) / sh.word.length), 0.038, C(STONE, signLight), C(base, 2))) return;
+    const g = architectureSignSpec(b, f, sh);
+    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || d > ARCH_FASCIA_VIS - 1.5) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
+      g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     if (f.front && sh.kind === SHOP_APTS) {
       const door = local + f.spacing * 0.24, half = f.spacing * 0.125;
@@ -13381,8 +13416,9 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (corner < 0.06) return set(i, '|', C(stone ? base : GRAY, L));
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
-    if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), 0.36,
-      Math.min(0.085, (width - 0.3) / sh.word.length), 0.055, C(sh.neon, signLight), C(GRAY, 1))) return;
+    const g = architectureSignSpec(b, f, sh);
+    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || d > ARCH_FASCIA_VIS - 1.5) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
+      g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
     if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
@@ -13404,7 +13440,41 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   BG[i] = C(lit ? WARM : b.sty === 1 ? BLUE : CYAN, lit ? 1.8 + night * 4 : 0.7 + day * 1.1);
   return set(i, lit ? ' ' : b.sty === 1 && fract((along + z * 0.5) * 5) < 0.05 ? '/' : ':', C(lit ? WARM : CYAN, Math.max(L * 0.45, lit ? night * 12 : 0)));
 }
+// A shop's fascia board (architecture.js): its name across the front, in the same lettering that's painted on the wall
+// past ARCH_FASCIA_VIS, and a frame round it. Brownstones paint theirs, gold leaf on a dark board; downtown it's a
+// box lit from inside after dark; midtown a board in the shop's colour.
+const FASCIA_BOARDS = [GREEN, BLUE, GRAY, BLACK];
+function architectureFasciaShade(o, i, t, L) {
+  const sh = SHOP[o.ownerCell];
+  if (sh.word !== o.word) { // a shop renamed after it was built (the hardware store that became IDEA): refit its name to the board
+    o.word = sh.word; o.cwid = Math.min(o.cmax, (o.width - o.margin) / o.word.length, (o.hl - o.edge * 2.5) * 2 / o.word.length);
+  }
+  const open = openAt(sh, tod), front = HIT.face === (o.outSign > 0 ? 3 : 4);
+  const board = o.style === 'painted' ? FASCIA_BOARDS[Math.floor(fract(o.seed * 13) * 4)] : o.style === 'box' ? GRAY : sh.neon;
+  const base = o.style === 'box' ? .8 + L * .08 + (open ? night * 1.4 : 0) : 1.3 + L * .14;
+  if (!front || o.hl - Math.abs(HIT.u) < o.edge * .6 || Math.abs(HIT.w - o.zc) > o.band / 2 + o.edge * .4) { // the frame, top and ends
+    BG[i] = C(o.style === 'painted' ? board : GRAY, (base + .7) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+  BG[i] = C(board, base);
+  const ink = o.style === 'painted' ? YEL : o.style === 'box' ? sh.neon : WHITE, lit = open ? Math.max(L, night * (o.style === 'box' ? 14 : 10)) : L * .5;
+  const [ex, ey] = faceDir(o.c, o.s);
+  return set(i, worldText(o.word, HIT.face === 3 ? HIT.u : -HIT.u, HIT.w, t, i, rel(o.x - px), rel(o.y - py), o.zc, ex, ey, o.cwid, o.band), C(ink, lit)), true;
+}
+// a shop's awning: a striped sheet sloping out from the wall (darker underneath) and a valance along its front with a
+// scalloped hem
+function architectureAwningShade(o, i, t, L) {
+  const sh = SHOP[o.ownerCell], col = sh.neon === WHITE ? RED : sh.neon;
+  const stripe = fract(HIT.u * 20 + .25) < .5 ? col : WHITE;
+  if (o.part === 'valance') {
+    const x = fract(HIT.u * 25) - .5, hem = HIT.w - o.z0;
+    if (hem < .006 * 4 * x * x) return false; // (between the scallops)
+    BG[i] = C(stripe, (1.6 + L * .2) * shadeFace(HIT.face)); return set(i, ' ', 0), true;
+  }
+  BG[i] = C(stripe, HIT.face === 5 ? 1.9 + L * .24 : HIT.face === 6 ? .8 + L * .06 : 1.5 + L * .18);
+  return set(i, ' ', 0), true;
+}
 function architectureDetailShade(o, i, t, L) {
+  if (o.kind === 'fascia') return architectureFasciaShade(o, i, t, L);
+  if (o.kind === 'awning') return architectureAwningShade(o, i, t, L);
   if (o.profile) return residentialDetailShade(o, i, t, L);
   const z = HIT.w, base = o.region === 'brownstones' ? BROWNSTONE_MATERIALS[o.material] : [STONE, WHITE, STONE, WARM, GRAY][o.material];
   if (o.kind === 'rail') {
@@ -13470,8 +13540,9 @@ function drawArchitecture() {
 const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
-  if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
-    Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
+  const g = architectureSignSpec(b, f, sh);
+  if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || d > ARCH_FASCIA_VIS - 1.5) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
+    g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
   if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)
