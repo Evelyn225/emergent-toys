@@ -84,7 +84,7 @@ test('subcell balcony bars keep cached continuous strokes in a native view and r
  });assert.deepEqual(r,[]);
 }));
 
-test('all three native balcony runs remain visible through the retired painted grid and block only their measured rail line',()=>fixture(async page=>{
+test('all three native balcony runs remain visible with no duplicate painted ironwork and block only their measured rail line',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
   enterRoom('bellehome',{ret:[41,73,0]},[21.2,12,0]);const rails=room.props.filter(o=>o.homeBalconyRail),bad=[],draw=drawBox;
   if(rails.length!==3)return ['no three native rails'];
@@ -95,12 +95,18 @@ test('all three native balcony runs remain visible through the retired painted g
    px=m.endPosts?23.5:21;py=m.endPosts?10:m.s===0&&m.c>0?4.7:15.3;
    const targetX=m.endPosts?o.x:21,targetY=m.endPosts?10:o.y;a=Math.atan2(targetY-py,targetX-px);freecam={z:.6};pitch=0;render(0);
    if(pixels<100)bad.push(['native rail hidden behind painted grid',m.c,m.s,pixels]);
-   if(ROOMW.cell(Math.floor(o.x),Math.floor(o.y))!==0)bad.push('retired one-metre painted grid still occludes built ironwork');
    const ix=targetX+(m.endPosts?-.3:0),iy=targetY+(m.endPosts?0:m.c*.3);
    if(!free(ix,iy))bad.push('old grid still blocks the clear deck approach');
    if(free(targetX,targetY))bad.push('new line collider lets player through rail');
    drawBox=draw;o.draw=original;
-  }freecam=null;return bad;
+  }
+  px=23.5;py=10;a=0;freecam={z:.6};pitch=0;render(0);homeOutdoorRay(0);const expected=[BG[0],CH[0],COL[0]];
+  for(const u of [0,.13,.2,.24,.37])for(const z of [.2,.6,1.04]){
+   homeWall(0,u,.01,z,2,25,10,10);
+   if(BG[0]!==expected[0]||CH[0]!==expected[1]||COL[0]!==expected[2])bad.push('legacy painted ironwork remains behind fitted rails');
+  }
+  if(ROOMW.cell(25,10)!==1.1||ROOMW.cell(21,2)!==1.1)bad.push('native grid edge/height changed');
+  freecam=null;return bad;
  });assert.deepEqual(r,[]);
 }));
 

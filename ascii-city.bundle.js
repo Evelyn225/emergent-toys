@@ -17709,7 +17709,7 @@ function roomSprites() {
 }
 const ROOMW = { cell: (x, y) => {
                   if (room.def.balcony && (x < 0 || y < 0 || x >= room.W || y >= room.H)) return 0;
-                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? (room.def.builtBalconyRails?0:1.1) : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
+                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? 1.1 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
                 },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 // ===== the specialist shops: what's behind the doors that used to open on the one convenience store (rooms.js has
