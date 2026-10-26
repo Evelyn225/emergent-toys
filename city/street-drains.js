@@ -20,13 +20,19 @@ function gullyAt(road, e, s, bx, by) {
   return null;
 }
 // bars across a grate: 1 on a bar, 0 in a slot, blending to the mean as they shrink below a cell
-const grateBars = (q, period, footprint) => footprint > period * .35 ? .55 : fract(q / period) < .45 ? 1 : 0;
+function grateBars(q,period,footprint){
+  const f=Math.max(1e-8,footprint/period),phase=q/period,duty=.45;
+  if(f>=1)return duty;
+  const a=phase-f/2,b=phase+f/2;
+  const coverage=clamp(((Math.floor(b)-Math.floor(a))*duty+Math.min(fract(b),duty)-Math.min(fract(a),duty))/f,0,1),blend=smooth(clamp((f-.5)/.5,0,1));
+  return coverage*(1-blend)+duty*blend;
+}
 function grateTone(bar, frame, L) { // solid iron for the frame and bars, near-black slots, an even mid-tone once they blend
-  return frame ? [' ', 0, C(GRAY, 1.7 + L * .08)] : bar >= 1 ? [' ', 0, C(GRAY, 1.3 + L * .1)] : bar <= 0 ? [' ', 0, C(GRAY, .25)] : [' ', 0, C(GRAY, .8 + L * .05)];
+  return [' ',0,C(GRAY,frame?1.7+L*.08:.25+clamp(bar,0,1)*(1.05+L*.1))];
 }
 // Water running along the gutter to the nearest grate in the rain: [ch, col, bg] or null.
 function gutterRunoff(road, e, s, bx, by, L) {
-  if (rain < .12 || road !== 1 && road !== 2) return null;
+  if (rain < .12 || road !== 1 && road !== 2 || road === 1 && onBridge(bx,by)) return null;
   const near = e < 1, w = near ? e - .3 : 1.7 - e;
   if (w < 0 || w > .012) return null; // (a thin rivulet against the kerb)
   for (const [k, a] of GULLY.at.entries()) {
@@ -50,8 +56,10 @@ function treePitsNear(wx, wy) {
   if (treePitCount !== trees.length) {
     treePitCells = new Map(); treePitCount = trees.length;
     for (const t of trees) if (treeHasPit(t)) {
-      const cell = idx(Math.floor(t.x), Math.floor(t.y));
-      (treePitCells.get(cell) || treePitCells.set(cell, []).get(cell)).push(t);
+      const H=TREE_GRATE.half;
+      for(let y=Math.floor(t.y-H);y<=Math.floor(t.y+H);y++)for(let x=Math.floor(t.x-H);x<=Math.floor(t.x+H);x++){
+        const cell=idx(x,y);(treePitCells.get(cell)||treePitCells.set(cell,[]).get(cell)).push(t);
+      }
     }
   }
   return treePitCells.get(idx(Math.floor(wx), Math.floor(wy)));
