@@ -2106,3 +2106,36 @@ trim code started. Then continue remaining passes5/6/9. The old local
 codex/home-furnishing-structure and codex/home-wall-finishes branches contain
 no unfinished implementation to recover. Keep held bathroom/DINER/bootstrap/
 facade/Claude lettering sources and shared home helpers reserved as before.
+
+User requested a focused fix for the odd block above bathroom doors in several
+places. Codex active `codex/bathroom-header-finish`: bathroomSurrounds in
+city/bathroom-quality.js (header finish only), new focused browser check,
+bundle and appended notes. This explicit bathroom report authorizes the
+necessary narrow edit despite the older Claude ownership reservation; Claude
+is out of weekly usage. Preserve all other bathroom fixtures/door policy and
+held DINER/bootstrap/facade/lettering files. Diagnose the filler painted as a
+separate box; retain the closed header and walking opening, match the adjacent
+partition material/light, verify native views and controls, finish this chunk.
+
+Bathroom header fix reviewed: the tall fill above every WC opening used the
+furniture solid-white shader, visibly differing from the adjacent wall. Its
+broad faces now continue the real partition shader with matching orientation,
+world UV, distance light and inside/outside finish; ceiling bands continue
+across the header too. The closed geometry, trim and door controls are intact.
+Fourteen bathroom browser checks and two Node bundle/parse files pass; the
+final focused test additionally compares background, glyph and foreground on
+both faces near/far across every WC room definition. Original block, missing
+header and wrong-light probes each fail assertions using isolated routed
+bundles, never source swapping. Sixteen before/after close/wide/oblique/night
+views reviewed in Fern House (horizontal) and motel (vertical); cameras clear,
+no page errors. Artifacts: work/backlog-review/bathroom-header-*.
+#285 full Node/four-shard CI passed40541465396, superseding its pending status.
+After this bounded reported fix, stop under the usage limit. Resume with its
+CI, then the saved home trim/panelling audit and remaining passes5/6/9. No new
+trim code started, other reserved Claude sources remain untouched.
+ABAB177x66 main e6a1312→after medians: Fern wide2.5→2.7ms,
+close2.8–3.2→3.1, oblique2.7→3.0–3.7; motel wide2.5–2.6→2.7–3.6,
+close3.3–3.4→3.8. Initial motel-oblique3.1→3.5/7.4 was noisy; focused
+120-warm/180-measured ABAB repeat gave3.0–3.3→3.3ms. Material continuity has
+a small view-dependent cost; no broad speedup claim. Publication/authorized
+merge is the final step; retain a clean checkout and monitor that PR's CI.
