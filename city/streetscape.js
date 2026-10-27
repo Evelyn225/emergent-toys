@@ -20,13 +20,13 @@ function streetBoxesOverlap(a_, b, pad = 0.012) {
   }
   return true;
 }
-function streetGeometryCollision(box, walls = true) {
+function streetGeometryCollision(box, walls = true, ignore = null) {
   const [ex, ey] = geometryBounds(box), visited = new Set();
   for (let y = Math.floor(box.y - ey - .02); y <= Math.floor(box.y + ey + .02); y++) for (let x = Math.floor(box.x - ex - .02); x <= Math.floor(box.x + ex + .02); x++) {
     const cell = idx(x, y);
     if (walls && map[cell] > box.z0 && streetBoxesOverlap(box,{x:x+.5,y:y+.5,c:1,s:0,hl:.5,hw:.5,z0:0,z1:map[cell]},0)) return {kind:'wall'};
     for (const o of streetGeometryCells[cell] || []) {
-      if (visited.has(o)) continue;
+      if (visited.has(o) || ignore?.has(o)) continue;
       visited.add(o);
       if (o.ownerCell != null && map[o.ownerCell] !== o.ownerHeight) continue;
       if (streetBoxesOverlap(box,o)) return o;

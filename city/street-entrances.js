@@ -100,8 +100,8 @@ function streetEntranceFixtureClear(o,kind) {
 }
 // Nearby buckets may still contain the previous cell while this family is
 // being fitted. The 3x3 neighbourhood covers the bounded two-metre slide.
-function streetEntranceNeighboursOverlap(o,kind) {
-  const boxes=streetFixtureBoxes(o,kind),bx=Math.floor(o.x/8),by=Math.floor(o.y/8);
+function streetEntranceNeighboursOverlap(o,kind,boxes=streetFixtureBoxes(o,kind)) {
+  const bx=Math.floor(o.x/8),by=Math.floor(o.y/8);
   const overlaps=(p,k)=>p!==o&&streetFixtureBoxes(p,k).some(b=>boxes.some(a=>streetBoxesOverlap(a,b,.008)));
   for(const [b,k] of [[lampsB,'lamp'],[lightsB,'signal'],[benchesB,'bench'],[treesB,'tree'],[machinesB,'machine'],[extrasB,'bike']])
     for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)for(const p of b[bi(bx+x,by+y)]) {

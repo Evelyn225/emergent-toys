@@ -2796,14 +2796,19 @@ const NIGHT_MARKET = (() => {
 })();
 // each stall: a waist-high counter with the goods laid out on it, two poles, a striped canopy above with the sign on
 // its front, and (after dark) someone behind the counter to sell to you
+const NIGHT_STALL = { roofHalf: .16, counterHalf: .13, postU: .14, postHalf: .006 };
+const NIGHT_MARKET_GROUPS = [];
 const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG], ['CURIOS', 5.15, ORANGE], ['FORTUNES', 6.35, BLUE], ['GOLDFISH', 7.55, CYAN]].map(([word, dx, canopy], k) => {
   const x = NIGHT_MARKET.bx * 8 + dx, y = NIGHT_MARKET.by * 8 + 1.78;
-  solidBox(x, y + 0.02, true, 0.56, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
-  for (const s of [-1, 1]) solidBox(x + s * 0.5, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
-  solidBox(x, y, true, 0.48, 0.09, 0, 0.1, 'stall', k);
-  const shirt = [WHITE, RED, BLUE, MAG, CYAN][k];
-  extras.push({ x: x + 0.1 - (k % 3) * 0.1, y: y + 0.14, z: 0, person: shirt, when: () => nightMarketOpen(tod) }); // the stallholder (drawn as a figure)
-  return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
+  const parts=[],add=(...args)=>{solidBox(...args);const o=solids[solids.length-1];parts.push(o);return o;};
+  Object.assign(add(x,y+.02,true,NIGHT_STALL.roofHalf,.15,.21,.26,'stallroof',k),{word,canopy,fs:-1});
+  for(const s of [-1,1])add(x+s*NIGHT_STALL.postU,y-.08,true,NIGHT_STALL.postHalf,NIGHT_STALL.postHalf,0,.21,'stallpole',k);
+  const counter=Object.assign(add(x,y,true,NIGHT_STALL.counterHalf,.09,0,.1,'stall',k),{word,canopy,fs:-1,at:[x,y-.3]});
+  const shirt=[WHITE,RED,BLUE,MAG,CYAN][k];
+  const seller={x:x+.1-(k%3)*.1,y:y+.14,z:0,person:shirt,when:()=>nightMarketOpen(tod)};
+  extras.push(seller);
+  NIGHT_MARKET_GROUPS.push({counter,parts,seller});
+  return counter;
 }) : [];
 if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
   extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, lantern: true, first: x === NIGHT_MARKET.bx * 8 + 2.4, last: x + 0.45 >= NIGHT_MARKET.bx * 8 + 7.8 });
@@ -5867,13 +5872,13 @@ function streetBoxesOverlap(a_, b, pad = 0.012) {
   }
   return true;
 }
-function streetGeometryCollision(box, walls = true) {
+function streetGeometryCollision(box, walls = true, ignore = null) {
   const [ex, ey] = geometryBounds(box), visited = new Set();
   for (let y = Math.floor(box.y - ey - .02); y <= Math.floor(box.y + ey + .02); y++) for (let x = Math.floor(box.x - ex - .02); x <= Math.floor(box.x + ex + .02); x++) {
     const cell = idx(x, y);
     if (walls && map[cell] > box.z0 && streetBoxesOverlap(box,{x:x+.5,y:y+.5,c:1,s:0,hl:.5,hw:.5,z0:0,z1:map[cell]},0)) return {kind:'wall'};
     for (const o of streetGeometryCells[cell] || []) {
-      if (visited.has(o)) continue;
+      if (visited.has(o) || ignore?.has(o)) continue;
       visited.add(o);
       if (o.ownerCell != null && map[o.ownerCell] !== o.ownerHeight) continue;
       if (streetBoxesOverlap(box,o)) return o;
@@ -42345,8 +42350,8 @@ function streetEntranceFixtureClear(o,kind) {
 }
 // Nearby buckets may still contain the previous cell while this family is
 // being fitted. The 3x3 neighbourhood covers the bounded two-metre slide.
-function streetEntranceNeighboursOverlap(o,kind) {
-  const boxes=streetFixtureBoxes(o,kind),bx=Math.floor(o.x/8),by=Math.floor(o.y/8);
+function streetEntranceNeighboursOverlap(o,kind,boxes=streetFixtureBoxes(o,kind)) {
+  const bx=Math.floor(o.x/8),by=Math.floor(o.y/8);
   const overlaps=(p,k)=>p!==o&&streetFixtureBoxes(p,k).some(b=>boxes.some(a=>streetBoxesOverlap(a,b,.008)));
   for(const [b,k] of [[lampsB,'lamp'],[lightsB,'signal'],[benchesB,'bench'],[treesB,'tree'],[machinesB,'machine'],[extrasB,'bike']])
     for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)for(const p of b[bi(bx+x,by+y)]) {
@@ -42368,6 +42373,58 @@ for(const b of extrasB)b.length=0;
 for(const o of extras)extrasB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].push(o);
 fitStreetFixtures(vendors,bucketed(vendors),'vendor',true);
 rebuildLampGlow();
+// Fit the authored market as complete stalls, after native doors and ordinary
+// street fixtures are final and before the later kerb fixtures are generated.
+// Parts, sellers and interaction points keep their exact relative positions.
+const NIGHT_MARKET_PLACEMENT = {moved:0,unfitted:[]};
+function fitNightMarket() {
+  NIGHT_MARKET_PLACEMENT.moved=0;NIGHT_MARKET_PLACEMENT.unfitted.length=0;
+  const allParts=new Set(NIGHT_MARKET_GROUPS.flatMap(g=>g.parts));
+  const cellsFor=o=>{
+    const cells=[],[ex,ey]=geometryBounds(o);
+    for(let y=Math.floor(o.y-ey);y<=Math.floor(o.y+ey);y++)for(let x=Math.floor(o.x-ex);x<=Math.floor(o.x+ex);x++)cells.push(idx(x,y));
+    return cells;
+  };
+  const touched=new Set([...allParts].flatMap(cellsFor));
+  const body=(p,dx=0)=>({x:p.x+dx,y:p.y,c:1,s:0,hl:.03,hw:.03,z0:0,z1:.18});
+  const groupBoxes=(g,dx=0)=>[...g.parts.map(p=>({...p,x:p.x+dx})),body(g.seller,dx)];
+  for(const g of NIGHT_MARKET_GROUPS) {
+    const {counter,seller}=g,start=counter.x;
+    const clear=dx=>{
+      const boxes=groupBoxes(g,dx),x=start+dx,y=counter.y;
+      // Remain on this pavement with a real wall behind the seller. Sliding
+      // across a corner or into the road is not a fallback for an entrance.
+      for(const u of [-NIGHT_STALL.roofHalf,0,NIGHT_STALL.roofHalf])
+        if(!ROAD[idx(x+u,y)] || isWater(x+u,y) || !map[idx(x+u,y+.3)])return false;
+      if(boxes.some(b=>streetEntranceCollision(b)||streetGeometryCollision(b,true,allParts)))return false;
+      if(streetEntranceNeighboursOverlap({x,y},null,boxes))return false;
+      for(const other of NIGHT_MARKET_GROUPS)if(other!==g)
+        for(const a of boxes)for(const b of groupBoxes(other))if(streetBoxesOverlap(a,b,.015))return false;
+      return true;
+    };
+    let fitted=null;
+    for(const dx of [0,...Array.from({length:30},(_,n)=>[(n+1)*-.05,(n+1)*.05]).flat()])if(clear(dx)){fitted=dx;break;}
+    if(fitted===null){NIGHT_MARKET_PLACEMENT.unfitted.push(counter.word);continue;}
+    if(!fitted)continue;
+    for(const p of g.parts)p.x=worldCoord(p.x+fitted);
+    seller.x=worldCoord(seller.x+fitted);counter.at[0]=worldCoord(counter.at[0]+fitted);
+    NIGHT_MARKET_PLACEMENT.moved++;
+  }
+  // Only the market's affected geometry cells change. Other architecture and
+  // its cached snow shelters remain intact; clear old/new market shelter cells.
+  for(const cell of touched) {
+    const list=streetGeometryCells[cell];if(list)streetGeometryCells[cell]=list.filter(p=>!allParts.has(p));
+  }
+  for(const p of allParts)for(const cell of cellsFor(p)) {
+    touched.add(cell);(streetGeometryCells[cell]||(streetGeometryCells[cell]=[])).push(p);
+  }
+  for(const cell of touched)delete groundSnowCells[cell];
+  for(const [items,buckets]of [[solids,solidsB],[extras,extrasB]]) {
+    for(const b of buckets)b.length=0;
+    for(const p of items)buckets[bi(Math.floor(p.x/8),Math.floor(p.y/8))].push(p);
+  }
+}
+fitNightMarket();
 // Utilities on the building fronts along the streets, placed on the finished
 // city: downpipes from the roof to the pavement (a hopper head under the
 // parapet, a bracket every couple of metres, a shoe at the foot that pours in

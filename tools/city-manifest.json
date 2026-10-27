@@ -212,6 +212,7 @@
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
     "city/street-entrances.js",
+    "city/night-market-placement.js",
     "city/facade-utilities.js",
     "city/kerb-fixtures.js",
     "city/window-railway-geometry.js",
