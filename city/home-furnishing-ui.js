@@ -10,7 +10,10 @@ const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 function refreshFurnishedRoom() {
   const home=mode==='room'&&homeRecord(room);if(!home)return;
   homeBalconyModels.delete(home);
-  room.props=room.def.props(room);room.props.push(...workshopProps(room),...furnishingProps(room));updateHomeLights();
+  // Keep constructor-added doors/surrounds and their live privacy state. Raw
+  // figures include bodies; rebuilding must not revive or remove residents.
+  const figures=room.props.filter(p=>p.fig);
+  room.props=[...room.def.props(room).filter(p=>!p.fig),...(room.homeStructuralProps||[]),...figures,...workshopProps(room),...furnishingProps(room)];updateHomeLights();
 }
 
 function updateHomeLights() {

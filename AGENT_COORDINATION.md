@@ -2069,3 +2069,40 @@ Artifacts: work/backlog-review/grand-suite-dining-*. The saved home refresh
 repair remains reproduced but unimplemented and is next before trim.
 CI correction: #282 run40505545186 completed green (Node and all four browser
 shards) after the cancelled shard rerun, superseding the earlier pending note.
+
+Codex bounded chunk on `codex/home-refresh-structure` (main68fd523): preserve
+constructor-added home bathroom props and their existing animation/privacy
+state across furniture/workshop refresh. Files: makeRoom bookkeeping only in
+city/rooms.js, city/home-furnishing-ui.js, city/workshop-ui.js, one focused
+browser test, bundle and append-only notes. Bathroom builders/policy, shared
+home helpers and reserved Claude files stay untouched. Verify four owned home
+families, real furniture/door controls, repeated refresh and saved privacy;
+finish this chunk before starting further quality work under the usage limit.
+#284 full Node and all four browser CI shards passed (40514739135).
+
+Bounded home-refresh chunk complete and reviewed. makeRoom now remembers only
+its home structural additions; furniture refresh reuses those exact objects,
+preserving door animation/privacy and raw living/dead figure identity. Workshop
+refresh delegates to the same path. Movable furniture/equipment still rebuild.
+Six unique browser checks pass: four-home structural/state/figure audit, real
+Fern move/pack/unpack/E/cross-and-return/save/reload, three existing furnishing/
+photo/lighting controls and existing saved-home privacy. Four Node files pass
+(bundle freshness/parse, home furnishings, workshop). Old main plus three
+isolated routed probes (drop bodies, reset door state, bypass workshop repair)
+fail intended assertions; no production source swapping. Eight before/after
+close/wide/oblique/night views reviewed, all clear, no page errors.
+ABAB177x66 main68fd523->after, after furniture refresh: wide1.6–1.8->2.4–2.7ms,
+close1.6–2.0->3.2–3.4, oblique1.8–1.9->3.0. This restores missing bathroom
+geometry; it costs about0.8–1.6ms in these views rather than claiming a speedup.
+Existing native door geometry is reused unchanged. Artifacts are under
+work/backlog-review/home-refresh-*; isolated mutants were removed.
+
+Usage-limited stopping point: finish publication/authorized merge of this
+branch, then stop with a clean checkout. Check its full CI on resumption.
+#284 is already merged and its full Node/four-shard CI is green40514739135.
+The previously reproduced home refresh loss is now repaired; the next chunk
+is the still-painted home skirting/cornice/Belle panelling audit, with no new
+trim code started. Then continue remaining passes5/6/9. The old local
+codex/home-furnishing-structure and codex/home-wall-finishes branches contain
+no unfinished implementation to recover. Keep held bathroom/DINER/bootstrap/
+facade/Claude lettering sources and shared home helpers reserved as before.

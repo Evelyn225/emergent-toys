@@ -17058,6 +17058,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  const authoredProps = r.props.length;
   r.props.push(...shopGondolas(r), ...shopWallShelves(r)); // shelf islands ('S' cells) and back-wall shelves are built: shop-gondolas.js
   if(def.wc){
     const frames=bathroomSurrounds(r);r.props.push(...frames);
@@ -17066,7 +17067,10 @@ function makeRoom(kind, extra = {}) {
   }
   r.props.push(...bathroomAccessories(r));
   if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
-  if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
+  if (def.home) {
+    r.homeStructuralProps = r.props.slice(authoredProps);
+    r.props.push(...workshopProps(r),...furnishingProps(r));
+  }
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
     if(kind==='lighthouse'||kind==='lamproom')r.exterior={x0:LIGHTHOUSE.x-LIGHTHOUSE.r,x1:LIGHTHOUSE.x+LIGHTHOUSE.r,y0:LIGHTHOUSE.y-LIGHTHOUSE.r,y1:LIGHTHOUSE.y+LIGHTHOUSE.r,up:kind==='lamproom'?2.8:0,faces:{}};
@@ -33361,8 +33365,7 @@ function workshopProps(r) {
 }
 function refreshWorkshopRoom() {
   if (!workshopHome()) return;
-  room.props = [...room.def.props(room), ...workshopProps(room),...furnishingProps(room)];
-  updateHomeLights();
+  refreshFurnishedRoom();
 }
 function nearWorkshopBench() {
   const home = workshopHome(); if (!home) return null;
@@ -41895,7 +41898,10 @@ const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 function refreshFurnishedRoom() {
   const home=mode==='room'&&homeRecord(room);if(!home)return;
   homeBalconyModels.delete(home);
-  room.props=room.def.props(room);room.props.push(...workshopProps(room),...furnishingProps(room));updateHomeLights();
+  // Keep constructor-added doors/surrounds and their live privacy state. Raw
+  // figures include bodies; rebuilding must not revive or remove residents.
+  const figures=room.props.filter(p=>p.fig);
+  room.props=[...room.def.props(room).filter(p=>!p.fig),...(room.homeStructuralProps||[]),...figures,...workshopProps(room),...furnishingProps(room)];updateHomeLights();
 }
 
 function updateHomeLights() {

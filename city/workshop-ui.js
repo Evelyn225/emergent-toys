@@ -55,8 +55,7 @@ function workshopProps(r) {
 }
 function refreshWorkshopRoom() {
   if (!workshopHome()) return;
-  room.props = [...room.def.props(room), ...workshopProps(room),...furnishingProps(room)];
-  updateHomeLights();
+  refreshFurnishedRoom();
 }
 function nearWorkshopBench() {
   const home = workshopHome(); if (!home) return null;
