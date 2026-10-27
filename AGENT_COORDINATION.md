@@ -1696,3 +1696,67 @@ are byte-identical to HEAD, verified by git diff: no runtime or render-cost
 change, so no ABAB timing is meaningful for this test-only repair. Ready
 commit/push/PR/merge and monitor full CI. Then native14 orphan-backed machines,
 followed by remaining passes5/6/9. No active source mutants or parallel work.
+
+#277 test-only aquarium visitor/camera repair merged asf0bc7b1; monitor its
+full CI (old #275/#276 runs use the original fixture). Codex active
+`codex/native-machine-backing` from that main. Own new
+city/street-machine-placement.js after coherent market and before later kerbs,
+optional extraction of the existing machine backing predicate in
+city/streetscape.js, focused native machine placement test and shared manifest/
+bundle/notes. Relocate only the14 native machines that lost a backing wall or
+front access during assembly; retain all448 objects/kinds and their inventory
+identity. Use actual cached facade approaches to find nearby mount planes,
+orient to the real wall, retain door/stair/structure/transit/fixture clearance
+and a usable front, and update each moved machine's bucket immediately so
+subsequent candidates see it. No held world-bootstrap/facade/shared home helper
+edits. Then remaining passes5/6/9. No source mutants or parallel Codex session.
+
+Native machine checkpoint: all448 now have real backing/front access; only14
+moved, none lost/unfitted. Nearby blank CITY shop-cell side walls are included
+alongside actual entrance faces, so most move across the same street19–20m;
+one constrained orphan needs a clear wall132m away within the bounded search.
+Each move preserves the object/kind, turns the actual controls out of its new
+wall, avoids doors/stairs/transit/other models and reserves customer standing
+space as well as the body. Buckets update immediately between candidates.
+Three focused +four original vending +five native entrance +one market control
+pass (13 unique at this checkpoint), plus three Node street/bundle/parse files
+and the focused pure vending goods check. New cold placement function allows
+two physical stress cases: a preferred native PHARMACY doorway and an actual
+post in the preferred customer standing area. Both pass. Removing only the
+body's door check survived because customer clearance also protects that
+approach; the complete missing-entrance-policy probe now removes both related
+checks, with the actual doorway retained as its oracle. Finish these probes,
+then final15 unique checks, close/wide/oblique/night/old-site/rotated/far-wall
+views and ABAB. Existing runtime vending renderer is unchanged; isolated
+model-axis defect probes do not edit its held source. #277 CI pending.
+
+#277 full CI GREEN40453292812: Node and all4 browser shards, restoring the
+merged main code's green status and validating combined market/transit work.
+Native machine final5 focused checks pass, along with the ten inherited
+vending/entrance/market checks (15 unique); four Node files pass across final
+runs (vending-only selection in goods), final bundle/parse checks green.
+Old native baseline plus8 independent placement/orientation/stock/index/model/
+access-policy/customer-space defects fail assertions in9 routed probes. The
+two new physical scenarios exercise an actual preferred PHARMACY doorway and
+a pre-existing post in the customer standing area; neither disables people or
+structure geometry to satisfy the oracle. Complete entrance-policy loss
+removes both body and standing-space checks, since either can reject default
+candidate doors. Existing models/stock remain unchanged; source mutations are
+isolated in routed ignored bundles, never swapped into source. Visual review
+and ABAB remain, then commit/push/PR/reviewed merge and remaining passes5/6/9.
+No parallel Codex session is active (agent listing contains only root).
+
+Native machine final review: all15 unique browser checks/four Node files
+(including vending-only goods selection) and final bundle checks pass. Nine
+routed old/independent defect probes fail assertions; no active mutants.
+Sixteen paired clear close/wide/oblique/night/old-site/rotated/far-wall/context
+views reviewed. Stress cases reset only later kerbs to match their actual
+pre-generation placement phase; all building geometry/people remain.
+ABAB177x66 main→after: wall-wide6.5–6.7→7.5–7.8ms,
+close7.3–7.7→8.3, oblique6.9–7.0→7.4, old floating site6.0→5.8,
+rotated wall6.3–6.5→6.5–7.1. New visible machines/stock cost0.4–1.1ms
+in these views; different scene contents, no general speedup claim.
+#277 full CI green40453292812. Ready commit/push/PR/merge, then resume
+remaining home pass5 (Belle French-door finish/outside furnishing fidelity),
+pass6 hotel/motel quality/verify existing door policy, and pass9 civic work.
+No second Codex session. Preserve all held Claude sources/unpublished lettering.
