@@ -1672,3 +1672,27 @@ speedup claim. Ready commit/push/PR/merge. Then separate aquarium native-camera
 CI repair before fourteen orphan-backed machines and remaining passes5/6/9.
 Do not fold a CI test repair into the market PR or leave dirty market work
 behind on a branch switch. No active mutants or second Codex session.
+
+#276 coherent market clearance merged as27feccd. Codex active
+`codex/aquarium-label-view-fixture` from latest main; TEST ONLY ownership:
+`test/browser/city-aquarium-gift-sign.browser.test.cjs` and appended notes.
+Runtime/bundle/manifest stay unchanged. Reproduce shard4 failure with an adult
+at the existing random visitor spot3,2.6, in front of the old camera3.1,2.6.
+Retain real people/tanks/walls and full label visibility thresholds; choose
+clear native approaches, likely4,2.1 and20,2.1 looking towards the same labels.
+Keep guaranteed adults in that test and verify wrong signed anchors/old camera
+fail. Then PR/merge CI repair and monitor full CI, followed by14 native backing
+cases and remaining passes5/6/9. Reserved Claude sources unchanged; no parallel
+Codex work or source mutants. Full #275 Node/shards1/2/3 green; only this old
+native visibility fixture failed shard4. #276 CI pending.
+
+Aquarium CI repair reviewed: guaranteed adult at3,2.6 reproduces the exact
+CI painted102/visible0 failure from old3.1,2.6 camera. New left4,2.1 and
+right20,2.1 cameras are1.118m/1.044m from the nearest guaranteed visitor;
+exit view remains clear. All three focused checks and a fresh-room repeat
+pass; wrong left/right signed anchors still fail assertions with the people
+retained. Five old/clear/exit views reviewed. Runtime sources/bundle/manifest
+are byte-identical to HEAD, verified by git diff: no runtime or render-cost
+change, so no ABAB timing is meaningful for this test-only repair. Ready
+commit/push/PR/merge and monitor full CI. Then native14 orphan-backed machines,
+followed by remaining passes5/6/9. No active source mutants or parallel work.
