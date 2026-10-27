@@ -34964,7 +34964,7 @@ function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
 });}
 function hotelDefinition(tier){
- const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null;
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null,diningX=tier===2?14.4:8,diningY=h-(tier===2?5.5:3.1);
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*1.2,tv[1]+Math.cos(tvAngle)*1.2],sofa,stove},tier,
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
@@ -34975,7 +34975,7 @@ function hotelDefinition(tier){
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
- if(tier)p.push(FITTED_KITCHEN(...stove,tier===1?1.3:1.7,.38,Math.PI/2,tier===2?WHITE:BRICK),HOME_FRIDGE(w-1.4,h-1.7,{angle:Math.PI/2,height:1.7}),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
+ if(tier)p.push(FITTED_KITCHEN(...stove,tier===1?1.3:1.7,.38,Math.PI/2,tier===2?WHITE:BRICK),HOME_FRIDGE(w-1.4,h-1.7,{angle:Math.PI/2,height:1.7}),...tableBox(diningX,diningY,tier===2?1.1:.65,.55),...homeChair(diningX,diningY+1.2,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
    for(const side of [-1,1])rod(vx+side*.3,vy,.05,vx+side*.3,vy,.42,.035,YEL);
    drum(vx,vy,.52,.4,.46,solid(tier===2?GREEN:BRICK,{bright:2,top:'~'}));

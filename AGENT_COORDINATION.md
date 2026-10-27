@@ -2037,3 +2037,35 @@ cancelled. Node and shards1/2/4 remain green. Re-run of that one cancelled job
 122193805244 was requested successfully through GitHub; follow the latest
 attempt of run40505545186. This is pending validation, not a claimed full
 green run. The execution workspace is still unavailable.
+
+Workspace recovered after disconnect. User-reported Grand Hotel kitchen table
+phases through green couch; this takes priority over the still-unimplemented
+furnishing-structure fix. Codex active `codex/grand-suite-dining-clearance`
+from latest main65e32c4, with prior branches preserved and clean. Own only
+hotelDefinition's tier2 dining-set coordinates in city/hotel-polish.js,
+focused native suite layout/interaction checks, bundle and append-only notes.
+Table centre13.2 with1.1m half-width intersects sofa's east edge12.7 by0.6m.
+Shift table/chair together into the available kitchen-side space, preserve
+original sizes and other tiers. Verify actual drawn shapes, both walking gaps,
+C seating and stove access, plus close/wide/oblique/night and ABAB. Shared
+furniture/kitchen helpers and held bathroom/facade/Claude files stay untouched.
+No source mutants or concurrent render benchmarks. Then return to the saved
+home refresh fix and quality queue.
+
+Grand suite dining fix reviewed on `codex/grand-suite-dining-clearance`:
+move only the tier2 table/chair from (13.2,10.9)/(13.2,12.1) to
+(14.4,8.5)/(14.4,9.7). Their original sizes remain; both side aisles clear
+60cm, including the counter handles, and the rear fridge route stays open.
+Five focused/inherited browser checks and two Node bundle/parse files pass.
+Four isolated routed negative probes reject old overlap, a left-behind chair,
+counter crowding and the blocked rear route; production sources were never
+swapped. Twelve final before/after views reviewed (close/wide/oblique/night,
+stove and seated); standing cameras clear, sofa camera intentionally seated,
+no page errors. Prop comparison changes only the suite table/chair; other
+tiers are identical. ABAB177x66 main65e32c4->after medians: wide5.1–5.2->4.4–4.5ms,
+close2.7–2.9->4.2, oblique2.3->3.8. Close/oblique now see the table in front
+of the kitchen, costing about1.3–1.5ms; no new models or broad speedup claim.
+Artifacts: work/backlog-review/grand-suite-dining-*. The saved home refresh
+repair remains reproduced but unimplemented and is next before trim.
+CI correction: #282 run40505545186 completed green (Node and all four browser
+shards) after the cancelled shard rerun, superseding the earlier pending note.
