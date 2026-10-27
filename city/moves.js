@@ -62,6 +62,7 @@ function nearSeat() {
     }
     return best;
   }
+  if(homeBalconyActive())return homeBalconySeat();
   if (mode !== 'walk' || fx.skating) return null;
   let best = null, bd = 0.15;
   for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }

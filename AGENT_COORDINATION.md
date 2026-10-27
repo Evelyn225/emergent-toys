@@ -1806,3 +1806,30 @@ finished geometry costs about0.2-0.7ms here; no speedup claim. All review
 cameras are clear and no page errors. Ready commit/push/PR/reviewed merge.
 Next outside balcony furniture fidelity, then remaining pass5 and6/9. Reserved
 Claude files, shared home/hotel helpers and home bathroom defaults unchanged.
+
+#279 French doors merged as2ef5247; monitor CI on a25bb218. Codex active
+`codex/home-balcony-furniture` from that main. READ-ONLY audit first: the
+native Belle table/chairs have no outdoor far shade or scaled draw path, so
+the city balcony may omit them entirely, rather than merely simplifying them.
+Own new home-only balcony furniture module, Belle-only set hook in rooms.js,
+scaled model integration in home-balcony.js, focused furniture coverage and
+shared manifest/bundle/notes. Retain set positions/footprints/seats, access,
+existing plants, rails, French doorway and saved room/world mapping. Do not
+modify shared furniture/home/hotel helpers used by shops or restaurants; use
+existing helpers unchanged or build a home-only cached model. Next remaining
+pass5 closing audit, then hotel/motel6 and civic9. Reserved Claude sources and
+unpublished lettering remain untouched; no source swaps or second session.
+
+Bistro checkpoint after usage pause:20 focused/inherited browser checks and
+three Node bundle/parse/furnishing files pass. Native and outdoor views now
+share the cached home-only set, including supported slats and curved backs.
+Existing positions/footprints/seat heights are retained. Audit also found C
+could not use the seats after the real roof-mode transition; homeBalconySeat
+and one nearSeat hook in moves.js now expose the two real chairs, with actual
+C sit/stand, restored clear approach, table-facing direction and eye height
+verified at both scales. Earlier wide/night review cameras intersected the
+unchanged palm; move them0.5m along the clear deck before final views/timing.
+Mutation, final visual and ABAB remain; not ready for PR yet. Preserve this
+work in a local checkpoint commit while isolated world-contract CI repair is
+reviewed/merged, then fold latest main back in and finish this chunk. No
+shared furniture/helper edits, no production source mutants, no second copy.

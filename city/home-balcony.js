@@ -12,6 +12,15 @@ function enterHomeBalcony() {
   return true;
 }
 const atHomeBalconyDoor = () => homeBalconyActive() && px < room.balconyWorld.x0 + .2 && Math.abs(py - room.balconyWorld.doorY) < .17;
+function homeBalconySeat(){
+  const b=room.balconyWorld;let best=null,distance=.11;
+  for(const s of room.props){
+    if(!s.homeBalconyFurniture||!s.seat)continue;
+    const x=b.x0+(s.x-19)/10,y=b.y+(s.y-10)/10,d=Math.hypot(x-px,y-py);
+    if(d<distance){distance=d;best={x,y,fx:s.fx,fy:s.fy,h:s.h};}
+  }
+  return best;
+}
 function leaveHomeBalcony() {
   if (!homeBalconyActive()) return false;
   const b = room.balconyWorld;
@@ -54,6 +63,7 @@ function drawHomeBalconies() {
     if (!model) {
       model = makeRoom('bellehome',{ cell: [home.cell % N,Math.floor(home.cell / N)] }).props.filter(o => {
         if(o.homeFrenchDoor)return true;
+        if(o.homeBalconyFurniture)return true;
         if(o.homeFrenchDoorSolid||o.homeFrenchDoorSurround)return false;
         if(o.homeBalconyRail)return true;
         const p = o.box || o;
@@ -71,6 +81,7 @@ function drawHomeBalconies() {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
       if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       if(o.homeFrenchDoor){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
+      if(o.homeBalconyFurniture){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       if(o.homePlant){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
       if (o.box && shade) {
