@@ -193,7 +193,7 @@ function drawRevolver(it) {
 // ---- the crosshair, the cylinder count, the flash lighting everything for an instant, and being hit
 function drawGunHud() {
   const it = heldGun();
-  if (it && onFootMode() && !game) {
+  if (it && handheldMode() && !game) {
     const x = cols / 2 * cw, y = (rows >> 1) * FS, moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
     const spread = cw * (1.2 - gunAim() * 0.45 + gun.kick * 2.5 + (moving ? 0.6 : 0));
     const on = mode !== 'room' && aimingAt(); // (red when somebody's in it)

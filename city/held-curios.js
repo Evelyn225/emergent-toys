@@ -216,7 +216,7 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
 });
 
 // The telescope magnifies the existing scene, without another world render.
-const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&onFootMode()&&!freecam;
+const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()&&!freecam;
 DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];

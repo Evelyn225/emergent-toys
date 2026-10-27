@@ -6501,6 +6501,9 @@ const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade', 'aquarium'], SONG
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
+// A passenger can handle inventory without gaining the walking/jump/drop
+// controls of an outdoor pedestrian. Vehicle helms keep their own controls.
+const handheldMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat' || mode === 'el' || mode === 'ferry';
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
@@ -10462,7 +10465,7 @@ const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, last
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
-const canAimGun = () => !wanted.busted && !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
+const canAimGun = () => !wanted.busted && !!heldGun() && handheldMode() && !freecam && !gun.reload;
 const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over
@@ -24843,7 +24846,8 @@ function hud() {
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
-    : settings.help && mode==='ferry'?'WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | Q eat / drink | M map'
+    : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
+    : settings.help && mode==='el'?`WASD walk | mouse / arrows look | C sit / stand | E get off at station | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
@@ -29172,7 +29176,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 let handDrawn = null; // what the hand held in the last frame drawn ({ id, t }), or null: for the tests
 function drawHeldBig() {
   handDrawn = null;
-  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind);
+  const onFoot = handheldMode();
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
@@ -29507,7 +29511,7 @@ function openInventory() {
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
-  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; ${placeKey()!==null?'X drop &middot; ':''}I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
   invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
@@ -29581,8 +29585,9 @@ function useHeldItem() {
     return;
   }
   const used=heldItem();
-  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
-    water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
+  const indoors=mode==='room'||mode==='el'||mode==='ferry'&&ferryRide&&ferryRide.u>FERRY_CABIN.aft&&ferryRide.u<FERRY_CABIN.front&&Math.abs(ferryRide.v)<FERRY_CABIN.side;
+  const [line, sound] = useHeld({ indoors, x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
+    water: mode==='ferry'&&!indoors || mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
   if ((ITEMS[used?.id]?.kind==='drug' || used?.id==='joint') && sound) {updateDrugBuyer();saveGame();}
   if (line) say(line, Math.max(3, line.length / 20)); // (long enough to read)
   if (actx && sound) sfxUse(sound);
@@ -31001,7 +31006,7 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
 });
 
 // The telescope magnifies the existing scene, without another world render.
-const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&onFootMode()&&!freecam;
+const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()&&!freecam;
 DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
@@ -32031,7 +32036,7 @@ function drawRevolver(it) {
 // ---- the crosshair, the cylinder count, the flash lighting everything for an instant, and being hit
 function drawGunHud() {
   const it = heldGun();
-  if (it && onFootMode() && !game) {
+  if (it && handheldMode() && !game) {
     const x = cols / 2 * cw, y = (rows >> 1) * FS, moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
     const spread = cw * (1.2 - gunAim() * 0.45 + gun.kick * 2.5 + (moving ? 0.6 : 0));
     const on = mode !== 'room' && aimingAt(); // (red when somebody's in it)
@@ -43685,11 +43690,6 @@ onkeydown = e => {
   if(mode==='el'&&e.code==='KeyC'){elSeatToggle();return;}
   if(mode==='ferry'&&e.code==='KeyC'){ferrySeatToggle();return;}
   if(mode==='ferry'&&e.code==='Space'){ferryWaitNextPort();return;}
-  if(mode==='ferry'&&!sleep) {
-    if(e.code==='KeyI')openInventory();
-    if(e.code==='KeyQ'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind))useHeldItem();
-    const slot=/^Digit([1-8])$/.exec(e.code);if(slot)holdQuickSlot(+slot[1]-1);
-  }
   if (chute && (e.code === 'Space' || e.code === 'KeyE')) return pullCord(); // (in the air, out of an aircraft)
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
@@ -43699,20 +43699,22 @@ onkeydown = e => {
     if (slot) holdQuickSlot(slot[1] - 1);
     if (e.code === 'KeyQ' && heldRod()) useHeldItem();
   }
-  if (onFoot && !sleep) {
+  if (handheldMode() && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'KeyR' && heldGun()) reloadKey(); // (the revolver: gun-ui.js)
+    if (e.code === 'KeyI') openInventory();
+    const slot = /^Digit([1-8])$/.exec(e.code);
+    if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1);
+    if (e.code === 'Digit0' || e.code === 'Backquote') held = -1;
+    if (e.code === 'KeyB' && heldItem()?.id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
+  }
+  if (onFoot && !sleep) {
     if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
     if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
-    if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
     if (e.code === 'KeyP') startPee();
-    const slot = /^Digit([1-8])$/.exec(e.code);
-    if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1); // again: put it away
-    if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
-    if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
   }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
@@ -43771,7 +43773,7 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
 }
 addEventListener('mousedown', e => {
   if (wanted.busted || !mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
-  if (e.button === 0 && (onFootMode() || mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind) || (mode === 'sea' || mode === 'boat') && heldRod())) {
+  if (e.button === 0 && (handheldMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
     K.MouseUse = 1; audioStart(); useHeldItem();
   }
   if (e.button === 2) {
@@ -43952,7 +43954,7 @@ function loop(t) {
     requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
-  if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && onFootMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
+  if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && handheldMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
   stepBathroomDoors(dt);
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
@@ -44166,6 +44168,12 @@ function eLabel(p) {
 }
 const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
+// The same held-item verbs apply while walking or riding as a passenger.
+function touchHeldActions(out) {
+  const it = heldItem();
+  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+  else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
+}
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
   if(furnishingPlacement)return [['Cancel','Escape','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
@@ -44202,7 +44210,13 @@ function touchActions() {
     return [['Camera', 'KeyV', 'pop'], [heli ? 'Back' : 'Power -', 'KeyS', 'pop'], [heli ? 'Forward' : 'Power +', 'KeyW', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   }
   if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
-  if(mode==='ferry')return [['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop'],...ferryRide.seat!=null?[['Next island','Space','pop']]:[],...heldItem()&&['food','drink'].includes(ITEMS[heldItem().id]?.kind)?[['Eat / drink','KeyQ','pop']]:[],...e?[[e,'KeyE','main']]:[]];
+  if(mode==='ferry'||mode==='el') {
+    out.push(['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop']);
+    if(mode==='ferry'&&ferryRide?.seat!=null)out.push(['Next island','Space','pop']);
+    touchHeldActions(out);
+    if(e)out.push([e,'KeyE','main']);
+    return out;
+  }
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if(mode==='room'&&homeRecord(room))out.push(['Furnish','KeyF','pop']);
@@ -44211,9 +44225,7 @@ function touchActions() {
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
-    const it = heldItem();
-    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
-    else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
+    touchHeldActions(out);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
@@ -44223,7 +44235,7 @@ function touchActions() {
 // the More sheet: [label, key, when]. Held buttons (Crouch) work while held, the rest close the sheet
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
-  ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
+  ['Empty hands', 'Digit0', () => handheldMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];

@@ -59,6 +59,12 @@ function eLabel(p) {
 }
 const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
+// The same held-item verbs apply while walking or riding as a passenger.
+function touchHeldActions(out) {
+  const it = heldItem();
+  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+  else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
+}
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
   if(furnishingPlacement)return [['Cancel','Escape','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
@@ -95,7 +101,13 @@ function touchActions() {
     return [['Camera', 'KeyV', 'pop'], [heli ? 'Back' : 'Power -', 'KeyS', 'pop'], [heli ? 'Forward' : 'Power +', 'KeyW', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   }
   if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
-  if(mode==='ferry')return [['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop'],...ferryRide.seat!=null?[['Next island','Space','pop']]:[],...heldItem()&&['food','drink'].includes(ITEMS[heldItem().id]?.kind)?[['Eat / drink','KeyQ','pop']]:[],...e?[[e,'KeyE','main']]:[]];
+  if(mode==='ferry'||mode==='el') {
+    out.push(['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop']);
+    if(mode==='ferry'&&ferryRide?.seat!=null)out.push(['Next island','Space','pop']);
+    touchHeldActions(out);
+    if(e)out.push([e,'KeyE','main']);
+    return out;
+  }
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if(mode==='room'&&homeRecord(room))out.push(['Furnish','KeyF','pop']);
@@ -104,9 +116,7 @@ function touchActions() {
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
-    const it = heldItem();
-    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
-    else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
+    touchHeldActions(out);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
@@ -116,7 +126,7 @@ function touchActions() {
 // the More sheet: [label, key, when]. Held buttons (Crouch) work while held, the rest close the sheet
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
-  ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
+  ['Empty hands', 'Digit0', () => handheldMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
