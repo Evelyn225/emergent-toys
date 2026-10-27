@@ -41769,7 +41769,9 @@ function homeFrenchDoors(r){
 // city balcony. This is home-only: shared restaurant/shop furniture is intact.
 function HOME_BALCONY_FURNITURE(x,y,kind,fx=0,fy=1){
   const chair=kind==='chair',c=chair?-fy:1,s=chair?fx:0,parts=[],variants=new Map();
-  const xy=(u,v)=>[c*u-s*v,s*u+c*v];
+  // Furniture's v axis points toward its occupant's facing direction. It is
+  // the reverse of the box ray's perpendicular axis (symmetric for a box).
+  const xy=(u,v)=>chair?[c*u+fx*v,s*u+fy*v]:[u,v];
   const block=(role,u,v,hl,hw,z0,z1,round,material)=>{
     const[x,y]=xy(u,v);parts.push({role,material,box:{...boxAt(x,y,c,s,hl,hw,z0,z1),round}});
   };
@@ -41790,7 +41792,9 @@ function HOME_BALCONY_FURNITURE(x,y,kind,fx=0,fy=1){
     }
     // The pressed pan supports the slats and stops unresolved gaps exposing
     // a checkerboard of ground pixels at ordinary standing distance.
-    block('seat-pan',0,0,.28,.28,.44,.455,.004,'paint');
+    // Its edge meets the inner frame face, so their exposed tops never
+    // overlap in the same plane between the slats.
+    block('seat-pan',0,0,.24,.24,.44,.455,.004,'paint');
     for(const v of [-.19,0,.19])block('seat-slat',0,v,.29,.085,.455,.5,.008,'paint');
     const arc=[[-.26,1],[-.20,1.07],[0,1.10],[.20,1.07],[.26,1]];
     for(let k=1;k<arc.length;k++)tube('back-arch',[arc[k-1][0],-.265,arc[k-1][1]],[arc[k][0],-.265,arc[k][1]],.016);
@@ -41811,7 +41815,14 @@ function HOME_BALCONY_FURNITURE(x,y,kind,fx=0,fy=1){
     const key=scale+':'+base;let v=variants.get(key);
     if(!v){
       if(variants.size>=2)variants.clear();
-      const paint=(i,t,L)=>{BG[i]=C(WHITE,3+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+      const topLight=coveLight(0,0,1),paint=(i,t,L,seat=false)=>{
+        const light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+        // Subcell bevel sides otherwise become scattered dark cells across
+        // a thin white seat. Average their light into the top while viewed
+        // from above; preserve the rounded shading once it resolves nearby.
+        const resolve=seat&&eye>base+.5*scale?smooth(clamp((.008*scale*Math.min(projX,projY)/t-.35)/.65,0,1)):1;
+        BG[i]=C(WHITE,3+L*.3*(resolve===1?light:topLight+(light-topLight)*resolve));set(i,' ',0);return true;
+      };
       const wood=(i,t,L)=>coveTimber(i,HIT.u/scale,(HIT.v+HIT.w-base)/scale,L,t/scale,HIT.nx,HIT.ny,HIT.nz,3);
       const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,chair?WHITE:GRAY);
       const lineShade=(i,t,L)=>{BG[i]=C(chair?WHITE:GRAY,2.5+L*.16);set(i,' ',0);return true;};
@@ -41819,7 +41830,8 @@ function HOME_BALCONY_FURNITURE(x,y,kind,fx=0,fy=1){
         const a=p.box,b=boxAt(a.x*scale,a.y*scale,a.c,a.s,a.hl*scale,a.hw*scale,base+a.z0*scale,base+a.z1*scale);
         if(p.tube)Object.assign(b,{ax:a.ax*scale,ay:a.ay*scale,az:base+a.az*scale,bx:a.bx*scale,by:a.by*scale,bz:base+a.bz*scale,r:a.r*scale});
         else b.round=a.round*scale;
-        return {role:p.role,local:b,view:{...b},ray:p.tube?coveRayCapsule:coveRayRounded,shade:p.material==='wood'?wood:p.material==='paint'?paint:metal,lineShade,tube:!!p.tube};
+        const seat=p.role==='seat-slat'||p.role==='seat-pan';
+        return {role:p.role,local:b,view:{...b},ray:p.tube?coveRayCapsule:coveRayRounded,shade:p.material==='wood'?wood:p.material==='paint'?(seat?(i,t,L)=>paint(i,t,L,true):paint):metal,lineShade,tube:!!p.tube};
       });variants.set(key,v);
     }return v;
   }

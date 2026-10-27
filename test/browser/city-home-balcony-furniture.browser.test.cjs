@@ -30,10 +30,12 @@ test('Belle bistro geometry has closed grounded legs, supported slats and connec
     const pan=rows.find(q=>q.role==='seat-pan'),slats=rows.filter(q=>q.role==='seat-slat'),posts=rows.filter(q=>q.role==='back-post'),arch=rows.filter(q=>q.role==='back-arch'),rail=rows.find(q=>q.role==='back-rail');
     check(pan&&slats.length===3&&posts.length===2&&arch.length===4&&rail,'missing seat support or shaped back');
     if(pan)check(slats.every(q=>Math.abs(q.b.z0-pan.b.z1)<1e-8&&q.b.z1===o.h),'seat slats float or seating height differs');
+    if(pan)for(const q of rows.filter(q=>q.role==='seat-frame')){const a=pan.b,b=q.b,overlapX=Math.min(a.x+a.hl,b.x+b.hl)-Math.max(a.x-a.hl,b.x-b.hl),overlapY=Math.min(a.y+a.hw,b.y+b.hw)-Math.max(a.y-a.hw,b.y-b.hw);check(overlapX<1e-8||overlapY<1e-8,'seat pan and frame have coplanar exposed tops');}
     for(const q of arch){const b=q.b;for(const P of [[b.ax,b.ay,b.az],[b.bx,b.by,b.bz]])check(arch.concat(posts).filter(a=>a!==q).some(a=>dist(P,[a.b.ax,a.b.ay,a.b.az],[a.b.bx,a.b.by,a.b.bz])<1e-8),'back arch has a loose endpoint');}
     for(const q of rows.filter(q=>q.role==='back-picket')){const b=q.b;check(dist([b.ax,b.ay,b.az],[rail.b.ax,rail.b.ay,rail.b.az],[rail.b.bx,rail.b.by,rail.b.bz])<1e-8&&arch.some(a=>dist([b.bx,b.by,b.bz],[a.b.ax,a.b.ay,a.b.az],[a.b.bx,a.b.by,a.b.bz])<1e-8),'picket misses its upper/lower rail');}
     for(const q of rows.filter(q=>q.role==='stretcher')){const b=q.b;for(const P of [[b.ax,b.ay,b.az],[b.bx,b.by,b.bz]])check(legs.some(a=>dist(P,[a.b.ax,a.b.ay,a.b.az],[a.b.bx,a.b.by,a.b.bz])<1e-8),'stretcher misses leg');}
     check(o.seat&&o.h===.5&&o.fx*(22.3-o.x)+o.fy*(6-o.y)>0,'chair points away from table');
+    check(posts.every(q=>(q.b.x-o.x)*o.fx+(q.b.y-o.y)*o.fy<-.24),'drawn chair back faces its seated occupant');
    }else{
     const top=rows.find(q=>q.role==='tabletop');check(top&&top.b.z1===.78&&rows.filter(q=>q.role==='apron').every(q=>Math.abs(q.b.z1-top.b.z0)<1e-8)&&legs.every(q=>Math.abs(q.b.bz+q.b.r-top.b.z0)<1e-8),'tabletop/apron/leg supports do not join');
    }
@@ -75,6 +77,7 @@ test('real C sits at both native and outdoor balcony chairs with the correct dir
  const r=await page.evaluate(()=>{const bad=[],b=room.balconyWorld;
   if(roofFree(b.x0+.33,b.y-.4)||roofFree(b.x0+.33,b.y-.28))bad.push('table or chair collider missing');
   if(!roofFree(b.x0+.16,b.y-.4))bad.push('bistro set blocks side route');
+  px=b.x0+.3;py=b.y+.4;if(nearSeat())bad.push('city seat reach was not converted from metres');
   px=b.x0+.4;py=b.doorY;for(let k=0;k<36&&mode==='roof';k++)move(-.01,0);
   if(mode!=='room'||!free(px,py))bad.push('door return broken');
   for(const kind of ['home','loft','islandhome','cafe','hotelroom']){enterRoom(kind,{ret:[50,73,0],lobby:{word:'HOTEL',ret:[50,73,0]}},ROOM_DEFS[kind].entry||[4,4,0]);if(room.props.some(o=>o.homeBalconyFurniture))bad.push('unrelated room got bistro set');}
@@ -88,5 +91,19 @@ test('subcell bistro metal keeps cached continuous strokes and resolves to close
   const A=capture(),B=capture(),thin=A.filter(q=>q.ray===rayRod);if(thin.length<10||thin.some(q=>!B.some(p=>p.b===q.b&&p.shade===q.shade&&p.ray===rayRod)))bad.push('subcell strokes missing or rebuilt');
   projX=10000;projY=6000;const near=capture();if(near.some(q=>q.ray===rayRod)||near.filter(q=>q.ray===coveRayCapsule).length!==thin.length)bad.push('tubes stay flat instead of resolving');
   return bad;
+ });assert.deepEqual(r,[]);
+}));
+
+test('unresolved seat bevels keep a calm painted top and recover rounded lighting close up at both scales',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  const o=room.props.find(o=>o.homeBalconyFurniture?.kind==='chair'),bad=[],draw=drawBox;if(!o)return ['no bistro seat'];dx=1;dy=0;projX=100;projY=60;
+  drawBox=()=>{};try{for(const [scale,base]of [[1,0],[.1,2]]){
+   o.drawScaled(1,0,scale,base);const part=o.homeBalconyFurniture.variants.get(scale+':'+base).find(p=>p.role==='seat-slat');
+   const color=(t,normal)=>{[HIT.nx,HIT.ny,HIT.nz]=normal;HIT.face=normal[2]>.7?5:3;part.shade(0,t,8);return BG[0];};
+   eye=base+1.7*scale;const flat=color(4*scale,[0,0,1]),bevel=color(4*scale,[.6,0,.8]),side=color(4*scale,[0,-1,0]);
+   if(flat!==bevel||flat!==side)bad.push('unresolved rounded edges sparkle across the seat');
+   if(color(.1*scale,[0,0,1])===color(.1*scale,[0,-1,0]))bad.push('near rounded lighting stays flat');
+   eye=base+.3*scale;if(color(4*scale,[0,0,1])===color(4*scale,[0,-1,0]))bad.push('underside loses its actual light');
+  }}finally{drawBox=draw;}return bad;
  });assert.deepEqual(r,[]);
 }));
