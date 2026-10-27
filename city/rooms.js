@@ -827,14 +827,15 @@ function homePlan(w, h, tier) {
       wall(start,divideY,end-1,divideY,'.');passages.push({start,end,cross:divideY});
     }
   }
-  let balcony = null;
+  let balcony = null, frenchDoor = null;
   if (tier === 2) {
     balcony = { x0: 20, x1: 25, y0: 3, y1: 17 };
     wall(19, 1, 25, h - 2); // solid end wings round a recessed, open balcony
     wall(20, 3, 24, 16, '.');
     wall(25, 3, 25, 16, 'B');
     wall(20, 2, 25, 2, 'B'); wall(20, 17, 25, 17, 'B');
-    wall(19, 11, 19, 13, '.'); // French doors, reachable from the salon
+    frenchDoor = {wall:19,thickness:1,start:11,end:14,top:2.9};
+    wall(frenchDoor.wall, frenchDoor.start, frenchDoor.wall, frenchDoor.end-1, '.');
   }
   const entryX = tier === 2 ? 9 : w / 2;
   wall(entryX - 1, h - 1, entryX, h - 1, 'D');
@@ -843,7 +844,7 @@ function homePlan(w, h, tier) {
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
   const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
     : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
-  return { home, wc, balcony, windows, lamps, tier, homePassages:passages, shelfAxis: [0,1], bedBounds: [home.bed[0],home.bed[1]+.2,tier?1.25:1,.85], grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
+  return { home, wc, balcony, frenchDoor, windows, lamps, tier, homePassages:passages, shelfAxis: [0,1], bedBounds: [home.bed[0],home.bed[1]+.2,tier?1.25:1,.85], grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
@@ -875,6 +876,7 @@ function homeDef(w, h, tier) {
       HOME_ENTRY_DOOR(r),
       ...homePassageSurrounds(r),
       ...homeBalconyRails(r),
+      ...homeFrenchDoors(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
@@ -1117,6 +1119,10 @@ function roomFloor(i, r, x, rx, ry) {
   switch (room.def.floor) {
     case 'home': {
       const b = room.def.balcony, sofa = room.def.home.sofa;
+      const door=room.def.frenchDoor;
+      // One floor surface owns the flush stone threshold: no overlaid slab
+      // or raised lip at the change from room to live city balcony.
+      if(door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end){BG[i]=C(STONE,2+f*2);return set(i,' ',0);}
       if (b && wx >= b.x0 && wy >= b.y0 && wy < b.y1) {
         BG[i] = C(WHITE, 2 + f * 2); return set(i, fract(wx * 2) < 0.04 || fract(wy * 2) < 0.04 ? '+' : ' ', C(GRAY, L));
       }

@@ -29,19 +29,16 @@ function homeBalconyFree(x, y) {
   if (x < b.x0 + .015) return false;
   if (body.z < 1.1 && (x > b.x1 - .035 || y < b.y0 + .035 || y > b.y1 - .035)) return false;
   const rx = 19 + (x - b.x0) * 10, ry = 10 + (y - b.y) * 10;
-  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && (!o.homeBalconyRail||body.z<o.box.z1) && inBox(o.box,rx,ry,.2))) return false;
+  if (room.props.some(o => o.box && !o.walk && (o.box.x >= 20 || o.homeFrenchDoorSolid) && o.box.z0 < 1.2 && (!(o.homeBalconyRail||o.homeFrenchDoorSolid)||body.z<o.box.z1) && inBox(o.box,rx,ry,.2))) return false;
   return roofHeightAt(x,y) <= roofH + ROOF_STEP + body.z / 10;
 }
 function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
   const home = homeAt(sh), b = homeBalconyBounds(home);
-  if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > .17 || z < b.z || z > b.z + .29) return false;
-  const du = rel(wc - b.doorY), rz = z - b.z;
-  const centerPost = Math.abs(du) < .008;
-  const frame = Math.abs(du) > .145 || centerPost || rz < .012 || rz > .27 || Math.abs(rz - .11) < .008;
-  BG[i] = C(frame ? STONE : CYAN,frame ? 2 + L * .3 : 1.5 + day * 2);
-  let ch = ':';
-  if (frame) ch = centerPost ? '|' : '=';
-  set(i,ch,C(frame ? WHITE : WARM,L * .8));
+  const p=ROOM_DEFS.bellehome.frenchDoor;
+  if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > (p.end-p.start)/20 || z < b.z || z > b.z + p.top/10) return false;
+  // The leaves stand open in real geometry. This inexpensive room recess
+  // replaces the old painted CLOSED doors; the interior keeps its live view.
+  BG[i] = C(BRICK,.4 + day*.35);set(i,' ',0);
   return true;
 }
 const homeBalconyModels = new WeakMap();
@@ -56,6 +53,8 @@ function drawHomeBalconies() {
     let model = homeBalconyModels.get(home);
     if (!model) {
       model = makeRoom('bellehome',{ cell: [home.cell % N,Math.floor(home.cell / N)] }).props.filter(o => {
+        if(o.homeFrenchDoor)return true;
+        if(o.homeFrenchDoorSolid||o.homeFrenchDoorSurround)return false;
         if(o.homeBalconyRail)return true;
         const p = o.box || o;
         return p.x >= 20 && p.y >= 3 && p.y < 17;
@@ -71,6 +70,7 @@ function drawHomeBalconies() {
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
       if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
+      if(o.homeFrenchDoor){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       if(o.homePlant){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
       if (o.box && shade) {
