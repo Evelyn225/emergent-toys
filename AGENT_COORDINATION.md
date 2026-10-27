@@ -1464,3 +1464,82 @@ add invisible player colliders/shelter. world-bootstrap/facade edits remain
 reserved, so use a post-assembly call if native refresh is needed. Include
 kerb fixtures created later and keep bucket/glow caches and el stair clearance
 consistent. Then remaining passes5/6/9 and unpublished Claude lettering hold.
+
+#273 physical walk-up landing merged. Codex active
+`codex/street-entrance-clearance`, beginning with a native placement/geometry
+audit before choosing source changes. Likely ownership: new cached pure
+entrance/step-approach helper, city/streetscape.js fixture placement predicate,
+city/kerb-fixtures.js placement only, optional separate post-assembly call,
+focused native audit test and shared manifest/bundle/notes. No geometry or
+rendering changes to held facade/world-bootstrap files. Keep reservations
+placement-only, not invisible player/shelter colliders. Cover rendered
+brownstone steps and actual door fronts, service door points, ordinary street
+fixtures, machines and later kerb fixtures. Preserve existing street geometry,
+el stair clearance, buckets, lamp glow, orientation and anchored machine backs.
+Choose move/skip behavior from actual full-world conflict counts and visible
+examples. This is the last new reported-fix group; remaining passes5/6/9 follow.
+#269–#271 full CI and full Node1069/1069 green; #272/#273 CI pending. Preserve
+unpublished Claude sign-lettering and all other ownership reservations. No
+parallel Codex chunk is running.
+
+27 October follow-up: user also requests item use aboard boats and the elevated
+train (and check ferry consistency). Queue a separate input/held-item chunk
+immediately after the active street entrance fix. Existing main.js restricts
+boat/sea Q and click to rods, el lacks the shared item/quick-slot handler, and
+ferry only permits food/drink. Check real inventory/slots/Q/click, effects and
+travel/movement controls without bypassing arrest/menu/sleep guards. No second
+copy of the street chunk is running. #272 and #273 full CI are GREEN
+(40422759285/40424527249).
+Clarification: by boat the user means the ferry, not the marina/garden boats.
+The queued input chunk is ferry + elevated train; leave small-boat input alone.
+
+Street entrance implementation/review checkpoint: finished-world reservations
+now follow offset merchant doors, repeated brownstone bays, housing/generic/
+Belle frontages, real service points and each actual stair flight plus its side
+rails, outer foot and raised headroom. The cache is placement-only and has no
+player collider/shadow/rain/render hook. Native refitting slides the existing
+fixtures along the curb/facade, preserving orientation and machine backing;
+lamps recalculate arcade height at candidate positions. Both body and vendor
+stay together, bikes keep their extras index, final buckets/glow refresh, and
+new kerbs/shelters reserve access before spawning (shelter benches stay attached).
+Controller cabinets retain their actual nearby signal pole; the inherited
+kerb control caught exact-.8m remote placements and now passes. All fixtures
+fit without removal, including all448 machines and28 carts. Cached approach
+index includes8098 entries across1356 physical stoops. Five focused checks
+include native rendered door-centre agreement and actual E-entry through the
+hardware door and former cabinet-blocked brownstone flight. Original awning,
+kerb and vending controls pass across final runs; nine Node checks pass. Old
+baseline +9 independent defects fail assertions using isolated routed bundles;
+the additional old native-stoop walking check fails as expected. Actual walk
+stops at the existing wall boundary on the high tread, rather than pretending
+the wall can be walked into. Final close/wide/oblique/night views show the
+cabinet off the stair and post off the door. ABAB repeat is still finishing;
+no source mutants or other Codex chunks are running.
+
+Known separate follow-ups from the full native audit: eight authored night-
+market counter/pole conflicts belong to five coherent stalls, so do not move
+those solids apart. Address them as a complete scene, preserving vendors,
+interaction points, canopies, indexes and road clearance. Also fourteen native
+machines already lack backing after world assembly on unchanged main; this
+chunk preserves their existing positions and tests backing on every relocation,
+not a fabricated all-world invariant. Keep that independent placement cleanup
+visible in pass11. User-priority next: general handheld item use on FERRY and
+EL TRAIN (not marina/garden boats), then the night-market scene and remaining
+passes5/6/9. All held Claude reservations remain untouched.
+
+Final street review: all18 unique browser checks across final focused/inherited
+runs and nine Node checks pass. Settled60-warm/120-sample ABAB177x66 repeat,
+main→after: door wide5.5–5.6→5.4ms, close5.8–5.9→5.8–6.0,
+oblique6.2–6.4→6.2–6.3; machine wide4.6→4.5–4.7,
+close4.6–4.7→4.5–4.6, oblique4.6–4.7→4.5–4.6;
+stoop wide5.6→5.5, close5.3–5.4→5.1, oblique5.5–5.7→5.6.
+Initial run overlapped browser checks; settled repeat resolves its load tails.
+No material render regression or general FPS gain claim. Final paired24 views
+are clear-floor; originally blocked cabinet is visibly beside the full stairs.
+Old native walking control stops at433.64 with no stair height; final reaches
+the existing high tread/wall boundary at433.94, ground.096 and real E enters.
+Old baseline plus9 independent defects and the extra old walking probe fail
+assertions (11 total routed probes), without changing source/saved bundle.
+Ready to commit/push/PR/merge, then ferry/el handhelds; keep coherent market
+and14 unchanged native backing cases queued explicitly rather than claiming
+all street scene placements are finished. No parallel Codex work or mutants.

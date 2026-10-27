@@ -46,6 +46,10 @@ function streetFixtureBoxes(o, kind) {
   if (kind === 'signal') return [box(.025,.025,0,.4)];
   if (kind === 'blade') return [box(.022,.006,0,.33,o.x,o.y,0,1)];
   if (kind === 'bench') return [box(.18,.07,.01,.13,o.x,o.y,-o.fy,o.fx)];
+  if (kind === 'bike') return [box(.092,.026,0,.1,o.x,o.y,o.c,o.s)];
+  if (kind === 'vendor') return [box(o.type.w*.38+.055,.075,0,.2,o.x,o.y,o.oy?1:0,o.oy?0:1),
+    box(.03,.03,0,.18,o.x+o.ox,o.y+o.oy),
+    ...(o.type.roof==='awning'?[box(o.type.w*.38+.015,.1,.18,.215,o.x,o.y,o.oy?1:0,o.oy?0:1)]:[])];
   if (kind === 'tree') return [box(.03,.03,0,.6*(o.s || 1))];
   return [box(VM_HL,VM_HW,0,VM_H,o.x,o.y,o.c,o.s)];
 }
@@ -66,12 +70,16 @@ function fixtureSpaceTaken(o,buckets) {
     if(p!==o&&Math.hypot(rel(o.x-p.x),rel(o.y-p.y))<.2)return true;
   return false;
 }
-function fitStreetFixtures(items, buckets, kind) {
-  STREET_CLEARANCE.checked[kind] = items.length; STREET_CLEARANCE.moved[kind] = 0; STREET_CLEARANCE.removed[kind] = 0;
+function fitStreetFixtures(items, buckets, kind, approaches = false) {
+  if (!approaches || STREET_CLEARANCE.checked[kind] == null) {
+    STREET_CLEARANCE.checked[kind] = items.length; STREET_CLEARANCE.moved[kind] = 0; STREET_CLEARANCE.removed[kind] = 0;
+  }
+  const clear = o => streetFixtureClear(o,kind) && (!approaches || streetEntranceFixtureClear(o,kind));
   for (let k=items.length-1;k>=0;k--) {
     const o=items[k];
+    if (approaches && streetEntranceFixtureClear(o,kind)) continue;
     if (kind==='lamp') o.top = arcadeAt(o.x,o.y) ? ARCADE_Z-NECK-.03 : LAMP_TOP;
-    if (streetFixtureClear(o,kind)) continue;
+    if (clear(o)) continue;
     for (const b of streetFixtureBoxes(o,kind)) {
       const hit=streetGeometryCollision(b,kind!=='machine');
       if (hit) STREET_CLEARANCE.conflicts[hit.kind]=(STREET_CLEARANCE.conflicts[hit.kind]||0)+1;
@@ -80,14 +88,15 @@ function fitStreetFixtures(items, buckets, kind) {
     const candidates=[];
     if (direction) {
       const [nx,ny]=direction;
-      let offsets=[.06,.12,.16,0];
+      let offsets=approaches ? [0] : [.06,.12,.16,0];
       if(kind==='blade')offsets=[.06,.12,.16,.24,.3,0];
       if(kind==='machine')offsets=[0]; // wall-mounted machines slide along their facade
-      for (const inward of offsets) for (const along of [0,-.35,.35,-.7,.7,-1.05,1.05])
+      for (const inward of offsets) for (const along of approaches ? [0,-.1,.1,-.2,.2,-.3,.3,-.4,.4,-.5,.5,-.7,.7,-1.05,1.05,-1.4,1.4,-1.75,1.75] : [0,-.35,.35,-.7,.7,-1.05,1.05])
         candidates.push([start[0]+nx*inward-ny*along,start[1]+ny*inward+nx*along]);
     } else for (const radius of [.2,.4,.6]) for(let n=0;n<8;n++) candidates.push([start[0]+Math.cos(n*Math.PI/4)*radius,start[1]+Math.sin(n*Math.PI/4)*radius]);
     for (const [x,y] of candidates) {
       o.x=worldCoord(x);o.y=worldCoord(y);
+      if(kind==='lamp')o.top=arcadeAt(o.x,o.y)?ARCADE_Z-NECK-.03:LAMP_TOP;
       if (isWater(o.x,o.y) || direction && !ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) continue;
       if(kind==='machine') {
         const fx=-o.s*o.fs,fy=o.c*o.fs;
@@ -95,9 +104,13 @@ function fitStreetFixtures(items, buckets, kind) {
           ||stations.some(s=>Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.7))continue;
       }
       if (fixtureSpaceTaken(o,buckets)) continue;
-      if (streetFixtureClear(o,kind)) {fitted=true;break;}
+      if (approaches && (elStairLocal(o.x,o.y) || streetEntranceNeighboursOverlap(o,kind))) continue;
+      if (clear(o)) {fitted=true;break;}
     }
-    if (fitted) STREET_CLEARANCE.moved[kind]++;
+    if (fitted) {
+      STREET_CLEARANCE.moved[kind]++;
+      if(approaches)STREET_ENTRANCE_MOVES.push({o,kind,x:start[0],y:start[1]});
+    }
     else {items.splice(k,1);STREET_CLEARANCE.removed[kind]++;}
   }
   for (const bucket of buckets) bucket.length=0;
