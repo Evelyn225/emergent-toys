@@ -37,13 +37,14 @@ function kerbCrowded(x, y, r) {
   const bx = Math.floor(x / 8), by = Math.floor(y / 8), around = b => { const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) out.push(...b[bi(bx + i, by + j)]); return out; };
   return near(around(lampsB), r + .045) || near(around(treesB), r + .06) || near(around(benchesB), r + .2) || near(around(machinesB), r + .07)
     || near(around(lightsB), r + .05) || near(around(elPillarsB), r + .06) || near(around(kerbsB), r + .03)
-    || near(vendors, r + .32) || near(stations, r + .3) || elStairLocal(x, y);
+    || near(around(extrasB).filter(o=>o.bike!=null), r + .1) || near(vendors, r + .32) || near(stations, r + .3) || elStairLocal(x, y);
 }
 function kerbClear(o) {
   const cell = idx(Math.floor(o.x), Math.floor(o.y));
+  if(o.signalPole && Math.hypot(rel(o.x-o.signalPole.x),rel(o.y-o.signalPole.y))>=.78)return false;
   if (!ROAD[cell] || isWater(o.x, o.y) || seaAt(o.x, o.y) || GAS_CELL[cell] || GAS_CELL[idx(Math.floor(o.x - o.fx * .4), Math.floor(o.y - o.fy * .4))]) return false;
   const box = { x: o.x, y: o.y, c: o.c, s: o.s, hl: o.hl, hw: o.hw, z0: 0, z1: o.h };
-  return !streetGeometryCollision(box, true) && !kerbCrowded(o.x, o.y, Math.max(o.hl, o.hw));
+  return !streetEntranceCollision(box) && !streetGeometryCollision(box, true) && !kerbCrowded(o.x, o.y, Math.max(o.hl, o.hw));
 }
 const kerbsB = bucketed([]);
 const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
@@ -240,7 +241,7 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     if (done.has(key) || hash(ix, iy, 1406) > .6) continue;
     const e = l.vert ? mod(l.x, 8) : mod(l.y, 8), ax = l.vert ? (e < 1 ? 1 : -1) : 0, ay = l.vert ? 0 : (e < 1 ? 1 : -1);
     const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
-    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
+    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true, signalPole: l })) done.add(key);
   }
 }
 

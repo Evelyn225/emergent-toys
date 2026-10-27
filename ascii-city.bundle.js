@@ -5893,6 +5893,10 @@ function streetFixtureBoxes(o, kind) {
   if (kind === 'signal') return [box(.025,.025,0,.4)];
   if (kind === 'blade') return [box(.022,.006,0,.33,o.x,o.y,0,1)];
   if (kind === 'bench') return [box(.18,.07,.01,.13,o.x,o.y,-o.fy,o.fx)];
+  if (kind === 'bike') return [box(.092,.026,0,.1,o.x,o.y,o.c,o.s)];
+  if (kind === 'vendor') return [box(o.type.w*.38+.055,.075,0,.2,o.x,o.y,o.oy?1:0,o.oy?0:1),
+    box(.03,.03,0,.18,o.x+o.ox,o.y+o.oy),
+    ...(o.type.roof==='awning'?[box(o.type.w*.38+.015,.1,.18,.215,o.x,o.y,o.oy?1:0,o.oy?0:1)]:[])];
   if (kind === 'tree') return [box(.03,.03,0,.6*(o.s || 1))];
   return [box(VM_HL,VM_HW,0,VM_H,o.x,o.y,o.c,o.s)];
 }
@@ -5913,12 +5917,16 @@ function fixtureSpaceTaken(o,buckets) {
     if(p!==o&&Math.hypot(rel(o.x-p.x),rel(o.y-p.y))<.2)return true;
   return false;
 }
-function fitStreetFixtures(items, buckets, kind) {
-  STREET_CLEARANCE.checked[kind] = items.length; STREET_CLEARANCE.moved[kind] = 0; STREET_CLEARANCE.removed[kind] = 0;
+function fitStreetFixtures(items, buckets, kind, approaches = false) {
+  if (!approaches || STREET_CLEARANCE.checked[kind] == null) {
+    STREET_CLEARANCE.checked[kind] = items.length; STREET_CLEARANCE.moved[kind] = 0; STREET_CLEARANCE.removed[kind] = 0;
+  }
+  const clear = o => streetFixtureClear(o,kind) && (!approaches || streetEntranceFixtureClear(o,kind));
   for (let k=items.length-1;k>=0;k--) {
     const o=items[k];
+    if (approaches && streetEntranceFixtureClear(o,kind)) continue;
     if (kind==='lamp') o.top = arcadeAt(o.x,o.y) ? ARCADE_Z-NECK-.03 : LAMP_TOP;
-    if (streetFixtureClear(o,kind)) continue;
+    if (clear(o)) continue;
     for (const b of streetFixtureBoxes(o,kind)) {
       const hit=streetGeometryCollision(b,kind!=='machine');
       if (hit) STREET_CLEARANCE.conflicts[hit.kind]=(STREET_CLEARANCE.conflicts[hit.kind]||0)+1;
@@ -5927,14 +5935,15 @@ function fitStreetFixtures(items, buckets, kind) {
     const candidates=[];
     if (direction) {
       const [nx,ny]=direction;
-      let offsets=[.06,.12,.16,0];
+      let offsets=approaches ? [0] : [.06,.12,.16,0];
       if(kind==='blade')offsets=[.06,.12,.16,.24,.3,0];
       if(kind==='machine')offsets=[0]; // wall-mounted machines slide along their facade
-      for (const inward of offsets) for (const along of [0,-.35,.35,-.7,.7,-1.05,1.05])
+      for (const inward of offsets) for (const along of approaches ? [0,-.1,.1,-.2,.2,-.3,.3,-.4,.4,-.5,.5,-.7,.7,-1.05,1.05,-1.4,1.4,-1.75,1.75] : [0,-.35,.35,-.7,.7,-1.05,1.05])
         candidates.push([start[0]+nx*inward-ny*along,start[1]+ny*inward+nx*along]);
     } else for (const radius of [.2,.4,.6]) for(let n=0;n<8;n++) candidates.push([start[0]+Math.cos(n*Math.PI/4)*radius,start[1]+Math.sin(n*Math.PI/4)*radius]);
     for (const [x,y] of candidates) {
       o.x=worldCoord(x);o.y=worldCoord(y);
+      if(kind==='lamp')o.top=arcadeAt(o.x,o.y)?ARCADE_Z-NECK-.03:LAMP_TOP;
       if (isWater(o.x,o.y) || direction && !ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) continue;
       if(kind==='machine') {
         const fx=-o.s*o.fs,fy=o.c*o.fs;
@@ -5942,9 +5951,13 @@ function fitStreetFixtures(items, buckets, kind) {
           ||stations.some(s=>Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.7))continue;
       }
       if (fixtureSpaceTaken(o,buckets)) continue;
-      if (streetFixtureClear(o,kind)) {fitted=true;break;}
+      if (approaches && (elStairLocal(o.x,o.y) || streetEntranceNeighboursOverlap(o,kind))) continue;
+      if (clear(o)) {fitted=true;break;}
     }
-    if (fitted) STREET_CLEARANCE.moved[kind]++;
+    if (fitted) {
+      STREET_CLEARANCE.moved[kind]++;
+      if(approaches)STREET_ENTRANCE_MOVES.push({o,kind,x:start[0],y:start[1]});
+    }
     else {items.splice(k,1);STREET_CLEARANCE.removed[kind]++;}
   }
   for (const bucket of buckets) bucket.length=0;
@@ -42225,6 +42238,131 @@ function assembleArchipelago() {
 }
 let CITY_LAYOUT_CHECKPOINT=null;
 assembleArchipelago();
+// Placement-only access reservations, built on the finished native city. These
+// are not player colliders or shelter, and are never queried by the renderer.
+// Door locations follow each facade's actual door layout; logical shop/lobby
+// doors are also protected. Stepped entrances include their outermost tread
+// and room to step off it, rather than only the doorway in the wall.
+const STREET_ENTRANCES = buildStreetEntrances();
+const STREET_ENTRANCE_MOVES = [];
+function buildStreetEntrances() {
+  const zones=[], cells=new Map(), steps=new Map();
+  const add=(x,y,c,s,hl,hw,family,nx,ny,source)=>zones.push({
+    x,y,c,s,hl,hw,z0:0,z1:family==='stair-foot'?.32:.2,family,nx,ny,source
+  });
+  const face=(f,along,half,family,source)=>add(
+    (f.side?along:f.line)+f.nx*.15,(f.side?f.line:along)+f.ny*.15,
+    f.side?1:0,f.side?0:1,half+.025,.15,family,f.nx,f.ny,source
+  );
+  const valid=(f,sh)=>{
+    const u=(f.start+f.end)/2;
+    const k=idx(Math.floor((f.side?u:f.line)-f.nx*.1),Math.floor((f.side?f.line:u)-f.ny*.1));
+    return !f.low && map[k]===f.height && (!sh || SHOP[k]===sh);
+  };
+  for(const b of ARCH_BUILDINGS)for(const f of b.faces)if(f.front && valid(f,b.sh)) {
+    const width=f.end-f.start,apartment=b.sh.kind===SHOP_APTS;
+    if(b.region==='brownstones' && !b.profile) {
+      // Every narrow brownstone bay has its own offset entrance and stoop.
+      for(let j=0;j<f.units;j++)face(f,f.start+(j+.5-.24)*f.spacing,
+        apartment?f.spacing*.125+.025:.067,apartment?'brownstone-door':'brownstone-shop',b.sh.word);
+    } else face(f,(f.start+f.end)/2,b.profile && apartment?Math.min(.23,width*.17):.067,
+      b.profile?'housing-door':'architecture-door',b.sh.word);
+  }
+  for(const b of MERCHANT_BUILDINGS)for(const f of b.faces)if(f.front && valid(f,b.sh)) {
+    const width=f.end-f.start;
+    // Merchant doors are offset from the face centre towards the first bay.
+    face(f,f.start+width*.35,Math.min(.14,width*.12)+.012,'merchant-door',b.sh.word);
+  }
+  const generic=new Set();
+  for(const a of SHOPFRONT_FACES)for(const f of a)if(f?.front && !generic.has(f) && valid(f)) {
+    generic.add(f);face(f,(f.start+f.end)/2,.067,'generic-door',SHOP[f.ownerCell]?.word);
+  }
+  const belle=new Set();
+  for(const a of BELLE_FACES)for(const f of a)if(f?.sign && !belle.has(f) && valid(f)) {
+    belle.add(f);
+    const u=(f.start+f.end)/2;
+    const k=idx(Math.floor((f.side?u:f.line)-f.nx*.1),Math.floor((f.side?f.line:u)-f.ny*.1));
+    if(SHOP[k]?.kind===SHOP_APTS)continue;
+    const width=f.end-f.start,bays=Math.max(1,Math.floor(width/.85)),spacing=width/bays;
+    for(let j=0;j<bays;j++) {
+      const centre=f.start+(j+.5)*spacing;
+      if(Math.abs(centre-f.sign.center)<spacing/2)face(f,centre,spacing*.32,'belle-door',SHOP[k]?.word);
+    }
+  }
+  for(const d of doors) {
+    const nx=-d.nx*10,ny=-d.ny*10,wallX=d.x+d.nx*1.2,wallY=d.y+d.ny*1.2;
+    add(wallX+nx*.15,wallY+ny*.15,Math.abs(ny),Math.abs(nx),.125,.15,'service-door',nx,ny,d.sh.word);
+  }
+  for(const o of ARCH_STEPS) {
+    if(map[o.ownerCell]!==o.ownerHeight)continue;
+    const key=[o.ownerCell,(o.x*o.c+o.y*o.s).toFixed(6),o.nx,o.ny].join(':');
+    const g=steps.get(key)||{o,minU:Infinity,maxU:-Infinity,minV:Infinity,maxV:-Infinity};
+    const u=(o.x-g.o.x)*o.c+(o.y-g.o.y)*o.s,v=(o.x-g.o.x)*o.nx+(o.y-g.o.y)*o.ny;
+    g.minU=Math.min(g.minU,u-o.hl);g.maxU=Math.max(g.maxU,u+o.hl);
+    g.minV=Math.min(g.minV,v-o.hw);g.maxV=Math.max(g.maxV,v+o.hw);steps.set(key,g);
+  }
+  const railsByOwner=new Map();
+  for(const r of ARCH_DETAILS)if(r.kind==='rail' && map[r.ownerCell]===r.ownerHeight) {
+    if(!railsByOwner.has(r.ownerCell))railsByOwner.set(r.ownerCell,[]);
+    railsByOwner.get(r.ownerCell).push(r);
+  }
+  for(const g of steps.values()) {
+    const o=g.o;
+    // Reserve the side rails too: the tread alone is narrower than the full
+    // built stoop. Group only the rail pair alongside this particular flight.
+    for(const r of railsByOwner.get(o.ownerCell)||[]) {
+      const u=(r.x-o.x)*o.c+(r.y-o.y)*o.s,v=(r.x-o.x)*o.nx+(r.y-o.y)*o.ny;
+      if(u<g.minU-.05 || u>g.maxU+.05 || Math.abs(v)>.3)continue;
+      const half=r.hl*Math.abs(r.c*o.c+r.s*o.s)+r.hw*Math.abs(-r.s*o.c+r.c*o.s);
+      g.minU=Math.min(g.minU,u-half);g.maxU=Math.max(g.maxU,u+half);
+    }
+    const u=(g.minU+g.maxU)/2,v=(g.minV+g.maxV+.12)/2;
+    add(o.x+o.c*u+o.nx*v,o.y+o.s*u+o.ny*v,o.c,o.s,
+      (g.maxU-g.minU)/2+.025,(g.maxV-g.minV+.12)/2,'stair-foot',o.nx,o.ny,SHOP[o.ownerCell]?.word);
+  }
+  for(const z of zones) {
+    const [ex,ey]=geometryBounds(z);
+    for(let y=Math.floor(z.y-ey);y<=Math.floor(z.y+ey);y++)for(let x=Math.floor(z.x-ex);x<=Math.floor(z.x+ex);x++) {
+      const k=idx(x,y);if(!cells.has(k))cells.set(k,[]);cells.get(k).push(z);
+    }
+  }
+  const conflict=b=>{
+    const [ex,ey]=geometryBounds(b);
+    for(let y=Math.floor(b.y-ey);y<=Math.floor(b.y+ey);y++)for(let x=Math.floor(b.x-ex);x<=Math.floor(b.x+ex);x++)
+      for(const z of cells.get(idx(x,y))||[])if(streetBoxesOverlap(b,z,0))return z;
+    return null;
+  };
+  return {zones,cells,conflict,stairGroups:steps.size};
+}
+function streetEntranceCollision(box) { return STREET_ENTRANCES.conflict(box); }
+function streetEntranceFixtureClear(o,kind) {
+  return streetFixtureBoxes(o,kind).every(b=>!streetEntranceCollision(b));
+}
+// Nearby buckets may still contain the previous cell while this family is
+// being fitted. The 3x3 neighbourhood covers the bounded two-metre slide.
+function streetEntranceNeighboursOverlap(o,kind) {
+  const boxes=streetFixtureBoxes(o,kind),bx=Math.floor(o.x/8),by=Math.floor(o.y/8);
+  const overlaps=(p,k)=>p!==o&&streetFixtureBoxes(p,k).some(b=>boxes.some(a=>streetBoxesOverlap(a,b,.008)));
+  for(const [b,k] of [[lampsB,'lamp'],[lightsB,'signal'],[benchesB,'bench'],[treesB,'tree'],[machinesB,'machine'],[extrasB,'bike']])
+    for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)for(const p of b[bi(bx+x,by+y)]) {
+      if(k==='bike'&&p.bike==null)continue;
+      if(Math.abs(rel(p.x-o.x))<1&&Math.abs(rel(p.y-o.y))<1&&overlaps(p,k))return true;
+    }
+  return vendors.some(p=>overlaps(p,'vendor'));
+}
+// Source-layout fitting predates archipelago assembly, and assembly replaces
+// junction signals. Refit only native entrance conflicts, sliding along the
+// existing kerb/facade, then refresh the same spatial and lighting caches.
+for(const [items,buckets,kind] of [[lamps,lampsB,'lamp'],[lights,lightsB,'signal'],[benches,benchesB,'bench'],[trees,treesB,'tree'],[machines,machinesB,'machine']])
+  fitStreetFixtures(items,buckets,kind,true);
+const entranceBikes=extras.filter(o=>o.bike!=null),oldEntranceBikes=new Set(entranceBikes);
+fitStreetFixtures(entranceBikes,bucketed(entranceBikes),'bike',true);
+const keptEntranceBikes=new Set(entranceBikes);
+for(let j=extras.length-1;j>=0;j--)if(oldEntranceBikes.has(extras[j])&&!keptEntranceBikes.has(extras[j]))extras.splice(j,1);
+for(const b of extrasB)b.length=0;
+for(const o of extras)extrasB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].push(o);
+fitStreetFixtures(vendors,bucketed(vendors),'vendor',true);
+rebuildLampGlow();
 // Utilities on the building fronts along the streets, placed on the finished
 // city: downpipes from the roof to the pavement (a hopper head under the
 // parapet, a bracket every couple of metres, a shoe at the foot that pours in
@@ -42376,13 +42514,14 @@ function kerbCrowded(x, y, r) {
   const bx = Math.floor(x / 8), by = Math.floor(y / 8), around = b => { const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) out.push(...b[bi(bx + i, by + j)]); return out; };
   return near(around(lampsB), r + .045) || near(around(treesB), r + .06) || near(around(benchesB), r + .2) || near(around(machinesB), r + .07)
     || near(around(lightsB), r + .05) || near(around(elPillarsB), r + .06) || near(around(kerbsB), r + .03)
-    || near(vendors, r + .32) || near(stations, r + .3) || elStairLocal(x, y);
+    || near(around(extrasB).filter(o=>o.bike!=null), r + .1) || near(vendors, r + .32) || near(stations, r + .3) || elStairLocal(x, y);
 }
 function kerbClear(o) {
   const cell = idx(Math.floor(o.x), Math.floor(o.y));
+  if(o.signalPole && Math.hypot(rel(o.x-o.signalPole.x),rel(o.y-o.signalPole.y))>=.78)return false;
   if (!ROAD[cell] || isWater(o.x, o.y) || seaAt(o.x, o.y) || GAS_CELL[cell] || GAS_CELL[idx(Math.floor(o.x - o.fx * .4), Math.floor(o.y - o.fy * .4))]) return false;
   const box = { x: o.x, y: o.y, c: o.c, s: o.s, hl: o.hl, hw: o.hw, z0: 0, z1: o.h };
-  return !streetGeometryCollision(box, true) && !kerbCrowded(o.x, o.y, Math.max(o.hl, o.hw));
+  return !streetEntranceCollision(box) && !streetGeometryCollision(box, true) && !kerbCrowded(o.x, o.y, Math.max(o.hl, o.hw));
 }
 const kerbsB = bucketed([]);
 const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
@@ -42579,7 +42718,7 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     if (done.has(key) || hash(ix, iy, 1406) > .6) continue;
     const e = l.vert ? mod(l.x, 8) : mod(l.y, 8), ax = l.vert ? (e < 1 ? 1 : -1) : 0, ay = l.vert ? 0 : (e < 1 ? 1 : -1);
     const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
-    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
+    if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true, signalPole: l })) done.add(key);
   }
 }
 
