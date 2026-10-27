@@ -298,14 +298,19 @@ const NIGHT_MARKET = (() => {
 })();
 // each stall: a waist-high counter with the goods laid out on it, two poles, a striped canopy above with the sign on
 // its front, and (after dark) someone behind the counter to sell to you
+const NIGHT_STALL = { roofHalf: .16, counterHalf: .13, postU: .14, postHalf: .006 };
+const NIGHT_MARKET_GROUPS = [];
 const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG], ['CURIOS', 5.15, ORANGE], ['FORTUNES', 6.35, BLUE], ['GOLDFISH', 7.55, CYAN]].map(([word, dx, canopy], k) => {
   const x = NIGHT_MARKET.bx * 8 + dx, y = NIGHT_MARKET.by * 8 + 1.78;
-  solidBox(x, y + 0.02, true, 0.56, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
-  for (const s of [-1, 1]) solidBox(x + s * 0.5, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
-  solidBox(x, y, true, 0.48, 0.09, 0, 0.1, 'stall', k);
-  const shirt = [WHITE, RED, BLUE, MAG, CYAN][k];
-  extras.push({ x: x + 0.1 - (k % 3) * 0.1, y: y + 0.14, z: 0, person: shirt, when: () => nightMarketOpen(tod) }); // the stallholder (drawn as a figure)
-  return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
+  const parts=[],add=(...args)=>{solidBox(...args);const o=solids[solids.length-1];parts.push(o);return o;};
+  Object.assign(add(x,y+.02,true,NIGHT_STALL.roofHalf,.15,.21,.26,'stallroof',k),{word,canopy,fs:-1});
+  for(const s of [-1,1])add(x+s*NIGHT_STALL.postU,y-.08,true,NIGHT_STALL.postHalf,NIGHT_STALL.postHalf,0,.21,'stallpole',k);
+  const counter=Object.assign(add(x,y,true,NIGHT_STALL.counterHalf,.09,0,.1,'stall',k),{word,canopy,fs:-1,at:[x,y-.3]});
+  const shirt=[WHITE,RED,BLUE,MAG,CYAN][k];
+  const seller={x:x+.1-(k%3)*.1,y:y+.14,z:0,person:shirt,when:()=>nightMarketOpen(tod)};
+  extras.push(seller);
+  NIGHT_MARKET_GROUPS.push({counter,parts,seller});
+  return counter;
 }) : [];
 if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
   extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, lantern: true, first: x === NIGHT_MARKET.bx * 8 + 2.4, last: x + 0.45 >= NIGHT_MARKET.bx * 8 + 7.8 });

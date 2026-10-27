@@ -1601,3 +1601,74 @@ its earlier pending status. Next keep the authored market and14 unchanged
 native backing cases visible before remaining passes5/6/9. Do not touch
 reserved bathroom/DINER/world-bootstrap/facade/global lettering/private
 Claude sign-lettering. No other Codex chunk/session is active.
+
+#275 ferry/el handhelds merged as75d6108. Codex active
+`codex/night-market-clearance` from that main. Begin with coherent native
+stall fitting: city/props.js night-market dimensions/group references only,
+new city/night-market-placement.js after entrance fitting and before kerbs,
+optional ignore-set parameter in streetGeometryCollision and optional explicit
+boxes in the existing nearby-fixture placement query; focused native market
+browser coverage and shared manifest/bundle/notes. Existing counters are9.6m
+wide and roofs11.2m wide; compact realistic footprints allow a complete stall
+to fit between doors while retaining its seller, service point, poles/canopy
+and curb side. Use the cached actual entrance reservations, check all group
+parts together, preserve wall backing/road clearance and update only affected
+spatial/shelter cells once. Do not move individual parts apart or push sellers
+into a traffic lane. No active mutants/other Codex session. Reserved Claude
+bathroom/DINER/world-bootstrap/facade/lettering remain untouched. #275 CI
+pending; #274 full CI green. Native14 backing cases and passes5/6/9 follow.
+
+Market implementation checkpoint: counters now2.6m and roofs3.2m across,
+with12cm grounded support posts that meet the canopy. Explicit groups retain
+counter/canopy/poles/seller references through native assembly. Whole-stall
+along-pavement fitting checks cached real entrances, all proposed solids and
+seller head/body, actual wall backing, other stalls and ordinary street
+fixtures; it keeps the original street side and never pushes into a lane.
+Only changed geometry cells/snow caches and solid/extra buckets refresh.
+Native full audit now reports ZERO ordinary, kerb, bike, cart or authored-solid
+entrance overlaps (all797 authored solids checked). Allfive stalls retained,
+no unfitted groups. Four focused market checks plus four coastal controls
+pass, as do six inherited native entrance/awning/walking checks and four Node
+goods/streetscape/bundle/parse files. Stronger independent physical-neighbour
+oracle passes too. Native walking/E now enters the formerly counter-blocked
+RAMEN door; tarp, CURIOS shop, fortune payment and goldfish E still work.
+Visual and isolated negative reviews are running; source/bundle are unchanged
+by mutants. #275 CI pending40450749769, #274 full green. Next fourteen native
+orphan-backed machines, then remaining passes5/6/9. Reserved Claude sources
+remain untouched; no second Codex chunk/session active.
+Market negative-review refinement: native default placement did not need to
+reject an ordinary fixture in its preferred gap, so merely removing that check
+survived. The placement routine now has a callable once-at-init function and a
+focused occupied-gap check: a real-sized native post occupies the preferred
+spot, all parts move to a different supported gap, and a populated old roof
+snow cache must agree with actual geometry afterward. Omitting neighbour
+clearance and omitting snow invalidation both fail this physical check; stale/
+missing/duplicate geometry cells and wrong buckets fail too. No per-frame
+hook was added. First close/rear cameras had assumed a different fitting
+choice; final cameras target actual STREET FOOD155.05,137.78, with a wider
+view centred157.3 on the opposite walking line. Final five focused checks,
+corrected views and bundle checks are finishing. No source mutants active.
+
+CI follow-up now takes priority immediately after the nearly reviewed market
+chunk: #275 Node and browser shards1/2/3 passed, shard4 failed only the
+#272 aquarium OPEN OCEAN native label view. Failure was painted102/visible0
+at camera3.1,2.6. Aquarium randomly puts an adult visitor at3,2.6, immediately
+in front of that camera; inspect/reproduce it with a guaranteed adult rather
+than weakening label assertions or deleting people. Likely use clear native
+hall approaches farther from those visitor positions and retain forced
+visitors in the regression. Keep this in its own branch/PR after preserving
+night-market work. Market five focused checks,14 total native/coastal/street
+browser checks, four Node files, two old-baseline +12 independent-defect probes
+and16 final paired clear views pass/reviewed. No active source mutants.
+
+Market final counts supersede14 above: FIFTEEN unique browser checks
+(5 focused +4 coastal +6 native street/awning), four Node files and final
+bundle checks pass. Two old-baseline +12 independent defects fail assertions
+(14 routed probes). Sixteen corrected paired clear close/wide/oblique/night/
+rear/pole/day views reviewed. ABAB177x66 main→after: wide7.4→6.9–7.2ms,
+close6.9→6.8, oblique9.7–9.8→9.4–9.6, door7.4–7.5→6.5–8.0.
+Smaller footprints change visible work; variable last door sample, no broad
+speedup claim. Ready commit/push/PR/merge. Then separate aquarium native-camera
+CI repair before fourteen orphan-backed machines and remaining passes5/6/9.
+Do not fold a CI test repair into the market PR or leave dirty market work
+behind on a branch switch. No active mutants or second Codex session.
