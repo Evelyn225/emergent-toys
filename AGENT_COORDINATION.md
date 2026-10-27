@@ -1807,6 +1807,33 @@ cameras are clear and no page errors. Ready commit/push/PR/reviewed merge.
 Next outside balcony furniture fidelity, then remaining pass5 and6/9. Reserved
 Claude files, shared home/hotel helpers and home bathroom defaults unchanged.
 
+#279 French doors merged as2ef5247; monitor CI on a25bb218. Codex active
+`codex/home-balcony-furniture` from that main. READ-ONLY audit first: the
+native Belle table/chairs have no outdoor far shade or scaled draw path, so
+the city balcony may omit them entirely, rather than merely simplifying them.
+Own new home-only balcony furniture module, Belle-only set hook in rooms.js,
+scaled model integration in home-balcony.js, focused furniture coverage and
+shared manifest/bundle/notes. Retain set positions/footprints/seats, access,
+existing plants, rails, French doorway and saved room/world mapping. Do not
+modify shared furniture/home/hotel helpers used by shops or restaurants; use
+existing helpers unchanged or build a home-only cached model. Next remaining
+pass5 closing audit, then hotel/motel6 and civic9. Reserved Claude sources and
+unpublished lettering remain untouched; no source swaps or second session.
+
+Bistro checkpoint after usage pause:20 focused/inherited browser checks and
+three Node bundle/parse/furnishing files pass. Native and outdoor views now
+share the cached home-only set, including supported slats and curved backs.
+Existing positions/footprints/seat heights are retained. Audit also found C
+could not use the seats after the real roof-mode transition; homeBalconySeat
+and one nearSeat hook in moves.js now expose the two real chairs, with actual
+C sit/stand, restored clear approach, table-facing direction and eye height
+verified at both scales. Earlier wide/night review cameras intersected the
+unchanged palm; move them0.5m along the clear deck before final views/timing.
+Mutation, final visual and ABAB remain; not ready for PR yet. Preserve this
+work in a local checkpoint commit while isolated world-contract CI repair is
+reviewed/merged, then fold latest main back in and finish this chunk. No
+shared furniture/helper edits, no production source mutants, no second copy.
+
 Codex CI repair `codex/home-doorway-world-contract` in isolated worktree
 /workspace/emergent-toys-door-contract from2ef5247. #279 all four browser
 shards pass, but Node's real Belle balcony test fails because pure property.js
@@ -1830,3 +1857,45 @@ scene contents and no extra model/pass; this is host variation, no speedup
 claim. Source-only change is data ownership, no dimensions or geometry moved.
 Ready PR/reviewed merge, then merge main into preserved bistro checkpoint and
 finish its pending probes/visuals/ABAB. Follow full Node CI on the repair.
+
+#280 world-contract repair merged as0b91335 and folded into the preserved
+bistro checkpoint. Both branches' complete append-only notes are retained;
+bundle rebuilt from the combined sources. Resume only the existing bistro
+chunk: final negative probes, corrected-camera views and ABAB against latest
+main0b91335, then reviewed PR/merge. Follow CI on08248a60 (#280); #279's only
+failure was the now-repaired pure-world contract. No production mutants or
+concurrent render benchmarks.
+
+Bistro final-check checkpoint:20 unique browser checks pass across final runs,
+including the final four focused geometry/render/C/thin-metal checks after
+merging #280. Four Node landmarks/bundle/parse/furnishing files and final
+bundle/parse repeat pass. Twelve original isolated probes plus a final
+coplanar-seat-pan defect fail intended assertions (13 unique; unsupported
+seat repeated after inset fix). The independent drawn-back/facing check caught
+a reversed v-axis basis; corrected before final review. Seat pan now meets
+the inner frame edge instead of overlapping its top, with a matching rendered
+surface check. Sources never swapped. Final corrected-camera visual/ABAB run
+currently active; no other render load. #280 full Node CI green and browser
+shard4 green, other three pending. Then final notes/commit/push/PR/reviewed
+merge, next pass5 closing audit (include the noisy external balcony deck
+material), then6/9. Do not claim the whole home pass complete yet.
+
+Bistro final review complete:21 unique browser checks pass across final runs
+(five focused plus16 inherited balcony/French-door/home-layout controls), four
+Node landmarks/bundle/parse/furnishing files and final bundle checks pass.
+Old baseline plus13 independent rendering/scale/foot/support/arch/orientation/
+cache/resolution/seat-reach/hook/footprint/coplanarity/material defects fail
+assertions in14 unique routed probes. No source/bundle swaps. A role-coloured
+raster diagnostic confirmed remaining seat mottling came from unresolved
+rounded-edge light, not holes; cached subcell light filtering keeps the top
+calm, restores rounded lighting nearby and preserves underside lighting.
+Final24 screenshots in12 before/after pairs reviewed: room/city close/wide/
+oblique/night/feet/back. All corrected cameras clear, no page errors. ABAB
+177x66,60 warm/120 samples main0b91335->after: room-wide3.5->3.3-3.4ms,
+close3.4-3.5->2.9-3.0, oblique4.6->4.4; city-wide7.4-7.5->8.1,
+close6.6-6.7->7.6, oblique9.7-9.9->10.8. Added visible outdoor set costs
+0.6-1.1ms; native set is cheaper here, no broad FPS gain claimed. #280 full
+Node and all4 browser CI shards GREEN40499058549. Ready final commit/push/PR/
+reviewed merge. Next pass5 closing audit, beginning with the noisy outside
+balcony deck material; then remaining home finish and passes6/9. Reserved
+Claude sources/shared helpers, existing private bathroom policy remain intact.
