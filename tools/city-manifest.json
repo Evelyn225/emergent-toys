@@ -213,6 +213,7 @@
     "city/world-bootstrap.js",
     "city/street-entrances.js",
     "city/night-market-placement.js",
+    "city/street-machine-placement.js",
     "city/facade-utilities.js",
     "city/kerb-fixtures.js",
     "city/window-railway-geometry.js",

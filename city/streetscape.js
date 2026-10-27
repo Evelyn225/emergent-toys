@@ -70,6 +70,10 @@ function fixtureSpaceTaken(o,buckets) {
     if(p!==o&&Math.hypot(rel(o.x-p.x),rel(o.y-p.y))<.2)return true;
   return false;
 }
+function machineMountClear(o) {
+  const fx=-o.s*o.fs,fy=o.c*o.fs;
+  return !!map[idx(o.x-fx*.1,o.y-fy*.1)] && !map[idx(o.x+fx*.3,o.y+fy*.3)];
+}
 function fitStreetFixtures(items, buckets, kind, approaches = false) {
   if (!approaches || STREET_CLEARANCE.checked[kind] == null) {
     STREET_CLEARANCE.checked[kind] = items.length; STREET_CLEARANCE.moved[kind] = 0; STREET_CLEARANCE.removed[kind] = 0;
@@ -99,9 +103,7 @@ function fitStreetFixtures(items, buckets, kind, approaches = false) {
       if(kind==='lamp')o.top=arcadeAt(o.x,o.y)?ARCADE_Z-NECK-.03:LAMP_TOP;
       if (isWater(o.x,o.y) || direction && !ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) continue;
       if(kind==='machine') {
-        const fx=-o.s*o.fs,fy=o.c*o.fs;
-        if(!map[idx(o.x-fx*.1,o.y-fy*.1)]||map[idx(o.x+fx*.3,o.y+fy*.3)]
-          ||stations.some(s=>Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.7))continue;
+        if(!machineMountClear(o)||stations.some(s=>Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.7))continue;
       }
       if (fixtureSpaceTaken(o,buckets)) continue;
       if (approaches && (elStairLocal(o.x,o.y) || streetEntranceNeighboursOverlap(o,kind))) continue;
