@@ -2031,3 +2031,9 @@ The refresh repair can reuse existing bathroom builders/objects without
 editing the held bathroom module. Do not modify shared home/hotel helpers used
 by shops/restaurants without agreement. Preserve append-only notes/manifest
 entries and rebuild the bundle. CLOUD_HANDOFF.md remains untouched.
+
+CI update while saving this handoff: #282's last shard3 was subsequently
+cancelled. Node and shards1/2/4 remain green. Re-run of that one cancelled job
+122193805244 was requested successfully through GitHub; follow the latest
+attempt of run40505545186. This is pending validation, not a claimed full
+green run. The execution workspace is still unavailable.
