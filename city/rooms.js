@@ -834,7 +834,7 @@ function homePlan(w, h, tier) {
     wall(20, 3, 24, 16, '.');
     wall(25, 3, 25, 16, 'B');
     wall(20, 2, 25, 2, 'B'); wall(20, 17, 25, 17, 'B');
-    frenchDoor = {wall:19,thickness:1,start:11,end:14,top:2.9};
+    frenchDoor = HOME_FRENCH_DOOR;
     wall(frenchDoor.wall, frenchDoor.start, frenchDoor.wall, frenchDoor.end-1, '.');
   }
   const entryX = tier === 2 ? 9 : w / 2;

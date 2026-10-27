@@ -1806,3 +1806,27 @@ finished geometry costs about0.2-0.7ms here; no speedup claim. All review
 cameras are clear and no page errors. Ready commit/push/PR/reviewed merge.
 Next outside balcony furniture fidelity, then remaining pass5 and6/9. Reserved
 Claude files, shared home/hotel helpers and home bathroom defaults unchanged.
+
+Codex CI repair `codex/home-doorway-world-contract` in isolated worktree
+/workspace/emergent-toys-door-contract from2ef5247. #279 all four browser
+shards pass, but Node's real Belle balcony test fails because pure property.js
+now requires DOM-backed ROOM_DEFS. Move the shared opening measurements into
+the earlier property layer, consume them in homePlan and the facade, retain
+all dimensions/geometry. Strengthen existing pure-world test's no-room/centre
+contract. Preserve the unfinished bistro branch/working tree in the primary
+workspace; its20 focused/inherited browser checks and three Node files pass,
+with final mutation/visual/timing work pending. This is a separate immediate
+main CI repair, not a duplicate furniture chunk. No source swapping or held
+Claude work. Resume bistro after reviewed repair merge.
+
+World-contract final: original pure loader reproduces ReferenceError ROOM_DEFS
+without changing files; corrected standalone balcony test and full landmarks,
+bundle freshness and parse files pass. Four French doorway browser checks pass
+against the isolated repair bundle. All13 room/city close/wide/oblique/night/
+head/threshold/hinge/reverse before-after frame hashes are identical, all
+cameras clear, no page errors; inspected oblique/night views match the prior
+review. ABAB177x66 room-wide2.3->2.2ms, city-wide6.1->6.2-6.4, with identical
+scene contents and no extra model/pass; this is host variation, no speedup
+claim. Source-only change is data ownership, no dimensions or geometry moved.
+Ready PR/reviewed merge, then merge main into preserved bistro checkpoint and
+finish its pending probes/visuals/ABAB. Follow full Node CI on the repair.
