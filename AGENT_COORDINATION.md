@@ -1422,3 +1422,45 @@ Y2.6..7.6. Supply supported closed geometry connecting top tread to roof door,
 including the landing banister feet; preserve E/return. Then street-object
 stair/door clearance audit and remaining passes5/6/9. Keep reserved bathroom/
 DINER/world-bootstrap/facade and unpublished Claude lettering untouched.
+
+#272 aquarium gift/inside-face labels merged. Codex active
+`codex/walkup-stair-landing`: city/lobbies.js, one focused native landing test,
+bundle and shared notes. Audit finds the walk-up is the stair-based roof lobby:
+stairRise lifts the player to1m all the way to the roof door, while ten tread
+boxes end atY2.6 and leave Y1..2.6 visually unsupported. Build a closed fitted
+landing from that top tread to the wall, supporting the level banister feet,
+with joined wall/tread edges and cached geometry. Preserve existing stair
+height, rail boundaries, room/roof E and return; do not change shared stair
+helpers or other lobbies. Then the street-object door/stair clearance audit,
+followed by remaining passes5/6/9. #269–#271 full CI and Node1069/1069 green.
+Keep reserved bathroom/DINER/world-bootstrap/facade and unpublished lettering
+untouched. No parallel Codex chunk is running.
+
+Walk-up landing reviewed. Added one cached closed rounded masonry solid from
+the actual top tread to the door wall, slightly buried at both joins, widened
+only at its outside edge to carry the level banister feet. Original stairRise,
+rail barrier, E and roof return are unchanged; walk:true retains the usable
+surface. Bounds/material are prepared once (literal bounds avoid calling the
+later renderer const during module initialization). Actual rays check support
+across the entire platform and millimetre-side samples at the tread join,
+closed underside, curved corner and rail feet. Native walking/E/return and
+actual landing pixels pass. A first fixture incorrectly used p.x/y for classic
+BX stair boxes; corrected to their real p.box.x/y before counting its result.
+Three focused plus three original lobby/police navigation checks and two Node
+bundle/parse files pass. Old baseline plus ten independent join/ground/height/
+rail-support/collider/cache/draw/roundness/material defects fail assertions.
+Nine clear-floor native/low inspection views reviewed across Brownstones,
+Chinatown and Shotengai, including close/wide/oblique/night and both joins.
+An initial side camera was too close to assess context; final lower side view
+shows the whole supported face. ABAB177x66 main→after: wide2.0–3.5→2.3–2.4ms,
+close1.1–1.2→1.8, oblique1.6–1.7→2.3, low side1.5–2.2→2.0. Added solid
+normally costs about0.6–0.7ms in close/oblique views; no speedup claim. Ready
+for final note push/PR/merge. This fixes the reported landing, not lobby pass9:
+existing door/rail finish remains for that pass. Next last new report: street
+items and vending machines blocking rendered building stairs/entrances.
+Audit exact native geometry and all static placement families. Prefer cached
+placement-only approach reservations and existing fitStreetFixtures; never
+add invisible player colliders/shelter. world-bootstrap/facade edits remain
+reserved, so use a post-assembly call if native refresh is needed. Include
+kerb fixtures created later and keep bucket/glow caches and el stair clearance
+consistent. Then remaining passes5/6/9 and unpublished Claude lettering hold.

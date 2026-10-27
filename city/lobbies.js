@@ -40,6 +40,18 @@ const BANISTER = ROOM_MODEL(WALKUP_RAIL, (1 + WALKUP_STAIRS.y1 - 0.8) / 2, (vx, 
   for (let y = s.y1 - 0.8; y > 1.1; y -= 0.25) rod(vx, at(y), step(y), vx, at(y), step(y) + 0.95, 0.012, WHITE, 1.2); // the balusters
   drawRod(vx, at(s.y1 - 0.8), 0, vx, at(s.y1 - 0.8), step(s.y1 - 0.8) + 1.05, 0.05, wood); // the newel post at the foot
 }, [0.06, (WALKUP_STAIRS.y1 - 0.8 - 1) / 2, 2.4]);
+// The player already stands at the top stair's height here. Give that landing
+// a closed supporting solid, including the level banister's feet. Small
+// overlaps bury the rounded edges in the wall and the top tread, leaving no
+// seam between them. Prepared bounds/materials are reused in every walk-up.
+const WALKUP_LANDING = (() => {
+  const s=WALKUP_STAIRS,overlap=.02,x0=WALKUP_RAIL-.06,x1=s.x1+overlap,y0=1-overlap,y1=s.y0+overlap;
+  const x=(x0+x1)/2,y=(y0+y1)/2,hl=(x1-x0)/2,hw=(y1-y0)/2;
+  const view={x:0,y:0,c:1,s:0,hl,hw,z0:0,z1:s.rise,round:.02};
+  const shade=(i,t,L)=>{BG[i]=C(GRAY,1.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{view.x=vx;view.y=vy;drawBox(view,shade,coveRayRounded);},[hl,hw,s.rise]),
+    walk:true,radius:Math.hypot(hl,hw),walkupLanding:{view,top:s.rise}};
+})();
 const walkupTint = r => r.district === 'chinatown' || r.district === 'shotengai' ? RED : GREEN;
 ROOM_DEFS.walkup = { grid: boxRoom(7, 10, { '4,0': 'E', '5,0': 'E' }), light: 0.6, floor: 'checker', ceil: 'pendant', height: 3.4, stairs: WALKUP_STAIRS, ex: 4.85, exReach: 1.2,
   upPrompt: 'E: up the stairs to the roof', upSay: 'You climb flight after flight, and shoulder open the roof door.',
@@ -50,7 +62,7 @@ ROOM_DEFS.walkup = { grid: boxRoom(7, 10, { '4,0': 'E', '5,0': 'E' }), light: 0.
     return walkupWall(i, u, uStep, z, d, mx, my, L) || set(i, ' ', 0);
   },
   wall: (i, u, uStep, z, d, mx, my, L) => walkupWall(i, u, uStep, z, d, mx, my, L),
-  props: r => [BANISTER, ...stairSteps(WALKUP_STAIRS),
+  props: r => [BANISTER, WALKUP_LANDING, ...stairSteps(WALKUP_STAIRS),
     BX(1.3, 5.2, 0.5, 0.06, 0.2, 0.75, (i, t, L) => { BG[i] = C(WHITE, 1.8 + L * 0.2); return set(i, fract(HIT.u * 9) < 0.35 ? '|' : ' ', C(GRAY, L * 0.6)), true; }, 0, 1), // the radiator
     ROOM_MODEL(1.25, 7.4, (vx, vy) => { // a bike against the wall
       for (const e of [-0.5, 0.5]) drawBox(boxAt(vx, vy + e, 0, 1, 0.33, 0.02, 0, 0.66), (i, t, L) => Math.hypot(HIT.u, HIT.w - 0.33) > 0.3 && Math.hypot(HIT.u, HIT.w - 0.33) < 0.34 ? (BG[i] = C(GRAY, 1), set(i, 'o', C(GRAY, 6)), true) : false);
