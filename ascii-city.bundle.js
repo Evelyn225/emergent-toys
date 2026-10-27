@@ -9634,11 +9634,14 @@ function summonCar(model) {
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_island' ? 'islandhome' : kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
+// World collision/roof queries run without the DOM-backed room definitions.
+// Keep the shared doorway measurements in this earlier, pure property layer.
+const HOME_FRENCH_DOOR = {wall:19,thickness:1,start:11,end:14,top:2.9};
 function homeBalconyBounds(home) {
   const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
   if (!b) return null;
   const y = (b.y0 + b.y1) / 2;
-  const p=ROOM_DEFS.bellehome.frenchDoor;
+  const p=HOME_FRENCH_DOOR;
   return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + ((p.start+p.end)/2-10)/10, z: Math.min(2,Math.max(.3,b.h - .4)) };
 }
 function homeBalconyHeight(x, y) {
@@ -17255,7 +17258,7 @@ function homePlan(w, h, tier) {
     wall(20, 3, 24, 16, '.');
     wall(25, 3, 25, 16, 'B');
     wall(20, 2, 25, 2, 'B'); wall(20, 17, 25, 17, 'B');
-    frenchDoor = {wall:19,thickness:1,start:11,end:14,top:2.9};
+    frenchDoor = HOME_FRENCH_DOOR;
     wall(frenchDoor.wall, frenchDoor.start, frenchDoor.wall, frenchDoor.end-1, '.');
   }
   const entryX = tier === 2 ? 9 : w / 2;
@@ -20482,7 +20485,7 @@ function homeBalconyFree(x, y) {
 }
 function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
   const home = homeAt(sh), b = homeBalconyBounds(home);
-  const p=ROOM_DEFS.bellehome.frenchDoor;
+  const p=HOME_FRENCH_DOOR;
   if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > (p.end-p.start)/20 || z < b.z || z > b.z + p.top/10) return false;
   // The leaves stand open in real geometry. This inexpensive room recess
   // replaces the old painted CLOSED doors; the interior keeps its live view.

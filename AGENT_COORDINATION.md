@@ -1833,3 +1833,35 @@ Mutation, final visual and ABAB remain; not ready for PR yet. Preserve this
 work in a local checkpoint commit while isolated world-contract CI repair is
 reviewed/merged, then fold latest main back in and finish this chunk. No
 shared furniture/helper edits, no production source mutants, no second copy.
+
+Codex CI repair `codex/home-doorway-world-contract` in isolated worktree
+/workspace/emergent-toys-door-contract from2ef5247. #279 all four browser
+shards pass, but Node's real Belle balcony test fails because pure property.js
+now requires DOM-backed ROOM_DEFS. Move the shared opening measurements into
+the earlier property layer, consume them in homePlan and the facade, retain
+all dimensions/geometry. Strengthen existing pure-world test's no-room/centre
+contract. Preserve the unfinished bistro branch/working tree in the primary
+workspace; its20 focused/inherited browser checks and three Node files pass,
+with final mutation/visual/timing work pending. This is a separate immediate
+main CI repair, not a duplicate furniture chunk. No source swapping or held
+Claude work. Resume bistro after reviewed repair merge.
+
+World-contract final: original pure loader reproduces ReferenceError ROOM_DEFS
+without changing files; corrected standalone balcony test and full landmarks,
+bundle freshness and parse files pass. Four French doorway browser checks pass
+against the isolated repair bundle. All13 room/city close/wide/oblique/night/
+head/threshold/hinge/reverse before-after frame hashes are identical, all
+cameras clear, no page errors; inspected oblique/night views match the prior
+review. ABAB177x66 room-wide2.3->2.2ms, city-wide6.1->6.2-6.4, with identical
+scene contents and no extra model/pass; this is host variation, no speedup
+claim. Source-only change is data ownership, no dimensions or geometry moved.
+Ready PR/reviewed merge, then merge main into preserved bistro checkpoint and
+finish its pending probes/visuals/ABAB. Follow full Node CI on the repair.
+
+#280 world-contract repair merged as0b91335 and folded into the preserved
+bistro checkpoint. Both branches' complete append-only notes are retained;
+bundle rebuilt from the combined sources. Resume only the existing bistro
+chunk: final negative probes, corrected-camera views and ABAB against latest
+main0b91335, then reviewed PR/merge. Follow CI on08248a60 (#280); #279's only
+failure was the now-repaired pure-world contract. No production mutants or
+concurrent render benchmarks.

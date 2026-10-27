@@ -43,7 +43,7 @@ function homeBalconyFree(x, y) {
 }
 function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
   const home = homeAt(sh), b = homeBalconyBounds(home);
-  const p=ROOM_DEFS.bellehome.frenchDoor;
+  const p=HOME_FRENCH_DOOR;
   if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > (p.end-p.start)/20 || z < b.z || z > b.z + p.top/10) return false;
   // The leaves stand open in real geometry. This inexpensive room recess
   // replaces the old painted CLOSED doors; the interior keeps its live view.
