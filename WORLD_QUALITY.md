@@ -482,3 +482,28 @@ The numbered passes above remain the work queue. The new models establish reusab
 
 
 - Home layouts (pass5), balcony deck finish and edge (Codex, `codex/home-balcony-deck`): replace bright repeated '=' across the city slab with calm0.5m paving shared by the native floor/flush threshold and city view. Metre UV and screen-row/column footprint filtering keep small grout from aliasing at grazing angles. Cache each owned home's closed25cm slab bounds/material, refreshing when physical bounds or height change, with unchanged world collision/rail/furniture support. The elevated native view exposed floor continuing a metre past the rail; it now ends at the real deck edge and shows the street below. Preserve actual world-coordinate snow on the top only. Three focused plus nine inherited bistro/French-door browser checks pass (12 unique), along with three Node landmarks/bundle/parse files and final bundle checks. The old baseline and11 independent unit/filter/grazing/cache/height/snow/native-overhang/draw/thickness/glyph defects fail12 isolated routed probes; restoring the native overhang paints4850 wrong pixels in its real render check. Reviewed26 final screenshots in13 before/after pairs covering close/wide/oblique/night/threshold/elevated edge, snow and intentional off-deck side/underside inspections; regular/elevated camera positions clear, no page errors. Fully covered snow PNGs are byte-identical before/after. ABAB177x66 main86dec18->after: room-wide2.7–2.8->3.0ms, close1.5->1.8, oblique3.1–3.2->3.4, elevated edge1.9–2.1->2.4–2.5; city-close6.4–6.5->6.6–6.7, oblique8.4->8.5. One initial city-wide baseline outlier7.7/12.3->7.6 was repeated with120 warm/180 measured samples:7.1–7.2->7.3. Added filtered material/real background costs about0.1–0.6ms, no FPS gain claimed. #281 full Node and all four browser CI shards are green(40501477568). Continue pass5 closing audit, including still-painted home wall trim/panelling, before passes6/9. Held Claude/shared helpers and home bathroom state are unchanged.
+
+
+## Resume after runtime disconnect (2026-10-27)
+
+- [ ] Fix furnishing/workshop refresh before continuing trim: the real owned
+  studio, Belle and Fern audit loses the bathroom frame, sliding door and both
+  accessories after refreshFurnishedRoom. room.bathroomDoors still points to
+  props no longer in room.props, so the missing geometry also loses collision.
+  The constructor adds these after def.props; both private refresh paths
+  rebuild only def.props/workshop/furnishings. Preserve those existing
+  structural objects and privacy/animation state, retain existing living/dead
+  figures, and route workshop refresh through the same preserving path.
+  Verify all four home families with real F/E controls, repeat refresh,
+  collision/sight/render checks and saved private state. This fix is reproduced
+  but NOT implemented; no runtime edit was made on
+  codex/home-furnishing-structure before the environment became unavailable.
+- [ ] Resume fitted home skirting/cornice and Belle panelling audit afterward;
+  these are still painted glyphs. No new wall-trim builder exists. Finish pass5,
+  then hotel/motel6 and civic9, keeping held Claude/shared helper ownership.
+
+#279–#282 are merged into main. #280 and #281 passed full Node/four-shard CI.
+#282 local checks/review are complete; monitor run40505545186 (Node and browser
+1/2/4 green,3 pending at the checkpoint). Detailed branch/file/reproduction and
+recovery instructions are appended to AGENT_COORDINATION.md. This handoff
+changes notes only; runtime sources, manifest and bundle are unchanged.
