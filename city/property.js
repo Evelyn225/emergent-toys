@@ -69,7 +69,8 @@ function homeBalconyBounds(home) {
   const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
   if (!b) return null;
   const y = (b.y0 + b.y1) / 2;
-  return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + .2, z: Math.min(2,Math.max(.3,b.h - .4)) };
+  const p=ROOM_DEFS.bellehome.frenchDoor;
+  return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + ((p.start+p.end)/2-10)/10, z: Math.min(2,Math.max(.3,b.h - .4)) };
 }
 function homeBalconyHeight(x, y) {
   let height = 0;

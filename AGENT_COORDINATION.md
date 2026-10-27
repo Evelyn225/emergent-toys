@@ -1760,3 +1760,49 @@ in these views; different scene contents, no general speedup claim.
 remaining home pass5 (Belle French-door finish/outside furnishing fidelity),
 pass6 hotel/motel quality/verify existing door policy, and pass9 civic work.
 No second Codex session. Preserve all held Claude sources/unpublished lettering.
+
+#278 native machine wall/backing/access fix merged as5b1477c. Codex active
+`codex/home-french-doors` from latest main, READ-ONLY audit starting. All newly
+reported fixes and ferry/el item use are merged; #277 full CI green, #278 CI
+pending. Resume pass5: inspect the Belle French-door opening/painted leaves,
+wall thickness and actual room/city balcony mapping before choosing changes.
+Likely ownership new home French-door builder, its Belle-only room/painter
+hooks and home-balcony.js display integration, focused home door coverage and
+shared manifest/bundle/notes. Preserve movement/E/return, saved room/balcony
+boundaries, real window views, existing rail model and outside furniture.
+Do not change shared home/hotel helpers restaurants/shops call without prior
+agreement, or held bathroom-quality.js/DINER/world-bootstrap/facade/global
+lettering/private Claude work. Keep pure inspections separate from runtime
+changes until the opening audit is concrete. No source mutants or second
+Codex session. Then finish remaining pass5 and proceed6/9.
+
+French-door checkpoint: #278 full CI GREEN40456193159. Belle has one measured
+3m opening with closed depth reveals/infill, inner/outer casing and permanent
+open clear-light leaves, fitted lower panels, hinges and lever hardware. The
+same cached core draws at metre/city scales; native mass stays native. City
+recess replaces the painted shut doors, its centre now aligns with native12.5
+instead of12.0. Flush stone threshold is part of the existing floor painter,
+not an overlapping slab. Leaf colliders include glass and participate outside
+although their centres lie inside native x20; no full-opening blocker. Four
+focused checks passed before final glazing-bar junction cleanup; inherited
+balcony/passage/entry/window checks currently running. Native renderer's third
+prop argument was initially mistaken for scale; a wrapper fixes it, and actual
+visibility coverage verifies both native draw paths. Sources never swapped;
+negative probes, final visual review and ABAB remain before PR/merge. This is
+the only active Codex chunk. Next remaining pass5, then6/9.
+
+French-door final:17 unique browser checks pass (four focused plus thirteen
+rail/passage/entrance/window controls), and three Node bundle/parse/furnishing
+files pass. Old baseline and eight independent missing/native-render/city-
+scale/infill/glass-collision/outdoor-collision/centre/cache/city-draw defects
+fail assertions in nine routed probes; no source or saved bundle swaps.
+Reviewed26 screenshots in13 before/after pairs: clear room/city close/wide/
+oblique/night, reverse approach, hinges, head and flush threshold. Clear panes
+retain the live native neighbourhood; the reverse city opening is a cheap dark
+recess, not an additional full interior render. ABAB177x66,60 warm/120 samples:
+room wide1.9->2.2-2.3ms, close2.4-2.5->3.0-3.1, oblique2.5-2.6->3.0-3.1;
+city wide5.8-5.9->6.0-6.2, close5.0->5.3-5.5, oblique6.2->6.5-6.6. Added
+finished geometry costs about0.2-0.7ms here; no speedup claim. All review
+cameras are clear and no page errors. Ready commit/push/PR/reviewed merge.
+Next outside balcony furniture fidelity, then remaining pass5 and6/9. Reserved
+Claude files, shared home/hotel helpers and home bathroom defaults unchanged.

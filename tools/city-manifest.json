@@ -209,6 +209,7 @@
     "city/home-entries.js",
     "city/home-passages.js",
     "city/home-balcony-rails.js",
+    "city/home-french-doors.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
     "city/street-entrances.js",

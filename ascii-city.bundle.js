@@ -9638,7 +9638,8 @@ function homeBalconyBounds(home) {
   const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
   if (!b) return null;
   const y = (b.y0 + b.y1) / 2;
-  return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + .2, z: Math.min(2,Math.max(.3,b.h - .4)) };
+  const p=ROOM_DEFS.bellehome.frenchDoor;
+  return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + ((p.start+p.end)/2-10)/10, z: Math.min(2,Math.max(.3,b.h - .4)) };
 }
 function homeBalconyHeight(x, y) {
   let height = 0;
@@ -17247,14 +17248,15 @@ function homePlan(w, h, tier) {
       wall(start,divideY,end-1,divideY,'.');passages.push({start,end,cross:divideY});
     }
   }
-  let balcony = null;
+  let balcony = null, frenchDoor = null;
   if (tier === 2) {
     balcony = { x0: 20, x1: 25, y0: 3, y1: 17 };
     wall(19, 1, 25, h - 2); // solid end wings round a recessed, open balcony
     wall(20, 3, 24, 16, '.');
     wall(25, 3, 25, 16, 'B');
     wall(20, 2, 25, 2, 'B'); wall(20, 17, 25, 17, 'B');
-    wall(19, 11, 19, 13, '.'); // French doors, reachable from the salon
+    frenchDoor = {wall:19,thickness:1,start:11,end:14,top:2.9};
+    wall(frenchDoor.wall, frenchDoor.start, frenchDoor.wall, frenchDoor.end-1, '.');
   }
   const entryX = tier === 2 ? 9 : w / 2;
   wall(entryX - 1, h - 1, entryX, h - 1, 'D');
@@ -17263,7 +17265,7 @@ function homePlan(w, h, tier) {
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
   const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
     : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
-  return { home, wc, balcony, windows, lamps, tier, homePassages:passages, shelfAxis: [0,1], bedBounds: [home.bed[0],home.bed[1]+.2,tier?1.25:1,.85], grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
+  return { home, wc, balcony, frenchDoor, windows, lamps, tier, homePassages:passages, shelfAxis: [0,1], bedBounds: [home.bed[0],home.bed[1]+.2,tier?1.25:1,.85], grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
@@ -17295,6 +17297,7 @@ function homeDef(w, h, tier) {
       HOME_ENTRY_DOOR(r),
       ...homePassageSurrounds(r),
       ...homeBalconyRails(r),
+      ...homeFrenchDoors(r),
       ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
       FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
       FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
@@ -17537,6 +17540,10 @@ function roomFloor(i, r, x, rx, ry) {
   switch (room.def.floor) {
     case 'home': {
       const b = room.def.balcony, sofa = room.def.home.sofa;
+      const door=room.def.frenchDoor;
+      // One floor surface owns the flush stone threshold: no overlaid slab
+      // or raised lip at the change from room to live city balcony.
+      if(door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end){BG[i]=C(STONE,2+f*2);return set(i,' ',0);}
       if (b && wx >= b.x0 && wy >= b.y0 && wy < b.y1) {
         BG[i] = C(WHITE, 2 + f * 2); return set(i, fract(wx * 2) < 0.04 || fract(wy * 2) < 0.04 ? '+' : ' ', C(GRAY, L));
       }
@@ -20460,19 +20467,16 @@ function homeBalconyFree(x, y) {
   if (x < b.x0 + .015) return false;
   if (body.z < 1.1 && (x > b.x1 - .035 || y < b.y0 + .035 || y > b.y1 - .035)) return false;
   const rx = 19 + (x - b.x0) * 10, ry = 10 + (y - b.y) * 10;
-  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && (!o.homeBalconyRail||body.z<o.box.z1) && inBox(o.box,rx,ry,.2))) return false;
+  if (room.props.some(o => o.box && !o.walk && (o.box.x >= 20 || o.homeFrenchDoorSolid) && o.box.z0 < 1.2 && (!(o.homeBalconyRail||o.homeFrenchDoorSolid)||body.z<o.box.z1) && inBox(o.box,rx,ry,.2))) return false;
   return roofHeightAt(x,y) <= roofH + ROOF_STEP + body.z / 10;
 }
 function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
   const home = homeAt(sh), b = homeBalconyBounds(home);
-  if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > .17 || z < b.z || z > b.z + .29) return false;
-  const du = rel(wc - b.doorY), rz = z - b.z;
-  const centerPost = Math.abs(du) < .008;
-  const frame = Math.abs(du) > .145 || centerPost || rz < .012 || rz > .27 || Math.abs(rz - .11) < .008;
-  BG[i] = C(frame ? STONE : CYAN,frame ? 2 + L * .3 : 1.5 + day * 2);
-  let ch = ':';
-  if (frame) ch = centerPost ? '|' : '=';
-  set(i,ch,C(frame ? WHITE : WARM,L * .8));
+  const p=ROOM_DEFS.bellehome.frenchDoor;
+  if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > (p.end-p.start)/20 || z < b.z || z > b.z + p.top/10) return false;
+  // The leaves stand open in real geometry. This inexpensive room recess
+  // replaces the old painted CLOSED doors; the interior keeps its live view.
+  BG[i] = C(BRICK,.4 + day*.35);set(i,' ',0);
   return true;
 }
 const homeBalconyModels = new WeakMap();
@@ -20487,6 +20491,8 @@ function drawHomeBalconies() {
     let model = homeBalconyModels.get(home);
     if (!model) {
       model = makeRoom('bellehome',{ cell: [home.cell % N,Math.floor(home.cell / N)] }).props.filter(o => {
+        if(o.homeFrenchDoor)return true;
+        if(o.homeFrenchDoorSolid||o.homeFrenchDoorSurround)return false;
         if(o.homeBalconyRail)return true;
         const p = o.box || o;
         return p.x >= 20 && p.y >= 3 && p.y < 17;
@@ -20502,6 +20508,7 @@ function drawHomeBalconies() {
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
       if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
+      if(o.homeFrenchDoor){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       if(o.homePlant){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
       if (o.box && shade) {
@@ -41653,6 +41660,94 @@ function homeBalconyRails(r){
   return [HOME_BALCONY_RAIL(east,(north+south)/2,0,1,south-north,true),
     HOME_BALCONY_RAIL((wall+east)/2,north,1,0,east-wall,false),
     HOME_BALCONY_RAIL((wall+east)/2,south,-1,0,east-wall,false,1)];
+}
+// Belle's permanent open balcony leaves use the same measured model indoors
+// and in the city. Clear panes keep the existing live neighbourhood view;
+// their thin leaf colliders include the glass, never the open doorway.
+function homeFrenchDoors(r){
+  const p=r.def.frenchDoor;if(!p)return [];
+  const x=p.wall,y=(p.start+p.end)/2,half=(p.end-p.start)/2,parts=[],variants=new Map(),props=[];
+  const paint=(i,t,L)=>{BG[i]=C(WHITE,3.5+L*.28*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const panel=(i,t,L)=>{BG[i]=C(WHITE,2.1+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
+  const box=(role,u,v,hl,hw,z0,z1,material=paint)=>parts.push({role,box:boxAt(u,v,1,0,hl,hw,z0,z1),material});
+  const tube=(role,A,B,radius)=>{
+    const[ax,ay,az]=A,[bx,by,bz]=B;
+    parts.push({role,box:{...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+radius,Math.abs(by-ay)/2+radius,Math.min(az,bz)-radius,Math.max(az,bz)+radius),ax,ay,az,bx,by,bz,r:radius},material:metal});
+  };
+  // The head owns the casing corners. The stiles end at its underside.
+  for(const e of [-1,1])box('casing-jamb',.035,e*(half+.035),.035,.055,0,p.top);
+  box('casing-head',.035,0,.035,half+.09,p.top,p.top+.10);
+  const hinge=.045,length=half-.06,end=hinge+length,z0=.035,z1=p.top-.06;
+  for(const e of [-1,1]){
+    const v=e*(half-.045),mid=(hinge+end)/2;
+    for(const u of [hinge+.04,end-.04])box('leaf-stile',u,v,.04,.025,z0,z1);
+    for(const [lo,hi]of [[z0,.17],[.70,.80],[z1-.10,z1]])box('leaf-rail',mid,v,length/2-.08,.025,lo,hi);
+    box('recessed-panel',mid,v,length/2-.08,.014,.17,.70,panel);
+    // Two by two clear lights, with real narrow glazing bars, not painted
+    // opaque blue rectangles. Rails/stiles own all corner junctions.
+    box('glazing-bar',mid,v,.013,.023,.80,z1-.10);
+    const paneHalf=(length/2-.08-.013)/2;
+    for(const side of [-1,1])box('glazing-bar',mid+side*(paneHalf+.013),v,paneHalf,.023,1.77,1.80);
+    for(const z of [.25,1.25,2.55]){
+      box('hinge-plate',hinge-.008,e*(half-.018),.045,.009,z-.04,z+.04,metal);
+      tube('hinge-barrel',[hinge,e*(half-.028),z-.045],[hinge,e*(half-.028),z+.045],.012);
+    }
+    // Lever, rose and connecting post leave a small real finger gap. They
+    // project only five centimetres into the opening, clear of the route.
+    const u=end-.11,front=v-e*.025;
+    box('handle-rose',u,front-e*.005,.025,.005,1.03,1.13,metal);
+    tube('handle-post',[u,front-e*.01,1.08],[u,front-e*.05,1.08],.009);
+    tube('handle-grip',[u,front-e*.05,1.08],[u-.12,front-e*.05,1.08],.009);
+    const b=boxAt(x+mid,y+v,1,0,length/2,.025,z0,z1);
+    props.push({box:b,draw:()=>{},homeFrenchDoorSolid:true});
+  }
+  function variant(scale,base){
+    const key=scale+':'+base;let v=variants.get(key);
+    if(!v){
+      if(variants.size>=2)variants.clear();
+      v=parts.map(part=>{
+        const a=part.box,b=boxAt(a.x*scale,a.y*scale,1,0,a.hl*scale,a.hw*scale,base+a.z0*scale,base+a.z1*scale),tube=a.ax!==undefined;
+        if(tube)Object.assign(b,{ax:a.ax*scale,ay:a.ay*scale,az:base+a.az*scale,bx:a.bx*scale,by:a.by*scale,bz:base+a.bz*scale,r:a.r*scale});
+        const shade=tube?part.material:(i,t,L)=>{
+          const f=HIT.face;HIT.nx=f===1?1:f===2?-1:0;HIT.ny=f===3?1:f===4?-1:0;HIT.nz=f===5?1:f===6?-1:0;
+          return part.material(i,t,L);
+        };
+        return {role:part.role,local:b,view:{...b},ray:tube?coveRayCapsule:rayBox,shade,tube};
+      });variants.set(key,v);
+    }return v;
+  }
+  function draw(vx,vy,scale=1,base=0){
+    for(const q of variant(scale,base)){
+      const b=q.view,a=q.local;b.x=vx+a.x;b.y=vy+a.y;
+      if(q.tube){b.ax=vx+a.ax;b.ay=vy+a.ay;b.bx=vx+a.bx;b.by=vy+a.by;}
+      drawBox(b,q.shade,q.ray);
+    }
+  }
+  const model={...ROOM_MODEL(x,y,(vx,vy)=>draw(vx,vy)),drawScaled:draw,radius:half+length,homeFrenchDoor:{parts,variants,opening:p}};
+  // The metre-wide native wall needs a closed head and depth reveals. City
+  // walls supply their own mass; don't project this infill onto the balcony.
+  const plaster=(i,t,L,b)=>{
+    const f=HIT.face,u=f===1||f===2?b.y+HIT.v:b.x+HIT.u;
+    const light=Math.max(0,1-t/vis)*(f===3||f===4?10:14)*r.def.light;
+    return homeWall(i,u,t/projX,HIT.w,t,Math.floor(b.x),Math.floor(b.y),light);
+  };
+  const surround=(role,b,material)=>{
+    const view={...b},shade=(i,t,L)=>{
+      if(role==='infill'&&(HIT.face===3||HIT.face===4))return false;
+      const f=HIT.face;HIT.nx=f===1?1:f===2?-1:0;HIT.ny=f===3?1:f===4?-1:0;HIT.nz=f===5?1:f===6?-1:0;
+      return material(i,t,L,b);
+    };
+    props.push({...ROOM_MODEL(b.x,b.y,(vx,vy)=>{view.x=vx;view.y=vy;drawBox(view,shade);}),box:b,homeFrenchDoorSurround:role,radius:half+.1});
+  };
+  surround('infill',boxAt(x+p.thickness/2,y,1,0,p.thickness/2,half,p.top,r.def.height),plaster);
+  for(const e of [-1,1]){
+    surround('reveal',boxAt(x+p.thickness/2,y+e*(half-.01),1,0,p.thickness/2,.01,0,p.top),paint);
+    surround('inner-jamb',boxAt(x-.035,y+e*(half+.035),1,0,.035,.055,0,p.top),paint);
+    surround('outer-jamb',boxAt(x+p.thickness+.035,y+e*(half+.035),1,0,.035,.055,0,p.top),paint);
+  }
+  for(const face of [x-.035,x+p.thickness+.035])surround('native-head',boxAt(face,y,1,0,.035,half+.09,p.top,p.top+.10),paint);
+  return [model,...props];
 }
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
