@@ -296,7 +296,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 let handDrawn = null; // what the hand held in the last frame drawn ({ id, t }), or null: for the tests
 function drawHeldBig() {
   handDrawn = null;
-  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind);
+  const onFoot = handheldMode();
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
@@ -631,7 +631,7 @@ function openInventory() {
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
-  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; ${placeKey()!==null?'X drop &middot; ':''}I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
   invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
@@ -705,8 +705,9 @@ function useHeldItem() {
     return;
   }
   const used=heldItem();
-  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
-    water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
+  const indoors=mode==='room'||mode==='el'||mode==='ferry'&&ferryRide&&ferryRide.u>FERRY_CABIN.aft&&ferryRide.u<FERRY_CABIN.front&&Math.abs(ferryRide.v)<FERRY_CABIN.side;
+  const [line, sound] = useHeld({ indoors, x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
+    water: mode==='ferry'&&!indoors || mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
   if ((ITEMS[used?.id]?.kind==='drug' || used?.id==='joint') && sound) {updateDrugBuyer();saveGame();}
   if (line) say(line, Math.max(3, line.length / 20)); // (long enough to read)
   if (actx && sound) sfxUse(sound);

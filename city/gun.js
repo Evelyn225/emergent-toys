@@ -22,7 +22,7 @@ const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, last
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
-const canAimGun = () => !wanted.busted && !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
+const canAimGun = () => !wanted.busted && !!heldGun() && handheldMode() && !freecam && !gun.reload;
 const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over

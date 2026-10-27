@@ -218,6 +218,9 @@ const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade', 'aquarium'], SONG
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
+// A passenger can handle inventory without gaining the walking/jump/drop
+// controls of an outdoor pedestrian. Vehicle helms keep their own controls.
+const handheldMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat' || mode === 'el' || mode === 'ferry';
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }

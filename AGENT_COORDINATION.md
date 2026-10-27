@@ -1543,3 +1543,61 @@ assertions (11 total routed probes), without changing source/saved bundle.
 Ready to commit/push/PR/merge, then ferry/el handhelds; keep coherent market
 and14 unchanged native backing cases queued explicitly rather than claiming
 all street scene placements are finished. No parallel Codex work or mutants.
+
+#274 generated street entrance/stoop clearance merged as a3c8050.
+Codex active `codex/transit-held-items` from that main. Ownership for this
+separate user-requested chunk: shared handheld-mode helper in city/goods.js,
+main.js item input only, goods-ui.js held rendering only, gun.js/gun-ui.js
+handheld mode/aim/HUD only, held-curios.js telescope activation only, optional
+touch controls if their aboard affordances need it, new focused transit item
+browser test and shared bundle/notes. Preserve actual walking mode semantics,
+boarding/seat/arrival controls, sleep/arrest/menu/freecam guards and small-boat
+input. Exercise real ferry/el boarding, quick slots, inventory, Q/click,
+visible held gear and telescope, and continuing movement/travel. Then coherent
+night-market obstruction and fourteen native backing cases, then passes5/6/9.
+Held Claude bathroom/DINER/world-bootstrap/facade/global lettering remain
+reserved; no parallel Codex task is active. #274 CI pending, check later.
+Transit chunk also owns only the ferry/el help strings in city/hud.js; its
+carriage geometry and other HUD paths stay untouched. The hints now describe
+general item use/slots, and show aim/reload when a gun is held. A negative
+probe proved an extra inventory X guard redundant: existing placeKey already
+rejects moving passengers. Reverted that guard, retaining the original drop
+policy and deriving the inventory drop hint from placeKey. Tests exercise that
+policy and catch bypassing it. The first guard fixture wrongly expected
+inventory Q to be swallowed; it intentionally closes the bag and uses once,
+so that behavior is now checked and shop panels test input swallowing instead.
+
+Transit review checkpoint: eight focused browser checks and six inherited gun/
+ferry/el controls pass (14 unique); four Node files (goods, gun, bundle and
+parse) pass, with final bundle/parse recheck green. Actual inventory/slots/Q,
+captured mouse, food effects, music/tape, seated use, camera album capture,
+6x telescope, gun aim/HUD/fire/reload, touch verbs, shop/sleep/freecam/arrest
+input ownership, continuing travel/walking/C and drop policy are exercised.
+The ferry travel fixture now advances beyond its real32s dwell rather than
+mistaking a docked ship for a movement regression. Cabin context retains indoor
+item restrictions on el/ferry lounge; open ferry deck supplies outdoor/water
+context. Small boat/sea controls are unchanged. Old baseline plus12 independent
+input/render/mouse/telescope/aim/HUD/reload/sleep/drop/context/touch defects fail
+assertions across final isolated routed probes. No source mutants are active.
+Reviewed22 final paired clear standing/seated/wide/close/oblique/night/live-
+window/telescope/portrait views. First portrait capture was cleared by a
+queued viewport-resize event under frozen RAF, now captured after resize;
+first el-scope camera aimed at the door, final one aims through its real window.
+No gameplay geometry change was needed for either fixture. Render ABAB is
+finishing; then commit/push/PR/reviewed merge and follow up #274 CI. Next is
+the coherent authored night-market obstruction, fourteen native backing cases,
+then remaining passes5/6/9. Held Claude sources remain reserved.
+
+Transit final ABAB177x66 main→after: ferry-wide7.4–7.5→8.3–8.5ms,
+close8.3–8.4→9.1–9.4; el-wide7.5–7.7→8.3–8.7,
+seated close9.3–9.4→10.1–10.3. Newly visible held models cost0.8–1.1ms.
+Scopes7.0–7.1→5.5–5.6 ferry,9.1–9.2→7.1 el compare different narrow
+fields of view, not equivalent-scene speedups; one existing world pass.
+Final bundle checks pass; all14 unique browser checks/four Node files pass
+across final runs, and all13 isolated old/independent defect probes fail their
+assertions. No active mutant/temp source swap. Ready to commit/push/PR/merge.
+#274 full CI GREEN40449222222 (Node plus all4 browser shards), superseding
+its earlier pending status. Next keep the authored market and14 unchanged
+native backing cases visible before remaining passes5/6/9. Do not touch
+reserved bathroom/DINER/world-bootstrap/facade/global lettering/private
+Claude sign-lettering. No other Codex chunk/session is active.
