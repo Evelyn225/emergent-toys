@@ -1899,3 +1899,54 @@ Node and all4 browser CI shards GREEN40499058549. Ready final commit/push/PR/
 reviewed merge. Next pass5 closing audit, beginning with the noisy outside
 balcony deck material; then remaining home finish and passes6/9. Reserved
 Claude sources/shared helpers, existing private bathroom policy remain intact.
+
+#281 bistro merged as86dec18; monitor CI on98099309. Codex active
+`codex/home-balcony-deck` from that main, after read-only material/UV/bounds/
+weather audit. Own new home-only deck/paving module, home-balcony.js deck
+render hook, Belle-only floor/threshold material and outside-edge condition
+in roomFloor (not other room definitions), focused deck browser coverage and
+shared manifest/bundle/notes. Replace every-cell exterior '=' with calm
+filtered0.5m paving shared in native metres/city one-tenth coordinates. Cache
+the closed25cm slab bounds/material per owned home, preserve exact physical
+edges/floor height and settled snow on its top. Keep the same real outside
+view beyond the native deck edge rather than painting floor to the room-grid
+edge. Native threshold remains flush on the existing floor, not a new slab.
+No shared furniture/home/hotel helper, held bathroom/DINER/world-bootstrap/
+facade/lettering or Claude source edits. Then finish pass5 closing audit and
+continue6/9. No source/bundle swaps or parallel benchmarks.
+
+Deck checkpoint: three focused geometry/material/native-render checks and nine
+inherited bistro/French-door checks pass (12 unique), plus three Node landmarks/
+bundle/parse files. The native elevated inspection exposed a real floor strip
+past x25; it now shows the street below instead, with original physics intact.
+The renderer stores ROOMW.floor by reference, so coverage instruments that real
+dispatch (a first global-function spy did not observe calls). Shared metre UV,
+grazing-row footprint, actual snow world coordinates/top-only application,
+cache identity/invalidation, closed six faces, top/underside visibility and
+walking return are checked. Initial winter before/after PNGs are byte-identical
+on the fully covered deck; stronger near grout contrast is the current final
+material. Twelve routed negative probes are running, sources never swapped.
+Then final close/wide/oblique/night/edge/underside/winter views and ABAB, PR/
+reviewed merge, pass5 closing audit and6/9. #281 full Node and all4 browser CI
+shards GREEN40501477568. No parallel render benchmark or second Codex chunk.
+
+Deck final review complete: all12 focused/inherited browser checks, three Node
+landmarks/bundle/parse files and final bundle checks pass. Old baseline plus11
+independent unit/filter/grazing/cache/stale-height/snow/overhang/draw/thickness/
+glyph defects fail intended assertions in12 isolated routed probes. The real
+native-overhang probe restores4850 wrongly painted pixels in its elevated
+view; final code shows the actual street instead. All13 final before/after
+pairs reviewed, including close/wide/oblique/night/threshold/elevated rail edge,
+snow and two intentional off-deck side/underside inspections. Regular/elevated
+review points are clear; no page errors. Full-snow before/after PNGs are byte-
+identical. ABAB177x66,60 warm/120 samples main86dec18->after: room-wide2.7-2.8
+->3.0ms, close1.5->1.8, oblique3.1-3.2->3.4, elevated edge1.9-2.1->2.4-2.5;
+city-close6.4-6.5->6.6-6.7, oblique8.4->8.5. Initial city-wide7.7/12.3->7.6
+had one baseline outlier; settled120-warm/180-sample ABAB repeat7.1-7.2->7.3.
+No broad FPS gain claimed. Geometry/material caching removes per-frame deck
+construction; small filtered paving/real background cost is about0.1-0.6ms.
+#281 full CI GREEN40501477568. Ready commit/push/PR/reviewed merge. Then pass5
+closing audit: home wall trim/panelling is still painted glyphs and needs an
+actual geometry/clearance audit; doors/windows/balconies/furnishings are covered.
+Finish that home work, then hotel/motel6 and civic9. All reserved/shared sources
+and private bathroom defaults remain untouched; no production source mutants.

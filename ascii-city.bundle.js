@@ -17538,18 +17538,18 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
-  if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
+  const balcony=room.def.balcony;
+  if (balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx>=balcony.x1&&wy>=balcony.y0&&wy<balcony.y1)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
   if (room.def.wc && inWc(wx, wy)) { if(ROOM_FLOORS[room.def.bathFloor])return ROOM_FLOORS[room.def.bathFloor](i,f,wx,wy,r,x,L);const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); }
   if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
       const b = room.def.balcony, sofa = room.def.home.sofa;
       const door=room.def.frenchDoor;
-      // One floor surface owns the flush stone threshold: no overlaid slab
-      // or raised lip at the change from room to live city balcony.
-      if(door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end){BG[i]=C(STONE,2+f*2);return set(i,' ',0);}
-      if (b && wx >= b.x0 && wy >= b.y0 && wy < b.y1) {
-        BG[i] = C(WHITE, 2 + f * 2); return set(i, fract(wx * 2) < 0.04 || fract(wy * 2) < 0.04 ? '+' : ' ', C(GRAY, L));
+      // The existing floor owns both the flush threshold and the paving;
+      // there is no second slab or raised lip over it.
+      if (b && (wx>=b.x0&&wy>=b.y0&&wy<b.y1 || door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end)) {
+        return homeBalconyPaving(i,wx-door.wall,wy-b.y0,L*15/7,homeBalconyPavingFootprint(d,eye));
       }
       if (room.def.tier && Math.abs(wx - sofa[0]) < 2.3 && wy > sofa[1] - 2.5 && wy < sofa[1] + 0.9) {
         const border = Math.abs(wx - sofa[0]) > 2.1 || wy < sofa[1] - 2.3 || wy > sofa[1] + 0.7;
@@ -20513,12 +20513,7 @@ function drawHomeBalconies() {
       });
       homeBalconyModels.set(home,model);
     }
-    const masonry = (i,t,L) => {
-      BG[i] = C(STONE,2 + L * .3); set(i,'=',C(WHITE,L));
-      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L,1,0,HIT.w);
-      return true;
-    };
-    drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);
+    drawHomeBalconyDeck(home,b);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
       if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
@@ -41853,6 +41848,40 @@ function homeBalconyDining(r){
     HOME_BALCONY_FURNITURE(22.3,7.2,'chair',0,-1),
     HOME_BALCONY_FURNITURE(22.3,4.8,'chair',0,1),
   ]:[];
+}
+// Paving coordinates are metres from the balcony's west/north corner. Both
+// the native floor and city slab use them; small joints filter into the stone.
+const HOME_BALCONY_PAVING={tile:.5,grout:.008,depth:.25};
+function homeBalconyPaving(i,u,v,L,footprint){
+  const p=HOME_BALCONY_PAVING,joint=Math.max(coveGroove(u,p.tile,p.grout,footprint),coveGroove(v,p.tile,p.grout,footprint));
+  BG[i]=C(STONE,2.8+L*.22-joint*2.2);set(i,' ',0);return true;
+}
+function homeBalconyPavingFootprint(t,height,unit=1){
+  // Row-to-row floor spacing grows faster at grazing angles than distance
+  // alone. Account for both screen axes before filtering the metre joints.
+  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit;
+}
+const homeBalconyDeckModels=new WeakMap();
+function homeBalconyDeckModel(home,b){
+  let m=homeBalconyDeckModels.get(home),q=m?.bounds;
+  if(!q||q.x0!==b.x0||q.x1!==b.x1||q.y0!==b.y0||q.y1!==b.y1||q.z!==b.z){
+    const bounds={x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,z:b.z},x=(b.x0+b.x1)/2,y=(b.y0+b.y1)/2,hl=(b.x1-b.x0)/2,hw=(b.y1-b.y0)/2;
+    const local=boxAt(0,0,1,0,hl,hw,b.z-HOME_BALCONY_PAVING.depth/10,b.z);
+    m={bounds,x,y,local,view:{...local}};
+    m.shade=(i,t,L)=>{
+      const f=HIT.face;
+      if(f===5){
+        homeBalconyPaving(i,(HIT.u+hl)*10,(HIT.v+hw)*10,L,homeBalconyPavingFootprint(t,eye-bounds.z,10));
+        paintSettledSnow(i,x+HIT.u,y+HIT.v,L,1,0,HIT.w);
+      }else{BG[i]=C(STONE,f===6?1.5+L*.1:2+L*.16);set(i,' ',0);}
+      return true;
+    };
+    homeBalconyDeckModels.set(home,m);
+  }
+  return m;
+}
+function drawHomeBalconyDeck(home,b){
+  const m=homeBalconyDeckModel(home,b);m.view.x=rel(m.x-px);m.view.y=rel(m.y-py);drawBox(m.view,m.shade);
 }
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
