@@ -1950,3 +1950,90 @@ closing audit: home wall trim/panelling is still painted glyphs and needs an
 actual geometry/clearance audit; doors/windows/balconies/furnishings are covered.
 Finish that home work, then hotel/motel6 and civic9. All reserved/shared sources
 and private bathroom defaults remain untouched; no production source mutants.
+
+
+# Runtime disconnect checkpoint — 2026-10-27
+
+Execution environment became unavailable after the furnishing-structure audit.
+The controller reported running, but exec transport disconnected and the next
+call returned "No usable execution environment is available." GitHub remained
+reachable. No runtime edits were made for the newly discovered refresh defect.
+
+Completed and merged:
+- #279 French doors: merge2ef5247, head a25bb218; all four browser shards passed,
+  pure-world ROOM_DEFS dependency repaired separately in #280.
+- #280 pure property/doorway contract: merge0b91335, head08248a60; full Node and
+  all four browser CI shards GREEN40499058549.
+- #281 shared native/city bistro set and actual outdoor C seats:
+  merge86dec18, head98099309; full CI GREEN40501477568.
+- #282 shared filtered deck paving, cached closed slab, native edge and snow:
+  merge72b5550, headf04064a7; monitor CI40505545186. At this checkpoint Node and
+  browser shards1/2/4 pass; shard3 is still running. Local12 browser checks,
+  three Node files,12 routed negative probes and final visual/ABAB review pass.
+Ferry/el held-item use is already merged in #275 and covered by later green CI.
+
+Local state at disconnect:
+- Primary workspace /workspace/emergent-toys on codex/home-furnishing-structure,
+  created from main72b5550. No runtime edits or uncommitted tracked work were
+  made on that branch. Inspect git status and processes before proceeding.
+- codex/home-wall-finishes is another clean local branch at the same main,
+  only a parked read-only audit, not a second implementation.
+- Ignored reproduction:
+  work/backlog-review/home-furnishing-structure-audit.cjs and its .log.
+  All source mutants/benchmarks had finished; production sources were never
+  swapped. Restart the localhost8123 preview server if it has expired.
+- Isolated worktree /workspace/emergent-toys-door-contract contains the clean,
+  committed/pushed #280 repair. Other historical worktrees are not new work.
+
+Fix FIRST: furnishing/workshop refresh removes real bathroom structure.
+The actual audit bought and entered owned homes, counted frame/door/accessory
+props and tested that room.bathroomDoors entries were present in room.props.
+Studio, Belle and Fern each changed from1 frame/1 door/2 accessories with the
+door reference present to0/0/0 and the reference absent after
+refreshFurnishedRoom(). The sequential audit failed to purchase the loft;
+verify it with a fresh fixture/purchase at citySourcePoint(41,73).
+
+Relevant source:
+- city/rooms.js makeRoom around633: def.props(r) builds the core, then the
+  constructor adds bathroom surrounds, pocket doors and accessories. These
+  additions are missing from the later home rebuild.
+- city/home-furnishing-ui.js refreshFurnishedRoom around10 reconstructs only
+  def.props + workshopProps + furnishingProps.
+- city/workshop-ui.js refreshWorkshopRoom around56 duplicates that same lossy
+  reconstruction. This route must be repaired as well.
+
+Suggested small home-only fix (NOT implemented):
+Capture the constructor-added structural props once on the room, after
+bathroom additions and before workshop/furnishing props, then reuse those
+exact objects in refreshFurnishedRoom. Preserve room.bathroomDoors and their
+animated open/target/collider state; do not recreate them and reset privacy.
+Preserve existing figure props, including dead figures (isRoomPerson excludes
+dead people, so use the actual figure identity when retaining them). Delegate
+the private workshop refresh to the same preserving path instead of keeping
+two reconstructions. Keep hotel/motel and home bathroom defaults unchanged.
+
+Verify with real F move/pack/unpack and workshop refresh, E-operated closed/
+partly moving doors, actual collision/sight and rendered frames/accessories,
+repeat refresh without duplicates, private privacy save/re-entry, and figure/
+corpse identity/state. Use fresh owned-home fixtures for all four families.
+Then follow the normal focused tests, negative probes, visual review and ABAB
+against latest main. No runtime changes should be published without these.
+
+After that: resume the pass5 home trim audit. homeWall still paints skirting,
+ceiling bands and Belle's chair rail/panels as glyphs. No new trim builder or
+profile code exists yet. Finish the remaining home work, then passes6 and9.
+Hotel/motel pocket doors already start closed and auto-close; homes retain
+their existing private state.
+
+Continue to respect the reserved bathroom-quality.js, DINER definition,
+world-bootstrap.js, facade/global lettering and unpublished Claude sources.
+The refresh repair can reuse existing bathroom builders/objects without
+editing the held bathroom module. Do not modify shared home/hotel helpers used
+by shops/restaurants without agreement. Preserve append-only notes/manifest
+entries and rebuild the bundle. CLOUD_HANDOFF.md remains untouched.
+
+CI update while saving this handoff: #282's last shard3 was subsequently
+cancelled. Node and shards1/2/4 remain green. Re-run of that one cancelled job
+122193805244 was requested successfully through GitHub; follow the latest
+attempt of run40505545186. This is pending validation, not a claimed full
+green run. The execution workspace is still unavailable.
