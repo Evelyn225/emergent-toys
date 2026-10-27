@@ -173,13 +173,21 @@ function bathroomSurrounds(r) {
   const height=r.def.height||3;
   return bathroomOpenings(r).map(p=>{
     const {vertical,cross,start,end}=p,c=vertical?0:1,s=vertical?1:0,x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5,half=(end-start)/2;
+    // This is a continuation of the partition, not a painted furniture box.
+    // Use its native wall finish/light on both faces, including bathroom tiles.
+    const wallAbove=(i,t,L)=>{
+      if(HIT.face!==3&&HIT.face!==4)return bathroomFlatPaint(i,t,L);
+      const along=(start+end)/2+HIT.u,u=(HIT.face===3?1:-1)*along;
+      roomWall(i,u,0,HIT.w,height,t,vertical?0:1,vertical?cross:start-1,vertical?start-1:cross,Math.max(0,1-t/vis),along);
+      return true;
+    };
     return {...ROOM_MODEL(x,y,(vx,vy)=>{
       const trim=(u,v,hl,hw,z0,z1)=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,.01,bathroomPaint);
       for(const side of [-1,1])trim(side*(half-.006),0,.006,.5,0,2.2); // (a liner proud of the jamb, never in its plane)
       // (the soffit is a flat box: a rounded marcher breaks up on so wide and thin a slab seen edge-on from below)
       drawBox(boxAt(vx,vy,c,s,half,.5,2.2,2.26),bathroomFlatPaint);
       // Close above the opening instead of leaving a free-floating lintel.
-      if(height>2.26)drawBox(boxAt(vx,vy,c,s,half,.5,2.26,height),solid(WHITE));
+      if(height>2.26)drawBox(boxAt(vx,vy,c,s,half,.5,2.26,height),wallAbove);
       for(const face of [-1,1]) {
         for(const side of [-1,1])trim(side*(half+.045),face*.516,.045,.016,0,2.3);
         trim(0,face*.516,half,.016,2.26,2.3);
