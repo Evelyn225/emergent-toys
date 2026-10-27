@@ -18,10 +18,18 @@ test('the aquarium gift label belongs to the solid wall over its counter, clear 
 
 test('native exit and ocean-hall labels use their visible interior wall faces',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
+  // These are real random visitor positions. Keep an adult at both instead
+  // of letting a lucky empty scene hide a camera placed inside a visitor.
+  for(const [x,y,shirt]of [[3,2.6,RED],[21,2.4,BLUE]]) {
+   const k=room.props.findIndex(p=>isRoomPerson(p)&&Math.hypot(p.x-x,p.y-y)<.01),adult=standing(x,y,shirt);
+   if(k<0)room.props.push(adult);else room.props[k]=adult;
+  }
   const original=wallText,bad=[];let wanted='',painted=0;
   wallText=(...args)=>{const hit=original(...args);if(hit&&args[5]===wanted&&CH[args[0]]!==' '){painted++;BG[args[0]]=C(MAG,15);}return hit;};
-  try{for(const[text,x,y,tx,ty]of [['THANK YOU FOR VISITING',6,11.8,6,15],['OPEN OCEAN',3.1,2.6,1,2.6],['OPEN OCEAN',20.5,2.6,23,2.6]]){
-   wanted=text;px=x;py=y;a=Math.atan2(ty-py,tx-px);pitch=0;render(0);pitch=.6/Math.hypot(tx-px,ty-py)*projY/rows;painted=0;render(0);
+  try{for(const[text,x,y,tx,ty]of [['THANK YOU FOR VISITING',6,11.8,6,15],['OPEN OCEAN',4,2.1,1,2.6],['OPEN OCEAN',20,2.1,23,2.6]]){
+   wanted=text;px=x;py=y;
+   if(room.props.some(p=>isRoomPerson(p)&&Math.hypot(p.x-px,p.y-py)<.4))bad.push([text,'camera intersects a visitor']);
+   a=Math.atan2(ty-py,tx-px);pitch=0;render(0);pitch=.6/Math.hypot(tx-px,ty-py)*projY/rows;painted=0;render(0);
    const visible=Array.from(BG).filter(c=>c===C(MAG,15)).length;if(!free(px,py)||painted<20||visible<20)bad.push([text,'missing native wall label',x,y,painted,visible]);
   }}finally{wallText=original;}return bad;
  });assert.deepEqual(r,[]);
