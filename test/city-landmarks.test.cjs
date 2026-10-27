@@ -43,17 +43,19 @@ test('cathedral buttresses stop walking and sideways vehicles without blocking t
 
 test('a purchased Belle balcony is a real outdoor surface attached to its apartment building', () => {
   const { ev } = loadCity();
+  assert.equal(ev('typeof ROOM_DEFS'),'undefined','world property queries do not load the interior renderer');
   const result = ev(`(()=>{
     const cell=freeHomeNear(px,py,'belle'),home={cell,kind:'home_belle'},b=homeBalconyBounds(home);
     const x=b.x0+.3,y=b.doorY,before=homeBalconyHeight(x,y);
     owned.homes.push(home);
     return [before,homeBalconyHeight(x,y),b.z,map[idx(Math.floor(x),Math.floor(y))],
       homeBalconyHeight(b.x1+.01,y),homeBalconyHeight(x,b.y0-.01),policeRoofHeight(x,y),
-      homeBalconyBounds({cell,kind:'home_loft'})];
+      homeBalconyBounds({cell,kind:'home_loft'}),b.doorY-b.y];
   })()`);
   assert.equal(result[0],0);
   assert.equal(result[1],result[2]);
   assert.equal(result[3],0,'the balcony projects over an open street-facing cell');
   assert.equal(result[4],0); assert.equal(result[5],0);
   assert.equal(result[6],result[2]); assert.equal(result[7],null);
+  assert.ok(Math.abs(result[8]-.25)<1e-8,'outside doorway matches the centre of the native 11–14m opening');
 });
