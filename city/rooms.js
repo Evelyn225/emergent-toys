@@ -1114,18 +1114,18 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
-  if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
+  const balcony=room.def.balcony;
+  if (balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx>=balcony.x1&&wy>=balcony.y0&&wy<balcony.y1)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
   if (room.def.wc && inWc(wx, wy)) { if(ROOM_FLOORS[room.def.bathFloor])return ROOM_FLOORS[room.def.bathFloor](i,f,wx,wy,r,x,L);const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); }
   if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
       const b = room.def.balcony, sofa = room.def.home.sofa;
       const door=room.def.frenchDoor;
-      // One floor surface owns the flush stone threshold: no overlaid slab
-      // or raised lip at the change from room to live city balcony.
-      if(door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end){BG[i]=C(STONE,2+f*2);return set(i,' ',0);}
-      if (b && wx >= b.x0 && wy >= b.y0 && wy < b.y1) {
-        BG[i] = C(WHITE, 2 + f * 2); return set(i, fract(wx * 2) < 0.04 || fract(wy * 2) < 0.04 ? '+' : ' ', C(GRAY, L));
+      // The existing floor owns both the flush threshold and the paving;
+      // there is no second slab or raised lip over it.
+      if (b && (wx>=b.x0&&wy>=b.y0&&wy<b.y1 || door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end)) {
+        return homeBalconyPaving(i,wx-door.wall,wy-b.y0,L*15/7,homeBalconyPavingFootprint(d,eye));
       }
       if (room.def.tier && Math.abs(wx - sofa[0]) < 2.3 && wy > sofa[1] - 2.5 && wy < sofa[1] + 0.9) {
         const border = Math.abs(wx - sofa[0]) > 2.1 || wy < sofa[1] - 2.3 || wy > sofa[1] + 0.7;

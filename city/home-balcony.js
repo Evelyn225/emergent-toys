@@ -71,12 +71,7 @@ function drawHomeBalconies() {
       });
       homeBalconyModels.set(home,model);
     }
-    const masonry = (i,t,L) => {
-      BG[i] = C(STONE,2 + L * .3); set(i,'=',C(WHITE,L));
-      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L,1,0,HIT.w);
-      return true;
-    };
-    drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);
+    drawHomeBalconyDeck(home,b);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
       if(o.homeBalconyRail){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
