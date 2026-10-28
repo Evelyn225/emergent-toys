@@ -2620,3 +2620,31 @@ ABAB177x66 mainc37ce9b→after: wide2.1–2.3→3.1ms; handle/leaf macro
 Next bounded pass6: public hotel/motel/Grand lobby floor finishes, standard
 hotel lobby's remaining painted ceiling lights, then lobby/service entries/
 reception fixtures and closing audit before9. Keep reserved files untouched.
+
+#301 merged (head846cdbc, mergeae86a7a). Codex active
+codex/hotel-lobby-floors from main. Own new hotel-lobby-floors.js, manifest/
+bundle and focused test only. Override floor styles for hotel/motel/grandhotel
+without editing reserved storefront definitions. Native flush surfaces: filtered
+hotel timber via existing unchanged helper; restrained motel linoleum and Grand
+stone slabs/veins with both-axis footprint filtering and actual room lighting.
+Keep bathroom/private-room/gallery floors, all layouts/props/actions unchanged.
+Next standard hotel's overhead fixtures, lobby/service entrances/reception,
+pass6 closing audit and9. Reserved files and shared helpers remain untouched.
+
+Public lobby floors complete on codex/hotel-lobby-floors: two focused native/
+material/footstep/bath/private/gallery browser checks and four Node files pass.
+Five isolated footstep/footprint/glyph/light/native-hook defects fail assertions.
+Reviewed16 final clear-floor close/wide/oblique/night/tier before/after images,
+no errors. Visual review removed broad random tone blotches; fine stone veins
+and stronger narrow joints resolve nearby and filter away in distant views.
+Original footstep classification is retained via def.footstepFloor; audio-mix.js
+reads that optional field before floor. Geometry helpers are unchanged.
+ABAB177x66 mainae86a7a→after: hotel wide2.1–2.3→2.6ms,
+close0.7–0.8→1.9; motel wide3.5–3.8→3.9–4.0, close1.0–1.1→1.4;
+Grand wide2.3–2.5→2.8–2.9, close1.0–1.1→2.0.
+#299 full CI green40770133626. #300 run40771358014 shard1 failed only the
+random-shell fireworks comparison, reproduced with valid .99/.01 source draws
+in work/backlog-review/fireworks-worst-case.cjs. Next separate test-only fix:
+compare identical shell sources outside/inside without weakening muffling or
+travel-delay checks. Then standard-hotel overhead fixtures and remaining lobby/
+service entries/reception details, closing audit, pass9. #301 run40772754849.
