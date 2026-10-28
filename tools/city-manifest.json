@@ -146,6 +146,7 @@
     "city/islands-content.js",
     "city/islands-render.js",
     "city/island-sights.js",
+    "city/hotel-bedside-lamps.js",
     "city/hotel-polish.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
