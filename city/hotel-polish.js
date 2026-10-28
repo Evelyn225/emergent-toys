@@ -11,7 +11,7 @@ function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURN
 function hotelDefinition(tier){
  const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null,diningX=tier===2?14.4:8,diningY=h-(tier===2?5.5:3.1);
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*(tier?.9:1.2)+Math.cos(tvAngle)*(tier?1:0),tv[1]+Math.cos(tvAngle)*(tier?.9:1.2)+Math.sin(tvAngle)*(tier?1:0)],sofa,stove},tier,
- wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
+ wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,' ',0),true;},
  props:r=>{
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
  const p=[...hotelCeilingLights(tier,w,r.def.height),...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
@@ -51,7 +51,7 @@ function hotelAmenityUse(){
 // Warm ceilings and parquet stay quiet at a distance; rugs define the sitting areas.
 ROOM_CEILS.hotel=(i,r,x,wx,wy)=>{
  const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy);
- BG[i]=C(WHITE,grand?5:4);return set(i,edge<.16?'=':' ',C(YEL,8));
+ BG[i]=C(WHITE,grand?5:4);return set(i,room.kind==='grandhotel'&&edge<.16?'=':' ',C(YEL,8));
 };
 ROOM_FLOORS.hotel=hotelFloorFinish;
 for(const def of [ROOM_DEFS.motelRoom,ROOM_DEFS.hotelroom,ROOM_DEFS.hotelSuite]){def.floor='hotel';def.ceil='hotel';}
