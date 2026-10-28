@@ -2552,3 +2552,26 @@ ABAB177x66 maincdb2d64→after: hotel wide4.6–4.9→4.9–5.0ms,
 close1.6→2.5; suite wide3.5→3.7, close3.0–3.1→3.8–4.0.
 Existing shared materials reused unchanged. Next fitted room wall trim, with
 native doorway gaps preserved, before lobby/service openings and pass9.
+
+#298 merged (head6de3f82, merge5d018ff). Codex active
+codex/hotel-room-trim from main. Own new hotel-room-trim.js, hotel-polish wall/
+ceiling material integration, one hotelroom-only makeRoom line in rooms.js,
+manifest/bundle and focused tests. Call homeWallMoulding unchanged; add fitted
+baseboards, chair rails and cornices after actual bathroom surrounds/fixtures.
+Explicit native entry-opening blockers keep lower trim out of D spans; upper
+trim may cross their solid heads. Preserve real casings/fixtures and routes.
+No DINER/shared helper/reserved Claude file changes. Next lobby/service entries
+and remaining hotel details before pass9.
+
+Hotel room trim complete: two new real-surface/native checks and two existing
+bedside/walking/automatic-door controls pass; three Node files pass. Five
+isolated entry-gap/base/ceiling/paint/native-hook defects fail assertions.
+Actual contact audit measured the intended2mm wall burial above WC infills;
+clearance checks cover the exposed moulding, not that supporting backing.
+Reviewed16 final clear-floor close/wide/oblique/night/cornice/entry/tier
+before/after views, no page errors. ABAB177x66 main5d018ff→after:
+wide4.2–5.4→3.1–3.4ms, base close2.1–3.6→2.2–2.5,
+cornice2.1–2.5→2.0–2.1; host variability, no broad speedup claim.
+Shared wall fitter is unchanged. Next hotel window casings: actual north-wall
+openings must split at the motel/suite partitions rather than span them;
+then lobby/service entries and pass9.

@@ -642,6 +642,7 @@ function makeRoom(kind, extra = {}) {
     r.props.push(...r.bathroomDoors);
   }
   r.props.push(...bathroomAccessories(r));
+  if(kind==='hotelroom')r.props.push(...hotelRoomTrim(r));
   if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) {
     r.props.push(...homeSkirting(r),...homeCornices(r));
