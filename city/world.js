@@ -448,8 +448,10 @@ function arcadeSpanFor(ns, lane, along) {
     while(lo>=lane-3 && !(map[at(lo)]>=ARCADE_Z))lo--;
     while(hi<=lane+4 && !(map[at(hi)]>=ARCADE_Z))hi++;
     if(lo>=lane-3 && hi<=lane+4) {
-      let clear=true;
-      for(let q=lo+1;q<hi;q++) {
+      // Border roads belong to one district, but their opposite facade may
+      // belong to another. Keep the canopy between two Shotengai buildings.
+      let clear=[lo,hi].every(q=>districtAt(ns?q+.5:along+.5,ns?along+.5:q+.5)==='shotengai');
+      for(let q=lo+1;clear&&q<hi;q++) {
         const x=ns?q+.5:along+.5,y=ns?along+.5:q+.5;
         if(map[at(q)] || isWater(x,y)) {clear=false;break;}
       }

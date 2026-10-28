@@ -2139,3 +2139,31 @@ close3.3–3.4→3.8. Initial motel-oblique3.1→3.5/7.4 was noisy; focused
 120-warm/180-measured ABAB repeat gave3.0–3.3→3.3ms. Material continuity has
 a small view-dependent cost; no broad speedup claim. Publication/authorized
 merge is the final step; retain a clean checkout and monitor that PR's CI.
+
+User-reported Shotengai roof attaching across the road to the museum: Codex
+active `codex/shotengai-roof-boundary`, city/world.js arcadeSpanFor only,
+focused district/support and native rendering/shelter checks, bundle and
+appended notes. Reproduced six museum-edge spans supported by downtown on one
+side and Shotengai on the other, plus thirty other district-edge spans.
+Require both actual supporting building cells to belong to Shotengai, retaining
+interior facade-to-facade roofs and existing roof render/shelter consumers.
+Held Claude/shared helpers remain untouched; finish this bounded reported fix.
+
+Shotengai boundary fix verified on `codex/shotengai-roof-boundary`: only
+arcadeSpanFor's cached eligibility changes. Both actual supporting buildings
+must be Shotengai; the museum-side road and other district-edge spans now
+have open sky. Two focused pure checks sweep every source-city span and the
+museum edge; five Node files pass including street fixtures/snow shelters,
+road traction and bundle freshness/parse. The native browser check proves
+no museum-facing canopy pixels (disabling roof rendering changes zero cells),
+no false shelter, and real steel/cover still present inside Shotengai.
+Old-border and all-roofs-removed isolated probes fail intended assertions.
+Ten before/after close/wide/oblique/night/interior views reviewed; every camera
+clear, no page errors. Interior control PNGs are byte-identical. ABAB177x66
+main6a784d6→after medians: museum-wide8.7–9.1→8.3–8.5ms,
+oblique9.4–10.0→8.8–8.9; interior10.0→9.9–10.1. Removing border beams reduces
+visible work there; no general speedup claim. Artifacts:
+work/backlog-review/arcade-boundary-*. Bundle rebuilt; no held files changed.
+#286 full Node/four-shard CI passed40572531500. Finish this reported fix's
+publication/authorized merge, leave clean main, and monitor its CI before the
+saved home trim/panelling audit and remaining passes5/6/9. No next chunk started.
