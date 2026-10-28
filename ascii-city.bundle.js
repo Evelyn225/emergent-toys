@@ -35125,6 +35125,19 @@ function hotelCeilingLights(tier,w,height) {
   points.push([w-2.5,3.5]);
   return points.map(([x,y])=>HOTEL_CEILING_LIGHT(x,y,height,tier));
 }
+// The native floor retains its walking plane and depth. Reuse the filtered
+// timber material unchanged; rugs keep their authored sitting-area footprints.
+function hotelFloorFinish(i,f,wx,wy,r,x,L) {
+  const tier=room.def.tier,sofa=room.def.hotelAmenities.sofa,half=tier===2?2.6:1.65;
+  const footprint=homeBalconyPavingFootprint(eye*projY/(r-hor+.5),eye);
+  if(Math.abs(wx-sofa[0])<half&&wy>sofa[1]-2.1&&wy<sofa[1]+.6){
+    const edge=Math.min(half-Math.abs(wx-sofa[0]),wy-sofa[1]+2.1,sofa[1]+.6-wy),filter=Math.max(.006,footprint);
+    const border=1-smooth(clamp((edge-.15)/filter+.5,0,1)),fine=1-smooth(clamp((footprint-.003)/.015,0,1));
+    const weave=fine?Math.sin(wx*180)*Math.sin(wy*180)*.08*fine:0;
+    BG[i]=C(tier===2?GREEN:BLUE,1.1+L*.35+border*.8+weave);set(i,' ',0);return true;
+  }
+  return homeFloorWood(i,wx,wy,L,footprint,tier);
+}
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
@@ -35180,16 +35193,7 @@ ROOM_CEILS.hotel=(i,r,x,wx,wy)=>{
  const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy);
  BG[i]=C(WHITE,grand?5:4);return set(i,edge<.16?'=':' ',C(YEL,8));
 };
-ROOM_FLOORS.hotel=(i,f,wx,wy,r,x,L)=>{
- const tier=room.def.tier,spot=room.def.hotelAmenities?.tv,sofa=room.def.hotelAmenities?.sofa||[room.W/2,9];
- if(Math.abs(wx-sofa[0])<(tier===2?2.6:1.65)&&wy>sofa[1]-2.1&&wy<sofa[1]+.6){
-  const border=Math.abs(wx-sofa[0])>(tier===2?2.4:1.5)||wy<sofa[1]-1.95||wy>sofa[1]+.45;
-  BG[i]=C(tier===2?GREEN:BLUE,2+f*2);return set(i,border?'=':hash(Math.floor(wx*4),Math.floor(wy*4),3)>.96?'+':' ',C(WARM,L));
- }
- const u=tier===2?wx+wy:wx,v=tier===2?wx-wy:wy;
- BG[i]=C(BRICK,2+f*2+(Math.floor(v*2)&1)*.5);
- return set(i,fract(v*2)<.04?tier===2?'/':'=':fract(u/1.8+(Math.floor(v*2)&1)*.5)<.025?'|':' ',C(WARM,L*.7));
-};
+ROOM_FLOORS.hotel=hotelFloorFinish;
 for(const def of [ROOM_DEFS.motelRoom,ROOM_DEFS.hotelroom,ROOM_DEFS.hotelSuite]){def.floor='hotel';def.ceil='hotel';}
 ROOM_DEFS.grandhotel.ceil='hotel';
 // Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
