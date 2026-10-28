@@ -2167,3 +2167,53 @@ work/backlog-review/arcade-boundary-*. Bundle rebuilt; no held files changed.
 #286 full Node/four-shard CI passed40572531500. Finish this reported fix's
 publication/authorized merge, leave clean main, and monitor its CI before the
 saved home trim/panelling audit and remaining passes5/6/9. No next chunk started.
+
+Codex continues pass5 on `codex/home-fitted-skirting` from main49ad111.
+Own new city/home-skirting.js, homeDef/homeWall/makeRoom integration only in
+city/rooms.js, focused tests, manifest/bundle and appended notes. Replace
+painted base '=' with fitted shallow baseboards in studio/loft/Belle homes;
+keep cornice/panelling as the following chunk. Derive runs from native wall
+faces, clip against actual casing/fixed-furniture geometry, close corners,
+cache prepared pieces, preserve doorway/balcony routes and furniture refresh.
+Fern/Cabin Cove, shared furniture/kitchen helpers and reserved Claude files
+remain untouched. #287 full Node/four-shard CI passed40609611459.
+Visual review of skirting exposed a pre-existing wall/floor raster seam:
+render.js used ceil at the wall bottom despite sampling at row+.5, painting
+wall-colored cells below floor level. Narrow necessary addition to this chunk:
+correct the shared floorEnd bound using row centres; verify ordinary room/city
+wall samples too. No geometry is sunk below the floor to hide the artifact.
+
+Pass5 fitted baseboards reviewed on `codex/home-fitted-skirting`: studio wood,
+loft charcoal and Belle pale stepped body/cap profiles follow native wall
+faces. Runs stop at fixed fixture footprints and actual doorway casings;
+horizontal members own corner squares and vertical members butt against them.
+Prepared bounds/materials are reused, including through furnishing/workshop
+refresh; boards stay inside the existing wall collision margin. Thin cap light
+filters continuously when unresolved and retains actual shading nearby.
+Fern/Cabin Cove baseboard geometry and bathroom privacy policy are unchanged.
+The shared render.js floorEnd correction prevents wall-coloured pixels below
+floor level using the actual row+.5 sample; ordinary rooms/city, terrain
+occlusion and canvas/WebGL parity controls pass. No geometry sunk below floor.
+Eleven unique browser checks pass (three new, three passage, two structural
+refresh, three renderer/terrain controls); nine Node assertions across four
+files pass, plus final bundle checks. Original baseline and eight independent
+profile/corner/cache/fixture/glyph/refresh/light/floor-overscan defects fail
+nine isolated routed probes; production sources were never swapped.
+Reviewed24 final before/after close/wide/oblique/night home views, all cameras
+clear and no page errors. Early native wall overscan flecks are fixed; final
+cap material also filters subpixel glints. Artifacts: work/backlog-review/home-skirting-*.
+ABAB177x66 main49ad111→after: studio wide1.9–2.0→2.1–2.2ms,
+close1.7→1.9–2.0, oblique1.7→1.8–1.9; loft wide1.9–2.0→2.0–2.5,
+close1.7→1.8–2.0, oblique1.7→1.9–2.2; Belle wide1.9→2.0–2.2,
+close1.8→2.0–2.1, oblique1.8–1.9→1.9–2.2. Added fitted detail costs roughly
+0.1–0.6ms in these views, not a speedup claim.
+Next: fitted ceiling cornices, then Belle chair rail/panelling, before the
+remaining pass5 closing audit and passes6/9. These are still painted glyphs;
+no cornice/panelling implementation started. Keep all held Claude files/shared
+furniture/kitchen helpers reserved. #287 full Node/four-shard CI is green.
+Final shared-renderer city control: clear walking view ABAB177x66
+7.8–8.0→7.8–8.0ms, with two additional before/after PNGs reviewed. Final
+visual total26 images. The final subpixel cap-light test and its independent
+unfiltered-lip mutant both pass their expected outcomes; final bundle checks
+are current. Publish/merge this chunk, then stop under the saved usage limit
+with a clean checkout. No ceiling cornice or panelling code exists yet.

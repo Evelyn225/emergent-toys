@@ -216,9 +216,12 @@ function render(dt,sceneOnly=false,mask=null) {
       if (d > vis) break;
       const h = W.cell(mx, my); hCur = h; dPrev = d;
       if (!h) continue;
-      if (first) { first = false; BASE[x] = Math.min(rows, Math.ceil(hor + eye * projY / d)); if (x === cols >> 1) lookHit = { d, mx, my }; }
+      // Wall samples use row centres (r + .5). Stop at the last sample at
+      // or above floor level; ceil without that half-cell paints below it.
+      const floorEnd = Math.min(rows, Math.floor(hor + eye * projY / d + .5));
+      if (first) { first = false; BASE[x] = floorEnd; if (x === cols >> 1) lookHit = { d, mx, my }; }
       const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
-      const bot = Math.min(clip, Math.ceil(hor + eye * projY / d));
+      const bot = Math.min(clip, floorEnd);
       // u runs left-to-right on screen for whichever face we see, so signs read correctly
       const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
       const uStep = side ? Math.abs(rx2 * (ry * d / ry2) - rx * d) : Math.abs(ry2 * (rx * d / rx2) - ry * d);
