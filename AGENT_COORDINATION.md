@@ -2356,3 +2356,41 @@ passes. Existing Fern/Cabin floor and homes' saved bathroom policy unchanged.
 chunk, then pass6 hotel bedside fittings first (currently glowing boxes on
 rods), subsequent rooms/lobbies/service areas and pass9. Keep bathroom-quality,
 DINER, world-bootstrap, facade/global-lettering and shared helpers reserved.
+
+#292 merged (head73544c2, merge826e273); monitor its full CI. Codex active
+codex/hotel-bedside-lamps from that main, first pass6 chunk. Own new
+city/hotel-bedside-lamps.js, only the bedside lamp expression in
+hotel-polish.js, focused test, manifest/bundle and appended notes. Replace
+glowing box/rod lamps with fitted open shades, actual bulbs/sockets, joined
+bases/stems/struts, larger ceramic/brass suite fittings and calm materials.
+Use existing homeLampPart/HOME_LAMP_BULB unchanged; do not change shared home/
+kitchen helpers. Keep lamps supported on original nightstands and contained
+inside their footprints; preserve price-tier room plans, amenities and the
+already-implemented shut/automatic washroom policy. Next other hotel room/
+lobby/service-area finishes, then pass9. Held Claude files remain reserved.
+
+Hotel bedside lamps reviewed: two per motel/hotel/suite, closed open-axis
+shades with actual wall thickness, real bulb/socket/stem contacts, mounted
+round bases and3 closed struts. Suite ceramic/brass proportions are larger;
+only bulb and inner lining emit. Bases meet the actual drawn nightstand top;
+all parts and lamp collision bounds fit within the existing stand footprint.
+Prepared profiles/materials/view bounds reuse objects. Existing shared lamp
+helpers are called unchanged, and no reserved source was edited.
+Seven unique browser checks pass (two new actual-surface/cache/native-pixel/
+real-E/privacy checks, two hotel amenities/public-door controls, three motel/
+Grand-suite clearance/seating/kitchen/TV regressions). Seven Node assertions
+across3 files pass plus final bundle checks. Ten isolated baseline/base/axis/
+emission/bulb/socket/strut/cache/draw/ceramic defects fail assertions.
+Reviewed30 final native close/wide/oblique/night and labelled low inspection
+before/after views across all3 tiers, clear floor, no page errors. Under-shade
+inspection uses0.55m freecam (not a standing player camera) to expose bulb/
+strut contacts. ABAB177x66 main826e273→after medians: motel wide5.3–6.0→5.5–5.7ms,
+close4.8→5.5–5.8, oblique5.2–5.9→5.3; hotel wide5.3–5.4→5.5–5.7,
+close4.7→5.5–5.7, oblique4.9–5.1→5.0–5.5; suite wide5.2–5.4→5.7,
+close4.7–4.8→6.4, oblique4.8–5.1→5.0–5.1. Usually~0–1ms added;
+suite macro adds1.6–1.7ms. No general speedup claim. Artifacts hotel-lamp-*.
+#292 full Node/four-shard CI GREEN40732344371. Publish/review/merge, then
+continue pass6: hotel coffee tables still use an unsupported primitive disc
+and two approximate rod legs with raised endpoints; inspect/fix that next.
+Then framed landscapes, room/lobby finishes/service areas and pass9.
+Homes' privacy state and hotel shut/automatic closure policy remain intact.
