@@ -2394,3 +2394,56 @@ continue pass6: hotel coffee tables still use an unsupported primitive disc
 and two approximate rod legs with raised endpoints; inspect/fix that next.
 Then framed landscapes, room/lobby finishes/service areas and pass9.
 Homes' privacy state and hotel shut/automatic closure policy remain intact.
+
+#293 merged (headf01128e, merge9ca6cff); monitor full CI. Codex active
+codex/hotel-coffee-tables from current main: new hotel-only round-table
+module, only the hotel/suite coffee-table expression in hotel-polish.js,
+focused test, manifest/bundle and append-only notes. Clarification of the
+prior note: the old disc DOES meet the rod tops; the defects are approximate
+two-rod construction and their raised feet, not an unsupported tabletop.
+Fit four grounded closed feet/legs into the same .52m half-width/.46m height
+and original positions, with rounded timber rim and a supported stone inset
+for the suite. Keep routes, seats, kitchen/TV and privacy behavior stable;
+call shared builders/materials unchanged. Next framed landscapes and other
+room/lobby/service finishes, then pass9. Reserved Claude files remain held.
+
+Coffee-table checkpoint: five unique browser checks pass (two focused geometry/
+native-view checks, two Grand-suite dining/C/E controls and the all-tier hotel
+amenity control). The audit found the metadata TV approach inside the existing
+coffee table; it now sits at a clear side position within E reach, with real
+TV/cooking controls and walking paths verified. Original table positions,
+height and collider footprints remain unchanged. Initial generic lathe macro
+views were too costly. Cached extremal cap limits now allow a direct plane hit
+strictly inside exposed circular caps/annuli; curved rims/edges and profile
+ties retain coveRayLathe. Final focused tests prove exact ray/normal/material-
+coordinate parity and identical native pixels/depth against that reference.
+Final13 isolated defect probes and final captures are running; optimized ABAB
+remains before commit/PR. Production sources/bundle were never swapped.
+Current source and new tests are uncommitted on codex/hotel-coffee-tables.
+Next hotel audit also found the two Grand lobby capital tops at4.85m below
+the5.2m ceiling in hotel-polish.js: measure the actual drawn gap and prioritise
+that structural fix before the remaining painted landscape frames.
+
+Coffee tables final: four closed grounded feet/turned legs support a bevelled
+timber top at the original height/position/footprint; suite stone rests in its
+actual recessed rim. Hotel/suite TV standing points now clear the existing
+table and stay within E range; normal TV/cooking controls and routes pass.
+Five unique browser checks pass across final focused and existing Grand-suite/
+hotel amenity runs, plus3 Node files. Final14 independent baseline/support/
+silhouette/inset/cache/translation/draw/cap/culling/TV defects fail assertions.
+Prepared view bounds, materials and cap limits are cached. Exact flat cap and
+cylindrical-recess hits plus conservative outer-cylinder rejection avoid most
+generic profile work; true curved edges/ties keep the reference ray. Random
+actual rays/normals/material coordinates and full native pixels/depth match
+coveRayLathe exactly; all10 final after-view PNGs are byte-identical to the
+reviewed pre-optimization models. Reviewed20 final close/wide/oblique/night/
+foot-inspection before/after images, clear cameras, no errors. Low inspection
+uses0.12m freecam explicitly. Final ABAB177x66 main9ca6cff→after medians:
+hotel wide3.9→4.0–4.2ms, close5.2→5.7–6.2, oblique5.8→6.3–6.8;
+suite wide5.6–5.8→5.8–6.2, close5.7→6.5–7.2, oblique5.7–5.8→6.4–7.0.
+Added finish costs~0.1–1.5ms. Initial generic suite macro8.8–8.9ms is reduced;
+no broad FPS gain claimed. Artifacts hotel-coffee-* (slow timing retained).
+#293 full Node/four-shard CI GREEN40734709953. Ready publish/review/merge.
+Next pass6: actual Grand lobby capital/ceiling and chandelier mounting gaps,
+then remaining room/lobby/service finishes and pass9. No reserved/shared
+helper changes; hotel/home privacy policy is preserved.
