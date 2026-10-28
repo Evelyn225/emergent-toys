@@ -101,20 +101,41 @@ function homePlushBedSupport(p,prop) {
  return top;
  }finally{for(const key in HIT)if(!(key in hit))delete HIT[key];Object.assign(HIT,hit);}
 }
+// Placement validates the fitted wall surfaces too. Cache only static
+// architecture, keyed by the actual props array so refresh cannot stale it.
+const HOME_WALL_FIXTURE_BOUNDS=new WeakMap();
+function homeWallFixtureFit(p,r) {
+  let bounds=HOME_WALL_FIXTURE_BOUNDS.get(r.props);
+  if(!bounds) {
+    bounds=[];const draw=drawBox;drawBox=b=>bounds.push({...b});
+    try {for(const o of r.props)if(o.draw&&(o.windowCasing||o.homeEntry||o.homePassage||o.homeFrenchDoor||o.homeFrenchDoorSurround||o.bathroomOpening||o.homeCornice||o.homeChairRail||o.homePanelling))o.draw(o.x,o.y);}
+    finally {drawBox=draw;}
+    for(const w of r.def.windows||[]) {
+      const vertical=w.face==='west'||w.face==='east',line=w.face==='west'||w.face==='north'?1:vertical?r.W-1:r.H-1;
+      bounds.push(boxAt(vertical?line:w.center,vertical?w.center:line,vertical?0:1,vertical?1:0,w.half,.001,w.bottom??.85,w.top??(r.def.tier?2.95:2.5)));
+    }
+    HOME_WALL_FIXTURE_BOUNDS.set(r.props,bounds);
+  }
+  const b=furnishingBox(p),overlap=a=>b.z0<a.z1-1e-6&&b.z1>a.z0+1e-6&&furnishingOverlap(b,a,1e-6);
+  if(bounds.some(overlap))return 'Choose a clear wall away from windows and trim.';
+  if(r.props.some(o=>o.furnishingKey!=null&&o.furnishingKey!==p.key&&o.box&&overlap(o.box)))return 'Leave other wall decorations clear.';
+  return '';
+}
 function furnishingCandidate() {
   const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
   const d=HOME_FURNITURE[q.id],p={id:q.id,key:q.part?.key??-1,a:q.a,x:0,y:0,z:d.wall?1.6:0};
   if(d.wall) {
-    let found=false,previous=[Math.floor(px),Math.floor(py)];
-    for(let t=.05;t<=3;t+=.025) {
-      const x=px+Math.cos(a)*t,y=py+Math.sin(a)*t,mx=Math.floor(x),my=Math.floor(y),cell=roomAt(mx,my);
-      if(cell!=='.') {
-        if(cell==='D')return {...p,ok:false,reason:'Keep doors clear.'};
-        if(mx!==previous[0]){p.a=Math.cos(a)>0?Math.PI/2:-Math.PI/2;p.x=Math.cos(a)>0?mx-d.hy:mx+1+d.hy;p.y=y;}
-        else {p.a=Math.sin(a)>0?Math.PI:0;p.y=Math.sin(a)>0?my-d.hy:my+1+d.hy;p.x=x;}
-        p.z=clamp(eye+pitch*rows/projY*t,.65,(room.def.height||3)-.4);found=true;break;
-      }
-      previous=[mx,my];
+    let found=false,mx=Math.floor(px),my=Math.floor(py);
+    const vx=Math.cos(a),vy=Math.sin(a),sx=vx<0?-1:1,sy=vy<0?-1:1,dx=Math.abs(1/vx),dy=Math.abs(1/vy);
+    let tx=(sx<0?px-mx:mx+1-px)*dx,ty=(sy<0?py-my:my+1-py)*dy;
+    for(let k=0;k<12;k++) {
+      const vertical=tx<ty,t=vertical?tx:ty;if(t>3)break;
+      if(vertical){mx+=sx;tx+=dx;}else{my+=sy;ty+=dy;}
+      const cell=roomAt(mx,my);if(cell==='.')continue;
+      if(cell==='D')return {...p,ok:false,reason:'Keep doors clear.'};
+      if(vertical){p.a=sx>0?Math.PI/2:-Math.PI/2;p.x=sx>0?mx-d.hy:mx+1+d.hy;p.y=py+vy*t;}
+      else {p.a=sy>0?Math.PI:0;p.y=sy>0?my-d.hy:my+1+d.hy;p.x=px+vx*t;}
+      p.z=clamp(eye+pitch*rows/projY*t,.65,(room.def.height||3)-.4);found=true;break;
     }
     if(!found)return {...p,ok:false,reason:'Look at a wall within three metres.'};
   }else {
@@ -138,6 +159,7 @@ function furnishingCandidate() {
   }
   const obstacles=support?room.props.map(o=>o===support?{...o,box:{...o.box,z1:p.z}}:o):room.props;
   let reason=furnishingFit(p,room.grid,obstacles);
+  if(!reason&&d.wall)reason=homeWallFixtureFit(p,room);
   if(!reason&&!d.wall&&!d.rug) {
     const obstacle=furnishingBox(p),pass=extra=>(x,y)=>room.grid[y]?.[x]==='.'&&!room.props.some(o=>o.box&&!o.walk&&!(q.part&&o.furnishingKey===q.part.key)&&inBox(o.box,x+.5,y+.5,.1))&&(!extra||!inBox(extra,x+.5,y+.5,.1));
     const from={x:room.def.entry[0],y:room.def.entry[1]},world={width:room.W,height:room.H,wrap:false};
