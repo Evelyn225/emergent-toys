@@ -5,7 +5,7 @@ function homeSkirting(r) {
   const tier=r.def.tier,height=[.105,.09,.155][tier],depth=[.022,.018,.026][tier],cap=.015;
   return homeWallMoulding(r,[[0,height-cap,depth],[height-cap,height,depth+.004]],false);
 }
-function homeWallMoulding(r,profile,cornice) {
+function homeWallMoulding(r,profile,cornice,marker=cornice?'homeCornice':'homeSkirting') {
   const tier=r.def.tier,height=Math.max(...profile.map(p=>p[1])),bottom=Math.min(...profile.map(p=>p[0]));
   const bounds=b=>{const ex=Math.abs(b.c)*b.hl+Math.abs(b.s)*b.hw,ey=Math.abs(b.s)*b.hl+Math.abs(b.c)*b.hw;return{x0:b.x-ex,x1:b.x+ex,y0:b.y-ey,y1:b.y+ey,z0:b.z0,z1:b.z1};};
   const blockers=[],addBlock=b=>{if(b&&b.z0<height&&b.z1>bottom)blockers.push(bounds(b));};
@@ -14,7 +14,7 @@ function homeWallMoulding(r,profile,cornice) {
     addBlock(p.box);
     // The entry has narrower real casings than the native two-cell D wall.
     for(const q of p.homeEntry?.parts||[])addBlock({...q.local,x:p.x+q.local.x,y:p.y+q.local.y});
-    if(p.bathroomOpening){
+    if(p.bathroomOpening||p.windowCasing){
       const draw=drawBox;drawBox=addBlock;try{p.draw(p.x,p.y);}finally{drawBox=draw;}
     }
   }
@@ -63,12 +63,12 @@ function homeWallMoulding(r,profile,cornice) {
         const shade=(i,t,L)=>{const f=HIT.face,u=f===1?1:f===2?-1:0,v=f===3?1:f===4?-1:0;HIT.nx=c*u-s*v;HIT.ny=s*u+c*v;HIT.nz=f===5?1:f===6?-1:0;
           // An unresolved horizontal lip keeps the front's light instead of
           // alternating bright/dark cells; real cap shading resolves nearby.
-          const edge=cornice?Math.max(0,d-(f===5?upper:lower)):2*box.hw;
+          const edge=cornice||marker==='homeChairRail'?Math.max(0,d-(f===5?upper:lower)):2*box.hw;
           const resolve=f>=5?smooth(clamp(Math.abs(eye-HIT.w)*edge*projY/(t*t)-.5,0,1)):1;
           return material(i,t,L,HIT.nx*resolve+nx*(1-resolve),HIT.ny*resolve+ny*(1-resolve),HIT.nz*resolve);};
         parts.push({box,view,shade,normal:[nx,ny],wall:line});fitted.push(bounds(box));
       }
     }
   }
-  return [{...ROOM_MODEL(0,0,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade);}}),walk:true,radius:Math.hypot(r.W,r.H),[cornice?'homeCornice':'homeSkirting']:{parts,profile,blockers}}];
+  return [{...ROOM_MODEL(0,0,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade);}}),walk:true,radius:Math.hypot(r.W,r.H),[marker]:{parts,profile,blockers}}];
 }

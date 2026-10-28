@@ -17071,6 +17071,7 @@ function makeRoom(kind, extra = {}) {
   if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) {
     r.props.push(...homeSkirting(r),...homeCornices(r));
+    r.props.push(...homePanelling(r));
     r.homeStructuralProps = r.props.slice(authoredProps);
     r.props.push(...workshopProps(r),...furnishingProps(r));
   }
@@ -17300,7 +17301,7 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, builtWindows:true, builtSkirting:true, builtCornices:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, builtSkirting:true, builtCornices:true, builtPanelling:tier===2, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       ...homeWindowCasings(r),
@@ -17425,8 +17426,8 @@ function homeWall(i, u, uStep, z, d, mx, my, L) {
     else homeView(i, u, z, face); return true;
   }
   BG[i] = C(def.tier === 2 ? STONE : WHITE, 3 + L * 0.38);
-  if (!def.builtSkirting && z < 0.12 || !def.builtCornices && z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
-  return set(i, def.tier === 2 && z < 0.9 && Math.abs(fract(along / 0.8) - 0.5) > 0.46 ? '|' : ' ', C(BRICK, L * 0.6)), true;
+  if (!def.builtSkirting && z < 0.12 || !def.builtCornices && z > (def.height || 3) - 0.16 || def.tier === 2 && !def.builtPanelling && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
+  return set(i, def.tier === 2 && !def.builtPanelling && z < 0.9 && Math.abs(fract(along / 0.8) - 0.5) > 0.46 ? '|' : ' ', C(BRICK, L * 0.6)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -41608,7 +41609,7 @@ function homeSkirting(r) {
   const tier=r.def.tier,height=[.105,.09,.155][tier],depth=[.022,.018,.026][tier],cap=.015;
   return homeWallMoulding(r,[[0,height-cap,depth],[height-cap,height,depth+.004]],false);
 }
-function homeWallMoulding(r,profile,cornice) {
+function homeWallMoulding(r,profile,cornice,marker=cornice?'homeCornice':'homeSkirting') {
   const tier=r.def.tier,height=Math.max(...profile.map(p=>p[1])),bottom=Math.min(...profile.map(p=>p[0]));
   const bounds=b=>{const ex=Math.abs(b.c)*b.hl+Math.abs(b.s)*b.hw,ey=Math.abs(b.s)*b.hl+Math.abs(b.c)*b.hw;return{x0:b.x-ex,x1:b.x+ex,y0:b.y-ey,y1:b.y+ey,z0:b.z0,z1:b.z1};};
   const blockers=[],addBlock=b=>{if(b&&b.z0<height&&b.z1>bottom)blockers.push(bounds(b));};
@@ -41617,7 +41618,7 @@ function homeWallMoulding(r,profile,cornice) {
     addBlock(p.box);
     // The entry has narrower real casings than the native two-cell D wall.
     for(const q of p.homeEntry?.parts||[])addBlock({...q.local,x:p.x+q.local.x,y:p.y+q.local.y});
-    if(p.bathroomOpening){
+    if(p.bathroomOpening||p.windowCasing){
       const draw=drawBox;drawBox=addBlock;try{p.draw(p.x,p.y);}finally{drawBox=draw;}
     }
   }
@@ -41666,14 +41667,14 @@ function homeWallMoulding(r,profile,cornice) {
         const shade=(i,t,L)=>{const f=HIT.face,u=f===1?1:f===2?-1:0,v=f===3?1:f===4?-1:0;HIT.nx=c*u-s*v;HIT.ny=s*u+c*v;HIT.nz=f===5?1:f===6?-1:0;
           // An unresolved horizontal lip keeps the front's light instead of
           // alternating bright/dark cells; real cap shading resolves nearby.
-          const edge=cornice?Math.max(0,d-(f===5?upper:lower)):2*box.hw;
+          const edge=cornice||marker==='homeChairRail'?Math.max(0,d-(f===5?upper:lower)):2*box.hw;
           const resolve=f>=5?smooth(clamp(Math.abs(eye-HIT.w)*edge*projY/(t*t)-.5,0,1)):1;
           return material(i,t,L,HIT.nx*resolve+nx*(1-resolve),HIT.ny*resolve+ny*(1-resolve),HIT.nz*resolve);};
         parts.push({box,view,shade,normal:[nx,ny],wall:line});fitted.push(bounds(box));
       }
     }
   }
-  return [{...ROOM_MODEL(0,0,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade);}}),walk:true,radius:Math.hypot(r.W,r.H),[cornice?'homeCornice':'homeSkirting']:{parts,profile,blockers}}];
+  return [{...ROOM_MODEL(0,0,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade);}}),walk:true,radius:Math.hypot(r.W,r.H),[marker]:{parts,profile,blockers}}];
 }
 // Slim ceiling profiles finish all three home families, including the solid
 // heads over otherwise open passages. The existing moulding fitter owns joins.
@@ -41684,6 +41685,40 @@ function homeCornices(r) {
     tier===1?[[h-.045,h-.015,.012],[h-.015,h,.025]]:
     [[h-.075,h-.045,.012],[h-.045,h-.018,.026],[h-.018,h,.04]];
   return homeWallMoulding(r,profile,true);
+}
+// Closed Shaker-style wainscot: periodic recessed fields are real cavities in
+// a shallow extrusion. A constant number of analytic plane hits replaces a
+// separate mesh for every stile and rail.
+function homePanellingRay(ox,oy,oz,rx,ry,rz,b) {
+  let t=rayBox(ox,oy,oz,rx,ry,rz,b);if(t<0)return t;
+  const f=HIT.face;let nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0,nz=f===5?1:f===6?-1:0;
+  HIT.panelBack=false;
+  if(f===3){
+    const u=HIT.u,v=HIT.v,z=HIT.w,tile=Math.floor((b.phase+u)/.8),lo=Math.max(-b.hl+.09,tile*.8-b.phase+.035),hi=Math.min(b.hl-.09,(tile+1)*.8-b.phase-.035),bottom=b.z0+.035,top=b.z1-.035;
+    if(u>lo&&u<hi&&z>bottom&&z<top){
+      const du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+      let dt=(-b.hw+.008-v)/dv;nu=0;nv=1;nz=0;HIT.panelBack=true;
+      if(Math.abs(du)>1e-12){const d=((du>0?hi:lo)-u)/du;if(d<dt){dt=d;nu=du>0?-1:1;nv=0;HIT.panelBack=false;}}
+      if(Math.abs(rz)>1e-12){const d=((rz>0?top:bottom)-z)/rz;if(d<dt){dt=d;nu=nv=0;nz=rz>0?-1:1;HIT.panelBack=false;}}
+      HIT.u=u+du*dt;HIT.v=v+dv*dt;HIT.w=z+rz*dt;t+=dt;HIT.face=7;
+    }
+  }
+  HIT.nx=b.c*nu-b.s*nv;HIT.ny=b.s*nu+b.c*nv;HIT.nz=nz;return t;
+}
+function homePanelling(r) {
+  if(!r.def.builtPanelling)return [];
+  const bottom=r.props.find(p=>p.homeSkirting)?.homeSkirting.profile.at(-1)[1]??.155;
+  // Meet the actual sill underside; the rail/frieze stops at its real casing.
+  let top=.855;const draw=drawBox;drawBox=b=>{top=Math.min(top,b.z0);};
+  try{for(const p of r.props.filter(p=>p.windowCasing))p.draw(p.x,p.y);}finally{drawBox=draw;}
+  const layout=homeWallMoulding(r,[[bottom,top,.026]],false,'homePanelLayout')[0],parts=layout.homePanelLayout.parts.map(p=>{
+    const b=p.box,view={...b,phase:b.x*b.c+b.y*b.s},[fx,fy]=p.normal;
+    const shade=(i,t,L)=>{const detail=smooth(clamp((.035*projX/t-.2)/.8,0,1)),base=3.5+((HIT.panelBack?3.25:4.1)-3.5)*detail;
+      BG[i]=C(WHITE,base+L*.28*coveLight(HIT.nx*detail+fx*(1-detail),HIT.ny*detail+fy*(1-detail),HIT.nz*detail));set(i,' ',0);return true;};
+    return{box:b,view,shade,normal:p.normal,wall:p.wall};
+  });
+  const model={...ROOM_MODEL(0,0,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade,homePanellingRay);}}),walk:true,radius:Math.hypot(r.W,r.H),homePanelling:{parts,bottom,top}};
+  return[model,...homeWallMoulding(r,[[top,.855,.026],[.855,.88,.03],[.88,.915,.045],[.915,.945,.032]],false,'homeChairRail')];
 }
 // One measured ironwork model for the room (metres) and its real city balcony
 // (one tenth scale). Foot flanges stay inside the deck; the east run owns both

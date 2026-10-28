@@ -2253,3 +2253,33 @@ and measured-sill integration plan are in work/backlog-review/belle-panelling-*
 (ignored, not source). Native window sills sit at~.805m, so use their real lower
 bounds as field tops; rail/frieze clips at window casings. No panelling source
 has yet been applied. Held Claude/shared shop/restaurant files stay untouched.
+
+Cornices merged as #289 (head797dfe87, merge see GitHub); monitor full CI
+40722683554. Codex immediately continues `codex/belle-recessed-panelling`
+from merged main: new city/home-panelling.js with closed analytic recessed
+fields plus fitted chair rail, existing owned moulding fitter gains optional
+metadata marker and captures native window casings for clipping; home-only
+flags/painter/makeRoom integration, tests, manifest/bundle and append-only notes.
+Use real sill lower bounds for field height so rails never cross glazing.
+Keep baseboards/cornices stable and cached, preserve door/furniture controls.
+No held Claude or shared shop/restaurant helper edits.
+
+Belle panelling complete on `codex/belle-recessed-panelling`: 28 fitted body
+runs with analytic closed recessed fields, native phase, opaque corner/end
+stiles and actual inward cavity normals; one root plus cached fitted chair
+rail. Body meets actual baseboard top and measured sill undersides; rail clips
+at real casings. No per-panel meshes. Painted low-wall glyphs removed only in
+Belle; lamp/furniture/workshop refresh retains exact structural objects and
+passages remain walkable. Eight unique browser checks and nine Node assertions
+across four files pass; final strengthened two-test panel run passes. Original
+baseline plus ten independent defect probes fail assertions, including
+body-only native omission and a calibrated exposed-ledge filter mutant. No
+source/bundle swaps. Reviewed12 final close/wide/oblique/night/sill/jamb PNGs;
+all cameras clear, no page errors. ABAB177x66 mainab35bbb→after medians:
+wide2.3→3.2ms, close1.8–1.9→3.4, oblique2.0→3.0–3.2. Added geometry costs
+~0.9–1.6ms, no speedup claim. Artifacts work/backlog-review/belle-panelling-*.
+#289 full Node/four-shard CI GREEN40722683554. Publish/merge, then continue
+home closing audit immediately. Early room audit finds only expected joined
+bed/toilet parts and conservative balcony collider overlaps; audit wall-hung
+decoration against new trim and all real home controls before closing pass5.
+Held Claude files/helpers and unpublished sign-lettering remain reserved.
