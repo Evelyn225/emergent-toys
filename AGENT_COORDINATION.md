@@ -2217,3 +2217,39 @@ visual total26 images. The final subpixel cap-light test and its independent
 unfiltered-lip mutant both pass their expected outcomes; final bundle checks
 are current. Publish/merge this chunk, then stop under the saved usage limit
 with a clean checkout. No ceiling cornice or panelling code exists yet.
+
+User requested uninterrupted continuation between tasks. Codex active
+`codex/home-ceiling-cornices` from main725c5ef: new fitted stepped ceiling
+cornices for studio/loft/Belle homes. Reuse the owned moulding run/corner/cache
+builder in city/home-skirting.js through a generic internal helper, with
+ceiling-level wall cuts including passage/bathroom/French-door infills.
+Home-only flags/painter/makeRoom integration in rooms.js, new focused test,
+bundle and append-only notes. Keep baseboard geometry unchanged, preserve
+clear windows/routes and existing refresh state. Next immediately after review/
+merge is Belle chair rail/panelling. #288 full Node/four-shard CI passed40713236953.
+Held Claude sources and shared restaurant/shop helpers remain reserved.
+
+Cornice chunk reviewed: fitted stepped ceiling profiles in all three home
+families, with actual infill above passage/bathroom/French-door openings.
+The internal owned moulding fitter is reused; baseboards are preserved (Belle
+bounds byte-identical against main, all baseboard controls pass). Closed
+members meet the ceiling/corners, windows remain clear, and existing lamp/
+furnishing/workshop controls retain identity. Cornice underside shadows and
+actual exposed-ledge filtering resolve near detail without far shadow speckles.
+Nine unique browser checks pass (three cornice including real rendered-pixel
+visibility, three baseboard/raster and three passage); nine Node assertions
+across four files plus final bundle/parse checks pass. Eleven isolated routed
+baseline/infill/backing/height/cache/glyph/corner/refresh/shadow/render-hook/
+filter probes fail intended assertions; no production source swapping.
+Reviewed24 final before/after close/wide/oblique/night views, clear cameras and
+no page errors. ABAB177x66 main725c5ef→after medians: studio wide1.9–2.0→2.1ms,
+close1.4–1.7→1.7–1.8, oblique1.6–1.7→1.8–1.9; loft wide1.6→1.8,
+close1.3–1.4→1.5, oblique1.6–1.7→1.7; Belle wide1.3–1.4→1.6,
+close1.4→1.7–1.8, oblique1.4–1.5→1.4–1.5. Added detail costs about0–0.4ms,
+no general speedup claim. Artifacts: work/backlog-review/home-cornice-*.
+After authorized publication/merge, move directly to Belle panelling per the
+user's uninterrupted-continuation instruction. Draft analytic recess prototype
+and measured-sill integration plan are in work/backlog-review/belle-panelling-*
+(ignored, not source). Native window sills sit at~.805m, so use their real lower
+bounds as field tops; rail/frieze clips at window casings. No panelling source
+has yet been applied. Held Claude/shared shop/restaurant files stay untouched.
