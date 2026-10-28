@@ -2314,3 +2314,45 @@ Host tails vary; no general speedup claim. Artifacts home-wall-fixture-*.
 Next home closing audit: native apartment floors still draw character seams
 and noisy rug strokes. Separate home-only floor finish chunk next, then
 remaining closing controls and passes6/9. Reserved sources/helpers unchanged.
+
+#291 placement merged (headc32f9fc, mergedeb7be0); monitor its CI. #290 full
+Node/four-shard CI GREEN40727548928. Codex active codex/home-floor-finishes
+from current main: new home-only floor material module and narrow native
+home-floor hook in rooms.js, focused test, manifest/bundle, appended notes.
+Replace noisy seam/rug glyphs with world-aligned filtered timber and fabric;
+distinct studio planks, loft boards and Belle basket parquet. Native floor
+remains its sole surface at walking height. Preserve existing balcony paving/
+threshold, bathroom and Fern/Cabin floors, layout and reserved sources.
+Then finish the home closing audit and proceed passes6/9.
+
+Home floors reviewed on codex/home-floor-finishes: world-aligned staggered
+studio planks, wider darker loft boards and Belle alternating basket parquet;
+quiet woven rug finish replaces seam/motif character strokes. Native floor
+keeps sole ownership/depth; no overlaid slab. Both screen-axis footprints
+filter joints/grain and unresolved board/block tones; skip fine trigonometry
+and hashes once unresolved. Actual room lamp light drives timber/fabric.
+Ten floor/balcony/passage/lamp checks and four Node files pass. Nine isolated
+old-glyph/joint/far-phase/light/footprint/world-coordinate/rug/native-hook
+defects fail assertions. Reviewed34 final before/after views: close/wide/
+oblique/night/lounge for all3 native families plus clear-floor Fern living
+area day/night control (both PNG pairs byte-identical). Initial flat material
+review prompted stronger broad plank/block variation; final grain remains
+filtered. ABAB177x66 maindeb7be0→after medians: studio wide4.4–4.6→4.9–5.0ms,
+close1.9–2.0→2.7–2.8, oblique2.9→3.4; loft wide3.7–3.9→4.2,
+close1.6–1.7→2.4, oblique2.7–2.8→3.3; Belle wide3.7→4.3–4.5,
+close2.4→3.6, oblique4.0→4.8–4.9. Added finish costs~0.3–1.2ms here.
+No general speedup claim. Artifacts work/backlog-review/home-floor-*.
+
+Pass5 closing audit on final tree: six additional selected existing controls
+pass (bedside sleep/fixture paths, native/world balcony C, native entrance
+E/walking exits, French-door walking/E/collision at both scales, all-four-home
+furniture/workshop/private-WC/figure refresh, native exterior windows/routes).
+Sixteen unique browser checks across final floor and closing runs. Earlier
+pass5 chunks cover all actual openings/trim/panels, windows, exterior ironwork,
+deck and usable bistro furniture. Pass5 native apartments/lofts/Belle is now
+complete; later district facades and coast architecture remain their own
+passes. Existing Fern/Cabin floor and homes' saved bathroom policy unchanged.
+#291 full Node/four-shard CI GREEN40729710609. Publish/review/merge floor
+chunk, then pass6 hotel bedside fittings first (currently glowing boxes on
+rods), subsequent rooms/lobbies/service areas and pass9. Keep bathroom-quality,
+DINER, world-bootstrap, facade/global-lettering and shared helpers reserved.

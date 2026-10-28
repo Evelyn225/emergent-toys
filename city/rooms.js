@@ -1126,21 +1126,14 @@ function roomFloor(i, r, x, rx, ry) {
   if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
-      const b = room.def.balcony, sofa = room.def.home.sofa;
+      const b = room.def.balcony;
       const door=room.def.frenchDoor;
       // The existing floor owns both the flush threshold and the paving;
       // there is no second slab or raised lip over it.
       if (b && (wx>=b.x0&&wy>=b.y0&&wy<b.y1 || door&&wx>=door.wall&&wx<door.wall+door.thickness&&wy>=door.start&&wy<door.end)) {
         return homeBalconyPaving(i,wx-door.wall,wy-b.y0,L*15/7,homeBalconyPavingFootprint(d,eye));
       }
-      if (room.def.tier && Math.abs(wx - sofa[0]) < 2.3 && wy > sofa[1] - 2.5 && wy < sofa[1] + 0.9) {
-        const border = Math.abs(wx - sofa[0]) > 2.1 || wy < sofa[1] - 2.3 || wy > sofa[1] + 0.7;
-        BG[i] = C(room.def.tier === 2 ? GREEN : BLUE, 1 + f * 2);
-        return set(i, border ? '=' : (Math.floor(wx * 5) + Math.floor(wy * 5)) % 7 ? ' ' : '+', C(WARM, L));
-      }
-      const herring = room.def.tier === 2, u = herring ? wx + wy : wx, v = herring ? wx - wy : wy;
-      BG[i] = C(BRICK, 1 + f * 2 + (Math.floor(v * 3) & 1));
-      return set(i, fract(v * 3) < 0.07 ? herring ? '/' : '=' : fract(u / 1.5 + (Math.floor(v * 3) & 1) * 0.5) < 0.025 ? '|' : ' ', C(WARM, L));
+      return homeFloorFinish(i,wx,wy,L,homeBalconyPavingFootprint(d,eye));
     }
     case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
     case 'royal': {
