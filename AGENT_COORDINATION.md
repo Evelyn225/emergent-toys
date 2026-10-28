@@ -2648,3 +2648,25 @@ in work/backlog-review/fireworks-worst-case.cjs. Next separate test-only fix:
 compare identical shell sources outside/inside without weakening muffling or
 travel-delay checks. Then standard-hotel overhead fixtures and remaining lobby/
 service entries/reception details, closing audit, pass9. #301 run40772754849.
+
+#302 merged (head02565d2, mergeccf12a3). Codex active
+codex/fireworks-audio-test: test/browser/city-gameplay-audio.browser.test.cjs
+and append-only notes only. Fix the reproducible random-shell false comparison
+from #300 CI without changing production audio or weakening attenuation/cutoff/
+travel-delay assertions. Seed only each show() call locally, restore the caller's
+RNG, and assert identical source coordinates/height/rise across outside/inside.
+Use the saved .99/.01 counterexample and isolated attenuation/cutoff defects.
+Then standard-hotel lobby lights and remaining pass6 fixtures before9.
+
+Fireworks test fix complete on codex/fireworks-audio-test. The old test compares
+different random shell positions/heights, so correct .15 indoor attenuation can
+still exceed its relative .3 bound. The saved valid .99-outside/.01-inside
+counterexample fails the original assertion. Each show() now locally uses the
+same source draw and restores caller RNG; source identity is explicitly asserted.
+Original launch/boom travel delays, indoors continuation, attenuation and cutoff
+assertions are retained. Focused test and adversarial caller-RNG copy both pass;
+isolated removed-attenuation and removed-lowpass defects still fail assertions.
+Bundle freshness passes; production audio/geometry and bundle are unchanged.
+No render benchmark/visual rerun applies to this test-only chunk. Artifacts:
+work/backlog-review/fireworks-{worst-case,fixed,test-probes}*. Next monitor
+#300–#302/#303 CI, then standard-hotel lobby light fittings and remaining6/9.

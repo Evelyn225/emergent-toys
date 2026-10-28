@@ -262,11 +262,17 @@ test('fireworks: each shell thumps off the barge and bursts later, and the show 
     tone = (at, freq, len, gain, type, pan) => { if (freq < 80) calls.push({ what: 'thump', delay: at - actx.currentTime, gain }); };
     playClip = (name, gain, when, spatial) => { if (name === 'firework') calls.push({ what: 'boom', delay: when - actx.currentTime, gain, cutoff: spatial.cutoff }); };
     const show = () => {
-      calls.length = 0; shells.length = 0; stepFireworks(1);
-      const s = shells[0]; if (!s) return null;
-      const launch = calls.find(c => c.what === 'thump');
-      T = s.t0 + s.rise + .01; stepFireworks(0);
-      return { launch, boom: calls.find(c => c.what === 'boom') };
+      // Compare the same source: different random heights/positions can
+      // outweigh the indoor attenuation and falsely fail this assertion.
+      const random = Math.random;
+      Math.random = () => .5;
+      try {
+        calls.length = 0; shells.length = 0; stepFireworks(1);
+        const s = shells[0]; if (!s) return null;
+        const launch = calls.find(c => c.what === 'thump');
+        T = s.t0 + s.rise + .01; stepFireworks(0);
+        return { source: { x: s.x, y: s.y, h: s.h, rise: s.rise }, launch, boom: calls.find(c => c.what === 'boom') };
+      } finally { Math.random = random; }
     };
     try {
       dayNum = 5; tod = 21.5; weather = 'clear'; a = Math.PI / 2;
@@ -281,6 +287,7 @@ test('fireworks: each shell thumps off the barge and bursts later, and the show 
   assert.ok(outside?.launch && outside.boom, JSON.stringify(outside));
   assert.ok(outside.launch.delay > .3 && outside.boom.delay > outside.launch.delay * .8, 'both travel from the bay: ' + JSON.stringify(outside));
   assert.ok(inside?.launch && inside.boom, 'the show goes on while you are in the bar: ' + JSON.stringify(inside));
+  assert.deepEqual(inside.source, outside.source, 'compare the same shell outside and through the walls');
   assert.ok(inside.boom.gain < outside.boom.gain * .3 && inside.boom.cutoff <= 900, 'through the walls: ' + JSON.stringify(inside));
 }));
 
