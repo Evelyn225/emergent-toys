@@ -644,6 +644,7 @@ function makeRoom(kind, extra = {}) {
   r.props.push(...bathroomAccessories(r));
   if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) {
+    r.props.push(...homeSkirting(r));
     r.homeStructuralProps = r.props.slice(authoredProps);
     r.props.push(...workshopProps(r),...furnishingProps(r));
   }
@@ -873,7 +874,7 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, builtWindows:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, builtSkirting:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       ...homeWindowCasings(r),
@@ -998,7 +999,7 @@ function homeWall(i, u, uStep, z, d, mx, my, L) {
     else homeView(i, u, z, face); return true;
   }
   BG[i] = C(def.tier === 2 ? STONE : WHITE, 3 + L * 0.38);
-  if (z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
+  if (!def.builtSkirting && z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
   return set(i, def.tier === 2 && z < 0.9 && Math.abs(fract(along / 0.8) - 0.5) > 0.46 ? '|' : ' ', C(BRICK, L * 0.6)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
@@ -1098,7 +1099,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
     if (D.home) {
       BG[i] = C(WHITE, 3 + L * 0.3);
-      return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
+      return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : !D.builtSkirting && z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));

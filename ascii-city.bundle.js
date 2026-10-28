@@ -17070,6 +17070,7 @@ function makeRoom(kind, extra = {}) {
   r.props.push(...bathroomAccessories(r));
   if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) {
+    r.props.push(...homeSkirting(r));
     r.homeStructuralProps = r.props.slice(authoredProps);
     r.props.push(...workshopProps(r),...furnishingProps(r));
   }
@@ -17299,7 +17300,7 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  return { ...plan, builtWindows:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+  return { ...plan, builtWindows:true, builtSkirting:true, doorWall:true, builtBalconyRails:tier===2, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       ...homeWindowCasings(r),
@@ -17424,7 +17425,7 @@ function homeWall(i, u, uStep, z, d, mx, my, L) {
     else homeView(i, u, z, face); return true;
   }
   BG[i] = C(def.tier === 2 ? STONE : WHITE, 3 + L * 0.38);
-  if (z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
+  if (!def.builtSkirting && z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
   return set(i, def.tier === 2 && z < 0.9 && Math.abs(fract(along / 0.8) - 0.5) > 0.46 ? '|' : ' ', C(BRICK, L * 0.6)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
@@ -17524,7 +17525,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
     if (D.home) {
       BG[i] = C(WHITE, 3 + L * 0.3);
-      return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
+      return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : !D.builtSkirting && z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
@@ -24296,9 +24297,12 @@ function render(dt,sceneOnly=false,mask=null) {
       if (d > vis) break;
       const h = W.cell(mx, my); hCur = h; dPrev = d;
       if (!h) continue;
-      if (first) { first = false; BASE[x] = Math.min(rows, Math.ceil(hor + eye * projY / d)); if (x === cols >> 1) lookHit = { d, mx, my }; }
+      // Wall samples use row centres (r + .5). Stop at the last sample at
+      // or above floor level; ceil without that half-cell paints below it.
+      const floorEnd = Math.min(rows, Math.floor(hor + eye * projY / d + .5));
+      if (first) { first = false; BASE[x] = floorEnd; if (x === cols >> 1) lookHit = { d, mx, my }; }
       const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
-      const bot = Math.min(clip, Math.ceil(hor + eye * projY / d));
+      const bot = Math.min(clip, floorEnd);
       // u runs left-to-right on screen for whichever face we see, so signs read correctly
       const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
       const uStep = side ? Math.abs(rx2 * (ry * d / ry2) - rx * d) : Math.abs(ry2 * (rx * d / rx2) - ry * d);
@@ -41596,6 +41600,64 @@ function homePassageSurrounds(r) {
     }
   }
   return props;
+}
+// Fitted baseboards follow the native wall faces. Horizontal members own
+// corner squares; vertical members butt against them, without overlapping tops.
+function homeSkirting(r) {
+  if(!r.def.builtSkirting)return [];
+  const tier=r.def.tier,height=[.105,.09,.155][tier],depth=[.022,.018,.026][tier],cap=.015;
+  const bounds=b=>{const ex=Math.abs(b.c)*b.hl+Math.abs(b.s)*b.hw,ey=Math.abs(b.s)*b.hl+Math.abs(b.c)*b.hw;return{x0:b.x-ex,x1:b.x+ex,y0:b.y-ey,y1:b.y+ey,z0:b.z0,z1:b.z1};};
+  const blockers=[],addBlock=b=>{if(b&&b.z0<height&&b.z1>0)blockers.push(bounds(b));};
+  for(const p of r.props){
+    if(p.fig)continue;
+    addBlock(p.box);
+    // The entry has narrower real casings than the native two-cell D wall.
+    for(const q of p.homeEntry?.parts||[])addBlock({...q.local,x:p.x+q.local.x,y:p.y+q.local.y});
+    if(p.bathroomOpening){
+      const draw=drawBox;drawBox=addBlock;try{p.draw(p.x,p.y);}finally{drawBox=draw;}
+    }
+  }
+  const floor=(x,y)=>r.grid[y]?.[x]==='.'&&!inWc(x+.5,y+.5,r.def.wc)&&!(r.def.frenchDoor&&x>=r.def.frenchDoor.wall);
+  const groups=new Map();
+  for(let y=0;y<r.H;y++)for(let x=0;x<r.W;x++)if(floor(x,y))for(const[nx,ny]of [[1,0],[-1,0],[0,1],[0,-1]]){
+    if(!'#WD'.includes(r.grid[y-ny]?.[x-nx]||' '))continue;
+    const horizontal=!!ny,line=horizontal?y+(ny<0?1:0):x+(nx<0?1:0),along=horizontal?x:y,key=[nx,ny,line].join(',');
+    if(!groups.has(key))groups.set(key,{nx,ny,line,horizontal,cells:[]});groups.get(key).cells.push(along);
+  }
+  const runs=[];
+  for(const g of groups.values()){
+    g.cells.sort((a,b)=>a-b);let lo=g.cells[0],hi=lo+1;
+    for(const v of g.cells.slice(1)){if(v===hi)hi++;else{runs.push({...g,lo,hi});lo=v;hi=v+1;}}runs.push({...g,lo,hi});
+  }
+  const parts=[],profile=[[0,height-cap,depth],[height-cap,height,depth+.004]];
+  const material=(i,t,L,nx=HIT.nx,ny=HIT.ny,nz=HIT.nz)=>{
+    if(tier===0)return coveTimber(i,HIT.u,HIT.w,L,t,nx,ny,nz,16);
+    BG[i]=C(tier===2?WHITE:GRAY,(tier===2?3.9:1.2)+L*.30*coveLight(nx,ny,nz));set(i,' ',0);return true;
+  };
+  for(const[z0,z1,d]of profile){
+    const fitted=[];
+    for(const horizontal of [true,false])for(const g of runs.filter(q=>q.horizontal===horizontal)){
+      const {nx,ny,line}=g,normal=horizontal?ny:nx,cross0=line-.002*normal,cross1=line+d*normal,low=Math.min(cross0,cross1),high=Math.max(cross0,cross1);
+      let spans=[[g.lo-(horizontal?d:0),g.hi+(horizontal?d:0)]];
+      for(const b of blockers.concat(horizontal?[]:fitted)){
+        if(b.z0>=z1-1e-6||b.z1<=z0+1e-6)continue;
+        const a=horizontal?b.y0:b.x0,B=horizontal?b.y1:b.x1;if(B<=low+1e-6||a>=high-1e-6)continue;
+        const from=horizontal?b.x0:b.y0,to=horizontal?b.x1:b.y1;
+        spans=spans.flatMap(([lo,hi])=>to<=lo||from>=hi?[[lo,hi]]:[[lo,Math.min(hi,from)],[Math.max(lo,to),hi]].filter(([a,b])=>b-a>.001));
+      }
+      for(const[lo,hi]of spans){
+        const mid=(lo+hi)/2,cross=(low+high)/2,c=ny,s=-nx;
+        const box=boxAt(horizontal?mid:cross,horizontal?cross:mid,c,s,(hi-lo)/2,(high-low)/2,z0,z1),view={...box};
+        const shade=(i,t,L)=>{const f=HIT.face,u=f===1?1:f===2?-1:0,v=f===3?1:f===4?-1:0;HIT.nx=c*u-s*v;HIT.ny=s*u+c*v;HIT.nz=f===5?1:f===6?-1:0;
+          // An unresolved horizontal lip keeps the front's light instead of
+          // alternating bright/dark cells; real cap shading resolves nearby.
+          const resolve=f>=5?smooth(clamp(Math.abs(eye-HIT.w)*2*box.hw*projY/(t*t)-.5,0,1)):1;
+          return material(i,t,L,HIT.nx*resolve+nx*(1-resolve),HIT.ny*resolve+ny*(1-resolve),HIT.nz*resolve);};
+        parts.push({box,view,shade,normal:[nx,ny],wall:line});fitted.push(bounds(box));
+      }
+    }
+  }
+  return [{...ROOM_MODEL(0,0,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade);}}),walk:true,radius:Math.hypot(r.W,r.H),homeSkirting:{parts,profile,blockers}}];
 }
 // One measured ironwork model for the room (metres) and its real city balcony
 // (one tenth scale). Foot flanges stay inside the deck; the east run owns both
