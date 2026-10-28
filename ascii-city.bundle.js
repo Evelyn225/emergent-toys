@@ -6199,7 +6199,7 @@ function soundDistanceProfile(rx,ry,rz,yaw,range=180,reference=14,indoors=false)
 function surfaceAt(mode, room, x, y) {
   if(mode==='ferry')return ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46?'carpet':'wood';
   if (mode === 'room') {
-    const f = room.def.floor;
+    const f = room.def.footstepFloor || room.def.floor;
     const w=room.def.wc;if(w&&x>=w.x0&&x<w.x1&&y>=w.y0&&y<w.y1)return 'tile';
     return f === 'carpet' ? 'carpet' : ['wood','home','hotel','cove','islandwood','fernwood'].includes(f) ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
   }
@@ -35188,6 +35188,26 @@ function hotelRoomEntry(r) {
   const model=HOME_ENTRY_DOOR({...r,def:{...r.def,entry:[center,...r.def.entry.slice(1)]}});
   model.hotelEntry=model.homeEntry;delete model.homeEntry;
   return model;
+}
+// Lobby materials stay on the native floor plane, without extra slabs.
+// Filter joints and fine detail by both screen axes.
+function hotelLobbyFloorFinish(i,wx,wy,L,footprint) {
+  if(room.kind==='hotel')return homeFloorWood(i,wx,wy,L,footprint,1);
+  const grand=room.kind==='grandhotel',size=grand?1.2:.5;
+  const joint=Math.max(coveGroove(wx,size,grand?.006:.003,footprint),coveGroove(wy,size,grand?.006:.003,footprint));
+  let texture=0;
+  if(grand){
+    const fine=1-smooth(clamp((footprint-.015)/.10,0,1));
+    if(fine)texture=-coveGroove(wx*.6+wy*.4+.12*Math.sin(wx*1.2-wy*2.3),.65,.018,footprint*1.5)*3*fine;
+  }else{
+    const fine=1-smooth(clamp((footprint-.002)/.010,0,1));
+    if(fine)texture=(hash(Math.floor(wx*95),Math.floor(wy*95),641)-.5)*.35*fine;
+  }
+  BG[i]=C(grand?STONE:GRAY,(grand?2.5:1.8)+L*(grand?.45:.4)+texture-joint*(grand?6:1.0));set(i,' ',0);return true;
+}
+ROOM_FLOORS.hotelLobby=(i,f,wx,wy,r,x,L)=>hotelLobbyFloorFinish(i,wx,wy,L,homeBalconyPavingFootprint(eye*projY/(r-hor+.5),eye));
+for(const kind of ['hotel','motel','grandhotel']){
+  const def=ROOM_DEFS[kind];def.footstepFloor=def.floor;def.floor='hotelLobby';
 }
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){

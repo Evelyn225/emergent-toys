@@ -128,7 +128,7 @@ function soundDistanceProfile(rx,ry,rz,yaw,range=180,reference=14,indoors=false)
 function surfaceAt(mode, room, x, y) {
   if(mode==='ferry')return ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46?'carpet':'wood';
   if (mode === 'room') {
-    const f = room.def.floor;
+    const f = room.def.footstepFloor || room.def.floor;
     const w=room.def.wc;if(w&&x>=w.x0&&x<w.x1&&y>=w.y0&&y<w.y1)return 'tile';
     return f === 'carpet' ? 'carpet' : ['wood','home','hotel','cove','islandwood','fernwood'].includes(f) ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
   }
