@@ -2575,3 +2575,24 @@ cornice2.1–2.5→2.0–2.1; host variability, no broad speedup claim.
 Shared wall fitter is unchanged. Next hotel window casings: actual north-wall
 openings must split at the motel/suite partitions rather than span them;
 then lobby/service entries and pass9.
+
+#299 merged (head0d86678, merge3a5c84d). Codex active
+codex/hotel-window-casings from main. Own new hotel-window-casings.js and the
+hotel-polish props/wall hook, manifest/bundle/focused tests. Call existing
+HOME_WINDOW_CASING unchanged. Split requested north-window spans at actual
+row1 partitions, with sill clearance; fitted jambs/rails/glazing bars/sills
+replace painted window borders, retaining native external view/light.
+No room plan, shared window helper, bathroom/DINER/world-bootstrap/facade/
+lettering changes. Next remaining hotel lobby/service entry fixtures and9.
+
+Hotel window casings complete on codex/hotel-window-casings: four focused/
+adjacent-trim browser checks and three Node files pass; final strengthened
+pane-edge checks pass. Five isolated partition/sill/bathroom/paint/native-draw
+defects fail assertions. The motel washroom has no exterior aperture and is
+explicitly excluded; its control PNG is byte-identical before/after. Actual
+motel/hotel/suite frame counts1/1/2. Reviewed16 final clear-floor close/wide/
+oblique/night/split-suite/bathroom-control images, no page errors.
+ABAB177x66 main3a5c84d→after: wide3.8–3.9→4.0ms, close4.5→5.2.
+Shared window helper unchanged. #296 full CI is green40767386038.
+Next hotel-room opaque entry leaves/infill using HOME_ENTRY_DOOR unchanged,
+with fitted trim continuing to their real casings; then lobby/service entries9.

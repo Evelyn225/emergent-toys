@@ -35152,6 +35152,30 @@ function hotelRoomTrim(r) {
     ...homeWallMoulding(fitted,[[h-drop,h-drop*.6,.012],[h-drop*.6,h-drop*.2,.027],[h-drop*.2,h,tier===2?.065:.04]],true,'hotelCornice')
   ];
 }
+// The original north-wall window spans sometimes cross a room partition.
+// Fit separate openings to its actual floor-side faces before adding casings.
+function hotelWindowCasings(r) {
+  const half=r.def.tier===2?2.65:1.6,left=r.W/2-half,right=r.W/2+half,runs=[];
+  // Washroom walls use their own opaque finish, including the motel's short
+  // remaining segment. It must not receive a casing around an absent view.
+  for(let x=Math.floor(left);x<Math.ceil(right);x++)if(r.grid[1][x]==='.'&&!inWc(x+.5,1.5,r.def.wc)){
+    const a=Math.max(left,x),b=Math.min(right,x+1),last=runs.at(-1);
+    if(last&&Math.abs(last[1]-a)<1e-8)last[1]=b;else runs.push([a,b]);
+  }
+  r.hotelWindows=runs.map(([a,b])=>{
+    // The existing sill extends 55mm past its jambs; leave it room at a cut.
+    if(a>left+1e-8)a+=.055;if(b<right-1e-8)b-=.055;
+    return {face:'north',center:(a+b)/2,half:(b-a)/2,bottom:.9,top:2.3};
+  }).filter(w=>w.half>.11);
+  return r.hotelWindows.map(w=>HOME_WINDOW_CASING(w,r.W,r.H,r.def.tier));
+}
+function hotelWindowWall(i,u,uStep,z,d,mx,my,L) {
+  if(my!==0)return false;
+  const win=room.hotelWindows.find(w=>Math.abs(u-w.center)<=w.half&&z>=w.bottom&&z<=w.top);
+  if(!win)return false;
+  if(room.exterior)homeView(i,u,z,'north');else viewOut(i,u,z,room.suite?22:14,18);
+  return true;
+}
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
@@ -35165,10 +35189,10 @@ function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURN
 function hotelDefinition(tier){
  const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null,diningX=tier===2?14.4:8,diningY=h-(tier===2?5.5:3.1);
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*(tier?.9:1.2)+Math.cos(tvAngle)*(tier?1:0),tv[1]+Math.cos(tvAngle)*(tier?.9:1.2)+Math.sin(tvAngle)*(tier?1:0)],sofa,stove},tier,
- wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,' ',0),true;},
+ wall:(...args)=>{if(hotelWindowWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,' ',0),true;},
  props:r=>{
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
- const p=[...hotelCeilingLights(tier,w,r.def.height),...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
+ const p=[...hotelWindowCasings(r),...hotelCeilingLights(tier,w,r.def.height),...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),HOTEL_BEDSIDE_LAMP(bed[0]+side*standOffset,bed[1]-.65,tier)]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle,r),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
