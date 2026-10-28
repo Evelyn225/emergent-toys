@@ -2283,3 +2283,34 @@ home closing audit immediately. Early room audit finds only expected joined
 bed/toilet parts and conservative balcony collider overlaps; audit wall-hung
 decoration against new trim and all real home controls before closing pass5.
 Held Claude files/helpers and unpublished sign-lettering remain reserved.
+
+#290 merged (head43af3fe, mergee4fe050); monitor full CI40727548928.
+Codex active codex/home-wall-fixture-clearance from that main. Reproduced
+valid placements passing through Belle lower panels and cornices (clear-floor
+camera, f_frame z.65 and3.2, f_clock z.65). Wall candidates currently test the
+native grid only and ignore walkable architecture; also check glazing and
+other wall decor. Own home-furnishing-ui.js, a new focused placement test,
+bundle and appended notes. Reject intersecting placements with a clear
+preview reason rather than moving saved items or shared fixture geometry.
+Cache static architectural capture per props array; preserve floor furniture
+flush-wall placement and reserved Claude/shared helpers. Then finish home
+closing audit, continue passes6/9 without stopping between chunks.
+
+Wall-fixture clearance reviewed: new/moved frames and clocks reject fitted
+home panels/cornices/casings and actual glazing apertures, and other placed
+wall decor; clear wall positions stay flush and moving an item ignores itself.
+Static drawn architecture is cached by props identity and recaptured after
+refresh. The oblique native review found the .025m stepping could mistake
+a horizontal wall for its adjacent grid crossing; an exact DDA now chooses
+the true face/anchor and hit height within the same3m reach. No shared fixture
+geometry or saved items are rewritten, and floor placement is unchanged.
+Nine unique browser checks pass across focused/clock/frame/furnishing runs,
+including final seven after the ray correction; three Node files and bundle
+checks pass. Nine final isolated baseline/panel/cornice/glass/overlap/self/
+cache/anchor/hook defects fail assertions. Reviewed14 close/wide/oblique/night/
+clear/cornice/glass before/after PNGs, clear floor, no page errors. ABAB177x66:
+panel preview2.9–3.3→2.9–3.0ms, clear1.4–2.0→1.4–1.5, glazing3.6–4.8→3.7–4.2.
+Host tails vary; no general speedup claim. Artifacts home-wall-fixture-*.
+Next home closing audit: native apartment floors still draw character seams
+and noisy rug strokes. Separate home-only floor finish chunk next, then
+remaining closing controls and passes6/9. Reserved sources/helpers unchanged.
