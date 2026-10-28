@@ -35107,6 +35107,24 @@ function hotelLandscape(x,y) {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade,p.ray);}}),
     walk:true,box:boxAt(x,y+.0005,1,0,.85,.0305,z-.45,z+.45),radius:.9,hotelWallArt:{parts,wallY:y-.03,centreZ:z}};
 }
+// Flush fittings keep headroom above hotel sleeping, living and washroom zones.
+// The closed frosted bowl meets its housing; the mount meets the real ceiling.
+function HOTEL_CEILING_LIGHT(x,y,height,tier) {
+  const parts=[],radius=[.23,.30,.36][tier];
+  const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,tier?YEL:GRAY);
+  const frost=(i,t,L)=>{BG[i]=C(STONE,HIT.nz<-.05?11.5+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz):4+L*.18);set(i,' ',0);return true;};
+  hotelLobbyTurned(parts,'diffuser',0,0,[[height-.20,0],[height-.192,radius*.55],[height-.175,radius*.88],[height-.145,radius-.016],[height-.125,radius-.016],[height-.125,0]],frost);
+  hotelLobbyTurned(parts,'housing',0,0,[[height-.125,0],[height-.125,radius-.02],[height-.111,radius],[height-.055,radius],[height-.04,radius-.015],[height-.04,0]],metal);
+  hotelLobbyTurned(parts,'mount',0,0,[[height-.04,0],[height-.04,.11],[height,.11],[height,0]],metal);
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,overhead:true,
+    box:boxAt(x,y,1,0,radius,radius,height-.20,height),radius,
+    hotelCeilingLight:{height,tier,parts}};
+}
+function hotelCeilingLights(tier,w,height) {
+  const points=tier===2?[[3.9,4.6],[4,9],[12.8,8.4]]:tier===1?[[3.25,4.4],[4.3,8.5]]:[[2.9,4.4]];
+  points.push([w-2.5,3.5]);
+  return points.map(([x,y])=>HOTEL_CEILING_LIGHT(x,y,height,tier));
+}
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
@@ -35123,7 +35141,7 @@ function hotelDefinition(tier){
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
- const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
+ const p=[...hotelCeilingLights(tier,w,r.def.height),...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),HOTEL_BEDSIDE_LAMP(bed[0]+side*standOffset,bed[1]-.65,tier)]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle,r),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
@@ -35159,8 +35177,8 @@ function hotelAmenityUse(){
 }
 // Warm ceilings and parquet stay quiet at a distance; rugs define the sitting areas.
 ROOM_CEILS.hotel=(i,r,x,wx,wy)=>{
- const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy),lamp=room.kind!=='grandhotel'&&Math.hypot(mod(wx,4)-2,mod(wy,4)-2)<.16;
- BG[i]=C(WHITE,grand?5:4);return set(i,lamp?'o':edge<.16?'=':' ',C(lamp?WARM:YEL,lamp?15:8));
+ const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy);
+ BG[i]=C(WHITE,grand?5:4);return set(i,edge<.16?'=':' ',C(YEL,8));
 };
 ROOM_FLOORS.hotel=(i,f,wx,wy,r,x,L)=>{
  const tier=room.def.tier,spot=room.def.hotelAmenities?.tv,sofa=room.def.hotelAmenities?.sofa||[room.W/2,9];
