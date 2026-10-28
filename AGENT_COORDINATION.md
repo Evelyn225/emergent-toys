@@ -2596,3 +2596,27 @@ ABAB177x66 main3a5c84d→after: wide3.8–3.9→4.0ms, close4.5→5.2.
 Shared window helper unchanged. #296 full CI is green40767386038.
 Next hotel-room opaque entry leaves/infill using HOME_ENTRY_DOOR unchanged,
 with fitted trim continuing to their real casings; then lobby/service entries9.
+
+#300 merged (head4efdc2d, mergec37ce9b). Codex active
+codex/hotel-room-entries from main. Own new hotel-room-entries.js, hotel-polish
+props/doorWall hook, hotel-room-trim compatibility proxy, manifest/bundle/test.
+Reuse HOME_ENTRY_DOOR unchanged at the measured native D-span centre; rename
+its metadata to hotelEntry so private-home audit/refresh semantics stay local.
+The trim fitter sees a proxy homeEntry marker only while preparing its real
+casings; remove the old broad virtual D blockers once a real hotel leaf exists.
+Retain two native D cells, spawn positions, E/walking returns and WC policies.
+No shared helper or reserved owner-file edits. Next lobby/service entry fixtures9.
+
+Hotel-room entries complete: four focused/hotel/private-home geometry/native/
+E/walking-return checks and three Node files pass. Five isolated anchor/trim/
+public-painter/metadata/omitted-draw defects fail assertions. Reviewed12 final
+clear-floor close/wide/oblique/night/tier before/after images; full heads and
+thresholds are visible in wide views. No page errors. Shared builder unchanged;
+measured D centre fixes the odd-width hotel's half-cell spawn/door discrepancy
+without moving its spawn or native cells. Trim reaches actual jambs/infill.
+ABAB177x66 mainc37ce9b→after: wide2.1–2.3→3.1ms; handle/leaf macro
+0.9→3.9ms. Added macro geometry costs3ms (3.9ms total), no speedup claim.
+#297 full CI green40768335737; #298 full CI green40769123472.
+Next bounded pass6: public hotel/motel/Grand lobby floor finishes, standard
+hotel lobby's remaining painted ceiling lights, then lobby/service entries/
+reception fixtures and closing audit before9. Keep reserved files untouched.
