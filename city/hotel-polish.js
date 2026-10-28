@@ -8,11 +8,6 @@ function hotelRoomPlan(tier){
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
 function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
-function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
- const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
- const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
- BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
-});}
 function hotelDefinition(tier){
  const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null,diningX=tier===2?14.4:8,diningY=h-(tier===2?5.5:3.1);
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*(tier?.9:1.2)+Math.cos(tvAngle)*(tier?1:0),tv[1]+Math.cos(tvAngle)*(tier?.9:1.2)+Math.sin(tvAngle)*(tier?1:0)],sofa,stove},tier,

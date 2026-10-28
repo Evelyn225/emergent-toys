@@ -2492,3 +2492,24 @@ Artifacts work/backlog-review/grand-lobby-*; actual baseline gaps preserved.
 next pass6 chunks bounded: framed hotel landscape prints, remaining real
 overhead room lights/trim, lobby entry/service fixtures and finishes, then9.
 Held bathroom-quality/DINER/world-bootstrap/facade/lettering remain reserved.
+
+#295 merged (head817d188, merge4dc22a6); monitor its CI. Codex active
+codex/hotel-landscape-frames from main, deliberately bounded to the one framed
+landscape fixture used by motel/hotel/suite rooms. Own new hotel-room-art.js;
+move hotelLandscape out of hotel-polish.js without changing its call/anchors.
+Use homeFrameRail/homeRayWorktop unchanged for four mitred bevelled rails,
+with separate backing/mat/canvas and wall-contact pads; cache prepared bounds.
+No glass/animation/new interactions. Keep current room plans, story/gallery
+art, shared helpers and reserved Claude files untouched. Focused actual
+geometry/native visibility,3 defect probes, four visual angles and paired
+render timings before publishing. Then the next pass6 fixture chunk.
+
+Hotel landscape frames complete on codex/hotel-landscape-frames: two focused
+actual-geometry/native browser checks and three Node files pass. Old slab,
+detached pads, front-painted print and omitted native draw each fail intended
+assertions in isolated bundles. Reviewed12 before/after tier controls and
+close/wide/oblique/night views, clear cameras/no page errors. ABAB177x66
+main4dc22a6→after: wide4.8→4.7–4.8ms, close2.6–2.7→3.4–3.5ms.
+No shared helper changes; original wall anchors/envelope/layout retained.
+Next bounded pass6 chunk: fitted overhead hotel-room lights and quiet ceiling
+finish, followed by remaining room/lobby/service surfaces, then pass9.

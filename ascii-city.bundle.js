@@ -35080,6 +35080,33 @@ function HOTEL_LOBBY_CHANDELIER(x,y,height) {
 function hotelLobbyWall(i,u,uStep,z,d,mx,my,L) {
   BG[i]=C(WHITE,3+L*.30);set(i,' ',0);return true;
 }
+// The landscape is a matte print in a fitted frame, rather than a frame
+// painted on one slab. The existing wall anchor and overall size are retained.
+function hotelLandscape(x,y) {
+  const parts=[],z=1.9,metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
+  const plain=(base,level)=>(i,t,L)=>{BG[i]=C(base,level+L*.23*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const box=(role,u,v,hl,hw,z0,z1,shade)=>{
+    const b=boxAt(u,v,1,0,hl,hw,z0,z1),material=(i,t,L)=>{const f=HIT.face;HIT.nx=f===1?1:f===2?-1:0;HIT.ny=f===3?1:f===4?-1:0;HIT.nz=f===5?1:f===6?-1:0;return shade(i,t,L);};
+    parts.push({role,box:b,view:{...b},shade:material,ray:rayBox});
+  };
+  box('canvas',0,.004,.72,.001,z-.32,z+.32,(i,t,L)=>{
+    const u=HIT.u,h=HIT.w,hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
+    const sun=(u+.35)**2+(h-2.09)**2<.0049,base=sun?YEL:h<1.7?CYAN:h<hill?GREEN:BLUE;
+    BG[i]=C(base,2.4+L*.20);set(i,' ',0);return true;
+  });
+  const rails=[
+    [[-.85,.45],[.85,.45],[.77,.37],[-.77,.37]],
+    [[.85,.45],[.85,-.45],[.77,-.37],[.77,.37]],
+    [[.85,-.45],[-.85,-.45],[-.77,-.37],[.77,-.37]],
+    [[-.85,-.45],[-.85,.45],[-.77,.37],[-.77,-.37]]
+  ];
+  for(const vertices of rails){const p=homeFrameRail(vertices,z),b={...boxAt(p.u,.006,1,0,p.hl,.025,p.z0,p.z1),planes:p.planes,normals:p.normals};parts.push({role:'rail',box:b,view:{...b},shade:metal,ray:homeRayWorktop});}
+  box('mat',0,.0015,.775,.0015,z-.375,z+.375,plain(STONE,4.0));
+  box('backing',0,-.003,.79,.003,z-.39,z+.39,plain(BRICK,1.6));
+  for(const u of [-.80,.80])for(const h of [-.40,.40])box('pad',u,-.024,.018,.006,z+h-.018,z+h+.018,plain(GRAY,.6));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const p of parts){p.view.x=vx+p.box.x;p.view.y=vy+p.box.y;drawBox(p.view,p.shade,p.ray);}}),
+    walk:true,box:boxAt(x,y+.0005,1,0,.85,.0305,z-.45,z+.45),radius:.9,hotelWallArt:{parts,wallY:y-.03,centreZ:z}};
+}
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
@@ -35090,11 +35117,6 @@ function hotelRoomPlan(tier){
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
 function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
-function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
- const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
- const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
- BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
-});}
 function hotelDefinition(tier){
  const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null,diningX=tier===2?14.4:8,diningY=h-(tier===2?5.5:3.1);
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*(tier?.9:1.2)+Math.cos(tvAngle)*(tier?1:0),tv[1]+Math.cos(tvAngle)*(tier?.9:1.2)+Math.sin(tvAngle)*(tier?1:0)],sofa,stove},tier,
