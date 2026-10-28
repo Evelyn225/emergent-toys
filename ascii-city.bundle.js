@@ -35143,9 +35143,13 @@ function hotelFloorFinish(i,f,wx,wy,r,x,L) {
 // casings/fixtures exist. Native entry cells need explicit lower opening gaps.
 function hotelRoomTrim(r) {
   const tier=r.def.tier,h=r.def.height,doors=[];
-  for(let y=0;y<r.H;y++)for(let x=0;x<r.W;x++)if(r.grid[y][x]==='D')
+  const entry=r.props.find(p=>p.hotelEntry);
+  if(!entry)for(let y=0;y<r.H;y++)for(let x=0;x<r.W;x++)if(r.grid[y][x]==='D')
     doors.push({box:boxAt(x+.5,y+.5,1,0,.51,.51,0,2.3)});
-  const fitted={...r,props:[...r.props,...doors]},base=[.10,.12,.15][tier],depth=[.018,.023,.028][tier],drop=[.06,.09,.15][tier];
+  // Supply the fitter's existing entry-parts contract only while preparing
+  // hotel trim; the real model retains hotel-only metadata and behavior.
+  const props=r.props.map(p=>p===entry?{...p,homeEntry:p.hotelEntry}:p);
+  const fitted={...r,props:[...props,...doors]},base=[.10,.12,.15][tier],depth=[.018,.023,.028][tier],drop=[.06,.09,.15][tier];
   return [
     ...homeWallMoulding(fitted,[[0,base-.018,depth],[base-.018,base,depth+.004]],false,'hotelSkirting'),
     ...homeWallMoulding(fitted,[[.775,.79,.012],[.79,.815,.023]],false,'hotelChairRail'),
@@ -35176,6 +35180,15 @@ function hotelWindowWall(i,u,uStep,z,d,mx,my,L) {
   if(room.exterior)homeView(i,u,z,'north');else viewOut(i,u,z,room.suite?22:14,18);
   return true;
 }
+// Hotel rooms get opaque fitted leaves rather than the public glass-exit
+// painter. Keep native D collision/interaction and all existing spawn points.
+function hotelRoomEntry(r) {
+  const slots=[...r.grid[r.H-1]].flatMap((c,x)=>c==='D'?[x+.5]:[]);
+  const center=slots.reduce((a,b)=>a+b,0)/slots.length;
+  const model=HOME_ENTRY_DOOR({...r,def:{...r.def,entry:[center,...r.def.entry.slice(1)]}});
+  model.hotelEntry=model.homeEntry;delete model.homeEntry;
+  return model;
+}
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
@@ -35188,11 +35201,11 @@ function hotelRoomPlan(tier){
 function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
 function hotelDefinition(tier){
  const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null,diningX=tier===2?14.4:8,diningY=h-(tier===2?5.5:3.1);
- return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*(tier?.9:1.2)+Math.cos(tvAngle)*(tier?1:0),tv[1]+Math.cos(tvAngle)*(tier?.9:1.2)+Math.sin(tvAngle)*(tier?1:0)],sofa,stove},tier,
+ return {grid:plan.grid,entry:plan.entry,doorWall:true,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*(tier?.9:1.2)+Math.cos(tvAngle)*(tier?1:0),tv[1]+Math.cos(tvAngle)*(tier?.9:1.2)+Math.sin(tvAngle)*(tier?1:0)],sofa,stove},tier,
  wall:(...args)=>{if(hotelWindowWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,' ',0),true;},
  props:r=>{
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
- const p=[...hotelWindowCasings(r),...hotelCeilingLights(tier,w,r.def.height),...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
+ const p=[hotelRoomEntry(r),...hotelWindowCasings(r),...hotelCeilingLights(tier,w,r.def.height),...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),HOTEL_BEDSIDE_LAMP(bed[0]+side*standOffset,bed[1]-.65,tier)]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle,r),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
