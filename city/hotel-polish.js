@@ -34,11 +34,11 @@ function hotelDefinition(tier){
 }
 ROOM_DEFS.motelRoom=hotelDefinition(0);ROOM_DEFS.hotelroom=hotelDefinition(1);ROOM_DEFS.hotelSuite=hotelDefinition(2);
 const GRAND_LOBBY_PROPS=ROOM_DEFS.grandhotel.props;
-ROOM_DEFS.grandhotel.grid=boxRoom(24,17);ROOM_DEFS.grandhotel.height=5.2;
+ROOM_DEFS.grandhotel.grid=boxRoom(24,17);ROOM_DEFS.grandhotel.height=5.2;ROOM_DEFS.grandhotel.wall=hotelLobbyWall;
 ROOM_DEFS.grandhotel.props=r=>[...GRAND_LOBBY_PROPS(r).filter(p=>!(p.box&&p.box.z1===.55&&p.box.z0===0&&p.box.hl===1.1)),
  ...couch(4.2,9,1.55,1,0,BRICK),...couch(19.7,9,1.55,-1,0,GREEN),...tableBox(6.3,9,.6,.9),...tableBox(17.5,9,.6,.9),
- ...[3,20.5].flatMap(x=>[POT_PLANT(x,13.5,2.4),ROOM_MODEL(x,6.6,(vx,vy)=>{drum(vx,vy,.24,0,4.8,solid(STONE,{bright:2}));drawBox(boxAt(vx,vy,1,0,.34,.34,4.6,4.85),solid(YEL));})]),
- ROOM_MODEL(12,8,(vx,vy)=>{for(const side of [-1,1]){rod(vx,vy,5,vx+side*.8,vy,4.2,.025,YEL);dot(vx+side*.8,vy,4.15,.14,solid(WARM,{bright:5}));}rod(vx,vy,5,vx,vy,3.9,.025,YEL);dot(vx,vy,3.85,.19,solid(WARM,{bright:5}));})];
+ ...[3,20.5].flatMap(x=>[POT_PLANT(x,13.5,2.4),HOTEL_LOBBY_COLUMN(x,6.6,r.def.height)]),
+ HOTEL_LOBBY_CHANDELIER(12,8,r.def.height)];
 function hotelAmenityPrompt(){
  if(mode!=='room'||room.kind!=='hotelroom')return '';
  const spots=room.def.hotelAmenities;if(!spots)return '';
@@ -55,7 +55,7 @@ function hotelAmenityUse(){
 }
 // Warm ceilings and parquet stay quiet at a distance; rugs define the sitting areas.
 ROOM_CEILS.hotel=(i,r,x,wx,wy)=>{
- const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy),lamp=Math.hypot(mod(wx,4)-2,mod(wy,4)-2)<.16;
+ const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy),lamp=room.kind!=='grandhotel'&&Math.hypot(mod(wx,4)-2,mod(wy,4)-2)<.16;
  BG[i]=C(WHITE,grand?5:4);return set(i,lamp?'o':edge<.16?'=':' ',C(lamp?WARM:YEL,lamp?15:8));
 };
 ROOM_FLOORS.hotel=(i,f,wx,wy,r,x,L)=>{

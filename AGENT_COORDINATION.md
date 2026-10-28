@@ -2447,3 +2447,48 @@ no broad FPS gain claimed. Artifacts hotel-coffee-* (slow timing retained).
 Next pass6: actual Grand lobby capital/ceiling and chandelier mounting gaps,
 then remaining room/lobby/service finishes and pass9. No reserved/shared
 helper changes; hotel/home privacy policy is preserved.
+
+#294 merged (head649e4f6, merge094cde9); monitor CI40760942627. Codex active
+codex/grand-lobby-supports from main. Actual baseline draw-ray probe confirms
+both column capitals end4.85m under the5.2m ceiling (0.35m gap), chandelier
+mount at5m (0.2m gap), and columns have no physical collider. Own new hotel-only
+lobby-support module, just these three expressions in hotel-polish.js,
+focused test, manifest/bundle and append-only notes. Build grounded closed
+column plinth/shaft/capital and joined ceiling abacus, plus a mounted brass
+chandelier with real hub/arms/sockets/frosted globes. Derive every connection
+from actual room height; keep original anchors, furniture and service routes.
+Solid column bounds fit their actual plinths; overhead lamp stays walk-under.
+Shared helpers/reserved Claude files unchanged. Then remaining pass6 room/
+lobby/service finishes (painted landscape frames etc.) and pass9.
+
+Lobby visual review also exposed the old room painter repeating 'o'/panel
+glyphs over the enlarged upper walls, and fake ceiling light dots alongside
+the real chandelier. Add a Grand-only continuous plaster wall material in the
+new module and a Grand-only ceiling-dot opt-out in the owned hotel ceiling
+painter. Other hotel rooms keep their current lighting until their fitted
+overhead-light chunk. No shared/global wall painter or Claude lettering edits.
+The two focused geometry/native/collision/check-in controls and all3 existing
+Grand Hotel theft/alarm/suite/escape/save checks already pass before this
+material cleanup; rerun final focused checks, visual review, probes and ABAB.
+
+Grand lobby supports final: actual floor/ceiling-connected closed plinth,
+foot/shaft/capital/abacus columns and a mounted brass canopy/stem/hub with
+9 joined arm segments,3 sockets and3 frosted globes. Height derives from the
+native room; both former0.35m column gaps and0.2m chandelier gap are closed.
+Columns now physically block at their actual .34m plinth bounds; walking below
+the overhead lamp and check-in routes remain clear. Calm plaster replaces
+the old enlarged wall glyph field; Grand-only painted ceiling dots are removed.
+Five unique browser checks pass across final focused and existing Grand Hotel
+suite/check-in/theft/alarm/patrol/escape/save controls;3 Node files pass.
+Eleven isolated old-gap/floor/capital/arm/collision/cache/material/light-dot/
+native-draw defects fail assertions. Reviewed16 final clear-floor close/wide/
+oblique/night before/after views; capital/canopy inspection cameras are
+explicitly elevated freecam, standing views use normal eye height. No errors.
+Cached geometry/material/view objects are reused; shared helpers unchanged.
+ABAB177x66 main094cde9→after: wide2.7–2.9→2.6–3.8ms (variable second tail),
+column2.2–2.3→2.2, chandelier2.5–2.8→1.9–2.0. No broad speedup claim.
+Artifacts work/backlog-review/grand-lobby-*; actual baseline gaps preserved.
+#294 full Node/four-shard CI GREEN40760942627. Publish/review/merge, then keep
+next pass6 chunks bounded: framed hotel landscape prints, remaining real
+overhead room lights/trim, lobby entry/service fixtures and finishes, then9.
+Held bathroom-quality/DINER/world-bootstrap/facade/lettering remain reserved.
