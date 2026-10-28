@@ -2534,3 +2534,21 @@ Shared helper implementations and room light values are unchanged. #295 full
 Node/four-shard CI is green40765538983. Next bounded pass6 chunk: calm native
 hotel floor/rug materials using the existing filtered timber helper unchanged;
 then remaining fitted openings/trim and lobby/service fixtures before pass9.
+
+#297 merged (headefc6ceb, mergecdb2d64). Codex active
+codex/hotel-floor-finishes from main. Own new hotel-floor-finishes.js and the
+hotel-polish floor-hook replacement/test only. Reuse homeFloorWood and
+homeBalconyPavingFootprint unchanged for native flush timber/parquet surfaces;
+retain each original rug footprint with filtered fabric/border material.
+No room plans, props, bathroom floors, world floors or shared-helper changes.
+Next remaining fitted openings/trim and lobby/service fixtures before pass9.
+
+Hotel floor finishes complete on codex/hotel-floor-finishes. Two focused
+native/material/plane/bathroom/lobby browser checks and three Node files pass;
+old paint, omitted footprint filtering, fixed lighting and shrunken rugs each
+fail intended assertions in isolated bundles. Reviewed18 final clear-floor
+close/wide/oblique/night/rug/tier before/after views, no page errors.
+ABAB177x66 maincdb2d64→after: hotel wide4.6–4.9→4.9–5.0ms,
+close1.6→2.5; suite wide3.5→3.7, close3.0–3.1→3.8–4.0.
+Existing shared materials reused unchanged. Next fitted room wall trim, with
+native doorway gaps preserved, before lobby/service openings and pass9.
