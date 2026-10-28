@@ -2513,3 +2513,24 @@ main4dc22a6→after: wide4.8→4.7–4.8ms, close2.6–2.7→3.4–3.5ms.
 No shared helper changes; original wall anchors/envelope/layout retained.
 Next bounded pass6 chunk: fitted overhead hotel-room lights and quiet ceiling
 finish, followed by remaining room/lobby/service surfaces, then pass9.
+
+#296 merged (head13d9053, merge24b7dd8); monitor full CI alongside #295.
+Codex active codex/hotel-ceiling-lights from main. Own new hotel-ceiling-lights.js
+and the bounded hotel-polish integration/ceiling finish plus focused test.
+Add closed ceiling-mounted frosted drums with separate mount/rim/diffuser in
+motel/hotel/suite sleeping, living and washroom zones. Retain room lighting,
+plans, interaction routes and saved/private-home door states. Shared helpers
+are called unchanged. Remove hotel-room painted ceiling dots only once actual
+fittings exist. Reserve other owners' files. Next remaining hotel finishes,
+lobby/service fixtures, then pass9.
+
+Hotel ceiling lights complete: two new actual draw-ray/native checks plus two
+bedside/walking/automatic-door controls pass; final closed-cap checks pass.
+Three Node files pass. Four isolated mount-gap, bowl-gap, painted-dot and
+omitted-native-draw probes fail assertions. Reviewed14 final clear-floor
+before/after close/wide/oblique/night/tier/washroom views, no page errors.
+ABAB177x66 main24b7dd8→after: wide2.8–3.0→2.8ms, close2.4–2.6→3.1–3.2.
+Shared helper implementations and room light values are unchanged. #295 full
+Node/four-shard CI is green40765538983. Next bounded pass6 chunk: calm native
+hotel floor/rug materials using the existing filtered timber helper unchanged;
+then remaining fitted openings/trim and lobby/service fixtures before pass9.
