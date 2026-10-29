@@ -2813,3 +2813,23 @@ ABAB177x66 main6d7a4e0: wide1.1–2.0→1.5–2.5ms (variable), leaf1.3→2.8–
 plaque.8–.9→2.8–2.9, lever1.0→3.6–3.7. No broad speedup claim. #308 full CI
 green40812339987. Next motel key rack, remaining service/office fixtures,
 pass6 closing audit then9. Reserved/shared helpers remain untouched.
+
+Codex active: codex/motel-key-rack owns new city/motel-key-rack.js and its
+focused browser test, plus append-only manifest/bundle/notes. A wall-mounted
+board, sixteen real hooks and hanging key rings/shafts/teeth/numbered tags retain
+the original occupied-room pattern. Props/wall wrap locally; storefronts.js and
+shared helpers remain unchanged. Next motel TV/wall/entry finishes and Grand
+clock/plinth before closing6 and9. #310 merged, preserving homepage dark theme.
+
+Codex codex/motel-key-rack complete: closed timber board, real hooks/rings/
+shafts/teeth and scaling numbered tags preserve sixteen hooks/occupied pattern.
+Local wrappers leave storefronts.js/shared helpers untouched. Also owns new
+city/hotel-fittings-text.js: tag-local face ray context/precise column spacing
+fix oblique duplicate digits, restoring WH afterward; native/global lettering
+files remain reserved. Three focused browser checks +three Node files pass;
+six isolated defects rejected. Reviewed12 final clear-floor close/wide/oblique/
+night/tag/ring comparisons, no errors. E booking wakes in a clear motel room,
+automatic washroom doors closed. ABAB177x66 maine2f8b8d: wide4.0–4.4→4.3–4.5ms
+(variable), rack2.6–2.9→3.9–4.1, tag1.0–1.1→3.2–3.4. No broad speedup claim.
+#309 full CI green40813380183. Next apply/audit this sampler on Codex hotel
+plaques, remaining motel TV/wall/entry and Grand clock/plinth, closing6 then9.
