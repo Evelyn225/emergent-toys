@@ -174,6 +174,7 @@
     "city/apartment-lobby-mailboxes.js",
     "city/apartment-lobby-surfaces.js",
     "city/hospital-beds.js",
+    "city/hospital-bay-curtains.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
