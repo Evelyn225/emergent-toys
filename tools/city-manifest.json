@@ -178,6 +178,7 @@
     "city/hospital-service-doors.js",
     "city/hospital-wall-signs.js",
     "city/hospital-water-cooler.js",
+    "city/hospital-wall-finishes.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
