@@ -2796,3 +2796,20 @@ six isolated defects rejected. Reviewed12 final clear-floor close/wide/oblique/
 night/both-run comparisons. ABAB177x66 mainb3b7f41: wide4.5–4.6→4.6–4.7ms,
 cloth3.6–3.9→4.3, rod2.7–2.8→2.9–3.0. No broad speedup claim. #307 full CI
 green40811169215. Next remaining motel/Grand service fixtures and closing6/9.
+
+Codex active: codex/grand-hotel-staff-door owns new city/hotel-staff-door.js,
+the old staff-sign prop expression in grand-hotel.js, its focused browser test
+and append-only manifest/bundle/notes. Closed fitted frame/leaf, mounted hardware
+and scaling STAFF ONLY plaque replace the billboard at the same gallery action.
+No changes to gallery hours, heist flow, walls or shared helpers. Next remaining
+motel/Grand service fixtures and pass6 closing audit before9. #309 merged.
+
+Codex codex/grand-hotel-staff-door complete: closed fitted frame/leaf/hardware
+and scaling plaque replace the billboard. Native action point/collision and
+day lock/night entry/lobby return unchanged. Six new/existing geometry/native/
+Grand gameplay checks +three Node files pass; four isolated defects rejected.
+Reviewed12 final clear-floor close/wide/oblique/night comparisons, no errors.
+ABAB177x66 main6d7a4e0: wide1.1–2.0→1.5–2.5ms (variable), leaf1.3→2.8–2.9,
+plaque.8–.9→2.8–2.9, lever1.0→3.6–3.7. No broad speedup claim. #308 full CI
+green40812339987. Next motel key rack, remaining service/office fixtures,
+pass6 closing audit then9. Reserved/shared helpers remain untouched.
