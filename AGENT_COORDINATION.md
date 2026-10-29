@@ -2996,3 +2996,26 @@ serial ABAB is the final new-geometry comparison. Pass6's first quality pass is
 complete. Further global lighting/distant-lettering tuning belongs with its
 later checklist passes. Next9: apartment-lobby entrance/lift first, then remaining
 mailboxes/wall finishes and other civic rooms. Reserved ownership preserved.
+
+Codex active: codex/apartment-lobby-entrances (pass9) owns new
+apartment-lobby-entrances.js, focused browser coverage and its manifest entry.
+Reuse unchanged prepared public entrance/lift models with apartment-only tags;
+retain the original lobby grid/props/mailbox wall, real exterior anchor, native
+roof and E/walking exits. No room definitions, home behavior or shared helpers
+changed. Reserved bathroom/DINER/bootstrap/facade/lettering ownership respected.
+#318 merged5e573fc and hotel closing audit #319 merged3823cca. Next apartment
+mailboxes/wall finishes, then other civic interiors.
+
+Codex codex/apartment-lobby-entrances complete: fitted public paired entrance,
+actual street-side glass view, closed roof lift with supported controls, and
+front-only scaling EXIT/ROOF plaques. Reused existing prepared hotel geometry
+unchanged with apartment-only markers. Three focused geometry/cache/contacts/
+view/text/real-roof-and-both-exits checks and three Node files pass. Five isolated
+anchor/lift-gap/paint/view/visibility defects rejected. Reviewed12 clear-floor
+close/wide/oblique/night before/after images, no page errors. ABAB177x66 against
+main3823cca: wide1.1–2.1→2.2–2.5ms(variable baseline), leaves.7→2.2,
+lift.8→3.1, controls.7→2.8; added nearby detail~1.5–2.3ms, no speedup claim.
+Native plan/props/mailboxes/home behavior retained. Next apartment lobby's old
+wall/mailbox patterns: built mailbox cabinet plus quiet finishes/fitted trim,
+then other pass9 civic rooms. Shared/reserved files untouched. #318 CI still
+running; #319 queued when last checked.
