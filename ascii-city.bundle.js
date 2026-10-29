@@ -17069,6 +17069,7 @@ function makeRoom(kind, extra = {}) {
   }
   r.props.push(...bathroomAccessories(r));
   if(kind==='hotelroom')r.props.push(...hotelRoomTrim(r));
+  if(kind==='hotel')r.props.push(...hotelLobbyPanelling(r));
   if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) {
     r.props.push(...homeSkirting(r),...homeCornices(r));
@@ -35234,6 +35235,40 @@ ROOM_FLOORS.hotelLobby=(i,f,wx,wy,r,x,L)=>hotelLobbyFloorFinish(i,wx,wy,L,homeBa
 for(const kind of ['hotel','motel','grandhotel']){
   const def=ROOM_DEFS[kind];def.footstepFloor=def.floor;def.floor='hotelLobby';
 }
+// A temporary layout proxy reuses the fitted home builders without changing
+// their implementation or the actual hotel's grid, definition or semantics.
+function hotelLobbyPanelling(r) {
+  const openings=[];
+  for(let y=0;y<r.H;y++)for(let x=0;x<r.W;x++)if('DE'.includes(r.grid[y][x]))
+    openings.push({box:boxAt(x+.5,y+.5,1,0,.51,.51,0,2.3)});
+  const layout={...r,grid:r.grid.map(row=>row.replace(/E/g,'D')),
+    def:{...r.def,tier:0,height:r.def.height||3,builtSkirting:true,builtPanelling:true,builtCornices:true},
+    props:[...r.props,...openings]};
+  const base=homeSkirting(layout);layout.props.push(...base);
+  const panels=homePanelling(layout),cornices=homeCornices(layout);
+  // Without window sills the helper's first frieze band has zero height.
+  // Remove that empty band from these returned pieces, retaining the joins.
+  for(const o of panels)if(o.homeChairRail){
+    const m=o.homeChairRail;m.parts.splice(0,m.parts.length,...m.parts.filter(p=>p.box.z1-p.box.z0>1e-8));
+    m.profile=m.profile.filter(([a,b])=>b-a>1e-8);
+  }
+  for(const model of panels)for(const p of model.homePanelling?.parts||[]){
+    const [fx,fy]=p.normal;
+    p.shade=(i,t,L)=>{
+      const detail=smooth(clamp((.035*projX/t-.2)/.8,0,1)),fine=coveDetail(t,.3);
+      const grain=fine?Math.sin(HIT.u*80+Math.sin(HIT.w*4)*.2)*.06*fine:0;
+      const light=coveLight(HIT.nx*detail+fx*(1-detail),HIT.ny*detail+fy*(1-detail),HIT.nz*detail);
+      BG[i]=C(BRICK,2.6+(HIT.panelBack?-.35:.35)*detail+L*.3*light+grain);set(i,' ',0);return true;
+    };
+  }
+  const models=[...base,...panels,...cornices];
+  for(const o of models)for(const [from,to]of [['homeSkirting','hotelLobbySkirting'],['homePanelling','hotelLobbyPanelling'],['homeChairRail','hotelLobbyChairRail'],['homeCornice','hotelLobbyCornice']])if(o[from]){o[to]=o[from];delete o[from];}
+  return models;
+}
+function hotelLobbyWallFinish(i,u,uStep,z,d,mx,my,L) {
+  BG[i]=C(z<.945?BRICK:STONE,(z<.945?2.6:3.4)+L*.3);set(i,' ',0);return true;
+}
+ROOM_DEFS.hotel.wall=hotelLobbyWallFinish;
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
