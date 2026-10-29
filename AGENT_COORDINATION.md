@@ -2712,3 +2712,28 @@ are unchanged; shared builders are called unchanged. ABAB177x66 main0cf9cf0→af
 wide2.4–2.5→2.5–2.7ms, clipboard2.5→4.8–5.0, bell2.3→4.3–4.4.
 Added macro detail~2–2.5ms here, no broad speedup claim. Next standard lobby
 walls/trim (old glyph field), then remaining entry/service fixtures, closing6/9.
+
+#305 merged (headda801fa, merge8fe5a47). Codex active
+codex/hotel-lobby-panelling: new hotel-lobby-panelling.js, one hotel-only
+makeRoom line after bathroom accessories, manifest/bundle/focused tests.
+Reuse homeSkirting/homePanelling/homeCornices/homeWallMoulding unchanged via
+an initialization-only layout proxy. Actual room grid/defs stay unchanged;
+D/E opening blockers preserve lower gaps and solid upper heads. Give returned
+panel pieces a prepared timber material and rename returned home metadata to
+hotelLobby* after fitting. Calm plaster replaces standard hotel's old glyph wall.
+Keep WC finish, scalable HOTEL/WC/ROOF signs, exits/lift/check-in, other families
+and reserved files. Then remaining lobby/service/entry fixtures, closing6 and9.
+
+Standard lobby panelling complete: four focused/new/lighting/check-in browser
+controls and three Node files pass. Six isolated filled-field/opening/ceiling/
+old-wall/empty-frieze/omitted-draw defects fail assertions. Reviewed16 clear-floor
+close/wide/oblique/night/base/cornice/entrance/lift before/after views, no errors.
+The no-window layout gives the shared builder an empty frieze; omit that empty
+returned band while retaining all supporting joins. Shared builders remain
+unchanged; proxy-only flags/grid conversion and hotelLobby* metadata keep native
+room/home semantics separate. Actual room grid, WC finish, functional signs,
+clerk/exit/lift paths and check-in are retained. ABAB177x66 main8fe5a47→after:
+wide2.5–2.6→3.5ms, field close1.1→3.3, cornice1.6→2.0.
+#304/#305 full CI green40806099909/40807456322. Next standard lobby entry/lift
+fixtures, remaining motel/Grand wall/service details and suite curtain supports;
+then pass6 closing audit and9. Reserved files remain untouched.
