@@ -172,6 +172,7 @@
     "city/motel-office-architecture.js",
     "city/apartment-lobby-entrances.js",
     "city/apartment-lobby-mailboxes.js",
+    "city/apartment-lobby-surfaces.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
