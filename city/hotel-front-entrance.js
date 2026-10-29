@@ -26,11 +26,12 @@ function hotelEntranceExterior(r) {
   candidates.sort((a,b)=>Math.hypot(a.x-ret[0],a.y-ret[1])-Math.hypot(b.x-ret[0],b.y-ret[1]));
   const v=candidates[0];v.up=outdoorGroundHeight(v.x,v.y);return v;
 }
+function hotelLobbyCityView(i,u,z) {
+  const e=room.hotelEntranceExterior,offset=(Math.abs(u)-room.W/2)/10;
+  homeCityView(i,e.x+e.ny*offset,e.y-e.nx*offset,e.up+z/10,e.nx+e.ny*WH.sl,e.ny-e.nx*WH.sl,(z-eye)/WH.dn);
+}
 function hotelEntranceGlass(i,u,z,mx,my) {
-  if(my===room.H-1&&roomAt(mx,my)==='D'&&z>.025&&z<2.20){
-    const e=room.hotelEntranceExterior,offset=(Math.abs(u)-room.W/2)/10;
-    homeCityView(i,e.x+e.ny*offset,e.y-e.nx*offset,e.up+z/10,e.nx+e.ny*WH.sl,e.ny-e.nx*WH.sl,(z-eye)/WH.dn);return true;
-  }
+  if(my===room.H-1&&roomAt(mx,my)==='D'&&z>.025&&z<2.20){hotelLobbyCityView(i,u,z);return true;}
   return false;
 }
 function hotelEntranceWall(i,u,uStep,z,d,mx,my,L) {
