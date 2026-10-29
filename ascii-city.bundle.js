@@ -35190,6 +35190,13 @@ function hotelRoomEntry(r) {
   model.hotelEntry=model.homeEntry;delete model.homeEntry;
   return model;
 }
+// Shared only by the two hotel reception fittings; profiles are prepared once.
+function hotelReceptionBellParts(parts,u,v,h,metal) {
+  hotelLobbyTurned(parts,'bell-foot',u,v,[[h,0],[h,.055],[h+.004,.060],[h+.010,.060],[h+.010,0]],metal);
+  hotelLobbyTurned(parts,'bell-body',u,v,[[h+.010,0],[h+.010,.057],[h+.014,.061],[h+.028,.056],[h+.043,.030],[h+.049,.015],[h+.051,.008],[h+.051,0]],metal);
+  hotelLobbyTurned(parts,'bell-post',u,v,[[h+.051,0],[h+.051,.005],[h+.060,.005],[h+.060,0]],metal);
+  hotelLobbyTurned(parts,'bell-button',u,v,[[h+.060,0],[h+.060,.012],[h+.064,.015],[h+.069,.015],[h+.071,.012],[h+.071,0]],metal);
+}
 // Keep the counter's original collider. Small desktop fittings are separate
 // decorative geometry, prepared once, with real supported layers and contacts.
 function HOTEL_RECEPTION_DESK(x,y,hl,hw,h) {
@@ -35207,10 +35214,7 @@ function HOTEL_RECEPTION_DESK(x,y,hl,hw,h) {
   box('board',-.62,.05,.21,.135,h,h+.012,.004,timber);
   box('paper',-.62,.05,.19,.115,h+.012,h+.014,.0006,paper);
   box('clip',-.62,-.045,.055,.014,h+.014,h+.031,.003,metal);
-  hotelLobbyTurned(parts,'bell-foot',.58,.06,[[h,0],[h,.055],[h+.004,.060],[h+.010,.060],[h+.010,0]],metal);
-  hotelLobbyTurned(parts,'bell-body',.58,.06,[[h+.010,0],[h+.010,.057],[h+.014,.061],[h+.028,.056],[h+.043,.030],[h+.049,.015],[h+.051,.008],[h+.051,0]],metal);
-  hotelLobbyTurned(parts,'bell-post',.58,.06,[[h+.051,0],[h+.051,.005],[h+.060,.005],[h+.060,0]],metal);
-  hotelLobbyTurned(parts,'bell-button',.58,.06,[[h+.060,0],[h+.060,.012],[h+.064,.015],[h+.069,.015],[h+.071,.012],[h+.071,0]],metal);
+  hotelReceptionBellParts(parts,.58,.06,h,metal);
   const fittings={...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:.9,hotelReceptionAccessories:{parts,height:h}};
   counter.hotelReception={height:h,fittings};
   return [counter,fittings];
@@ -35457,6 +35461,15 @@ ROOM_DEFS.motel.wall=(i,u,uStep,z,d,mx,my,L)=>{
   if(mx===room.W-1&&Math.abs(u-6)<.55&&z>1.45&&z<2.15){BG[i]=C(YEL,3.6+L*.15);set(i,' ',0);return true;}
   return MOTEL_TV_WALL(i,u,uStep,z,d,mx,my,L);
 };
+// Replace only the office's old decorative bell. The original desk, clerk,
+// bell position and collision stay intact; the measured countertop owns support.
+function MOTEL_SERVICE_BELL(x,y,height) {
+  const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,YEL);
+  hotelReceptionBellParts(parts,0,0,height,metal);
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:.065,motelBell:{parts,height}};
+}
+const MOTEL_BELL_PROPS=ROOM_DEFS.motel.props;
+ROOM_DEFS.motel.props=r=>[...MOTEL_BELL_PROPS(r).filter(p=>!(p.draw&&!p.box&&p.x===3.6&&p.y===2.35)),MOTEL_SERVICE_BELL(3.6,2.35,1.1)];
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
  const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
