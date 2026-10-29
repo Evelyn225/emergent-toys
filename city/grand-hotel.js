@@ -77,9 +77,8 @@ ROOM_DEFS.grandhotel = { grid: boxRoom(14, 9), light: 0.95, floor: 'marble', cei
   },
   props: r => [
     ...counterBox(6.5, 2.75, 1.35, 1.05), standing(6.5, 2.15, YEL),
-    BX(3, 1.2, 0.42, 0.42, 0, 0.48, solid(BRICK, { top: '=' })),
+    ...HOTEL_LOBBY_CLOCK(3,1.43),
     POT_PLANT(11.9, 1.3, 1.5),
-    SP(3, 1.15, 0.52, 0.72, pad(['+-----+', '|  o  |', '|     |', '+-----+']), (c, row) => C(c === 'o' ? YEL : WHITE, 12)),
     HOTEL_STAFF_DOOR(HOTEL_HEIST_DOOR[0],1),
     BX(3.4, 4.8, 1.1, 0.38, 0, 0.55, solid(BRICK, { top: '=' })),
     BX(10.2, 4.8, 1.1, 0.38, 0, 0.55, solid(BRICK, { top: '=' })),

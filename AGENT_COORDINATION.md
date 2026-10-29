@@ -2909,3 +2909,24 @@ comparison PNG pairs byte-identical. ABAB177x66 main8a17ec1: wide3.3–3.6→3.3
 bell3.8–4.1→3.9–4.0, button3.8–4.1→3.9; overlapping ranges, no speedup claim.
 Next Grand clock/plinth, remaining motel wall/entry/brochure/table audit,
 closing6 then9. Reserved files and shared home/shop helpers remain untouched.
+
+Codex active: codex/grand-lobby-clock owns new hotel-lobby-clock.js, only the
+old clock/plinth prop expressions in grand-hotel.js, focused coverage and
+append-only manifest/bundle/notes. Grounded moulded plinth/case fit inside the
+north wall; unchanged HOME_WALL_CLOCK supplies real glass/dial/indices/time hands.
+This decoration has no home furnishing key; the actual plinth owns collision.
+Shared home/restaurant clock helpers remain untouched. #315 bell merged05192b4.
+Next remaining motel wall/entry/brochure/table audit, pass6 closing review then9.
+
+Codex codex/grand-lobby-clock complete: fitted grounded case/plinth inside wall,
+unchanged HOME_WALL_CLOCK dial and real-time hands; no furnishing key. Cabinet
+pads join the clock backing. Local exact cylinder-cap hits/draw order preserve
+shared helpers and native pixels/depth. Three new checks +four Grand gameplay
+controls +three Node files pass; eight isolated defects rejected. Reference
+backing attempts1483→181 (~88%); all six optimized PNGs byte-identical to reviewed
+fitted geometry. Reviewed12 final clear-floor close/wide/oblique/night/case/front-
+floor-contact comparisons. ABAB177x66 main05192b4: wide2.4–2.5→2.7–2.8ms,
+case1.2–1.3→3.2–3.3, face1.6–1.8→6.9–7.1. Initial fitted macro9.4–10ms is
+reduced locally, no broad speedup claim. #314 full CI green40881136740. Next audit
+remaining lobby entrances and motel wall/window/entry/brochure/table finishes,
+closing6 then9. Reserved files/shared home+shop helpers remain untouched.

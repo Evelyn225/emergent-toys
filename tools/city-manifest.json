@@ -166,6 +166,7 @@
     "city/motel-key-rack.js",
     "city/motel-office-television.js",
     "city/motel-service-bell.js",
+    "city/hotel-lobby-clock.js",
     "city/hotel-polish.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
