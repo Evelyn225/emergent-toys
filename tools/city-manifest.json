@@ -182,6 +182,7 @@
     "city/hospital-floor-lights.js",
     "city/hospital-front-entrance.js",
     "city/bank-vault-door.js",
+    "city/bank-teller-counter.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
