@@ -2737,3 +2737,27 @@ wide2.5–2.6→3.5ms, field close1.1→3.3, cornice1.6→2.0.
 #304/#305 full CI green40806099909/40807456322. Next standard lobby entry/lift
 fixtures, remaining motel/Grand wall/service details and suite curtain supports;
 then pass6 closing audit and9. Reserved files remain untouched.
+
+#306 merged (head514d833, mergeca228bd). Codex active
+codex/hotel-roof-lift: new hotel-roof-lift.js, manifest/bundle/focused tests.
+Wrap standard hotel's authored props before hotel-polish captures them; no edits
+to shared builders or reserved files. Add closed cached jamb/head/threshold,
+paired steel leaves with backed reveals, supported panel/buttons and a front-only
+scaling ROOF sign. Standard hotel liftWall uses its existing new wall finish,
+removing the old glyph door/header behind the fitted model. Keep native E cells,
+ex position, roof travel/return, collision, check-in and panelling clearance.
+Then front entries, remaining motel/Grand service details, suite curtain supports,
+pass6 closing audit and9.
+
+Standard roof lift complete: two new geometry/native/scaling/real roof round-trip
+checks plus two panelling/route controls and three Node files pass. Ground probe
+casts from below the floor; final checks pass. Four isolated threshold/panel/
+old-header/omitted-draw defects fail assertions. Reviewed12 final clear-floor
+close/wide/oblique/night/sign/button before/after views, no errors. Paired leaves
+have real recessed faces/backed reveals; wall-supported controls and the centred
+ROOF plaque use cached parts/materials. Native E cells, collision and ex position
+stay intact; E travels to an actual generated hotel's usable own roof and back.
+ABAB177x66 mainca228bd→after: wide3.5→3.9ms, leaves1.3→3.7–3.8,
+sign2.4–2.5→3.9–4.0, buttons1.5→3.5–3.6. No broad speedup claim.
+#306 full CI green40809125896. Next standard lobby front entrance, then remaining
+motel/Grand wall/service fixtures, suite curtain supports, closing6 and9.
