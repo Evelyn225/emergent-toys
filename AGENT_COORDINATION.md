@@ -3186,3 +3186,22 @@ taps1.9–2.0→3.4. Added detail cost~.2–1.5ms here; no speedup claim.
 #326 full CI green40935866946. Next fitted hospital wall guards/skirting/cornices
 using final fixtures, then floor/ceiling/front entrance and remaining civic rooms.
 Reserved files/shared helpers unchanged.
+
+Codex active: codex/hospital-wall-finishes owns new hospital-wall-finishes.js, focused coverage and its manifest entry. Quiet plaster/tiled lower walls and physical wall guards/skirting/cornices replace painted patterns. Call shared fitters unchanged through an init-only proxy; fit around final cooler/staff doorway/curtains, preserve native entry and clinical flows. Update owned sign/door tests only for their intentionally changed wall finish. #327 mergede9d5e81. Next floor/ceiling/front entrance, then other civic rooms. Reserved helpers/files remain untouched.
+
+Codex codex/hospital-wall-finishes complete: quiet plaster/filtered lower tile,
+grounded skirting, joined ceiling cornices and real layered wall guards replace
+the glyph fields. Init-only proxy fits52 cached trim parts around the final staff
+frame, cooler, entry and cloth while keeping baseboards below curtain hems and
+cornices above doors. Shared fitters unchanged; use their existing chair-rail
+edge filtering before renaming the owned marker to avoid checkerboard lips.
+Visual review calibrated grout contrast, and actual standing-view pixels verify
+visible tile. Two new plus six door/sign/cooler browser controls and three Node
+files pass. Nine isolated cooler/staff/cloth intersections, blocked entry,
+floating baseboard, ceiling gap, old paint, missing height filter and omitted
+native guard fail assertions. Reviewed16 clear-floor close/wide/oblique/night/
+corner/ceiling/base/cooler comparisons, no errors. Serial ABAB177x66 maine9d5e81:
+wide3.9–4.0→4.1–4.2ms, guard3.1–3.2→3.4–3.6, corner3.0→3.3–3.5,
+cornice1.7→1.9. Added detail cost~.1–.5ms here, no speedup claim.
+#327 CI still running last checked. Next hospital floor/ceiling/lights, then
+front entry and civic closing review/other rooms. Reserved files unchanged.
