@@ -27,9 +27,9 @@
   <link rel="manifest" href="/site.webmanifest">
   <title>Eve Net</title>
   <script>
-    /* Set the theme before first paint so the light default never flashes dark. */
+    /* Set the theme before first paint, defaulting to dark. */
     document.documentElement.dataset.theme =
-      localStorage.getItem('evenet-theme') === 'dark' ? 'dark' : 'light';
+      localStorage.getItem('evenet-theme') === 'light' ? 'light' : 'dark';
   </script>
   <link rel="preload" href="PlantHUD.woff2" as="font" type="font/woff2" crossorigin>
   <style id="fonts">
@@ -414,7 +414,7 @@
   <!--<img src="/images/cover_4x.png" alt="" style="display:none">-->
   <div id="corner">
     <a id="font-link" href="planthud">Download my font!</a>
-    <button id="theme-toggle" aria-label="Toggle colour theme">[ dark ]</button>
+    <button id="theme-toggle" aria-label="Toggle colour theme">[ light ]</button>
   </div>
   <div id="cursor-layer" aria-hidden="true"></div>
   <main class="main-inner" id="main-content">
@@ -463,8 +463,8 @@
     document.getElementById('theme-toggle').textContent = dark ? '[ light ]' : '[ dark ]';
   }
 
-  // Init: localStorage → light default (mirrors the pre-paint script in <head>)
-  applyTheme(localStorage.getItem('evenet-theme') === 'dark');
+  // Init: localStorage → dark default (mirrors the pre-paint script in <head>)
+  applyTheme(localStorage.getItem('evenet-theme') !== 'light');
 
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const dark = !isDark();
