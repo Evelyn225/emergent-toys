@@ -3042,3 +3042,27 @@ slot.9→5.0–5.1, label.9→5.9. Added macro detail costs~3.6–5ms, no speedu
 claim; geometry/materials cached at construction. #318 full CI green40897176725;
 #319 in progress. Next apartment lobby floor/ceiling-light finish, then hospital
 and other civic interiors. Shared/reserved helpers/files untouched.
+
+Codex active: codex/apartment-lobby-surfaces owns new
+apartment-lobby-surfaces.js, focused coverage and manifest entry. Reuse unchanged
+filtered lobby tile material and prepared flush light geometry; quiet plaster
+ceiling replaces the remaining glyph fields. Preserve native floor plane/tile
+footsteps, plan, props, private-home policy, roof and exits. Two ceiling lights
+must meet the ceiling, clear cornices and retain headroom. #321 merged589fc67.
+Next hospital and other civic interiors; reserved/shared helper edits avoided.
+
+Codex codex/apartment-lobby-surfaces complete: filtered half-metre tile with
+native standing-height-visible fine grout, quiet plaster ceiling and two closed
+flush silver/frost fixtures mounted to the ceiling. Existing groove/footprint
+filters and light geometry are reused unchanged; apartment-only material contrast
+keeps its joints visible at the actual cell footprint. Two new native depth/
+material/filter/light/contact/headroom checks plus three apartment roof/exit
+controls and three Node files pass. Five isolated footstep/hook/ceiling-paint/
+mount/native-joint defects rejected; low-contrast mutant specifically fails the
+actual standing-view assertion. Reviewed close/wide/oblique/night/floor/cornice
+views with12 before/after captures, no errors. Serial ABAB177x66 main589fc67:
+wide3.1–3.3→3.0–3.2ms, floor1.2–1.3→1.2–1.4, light2.1–2.2→2.4;
+mostly overlapping ranges, no speedup claim. Original tile footsteps retained;
+no old hanging fixtures duplicate the new lights. #319 full CI green40898100746;
+#320 running. Next hospital beds/bay furnishings, then its service doors/wall
+fittings and other civic rooms. Shared/reserved files remain unchanged.
