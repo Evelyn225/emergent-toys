@@ -158,6 +158,7 @@
     "city/hotel-reception-desk.js",
     "city/hotel-lobby-floors.js",
     "city/hotel-lobby-panelling.js",
+    "city/hotel-roof-lift.js",
     "city/hotel-polish.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
