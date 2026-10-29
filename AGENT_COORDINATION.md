@@ -2853,3 +2853,23 @@ avoids clerk/partition occlusion. Serial ABAB177x66 main5d222d8: changes within
 #310 full CI green40813988428. Next motel office TV, remaining motel wall/entry
 finishes and Grand clock/plinth; pass6 closing audit then9. Global lettering,
 Claude's reserved files, shared home/restaurant helpers and actions untouched.
+
+Codex active: codex/motel-office-television owns new motel-office-television.js,
+its focused browser test and append-only manifest/bundle/notes. The existing
+TELEVISION builder is called unchanged; its wall-mounted case/screen/buttons
+prepare once without feet/legs, seated against the actual east wall. Only the
+screen animates/emits; office always-on behavior stays intact. Local props/wall
+wrappers preserve the clerk, keys, exits and other motel wall details. Reserved
+storefronts.js/global lettering/shared home helpers remain untouched. #312 merged.
+
+Codex codex/motel-office-television complete: unchanged TELEVISION builder,
+wall-mounted retained parts captured/prepared once; no feet/legs or new collider.
+Back meets east wall; recessed screen alone emits/animates, HIT height restored.
+Two focused geometry/cache/emission/screen-pixel-animation/booking checks +three
+Node files pass; five isolated defects rejected. Reviewed12 clear-floor final
+close/wide/oblique/night/side comparisons. ABAB177x66 maincc68c8c: wide2.8–3.1→
+2.9–3.0ms, screen1.6–3.1→1.9 (variable baseline), bezel1.0–1.6→2.8. No broad
+speedup claim. #311 CI40814996820: only shard1 fails, scene-render cleanup calls
+leaveCar after taxi auto-exit (me=null); three other shards +Node passed. Next
+fix this test cleanup race separately, then motel wall/entry/bell/brochure/table
+remaining audit and Grand clock/plinth, closing6 then9. No shared helper edits.
