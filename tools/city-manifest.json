@@ -184,6 +184,7 @@
     "city/bank-vault-door.js",
     "city/bank-teller-counter.js",
     "city/bank-wall-finishes.js",
+    "city/bank-floor-lights.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
