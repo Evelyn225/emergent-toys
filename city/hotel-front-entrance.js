@@ -1,7 +1,7 @@
 // Paired glass leaves frame the native exit cells; they add no walking collider.
 // Only the unobstructed glass carries the existing lightweight neighbourhood ray.
-function HOTEL_FRONT_ENTRANCE(x,y) {
-  const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+function HOTEL_FRONT_ENTRANCE(x,y,frameColor=GRAY) {
+  const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,frameColor);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
   const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&hotelFittingText(i,-HIT.u,HIT.w,t,'EXIT',0,2.515,.13,.20,C(GREEN,12),BG[i],-1))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=-v;};
@@ -26,11 +26,15 @@ function hotelEntranceExterior(r) {
   candidates.sort((a,b)=>Math.hypot(a.x-ret[0],a.y-ret[1])-Math.hypot(b.x-ret[0],b.y-ret[1]));
   const v=candidates[0];v.up=outdoorGroundHeight(v.x,v.y);return v;
 }
-function hotelEntranceWall(i,u,uStep,z,d,mx,my,L) {
+function hotelEntranceGlass(i,u,z,mx,my) {
   if(my===room.H-1&&roomAt(mx,my)==='D'&&z>.025&&z<2.20){
-    const e=room.hotelEntranceExterior,offset=(Math.abs(u)-7)/10;
+    const e=room.hotelEntranceExterior,offset=(Math.abs(u)-room.W/2)/10;
     homeCityView(i,e.x+e.ny*offset,e.y-e.nx*offset,e.up+z/10,e.nx+e.ny*WH.sl,e.ny-e.nx*WH.sl,(z-eye)/WH.dn);return true;
   }
+  return false;
+}
+function hotelEntranceWall(i,u,uStep,z,d,mx,my,L) {
+  if(hotelEntranceGlass(i,u,z,mx,my))return true;
   return hotelLobbyWallFinish(i,u,uStep,z,d,mx,my,L);
 }
 const HOTEL_ENTRANCE_PROPS=ROOM_DEFS.hotel.props;

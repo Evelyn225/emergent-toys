@@ -2930,3 +2930,23 @@ case1.2–1.3→3.2–3.3, face1.6–1.8→6.9–7.1. Initial fitted macro9.4–
 reduced locally, no broad speedup claim. #314 full CI green40881136740. Next audit
 remaining lobby entrances and motel wall/window/entry/brochure/table finishes,
 closing6 then9. Reserved files/shared home+shop helpers remain untouched.
+
+Codex active: codex/grand-lobby-entrance owns new grand-lobby-entrance.js,
+focused coverage and a small hotel-front-entrance.js refactor: optional frame
+colour, reusable native-D glass sampling with the actual room centre. Default
+standard-hotel geometry/view must stay identical. Grand wrapper loads after
+hotel-polish, preserving its quiet wall finish and native exit behavior; actual
+building/return metadata supplies the inexpensive street view. Reserved files
+and shared home/shop helpers untouched. #316 clock mergeda7e08a0.
+
+Codex codex/grand-lobby-entrance complete: fitted brass paired doors and scaling
+EXIT plaque at Grand's own D span; actual return-side street/ground view with
+room-centred parallax. Reused hotel-front-entrance default shape unchanged;
+all six standard hotel PNG pairs byte-identical. Eight Grand+standard geometry/
+view/scaling/exit/gameplay checks +three Node files pass; five isolated defects
+rejected. Reviewed12 final clear-floor Grand close/wide/oblique/night/bar/sign
+comparisons, no errors. ABAB177x66 maina7e08a0: wide1.0–1.8→1.7–1.8ms(variable),
+leaves.8→3.0–3.1, sign.8–1.0→2.9–3.2, bars.8–.9→2.2–2.7. No speedup claim.
+Next remaining motel wall/window/front+roof-entry architecture, table/brochure
+closing audit (their stock helpers already have fitted construction), closing6
+then9. Shared home/shop helpers and reserved files remain untouched.
