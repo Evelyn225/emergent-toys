@@ -2950,3 +2950,29 @@ leaves.8→3.0–3.1, sign.8–1.0→2.9–3.2, bars.8–.9→2.2–2.7. No spee
 Next remaining motel wall/window/front+roof-entry architecture, table/brochure
 closing audit (their stock helpers already have fitted construction), closing6
 then9. Shared home/shop helpers and reserved files remain untouched.
+
+Codex active: codex/motel-office-architecture owns new motel-office-architecture.js,
+focused coverage and a small hotel-front-entrance.js extraction of unchanged
+room-centred city-view math for doors and windows. Original motel grid, collision,
+clerk/rent/roof/return policies stay intact. Reuse fitted casings, front/service
+doors and wall builders unchanged; local instance materials/signs and a temporary
+layout proxy fit motel windows/door extents. Vacancy sign hangs from the real
+window head; MOTEL plaque mounts to the wall. Standard/Grand entrance pixels must
+stay unchanged. Reserved storefronts/eateries/rooms/helpers untouched. #317 merged
+cc4d111; #315/#316 full CI green40882819231/40889315114. Next motel closing audit,
+then pass6 completion and9.
+
+Codex codex/motel-office-architecture complete: fitted paired front doors, local
+steel roof-stair door, two supported window casings, wall-mounted MOTEL and
+window-head-hung blinking VACANCY signs, quiet plaster and fitted recessed timber
+panels/skirting/chair rails/cornices. Original plan/collision/booking/roof/exit
+policies retained; unchanged shared builders. Three new checks plus seven
+standard/Grand entrance and motel key-rack controls pass; three Node files pass.
+Six isolated window/sill/hanger/trim/view/draw/blink defects rejected against the
+passing final test. Reviewed18 clear-floor before/after close/wide/oblique/night/
+wall/window/door/sign images. All12 standard+Grand entrance PNG pairs identical.
+ABAB177x66 maincc4d111: wide1.8→3.1–3.2ms, window1.0–1.2→3.3–3.4,
+roof1.0–1.2→3.3–3.4, panels2.4–2.6→3.5–3.6; added detail/view cost,
+no speedup claim. #317 full CI green40892588064. Next pass6 closing audit of
+native rooms/lobbies, already-built table/brochchure fixtures and amenities;
+then civic pass9. Reserved files/shared home+shop helpers remain untouched.
