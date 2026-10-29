@@ -3163,3 +3163,26 @@ cross2.0–2.1→2.6–2.7, symbol1.0→2.6–2.8. Added detail, no speedup clai
 subsequent fitted wall guards/skirting/cornices use its final footprint, then
 hospital floor/ceiling/front entrance and other civic rooms. Reserved/shared
 helpers untouched; common clock/text rays called unchanged.
+
+Codex active: codex/hospital-water-cooler owns new hospital-water-cooler.js,
+focused coverage and manifest entry. Replace the old blue block with a grounded
+white cabinet flush to the west wall, ribbed inverted bottle, real dispensing
+recess, supported hot/cold taps with hollow nozzles, and joined grated drip tray.
+Prepare geometry/materials/orientation once. Existing clinical/seating/exit flows
+remain; no shared helper or reserved file changes. #326 mergedae99221. Next wall
+guards/skirting/cornices must fit this final cooler footprint, then hospital
+floor/ceiling/front entrance and other civic rooms.
+
+Codex codex/hospital-water-cooler complete: replaces the blue block with a grounded
+wall-flush white cabinet, moulded ribbed bottle, real6cm dispensing recess,
+supported red/blue taps with hollow nozzles and an open joined13-bar drip grate.
+All32 prepared parts, bounds and materials cache once. Two focused actual-ray/
+native/collision/route checks and three Node files pass; nine isolated wall-gap/
+floating-foot/bottle/flat-recess/closed-bore/filled-grate/old-block/ghost-collision/
+omitted-draw defects fail assertions. Reviewed16 clear-floor close/wide/oblique/
+night/bottle/tap/tray/crouched-foot comparisons, no errors. Serial ABAB177x66
+mainae99221: wide2.0–2.2→2.4–2.5ms, cabinet1.6–1.7→2.9, bottle1.5→2.3,
+taps1.9–2.0→3.4. Added detail cost~.2–1.5ms here; no speedup claim.
+#326 full CI green40935866946. Next fitted hospital wall guards/skirting/cornices
+using final fixtures, then floor/ceiling/front entrance and remaining civic rooms.
+Reserved files/shared helpers unchanged.
