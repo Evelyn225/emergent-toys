@@ -3091,3 +3091,27 @@ no speedup claim. Shared clock/ellipsoid helpers called unchanged, no figure or
 rooms.js edits. #320/#321 full CI green40899128073/40900788264; #322 running.
 Next hospital bay curtains (old floating striped planes), service doors/wall
 fittings, surfaces/cooler, then other civic rooms. Reserved ownership intact.
+
+Codex active: codex/hospital-bay-curtains owns new hospital-bay-curtains.js,
+focused browser coverage and manifest entry. Three shared thin folded cloth
+panels replace the four floating striped planes; clips join tracks, tracks meet
+right-wall mounts and hangers meet real ceiling roses. Existing hotel curtain
+rays are called unchanged; no reserved or shared helper edits. Native treatment/
+recovery/exit/waiting/bed seating flows stay intact. #323 mergedc20147c. Next
+hospital service doors/wall fittings, surfaces and cooler, then other civic rooms.
+
+Codex codex/hospital-bay-curtains complete: three shared folded cloth dividers
+replace four floating striped planes. Closed3mm front/back/end/hem surfaces,
+clips, tracks, right-wall mounts and ceiling-hung roses join at real datums.
+Indoor normal-driven relief is readable on both fabric sides without weave
+checkerboarding. Two new geometry/native/two-sided-collision checks plus three
+bed/C/occupied-patient controls, two real recovery/exit controls and three Node
+files pass. Eight isolated ceiling/clip/cap/fold/back-light/collision/draw/wall-
+mount defects rejected. Reviewed close/wide/oblique/night/track/hem/ceiling/edge
+views with16 before/after captures, all clear floor/no errors. ABAB177x66 against
+mainc20147c: wide3.7→4.4–4.6ms, cloth2.8→5.6–5.9, track1.6–1.7→3.9–4.6,
+hem4.2–4.3→5.1–7.9(variable); added detail, no speedup claim. Existing hotel
+curtain rays called unchanged; no reserved/shared helper edits. #322/#323 full CI
+green40902200125/40904934096. Next hospital service doors/wall fittings, surfaces,
+water cooler and other civic rooms. Local preview server restarted34066 after
+resume; all failed connection-refused runs were rerun successfully.
