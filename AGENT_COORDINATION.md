@@ -3019,3 +3019,26 @@ Native plan/props/mailboxes/home behavior retained. Next apartment lobby's old
 wall/mailbox patterns: built mailbox cabinet plus quiet finishes/fitted trim,
 then other pass9 civic rooms. Shared/reserved files untouched. #318 CI still
 running; #319 queued when last checked.
+
+Codex active: codex/apartment-lobby-mailboxes owns new
+apartment-lobby-mailboxes.js, focused browser coverage and manifest entry.
+Built closed steel mailbox cabinet with12 numbered doors, real recessed posting
+slots, locks and labels; quiet plaster and fitted base/cornice replace wall
+patterns. Existing home moulding helpers are called unchanged via a temporary
+layout proxy; native grid/collision/entrance/lift/roof actions remain intact.
+No reserved room/helper/facade/lettering edits. #320 merged e2ce4ea. Next other
+apartment lobby surfaces/lighting as needed, then remaining civic rooms.
+
+Codex codex/apartment-lobby-mailboxes complete: wall-mounted closed steel cabinet
+with12 joined doors, backed12mm posting recesses, lock plates and individually
+numbered labels; quiet plaster replaces the old mailbox/wall glyph fields.
+Unchanged home fitters provide grounded skirting and ceiling/corner-joined
+cornices, clearing native front/lift frames. Six new+entrance geometry/native/
+label-order/oblique/context/roof/exit controls and three Node files pass; seven
+isolated mounting/flat-slot/label/paint/draw/reversed-text/context defects rejected.
+Reviewed clear-floor close/wide/oblique/night views with12 before/after captures,
+no page errors. Serial ABAB177x66 maine2ce4ea: wide1.9→2.8ms, cabinet.9→4.5,
+slot.9→5.0–5.1, label.9→5.9. Added macro detail costs~3.6–5ms, no speedup
+claim; geometry/materials cached at construction. #318 full CI green40897176725;
+#319 in progress. Next apartment lobby floor/ceiling-light finish, then hospital
+and other civic interiors. Shared/reserved helpers/files untouched.
