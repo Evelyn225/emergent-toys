@@ -176,6 +176,7 @@
     "city/hospital-beds.js",
     "city/hospital-bay-curtains.js",
     "city/hospital-service-doors.js",
+    "city/hospital-wall-signs.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",

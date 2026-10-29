@@ -3139,3 +3139,27 @@ window1.3–1.4→4.5–4.6, sign2.5–3.6→3.7–4.1(variable). Added detail,
 no speedup claim. Common clock/text helpers unchanged. Next hospital emergency
 sign/cross, fitted wall rail/finishes, surfaces/cooler and remaining civic rooms.
 #324 CI still running when last checked; reserved ownership remains intact.
+
+Codex active: codex/hospital-wall-signs owns new hospital-wall-signs.js,
+focused coverage and manifest entry. Mounted scaling EMERGENCY plaque and a
+closed raised cross/backplate replace the painted title/old cross. Move the
+cross to x9.2 above the clear treatment aisle; old x12.55 was hidden behind the
+taller bay curtain. Cache joined symbol prisms and mounted screws; use common
+clock/text helpers unchanged. Preserve staff-door wrapper, native plan, clinical
+flows, routes and reserved ownership. #325 mergede64c42e. Next fitted hospital
+rail/wall finishes, floor/ceiling/cooler, then remaining civic rooms.
+
+Codex codex/hospital-wall-signs complete: mounted scaling EMERGENCY housing and
+closed raised cross/backplate with supported screws replace painted wayfinding.
+The cross moves to x9.2 above the clear treatment aisle; the obsolete x12.55
+symbol is removed from behind the tall curtain. Joined cross prisms share exact
+arm/stem boundaries. Two new geometry/cache/native/scaling/context/visibility/
+route checks plus two staff-door controls and three Node files pass; six isolated
+mount/symbol/joint/hidden-location/old-paint/omitted-title defects rejected.
+Reviewed16 clear-floor close/wide/oblique/night/cross/screw/side comparisons,
+no errors. ABAB177x66 maine64c42e: wide3.4–3.5→3.6–3.8ms, title2.4–2.5→2.8–2.9,
+cross2.0–2.1→2.6–2.7, symbol1.0→2.6–2.8. Added detail, no speedup claim.
+#324/#325 full CI green40931509708/40933408694. Next water cooler first so the
+subsequent fitted wall guards/skirting/cornices use its final footprint, then
+hospital floor/ceiling/front entrance and other civic rooms. Reserved/shared
+helpers untouched; common clock/text rays called unchanged.
