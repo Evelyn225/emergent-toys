@@ -2692,3 +2692,23 @@ completed against unchanged main. #302/#303 full CI green40775012801/40775450517
 Next standard-hotel reception desk (primitive BX), using unchanged SHOP_COUNTER
 with fitted cached service bell/clipboard, then lobby wall/service/entry fixtures
 and closing pass6 before9. Reserved files remain untouched.
+
+#304 merged (head22a71e6, merge0cf9cf0). Codex active
+codex/hotel-reception-desk: new hotel-reception-desk.js, only the standard-hotel
+counter expression in rooms.js, manifest/bundle/focused test. Call SHOP_COUNTER
+unchanged for the old exact footprint/height. Add a separate cached decorative
+service bell and supported clipboard/paper/clip; retain original counter collider,
+clerk/desk access and bookRoom behavior. No shared-builder or reserved owner-file
+edits. Next standard lobby wall/service/entry fixtures, closing6 and9.
+
+Reception desk complete on codex/hotel-reception-desk: two focused actual-
+geometry/native/route/E-check-in browser checks and three Node files pass.
+Four isolated clipboard-support/bell-joint/collider/omitted-draw defects fail
+assertions. Reviewed10 final clear-floor close/wide/oblique/night before/after
+views, no errors. Visual review flattened the bell to a realistic12.2cm diameter,
+7.1cm height. Clipboard layers and bell caps/joins have real ray-tested contacts;
+new fittings reuse prepared parts/materials. Counter collider and clerk position
+are unchanged; shared builders are called unchanged. ABAB177x66 main0cf9cf0→after:
+wide2.4–2.5→2.5–2.7ms, clipboard2.5→4.8–5.0, bell2.3→4.3–4.4.
+Added macro detail~2–2.5ms here, no broad speedup claim. Next standard lobby
+walls/trim (old glyph field), then remaining entry/service fixtures, closing6/9.
