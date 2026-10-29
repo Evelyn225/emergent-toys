@@ -35239,6 +35239,10 @@ function hotelDefinition(tier){
  }};
 }
 ROOM_DEFS.motelRoom=hotelDefinition(0);ROOM_DEFS.hotelroom=hotelDefinition(1);ROOM_DEFS.hotelSuite=hotelDefinition(2);
+const HOTEL_RECEPTION_PROPS=ROOM_DEFS.hotel.props;
+ROOM_DEFS.hotel.ceil='hotel';
+ROOM_DEFS.hotel.props=r=>[...HOTEL_RECEPTION_PROPS(r),
+ ...[[3.2,3.8],[7.7,5.3],[12,2.5]].map(([x,y])=>HOTEL_CEILING_LIGHT(x,y,r.def.height||3,1))];
 const GRAND_LOBBY_PROPS=ROOM_DEFS.grandhotel.props;
 ROOM_DEFS.grandhotel.grid=boxRoom(24,17);ROOM_DEFS.grandhotel.height=5.2;ROOM_DEFS.grandhotel.wall=hotelLobbyWall;
 ROOM_DEFS.grandhotel.props=r=>[...GRAND_LOBBY_PROPS(r).filter(p=>!(p.box&&p.box.z1===.55&&p.box.z0===0&&p.box.hl===1.1)),
