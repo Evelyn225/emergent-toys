@@ -2976,3 +2976,23 @@ roof1.0–1.2→3.3–3.4, panels2.4–2.6→3.5–3.6; added detail/view cost,
 no speedup claim. #317 full CI green40892588064. Next pass6 closing audit of
 native rooms/lobbies, already-built table/brochchure fixtures and amenities;
 then civic pass9. Reserved files/shared home+shop helpers remain untouched.
+
+Codex active: codex/hotel-closing-audit, based on merged #318 (5e573fc).
+Read-only final review of motel/standard/Grand lobbies and all three room tiers,
+including the already-built motel brochure rack/tea table, routes, amenities,
+private door policies and retained crime/roof/booking flows. This chunk owns
+append-only audit notes; no reserved or shared helper edits. Next civic pass9.
+
+Codex codex/hotel-closing-audit complete: reviewed18 day/reverse/night native
+views across motel/standard/Grand lobbies and all three room tiers, all from
+clear floor with no page errors. Read-only actual-ray audit confirms motel tea
+table's six joined grounded parts and brochure rack's31 built parts/backing
+against east wall, plus desk/roof/brochure routes. Eight existing controls pass:
+automatic non-home WC closing with home-state preservation, suite dining gaps,
+real seating/kitchen/TV actions, both fitted coffee-table routes, all three window
+tiers, motel+hotel actual booking, and independent painting theft/inspection/save.
+No product, bundle or render-cost changes in this documentation chunk; #318's
+serial ABAB is the final new-geometry comparison. Pass6's first quality pass is
+complete. Further global lighting/distant-lettering tuning belongs with its
+later checklist passes. Next9: apartment-lobby entrance/lift first, then remaining
+mailboxes/wall finishes and other civic rooms. Reserved ownership preserved.
