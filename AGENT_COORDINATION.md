@@ -2873,3 +2873,19 @@ speedup claim. #311 CI40814996820: only shard1 fails, scene-render cleanup calls
 leaveCar after taxi auto-exit (me=null); three other shards +Node passed. Next
 fix this test cleanup race separately, then motel wall/entry/bell/brochure/table
 remaining audit and Grand clock/plinth, closing6 then9. No shared helper edits.
+
+Codex active: codex/scene-taxi-cleanup owns only the scene-render fixture's
+room transition in test/browser/ascii-city.browser.test.cjs and appended notes.
+Deterministic completed-fare preload reproduces #311 CI's null-me/exitSpot crash
+on the old unconditional cleanup. Guard the second exit if the taxi has already
+finished naturally; keep live rendering/audio and the scene coverage. No product
+or bundle changes. #313 TV merged9bc7c3e; #312 full CI green40816089704.
+
+Codex codex/scene-taxi-cleanup complete: conditional fixture cleanup handles
+normal fare completion between the taxi and room scenes. Original fixture fails
+with a forced completed fare (same null-me/exitSpot CI stack); corrected fixture
+passes both forced and ordinary live scene sweeps, including audio/nonblank
+canvas checks. Product/bundle unchanged. Artifacts ignored scene-taxi-*.log and
+scene-taxi-autoexit-preload.cjs. #312 full CI green40816089704; #313 merged9bc7c3e.
+Next remaining motel wall/entry/bell/brochure/table audit and Grand clock/plinth,
+then closing6 and9. Reserved files and shared home/shop helpers stay untouched.

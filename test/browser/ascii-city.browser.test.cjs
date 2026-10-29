@@ -792,7 +792,8 @@ test('every mode renders without errors', async () => {
       siren: "mode = 'walk'; plat = ride = null; [px,py] = citySourcePoint(9 * 8 + 1,10 * 8 + 4); spawnEmergency()",
       talk: "const p = people.find(p => !p.hidden); talkTo(p)",
       taxi: "me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; setDest(5)",
-      room: "leaveCar(); enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [6, 6, -Math.PI / 2])",
+      // Live frames above may already have completed the fare and exited the taxi.
+      room: "if (me) leaveCar(); enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [6, 6, -Math.PI / 2])",
       roof: "leaveRoom(); mode = 'roof'; roofH = 5; [px,py] = citySourcePoint(2 * 8 + 3.5,2 * 8 + 3.5)",
       cafe: "mode = 'walk'; enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a] }, [5, 6.3, -Math.PI / 2])",
       books: "enterRoom('books', { word: 'BOOKS', neon: GREEN, ret: [px, py, a] }, [4.5, 5, -Math.PI / 2])",
