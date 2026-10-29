@@ -2761,3 +2761,21 @@ ABAB177x66 mainca228bd→after: wide3.5→3.9ms, leaves1.3→3.7–3.8,
 sign2.4–2.5→3.9–4.0, buttons1.5→3.5–3.6. No broad speedup claim.
 #306 full CI green40809125896. Next standard lobby front entrance, then remaining
 motel/Grand wall/service fixtures, suite curtain supports, closing6 and9.
+
+Codex active: codex/hotel-front-entrance owns new city/hotel-front-entrance.js,
+its focused browser test and append-only manifest/bundle/notes. Fitted paired
+entrance frames/push bars and EXIT plaque keep native D cells and collision;
+existing lightweight neighbourhood rays supply glass views. Shared helpers and
+Claude's reserved bathroom/DINER/bootstrap/facade/lettering files stay untouched.
+Next remaining motel/Grand service details and suite curtain supports before
+pass6 closing audit and9. #307 merged; its full CI is still running.
+
+Codex codex/hotel-front-entrance complete: fitted paired entrance geometry and
+scaling EXIT plaque; unobstructed glass reuses unchanged homeCityView with the
+actual hotel's return-side boundary/ground, orientation and parallax. Native D
+cells and E/walking exits unchanged. Two new checks +four lift/light/booking
+controls and three Node files pass; four isolated defects rejected. Reviewed12
+final clear-floor close/wide/oblique/night comparisons. ABAB177x66 main81d19b2:
+wide2.1→2.7ms, leaves1.2→2.8, sign1.2→2.5, bars1.0–1.1→2.5. No broad
+speedup claim. Next suite curtain supports, remaining motel/Grand fixtures,
+pass6 closing audit, then9. Reserved/shared helpers remain untouched.
