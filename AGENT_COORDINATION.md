@@ -2889,3 +2889,23 @@ canvas checks. Product/bundle unchanged. Artifacts ignored scene-taxi-*.log and
 scene-taxi-autoexit-preload.cjs. #312 full CI green40816089704; #313 merged9bc7c3e.
 Next remaining motel wall/entry/bell/brochure/table audit and Grand clock/plinth,
 then closing6 and9. Reserved files and shared home/shop helpers stay untouched.
+
+Codex active: codex/motel-service-bell owns new motel-service-bell.js and its
+focused test; hotel-reception-desk.js only extracts its existing four bell
+profiles unchanged into hotelReceptionBellParts for these two Codex fixtures.
+The motel props wrap replaces the old decorative bell at the same position on
+the same counter, adding no collider. Existing hotel desk shape must remain
+identical. Shared home/shop helpers and reserved storefronts.js stay untouched.
+#314 taxi fixture race fix merged8a17ec1. Next remaining motel wall/entry,
+brochure/table and Grand clock/plinth audit before closing6 and9.
+
+Codex codex/motel-service-bell complete: four closed fitted bell parts replace
+old drum/dot at the same position, supported by the actual native countertop.
+Profiles extracted unchanged from hotel-reception-desk.js; helper belongs only
+to these Codex fittings. Four motel+hotel geometry/cache/visibility/booking checks
++three Node files pass; three isolated defects rejected. Reviewed12 final clear-
+floor motel close/wide/oblique/night/button/foot comparisons; all five hotel
+comparison PNG pairs byte-identical. ABAB177x66 main8a17ec1: wide3.3–3.6→3.3–3.5ms,
+bell3.8–4.1→3.9–4.0, button3.8–4.1→3.9; overlapping ranges, no speedup claim.
+Next Grand clock/plinth, remaining motel wall/entry/brochure/table audit,
+closing6 then9. Reserved files and shared home/shop helpers remain untouched.
