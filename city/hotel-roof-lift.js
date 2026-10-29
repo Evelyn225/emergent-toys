@@ -4,7 +4,7 @@ function HOTEL_ROOF_LIFT(x,y) {
   const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
   const leaf=(i,t,L)=>{const fine=coveDetail(t,.4),grain=fine?Math.sin(HIT.u*180+HIT.w*6)*.06*fine:0;BG[i]=C(GRAY,2.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'ROOF',0,2.515,.13,.20,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'ROOF',0,2.515,.13,.20,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=v;};
   box('reveal',0,.012,.86,.012,.025,2.18,0,dark);
   box('threshold',0,.055,1,.055,0,.025,.006,metal);

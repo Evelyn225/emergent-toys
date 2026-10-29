@@ -35269,13 +35269,14 @@ function hotelLobbyWallFinish(i,u,uStep,z,d,mx,my,L) {
   BG[i]=C(z<.945?BRICK:STONE,(z<.945?2.6:3.4)+L*.3);set(i,' ',0);return true;
 }
 ROOM_DEFS.hotel.wall=hotelLobbyWallFinish;
-// Front-facing hotel fittings use local +X lettering on a +Y face. Rebuild
+// Hotel fittings use local +X lettering on a +Y face, or the reversed X on
+// a -Y face (facing=-1). Rebuild
 // the wall sampler's ray context for that face instead of using the last room
 // wall's context, including the exact adjacent-column spacing at oblique views.
-function hotelFittingText(i,u,z,t,text,u0,z0,width,height,color,background) {
+function hotelFittingText(i,u,z,t,text,u0,z0,width,height,color,background,facing=1) {
   const q=(2*(i%cols+.5)/cols-1)*tf,rx=dx-dy*q,ry=dy+dx*q;
   const dn=WH.dn,sl=WH.sl,wc=WH.wc;
-  WH.dn=Math.max(1e-6,Math.abs(ry*t));WH.sl=rx/(Math.abs(ry)||1e-6);WH.wc=u;
+  WH.dn=Math.max(1e-6,Math.abs(ry*t));WH.sl=facing*rx/(Math.abs(ry)||1e-6);WH.wc=u;
   try{return wallText(i,u,t/(projX*Math.max(1e-6,Math.abs(ry+dx/projX))),z,t,text,u0,z0,width,height,color,background);}
   finally{WH.dn=dn;WH.sl=sl;WH.wc=wc;}
 }
@@ -35285,7 +35286,7 @@ function HOTEL_ROOF_LIFT(x,y) {
   const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
   const leaf=(i,t,L)=>{const fine=coveDetail(t,.4),grain=fine?Math.sin(HIT.u*180+HIT.w*6)*.06*fine:0;BG[i]=C(GRAY,2.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&wallText(i,HIT.u,t/projX,HIT.w,t,'ROOF',0,2.515,.13,.20,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'ROOF',0,2.515,.13,.20,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=v;};
   box('reveal',0,.012,.86,.012,.025,2.18,0,dark);
   box('threshold',0,.055,1,.055,0,.025,.006,metal);
@@ -35305,7 +35306,7 @@ ROOM_DEFS.hotel.liftWall=hotelLobbyWallFinish;
 function HOTEL_FRONT_ENTRANCE(x,y) {
   const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&wallText(i,-HIT.u,t/projX,HIT.w,t,'EXIT',0,2.515,.13,.20,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&hotelFittingText(i,-HIT.u,HIT.w,t,'EXIT',0,2.515,.13,.20,C(GREEN,12),BG[i],-1))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=-v;};
   box('threshold',0,.055,1,.055,0,.025,.006,metal);
   for(const e of [-1,1])box('jamb',e*.93,.055,.07,.055,.025,2.20,.008,metal);
@@ -35394,7 +35395,7 @@ function HOTEL_STAFF_DOOR(x,y) {
   const frame=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,7);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
   const paint=(i,t,L)=>{BG[i]=C(GREEN,2.3+L*.28*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&(wallText(i,HIT.u,t/projX,HIT.w,t,'STAFF',0,1.88,.10,.12,C(WHITE,13),BG[i])||wallText(i,HIT.u,t/projX,HIT.w,t,'ONLY',0,1.70,.10,.12,C(WHITE,13),BG[i])))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,'STAFF',0,1.88,.10,.12,C(WHITE,13),BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,'ONLY',0,1.70,.10,.12,C(WHITE,13),BG[i])))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=v;};
   box('reveal',0,.012,.56,.012,.025,2.20,0,dark);
   box('threshold',0,.055,.68,.055,0,.025,.006,metal);
