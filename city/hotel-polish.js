@@ -22,7 +22,7 @@ function hotelDefinition(tier){
  POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
  if(tier)p.push(FITTED_KITCHEN(...stove,tier===1?1.3:1.7,.38,Math.PI/2,tier===2?WHITE:BRICK),HOME_FRIDGE(w-1.4,h-1.7,{angle:Math.PI/2,height:1.7}),...tableBox(diningX,diningY,tier===2?1.1:.65,.55),...homeChair(diningX,diningY+1.2,0,-1));
  if(tier)p.push(HOTEL_COFFEE_TABLE(sofa[0],sofa[1]-1.25,tier));
- if(tier===2)for(const side of [-1,1])p.push(BX(w/2+side*2.9,1.06,.19,.05,.12,3.25,(i,t,L)=>{BG[i]=C(GREEN,2+L*.15);return set(i,fract(HIT.u*35)<.15?'|':' ',C(YEL,L*.7)),true;}));
+ if(tier===2)p.push(...hotelSuiteCurtains(r));
  if(tier===2)p.push(...tableBox(10.9,3.6,1.2,.55),...homeChair(10.9,4.8,0,-1),POT_PLANT(9.7,1.5,1.9),...couch(4,10,1.5,1,0,STONE),...tableBox(6.3,10,.6,.8));
  return p;
  }};

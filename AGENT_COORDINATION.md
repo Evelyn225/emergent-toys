@@ -2779,3 +2779,20 @@ final clear-floor close/wide/oblique/night comparisons. ABAB177x66 main81d19b2:
 wide2.1→2.7ms, leaves1.2→2.8, sign1.2→2.5, bars1.0–1.1→2.5. No broad
 speedup claim. Next suite curtain supports, remaining motel/Grand fixtures,
 pass6 closing audit, then9. Reserved/shared helpers remain untouched.
+
+Codex active: codex/hotel-suite-curtains owns new city/hotel-suite-curtains.js,
+its focused browser test and only the suite-curtain expression in hotel-polish.js,
+plus append-only manifest/bundle/notes. Thin closed pleated fabric replaces two
+striped boxes; separate supported rods stop at the actual partition. Existing
+curtain collider envelopes and live window openings stay intact. Next remaining
+motel/Grand service fixtures, pass6 closing audit then9. #308 entrance merged.
+
+Codex codex/hotel-suite-curtains complete: thin closed pleats replace striped
+boxes; clips/rods/wall brackets/finials connect, split runs clear the partition.
+Native colliders/live panes unchanged. Cached edges/normals/views/materials;
+exact rods gain subpixel coverage via unchanged rayRod after visual review
+caught distant dashes. Four new/window browser checks +three Node files pass;
+six isolated defects rejected. Reviewed12 final clear-floor close/wide/oblique/
+night/both-run comparisons. ABAB177x66 mainb3b7f41: wide4.5–4.6→4.6–4.7ms,
+cloth3.6–3.9→4.3, rod2.7–2.8→2.9–3.0. No broad speedup claim. #307 full CI
+green40811169215. Next remaining motel/Grand service fixtures and closing6/9.
