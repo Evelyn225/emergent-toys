@@ -3066,3 +3066,28 @@ mostly overlapping ranges, no speedup claim. Original tile footsteps retained;
 no old hanging fixtures duplicate the new lights. #319 full CI green40898100746;
 #320 running. Next hospital beds/bay furnishings, then its service doors/wall
 fittings and other civic rooms. Shared/reserved files remain unchanged.
+
+Codex active: codex/hospital-beds owns new hospital-beds.js, focused coverage and
+manifest entry. Prepared closed wheeled bed frames, mattresses/sheets/pillows,
+end boards and split head-side safety rails replace the two painted bed pairs.
+Move each existing seat/patient instance to its supported clear long edge so
+legs clear the mattress and rails; no figure/shared room/helper edits. Preserve
+room plan, treatment/exit interactions, waiting seats and other bay fixtures.
+#322 merged419c2c4. Next hospital curtains/service doors/wall fittings and the
+remaining civic interiors. Reserved ownership remains intact.
+
+Codex codex/hospital-beds complete: two prepared closed wheeled steel frames,
+actual caster/fork/axle/leg assemblies, supported platform/mattress/sheet/pillow,
+joined end boards and frame-welded split head-side safety rails replace the
+legacy painted base/mattress pairs. Existing C seats and patient move to the
+supported long edge (y-.37), facing outward with clear legs/rail space. Three
+new geometry/native/occupied-patient/actual-caster-pixels/real-C checks, two real
+hospital recovery/exit controls and three Node files pass. Eight isolated wheel/
+leg/pillow/bracket/old-box/seat/draw/caster-visibility defects rejected. Reviewed
+clear-floor close/wide/oblique/night/rail/occupied-seat and crouched caster views,
+16 before/after captures, no errors. ABAB177x66 main419c2c4: wide1.4–1.7→2.9–3.0ms,
+bed1.5–1.7→4.3–4.4, caster1.4→2.2, pillow1.7–1.9→5.4–5.6; added detail,
+no speedup claim. Shared clock/ellipsoid helpers called unchanged, no figure or
+rooms.js edits. #320/#321 full CI green40899128073/40900788264; #322 running.
+Next hospital bay curtains (old floating striped planes), service doors/wall
+fittings, surfaces/cooler, then other civic rooms. Reserved ownership intact.
