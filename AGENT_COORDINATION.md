@@ -3115,3 +3115,27 @@ curtain rays called unchanged; no reserved/shared helper edits. #322/#323 full C
 green40902200125/40904934096. Next hospital service doors/wall fittings, surfaces,
 water cooler and other civic rooms. Local preview server restarted34066 after
 resume; all failed connection-refused runs were rerun successfully.
+
+Codex active: codex/hospital-service-doors owns new hospital-service-doors.js,
+focused browser coverage and manifest entry. Fitted paired staff leaves have
+actual circular bores, recessed frosted panes and annular trims, grounded frames,
+supported plates/hinges and a wall-mounted scaling STAFF ONLY plaque. Native
+solid staff wall, hospital treatment/exit/bed routes stay intact; suppress only
+its old painted door/header patch. Common clock/text rays called unchanged; no
+reserved room/helper edits. #324 merged146d079. Next remaining hospital wall
+fittings, surfaces/cooler and other civic interiors.
+
+Codex codex/hospital-service-doors complete: grounded fitted paired staff leaves,
+real circular bores (including grazing inner-wall hits), recessed closed frosted
+panes/annular trims, supported plates/hinges and a mounted scaling STAFF ONLY
+plaque replace the old painted door/header. The fitted frame has its measured
+solid collider; the underlying staff wall stays solid. Two geometry/cache/native/
+text/context/collision/route checks, two hospital recovery/exit controls and three
+Node files pass. Eight isolated threshold/bore/pane/bore-wall/plate/header/draw/
+frame-collision defects rejected. Reviewed16 clear-floor close/wide/oblique/night/
+window/sign/hinge/plate comparisons, no errors. ABAB177x66 main146d079:
+wide2.8–3.5→3.6–3.8ms(variable baseline), leaves1.3–1.4→3.6–3.7,
+window1.3–1.4→4.5–4.6, sign2.5–3.6→3.7–4.1(variable). Added detail,
+no speedup claim. Common clock/text helpers unchanged. Next hospital emergency
+sign/cross, fitted wall rail/finishes, surfaces/cooler and remaining civic rooms.
+#324 CI still running when last checked; reserved ownership remains intact.
