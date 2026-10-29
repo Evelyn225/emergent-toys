@@ -2833,3 +2833,23 @@ automatic washroom doors closed. ABAB177x66 maine2f8b8d: wide4.0–4.4→4.3–4
 (variable), rack2.6–2.9→3.9–4.1, tag1.0–1.1→3.2–3.4. No broad speedup claim.
 #309 full CI green40813380183. Next apply/audit this sampler on Codex hotel
 plaques, remaining motel TV/wall/entry and Grand clock/plinth, closing6 then9.
+
+Codex active: codex/hotel-plaque-sampling owns hotel-fittings-text.js plus
+only the plaque shaders in hotel-roof-lift.js, hotel-front-entrance.js and
+hotel-staff-door.js, focused coverage and bundle/notes. Baseline oblique probes
+show incomplete/mixed lettering on those models. Apply the local face sampler
+from #311, with reversed X for the entrance's south face. Global lettering and
+Claude's reserved files remain untouched. Geometry/actions stay unchanged.
+
+Codex codex/hotel-plaque-sampling complete: face-correct text on roof/EXIT/
+STAFF ONLY plaques, with reversed X on the south-facing entrance; WH restored.
+Baseline EXIT/staff oblique views lost letters; nine native camera checks now
+require every letter once (including legitimate repeated O/F) and no context
+leak. Four existing native scaling/action/tag checks +three Node files pass.
+Four isolated letter/old-exit/old-staff/context defects rejected. Reviewed24
+final close/wide/oblique/night comparisons, no errors. Roof oblique camera9,6.4
+avoids clerk/partition occlusion. Serial ABAB177x66 main5d222d8: changes within
+~.2ms, overlapping repeated ranges across three fixtures; no speedup claim.
+#310 full CI green40813988428. Next motel office TV, remaining motel wall/entry
+finishes and Grand clock/plinth; pass6 closing audit then9. Global lettering,
+Claude's reserved files, shared home/restaurant helpers and actions untouched.
