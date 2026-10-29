@@ -2670,3 +2670,25 @@ Bundle freshness passes; production audio/geometry and bundle are unchanged.
 No render benchmark/visual rerun applies to this test-only chunk. Artifacts:
 work/backlog-review/fireworks-{worst-case,fixed,test-probes}*. Next monitor
 #300–#302/#303 CI, then standard-hotel lobby light fittings and remaining6/9.
+
+#303 merged (heada3ad908, merge4b98b6d); #301 full CI green40772754849.
+Codex active codex/hotel-lobby-lights: hotel-polish.js lobby-only props/ceiling
+hook, bundle and new focused browser test. Reuse HOTEL_CEILING_LIGHT unchanged
+for standard-hotel reception, waiting and washroom zones at the native height.
+Remove its painted ceiling dots through the existing quiet hotel finish once
+fixtures exist. Keep motel battens, Grand chandelier, all private-room fixtures,
+plans, desk/exit/check-in/bathroom interactions and shared helpers unchanged.
+Next lobby/service entries and reception/wall fixtures, closing6 then9.
+
+Standard lobby lights complete: four new/private fixture geometry/native/
+check-in browser controls and three Node files pass. Three isolated ceiling-gap,
+painted-ceiling and omitted-draw defects fail assertions. Reviewed10 final
+clear-floor close/wide/oblique/night/washroom before/after images, no errors.
+ABAB177x66 main4b98b6d→after: wide2.1–2.3→2.1–2.2ms,
+close1.6–1.8→2.4–2.5. Existing shared fixture builder is unchanged; motel
+battens, Grand chandelier and private-room lights retain their own placements.
+Environment restart interrupted the initial review only; resumed server/review
+completed against unchanged main. #302/#303 full CI green40775012801/40775450517.
+Next standard-hotel reception desk (primitive BX), using unchanged SHOP_COUNTER
+with fitted cached service bell/clipboard, then lobby wall/service/entry fixtures
+and closing pass6 before9. Reserved files remain untouched.
