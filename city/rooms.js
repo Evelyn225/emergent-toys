@@ -1072,17 +1072,14 @@ function roomFloor(i, r, x, rx, ry) {
       }
       return homeFloorFinish(i,wx,wy,L,homeBalconyPavingFootprint(d,eye));
     }
-    case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
     case 'royal': {
       const border = Math.abs(wx - 4.5) > 3 || Math.abs(wy - 3.5) > 2;
       const motif = Math.abs(fract(wx / 0.7) - 0.5) + Math.abs(fract(wy / 0.7) - 0.5) < 0.13;
       BG[i] = C(BRICK, 1 + f);
       return set(i, border ? '=' : motif ? '+' : ' ', C(YEL, L * (border ? 1.3 : 0.7)));
     }
-    case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }
     case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
-    case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);

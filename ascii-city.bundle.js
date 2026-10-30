@@ -17482,17 +17482,14 @@ function roomFloor(i, r, x, rx, ry) {
       }
       return homeFloorFinish(i,wx,wy,L,homeBalconyPavingFootprint(d,eye));
     }
-    case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
     case 'royal': {
       const border = Math.abs(wx - 4.5) > 3 || Math.abs(wy - 3.5) > 2;
       const motif = Math.abs(fract(wx / 0.7) - 0.5) + Math.abs(fract(wy / 0.7) - 0.5) < 0.13;
       BG[i] = C(BRICK, 1 + f);
       return set(i, border ? '=' : motif ? '+' : ' ', C(YEL, L * (border ? 1.3 : 0.7)));
     }
-    case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }
     case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
-    case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
@@ -36843,6 +36840,35 @@ function MUSEUM_ROPES(x,y) {
   }
   return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:reach*1.5,museumRopes:{parts}};
 }
+// The four floors most shops, restaurants and leisure rooms share, without their
+// glyph fields. Style names stay, so footsteps and room definitions don't change.
+function sharedTileFinish(i,wx,wy,L,footprint) {
+  const joint=Math.max(coveGroove(wx,.6,.004,footprint),coveGroove(wy,.6,.004,footprint));
+  const check=footprint>.3?.5:(Math.floor(wx/.6)+Math.floor(wy/.6))&1; // (its average once a pixel spans most of a tile)
+  BG[i]=C(GRAY,2.6+check*1+L*.28-7*joint);set(i,' ',0);return true;
+}
+function sharedConcreteFinish(i,wx,wy,L,footprint) {
+  const joint=Math.max(coveGroove(wx,4,.008,footprint),coveGroove(wy,4,.008,footprint));
+  BG[i]=C(GRAY,1.9+L*.22-6*joint);set(i,' ',0);return true;
+}
+// Loud loop-pile with a repeat of coloured flecks. They go before they can shimmer.
+function sharedCarpetFinish(i,wx,wy,L,footprint) {
+  set(i,' ',0);
+  const pile=1.3+L*.14;
+  if(footprint<.12) {
+    const h=hash(Math.floor(wx*4),Math.floor(wy*4),77);
+    if(h>.72){BG[i]=C(NEON[h*40&3],pile+.6);return true;}
+  }
+  BG[i]=C(GRAY,pile);return true;
+}
+const sharedFloorDepth=r=>homeBalconyPavingFootprint(eye*projY/(r-hor+.5),eye);
+Object.assign(ROOM_FLOORS,{
+  tile:(i,f,wx,wy,r,x,L)=>sharedTileFinish(i,wx,wy,L,sharedFloorDepth(r)),
+  concrete:(i,f,wx,wy,r,x,L)=>sharedConcreteFinish(i,wx,wy,L,sharedFloorDepth(r)),
+  carpet:(i,f,wx,wy,r,x,L)=>sharedCarpetFinish(i,wx,wy,L,sharedFloorDepth(r)),
+  // The loft's boards, with the fitted floors' filtering and light response.
+  wood:(i,f,wx,wy,r,x,L)=>{homeFloorWood(i,wx,wy,L,sharedFloorDepth(r),1);return true;},
+});
 // Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
 const COAST_GATHERINGS=[];
 function coastPatchClear(x,y,r=.8){
