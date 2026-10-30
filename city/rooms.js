@@ -1021,8 +1021,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (z > STATION_EXIT_Z - STATION_EXIT_H / 2 - 0.04) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, STATION_EXIT_Z, 0.25, STATION_EXIT_H, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
     }
-    if (z > 2.3) return set(i, '=', C(GRAY, L));
-    return fract(u) < 0.08 ? set(i, '|', C(GRAY, L)) : set(i, ':', C(day > 0.3 ? CYAN : WARM, 6 + day * 6));
+    return sharedGlassDoor(i, u, z, L);
   }
   if (c === 'E') { // elevator (or whatever this building has instead: lobbies.js)
     if (D.liftWall) return D.liftWall(i, u, uStep, z, d, mx, my, L);
@@ -1040,19 +1039,11 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : !D.builtSkirting && z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-    if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
-    if (z < 0.95) return set(i, '=', C(GRAY, L));
-    BG[i] = C(WHITE, 1.1 + L * 0.12); // (a solid painted partition standing in the room, not the dotted dark of the far walls)
-    return set(i, fract(z * 2.4) < 0.04 ? '-' : ' ', C(GRAY, L * 0.3));
+    return sharedWallFinish(i, u, uStep, z, d, mx, my, L);
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-  if (D.neon && z > 2.75 && z < 2.85) return set(i, '=', C(R.neon, 15));
-  if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6)); // wainscot
-  if (z < 0.95) return set(i, '=', C(GRAY, L));
-  if (D.posters && hash(Math.floor(u / 1.2), Math.floor(z), mx + my * 10) > 0.8 && fract(u / 1.2) > 0.15 && fract(u / 1.2) < 0.85 && fract(z) > 0.2 && fract(z) < 0.8)
-    return set(i, '%', C(ITEM_COL[hash(Math.floor(u / 1.2), 5) * 8 | 0], L));
-  set(i, '.', C(GRAY, L * 0.3));
+  sharedWallFinish(i, u, uStep, z, d, mx, my, L, D.posters, D.neon ? R.neon : undefined);
 }
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
@@ -1199,21 +1190,19 @@ function roomCeil(i, r, x, rx, ry) {
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
     if(prepareInteriorHanging()){BG[i]=C(BRICK,2);return set(i,' ',0);}
-    const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
-    return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
+    return sharedPendantCeil(i, ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1);
   }
   if (st === 'lantern') { // Light comes from the fitted paper shells below.
     BG[i]=C(BRICK,2);return set(i,' ',0);
   }
   if (st === 'disco') { // spots of coloured light sweeping across the ceiling
-    const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;
-    return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
+    return sharedDiscoCeil(i, wx, wy);
   }
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
-  if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
+  if (st === 'dark') return sharedDarkCeil(i);
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
