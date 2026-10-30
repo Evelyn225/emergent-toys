@@ -3395,3 +3395,51 @@ Serial ABAB177x66 maine10623b: cell4.8–5.2→4.9–5.0ms, close2.1–2.2→3.0
 oblique3.4→4.0–4.2, plaque.9–1.0→1.7–1.8. Detail costs~0–.9ms locally,
 no speedup claim. #342 full CI green40999889183. Next jail wall/floor/ceiling
 finishes then closing review. Reserved files/shared helpers unchanged.
+
+Codex active: codex/jail-wall-finishes owns new jail-wall-finishes.js, focused
+coverage, manifest entry and intentionally updated backing-material assertions
+in owned jail door/window tests. Replace coarse block glyph field with filtered
+world-fixed cinder joints; retain bunk tally marks. Fit plain grounded mop-base
+and ceiling strips through unchanged homeWallMoulding, with init-only actual
+bar-part blockers and a door-envelope cut. Preserve all final fixtures, native
+grid/block, occupants and interactions. #343 merged6a602d9. Next floor/ceiling/
+lights then jail closing audit. Shared/reserved files unchanged.
+
+Codex codex/jail-wall-finishes complete: filtered world-fixed cinder mortar
+replaces the coarse glyph field, with57 cached grounded mop-base and ceiling
+strip parts. Unchanged homeWallMoulding fits around actual bar/sill/band bounds
+and the final door envelope. Native grid/block, occupants and all fixtures stay
+intact. Visual calibration keeps horizontal courses readable across character
+rows; tally scratches now overlay the same mortar instead of replacing a
+rectangular material patch. Two new geometry/cache/real-fixture-clearance/
+filter/world-coordinate/native-mortar/native-strip/tally checks, six final
+door/window controls and three Node files pass. Twelve isolated float/missing-
+cut/collision-slab/mortar/filter/movement/tally/material-patch/old-hook/native-
+base/native-ceiling defects fail assertions. Material-sensitive probes were
+rechecked after calibration. Reviewed18 final clear-view close/wide/oblique/
+night/tally/base/ceiling/door/window comparisons, no errors. Serial ABAB177x66
+main6a602d9: wide3.9–4.1→4.2ms, wall1.1→1.4–1.5, base.9–1.0→1.2,
+ceiling3.5–3.7→3.7–4.0. Detail costs~0–.5ms locally, no speedup claim.
+#343 full CI green41001141916. Shared/reserved helpers unchanged.
+
+Codex wrap-up / next-agent handoff: stopping after this wall chunk at the
+user's request to conserve the remaining weekly usage. Read this file and
+WORLD_QUALITY.md, inspect the working tree, then fetch latest main. Finish no
+second copy of an active chunk. Jail floor/ceiling/lights are NEXT and have not
+been started: replace jailFloor/jailCeil's glyph fields, preserve concrete
+footsteps and the yellow corridor line, fit ten supported caged lights at the
+existing locations, then do the jail closing audit. The final jail bars, bunks,
+guard desk/patrol, CCTV/mug, door and privacy window are merged. Next remaining
+pass9 rooms: gym, laundry, storage and museum. Apartment lobbies, hospital and
+bank first passes are complete; passes4/5/6 were already closed earlier.
+Keep one branch/PR per chunk, actual native geometry/interaction checks and
+isolated assertion-failing probes, close/wide/oblique/night review, serial ABAB
+against exact main. Preserve both agents' notes/manifest entries; rebuild with
+node tools/build-city.cjs. Respect reserved bathroom-quality.js, DINER,
+world-bootstrap.js, facade/global-lettering and Claude ownership until released;
+shared helpers were called unchanged. Do not restore deleted CLOUD_HANDOFF.md.
+Wall validation logs, screenshots and bench runner are local under
+work/backlog-review/jail-walls-*. Final committed coverage is
+city-jail-wall-finishes, city-jail-exit-door and city-jail-west-window browser
+tests. Check this last wall PR's full CI on resumption; local checks pass and
+reviewed merging before full CI completion is authorized.
