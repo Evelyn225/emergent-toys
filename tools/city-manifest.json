@@ -200,6 +200,7 @@
     "city/storage-quality.js",
     "city/museum-shell.js",
     "city/museum-exhibits.js",
+    "city/shared-floors.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
