@@ -22,7 +22,7 @@ test('a shop with its props taken out is walls, floor and ceiling with barely a 
    room.props=[];const W=room.W,H=room.H;let g=0,n=0;const stray={};
    for(const [x,y]of [[1.6,1.6],[W-1.6,1.6],[1.6,H-1.6],[W-1.6,H-1.6]]){
     px=x;py=y;a=Math.atan2(H/2-y,W/2-x);pitch=0;render(0);
-    for(let i=0;i<cols*rows;i++){n++;const c=CH[i];if(c!==' '&&c!==''){g++;if(!/[A-Za-z0-9#]/.test(c))stray[c]=(stray[c]||0)+1;}}
+    for(let i=0;i<cols*rows;i++){n++;const c=CH[i];if(c!==' '&&c!==''){g++;if(!/[A-Za-z0-9]/.test(c)&&!BLOCK_CELLS.includes(c))stray[c]=(stray[c]||0)+1;}}
    }
    // (a few cells are punctuation on signs and menus, like the hyphen in WALK-INS)
    if(Object.values(stray).reduce((t,v)=>t+v,0)>60)bad.push([kind,'painted marks',stray]);

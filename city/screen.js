@@ -34,19 +34,25 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
     return set(i, blockGlyph(text, q, (z0 + bandH / 2 - z) / bandH, uStep / cwid, d / projY / bandH), col), true;
   }
   // Too small for blocks: the word set solid along its middle row, not spread out over the width it would fill.
-  const k = uStep >= cwid ? p : Math.floor((u - u0) / uStep + text.length / 2 + 0.0137);
+  const k = uStep >= cwid ? p : Math.floor(text.length / 2 - columnsToCentre(u, uStep, u0) + 0.0137);
   set(i, oneCell(z - z0, d / projY) && k >= 0 && k < text.length ? text[k] : ' ', col);
   return true;
 }
 
 // is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
 // switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+// How many screen columns from u to u0 along this wall. A column covers more wall the more obliquely the ray meets it,
+// so an even step would lose letters off the far end of an angled word: this is that step's exact integral.
+function columnsToCentre(u, uStep, u0) {
+  const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1;
+  return (D * D + s0 * s0) / (uStep * D) * sgn * (Math.atan((s0 + sgn * (u0 - u)) / D) - Math.atan(s0 / D));
+}
 // (Decided once per view for each sign: judged column by column, an oblique sign could go half large, half small.)
 const wallTextSizes = new Map();
 function wallTextIsBig(u, uStep, d, text, u0, z0, cwid, bandH) {
   let m = wallTextSizes.get(text);
-  if (m && m.u0 === u0 && m.z0 === z0 && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.hor === hor && m.projX === projX) return m.big;
-  m = { u0, z0, px, py, dx, dy, hor, projX, big: wallTextBig(u, uStep, d, u0, cwid, bandH, text.length) };
+  if (m && m.u0 === u0 && m.z0 === z0 && Math.abs(m.dn - WH.dn) < 0.01 && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.hor === hor && m.projX === projX) return m.big;
+  m = { u0, z0, dn: WH.dn, px, py, dx, dy, hor, projX, big: wallTextBig(u, uStep, d, u0, cwid, bandH, text.length) };
   wallTextSizes.set(text, m);
   return m.big;
 }

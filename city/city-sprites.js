@@ -716,8 +716,14 @@ function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   if (k < -1 || k > word.length) return null;
   if (Math.floor(i / cols) !== Math.floor(hor - (zc - eye) * projY / tc)) return ' ';
   const c = i % cols, cx = 2 * (c + 0.5) / cols - 1, X = (dx - dy * tf * cx) * t, Y = (dy + dx * tf * cx) * t; // where this cell's ray met the sign
+  // The word set solid, centred on the column its middle projects into, not spread out over the sign's width.
+  const off = (word.length / 2 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
+  if (dep <= 0.05) return ' ';
+  const centre = cols / 2 + (-dy * PX + dx * PY) * projX / dep, j = c - Math.floor(centre - word.length / 2);
+  if (letterW * projX / far >= 1) return word[j] ?? ' ';
+  // (narrower than a cell per letter on screen: whichever letter's middle lands in this cell)
   let best = ' ', bd = Infinity;
-  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) { // this letter or a neighbour, whichever's middle lands here
+  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) {
     const off = (j + 0.5 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
     if (dep > 0.05 && Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep) === c && Math.abs(off) < bd) { bd = Math.abs(off); best = word[j]; }
   }

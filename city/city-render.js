@@ -16,7 +16,7 @@ function blockGlyph(text, q, hz, du, dv) {
   let bits = 0;
   for (let b = 0; b < 4; b++) {
     const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
-    if (hh >= 0 && hh < 1 && GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
+    if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
   }
   return BLOCK_CELLS[bits];
 }
@@ -184,19 +184,11 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
-      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
-      const du = uStep, dz = d / projY;
       if (signBig(u, uStep, d, side, mx, my, wc, p, w.length)) {
-        let on = 0, pk = -1;
-        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
-          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
-          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
-        }
-        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
-          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
-          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
-          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        const ch = blockGlyph(w, mod(u * 10, m), (0.4 - z) / 0.08, uStep * 10, d / projY / 0.08);
+        if (p < w.length && GLYPH5[w[p]] !== undefined || ch !== ' ') {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon;
+          return set(i, ch, C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
         }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between

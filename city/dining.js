@@ -121,7 +121,7 @@ const siphon = (x, y) => KITCHEN_SIPHON(x,y);
 const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass, lit
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.3, 0.325, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
+  if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.3, 0.325, C(BRICK, 0.8), C(YEL, 5)) || set(i, ' ', 0), true; } // on a brass plate
   if (z < 1.0) { BG[i] = C(BRICK, 1.1 + L * 0.15); return set(i, ' ', 0), true; }
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, ' ', 0), true; // dark panelling
 }

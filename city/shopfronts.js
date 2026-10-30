@@ -4,7 +4,7 @@
 // one board with the name on it, built like the architecture families' (architectureShopfront), and the open shops
 // an awning. Faces come from the same face finder; SHOPFRONT_FACES indexes them by direction and cell like ARCH_FACES.
 const SHOPFRONT_FACES = Array.from({ length: 4 }, () => new Array(N * N));
-const SHOPFRONT_SPEC = { zc: .36, band: .08, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
+const SHOPFRONT_SPEC = { zc: .365, band: .09, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
 const SHOPFRONT_AWNING = { top: .31, out: .1, drop: .04, valance: .015, thick: .005, keep: .7 };
 const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
 {

@@ -181,12 +181,12 @@ test('record divider letters read forwards from both aisles and sleeve art scale
    const q=cards[k],b=q.box,u=side*(b.hl+.1),v=side===1?-((col+.5)/4-.5)*.025:((col+.5)/4-.5)*.025,z=RECORD_BIN.rim+RECORD_BIN.sleeve+.03+(.5-(row+.5)/5)*.04;
    const t=q.ray(b.x+b.c*u-b.s*v,b.y+b.s*u+b.c*v,z,-side*b.c,-side*b.s,0,b);
    if(t<0){bad.push('divider missed');continue;}q.shade(0,t,8);cells++;
-   if((CH[0]==='#')!==!!glyphOn(bin.recordBin.cards[k].letter,col,row))bad.push(['mirrored divider',bin.recordBin.cards[k].letter,side,row,col]);
+   if((CH[0]==='█')!==!!glyphOn(bin.recordBin.cards[k].letter,col,row))bad.push(['mirrored divider',bin.recordBin.cards[k].letter,side,row,col]);
   }
   const fo=room.props.find(o=>o.faceOut),sleeves=parts(fo).filter(q=>q.box.hl===RECORD_BIN.sleeve/2);let marks=0;
   for(const q of sleeves)for(let row=0;row<12;row++)for(let col=0;col<12;col++){
    const b=q.box,u=((col+.5)/12-.5)*b.hl*2,z=b.z0+(row+.5)/12*(b.z1-b.z0),t=q.ray(b.x+u,b.y+.1,z,0,-1,0,b);
-   q.shade(0,t,8);if(CH[0]!==' '&&CH[0]!=='#')bad.push(['stamped sleeve artwork',CH[0]]);if(CH[0]==='#')marks++;
+   q.shade(0,t,8);if(CH[0]!==' '&&CH[0]!=='\u2588')bad.push(['stamped sleeve artwork',CH[0]]);if(CH[0]==='\u2588')marks++;
   }
   return {bad:bad.slice(0,8),cells,sleeves:sleeves.length,marks};
  });
@@ -208,8 +208,8 @@ test('the pharmacy cuff has an open arm recess with inward walls and a closed ba
   for(let row=0;row<5;row++)for(let col=0;col<20;col++){
    const u=((col+.5)/4-2.5)*.036,z=1.115+(.5-(row+.5)/5)*.045;
    const t=screen.ray(s.x+s.c*u-s.s*.1,s.y+s.s*u+s.c*.1,z,s.s,-s.c,0,s);screen.shade(0,t,8);
-   const expected=glyphOn('READY'[Math.floor(col/4)],col%4,row);if(CH[0]==='#')ink++;
-   if((CH[0]==='#')!==!!expected)bad.push(['unreadable idle display',row,col,CH[0]]);
+   const expected=glyphOn('READY'[Math.floor(col/4)],col%4,row);if(CH[0]==='█')ink++;
+   if((CH[0]==='\u2588')!==!!expected)bad.push(['unreadable idle display',row,col,CH[0]]);
   }
   return {bad:bad.slice(0,8),ink};
  });

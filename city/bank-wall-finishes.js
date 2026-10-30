@@ -8,8 +8,8 @@ function bankWallFinish(i,u,uStep,z,d,mx,my,L) {
 // The name fills its mounted board.
 function BANK_WALL_TITLE(x,y) {
   const parts=[];
-  hotelLobbyRound(parts,'housing',1.2,.03,2.50,2.82,.02,(i,t,L)=>{
-    BG[i]=C(STONE,5+L*.25);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'BANK',0,2.66,.56,.28,C(GRAY,.2),BG[i]))return true;
+  hotelLobbyRound(parts,'housing',1.2,.03,2.42,2.83,.02,(i,t,L)=>{
+    BG[i]=C(STONE,5+L*.25);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'BANK',0,2.625,.56,.38,C(GRAY,.2),BG[i]))return true;
     set(i,' ',0);return true;
   });
   return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:1.22,bankWallTitle:{parts}};

@@ -21,7 +21,7 @@ test('every named shop face has a fascia board round its lettering, standing off
    if(cw<.03||SHOPFRONT_SPEC.zc+SHOPFRONT_SPEC.band/2+SHOPFRONT_SPEC.edge>f.height-.05)return;expected++;if(!f.fascia)bad.push(['a named generic face with no board',sh.word]);
    if(f.awning&&STY[k]===8)bad.push('an awning over a warehouse\'s loading doors');
    if(f.fascia){const mid=(f.start+f.end)/2,x=f.side?mid:f.line,y=f.side?f.line:mid; // (the face, as the facade paints it, lines up with its board after the city's laid out)
-    if(!fascias.some(o=>Math.abs(rel(o.x-x))<.02&&Math.abs(rel(o.y-y))<.02&&o.word===sh.word))bad.push(['a generic face away from its board',sh.word,x,y]);}});
+    if(!fascias.some(o=>Math.abs(rel(o.x-x))<ARCH_FASCIA.depth&&Math.abs(rel(o.y-y))<ARCH_FASCIA.depth&&o.word===sh.word))bad.push(['a generic face away from its board',sh.word,x,y]);}});
   const covered=new Set();for(let dir=0;dir<4;dir++)SHOPFRONT_FACES[dir].forEach((f,k)=>f&&covered.add(SHOP[k]));
   for(const sh of generic)if(!covered.has(sh))bad.push(['a generic shop with no faces',sh.word]);
   for(const o of fascias){const sh=SHOP[o.ownerCell];
@@ -35,6 +35,7 @@ test('every named shop face has a fascia board round its lettering, standing off
    if(ARCH_BLOCKERS.includes(o))bad.push('a board you walk into');}
   for(const o of [...fascias,...awnings])for(const q of ARCH_DETAILS){if(q===o||q.ownerCell!==o.ownerCell&&Math.hypot(rel(q.x-o.x),rel(q.y-o.y))>2)continue;
    if(o.kind==='awning'&&q.kind==='awning'&&Math.hypot(rel(q.x-o.x),rel(q.y-o.y))<.11)continue; // (its own canopy and valance)
+   if(o.kind==='fascia'&&q.kind==='course')continue; // (the board stands proud of the string course, which runs on behind it)
    if(streetBoxesOverlap(o,q,0))bad.push(['overlapping',o.kind,q.kind,o.word||SHOP[o.ownerCell].word]);}
   for(const o of awnings){
    if(ARCH_BLOCKERS.includes(o))bad.push('an awning you walk into');

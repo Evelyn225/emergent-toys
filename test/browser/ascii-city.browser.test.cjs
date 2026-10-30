@@ -118,7 +118,7 @@ test('merchant blade signs use block glyphs up close and single readable charact
     pavilionDetailShade(o,0,10,10);
     return {near,far:CH[0],height:o.z1-o.z0};
   });
-  assert.ok(result.near.includes('#'),JSON.stringify(result));
+  assert.ok(result.near.includes('\u2588'),JSON.stringify(result));
   assert.ok(!result.near.includes('J'),'close letters are scaled pixel glyphs');
   assert.equal(result.far,'J');
   assert.ok(result.height<=.55);
@@ -155,7 +155,7 @@ test('the WebGL grid paints the same picture as the 2D canvas, and only odd char
       CH[i] = i % 7 ? word[i % word.length] : ' '; COL[i] = C(1 + i % 13, 4 + i % 9);
       BG[i] = i % 5 ? C(1 + (i >> 3) % 13, 2 + i % 6) : NONE; FOGS[i] = i % 11 === 0 ? 3 : 0; FOGB[i] = i % 17 === 0 ? 4 : 0;
     }
-    CH[cols + 3] = 'é'; CH[cols + 4] = '█';
+    CH[cols + 3] = 'é'; CH[cols + 4] = '♠'; CH[cols + 6] = '█'; CH[cols + 8] = '\u259A'; // (block cells come from the atlas, like ASCII)
     const grab = c => c.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
     present2D(); const flat = grab(cv).slice();
     g.fillText = function (...args) { calls.push(args[0]); return original.apply(this, args); };
@@ -170,7 +170,7 @@ test('the WebGL grid paints the same picture as the 2D canvas, and only odd char
     return { gl, calls, off: off / (flat.length / 4), far: far / (flat.length / 4) };
   });
   assert.ok(r.gl, 'the WebGL path ran');
-  assert.deepStrictEqual(r.calls, ['é', '█'], 'plain ASCII comes from the glyph atlas');
+  assert.deepStrictEqual(r.calls, ['é', '♠'], 'plain ASCII and block cells come from the glyph atlas');
   assert.ok(r.off < 0.3 && r.far < 0.01, `the same picture, give or take glyph antialiasing (${JSON.stringify(r)})`);
 }));
 
@@ -213,7 +213,7 @@ test('Belle shop signs retain complete scaled lettering on short recessed faces 
       const mx=Math.floor((f.side?center:f.line)-f.nx*.1),my=Math.floor((f.side?f.line:center)-f.ny*.1);
       for(const sign of [-1,1])for(let p=0;p<b.sh.word.length;p++) {
         const copy=0; // The finite city has one facade; no neighboring torus copies.
-        const wc=center+copy+sign*(p+.5-b.sh.word.length/2)*letterW;
+        const wc=center+copy+sign*(p+.5-b.sh.word.length/2)*.004; // (too far for blocks: the word sits tight, one column per letter)
         WH.dn=8;WH.sl=0;WH.wc=wc;
         belleFacade(0,sign*wc,.004,.36,b.h,8,f.side,mx,my,wc,10,0);
         if(CH[0]!==b.sh.word[p])errors.push([dir,sign,p,CH[0],b.sh.word[p]]);
@@ -222,7 +222,7 @@ test('Belle shop signs retain complete scaled lettering on short recessed faces 
           const at=center+copy+sign*(p+(col+.5)/4-b.sh.word.length/2)*letterW;
           WH.dn=.3;WH.sl=0;WH.wc=at;
           belleFacade(0,sign*at,.001,.36+bandH*(.5-(row+.5)/5),b.h,.3,f.side,mx,my,at,10,0);
-          const expected=glyphOn(b.sh.word[p],col,row)?'#':' ';
+          const expected=glyphOn(b.sh.word[p],col,row)?'█':' ';
           if(CH[0]!==expected)errors.push(['glyph',dir,sign,p,row,col,CH[0],expected]);
           blocks++;
         }

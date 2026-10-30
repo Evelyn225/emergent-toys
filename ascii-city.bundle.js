@@ -3243,15 +3243,15 @@ const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painte
 const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
 function architectureSignSpec(b, f, sh) {
   const width = f.end - f.start, n = sh.word.length;
-  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .38, cmax: .067, margin: .3, band: .043, edge: .012, style: 'board' }
-    : b.region === 'brownstones' ? { zc: .39, cmax: .07, margin: .25, band: .038, edge: .012, style: 'painted' }
-    : { zc: .36, cmax: .085, margin: .3, band: .055, edge: .014, style: 'box' };
+  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .39, cmax: .09, margin: .3, band: .1, edge: .01, style: 'board' }
+    : b.region === 'brownstones' ? { zc: .39, cmax: .09, margin: .25, band: .1, edge: .01, style: 'painted' }
+    : { zc: .39, cmax: .1, margin: .3, band: .1, edge: .01, style: 'box' };
   return { ...g, width, cwid: Math.min(g.cmax, (width - g.margin) / n) };
 }
 // A shop's fascia board on each face that carries its name, standing off the wall over the window, and on some
 // brownstone and midtown shops a striped awning over the window below it: a sloping canopy on its frame, a valance
 // along the front. (Downtown towers and the apartment blocks with entrance canopies get no awning.)
-const ARCH_FASCIA = { depth: .012, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
+const ARCH_FASCIA = { depth: .04, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
 function architectureShopfront(b) {
   const sh = b.sh;
   if (sh.kind === SHOP_APTS) return;
@@ -3658,7 +3658,7 @@ for (const o of roofs) o.z = Math.max(o.z,pavilionRoofHeight(o.x,o.y));
 // one board with the name on it, built like the architecture families' (architectureShopfront), and the open shops
 // an awning. Faces come from the same face finder; SHOPFRONT_FACES indexes them by direction and cell like ARCH_FACES.
 const SHOPFRONT_FACES = Array.from({ length: 4 }, () => new Array(N * N));
-const SHOPFRONT_SPEC = { zc: .36, band: .08, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
+const SHOPFRONT_SPEC = { zc: .365, band: .09, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
 const SHOPFRONT_AWNING = { top: .31, out: .1, drop: .04, valance: .015, thick: .005, keep: .7 };
 const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
 {
@@ -11891,19 +11891,25 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
     return set(i, blockGlyph(text, q, (z0 + bandH / 2 - z) / bandH, uStep / cwid, d / projY / bandH), col), true;
   }
   // Too small for blocks: the word set solid along its middle row, not spread out over the width it would fill.
-  const k = uStep >= cwid ? p : Math.floor((u - u0) / uStep + text.length / 2 + 0.0137);
+  const k = uStep >= cwid ? p : Math.floor(text.length / 2 - columnsToCentre(u, uStep, u0) + 0.0137);
   set(i, oneCell(z - z0, d / projY) && k >= 0 && k < text.length ? text[k] : ' ', col);
   return true;
 }
 
 // is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
 // switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+// How many screen columns from u to u0 along this wall. A column covers more wall the more obliquely the ray meets it,
+// so an even step would lose letters off the far end of an angled word: this is that step's exact integral.
+function columnsToCentre(u, uStep, u0) {
+  const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1;
+  return (D * D + s0 * s0) / (uStep * D) * sgn * (Math.atan((s0 + sgn * (u0 - u)) / D) - Math.atan(s0 / D));
+}
 // (Decided once per view for each sign: judged column by column, an oblique sign could go half large, half small.)
 const wallTextSizes = new Map();
 function wallTextIsBig(u, uStep, d, text, u0, z0, cwid, bandH) {
   let m = wallTextSizes.get(text);
-  if (m && m.u0 === u0 && m.z0 === z0 && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.hor === hor && m.projX === projX) return m.big;
-  m = { u0, z0, px, py, dx, dy, hor, projX, big: wallTextBig(u, uStep, d, u0, cwid, bandH, text.length) };
+  if (m && m.u0 === u0 && m.z0 === z0 && Math.abs(m.dn - WH.dn) < 0.01 && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.hor === hor && m.projX === projX) return m.big;
+  m = { u0, z0, dn: WH.dn, px, py, dx, dy, hor, projX, big: wallTextBig(u, uStep, d, u0, cwid, bandH, text.length) };
   wallTextSizes.set(text, m);
   return m.big;
 }
@@ -12112,7 +12118,7 @@ function blockGlyph(text, q, hz, du, dv) {
   let bits = 0;
   for (let b = 0; b < 4; b++) {
     const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
-    if (hh >= 0 && hh < 1 && GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
+    if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
   }
   return BLOCK_CELLS[bits];
 }
@@ -12280,19 +12286,11 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
-      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
-      const du = uStep, dz = d / projY;
       if (signBig(u, uStep, d, side, mx, my, wc, p, w.length)) {
-        let on = 0, pk = -1;
-        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
-          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
-          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
-        }
-        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
-          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
-          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
-          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        const ch = blockGlyph(w, mod(u * 10, m), (0.4 - z) / 0.08, uStep * 10, d / projY / 0.08);
+        if (p < w.length && GLYPH5[w[p]] !== undefined || ch !== ' ') {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon;
+          return set(i, ch, C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
         }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
@@ -15001,8 +14999,14 @@ function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   if (k < -1 || k > word.length) return null;
   if (Math.floor(i / cols) !== Math.floor(hor - (zc - eye) * projY / tc)) return ' ';
   const c = i % cols, cx = 2 * (c + 0.5) / cols - 1, X = (dx - dy * tf * cx) * t, Y = (dy + dx * tf * cx) * t; // where this cell's ray met the sign
+  // The word set solid, centred on the column its middle projects into, not spread out over the sign's width.
+  const off = (word.length / 2 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
+  if (dep <= 0.05) return ' ';
+  const centre = cols / 2 + (-dy * PX + dx * PY) * projX / dep, j = c - Math.floor(centre - word.length / 2);
+  if (letterW * projX / far >= 1) return word[j] ?? ' ';
+  // (narrower than a cell per letter on screen: whichever letter's middle lands in this cell)
   let best = ' ', bd = Infinity;
-  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) { // this letter or a neighbour, whichever's middle lands here
+  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) {
     const off = (j + 0.5 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
     if (dep > 0.05 && Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep) === c && Math.abs(off) < bd) { bd = Math.abs(off); best = word[j]; }
   }
@@ -21553,7 +21557,7 @@ const siphon = (x, y) => KITCHEN_SIPHON(x,y);
 const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass, lit
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.3, 0.325, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
+  if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.3, 0.325, C(BRICK, 0.8), C(YEL, 5)) || set(i, ' ', 0), true; } // on a brass plate
   if (z < 1.0) { BG[i] = C(BRICK, 1.1 + L * 0.15); return set(i, ' ', 0), true; }
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, ' ', 0), true; // dark panelling
 }
@@ -35969,8 +35973,8 @@ function bankWallFinish(i,u,uStep,z,d,mx,my,L) {
 // The name fills its mounted board.
 function BANK_WALL_TITLE(x,y) {
   const parts=[];
-  hotelLobbyRound(parts,'housing',1.2,.03,2.50,2.82,.02,(i,t,L)=>{
-    BG[i]=C(STONE,5+L*.25);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'BANK',0,2.66,.56,.28,C(GRAY,.2),BG[i]))return true;
+  hotelLobbyRound(parts,'housing',1.2,.03,2.42,2.83,.02,(i,t,L)=>{
+    BG[i]=C(STONE,5+L*.25);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'BANK',0,2.625,.56,.38,C(GRAY,.2),BG[i]))return true;
     set(i,' ',0);return true;
   });
   return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:1.22,bankWallTitle:{parts}};
