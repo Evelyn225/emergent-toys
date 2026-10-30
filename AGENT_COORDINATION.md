@@ -3371,3 +3371,27 @@ main9097d37: cell4.0–4.3→4.2–4.3ms, leaf.9–1.0→3.1–3.3, pane.8→3.5
 oblique1.4→2.8–2.9. Detail costs~0–2.8ms locally, no speedup claim.
 #340/#341 full CI green40997479459/40998531471. Next west high window and wall/
 floor/ceiling finishes, then jail closing review. Reserved/shared files unchanged.
+
+Codex active: codex/jail-west-window owns new jail-west-window.js, focused
+coverage and manifest entry. Fit the high west privacy window using unchanged
+HOME_WINDOW_CASING plus prepared recessed weather-lit pane and round steel
+bars; mount a scaling BLOCK C plaque below. Retain original diffuse day/night
+outlook rather than add another exterior scene render. Preserve solid wall,
+cell boundaries, occupants and jail flows. #342 mergede10623b. Next jail wall/
+floor/ceiling finishes and closing review. Reserved/shared files unchanged.
+
+Codex codex/jail-west-window complete: unchanged HOME_WINDOW_CASING supplies8
+cached closed frame/sill/mullion parts, plus7 prepared recessed privacy-pane/
+round-bar/plaque pieces. Five rods bury into the actual frame; light follows
+the existing day/night outlook without a second exterior render. Mounted
+BLOCK C lettering scales, restores rotated wall context and keeps every
+far oblique letter exactly once in the correct order. Three new geometry/
+cache/support/roundness/recess/native-pane+bar+frame/day-night/text checks,
+three retained final door controls and three Node files pass. Twelve isolated
+frame/bar/pane/old-paint/static-weather/native-frame/native-bar/text/context
+defects fail assertions. Reviewed16 cell/close/wide/oblique/night/sill/bar/
+plaque comparisons without errors; actual dev freecam holds player in cell.
+Serial ABAB177x66 maine10623b: cell4.8–5.2→4.9–5.0ms, close2.1–2.2→3.0,
+oblique3.4→4.0–4.2, plaque.9–1.0→1.7–1.8. Detail costs~0–.9ms locally,
+no speedup claim. #342 full CI green40999889183. Next jail wall/floor/ceiling
+finishes then closing review. Reserved files/shared helpers unchanged.
