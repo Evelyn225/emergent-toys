@@ -98,11 +98,11 @@ function pizzaWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.75, 1.95, room.menu, 1.2, C(GRAY, 0.8), C(WHITE, 14), 'MENU', C(YEL, 14))) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.62, 0.3, 0.42, C(RED, 15), C(GRAY, 0.6))) return true; // in red neon
   if (z > 0.98 && z < 1.16) { const k = Math.floor((z - 0.98) / 0.06); BG[i] = C([RED, WHITE, GREEN][k] ?? GREEN, k === 1 ? 6 : 3.5); return set(i, ' ', 0), true; } // the tricolour, all round
-  if (z < 0.98) { BG[i] = C(WHITE, 2.6 + L * 0.1); return set(i, fract(u * 6.5) < 0.06 || fract(z * 13) < 0.08 ? '+' : ' ', C(GRAY, L * 0.3)), true; } // white tiles
+  if (z < 0.98) { BG[i] = C(WHITE, 2.6 + L * 0.1); return set(i, ' ', 0), true; } // white tiles
   const fu = fract(u / 2.2), fz = z - 1.45; // framed photos: the old country, the family, a football team
   if (!backWall(my) && fu > 0.3 && fu < 0.7 && fz > 0 && fz < 0.6) {
     if (fu < 0.33 || fu > 0.67 || fz < 0.04 || fz > 0.56) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-    const h = hash(Math.floor(u / 2.2), mx + my, 88); BG[i] = C(h < 0.5 ? STONE : BLUE, 1.6 + fz * 2); return set(i, hash(Math.floor(u * 20), Math.floor(z * 20), 89) > 0.8 ? '.' : ' ', C(GRAY, 3)), true;
+    const h = hash(Math.floor(u / 2.2), mx + my, 88); BG[i] = C(h < 0.5 ? STONE : BLUE, 1.6 + fz * 2); return set(i, ' ', 0), true;
   }
   BG[i] = C(YEL, 2.4 + L * 0.12); return set(i, ' ', 0), true; // warm plaster
 }
@@ -132,14 +132,14 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
       BG[i] = C(WHITE, 6);
       if (wallText(i, u, uStep, z, d, room.menu[k] || '', M - 3.3 + k * 2.2 + 1.1, 1.92, 0.12, 0.16, C(RED, 6), C(WHITE, 6))) return true;
       const bz = z - 2.22, r = Math.hypot(cu / 1.6, bz); // the picture: bun, patty, cheese, lettuce, bun
-      if (r < 0.18) { const layer = bz > 0.06 ? [ORANGE, 8] : bz > 0.02 ? [GREEN, 6] : bz > -0.02 ? [YEL, 11] : bz > -0.07 ? [BRICK, 3] : [ORANGE, 8]; BG[i] = C(...layer); return set(i, bz > 0.1 && fract(cu * 20) < 0.2 ? '.' : ' ', C(WHITE, 13)), true; }
+      if (r < 0.18) { const layer = bz > 0.06 ? [ORANGE, 8] : bz > 0.02 ? [GREEN, 6] : bz > -0.02 ? [YEL, 11] : bz > -0.07 ? [BRICK, 3] : [ORANGE, 8]; BG[i] = C(...layer); return set(i, ' ', 0), true; }
       return set(i, ' ', 0), true;
     }
     if (burgerPassOpening(u, z, M, BURGER_PASS_HALF)) { const low = clamp(1 - (z - BURGER_PASS.bottom) / 0.25, 0, 1); BG[i] = low > 0 ? C(ORANGE, 0.8 + low * 2.4 + noise(u * 3, T * 0.8, 90) * 0.6) : C(GRAY, 0.7); return set(i, ' ', 0), true; } // through the pass: the kitchen, the griddle glowing low
   }
   if (z < 1.0) { BG[i] = (Math.floor(u * 4) + Math.floor(z * 4)) & 1 ? C(WHITE, 4 + L * 0.2) : C(RED, 3 + L * 0.2); return set(i, ' ', 0), true; } // red and white tiles
-  if (z < 1.08) { BG[i] = C(GRAY, 4); return set(i, '=', C(WHITE, 13)), true; } // a chrome strip
-  BG[i] = C(CYAN, 1.6 + L * 0.12); return set(i, fract(u / 1.6) < 0.02 ? '|' : ' ', C(WHITE, 4)), true; // mint walls
+  if (z < 1.08) { BG[i] = C(GRAY, 4); return set(i, ' ', 0), true; } // a chrome strip
+  BG[i] = C(CYAN, 1.6 + L * 0.12); return set(i, ' ', 0), true; // mint walls
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
   props: r => [KITCHEN_SERVICE_COUNTER(6,BURGER_COUNTER_Y,2.8,.32,1.05,RED,WHITE),
@@ -155,10 +155,10 @@ const papelPicado = (y,x0,x1,z) => PAPEL_PICADO(y,x0,x1,z);
 const trompo = (x,y) => KITCHEN_SPIT(x,y,'pastor');
 function tacoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.1, room.menu, 1.25, C(GRAY, 0.6), C(YEL, 15), 'TACOS', C(MAG, 15))) return true;
-  if (z < 0.95) { const k = (Math.floor(u * 5) + Math.floor(z * 5)) & 1, mot = Math.abs(fract(u * 5) - 0.5) + Math.abs(fract(z * 5) - 0.5) < 0.22; BG[i] = C(k ? BLUE : WHITE, k ? 4 : 5.5); return set(i, mot ? '+' : ' ', C(k ? WHITE : BLUE, 10)), true; } // talavera tiles
+  if (z < 0.95) { const k = (Math.floor(u * 5) + Math.floor(z * 5)) & 1, mot = Math.abs(fract(u * 5) - 0.5) + Math.abs(fract(z * 5) - 0.5) < 0.22; BG[i] = C(k ? BLUE : WHITE, k ? 4 : 5.5); return set(i, ' ', 0), true; } // talavera tiles
   const band = Math.floor(u / 2.4 + my * 0.5 + mx * 0.5) % 3;
   BG[i] = C([CYAN, MAG, YEL][(band + 3) % 3], ([CYAN, MAG, YEL][(band + 3) % 3] === YEL ? 6 : 4) + L * 0.15); // painted walls, each stretch its own colour
-  return set(i, z > 2.7 && fract(u * 3) < 0.3 ? 'v' : ' ', C(WHITE, 10)), true; // a scallop round the top
+  if (z > 2.7 && fract(u * 3) < 0.3) BG[i] = C(WHITE, 5); return set(i, ' ', 0), true; // a scallop round the top
 }
 ROOM_FLOORS.saltillo = (i, f, wx, wy, r, x, L) => { // big square terracotta tiles, each fired a little different, grout between
   const fp = sharedFloorDepth(r), tx = Math.floor(wx / 0.5), ty = Math.floor(wy / 0.5), g = Math.max(coveGroove(wx, 0.5, 0.02, fp), coveGroove(wy, 0.5, 0.02, fp));
@@ -200,16 +200,16 @@ const sushiBelt = () => ROOM_MODEL((SUSHI_LOOP.x0 + SUSHI_LOOP.x1) / 2, (SUSHI_L
 });
 function sushiWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && Math.abs(u - 6.0) < 0.8 && z < 2.1) { // the noren, over the kitchen door: three panels, a wave on them
-    if (z > 1.35) { BG[i] = C(BLUE, 3 + L * 0.2); return set(i, Math.abs(fract(u * 1.9) - 0.5) < 0.04 ? ' ' : z > 1.6 && z < 1.8 && Math.abs(fract(u * 4 + z * 2) - 0.5) < 0.15 ? '~' : ' ', C(WHITE, 13)), true; }
+    if (z > 1.35) { BG[i] = C(BLUE, 3 + L * 0.2); return set(i, ' ', 0), true; }
     BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; // (the dark doorway below)
   }
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 3.2, 2.5, 0.3, 0.4, C(RED, 13), C(STONE, 4))) return true; // on a painted board
   if (backWall(my) && z > 1.6 && z < 2.3 && Math.abs(u - 8.7) < 1.0) { // the fish, carved on its board
     const fu = (u - 8.7) / 0.9, fz = (z - 1.95) / 0.3, body = fu * fu + fz * fz * 2.2 < 0.5, tail = fu < -0.6 && Math.abs(fz) < (-fu - 0.6) * 2;
-    BG[i] = body || tail ? C(GRAY, 3 + L * 0.2) : C(BRICK, 2); return set(i, body && fract(fu * 6) < 0.3 ? ')' : ' ', C(WHITE, 9)), true;
+    BG[i] = body || tail ? C(GRAY, 3 + L * 0.2) : C(BRICK, 2); return set(i, ' ', 0), true;
   }
-  if (z < 0.9) { BG[i] = C(BRICK, 1.6 + L * 0.2); return set(i, fract(u * 5) < 0.06 ? '|' : ' ', C(GRAY, 2)), true; } // dark wood below
-  BG[i] = C(STONE, 3.2 + L * 0.15); return set(i, fract(u / 0.9) < 0.03 || fract(z / 0.9) < 0.03 ? '|' : ' ', C(BRICK, 5)), true; // pale panels, framed in wood
+  if (z < 0.9) { BG[i] = C(BRICK, 1.6 + L * 0.2); return set(i, ' ', 0), true; } // dark wood below
+  BG[i] = C(STONE, 3.2 + L * 0.15); return set(i, ' ', 0), true; // pale panels, framed in wood
 }
 // long boards, staggered: pale cypress (the sushi bar) or honey oak (the bakery)
 const planks = (col, lv) => (i, f, wx, wy, r, x, L) => {
@@ -243,10 +243,10 @@ const wireChair = (x, y, fx, fy, col) => [WIRE_CHAIR(x, y, fx, fy, col)]; // a p
 function iceWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.0 && Math.abs(u - 2.0) < 0.6) { // the neon cone
     const cu = u - 2.0, cz = z - 2.0, cone = cz < 0.5 && Math.abs(cu) < cz * 0.35, scoop = Math.hypot(cu, cz - 0.62) < 0.2;
-    BG[i] = scoop ? C(MAG, 10) : cone ? C(ORANGE, 9) : C(GRAY, 1); return set(i, cone && fract(cz * 8 + cu * 8) < 0.2 ? 'x' : ' ', C(BRICK, 6)), true;
+    BG[i] = scoop ? C(MAG, 10) : cone ? C(ORANGE, 9) : C(GRAY, 1); return set(i, ' ', 0), true;
   }
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.6, 2.0, ['1 SCOOP 3', '2 SCOOPS 5', 'SHAKE 5', 'SUNDAE 7'], 1.2, C(WHITE, 8), C(MAG, 8), room.word, C(CYAN, 7))) return true;
-  if (z < 0.95) { BG[i] = C(WHITE, 5 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(MAG, 6)), true; } // white panelling
+  if (z < 0.95) { BG[i] = C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true; } // white panelling
   const st = Math.floor(u * 3) % 3; BG[i] = C([MAG, WHITE, GREEN][(st + 3) % 3], [7, 9, 7][(st + 3) % 3] + L * 0.2); return set(i, ' ', 0), true; // candy stripes
 }
 ROOM_FLOORS.pastel = (i, f, wx, wy, r, x, L) => { BG[i] = (Math.floor(wx * 2) + Math.floor(wy * 2)) & 1 ? C(MAG, 5 + f * 3) : C(WHITE, 6 + f * 4); return set(i, ' ', 0); };
@@ -259,7 +259,7 @@ ROOM_DEFS.icecream = { grid: boxRoom(11, 8), light: 1.1, floor: 'pastel', ceil: 
 // the deck oven glowing, flour sacks stacked, a table by the door
 function bakeryWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.5 && wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.7, 0.24, 0.3, C(BRICK, 4), C(YEL, 9))) return true;
-  if (z < 0.95) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(WARM, 4)), true; }
+  if (z < 0.95) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(YEL, 6 + L * 0.15); return set(i, ' ', 0), true; // cream walls
 }
 ROOM_DEFS.bakery = { grid: boxRoom(11, 8), light: 1.0, floor: 'oak', ceil: 'pendant', sign: false, wall: bakeryWall, keeper: [5.0, 1.55],
