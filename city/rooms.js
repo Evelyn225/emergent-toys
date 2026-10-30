@@ -646,7 +646,7 @@ const trainShade = (open, k) => (i, t, L) => {
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0) return false;
-  if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.35, 0.3, C(room.neon, 15))) return true;
+  if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.438, 0.375, C(room.neon, 15))) return true;
   for (const [u0, s] of [[2.6, 0], [room.W - 2.6, 1]]) if (Math.abs(u - u0) < 1.3 && z > 1.45 && z < 2.35) { // menu boards
     BG[i] = C(GRAY, 1);
     if (wallText(i, u, uStep, z, d, room.menu[s * 2], u0, 2.1, 0.17, 0.25, C(WHITE, 14), C(GRAY, 1))) return true;
@@ -999,7 +999,7 @@ function stationWall(i, u, uStep, z, d, mx, my, L) {
   const far = my === room.H - 1; // the tunnel wall across the tracks
   const u0 = Math.floor((u - 2) / 8) * 8 + 6;
   if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
-    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.25, 0.35, C(WHITE, 15), C(GREEN, 4))) return true;
+    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.312, 0.438, C(WHITE, 15), C(GREEN, 4))) return true;
     set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
   }
   if (far) {
@@ -1053,7 +1053,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     return sharedWallFinish(i, u, uStep, z, d, mx, my, L);
   }
-  if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
+  if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.5, 0.375, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
   sharedWallFinish(i, u, uStep, z, d, mx, my, L, D.posters, D.neon ? R.neon : undefined);
 }

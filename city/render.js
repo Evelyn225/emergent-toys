@@ -24,9 +24,9 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
-      if (word && cellW >= 3 && cellH >= 3.5 && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
+      if (word && cellW >= LETTER_MIN_COLS && cellH >= LETTER_MIN_ROWS && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
         const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
-        set(i, glyphOn(ch, Math.floor(fx * 4), Math.floor(fy * 5)) ? '#' : ' ', colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
       }
       if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
         set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
@@ -329,11 +329,16 @@ function glPresentInit() {
   return st;
 }
 // (re)build what depends on the screen's size: the glyph atlas, the cell texture, the canvas
+function drawBlockCell(x, bits, left, top) {
+  const w = Math.ceil(cw / 2), h = Math.ceil(FS / 2);
+  for (let b = 0; b < 4; b++) if (bits >> b & 1) x.fillRect(left + (b & 1 ? Math.floor(cw / 2) : 0), top + (b & 2 ? Math.floor(FS / 2) : 0), b & 1 ? Math.ceil(cw) - Math.floor(cw / 2) : w, h);
+}
 function glPresentSize(st) {
   const { gl, U } = st, slotW = Math.ceil(cw) + 1, at = document.createElement('canvas'), x = at.getContext('2d');
-  at.width = 96 * slotW; at.height = FS;
+  at.width = 111 * slotW; at.height = FS;
   x.font = FS + 'px monospace'; x.textBaseline = 'top'; x.fillStyle = '#fff';
   for (let k = 1; k < 95; k++) x.fillText(String.fromCharCode(32 + k), k * slotW, 0); // ('!'..'~'; 0 is the space)
+  for (let b = 1; b < 16; b++) drawBlockCell(x, b, (95 + b) * slotW, 0); // (exact rectangles: no font to depend on)
   gl.activeTexture(gl.TEXTURE2); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, at);
   st.data = new Uint8Array(cols * rows * 4);
   gl.activeTexture(gl.TEXTURE0); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, st.data);
@@ -349,8 +354,8 @@ function glPresent() {
   if (st.key !== [cols, rows, cw, FS, cv.width, cv.height].join()) glPresentSize(st);
   const D = st.data, odd = []; // (cells whose character isn't plain ASCII: drawn over the top after)
   for (let i = 0, n = cols * rows; i < n; i++) {
-    const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4;
-    D[j] = code > 32 && code < 127 && FOGS[i] < 8 ? code - 32 : 255;
+    const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4, block = code >= 0x2580 ? BLOCK_CELLS.indexOf(ch) : -1;
+    D[j] = FOGS[i] >= 8 ? 255 : code > 32 && code < 127 ? code - 32 : block > 0 ? 95 + block : 255;
     if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < 8 && !(code > 32 && code < 127)) odd.push(i);
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
@@ -389,7 +394,8 @@ function present2D() {
     // preserving both the complete grapheme and the position of the ordinary text that follows it.
     if (!singleWidth(CH[i])) {
       g.fillStyle = FOGS[i] ? fogged(COL[i],FOGS[i]) : PAL[COL[i]];
-      g.fillText(CH[i],x * cw,r * FS,cw);
+      const block = BLOCK_CELLS.indexOf(CH[i]);
+      if (block > 0) drawBlockCell(g, block, x * cw, r * FS); else g.fillText(CH[i],x * cw,r * FS,cw);
       x++; continue;
     }
     const key = COL[i] * 9 + FOGS[i];

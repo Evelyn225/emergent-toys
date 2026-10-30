@@ -3,7 +3,7 @@
 function HOTEL_FRONT_ENTRANCE(x,y,frameColor=GRAY) {
   const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,frameColor);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&hotelFittingText(i,-HIT.u,HIT.w,t,'EXIT',0,2.515,.13,.20,C(GREEN,12),BG[i],-1))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&hotelFittingText(i,-HIT.u,HIT.w,t,'EXIT',0,2.515,.19,.24,C(GREEN,12),BG[i],-1))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=-v;};
   box('threshold',0,.055,1,.055,0,.025,.006,metal);
   for(const e of [-1,1])box('jamb',e*.93,.055,.07,.055,.025,2.20,.008,metal);
