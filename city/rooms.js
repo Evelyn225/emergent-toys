@@ -154,31 +154,6 @@ const JUKEBOX = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
     });
   }
 }, [Math.abs(fx) * 0.25 + Math.abs(fy) * 0.45, Math.abs(fx) * 0.45 + Math.abs(fy) * 0.25, 1.45]);
-// a treadmill, the runner facing (0, -1): the deck and its moving belt, uprights up to the console, handrails
-const TREADMILL = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 0, 1, 0.8, 0.36, 0, 0.18), (i, t, L) => {
-    if (HIT.face === 5) { const belt = Math.abs(HIT.v) < 0.27; BG[i] = C(GRAY, belt ? 0.8 : 2.5); return set(i, belt && fract((HIT.u + T * 2.5) * 5) < 0.12 ? '-' : ' ', C(GRAY, L * 0.6)), true; }
-    BG[i] = C(GRAY, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, '_', C(GRAY, L * 0.5)), true;
-  });
-  for (const e of [-1, 1]) {
-    rod(vx + e * 0.32, vy - 0.65, 0.15, vx + e * 0.3, vy - 0.82, 1.15, 0.02, GRAY, 1.2);
-    rod(vx + e * 0.3, vy - 0.78, 1.0, vx + e * 0.32, vy - 0.35, 0.95, 0.015, GRAY, 1.2);
-  }
-  drawBox(boxAt(vx, vy - 0.85, 0, 1, 0.08, 0.36, 1.05, 1.28), (i, t, L) => {
-    if (HIT.face === 1) { BG[i] = C(CYAN, 2.5); return set(i, fract(HIT.v * 10 + T) < 0.3 ? '#' : ':', C(WHITE, 12)), true; }
-    BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true;
-  });
-}, [0.36, 0.9, 1.28]);
-// a dumbbell rack against the wall: a frame of two shelves, a row of dumbbells on each, the heavy ones at the end
-const WEIGHT_RACK = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  for (const e of [-1, 1]) rod(vx + e * 0.88, vy, 0, vx + e * 0.88, vy, 0.95, 0.025, GRAY, 1.1);
-  for (const z of [0.35, 0.75]) for (const d of [-0.12, 0.12]) rod(vx - 0.88, vy + d, z, vx + 0.88, vy + d, z, 0.015, GRAY, 1.1);
-  for (const z of [0.35, 0.75]) for (let k = 0; k < 7; k++) {
-    const x0 = vx - 0.72 + k * 0.24, r = 0.045 + k * 0.006 + (z > 0.5 ? 0 : 0.012), col = k & 1 ? GRAY : BRICK;
-    rod(x0, vy - 0.12, z + r, x0, vy + 0.12, z + r, 0.012, GRAY, 1.2);
-    for (const e of [-1, 1]) drawRod(x0, vy + e * 0.07, z + r, x0, vy + e * 0.11, z + r, r, (i, t, L) => { BG[i] = C(col, 1.2 + L * 0.3); return set(i, 'O', C(GRAY, L * 0.5)), true; });
-  }
-}, [0.9, 0.2, 0.95]);
 // a barber's pole: a glass drum with red, white and blue spiralling up it, chrome caps, a bracket to the wall
 const BARBER_POLE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // (on the west wall, x = 1)
   drum(vx, vy, 0.08, 0.5, 1.45, (i, t, L) => {
@@ -431,7 +406,7 @@ const ROOM_DEFS = {
     props: r => {
       const foe = nextBoxer(), fx = GYM_RING.x + 1.1, fy = GYM_RING.y - 1.1;
       const p = [WEIGHT_RACK(10.6, 9.6), WEIGHT_RACK(12.9, 9.6), BOXING_RING(GYM_RING.x, GYM_RING.y),
-        BX(3, 7.95, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 1.04, top: '=' })), // the front desk
+        KITCHEN_SERVICE_COUNTER(3, 7.95, 1.1, 0.3, 1.05, GRAY, GRAY), GYM_HEAVY_BAG(13.6, 8, r.def.height || 3), // the front desk, and the bag
         figProp(3, 7.3, figAnyone(RED, { top: 'tee', bot: 'pants' }), { face: [0, 1] }), // the trainer
         figProp(fx, fy, figAnyone(foe.trunks[0], { top: 'tank', bot: 'shorts' }), { z: GYM_RING.top, face: [-1, 1], chat: false, // the next fighter, in their corner
           pose: () => (Math.floor(T * 3) & 1) ? 'run1' : 'run5' })]; // (bouncing on their toes)
