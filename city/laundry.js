@@ -5,7 +5,7 @@ const WASH_FEE = 3, WASH_T = 45;
 let wash = null; // { cell: the laundromat (its door's cell), n: which machine, done: when it finishes, told }
 const myLaundromat = () => !!wash && mode === 'room' && room.kind === 'laundry' && !!room.cell && room.cell[0] === wash.cell[0] && room.cell[1] === wash.cell[1];
 // the machine you're standing at, along the back wall (0.75m each), or -1
-const machineHere = () => mode === 'room' && room.kind === 'laundry' && py < 1.9 && px > 1.1 && px < room.W - 1.1 ? Math.floor(px / 0.75) : -1;
+const machineHere = () => mode === 'room' && room.kind === 'laundry' && py < 1.9 && px > LAUNDRY_WASHER.first * LAUNDRY_BAY && px < room.W - 1 ? Math.floor(px / 0.75) : -1;
 function laundryPrompt() {
   const n = machineHere();
   if (n < 0) return '';
