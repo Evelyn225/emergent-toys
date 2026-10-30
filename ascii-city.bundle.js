@@ -36657,7 +36657,8 @@ function museumShellWall(i,su,uStep,z,d,mx,my,L) {
   if(wing==='egypt')return museumEgyptWall(i,u,z,d,L,lit);
   if(wing==='gallery'&&z>MUSEUM_CANVAS.z0&&z<MUSEUM_CANVAS.z1) {
     const k=Math.floor(u/MUSEUM_CANVAS.pitch),fu=u-k*MUSEUM_CANVAS.pitch-MUSEUM_CANVAS.inset;
-    const line=Math.abs(fract(hx+.5)-.5)<Math.abs(fract(hy+.5)-.5)?Math.round(hx):-1-Math.round(hy);
+    // The hit point sits just outside the wall cell, on the axis of the face it hit.
+    const line=hx<mx||hx>mx+1?Math.round(hx):-1-Math.round(hy);
     if(fu>0&&fu<MUSEUM_CANVAS.w&&room.museumCanvases?.has([line,k].join()))return museumCanvas(i,u,z,k,line,lit);
   }
   if(wing==='gems'){BG[i]=C(RED,(1.2+L*.1)*lit);return true;}
