@@ -64,6 +64,7 @@ test('native walking and E return cross the open French doorway while the actual
 test('native room and city render the open leaves and supported head with clear panes and no duplicate painted closed doors',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
   const bad=[],draw=drawBox;let count=0;
+  const surroundHead=door=>{const p=door.homeFrenchDoor.opening;return room.props.filter(o=>o.homeFrenchDoorSurround).some(o=>{const list=[];drawBox=box=>list.push(box);try{o.draw(o.x,o.y);}finally{drawBox=draw;}return list.some(q=>Math.abs(q.z0-p.top)<1e-6&&q.z1<=p.top+.11&&q.x<p.wall&&q.hw>=(p.end-p.start)/2);});};
   for(const stage of ['room','city']){
    if(stage==='city'){px=22.8;py=12.5;stepHomeBalcony();}
    const b=room.balconyWorld,h=homeRecord(),o=stage==='room'?room.props.find(o=>o.homeFrenchDoor):(render(0),homeBalconyModels.get(h)?.find(o=>o.homeFrenchDoor));
@@ -74,10 +75,18 @@ test('native room and city render the open leaves and supported head with clear 
     try{
      if(stage==='room'){px=22;py=12.5;freecam={z:1.7};a=Math.PI;}
      else{px=b.x0+.3;py=b.doorY-.23;freecam={z:b.z+.17};a=Math.atan2(b.doorY-py,b.x0-px);}
-     pitch=0;render(0);const target=role==='casing-head'?2.95:1.6,dist=stage==='room'?3:Math.hypot(b.x0-px,b.doorY-py);pitch=((stage==='room'?target:b.z+target/10)-freecam.z)/dist*projY/rows;render(0);
-     const before=Array.from(BG),v=o.homeFrenchDoor.variants.get(stage==='room'?'1:0':'0.1:'+b.z),targets=new Set((v||[]).filter(p=>p.role===role).map(p=>p.view));
-     drawBox=(box,shade,ray)=>draw(box,active&&targets.has(box)?(i,t,L)=>{const hit=shade(i,t,L);if(hit){paints++;BG[i]=C(MAG,15);}return hit;}:shade,ray);
-     render(0);if(paints<5||!Array.from(BG).some((c,i)=>c===C(MAG,15)&&before[i]!==c))bad.push([stage,role,'not visible',paints]);count++;
+     pitch=0;render(0);const target=role==='casing-head'?2.95:1.6,dist=stage==='room'?3:Math.hypot(b.x0-px,b.doorY-py),aim=((stage==='room'?target:b.z+target/10)-freecam.z)/dist*projY/rows;
+     const v=o.homeFrenchDoor.variants.get(stage==='room'?'1:0':'0.1:'+b.z),targets=new Set((v||[]).filter(p=>p.role===role).map(p=>p.view));
+     // A thin part can fall between character rows, so look a row or two either side of it.
+     let seen=false;for(const rowsOff of [0,-1,1,-2,2,-3,3]){
+      pitch=aim+rowsOff/rows;drawBox=draw;render(0);const before=Array.from(BG);paints=0;
+      drawBox=(box,shade,ray)=>draw(box,active&&targets.has(box)?(i,t,L)=>{const hit=shade(i,t,L);if(hit){paints++;BG[i]=C(MAG,15);}return hit;}:shade,ray);
+      render(0);
+      // From inside, the door's own head is meant to sit behind the room-side surround head: it has to draw, and that head has to cover it.
+      const covered=stage==='room'&&role==='casing-head'&&paints>=5&&surroundHead(o);
+      if(covered||paints>=5&&Array.from(BG).some((c,i)=>c===C(MAG,15)&&before[i]!==c)){seen=true;break;}
+     }
+     if(!seen)bad.push([stage,role,'not visible',paints]);count++;
     }finally{drawBox=draw;o[method]=original;freecam=null;}
    }
    if(stage==='city'){

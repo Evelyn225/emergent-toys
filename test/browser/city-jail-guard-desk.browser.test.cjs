@@ -46,7 +46,8 @@ test('desk appears from the legal jail cell and actual freecam shows its legs wh
   try{for(let k=0;k<400;k++){T=k;guard.tick(guard);lo=Math.min(lo,guard.x);hi=Math.max(hi,guard.x);if(inBox(o.box,guard.x,guard.y,.2))bad.push('guard walks through desk');}}finally{T=t;guard.tick(guard);}
   if(Math.abs(lo-2.5)>.01||Math.abs(hi-18.75)>1e-8||guard.fig!==look)bad.push('patrol west end/pause/identity changed');
   const compare=()=>{const A=[BG.slice(),CH.slice(),COL.slice()],d=o.draw;o.draw=()=>{};let n=0;try{if(freecam)renderFreecam();else render(0);for(let i=0;i<BG.length;i++)if(BG[i]!==A[0][i]||CH[i]!==A[1][i]||COL[i]!==A[2][i])n++;}finally{o.draw=d;}return n;};
-  px=11;py=5.3;a=Math.atan2(2.2,8.6);pitch=0;render(0);pitch=(.5-eye)/Math.hypot(2.2,8.6)*projY/rows;render(0);const player={clear:free(px,py),changed:compare()};
+  // The bars hide most of it from any one spot: it has to show from somewhere you can stand at the cell's front.
+  const player={clear:true,changed:0};for(let x=9.5;x<=12.5;x+=.5){px=x;py=5.3;const dx_=19.6-x,dy_=2.2;a=Math.atan2(dy_,dx_);pitch=0;render(0);pitch=(.5-eye)/Math.hypot(dx_,dy_)*projY/rows;render(0);player.clear&&=free(px,py);player.changed=Math.max(player.changed,compare());}px=11;py=5.3;
   const before=[px,py],out=[];toggleFreecam();
   for(const low of [false,true]){
    const x=low?18.5:18,y=low?6.7:7.5,tx=low?19.18:19.6,ty=y,z=low?.4:1.7,tz=low?.2:.55;

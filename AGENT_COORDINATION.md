@@ -28,12 +28,3 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
   not an FPS guarantee.
 - Preserve both agents' `WORLD_QUALITY.md` notes and manifest entries. Rebuild
   with `node tools/build-city.cjs`, never hand-merge `ascii-city.bundle.js`.
-
-## Known local test failures
-
-Both pass in CI and depend on the character grid rather than on the game:
-
-- `city-jail-guard-desk` 'desk appears from the legal jail cell'.
-- `city-home-french-doors` 'native room and city render the open leaves...':
-  passes at viewport 1170x800 and 1400x800, fails at 1100x800 and at its default
-  1280x720 under Windows. The door head is drawn in every case.
