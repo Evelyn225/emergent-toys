@@ -8,11 +8,11 @@
 const shopCat = (x, y, z) => figProp(x, y, KITTEN_LOOK, { z, h: 0.3 / KITTEN_LOOK.scale(0), pose: () => fract(T / 7) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 }); // (it lives here: still there after closing)
 function bodegaWall(i, u, uStep, z, d, mx, my, L) {
   if (my === room.H - 1 && z > 1.3 && z < 2.1 && hash(Math.floor(u / 0.5), Math.floor(z / 0.4), 131) > 0.55) { // flyers taped up in the window
-    BG[i] = C([YEL, RED, WHITE, GREEN][hash(Math.floor(u / 0.5), 1, 132) * 4 | 0], 6); return set(i, fract(z * 8) < 0.3 ? '=' : ' ', C(GRAY, 3)), true; }
+    BG[i] = C([YEL, RED, WHITE, GREEN][hash(Math.floor(u / 0.5), 1, 132) * 4 | 0], 6); return set(i, ' ', 0), true; }
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (rightWall(mx) && z > 1.1 && z < 2.2 && u > 5.3 && u < 7.5) { // behind the till: the cigarettes in their racks, the lotto
     if (z > 1.95) { BG[i] = C(YEL, 6); return wallText(i, u, uStep, z, d, 'LOTTO', 6.4, 2.07, 0.12, 0.14, C(RED, 6), C(YEL, 6)) || set(i, ' ', 0), true; }
-    const ry = (z - 1.1) / 0.21; BG[i] = fract(ry) < 0.15 ? C(GRAY, 2) : C([RED, WHITE, BLUE, GREEN, YEL][hash(Math.floor(u / 0.16) + Math.floor(ry) * 17, 2, 133) * 5 | 0], 5); return set(i, fract(u / 0.16) < 0.12 ? '|' : ' ', C(GRAY, 2)), true;
+    const ry = (z - 1.1) / 0.21; BG[i] = fract(ry) < 0.15 || fract(u / 0.16) < 0.12 ? C(GRAY, 2) : C([RED, WHITE, BLUE, GREEN, YEL][hash(Math.floor(u / 0.16) + Math.floor(ry) * 17, 2, 133) * 5 | 0], 5); return set(i, ' ', 0), true;
   }
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.28, 0.34, C(RED, 14), C(YEL, 7))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.0, 1.95, room.board3 || (room.board3 = menuLines().slice(0, 3)), 1.2, C(GRAY, 1), C(WHITE, 14))) return true;
@@ -33,14 +33,16 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
   ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || set(i, ' ', 0), true; }
+  if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
+  const footprint = Math.max(uStep, d / projY);
+  set(i, ' ', 0);
   if (!backWall(my) && my !== room.H - 1 && z > 2.3 && Math.abs(fract(Math.abs(u) / 3) - 0.5) < 0.18) { // tall arched windows, high up
     const wu = (fract(Math.abs(u) / 3) - 0.5) * 3, arch = z < 3.0 + Math.sqrt(Math.max(0, 0.29 - wu * wu)) * 0.6;
-    if (arch) { BG[i] = C(BLUE, 1 + day * 3); return set(i, Math.abs(wu) < 0.03 || fract(z * 2) < 0.05 ? '|' : ' ', C(GRAY, 5)), true; }
+    if (arch) { BG[i] = Math.abs(wu) < 0.03 || fract(z * 2) < 0.05 ? C(GRAY, 2) : C(BLUE, 1 + day * 3); return true; }
   }
-  if (Math.abs(fract(Math.abs(u) / 3) - 0.5) > 0.47) { BG[i] = C(GREEN, 2.2 + L * 0.2); return set(i, fract(z * 4) < 0.1 ? '=' : '|', C(GREEN, L)), true; } // iron columns, painted green
-  if (z < 1.2) { BG[i] = C(BRICK, 1.5 + L * 0.2); return set(i, fract(z / 0.15) < 0.12 ? '-' : fract(u / 0.3 + (Math.floor(z / 0.15) & 1) * 0.5) < 0.06 ? '|' : ' ', C(STONE, L * 0.5)), true; } // brick
-  BG[i] = C(STONE, 3.2 + L * 0.15); return set(i, ' ', 0), true;
+  if (Math.abs(fract(Math.abs(u) / 3) - 0.5) > 0.47) { BG[i] = C(GREEN, 2.2 + L * 0.2); return true; } // iron columns, painted green
+  if (z < 1.2) { BG[i] = C(BRICK, 1.7 + L * 0.2 - 1.5 * Math.max(coveGroove(z, 0.15, 0.008, d / projY), coveGroove(u + (Math.floor(z / 0.15) & 1) * 0.15, 0.3, 0.008, footprint))); return true; } // brick
+  BG[i] = C(STONE, 3.2 + L * 0.15); return true;
 }
 ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 'concrete', ceil: 'strip', sign: false, wall: marketWall, keeper: [8.0, 1.4],
   props: r => [...stall(3.5, 2.0, 1.4, 0, BLUE, WHITE), ...stall(8.0, 2.0, 1.6, 1, GREEN, r.neon), ...stall(12.5, 2.0, 1.4, 3, YEL, BRICK), // fish, the greengrocer, cheese
@@ -58,7 +60,7 @@ const FRUIT_PAPER = { r: 0.035, leaf: 0.013 }; // the oranges on the wallpaper, 
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(GREEN, 14), C(WHITE, 7))) return true;
-  if (z < 1.0) { BG[i] = C(GREEN, 2.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WHITE, 4)), true; }
+  if (z < 1.0) { set(i, ' ', 0); BG[i] = C(GREEN, 2.4 + L * 0.2 - 1.5 * coveGroove(u, 0.25, 0.01, Math.max(uStep, d / projY))); return true; }
   // the paper above: a little orange with its leaf in every other 25 cm square, each row half a step along from the
   // last (a half-drop repeat)
   const tu = Math.floor(u * 4), tz = Math.floor(z * 4);
@@ -140,7 +142,7 @@ ROOM_DEFS.welding = { grid: boxRoom(12, 9), light: 0.8, floor: 'concrete', ceil:
 // ---- the tyre shop (TIRES): tyres stacked up everywhere, the changer and the balancer, the counter with its screen, a
 // row of chairs and the coffee machine for waiting
 const tyreStack = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
-  for (let k = 0; k < n; k++) drum(vx, vy, 0.32, k * 0.22, k * 0.22 + 0.21, (i, t, L) => { BG[i] = C(GRAY, (0.6 + L * 0.12) * drumLit(0.32)); return set(i, HIT.face === 5 ? (Math.hypot(HIT.u, HIT.v) < 0.18 ? ' ' : 'o') : fract(Math.atan2(HIT.v, HIT.u) * 4) < 0.3 ? '=' : '#', C(GRAY, 4)), true; });
+  for (let k = 0; k < n; k++) drum(vx, vy, 0.32, k * 0.22, k * 0.22 + 0.21, (i, t, L) => { set(i, ' ', 0); BG[i] = HIT.face === 5 ? (Math.hypot(HIT.u, HIT.v) < 0.18 ? C(GRAY, 0.3) : C(GRAY, 1.1 + L * 0.12)) : C(GRAY, (0.9 + L * 0.14) * drumLit(0.32)) ; return true; }); // (a tread you can't resolve from here, a black hole through the stack)
 }, [0.32, 0.32, n * 0.22]);
 function tyreWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -237,7 +239,7 @@ const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, 
 function drugWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
-  if (z > 2.0 && z < 2.2) { BG[i] = C(YEL, 8); return set(i, fract(u * 2) < 0.5 ? '%' : ' ', C(RED, 10)), true; } // price banners all round
+  if (z > 2.0 && z < 2.2) { BG[i] = fract(u * 2) < 0.5 ? C(RED, 6) : C(YEL, 8); return set(i, ' ', 0), true; } // price banners all round
   BG[i] = C(WHITE, 6 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.drugstore = { grid: ['############', '#..........#', '#..........#', '#.SSS..SSS.#', '#..........#', '#.SSS..SSS.#', '#..........#', '#..........#', '#####DD#####'],
@@ -278,10 +280,11 @@ const gachaMachine = (x, y, fx, fy, k) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
     const f = HIT.face, front = f === 3 || f === 4, w = HIT.w - z0, a = HIT.u; // (the long sides: the one against the wall never shows)
     BG[i] = C([MAG, CYAN, YEL, GREEN, RED, BLUE][kk % 6], (2.6 + L * 0.3) * shadeFace(f));
     if (!front) return set(i, ' ', 0), true;
-    if (w > 0.45 && w < 0.84 && Math.abs(a) < 0.2) { BG[i] = C(CYAN, 1); const c = hash(Math.floor(a * 18), Math.floor(w * 16), kk); return set(i, c > 0.45 ? 'O' : ' ', C(ITEM_COL[c * 13 % ITEM_COL.length | 0], 13)), true; } // the capsules behind the window
-    if (Math.hypot(a, w - 0.3) < 0.06) return set(i, '@', C(WHITE, 14)), true; // the handle
+    if (w > 0.45 && w < 0.84 && Math.abs(a) < 0.2) { const c = hash(Math.floor(a * 18), Math.floor(w * 16), kk); BG[i] = c > 0.45 && coveDetail(t) > 0.3 ? C(ITEM_COL[c * 13 % ITEM_COL.length | 0], 5) : C(CYAN, 1.2); return set(i, ' ', 0), true; } // the capsules behind the window
+    if (Math.hypot(a, w - 0.3) < 0.06) { BG[i] = C(WHITE, 8); return set(i, ' ', 0), true; } // the handle
     if (w > 0.05 && w < 0.16 && Math.abs(a) < 0.08) { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; } // the hatch
-    return set(i, w > 0.36 && w < 0.42 ? '$' : ' ', C(WHITE, 10)), true;
+    if (w > 0.36 && w < 0.42) BG[i] = C(WHITE, 5); // (a coin slot's plate)
+    return set(i, ' ', 0), true;
   });
 }, [0.24, 0.24, 1.78]), gacha: true, cx: x + fx * 0.6, cy: y + fy * 0.6 });
 const nearGacha = () => mode === 'room' && room.props.find(s => s.gacha && Math.hypot(px - s.cx, py - s.cy) < 0.5) || null;

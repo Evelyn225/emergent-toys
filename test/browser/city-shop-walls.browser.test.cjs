@@ -12,7 +12,7 @@ async function fixture(run){
   }finally{await p.close();}
 }
 // (the rooms with bathrooms are in here too: their tile is shared)
-const SHOPS=['jeweler','tobacco','deli','delicatessen','thrift','tattoo','gacha','tireshop','florist','petshop','pawn','toys','antiques','sports','welding','tailor','herbs','records'];
+const SHOPS=['jeweler','tobacco','deli','delicatessen','thrift','tattoo','gacha','tireshop','florist','petshop','pawn','toys','antiques','sports','welding','tailor','herbs','records','liquor','video','hardware','grocer','markethall','gas','pharmacy','drugstore','phones','realty','barber','bodega','fruitshop'];
 test('a shop with its props taken out is walls, floor and ceiling with barely a glyph left, and those are its lettering',()=>fixture(async p=>{
  const r=await p.evaluate(SHOPS=>{
   const bad=[];
@@ -47,6 +47,8 @@ test('each shop keeps its character: mirrors, gilt, tanks, fish, ink, hazard str
   flashSheet(0,.3,.3,.7,.9,3,8);if(CH[0]!==' ')bad.push('flash glyph');
   koiMural(0,7.4,1.8,8);if(CH[0]!==' '||![ORANGE,WHITE].includes(hue(BG[0])))bad.push('koi body');
   enter('toys');if(toyBoxWall(0,.1,.2,8,3)&&CH[0]!==' ')bad.push('toy box glyph');
+  enter('video');const beads=room.props.find(q=>q.walk&&q.shade&&q.box?.hw===.02&&q.box?.z1===2.15);if(!beads)bad.push('no bead curtain');else{HIT.face=3;HIT.w=1;let on=0,off=0;for(let u=-.45;u<.45;u+=.01){HIT.u=u;const hit=beads.shade(0,2,8);if(hit){on++;if(CH[0]!==' ')bad.push('bead glyph');}else off++;}if(!on||!off)bad.push('curtain lost its strings or gaps');}
+  enter('gacha');const m=room.props.find(q=>q.gacha),list=[],dbx=drawBox;drawBox=(b,shade)=>list.push(shade);try{m.draw(m.x,m.y);}finally{drawBox=dbx;}HIT.face=3;HIT.u=0;HIT.w=.3;HIT.nx=0;HIT.ny=1;HIT.nz=0;list[0](0,2,8);if(CH[0]!==' ')bad.push('gacha handle glyph');
   // the shared front window, by day and at night
   enter('tailor');const window=()=>{frontWindow(0,-.8,.001,1.5,2,room.H-1,8);return BG[0];};const dayGlass=window();if(CH[0]!==' ')bad.push('window glyph');if(hue(dayGlass)!==BLUE)bad.push('window glass');
   frontWindow(0,-.01,.001,1.5,2,room.H-1,8);if(hue(BG[0])!==GRAY)bad.push('window mullion');

@@ -119,14 +119,14 @@ const drumLit = r => 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / 
 const CHROME = (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.5); return set(i, ' ', 0), true; };
 // a potted plant: a terracotta pot with a rim, and a bush of leaves round a stem (h: how tall, seed: its shape)
 const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.16, 0, 0.3, (i, t, L) => { if (HIT.face === 5) { BG[i] = C(BRICK, 0.8); return set(i, '.', C(BRICK, L * 0.5)), true; } BG[i] = C(ORANGE, (1.6 + L * 0.3) * drumLit(0.16)); return set(i, ' ', 0), true; });
-  drum(vx, vy, 0.185, 0.27, 0.33, (i, t, L) => { if (HIT.face === 5) return false; BG[i] = C(ORANGE, (2.1 + L * 0.35) * drumLit(0.185)); return set(i, '=', C(BRICK, L * 0.7)), true; });
+  drum(vx, vy, 0.16, 0, 0.3, (i, t, L) => { set(i, ' ', 0); BG[i] = HIT.face === 5 ? C(BRICK, 0.8) : C(ORANGE, (1.6 + L * 0.3) * drumLit(0.16)); return true; });
+  drum(vx, vy, 0.185, 0.27, 0.33, (i, t, L) => { if (HIT.face === 5) return false; BG[i] = C(ORANGE, (2.1 + L * 0.35) * drumLit(0.185)); return set(i, ' ', 0), true; });
   rod(vx, vy, 0.3, vx, vy, h * 0.7, 0.012, BRICK, 0.8);
   for (let k = 0; k < 7; k++) {
     const a = hash(seed, k, 4401) * Math.PI * 2, rr = 0.13 + hash(seed, k, 4403) * 0.07, r = Math.min(rr * 0.8, 0.05 + hash(seed, k, 4402) * 0.1), z = 0.5 + (h - 0.65) * (k + 0.5) / 7, tone = 0.75 + hash(seed, k, 4404) * 0.5; // (each clump touching the stem, the bush within 0.3m of it)
-    dot(vx + Math.cos(a) * r, vy + Math.sin(a) * r, z, rr, (i, t, L) => { BG[i] = C(GREEN, (1.4 + L * 0.3) * tone); return set(i, k & 1 ? '%' : '&', C(GREEN, L * 0.55 * tone)), true; });
+    dot(vx + Math.cos(a) * r, vy + Math.sin(a) * r, z, rr, (i, t, L) => { BG[i] = C(GREEN, (1.4 + L * 0.3) * tone); return set(i, ' ', 0), true; });
   }
-}, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, HIT.w < 0.3 ? ' ' : '&', C(GREEN, L * 0.6)), true; });
+}, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, ' ', 0), true; });
 // a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
 const STOOL = (x,y,col=RED,seatZ=.62) => FURNITURE_STOOL(x,y,col,seatZ);
 // the jukebox, facing (fx, fy): a rounded top in slices, neon tubes up its front cycling colour, the record turning in
@@ -179,11 +179,11 @@ const BARBER_CHAIR = (x, y) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.34, 0.3, 1.25]), seat: true, fx: 0, fy: -1, h: 0.45 });
 // a bouquet in a glass vase: stems fanning up, a flower head on each in the bloom's colour
 const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.09, 0, 0.32, (i, t, L) => { BG[i] = C(CYAN, (1.6 + L * 0.3) * drumLit(0.09)); return set(i, HIT.face === 5 ? '~' : ':', C(WHITE, L * 0.6)), true; });
+  drum(vx, vy, 0.09, 0, 0.32, (i, t, L) => { BG[i] = C(CYAN, (HIT.face === 5 ? 2.4 : 1.6) + L * 0.3 * drumLit(0.09)); return set(i, ' ', 0), true; });
   for (let k = 0; k < 7; k++) {
     const a = k / 7 * Math.PI * 2 + x, r = 0.05 + (k % 3) * 0.035, z = 0.48 + (k % 3) * 0.06, tx = vx + Math.cos(a) * r, ty = vy + Math.sin(a) * r;
     rod(vx, vy, 0.28, tx, ty, z, 0.004, GREEN, 0.9);
-    dot(tx, ty, z + 0.02, 0.035, (i, t, L) => { BG[i] = C(k === 3 ? YEL : bloom, 3 + L * 0.4); return set(i, '*', C(WHITE, L * 0.6)), true; });
+    dot(tx, ty, z + 0.02, 0.035, (i, t, L) => { BG[i] = C(k === 3 ? YEL : bloom, 3 + L * 0.4); return set(i, ' ', 0), true; });
   }
 });
 // a grab pole, floor to ceiling
@@ -247,10 +247,12 @@ const petCage = (x, y, look, pose, h) => [BX(x, y, 0.42, 0.32, 0, 0.7, solid(BRI
 const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i, t, L) => {
   const f = HIT.face;
   BG[i] = C(base, (1 + L * 0.35 * bright) * shadeFace(f));
-  if (f === 5) return set(i, top, C(base, L * 0.9)), true;
-  if (trim && HIT.w > trim) return set(i, '=', C(base, L)), true;
+  set(i, ' ', 0);
+  if (f === 5) { BG[i] = C(base, (1.3 + L * 0.4 * bright)); return true; }
+  if (trim && HIT.w > trim) { BG[i] = C(base, (1.5 + L * 0.4 * bright) * shadeFace(f)); return true; }
   const along = f <= 2 ? HIT.v : HIT.u;
-  return set(i, panel && Math.abs(fract(along / panel) - 0.5) < 0.06 ? '|' : ' ', C(base, L * 0.6)), true;
+  if (panel && t < 12 && Math.abs(fract(along / panel) - 0.5) < 0.06) BG[i] = C(base, Math.max(0.3, (0.6 + L * 0.2 * bright) * shadeFace(f)));
+  return true;
 };
 const counterBox = (x,y,half,z1=1.05) => [FURNITURE_COUNTER(x,y,half,z1),FURNITURE_REGISTER(x-half*.6,y,z1)];
 // a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
@@ -679,8 +681,8 @@ function gymWall(i, u, uStep, z, d, mx, my, L) {
 }
 function barberWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0 && z > 0.9 && z < 2.0) { // a mirror behind each chair
-    if (fract(u / 2.5) < 0.05 || z < 0.95 || z > 1.95) { set(i, '=', C(GRAY, L)); return true; }
-    set(i, fract(u * 3 + z) < 0.08 ? '/' : ' ', C(CYAN, L * 0.6)); BG[i] = C(CYAN, 1); return true;
+    set(i, ' ', 0);
+    BG[i] = fract(u / 2.5) < 0.05 || z < 0.95 || z > 1.95 ? C(GRAY, 2.4 + L * 0.2) : C(CYAN, 1.6 + (z - 0.9) * 0.5); return true;
   }
   return false;
 }
@@ -735,12 +737,13 @@ function showCar(x, y, col) {
 function realtyWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0 && z > 1.0 && z < 1.9 && fract(u / 1.6) < 0.7) { // listings pinned up: a little house, a price
     const fu = fract(u / 1.6) / 0.7, fz = (z - 1.0) / 0.9;
-    BG[i] = C(WHITE, 4 + L * 0.2);
-    if (fz > 0.45 && fz < 0.85 && Math.abs(fu - 0.5) < 0.3 - (fz - 0.45)) return set(i, '^', C(BRICK, 12)), true; // the roof
-    if (fz > 0.15 && fz <= 0.45 && Math.abs(fu - 0.5) < 0.22) return set(i, Math.abs(fu - 0.5) < 0.05 ? '|' : '#', C(GRAY, 9)), true;
-    return set(i, fz < 0.12 && fract(fu * 6) < 0.6 ? '$' : ' ', C(GREEN, 12)), true;
+    set(i, ' ', 0); BG[i] = C(WHITE, 4 + L * 0.2);
+    if (fz > 0.45 && fz < 0.85 && Math.abs(fu - 0.5) < 0.3 - (fz - 0.45)) BG[i] = C(BRICK, 4); // the roof
+    else if (fz > 0.15 && fz <= 0.45 && Math.abs(fu - 0.5) < 0.22) BG[i] = Math.abs(fu - 0.5) < 0.05 ? C(BRICK, 2) : C(GRAY, 3); // the walls, a door
+    else if (fz < 0.12 && Math.abs(fu - 0.5) < 0.3) BG[i] = C(GREEN, 3.5); // the price
+    return true;
   }
-  BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
+  set(i, ' ', 0); BG[i] = C(WARM, 2.2 + L * 0.15 - 1.5 * coveGroove(u, 0.5, 0.012, Math.max(uStep, d / projY))); return true;
 }
 const HOME_SHELF_CAPACITY = 48;
 function homeRecord(r = room) {
