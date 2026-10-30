@@ -64,6 +64,7 @@ test('native walking and E return cross the open French doorway while the actual
 test('native room and city render the open leaves and supported head with clear panes and no duplicate painted closed doors',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
   const bad=[],draw=drawBox;let count=0;
+  const surroundHead=head=>room.props.filter(o=>o.homeFrenchDoorSurround).some(o=>{const list=[];drawBox=box=>list.push(box);try{o.draw(o.x,o.y);}finally{drawBox=draw;}return list.some(q=>q.z0===head.z0&&q.z1===head.z1&&q.x<head.x&&Math.abs(q.y-head.y)<1e-9&&q.hw>=head.hw);});
   for(const stage of ['room','city']){
    if(stage==='city'){px=22.8;py=12.5;stepHomeBalcony();}
    const b=room.balconyWorld,h=homeRecord(),o=stage==='room'?room.props.find(o=>o.homeFrenchDoor):(render(0),homeBalconyModels.get(h)?.find(o=>o.homeFrenchDoor));
@@ -80,7 +81,10 @@ test('native room and city render the open leaves and supported head with clear 
      let seen=false;for(const rowsOff of [0,-1,1,-2,2,-3,3]){
       pitch=aim+rowsOff/rows;drawBox=draw;render(0);const before=Array.from(BG);paints=0;
       drawBox=(box,shade,ray)=>draw(box,active&&targets.has(box)?(i,t,L)=>{const hit=shade(i,t,L);if(hit){paints++;BG[i]=C(MAG,15);}return hit;}:shade,ray);
-      render(0);if(paints>=5&&Array.from(BG).some((c,i)=>c===C(MAG,15)&&before[i]!==c)){seen=true;break;}
+      render(0);
+      // From inside, the door's own head is meant to sit behind the room-side surround head: it has to draw, and that head has to cover it.
+      const covered=stage==='room'&&role==='casing-head'&&paints>=5&&surroundHead(v.find(p=>p.role===role).view);
+      if(covered||paints>=5&&Array.from(BG).some((c,i)=>c===C(MAG,15)&&before[i]!==c)){seen=true;break;}
      }
      if(!seen)bad.push([stage,role,'not visible',paints]);count++;
     }finally{drawBox=draw;o[method]=original;freecam=null;}
