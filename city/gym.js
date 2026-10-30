@@ -6,30 +6,6 @@ const GYM_RING = { x: 12, y: 4.6, h: 2.1, top: 0.5 }; // its centre, half a side
 const RING_MIN_HEALTH = 40, RING_FLOOR = 5;
 const nextBoxer = () => BOXERS[Math.min(boxRank, BOXERS.length - 1)];
 const nearRing = () => !!room && room.kind === 'gym' && Math.max(Math.abs(px - GYM_RING.x), Math.abs(py - GYM_RING.y)) < GYM_RING.h + 0.9;
-// the ring: a raised canvas on a skirted apron, a post at each corner with its pad (red and blue corners, two white),
-// three ropes round it
-const BOXING_RING = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  const { h, top } = GYM_RING, post = h - 0.12;
-  drawBox(boxAt(vx, vy, 1, 0, h, h, 0, top), (i, t, L) => {
-    if (HIT.face === 5) { // the canvas, scuffed, the logo in the middle
-      const r = Math.hypot(HIT.u, HIT.v), edge = Math.max(Math.abs(HIT.u), Math.abs(HIT.v)) > h - 0.08;
-      BG[i] = C(edge ? BLUE : WHITE, edge ? 3 + L * 0.2 : 4.5 + L * 0.25);
-      return set(i, r < 0.5 && r > 0.4 ? 'o' : hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 41) > 0.93 ? '.' : ' ', C(r < 0.5 ? RED : GRAY, L * 0.7)), true;
-    }
-    BG[i] = C(BLUE, (1.2 + L * 0.2) * shadeFace(HIT.face)); // the apron skirt
-    return set(i, HIT.w > top - 0.06 ? '=' : ' ', C(WHITE, L * 0.6)), true;
-  });
-  const corners = [[-1, -1, RED], [1, -1, WHITE], [1, 1, BLUE], [-1, 1, WHITE]];
-  for (const [ex, ey, col] of corners) {
-    const cx = vx + ex * post, cy = vy + ey * post;
-    drum(cx, cy, 0.04, top, top + 1.0, (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.4); return set(i, ' ', 0), true; });
-    drum(cx, cy, 0.075, top + 0.25, top + 0.95, (i, t, L) => { BG[i] = C(col, (col === WHITE ? 4 : 2.5) * drumLit(0.075) + L * 0.2); return set(i, ' ', 0), true; }); // the pad
-  }
-  for (const [k, z] of [[0, 0.35], [1, 0.62], [2, 0.88]]) for (let c = 0; c < 4; c++) { // the ropes, corner to corner
-    const [ax, ay] = corners[c], [bx, by] = corners[(c + 1) % 4];
-    rod(vx + ax * post, vy + ay * post, top + z, vx + bx * post, vy + by * post, top + z, 0.018, [RED, WHITE, BLUE][k], 1.1);
-  }
-}, [GYM_RING.h, GYM_RING.h, GYM_RING.top]); // (you walk round it: in it is the fight)
 // what E does here, and what the prompt says: the ring first (it's the big thing), then the desk
 function gymPrompt() {
   if (!room || room.kind !== 'gym') return '';
