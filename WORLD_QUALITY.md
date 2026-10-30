@@ -41,9 +41,9 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 1. [x] Shared furniture kit: chairs, stools, benches, sofas, beds, tables, shelves, cabinets, wardrobes and counters; fitted construction and seating. Specialist built-ins and room-specific variations continue in their interior passes below.
 2. [x] Bathrooms: toilets, baths, showers, sinks, mirrors, taps, plumbing, partitions, doors and useful layouts.
 3. [x] Kitchens and dining: cupboards, worktops, appliances, cookware, dishes, food displays, seating and cooking feedback.
-4. [ ] Home lighting, electronics and decoration: lamps, switches, TVs, record players, radios, clocks, books, plants, frames and keepsakes.
-5. [ ] Standard apartments, lofts and Belle homes: distinct layouts, finished openings, balconies, windows and coherent furnishing sets.
-6. [ ] Hotels and motels: rooms, suites, lobbies, reception, bathrooms, service areas and price-appropriate character.
+4. [x] Home lighting, electronics and decoration: lamps, switches, TVs, record players, radios, clocks, books, plants, frames and keepsakes.
+5. [x] Standard apartments, lofts and Belle homes: distinct layouts, finished openings, balconies, windows and coherent furnishing sets.
+6. [x] Hotels and motels: rooms, suites, lobbies, reception, bathrooms, service areas and price-appropriate character.
 7. [ ] Shop interiors: grocer, deli, hardware, sports, toys, thrift, records, tattoo, florist, pet shop, pharmacy, pawn, jeweller and remaining specialist stores.
 8. [ ] Restaurants, cafés and bars: ramen/noodles, diners, regional restaurants, bakery, tea, coffee, karaoke and nightlife.
 9. [ ] Civic interiors: hospital, bank, jail, gym, laundry, storage, museum and apartment lobbies.
@@ -486,7 +486,7 @@ The numbered passes above remain the work queue. The new models establish reusab
 
 ## Resume after runtime disconnect (2026-10-27)
 
-- [ ] Fix furnishing/workshop refresh before continuing trim: the real owned
+- [x] Fix furnishing/workshop refresh before continuing trim: the real owned
   studio, Belle and Fern audit loses the bathroom frame, sliding door and both
   accessories after refreshFurnishedRoom. room.bathroomDoors still points to
   props no longer in room.props, so the missing geometry also loses collision.
@@ -498,7 +498,7 @@ The numbered passes above remain the work queue. The new models establish reusab
   collision/sight/render checks and saved private state. This fix is reproduced
   but NOT implemented; no runtime edit was made on
   codex/home-furnishing-structure before the environment became unavailable.
-- [ ] Resume fitted home skirting/cornice and Belle panelling audit afterward;
+- [x] Resume fitted home skirting/cornice and Belle panelling audit afterward;
   these are still painted glyphs. No new wall-trim builder exists. Finish pass5,
   then hotel/motel6 and civic9, keeping held Claude/shared helper ownership.
 
@@ -634,3 +634,5 @@ changes notes only; runtime sources, manifest and bundle are unchanged.
 - Civic interiors (pass 9), jail floor and lights (Claude, claude/jail-floor-lights): replace the speck-glyph floor and painted ceiling lamps. New `city/jail-floor-lights.js`: filtered painted concrete with 3 m saw cuts and worn patches, a real world-space yellow line whose coverage uses the pixel's extent across the line (an isotropic footprint swelled it into a wedge down the corridor), plain board-marked ceiling, and ten cached caged bulkhead lamps at the old points: steel plate on the ceiling, lit closed glass dome, two crossed wire hoops and a ring, wire ends joined or buried in the plate. `jailFloor`/`jailCeil` and their switch cases are gone; the room keeps `floor: 'jail'`, so footsteps are unchanged. Three browser checks cover glyph-free filtering, footsteps, the line's width and continuity in the actual view, lamp placement, plate/cage joints, dome inside the cage, headroom and lit glass in view; seven isolated source mutations each fail them. Serial ABAB at 177×66 against main 5c995cd: corridor 5.2-5.3→4.6-5.4 ms, cell 3.5→2.9-3.1, ceiling 6.2-6.7→3.4-3.5, wide 5.8→4.8; the old ceiling painter looped over every lamp for every pixel. Local observations, not an FPS guarantee.
 
 - Civic interiors (pass 9), jail closing audit (Claude): first jail interior quality pass complete after #338-#344 and the floor/lights chunk. Reviewed twelve final views, day and night: cell front, inside a cell, corridor both ways, desk, exit door, west window, oblique bars and a lamp, with no page errors and nothing painted in view. Not changed: `jail.js` still holds superseded painters behind the fitted wrappers, and `city-jail-guard-desk`'s 'desk appears from the legal jail cell' check fails on this Windows machine on exact main as well as this branch, because from 9 m the desk changes only 0-1 cells against its `changed>2` threshold; CI has passed it. Remaining pass 9 rooms: gym, laundry, storage, museum.
+
+- Checklist audit of passes 4, 5 and 6 (Claude): ticked after checking Codex's closing audits against current main (a0a5a8d) rather than on their wording. The 147 home, hotel, motel and washroom browser tests were rerun: 146 pass, and the one failure (`city-home-french-doors` casing-head) depends on the character grid, not the game: the head is drawn at every width tried and the test passes at 1170 and 1400 wide. Reviewed day, night and reverse views of the studio, loft, Belle home, all three hotel room tiers and the motel, hotel and Grand lobbies, with no page errors. Also ticked the two 27 October resume items: `city-home-refresh-structure` and the skirting and panelling suites pass. Scope notes: 'switches' means the rotary switch on each lamp and its E control, as homes have no wall switches; homes have no radio fixture. Known remainder left to its own pass: lobby signs drop to mixed large and small letters from an oblique angle (standard HOTEL board), which belongs with the reserved global lettering. The 26 October reported-fix boxes above stay unticked: their fix notes exist, but this audit did not recheck them.
