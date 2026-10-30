@@ -32,6 +32,11 @@ test('every canvas is whole on one gallery wall, framed where the painter puts i
   const o=frames.find(f=>f.museumFrame.face.fx===-1),q=o.museumFrame.face;px=q.line-2;py=q.mid;a=0;pitch=0;render(0);
   const row=Math.floor(hor-(1.75-eye)*projY/2),i=row*cols+Math.floor(cols/2),hue=BG[i]>>4;
   if(hue===WHITE||Math.abs(ZB[i]-2)>.05)bad.push(['no canvas where the frame is',hue,ZB[i]]);
+  // ...and right across it: a wall cell's edge must not drop a column of marble through the picture.
+  // (This wall's palette has no white, so any white between the side bars is the wall showing.)
+  px=q.line-2.4;py=q.mid;render(0);const scan=Math.floor(hor-(1.5-eye)*projY/2.4)*cols;let marble=0;
+  for(let c=0;c<cols;c++){const dy_=(2*(c+.5)/cols-1)*tf*2.4;if(Math.abs(dy_)<w/2-.1&&BG[scan+c]>>4===WHITE)marble++;}
+  if(q.k!==1||q.line!==25)bad.push('fixture: expected the east wall bay');if(marble)bad.push('marble columns through the canvas '+marble);
   return{bad};
  });
  assert.deepEqual(r.bad,[]);
