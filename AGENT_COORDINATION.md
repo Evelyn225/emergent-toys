@@ -4,7 +4,7 @@ Read this alongside `WORLD_QUALITY.md` (the checklist and the per-chunk notes)
 and `corridor-geometry-notes.md`. Do not edit or restore `CLOUD_HANDOFF.md`.
 
 Everything before 2026-10-30, including every chunk's branch, test and timing
-log, is in `docs/archive/agent-coordination-to-2026-10-30.md`. Keep this file to
+log, is in `AGENT_COORDINATION_ARCHIVE.md`. Keep this file to
 what the next agent needs: replace stale entries, and move finished detail into
 the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
