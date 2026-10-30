@@ -123,9 +123,10 @@ const gasBottle = (x, y, col) => ROOM_MODEL(x, y, (vx, vy) => {
 const carSeat = (x, y, fx, fy) => [{ ...BX(x, y, 0.27, 0.27, 0.2, 0.5, solid(GRAY, { top: '=', bright: 0.9 })), seat: true, x, y, fx, fy, h: 0.5 }, BX(x - fx * 0.25, y - fy * 0.25, 0.27, 0.07, 0.5, 1.2, solid(GRAY, { bright: 0.9 }), fy, -fx)];
 function weldWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.48, 0.3, 0.36, C(ORANGE, 14), C(GRAY, 1))) return true;
-  if (backWall(my) && z > 1.5 && z < 2.0 && Math.abs(u - 9.0) < 1.0) { BG[i] = C(YEL, 7); return wallText(i, u, uStep, z, d, 'SAFETY FIRST', 9.0, 1.75, 0.13, 0.2, C(GRAY, 1), C(YEL, 7)) || set(i, fract((u + z) * 4) < 0.5 ? '/' : ' ', C(GRAY, 1)), true; }
-  const scorch = Math.max(0, 1 - Math.hypot(u - 4.0, (z - 1.1) * 1.5) / 1.6);
-  BG[i] = C(GRAY, (2 + L * 0.2) * (1 - scorch * 0.6)); return set(i, fract(u * 3) < 0.15 ? '|' : ' ', C(GRAY, 4 * (1 - scorch * 0.5))), true; // corrugated steel, scorched by the bench
+  if (backWall(my) && z > 1.5 && z < 2.0 && Math.abs(u - 9.0) < 1.0) { BG[i] = C(YEL, 7); return wallText(i, u, uStep, z, d, 'SAFETY FIRST', 9.0, 1.75, 0.13, 0.2, C(GRAY, 1), C(YEL, 7)) || (set(i, ' ', 0), true); }
+  const scorch = Math.max(0, 1 - Math.hypot(u - 4.0, (z - 1.1) * 1.5) / 1.6), footprint = Math.max(uStep, d / projY);
+  set(i, ' ', 0);
+  BG[i] = C(GRAY, (2 + L * 0.2) * (1 - scorch * 0.6) - coveGroove(u, 1 / 3, 0.05, footprint)); return true; // corrugated steel, scorched by the bench
 }
 const WELDING_STOCK = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, fract(HIT.w * 5) < 0.3 ? '=' : ' ', C(GRAY, 9)), true; };
 ROOM_DEFS.welding = { grid: boxRoom(12, 9), light: 0.8, floor: 'concrete', ceil: 'strip', sign: false, wall: weldWall, keeper: [9.4, 6.3],
@@ -144,9 +145,14 @@ const tyreStack = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
 function tyreWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 7.5, 2.5, 0.3, 0.36, C(YEL, 15), C(GRAY, 0.6))) return true;
-  if (backWall(my) && z > 1.1 && z < 2.1 && Math.abs(u - 7.5) < 2.3) { BG[i] = C(GRAY, 0.8); return set(i, Math.abs(fract(u * 2.5) - 0.5) < 0.12 && fract(z * 4 + Math.floor(u * 2.5) * 0.5) < 0.5 ? '#' : ' ', C(GRAY, 4)), true; } // the tread patterns, a poster of them
-  if (z < 1.0) { BG[i] = C(YEL, 4 + L * 0.2); return set(i, fract((u + z) * 3) < 0.5 ? '/' : ' ', C(GRAY, 1)), true; } // hazard stripes
-  BG[i] = C(GRAY, 2.6 + L * 0.15); return set(i, fract(z / 0.3) < 0.08 ? '-' : fract(u / 0.6 + (Math.floor(z / 0.3) & 1) * 0.5) < 0.04 ? '|' : ' ', C(GRAY, 4)), true; // blocks
+  const footprint = Math.max(uStep, d / projY);
+  set(i, ' ', 0);
+  if (backWall(my) && z > 1.1 && z < 2.1 && Math.abs(u - 7.5) < 2.3) { // the tread patterns, a poster of them
+    BG[i] = footprint < 0.06 && Math.abs(fract(u * 2.5) - 0.5) < 0.12 && fract(z * 4 + Math.floor(u * 2.5) * 0.5) < 0.5 ? C(GRAY, 3) : C(GRAY, 0.9); return true;
+  }
+  if (z < 1.0) { BG[i] = footprint > 0.12 ? C(YEL, 2.6 + L * 0.15) : fract((u + z) * 3) < 0.5 ? C(GRAY, 1) : C(YEL, 4 + L * 0.2); return true; } // hazard stripes
+  const course = coveGroove(z, 0.3, 0.008, d / projY), joint = coveGroove(u + (Math.floor(z / 0.3) & 1) * 0.3, 0.6, 0.008, footprint);
+  BG[i] = C(GRAY, 2.6 + L * 0.15 - 2.5 * Math.max(course, joint)); return true; // blocks
 }
 ROOM_DEFS.tireshop = { grid: boxRoom(12, 9), light: 0.95, floor: 'concrete', ceil: 'strip', sign: false, wall: tyreWall, keeper: [9.5, 7.3],
   props: r => [...[1.5, 2.2, 2.9, 3.6].map((x, k) => tyreStack(x, 1.4, 4 + (k & 1) * 2)), ...[2.3, 3.0, 3.7].map((y, k) => tyreStack(1.4, y + 0.6, 3 + k)),
@@ -162,14 +168,18 @@ const sewingMachine = (x, y, fx, fy) => [ROOM_MODEL(x, y, (vx, vy) => drawFurnit
   SEWING_MACHINE(x, y, 0.75, -fy, fx)];
 function tailorWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
+  const footprint = Math.max(uStep, d / projY);
   if (backWall(my) && z > 0.9 && z < 2.3 && u > 3.0 && u < 8.0) { // bolts of cloth, end on, on their shelves
     const sz = (z - 0.9) / 0.35, bz = fract(sz), bu = fract(u / 0.3), k = Math.floor(u / 0.3) + Math.floor(sz) * 23;
-    if (bz < 0.1) { BG[i] = C(BRICK, 2); return set(i, '=', C(WARM, L)), true; }
-    const r = Math.hypot(bu - 0.5, (bz - 0.55) * 1.1); BG[i] = r < 0.42 ? C([BLUE, GRAY, BRICK, GREEN, RED, WHITE, YEL][hash(k, 1, 142) * 7 | 0], 3 + L * 0.2) : C(BRICK, 1); return set(i, r < 0.1 ? 'o' : r < 0.42 && fract(r * 12) < 0.3 ? '@' : ' ', C(GRAY, 6)), true;
+    set(i, ' ', 0);
+    if (bz < 0.1) { BG[i] = C(BRICK, 2.4 + L * 0.15); return true; }
+    const r = Math.hypot(bu - 0.5, (bz - 0.55) * 1.1);
+    BG[i] = r < 0.1 ? C(BRICK, 1) : r < 0.42 ? C([BLUE, GRAY, BRICK, GREEN, RED, WHITE, YEL][hash(k, 1, 142) * 7 | 0], 3 + L * 0.2) : C(BRICK, 1); return true;
   }
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.58, 0.26, 0.3, C(YEL, 12), C(BRICK, 1.5))) return true;
-  if (z < 0.95) { BG[i] = C(BRICK, 1.4 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(WARM, 3)), true; }
-  BG[i] = C(STONE, 3.8 + L * 0.15); return set(i, fract(u / 0.12) < 0.08 ? ':' : ' ', C(GRAY, 4)), true; // pinstripe
+  set(i, ' ', 0);
+  if (z < 0.95) { BG[i] = C(BRICK, 1.4 + L * 0.2 - coveGroove(u, 1 / 3, 0.02, footprint)); return true; }
+  BG[i] = C(STONE, 3.8 + L * 0.15 - coveGroove(u, 0.12, 0.012, footprint) * 2); return true; // pinstripe
 }
 ROOM_DEFS.tailor = { grid: boxRoom(11, 8), light: 0.95, floor: 'oak', ceil: 'pendant', sign: false, wall: tailorWall, keeper: [5.5, 2.9],
   props: r => [CUTTING_TABLE(5.5, 3.6, 1.3, 0.55, 0.9), { ...standing(5.5, 2.9, r.neon), face: [0, 1] },
@@ -202,13 +212,15 @@ const chandelier = (x, y) => hung(x, y, 2.5, (vx, vy, z) => { drum(vx, vy, 0.04,
 function antiqueWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.26, 0.3, C(YEL, 12), C(GREEN, 1.4))) return true;
+  const footprint = Math.max(uStep, d / projY);
+  set(i, ' ', 0);
   if (my !== room.H - 1 && z > 1.3 && z < 2.2 && fract(Math.abs(u) / 2.6) > 0.25 && fract(Math.abs(u) / 2.6) < 0.75) { // landscapes in gilt frames
     const fu = fract(Math.abs(u) / 2.6), k = Math.floor(Math.abs(u) / 2.6) + mx * 3 + my * 7;
-    if (fu < 0.29 || fu > 0.71 || z < 1.36 || z > 2.14) { BG[i] = C(YEL, 4.5); return set(i, fract((fu + z) * 20) < 0.3 ? '=' : ' ', C(ORANGE, 8)), true; }
-    const hz = 1.7 + Math.sin(fu * 9 + k) * 0.08; BG[i] = z > hz ? C(BLUE, 3 + (z - hz) * 4) : C([GREEN, BRICK, YEL][k % 3], 2 + L * 0.1); return set(i, z > hz && hash(Math.floor(fu * 30), Math.floor(z * 20), k) > 0.93 ? '~' : ' ', C(WHITE, 9)), true;
+    if (fu < 0.29 || fu > 0.71 || z < 1.36 || z > 2.14) { BG[i] = C(YEL, 4.5); return true; }
+    const hz = 1.7 + Math.sin(fu * 9 + k) * 0.08; BG[i] = z > hz ? C(BLUE, 3 + (z - hz) * 4) : C([GREEN, BRICK, YEL][k % 3], 2 + L * 0.1); return true;
   }
-  if (z < 0.95) { BG[i] = C(BRICK, 1.3 + L * 0.2); return set(i, fract(u * 2) < 0.05 ? '|' : ' ', C(WARM, 3)), true; }
-  BG[i] = C(GREEN, 1.4 + L * 0.15); return set(i, hash(Math.floor(u * 4), Math.floor(z * 4), 143) > 0.9 ? '*' : ' ', C(YEL, 4)), true; // old green damask
+  if (z < 0.95) { BG[i] = C(BRICK, 1.4 + L * 0.2 - coveGroove(u, 0.5, 0.02, footprint)); return true; }
+  BG[i] = C(GREEN, 1.5 + L * 0.15); return true; // old green damask
 }
 ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 'pendant', sign: false, wall: antiqueWall, keeper: [9.6, 1.6],
   props: r => [...counterBox(9.6, 2.3, 1.1), { ...standing(9.6, 1.6, GRAY), face: [0, 1] }, grandfatherClock(1.45, 1.35), gramophone(6.4, 1.45),
@@ -220,7 +232,7 @@ ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 
 
 // ---- the drugstore (DRUGSTORE): bright as day, aisles of everything in loud packets, signs hung over them, the
 // pharmacist's counter at the back and a bench to wait on
-ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { BG[i] = C(WHITE, 2.4 + f * 4); return set(i, fract(wx / 0.6) < 0.03 || fract(wy / 0.6) < 0.03 ? '+' : ' ', C(GRAY, L * 0.5)); }; // shiny white tiles
+ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { const fp = sharedFloorDepth(r); set(i, ' ', 0); BG[i] = C(WHITE, 2.4 + f * 4 - 3 * Math.max(coveGroove(wx, 0.6, 0.006, fp), coveGroove(wy, 0.6, 0.006, fp))); }; // shiny white tiles
 const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.01, z - 0.35, z), (i, t, L) => { BG[i] = C(col, 8); return set(i, HIT.w > z - 0.15 ? '!' : fract(HIT.u * 9) < 0.4 ? '%' : ' ', C(RED, 12)), true; }));
 function drugWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
@@ -240,13 +252,15 @@ function delicatessenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 1.15 && z < 2.25 && u > 1.5 && u < 9.5) { // jars and bottles of wine on the shelves
     const sz = (z - 1.15) / 0.55, bz = fract(sz), cu = fract(u / 0.22), k = Math.floor(u / 0.22) + Math.floor(sz) * 41;
-    if (bz < 0.08) { BG[i] = C(BRICK, 2); return set(i, '=', C(WARM, L)), true; }
+    set(i, ' ', 0);
+    if (bz < 0.08) { BG[i] = C(BRICK, 2.4 + L * 0.15); return true; }
     const wine = hash(k, 1, 146) < 0.45, on = wine ? Math.abs(cu - 0.5) < (bz > 0.65 ? 0.08 : 0.25) && bz < 0.95 : Math.abs(cu - 0.5) < 0.32 && bz < 0.6;
-    BG[i] = on ? (wine ? C(GREEN, 1.6) : C([RED, ORANGE, YEL, GREEN][k & 3], 5)) : C(BRICK, 1); return set(i, on && bz > 0.25 && bz < 0.45 ? '=' : ' ', C(WHITE, 8)), true;
+    BG[i] = on ? (bz > 0.25 && bz < 0.45 ? C(WHITE, 4) : wine ? C(GREEN, 1.6) : C([RED, ORANGE, YEL, GREEN][k & 3], 5)) : C(BRICK, 1); return true; // (a paper label on each)
   }
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.6, 0.22, 0.28, C(YEL, 12), C(GREEN, 1.3))) return true;
-  if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2); return set(i, fract(z / 0.15) < 0.12 ? '-' : ' ', C(GRAY, 3)), true; }
-  BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
+  set(i, ' ', 0);
+  if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2 - 2.5 * coveGroove(z, 0.15, 0.008, d / projY)); return true; }
+  BG[i] = C(GREEN, 1.5 + L * 0.12); return true;
 }
 ROOM_DEFS.delicatessen = { grid: boxRoom(11, 8), light: 0.95, floor: 'checker', ceil: 'tin', sign: false, wall: delicatessenWall, keeper: [5.5, 1.7],
   props: r => [KITCHEN_FOOD_CASE(5.5, 2.4, 2.4, 0.34, 1.15, 'deli', WHITE), { ...standing(5.5, 1.7, WHITE), face: [0, 1] },
@@ -280,9 +294,10 @@ function turnGacha() {
 function gachaWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(MAG, 15), C(WHITE, 7))) return true;
+  set(i, ' ', 0);
   if (z > 1.95) { const k = Math.floor(Math.abs(u) / 0.9), cu = fract(Math.abs(u) / 0.9) - 0.5, r = Math.hypot(cu, (z - 2.35) * 1.4); // the characters, painted round the top
-    if (r < 0.3) { BG[i] = C([MAG, CYAN, YEL, GREEN][k & 3], 8); return set(i, Math.abs(Math.abs(cu) - 0.1) < 0.04 && Math.abs(z - 2.4) < 0.05 ? 'o' : ' ', C(GRAY, 1)), true; } }
-  BG[i] = C(WHITE, 6 + L * 0.2); return set(i, ' ', 0), true;
+    if (r < 0.3) { BG[i] = Math.abs(Math.abs(cu) - 0.1) < 0.04 && Math.abs(z - 2.4) < 0.05 ? C(GRAY, 1) : C([MAG, CYAN, YEL, GREEN][k & 3], 8); return true; } }
+  BG[i] = C(WHITE, 6 + L * 0.2); return true;
 }
 ROOM_DEFS.gacha = { grid: boxRoom(10, 8), light: 1.15, floor: 'kids', ceil: 'strip', sign: false, wall: gachaWall,
   props: r => {

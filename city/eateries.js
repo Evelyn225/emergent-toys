@@ -73,9 +73,10 @@ const menuLines = () => room.board || (room.board = stockFor(room.kind, room.wor
 function frontWindow(i, u, uStep, z, d, my, L, z0 = 0.95, z1 = 2.35) {
   if (my !== room.H - 1 || z < z0 || z > z1) return false;
   const x = -u; // (on the front wall u runs the other way)
-  if (z < z0 + 0.06 || z > z1 - 0.05 || fract(x / 1.5) < 0.04) { BG[i] = C(GRAY, 2.2 + L * 0.2); return set(i, ' ', 0), true; }
+  set(i, ' ', 0);
+  if (z < z0 + 0.06 || z > z1 - 0.05 || fract(x / 1.5) < 0.04) { BG[i] = C(GRAY, 2.2 + L * 0.2); return true; }
   const glow = hash(Math.floor(x * 3), Math.floor(z * 4), 103);
-  BG[i] = C(BLUE, 0.5 + day * 1.8); return set(i, night > 0.5 && glow > 0.9 ? 'o' : fract((x + z) * 2.5) < 0.04 ? '/' : ' ', C(glow > 0.95 ? YEL : WHITE, 9)), true;
+  BG[i] = night > 0.5 && glow > 0.9 ? C(glow > 0.95 ? YEL : WHITE, 5) : C(BLUE, 0.5 + day * 1.8); return true; // the street, lit windows across it after dark
 }
 // a menu board on a wall, centred at u0, its lines from z0 down: true if it painted this cell
 function menuBoard(i, u, uStep, z, d, u0, z0, lines, hw, bg, col, title, titleCol) {
@@ -160,8 +161,9 @@ function tacoWall(i, u, uStep, z, d, mx, my, L) {
   return set(i, z > 2.7 && fract(u * 3) < 0.3 ? 'v' : ' ', C(WHITE, 10)), true; // a scallop round the top
 }
 ROOM_FLOORS.saltillo = (i, f, wx, wy, r, x, L) => { // big square terracotta tiles, each fired a little different, grout between
-  const tx = Math.floor(wx / 0.5), ty = Math.floor(wy / 0.5), g = fract(wx / 0.5) < 0.06 || fract(wy / 0.5) < 0.06;
-  BG[i] = g ? C(STONE, 0.8 + f * 1.5) : C(BRICK, 1.2 + f * 2.6 + hash(tx, ty, 99) * 0.5); return set(i, g ? ' ' : hash(Math.floor(wx * 8), Math.floor(wy * 8), 100) > 0.94 ? '.' : ' ', C(ORANGE, L * 0.5));
+  const fp = sharedFloorDepth(r), tx = Math.floor(wx / 0.5), ty = Math.floor(wy / 0.5), g = Math.max(coveGroove(wx, 0.5, 0.02, fp), coveGroove(wy, 0.5, 0.02, fp));
+  set(i, ' ', 0);
+  BG[i] = g > 0.5 ? C(STONE, 0.8 + f * 1.5) : C(BRICK, 1.2 + f * 2.6 + (fp < 0.2 ? hash(tx, ty, 99) * 0.5 : 0.25));
 };
 ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'saltillo', ceil: 'strip', sign: false, wall: tacoWall, keeper: [5.2, 1.55],
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.6,2.7,.32,1,BLUE,GRAY,true),
@@ -211,8 +213,9 @@ function sushiWall(i, u, uStep, z, d, mx, my, L) {
 }
 // long boards, staggered: pale cypress (the sushi bar) or honey oak (the bakery)
 const planks = (col, lv) => (i, f, wx, wy, r, x, L) => {
-  const row = Math.floor(wy * 4), seam = fract(wx / 1.4 + row * 0.37) < 0.02;
-  BG[i] = C(col, lv * (0.4 + f) + hash(Math.floor(wx / 1.4 + row * 0.37), row, 101) * 0.4); return set(i, fract(wy * 4) < 0.08 ? '-' : seam ? '|' : ' ', C(BRICK, L * 0.4));
+  const fp = sharedFloorDepth(r), row = Math.floor(wy * 4), tone = fp < 0.1 ? hash(Math.floor(wx / 1.4 + row * 0.37), row, 101) * 0.4 : 0.2;
+  set(i, ' ', 0);
+  BG[i] = C(col, lv * (0.4 + f) + tone - 1.5 * coveGroove(wy, 0.25, 0.006, fp));
 };
 Object.assign(ROOM_FLOORS, { hinoki: planks(STONE, 3.2), oak: planks(ORANGE, 2.2) });
 // little hexagonal terracotta tiles (the pizzeria's): offset rows, each a shade of its own
