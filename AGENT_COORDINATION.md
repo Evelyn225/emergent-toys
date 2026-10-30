@@ -3317,3 +3317,30 @@ wide2.6–2.7→3.1–3.3, oblique2.2–2.3→3.3, drawer2.3→3.0. Added detail
 costs~0–1.1ms here, no speedup claim. #338 full CI green40995224638; #339 still
 running last checked. Next CCTV and coffee, then jail wall/surface fittings.
 Reserved files/shared helpers unchanged.
+
+Codex active: codex/jail-desk-accessories owns new jail-desk-accessories.js,
+focused coverage and manifest entry. Replace painted CCTV and coffee sprite
+with cached supported closed monitor frame/stand/recessed animated screen and
+hollow mug/coffee/handle. The screen is a cheap schematic of the actual cell
+layout and cached guard position, not another world render. Only screen face
+emits. Preserve desk, patrol, occupants, jail rules and shared helpers. #340
+mergedf9e43e2. Next jail door/window/wall and floor/ceiling fittings.
+
+Codex codex/jail-desk-accessories complete:9 prepared stand/back/bezel/recessed-
+screen/power parts replace painted CCTV;3 turned vessel/coffee/open handle
+parts replace the flat sprite. Screen depicts the actual grid and cached
+patrol guard with cheap filtered schematic shading; only its front and power
+LED emit. Mug has a real closed hollow/rim/fill and welded open handle outside
+the inner wall. Both accessories rest on the .8m worktop; shared circular,
+rounded and text helpers are unchanged. Three new actual-ray/cache/support/
+recess/animation/emission/native-mug checks, two final desk controls and three
+Node files pass. Owned desk control now ray-measures mug support instead of
+sprite z. Twelve isolated stand/frame/recess/emission/stale-map/hollow/handle/
+fill/legacy/native-monitor/native-mug defects fail assertions. Reviewed16
+cell/close/wide/oblique/night/rim/handle comparisons, no errors. Macros use actual
+freecam in clear3D space above/beside the worktop, player held in legal cell.
+Serial ABAB177x66 mainf9e43e2: cell3.9–4.0→4.0–4.1ms, monitor2.7–3.0→3.1,
+coffee4.3–4.4→4.8–4.9, oblique3.0–3.1→3.5. Added detail costs~0–.6ms
+locally, no speedup claim. #339 full CI green40996458656; #340 running last
+checked. Next jail door/window and wall/surface fittings. Reserved files and
+shared helpers unchanged.
