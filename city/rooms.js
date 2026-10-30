@@ -267,18 +267,6 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   if (Math.abs(du) > width - 0.15 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > width - 0.15 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
   if(room.exterior)homeView(i,u,z,'north');else viewOut(i,u,z,room.suite?22:14,18);return true; // six floors up, across the avenue
 }
-function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
-  if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
-  const bay = fract(u / 1.2);
-  if (bay < 0.05 || bay > 0.95 || z < 0.05) { set(i, '|', C(GRAY, L)); BG[i] = C(GRAY, 1); return true; }
-  if (z > 2.1) { // the unit number plate
-    const n = String(100 + (hash(Math.floor(u / 1.2), mx * 31 + my, 5) * 800 | 0));
-    if (wallText(i, u, uStep, z, d, n, Math.floor(u / 1.2) * 1.2 + 0.6, 2.25, 0.12, 0.18, C(WHITE, 13), C(GRAY, 2))) return true;
-    set(i, ' ', 0); BG[i] = C(GRAY, 2); return true;
-  }
-  BG[i] = C(ORANGE, 2 + L * 0.15);
-  set(i, z < 0.18 && Math.abs(bay - 0.5) < 0.08 ? '_' : fract(z * 12) < 0.5 ? '=' : '-', C(ORANGE, L * 0.9)); return true;
-}
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
   const board = room.def.keeper[0];
   if (my === 0 && Math.abs(u - board) < 2 && z > 1.4 && z < 2.5) {
@@ -534,8 +522,8 @@ const ROOM_DEFS = {
   // self storage: corridors of orange roll-up doors ('L', 2.6m locker blocks), an attendant by the door
   storage: { grid: ['##############', '#............#', '#.LL.LL.LL.L.#', '#.LL.LL.LL.L.#', '#............#', '#.LL.LL.LL.L.#',
                     '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
-    light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
-    props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
+    light: 0.85, floor: 'concrete', ceil: 'strip', keeper: [11.5, 7.15],
+    props: r => [KITCHEN_SERVICE_COUNTER(11.5, 7.75, 1.1, 0.3, 1.05, GRAY, GRAY), standing(11.5, 7.15, ORANGE)] },
   // the cell block (jail.js): your cell in a row of three, real bars across its front, a corridor with a guard
   // pacing it, three more cells across the way. You only ever stand in yours (the guard lets you out)
   jail: { grid: JAIL_GRID, light: 0.95, floor: 'jail', ceil: 'jail', wall: jailWall, block: jailBlock, props: jailProps },

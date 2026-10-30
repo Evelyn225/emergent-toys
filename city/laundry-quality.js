@@ -113,7 +113,6 @@ ROOM_DEFS.laundry.props=r=>{
   for(const o of base){o.laundrySkirting=o.homeSkirting;delete o.homeSkirting;}
   return [...props,...base];
 };
-ROOM_DEFS.laundry.sign=false;
 ROOM_DEFS.laundry.doorWall=true;
 ROOM_DEFS.laundry.wall=(i,u,uStep,z,d,mx,my,L)=>hotelEntranceGlass(i,u,z,mx,my)||laundryWallFinish(i,u,uStep,z,d,mx,my,L);
 ROOM_DEFS.laundry.floor='laundryVinyl';
