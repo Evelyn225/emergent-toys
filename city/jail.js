@@ -73,19 +73,3 @@ function jailWall(i, su, uStep, z, d, mx, my, L) {
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
   return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
 }
-// overhead: bare concrete, a caged lamp in each cell and down the corridor; underfoot: painted concrete, a yellow
-// line down the corridor the inmates aren't to cross
-function jailCeil(i, wx, wy) {
-  const lamps = [[4, 3], [11, 3], [18, 3], [4, 10.5], [11, 10.5], [18, 10.5], [2.5, 7.5], [8.5, 7.5], [14.5, 7.5], [20, 7.5]];
-  for (const [lx, ly] of lamps) {
-    const r = Math.hypot(wx - lx, wy - ly);
-    if (r < 0.16) { BG[i] = C(YEL, 6); return set(i, r < 0.08 ? 'O' : '#', C(r < 0.08 ? WHITE : GRAY, 15)); }
-  }
-  BG[i] = C(GRAY, 1);
-  return set(i, (Math.floor(wx * 2) + Math.floor(wy * 2)) % 7 ? ' ' : '.', C(GRAY, 4));
-}
-function jailFloor(i, f, wx, wy) {
-  if (wy > JAIL_BARS_NEAR + 0.3 && wy < JAIL_BARS_FAR - 0.3 && Math.abs(wy - JAIL_BARS_NEAR - 0.45) < 0.05) return set(i, '=', C(YEL, 5 + f * 8)); // the line
-  BG[i] = C(GRAY, 1 + f * 1.2);
-  return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 37) > 0.92 ? '.' : ' ', C(GRAY, 3 + f * 4));
-}
