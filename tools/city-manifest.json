@@ -187,6 +187,7 @@
     "city/bank-floor-lights.js",
     "city/bank-front-entrance.js",
     "city/jail-cell-bars.js",
+    "city/jail-bunks.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
