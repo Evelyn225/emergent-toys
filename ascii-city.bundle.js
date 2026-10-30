@@ -3075,7 +3075,7 @@ function modernApartmentDetails(b, f) {
   }
   if (r.core >= 0) {
     const along = f.start + r.margin + (r.core + .5) * r.spacing;
-    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .44, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
+    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .45, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
   }
 }
 function tenementEscapeDetails(b, f) {
@@ -3225,7 +3225,7 @@ function downtownDetails(b) {
     const piers = Math.max(2, Math.round((f.end - f.start) / 0.7));
     for (let p = 0; p <= piers; p++) {
       const along = f.start + 0.06 + p / piers * (f.end - f.start - 0.12);
-      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.43, f.low), f.height - 0.035, 'pier');
+      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.45, f.low), f.height - 0.035, 'pier');
     }
   }
   if (b.sty !== 14 || b.access) return;
@@ -3243,15 +3243,15 @@ const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painte
 const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
 function architectureSignSpec(b, f, sh) {
   const width = f.end - f.start, n = sh.word.length;
-  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .38, cmax: .067, margin: .3, band: .043, edge: .012, style: 'board' }
-    : b.region === 'brownstones' ? { zc: .39, cmax: .07, margin: .25, band: .038, edge: .012, style: 'painted' }
-    : { zc: .36, cmax: .085, margin: .3, band: .055, edge: .014, style: 'box' };
+  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .39, cmax: .09, margin: .3, band: .1, edge: .01, style: 'board' }
+    : b.region === 'brownstones' ? { zc: .39, cmax: .09, margin: .25, band: .1, edge: .01, style: 'painted' }
+    : { zc: .39, cmax: .1, margin: .3, band: .1, edge: .01, style: 'box' };
   return { ...g, width, cwid: Math.min(g.cmax, (width - g.margin) / n) };
 }
 // A shop's fascia board on each face that carries its name, standing off the wall over the window, and on some
 // brownstone and midtown shops a striped awning over the window below it: a sloping canopy on its frame, a valance
 // along the front. (Downtown towers and the apartment blocks with entrance canopies get no awning.)
-const ARCH_FASCIA = { depth: .012, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
+const ARCH_FASCIA = { depth: .04, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
 function architectureShopfront(b) {
   const sh = b.sh;
   if (sh.kind === SHOP_APTS) return;
@@ -3658,7 +3658,7 @@ for (const o of roofs) o.z = Math.max(o.z,pavilionRoofHeight(o.x,o.y));
 // one board with the name on it, built like the architecture families' (architectureShopfront), and the open shops
 // an awning. Faces come from the same face finder; SHOPFRONT_FACES indexes them by direction and cell like ARCH_FACES.
 const SHOPFRONT_FACES = Array.from({ length: 4 }, () => new Array(N * N));
-const SHOPFRONT_SPEC = { zc: .36, band: .08, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
+const SHOPFRONT_SPEC = { zc: .365, band: .09, cmax: .1, margin: .3, edge: .008 }; // (the band the generic facade paints its name in)
 const SHOPFRONT_AWNING = { top: .31, out: .1, drop: .04, valance: .015, thick: .005, keep: .7 };
 const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
 {
@@ -11886,23 +11886,48 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
   if (Math.abs(z - z0) > bandH / 2 && !oneCell(z - z0, d / projY)) return false;
   const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
   if (p < 0 || p >= text.length) return false;
-  if (wallTextBig(u, uStep, d, u0, cwid, bandH, text.length)) { // close enough: every letter drawn large in blocks
-    BG[i] = bgc; const ch = text[p];
-    return set(i, GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor(fract(q) * 4), Math.floor((z0 + bandH / 2 - z) / bandH * 5)) ? '#' : ' ', col), true;
+  BG[i] = bgc;
+  if (wallTextIsBig(u, uStep, d, text, u0, z0, cwid, bandH)) { // every letter drawn large in blocks, for as long as it fits
+    return set(i, blockGlyph(text, q, (z0 + bandH / 2 - z) / bandH, uStep / cwid, d / projY / bandH), col), true;
   }
-  const centered = (uStep >= cwid || oneCell((fract(q) - 0.5) * cwid, uStep)) && oneCell(z - z0, d / projY);
-  set(i, centered ? text[p] : ' ', col); BG[i] = bgc;
+  // Too small for blocks: the word set solid along its middle row, not spread out over the width it would fill.
+  const k = uStep >= cwid ? p : wallTextLetter(i % cols, u, uStep, text, u0);
+  set(i, oneCell(z - z0, d / projY) && k >= 0 && k < text.length ? text[k] : ' ', col);
   return true;
 }
 
 // is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
 // switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+// Which letter a column shows when the word is set tight. Worked out once per view and then counted off in whole
+// columns, so that however the wall is angled each letter gets exactly one column and none is skipped or repeated.
+function wallTextLetter(column, u, uStep, text, u0) {
+  const m = wallTextSizes.get(text);
+  if (m.column === undefined) { m.column = column; m.u = u; m.letter = text.length / 2 - columnsToCentre(u, uStep, u0) + 0.0137; m.dir = 0; }
+  if (column === m.column) return Math.floor(m.letter);
+  if (!m.dir) m.dir = Math.sign(u - m.u) * Math.sign(column - m.column) || 1;
+  return Math.floor(m.letter + m.dir * (column - m.column));
+}
+// How many screen columns from u to u0 along this wall. A column covers more wall the more obliquely the ray meets it,
+// so an even step would lose letters off the far end of an angled word: this is that step's exact integral.
+function columnsToCentre(u, uStep, u0) {
+  const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1;
+  return (D * D + s0 * s0) / (uStep * D) * sgn * (Math.atan((s0 + sgn * (u0 - u)) / D) - Math.atan(s0 / D));
+}
+// (Decided once per view for each sign: judged column by column, an oblique sign could go half large, half small.)
+const wallTextSizes = new Map();
+function wallTextIsBig(u, uStep, d, text, u0, z0, cwid, bandH) {
+  let m = wallTextSizes.get(text);
+  if (m && m.u0 === u0 && m.z0 === z0 && Math.abs(m.dn - WH.dn) < 0.01 && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.hor === hor && m.projX === projX) return m.big;
+  m = { u0, z0, dn: WH.dn, px, py, dx, dy, hor, projX, big: wallTextBig(u, uStep, d, u0, cwid, bandH, text.length) };
+  wallTextSizes.set(text, m);
+  return m.big;
+}
 function wallTextBig(u, uStep, d, u0, cwid, bandH, len) {
-  if (cwid / uStep < 1.5) return false;
+  if (cwid / uStep < LETTER_MIN_COLS * 0.75) return false;
   const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1, r0 = D * D + s0 * s0;
   for (const e of [-1, 1]) {
     const s = s0 + sgn * (u0 + e * (len / 2 - 0.5) * cwid - u), r = (D * D + s * s) / r0;
-    if (cwid / (uStep * r) < 2.2 || bandH * projY / (d * Math.sqrt(r)) < 2.8) return false;
+    if (cwid / (uStep * r) < LETTER_MIN_COLS || bandH * projY / (d * Math.sqrt(r)) < LETTER_MIN_ROWS) return false;
   }
   return true;
 }
@@ -12093,14 +12118,27 @@ const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448, '$': 15518, ':': 1040, '&': 10923, '!': 9346, "'": 9216 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
+// Block lettering shows four font pixels in each screen cell: index 1 top left, 2 top right, 4 bottom left, 8 bottom
+// right. A letter stays whole down to 2 cells by 2.5 rows (4 columns with its gap, 5 rows), and only then goes small.
+const BLOCK_CELLS = ' \u2598\u259D\u2580\u2596\u258C\u259E\u259B\u2597\u259A\u2590\u259C\u2584\u2599\u259F\u2588';
+const LETTER_MIN_COLS = 2, LETTER_MIN_ROWS = 2.5;
+// q: how far across in letters; hz: 0 at the top of the band to 1 at the bottom; du, dv: one screen cell in those units
+function blockGlyph(text, q, hz, du, dv) {
+  let bits = 0;
+  for (let b = 0; b < 4; b++) {
+    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
+    if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
+  }
+  return BLOCK_CELLS[bits];
+}
 // a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
 // letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
 // letters (letter k is [k, k+1)); hz: 0 at the top of the lettering's band to 1 at the bottom. null: not on a letter
-const signIsBig = (letterW, bandH, tFar) => letterW * projX / tFar >= 2.2 && bandH * projY / tFar >= 2.8;
+const signIsBig = (letterW, bandH, tFar) => letterW * projX / tFar >= LETTER_MIN_COLS && bandH * projY / tFar >= LETTER_MIN_ROWS;
 function signGlyph(word, lq, hz, t, letterW, bandH, tFar) {
   const k = Math.floor(lq);
   if (k < 0 || k >= word.length || hz < 0 || hz >= 1) return null;
-  if (signIsBig(letterW, bandH, tFar)) return GLYPH5[word[k]] !== undefined && glyphOn(word[k], Math.floor(fract(lq) * 4), Math.floor(hz * 5)) ? '#' : ' ';
+  if (signIsBig(letterW, bandH, tFar)) return blockGlyph(word, lq, hz, t / projX / letterW, t / projY / bandH);
   const cellU = t / projX / letterW, cellV = t / projY / bandH;
   return Math.abs(hz - 0.5) < Math.max(cellV, 1e-4) / 2 && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
 }
@@ -12257,19 +12295,11 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
-      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
-      const du = uStep, dz = d / projY;
       if (signBig(u, uStep, d, side, mx, my, wc, p, w.length)) {
-        let on = 0, pk = -1;
-        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
-          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
-          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
-        }
-        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
-          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
-          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
-          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        const ch = blockGlyph(w, mod(u * 10, m), (0.4 - z) / 0.08, uStep * 10, d / projY / 0.08);
+        if (p < w.length && GLYPH5[w[p]] !== undefined || ch !== ' ') {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon;
+          return set(i, ch, C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
         }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
@@ -14972,14 +15002,29 @@ function drawBike(o, vx, vy) {
 // room for it, on the row the line's middle projects into at the sign's middle, so the line stays straight on screen
 // even seen at an angle. zc: the line's middle height; tc: the sign's middle depth (see midDepth); (ex, ey): the way the
 // text runs, a unit vector. hz only matters for blocks.
+// The column a tight word starts in, fixed once per view for each sign. Worked out afresh in every cell, rounding
+// noise near a column's edge could shift part of the word by one and repeat or lose a letter.
+const signLineStarts = new Map();
+function signLineStart(word, PX, PY, dep) {
+  const m = signLineStarts.get(word);
+  if (m && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.projX === projX && Math.abs(m.PX - PX) + Math.abs(m.PY - PY) < 0.02) return m.start;
+  const start = Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep - word.length / 2);
+  signLineStarts.set(word, { px, py, dx, dy, projX, PX, PY, start });
+  return start;
+}
 function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   if (signIsBig(letterW, bandH, far)) return signGlyph(word, lq, hz, t, letterW, bandH, far);
   const k = Math.floor(lq);
   if (k < -1 || k > word.length) return null;
   if (Math.floor(i / cols) !== Math.floor(hor - (zc - eye) * projY / tc)) return ' ';
   const c = i % cols, cx = 2 * (c + 0.5) / cols - 1, X = (dx - dy * tf * cx) * t, Y = (dy + dx * tf * cx) * t; // where this cell's ray met the sign
+  // The word set solid, centred on the column its middle projects into, not spread out over the sign's width.
+  const off = (word.length / 2 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
+  if (dep <= 0.05) return ' ';
+  if (letterW * projX / far >= 1) return word[c - signLineStart(word, PX, PY, dep)] ?? ' ';
+  // (narrower than a cell per letter on screen: whichever letter's middle lands in this cell)
   let best = ' ', bd = Infinity;
-  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) { // this letter or a neighbour, whichever's middle lands here
+  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) {
     const off = (j + 0.5 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
     if (dep > 0.05 && Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep) === c && Math.abs(off) < bd) { bd = Math.abs(off); best = word[j]; }
   }
@@ -17056,7 +17101,7 @@ const trainShade = (open, k) => (i, t, L) => {
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0) return false;
-  if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.35, 0.3, C(room.neon, 15))) return true;
+  if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.438, 0.375, C(room.neon, 15))) return true;
   for (const [u0, s] of [[2.6, 0], [room.W - 2.6, 1]]) if (Math.abs(u - u0) < 1.3 && z > 1.45 && z < 2.35) { // menu boards
     BG[i] = C(GRAY, 1);
     if (wallText(i, u, uStep, z, d, room.menu[s * 2], u0, 2.1, 0.17, 0.25, C(WHITE, 14), C(GRAY, 1))) return true;
@@ -17409,7 +17454,7 @@ function stationWall(i, u, uStep, z, d, mx, my, L) {
   const far = my === room.H - 1; // the tunnel wall across the tracks
   const u0 = Math.floor((u - 2) / 8) * 8 + 6;
   if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
-    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.25, 0.35, C(WHITE, 15), C(GREEN, 4))) return true;
+    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.312, 0.438, C(WHITE, 15), C(GREEN, 4))) return true;
     set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
   }
   if (far) {
@@ -17463,7 +17508,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     return sharedWallFinish(i, u, uStep, z, d, mx, my, L);
   }
-  if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
+  if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.5, 0.375, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
   sharedWallFinish(i, u, uStep, z, d, mx, my, L, D.posters, D.neon ? R.neon : undefined);
 }
@@ -18834,7 +18879,7 @@ function tattooWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.0) { BG[i] = z > 0.95 ? C(YEL, 4 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return true; } // black wainscot, a brass rail
   if (backWall(my)) {
     if (z > 2.35 && z < 2.85) { // NO REGRETS, in pink neon, a glow round it
-      if (wallText(i, u, uStep, z, d, 'NO REGRETS', W / 2, 2.6, 0.22, 0.34, C(WHITE, 15))) { BG[i] = C(MAG, 9); return true; }
+      if (wallText(i, u, uStep, z, d, 'NO REGRETS', W / 2, 2.6, 0.27, 0.44, C(WHITE, 15))) { BG[i] = C(MAG, 9); return true; }
       if (Math.abs(u - W / 2) < 1.4) { BG[i] = C(MAG, 2.4); return set(i, ' ', 0), true; }
     }
     for (const sx of [2.6, 7, 11.4]) { // over each station: a mirror, two flash sheets either side
@@ -19588,7 +19633,7 @@ const checkCloth = (i, t, L) => { BG[i] = (Math.floor(HIT.u * 6) + Math.floor(HI
 const pizzaOven = (x,y) => KITCHEN_PIZZA_OVEN(x,y);
 function pizzaWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.75, 1.95, room.menu, 1.2, C(GRAY, 0.8), C(WHITE, 14), 'MENU', C(YEL, 14))) return true;
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.62, 0.3, 0.42, C(RED, 15), C(GRAY, 0.6))) return true; // in red neon
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.62, 0.375, 0.525, C(RED, 15), C(GRAY, 0.6))) return true; // in red neon
   if (z > 0.98 && z < 1.16) { const k = Math.floor((z - 0.98) / 0.06); BG[i] = C([RED, WHITE, GREEN][k] ?? GREEN, k === 1 ? 6 : 3.5); return set(i, ' ', 0), true; } // the tricolour, all round
   if (z < 0.98) { BG[i] = C(WHITE, 2.6 + L * 0.1); return set(i, ' ', 0), true; } // white tiles
   const fu = fract(u / 2.2), fz = z - 1.45; // framed photos: the old country, the family, a football team
@@ -19617,7 +19662,7 @@ const BURGER_PASS_HALF=1.0; // the pass: over the counter, clear of the shake ma
 function burgerWall(i, u, uStep, z, d, mx, my, L) {
   const M = 5.7; // (over the counter, clear of the bathroom)
   if (backWall(my)) {
-    if (z > 2.55 && wallText(i, u, uStep, z, d, room.word, M, 2.75, 0.3, 0.38, C(YEL, 15), C(RED, 2))) return true; // neon, red behind it
+    if (z > 2.55 && wallText(i, u, uStep, z, d, room.word, M, 2.75, 0.375, 0.475, C(YEL, 15), C(RED, 2))) return true; // neon, red behind it
     if (z > 1.75 && z < 2.5 && Math.abs(u - M) < 3.3) { // the lit menu boards: a burger drawn on each, the prices under
       const k = Math.floor((u - M + 3.3) / 2.2), cu = u - (M - 3.3 + k * 2.2 + 1.1);
       if (Math.abs(cu) > 1.02 || z < 1.8 || z > 2.45) { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; }
@@ -19695,7 +19740,7 @@ function sushiWall(i, u, uStep, z, d, mx, my, L) {
     if (z > 1.35) { BG[i] = C(BLUE, 3 + L * 0.2); return set(i, ' ', 0), true; }
     BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; // (the dark doorway below)
   }
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 3.2, 2.5, 0.3, 0.4, C(RED, 13), C(STONE, 4))) return true; // on a painted board
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 3.2, 2.5, 0.375, 0.5, C(RED, 13), C(STONE, 4))) return true; // on a painted board
   if (backWall(my) && z > 1.6 && z < 2.3 && Math.abs(u - 8.7) < 1.0) { // the fish, carved on its board
     const fu = (u - 8.7) / 0.9, fz = (z - 1.95) / 0.3, body = fu * fu + fz * fz * 2.2 < 0.5, tail = fu < -0.6 && Math.abs(fz) < (-fu - 0.6) * 2;
     BG[i] = body || tail ? C(GRAY, 3 + L * 0.2) : C(BRICK, 2); return set(i, ' ', 0), true;
@@ -19750,7 +19795,7 @@ ROOM_DEFS.icecream = { grid: boxRoom(11, 8), light: 1.1, floor: 'pastel', ceil: 
 // ---- the bakery (BAKERY): baskets of loaves on wooden racks behind the counter, the glass case of cakes and pastries,
 // the deck oven glowing, flour sacks stacked, a table by the door
 function bakeryWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.5 && wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.7, 0.24, 0.3, C(BRICK, 4), C(YEL, 9))) return true;
+  if (backWall(my) && z > 2.5 && wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.7, 0.3, 0.375, C(BRICK, 4), C(YEL, 9))) return true;
   if (z < 0.95) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(YEL, 6 + L * 0.15); return set(i, ' ', 0), true; // cream walls
 }
@@ -21238,7 +21283,7 @@ Object.assign(MENUS, { YAKITORI: MENU_ITEMS.length - 3, TAKOYAKI: MENU_ITEMS.len
 const fryer = (x,y) => KITCHEN_FRYER(x,y);
 function chickenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.7, 0.32, 0.4, C(RED, 15), C(WHITE, 7))) return true;
+  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.7, 0.4, 0.5, C(RED, 15), C(WHITE, 7))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 6.4, 2.0, menuLines(), 1.45, C(RED, 2.5), C(WHITE, 15))) return true;
   if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2); return set(i, ' ', 0), true; } // white tiles
   if (z < 1.12) { BG[i] = C(RED, 4); return set(i, ' ', 0), true; }
@@ -21268,7 +21313,7 @@ function photoMenu(i, u, uStep, z, d, u0, z0, bg) {
 }
 function kebabWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.6, 2.7, 0.32, 0.4, C(GREEN, 15), C(GRAY, 0.5))) return true; // green neon
+  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.6, 2.7, 0.4, 0.5, C(GREEN, 15), C(GRAY, 0.5))) return true; // green neon
   if (backWall(my) && photoMenu(i, u, uStep, z, d, 5.6, 1.62, C(GRAY, 0.5))) return true;
   if (z < 1.2) { BG[i] = C(WHITE, 4.2 + L * 0.2 - 2.5 * Math.max(coveGroove(u, 0.25, 0.006, Math.max(uStep, d / projY)), coveGroove(z, 0.25, 0.006, d / projY))); return set(i, ' ', 0), true; }
   BG[i] = C(GREEN, 1.6 + L * 0.15); return set(i, ' ', 0), true; // mirror tiles
@@ -21290,7 +21335,7 @@ function noren(i, u, z, u0, hw, col, z0 = 1.35, z1 = 2.1) { // a split curtain o
 function bentoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && noren(i, u, z, 2.0, 0.6, BLUE)) return true;
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.55, 0.28, 0.34, C(RED, 13), C(WHITE, 6))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.55, 0.35, 0.425, C(RED, 13), C(WHITE, 6))) return true;
   if (backWall(my) && z > 1.55 && z < 2.15 && u > 3.3 && u < 7.6) { // photo cards of every box, pinned in a row
     const cu = fract((u - 3.3) / 0.62), k = Math.floor((u - 3.3) / 0.62);
     if (cu < 0.1 || cu > 0.9 || z < 1.6 || z > 2.1) { BG[i] = C(STONE, 3.4 + L * 0.15); return set(i, ' ', 0), true; }
@@ -21315,7 +21360,7 @@ function takoWall(i, u, uStep, z, d, mx, my, L) {
     const leg = cz < -0.25 && cz > -0.95 && Math.abs(fract((cu + Math.sin(cz * 7 + T * 2) * 0.06) / 0.18) - 0.5) < 0.22 && Math.abs(cu) < 0.55 + cz * 0.2;
     BG[i] = head || leg ? C(RED, eye ? 1 : 6) : C(WHITE, 6); return set(i, ' ', 0), true;
   }
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.6, 2.5, 0.25, 0.32, C(RED, 14), C(WHITE, 6))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.6, 2.5, 0.312, 0.4, C(RED, 14), C(WHITE, 6))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.6, 1.95, menuLines(), 1.1, C(BRICK, 1.5), C(YEL, 14))) return true;
   if (z < 1.0) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, ' ', 0), true; // white, a red wave round the top
@@ -21330,7 +21375,7 @@ const yakiGrill = (x,y,hl) => KITCHEN_YAKITORI(x,y,hl);
 const akachochin = (x,y,r) => PAPER_LANTERN(x,y,{ceiling:r?.def.height||3});
 function yakiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.25 && z < 2.75 && Math.abs(u - room.W / 2) < 1.6) { BG[i] = C(BRICK, 2.5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(WHITE, 13), C(BRICK, 2.5)) || set(i, ' ', 0), true; } // on a board
+  if (backWall(my) && z > 2.25 && z < 2.75 && Math.abs(u - room.W / 2) < 1.6) { BG[i] = C(BRICK, 2.5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.375, 0.45, C(WHITE, 13), C(BRICK, 2.5)) || set(i, ' ', 0), true; } // on a board
   if (backWall(my) && z > 1.3 && z < 2.15 && Math.abs(u - room.W / 2) > 1.2 && Math.abs(u - room.W / 2) < 4.4) { // the menu tags, hung in a row: each a dish, brushed on
     const tu = fract(u / 0.3), k = Math.floor(u / 0.3);
     if (tu < 0.18 || tu > 0.82 || z < 1.36 + hash(k, 1, 112) * 0.08) { BG[i] = C(BRICK, 1.4 + L * 0.15); return set(i, ' ', 0), true; }
@@ -21358,7 +21403,7 @@ function donutWall(i, u, uStep, z, d, mx, my, L) {
     const r = Math.hypot(u - 2.1, z - 2.05);
     if (r < 0.6 && r > 0.22) { BG[i] = C(MAG, 9 + Math.sin(T * 3) * 2); return set(i, ' ', 0), true; }
   }
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.3, 0.36, C(MAG, 15), C(BRICK, 2))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.375, 0.45, C(MAG, 15), C(BRICK, 2))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.4, 2.0, menuLines(), 1.0, C(BRICK, 1.6), C(WHITE, 14))) return true;
   if (z < 1.0) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, ' ', 0), true; } // a chocolate wainscot
   BG[i] = C(MAG, 6 + L * 0.2); return set(i, ' ', 0), true; // pink, sprinkled
@@ -21375,7 +21420,7 @@ ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil:
 const blender = (x,y,col) => KITCHEN_BLENDER(x,y,col);
 function juiceWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.3, 0.36, C(GREEN, 15), C(YEL, 8))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.375, 0.45, C(GREEN, 15), C(YEL, 8))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.0, 2.0, menuLines(), 1.2, C(GREEN, 2), C(WHITE, 15))) return true;
   if (z > 1.1) { // painted oranges, halved, every so often
     const cu = fract(Math.abs(u) / 1.7) - 0.5, cz = z - 1.75 - (Math.floor(Math.abs(u) / 1.7) & 1) * 0.5, r = Math.hypot(cu * 1.7, cz);
@@ -21395,7 +21440,7 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
 // under the glass; subway tiles, deep green, two tables and a ledge
 function bagelWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.4 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.62, 0.3, 0.34, C(YEL, 14), C(GREEN, 1.4))) return true;
+  if (backWall(my) && z > 2.4 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.62, 0.375, 0.425, C(YEL, 14), C(GREEN, 1.4))) return true;
   if (z < 1.35) { BG[i] = C(WHITE, 4.6 + L * 0.2 - 2.5 * coursedJoint(u, z, 0.15, 0.3, uStep, d)); return set(i, ' ', 0), true; } // subway tiles
   BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
 }
@@ -21434,7 +21479,7 @@ const lowStool = (x,y,fx,fy,col) => [FURNITURE_STOOL(x,y,col,.42,true,fx,fy)];
 const spiritHouse = (x,y) => THAI_SPIRIT_HOUSE(x,y);
 function thaiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.3, 0.34, C(YEL, 14), C(RED, 2))) return true;
+  if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.375, 0.425, C(YEL, 14), C(RED, 2))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.05, menuLines(), 1.15, C(RED, 1.4), C(YEL, 14))) return true;
   if (!backWall(my) && z > 1.35 && z < 2.25) { // gold elephants, trunks up, one after another
     const eu = fract(Math.abs(u) / 2.4) * 2.4 - 1.2, ez = z - 1.8;
@@ -21456,7 +21501,7 @@ ROOM_DEFS.thai = { grid: backWc(13, 9), wc: wcAt(13), light: 0.8, floor: 'oak', 
 const stockPot = (x,y) => KITCHEN_POT_STOVE(x,y);
 function phoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.68, 0.32, 0.36, C(RED, 15), C(YEL, 7))) return true;
+  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.68, 0.4, 0.45, C(RED, 15), C(YEL, 7))) return true;
   if (backWall(my) && photoMenu(i, u, uStep, z, d, 5.0, 1.6, C(GREEN, 1.5))) return true;
   if (z < 1.2) { BG[i] = C(GREEN, 2.6 + L * 0.2); return set(i, ' ', 0), true; } // green tiles
   BG[i] = C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true;
@@ -21474,7 +21519,7 @@ ROOM_DEFS.pho = { grid: backWc(13, 9), wc: wcAt(13), light: 1.05, floor: 'lino',
 const steamers = (x,y,n) => KITCHEN_STEAMER_STACK(x,y,n);
 function dumplingWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.4))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.55, 0.375, 0.425, C(YEL, 14), C(RED, 2.4))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.6, 2.05, menuLines(), 0.95, C(WHITE, 7), C(RED, 6))) return true; // a paper menu, pinned up
   if (!backWall(my) && z > 1.4 && z < 2.2 && fract(Math.abs(u) / 2.2) > 0.4 && fract(Math.abs(u) / 2.2) < 0.62) { // and more, by the tables
     const fu = fract(Math.abs(u) / 2.2); BG[i] = C(WHITE, 7); return set(i, ' ', 0), true;
@@ -21499,7 +21544,7 @@ const trolley = k => KITCHEN_DIMSUM_CART(k); // mobile decoration has no invisib
 const trolleyServer = (k, col) => ({ ...standing(7.4, 6.3, col), tick: s => { const t = T - 2.2, a = t * 0.15 + k * Math.PI; [s.x, s.y] = DIMSUM_LOOP(t, k); s.face = [-Math.sin(a) * 1.7, Math.cos(a)]; } });
 function dragonWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.5 && wallText(i, u, uStep, z, d, room.word, 7.4, 2.72, 0.32, 0.34, C(YEL, 15), C(RED, 2.6))) return true;
+  if (backWall(my) && z > 2.5 && wallText(i, u, uStep, z, d, room.word, 7.4, 2.72, 0.4, 0.425, C(YEL, 15), C(RED, 2.6))) return true;
   if (backWall(my) && z > 1.3 && z < 2.45 && (Math.abs(u - 3.6) < 2.2 || Math.abs(u - 10.0) < 1.0)) { // the dragon (a coil of gold scales, its head up) and the phoenix
     if (u < 7) {
       const c = Math.sin((u - 1.4) * 2.6) * 0.32 + 1.85, on = Math.abs(z - c) < 0.1, head = Math.hypot(u - 5.6, z - 2.25) < 0.15;
@@ -21530,7 +21575,7 @@ const siphon = (x, y) => KITCHEN_SIPHON(x,y);
 const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass, lit
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
+  if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.3, 0.325, C(BRICK, 0.8), C(YEL, 5)) || set(i, ' ', 0), true; } // on a brass plate
   if (z < 1.0) { BG[i] = C(BRICK, 1.1 + L * 0.15); return set(i, ' ', 0), true; }
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, ' ', 0), true; // dark panelling
 }
@@ -21549,7 +21594,7 @@ ROOM_FLOORS.izakaya = (i, f, wx, wy, r, x, L) => { // dark boards, and tatami in
 function izakayaWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && noren(i, u, z, 1.5, 0.55, BLUE)) return true; // the kitchen
-  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.3, 2.68, 0.28, 0.32, C(WHITE, 13), C(BRICK, 2))) return true;
+  if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.3, 2.68, 0.35, 0.4, C(WHITE, 13), C(BRICK, 2))) return true;
   if (!backWall(my) && z > 1.35 && z < 2.25 && Math.abs(u) % 3.4 > 1.2 && Math.abs(u) % 3.4 < 2.6) { // the menu tags
     const tu = fract(Math.abs(u) / 0.3), k = Math.floor(Math.abs(u) / 0.3);
     if (tu < 0.18 || tu > 0.82 || z < 1.4 + hash(k, 1, 126) * 0.08) { BG[i] = C(BRICK, 1.4 + L * 0.15); return set(i, ' ', 0), true; }
@@ -21576,7 +21621,7 @@ ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'iza
 // cashier at the back, a flask of tea for everyone; sit in on a hand at any of them
 function mahjongWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.1, 2.2)) return true;
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.3, 0.34, C(RED, 14), C(WHITE, 6))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.375, 0.425, C(RED, 14), C(WHITE, 6))) return true;
   if (backWall(my) && z > 1.55 && z < 2.15 && Math.abs(u - 8.7) < 0.9) { BG[i] = C(WHITE, 7); return wallText(i, u, uStep, z, d, 'NO SMOKING', 8.7, 1.85, 0.15, 0.2, C(RED, 6), C(WHITE, 7)) || set(i, ' ', 0), true; } // (nobody minds it)
   if (z < 1.0) { BG[i] = C(GREEN, 1.6 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(GREEN, 3 + L * 0.15 - Math.max(0, z - 2) * 0.5); return set(i, ' ', 0), true; // (stained by the smoke, up top)
@@ -21601,7 +21646,7 @@ const beanSacks = (x, y) => [KITCHEN_COFFEE_SACK(x, y, 'ETHIOPIA'), KITCHEN_COFF
 const pourOver = (x,y) => KITCHEN_POUR_OVER(x,y);
 function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.6, 0.32, 0.36, C(WHITE, 15), C(GRAY, 1))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.6, 0.4, 0.45, C(WHITE, 15), C(GRAY, 1))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 6.0, 2.0, ['ETHIOPIA  FLORAL', 'COLOMBIA  CARAMEL', ...menuLines()], 1.5, C(GRAY, 0.9), C(WHITE, 13))) return true; // (the beans this week, chalked up over the bar)
   BG[i] = C(WHITE, 4.6 + L * 0.15 - 2 * coursedJoint(u, z, 0.16, 0.36, uStep, d)); return set(i, ' ', 0), true; // white-painted brick
 }
@@ -21618,7 +21663,7 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
 function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.6))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.375, 0.425, C(YEL, 14), C(RED, 2.6))) return true;
   if (z > 1.3 && z < 2.25 && (backWall(my) ? u > 7.8 && u < 9.6 : my !== room.H - 1 && fract(Math.abs(u) / 3) < 0.5)) { // the menu, brushed on red strips
     const tu = fract(Math.abs(u) / 0.32), k = Math.floor(Math.abs(u) / 0.32);
     if (tu < 0.2 || tu > 0.8 || z < 1.35 + hash(k, 1, 148) * 0.1) { BG[i] = C(YEL, 5.4 + L * 0.15); return set(i, ' ', 0), true; }
@@ -21651,7 +21696,7 @@ function bodegaWall(i, u, uStep, z, d, mx, my, L) {
     if (z > 1.95) { BG[i] = C(YEL, 6); return wallText(i, u, uStep, z, d, 'LOTTO', 6.4, 2.07, 0.12, 0.14, C(RED, 6), C(YEL, 6)) || set(i, ' ', 0), true; }
     const ry = (z - 1.1) / 0.21; BG[i] = fract(ry) < 0.15 || fract(u / 0.16) < 0.12 ? C(GRAY, 2) : C([RED, WHITE, BLUE, GREEN, YEL][hash(Math.floor(u / 0.16) + Math.floor(ry) * 17, 2, 133) * 5 | 0], 5); return set(i, ' ', 0), true;
   }
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.28, 0.34, C(RED, 14), C(YEL, 7))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.35, 0.425, C(RED, 14), C(YEL, 7))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.0, 1.95, room.board3 || (room.board3 = menuLines().slice(0, 3)), 1.2, C(GRAY, 1), C(WHITE, 14))) return true;
   if (z < 0.9) { BG[i] = C(GRAY, 1.6 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(YEL, 4.5 + L * 0.15); return set(i, ' ', 0), true;
@@ -21670,7 +21715,7 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
   ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
+  if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.375, 0.45, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
   const footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
   if (!backWall(my) && my !== room.H - 1 && z > 2.3 && Math.abs(fract(Math.abs(u) / 3) - 0.5) < 0.18) { // tall arched windows, high up
@@ -21696,7 +21741,7 @@ const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k
 const FRUIT_PAPER = { r: 0.035, leaf: 0.013 }; // the oranges on the wallpaper, and their leaves
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(GREEN, 14), C(WHITE, 7))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.375, 0.45, C(GREEN, 14), C(WHITE, 7))) return true;
   if (z < 1.0) { set(i, ' ', 0); BG[i] = C(GREEN, 2.4 + L * 0.2 - 1.5 * coveGroove(u, 0.25, 0.01, Math.max(uStep, d / projY))); return true; }
   // the paper above: a little orange with its leaf in every other 25 cm square, each row half a step along from the
   // last (a half-drop repeat)
@@ -21729,7 +21774,7 @@ function motelWall(i, u, uStep, z, d, mx, my, L) {
     if (Math.abs(u - 6.0) > 0.5 || z < 1.5 || z > 2.1) { BG[i] = C(GRAY, 0.8); return set(i, ' ', 0), true; }
     const n = hash(Math.floor(u * 9), Math.floor(z * 9), Math.floor(T * 1.5)); BG[i] = C([BLUE, CYAN, GREEN, WHITE][n * 4 | 0], 3 + n * 4); return set(i, ' ', 0), true;
   }
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 3.0, 2.5, 0.26, 0.3, C(RED, 13), C(YEL, 5))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 3.0, 2.5, 0.325, 0.375, C(RED, 13), C(YEL, 5))) return true;
   if (z < 1.0) { BG[i] = C(BRICK, 1.5 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WARM, 3)), true; } // wood-look panelling
   BG[i] = C(YEL, 3.6 + L * 0.15); return set(i, fract(u / 0.25) < 0.04 ? ':' : ' ', C(ORANGE, 4)), true; // stripy wallpaper
 }
@@ -21761,7 +21806,7 @@ const gasBottle = (x, y, col) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.12, 0.12, 1.48]);
 const carSeat = (x, y, fx, fy) => [{ ...BX(x, y, 0.27, 0.27, 0.2, 0.5, solid(GRAY, { top: '=', bright: 0.9 })), seat: true, x, y, fx, fy, h: 0.5 }, BX(x - fx * 0.25, y - fy * 0.25, 0.27, 0.07, 0.5, 1.2, solid(GRAY, { bright: 0.9 }), fy, -fx)];
 function weldWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.48, 0.3, 0.36, C(ORANGE, 14), C(GRAY, 1))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.48, 0.375, 0.45, C(ORANGE, 14), C(GRAY, 1))) return true;
   if (backWall(my) && z > 1.5 && z < 2.0 && Math.abs(u - 9.0) < 1.0) { BG[i] = C(YEL, 7); return wallText(i, u, uStep, z, d, 'SAFETY FIRST', 9.0, 1.75, 0.13, 0.2, C(GRAY, 1), C(YEL, 7)) || (set(i, ' ', 0), true); }
   const scorch = Math.max(0, 1 - Math.hypot(u - 4.0, (z - 1.1) * 1.5) / 1.6), footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
@@ -21783,7 +21828,7 @@ const tyreStack = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.32, 0.32, n * 0.22]);
 function tyreWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 7.5, 2.5, 0.3, 0.36, C(YEL, 15), C(GRAY, 0.6))) return true;
+  if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 7.5, 2.5, 0.375, 0.45, C(YEL, 15), C(GRAY, 0.6))) return true;
   const footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
   if (backWall(my) && z > 1.1 && z < 2.1 && Math.abs(u - 7.5) < 2.3) { // the tread patterns, a poster of them
@@ -21815,7 +21860,7 @@ function tailorWall(i, u, uStep, z, d, mx, my, L) {
     const r = Math.hypot(bu - 0.5, (bz - 0.55) * 1.1);
     BG[i] = r < 0.1 ? C(BRICK, 1) : r < 0.42 ? C([BLUE, GRAY, BRICK, GREEN, RED, WHITE, YEL][hash(k, 1, 142) * 7 | 0], 3 + L * 0.2) : C(BRICK, 1); return true;
   }
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.58, 0.26, 0.3, C(YEL, 12), C(BRICK, 1.5))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.58, 0.325, 0.375, C(YEL, 12), C(BRICK, 1.5))) return true;
   set(i, ' ', 0);
   if (z < 0.95) { BG[i] = C(BRICK, 1.4 + L * 0.2 - coveGroove(u, 1 / 3, 0.02, footprint)); return true; }
   BG[i] = C(STONE, 3.8 + L * 0.15 - coveGroove(u, 0.12, 0.012, footprint) * 2); return true; // pinstripe
@@ -21850,7 +21895,7 @@ const gramophone = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 const chandelier = (x, y) => hung(x, y, 2.5, (vx, vy, z) => { drum(vx, vy, 0.04, z - 0.4, z, solid(YEL)); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; dot(vx + Math.cos(a) * 0.3, vy + Math.sin(a) * 0.3, z - 0.35, 0.03, (i, t, L) => { BG[i] = C(YEL, 12); return set(i, '*', C(WHITE, 15)), true; }); rod(vx, vy, z - 0.3, vx + Math.cos(a) * 0.3, vy + Math.sin(a) * 0.3, z - 0.35, 0.01, YEL, 1.4); } });
 function antiqueWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.26, 0.3, C(YEL, 12), C(GREEN, 1.4))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.325, 0.375, C(YEL, 12), C(GREEN, 1.4))) return true;
   const footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
   if (my !== room.H - 1 && z > 1.3 && z < 2.2 && fract(Math.abs(u) / 2.6) > 0.25 && fract(Math.abs(u) / 2.6) < 0.75) { // landscapes in gilt frames
@@ -21875,7 +21920,7 @@ ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { const fp = sharedFloorDepth(r);
 const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.01, z - 0.35, z), (i, t, L) => { BG[i] = C(col, 8); return set(i, HIT.w > z - 0.15 ? '!' : fract(HIT.u * 9) < 0.4 ? '%' : ' ', C(RED, 12)), true; }));
 function drugWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
+  if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.375, 0.45, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
   if (z > 2.0 && z < 2.2) { BG[i] = fract(u * 2) < 0.5 ? C(RED, 6) : C(YEL, 8); return set(i, ' ', 0), true; } // price banners all round
   BG[i] = C(WHITE, 6 + L * 0.2); return set(i, ' ', 0), true;
 }
@@ -21896,7 +21941,7 @@ function delicatessenWall(i, u, uStep, z, d, mx, my, L) {
     const wine = hash(k, 1, 146) < 0.45, on = wine ? Math.abs(cu - 0.5) < (bz > 0.65 ? 0.08 : 0.25) && bz < 0.95 : Math.abs(cu - 0.5) < 0.32 && bz < 0.6;
     BG[i] = on ? (bz > 0.25 && bz < 0.45 ? C(WHITE, 4) : wine ? C(GREEN, 1.6) : C([RED, ORANGE, YEL, GREEN][k & 3], 5)) : C(BRICK, 1); return true; // (a paper label on each)
   }
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.6, 0.22, 0.28, C(YEL, 12), C(GREEN, 1.3))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.6, 0.275, 0.35, C(YEL, 12), C(GREEN, 1.3))) return true;
   set(i, ' ', 0);
   if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2 - 2.5 * coveGroove(z, 0.15, 0.008, d / projY)); return true; }
   BG[i] = C(GREEN, 1.5 + L * 0.12); return true;
@@ -21933,7 +21978,7 @@ function turnGacha() {
 }
 function gachaWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(MAG, 15), C(WHITE, 7))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.375, 0.45, C(MAG, 15), C(WHITE, 7))) return true;
   set(i, ' ', 0);
   if (z > 1.95) { const k = Math.floor(Math.abs(u) / 0.9), cu = fract(Math.abs(u) / 0.9) - 0.5, r = Math.hypot(cu, (z - 2.35) * 1.4); // the characters, painted round the top
     if (r < 0.3) { BG[i] = Math.abs(Math.abs(cu) - 0.1) < 0.04 && Math.abs(z - 2.4) < 0.05 ? C(GRAY, 1) : C([MAG, CYAN, YEL, GREEN][k & 3], 8); return true; } }
@@ -23990,9 +24035,9 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
-      if (word && cellW >= 3 && cellH >= 3.5 && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
+      if (word && cellW >= LETTER_MIN_COLS && cellH >= LETTER_MIN_ROWS && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
         const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
-        set(i, glyphOn(ch, Math.floor(fx * 4), Math.floor(fy * 5)) ? '#' : ' ', colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
       }
       if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
         set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
@@ -24295,11 +24340,16 @@ function glPresentInit() {
   return st;
 }
 // (re)build what depends on the screen's size: the glyph atlas, the cell texture, the canvas
+function drawBlockCell(x, bits, left, top) {
+  const w = Math.ceil(cw / 2), h = Math.ceil(FS / 2);
+  for (let b = 0; b < 4; b++) if (bits >> b & 1) x.fillRect(left + (b & 1 ? Math.floor(cw / 2) : 0), top + (b & 2 ? Math.floor(FS / 2) : 0), b & 1 ? Math.ceil(cw) - Math.floor(cw / 2) : w, h);
+}
 function glPresentSize(st) {
   const { gl, U } = st, slotW = Math.ceil(cw) + 1, at = document.createElement('canvas'), x = at.getContext('2d');
-  at.width = 96 * slotW; at.height = FS;
+  at.width = 111 * slotW; at.height = FS;
   x.font = FS + 'px monospace'; x.textBaseline = 'top'; x.fillStyle = '#fff';
   for (let k = 1; k < 95; k++) x.fillText(String.fromCharCode(32 + k), k * slotW, 0); // ('!'..'~'; 0 is the space)
+  for (let b = 1; b < 16; b++) drawBlockCell(x, b, (95 + b) * slotW, 0); // (exact rectangles: no font to depend on)
   gl.activeTexture(gl.TEXTURE2); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, at);
   st.data = new Uint8Array(cols * rows * 4);
   gl.activeTexture(gl.TEXTURE0); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, st.data);
@@ -24315,8 +24365,8 @@ function glPresent() {
   if (st.key !== [cols, rows, cw, FS, cv.width, cv.height].join()) glPresentSize(st);
   const D = st.data, odd = []; // (cells whose character isn't plain ASCII: drawn over the top after)
   for (let i = 0, n = cols * rows; i < n; i++) {
-    const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4;
-    D[j] = code > 32 && code < 127 && FOGS[i] < 8 ? code - 32 : 255;
+    const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4, block = code >= 0x2580 ? BLOCK_CELLS.indexOf(ch) : -1;
+    D[j] = FOGS[i] >= 8 ? 255 : code > 32 && code < 127 ? code - 32 : block > 0 ? 95 + block : 255;
     if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < 8 && !(code > 32 && code < 127)) odd.push(i);
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
@@ -24355,7 +24405,8 @@ function present2D() {
     // preserving both the complete grapheme and the position of the ordinary text that follows it.
     if (!singleWidth(CH[i])) {
       g.fillStyle = FOGS[i] ? fogged(COL[i],FOGS[i]) : PAL[COL[i]];
-      g.fillText(CH[i],x * cw,r * FS,cw);
+      const block = BLOCK_CELLS.indexOf(CH[i]);
+      if (block > 0) drawBlockCell(g, block, x * cw, r * FS); else g.fillText(CH[i],x * cw,r * FS,cw);
       x++; continue;
     }
     const key = COL[i] * 9 + FOGS[i];
@@ -35155,7 +35206,7 @@ function HOTEL_ROOF_LIFT(x,y) {
   const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
   const leaf=(i,t,L)=>{const fine=coveDetail(t,.4),grain=fine?Math.sin(HIT.u*180+HIT.w*6)*.06*fine:0;BG[i]=C(GRAY,2.5+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'ROOF',0,2.515,.13,.20,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'ROOF',0,2.515,.19,.24,C(GREEN,12),BG[i]))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=v;};
   box('reveal',0,.012,.86,.012,.025,2.18,0,dark);
   box('threshold',0,.055,1,.055,0,.025,.006,metal);
@@ -35175,7 +35226,7 @@ ROOM_DEFS.hotel.liftWall=hotelLobbyWallFinish;
 function HOTEL_FRONT_ENTRANCE(x,y,frameColor=GRAY) {
   const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,frameColor);
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.3+L*.06);set(i,' ',0);return true;};
-  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&hotelFittingText(i,-HIT.u,HIT.w,t,'EXIT',0,2.515,.13,.20,C(GREEN,12),BG[i],-1))return true;set(i,' ',0);return true;};
+  const sign=(i,t,L)=>{BG[i]=C(GRAY,.7+L*.08);if(HIT.face===4&&hotelFittingText(i,-HIT.u,HIT.w,t,'EXIT',0,2.515,.19,.24,C(GREEN,12),BG[i],-1))return true;set(i,' ',0);return true;};
   const box=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=-v;};
   box('threshold',0,.055,1,.055,0,.025,.006,metal);
   for(const e of [-1,1])box('jamb',e*.93,.055,.07,.055,.025,2.20,.008,metal);
@@ -35937,34 +35988,14 @@ function bankWallFinish(i,u,uStep,z,d,mx,my,L) {
   const vein=coveGroove(u+.14*Math.sin(z*3),1.8,.009,footprint)*coveDetail(d);
   BG[i]=C(STONE,4.2+L*.28-10*joint-.7*vein);set(i,' ',0);return true;
 }
-// Small letters occupy their projected centre cell exactly once. The shared
-// wall sampler's biased interval can leave a gap between oblique columns.
-// Keep its close block lettering and restore context without changing it.
-function bankTitleText(i,u,z,t,letters,color,background) {
-  const q=(2*(i%cols+.5)/cols-1)*tf,rx=dx-dy*q,ry=dy+dx*q;
-  const dn=WH.dn,sl=WH.sl,wc=WH.wc,step=t/(projX*Math.max(1e-6,Math.abs(ry+dx/projX)));
-  WH.dn=Math.max(1e-6,Math.abs(ry*t));WH.sl=rx/(Math.abs(ry)||1e-6);WH.wc=u;
-  try{
-    if(wallTextBig(u,step,t,0,.24,.22,4))return wallText(i,u,step,z,t,'BANK',0,2.69,.24,.22,color,background);
-    for(const p of letters)if(p.i===i){BG[i]=background;set(i,p.ch,color);return true;}
-    return false;
-  }finally{WH.dn=dn;WH.sl=sl;WH.wc=wc;}
-}
+// The name fills its mounted board.
 function BANK_WALL_TITLE(x,y) {
-  const parts=[],letters=[... 'BANK'].map(ch=>({ch,i:-1}));
-  hotelLobbyRound(parts,'housing',1.2,.03,2.50,2.82,.02,(i,t,L)=>{
-    BG[i]=C(STONE,5+L*.25);if(HIT.face===3&&bankTitleText(i,HIT.u,HIT.w,t,letters,C(GRAY,.2),BG[i]))return true;
+  const parts=[];
+  hotelLobbyRound(parts,'housing',1.2,.03,2.42,2.83,.02,(i,t,L)=>{
+    BG[i]=C(STONE,5+L*.25);if(HIT.face===3&&hotelFittingText(i,HIT.u,HIT.w,t,'BANK',0,2.625,.56,.38,C(GRAY,.2),BG[i]))return true;
     set(i,' ',0);return true;
   });
-  const surfaces=hotelLobbyDraw(parts),draw=(vx,vy)=>{
-    for(let k=0;k<letters.length;k++){
-      const xx=vx+(k-1.5)*.24,yy=vy+.03,forward=dx*xx+dy*yy,across=-dy*xx+dx*yy;
-      const col=Math.floor(cols/2+projX*across/forward),row=Math.floor(hor-(2.69-eye)*projY/forward);
-      letters[k].i=forward>.01&&col>=0&&col<cols&&row>=0&&row<rows?row*cols+col:-1;
-    }
-    surfaces(vx,vy);
-  };
-  return {...ROOM_MODEL(x,y,draw),walk:true,radius:1.22,bankWallTitle:{parts}};
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:1.22,bankWallTitle:{parts}};
 }
 const BANK_FINISH_PROPS=ROOM_DEFS.bank.props;
 ROOM_DEFS.bank.props=r=>{
@@ -36332,12 +36363,14 @@ function GYM_MIRROR_FRAME(x,normal) {
 }
 // A mounted board, so a room's name and line stop painting straight on its wall.
 function wallTitleBoard(x,y,hl,title,subtitle,ink,z0,marker) {
+  // Each line as wide as the board allows, as tall as a letter that wide can usefully be.
+  const width=2*hl*.94,fit=(text,band)=>Math.min(width/text.length,band*1.5),titleBand=.36,subBand=.24;
   const parts=[],board=(i,t,L)=>{
     BG[i]=C(GRAY,.7+L*.07);
-    if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,title,0,z0+.38,.30,.26,ink,BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,subtitle,0,z0+.08,.17,.17,C(WHITE,12),BG[i])))return true;
+    if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,title,0,z0+.47,fit(title,titleBand),titleBand,ink,BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,subtitle,0,z0+.15,fit(subtitle,subBand),subBand,C(WHITE,12),BG[i])))return true;
     set(i,' ',0);return true;
   };
-  hotelLobbyRound(parts,'board',hl,.025,z0,z0+.6,.012,board);
+  hotelLobbyRound(parts,'board',hl,.025,z0,z0+.68,.012,board);
   return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:hl+.02,[marker]:{parts}};
 }
 // Rooms can lack their building's cell in old saves: use the nearest one by name.

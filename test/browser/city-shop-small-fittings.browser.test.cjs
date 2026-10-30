@@ -35,7 +35,7 @@ test('the returns slot is recessed into its housing and the queue board shows on
   enterRoom('phones',{word:'PHONES',ret:[100,100,0]},[5,5,0]);const screen=room.props.find(o=>o.x===10.7&&o.y===6.3),q=parts(screen).find(q=>q.box.z0===1.2),s=q.box;Object.assign(WH,{dn:1,sl:0,wc:0});
   for(const time of [10,10.7]){T=time;for(let row=0;row<5;row++)for(let col=0;col<8;col++){
    const u=((col+.5)/4-1)*.08,z=1.335+(.5-(row+.5)/5)*.1,t=q.ray(s.x+s.c*u-s.s*.1,s.y+s.s*u+s.c*.1,z,s.s,-s.c,0,s);q.shade(0,t,8);
-   if((CH[0]==='#')!==!!glyphOn('01'[Math.floor(col/4)],col%4,row))bad.push(['queue number missing or duplicated',time,row,col,CH[0]]);
+   if((CH[0]==='█')!==!!glyphOn('01'[Math.floor(col/4)],col%4,row))bad.push(['queue number missing or duplicated',time,row,col,CH[0]]);
   }}return bad.slice(0,8);
  });assert.deepEqual(bad,[]);
 }));

@@ -7,14 +7,27 @@ const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448, '$': 15518, ':': 1040, '&': 10923, '!': 9346, "'": 9216 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
+// Block lettering shows four font pixels in each screen cell: index 1 top left, 2 top right, 4 bottom left, 8 bottom
+// right. A letter stays whole down to 2 cells by 2.5 rows (4 columns with its gap, 5 rows), and only then goes small.
+const BLOCK_CELLS = ' \u2598\u259D\u2580\u2596\u258C\u259E\u259B\u2597\u259A\u2590\u259C\u2584\u2599\u259F\u2588';
+const LETTER_MIN_COLS = 2, LETTER_MIN_ROWS = 2.5;
+// q: how far across in letters; hz: 0 at the top of the band to 1 at the bottom; du, dv: one screen cell in those units
+function blockGlyph(text, q, hz, du, dv) {
+  let bits = 0;
+  for (let b = 0; b < 4; b++) {
+    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
+    if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
+  }
+  return BLOCK_CELLS[bits];
+}
 // a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
 // letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
 // letters (letter k is [k, k+1)); hz: 0 at the top of the lettering's band to 1 at the bottom. null: not on a letter
-const signIsBig = (letterW, bandH, tFar) => letterW * projX / tFar >= 2.2 && bandH * projY / tFar >= 2.8;
+const signIsBig = (letterW, bandH, tFar) => letterW * projX / tFar >= LETTER_MIN_COLS && bandH * projY / tFar >= LETTER_MIN_ROWS;
 function signGlyph(word, lq, hz, t, letterW, bandH, tFar) {
   const k = Math.floor(lq);
   if (k < 0 || k >= word.length || hz < 0 || hz >= 1) return null;
-  if (signIsBig(letterW, bandH, tFar)) return GLYPH5[word[k]] !== undefined && glyphOn(word[k], Math.floor(fract(lq) * 4), Math.floor(hz * 5)) ? '#' : ' ';
+  if (signIsBig(letterW, bandH, tFar)) return blockGlyph(word, lq, hz, t / projX / letterW, t / projY / bandH);
   const cellU = t / projX / letterW, cellV = t / projY / bandH;
   return Math.abs(hz - 0.5) < Math.max(cellV, 1e-4) / 2 && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
 }
@@ -171,19 +184,11 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
-      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
-      const du = uStep, dz = d / projY;
       if (signBig(u, uStep, d, side, mx, my, wc, p, w.length)) {
-        let on = 0, pk = -1;
-        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
-          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
-          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
-        }
-        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
-          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
-          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
-          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        const ch = blockGlyph(w, mod(u * 10, m), (0.4 - z) / 0.08, uStep * 10, d / projY / 0.08);
+        if (p < w.length && GLYPH5[w[p]] !== undefined || ch !== ' ') {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon;
+          return set(i, ch, C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
         }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between

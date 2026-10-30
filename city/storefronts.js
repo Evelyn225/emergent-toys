@@ -14,7 +14,7 @@ function bodegaWall(i, u, uStep, z, d, mx, my, L) {
     if (z > 1.95) { BG[i] = C(YEL, 6); return wallText(i, u, uStep, z, d, 'LOTTO', 6.4, 2.07, 0.12, 0.14, C(RED, 6), C(YEL, 6)) || set(i, ' ', 0), true; }
     const ry = (z - 1.1) / 0.21; BG[i] = fract(ry) < 0.15 || fract(u / 0.16) < 0.12 ? C(GRAY, 2) : C([RED, WHITE, BLUE, GREEN, YEL][hash(Math.floor(u / 0.16) + Math.floor(ry) * 17, 2, 133) * 5 | 0], 5); return set(i, ' ', 0), true;
   }
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.28, 0.34, C(RED, 14), C(YEL, 7))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.35, 0.425, C(RED, 14), C(YEL, 7))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.0, 1.95, room.board3 || (room.board3 = menuLines().slice(0, 3)), 1.2, C(GRAY, 1), C(WHITE, 14))) return true;
   if (z < 0.9) { BG[i] = C(GRAY, 1.6 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(YEL, 4.5 + L * 0.15); return set(i, ' ', 0), true;
@@ -33,7 +33,7 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
   ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.3, 0.36, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
+  if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.375, 0.45, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
   const footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
   if (!backWall(my) && my !== room.H - 1 && z > 2.3 && Math.abs(fract(Math.abs(u) / 3) - 0.5) < 0.18) { // tall arched windows, high up
@@ -59,7 +59,7 @@ const bananas = x => hung(x, 1.3, 1.9, (vx, vy, z) => { for (let k = 0; k < 5; k
 const FRUIT_PAPER = { r: 0.035, leaf: 0.013 }; // the oranges on the wallpaper, and their leaves
 function fruitWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(GREEN, 14), C(WHITE, 7))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.375, 0.45, C(GREEN, 14), C(WHITE, 7))) return true;
   if (z < 1.0) { set(i, ' ', 0); BG[i] = C(GREEN, 2.4 + L * 0.2 - 1.5 * coveGroove(u, 0.25, 0.01, Math.max(uStep, d / projY))); return true; }
   // the paper above: a little orange with its leaf in every other 25 cm square, each row half a step along from the
   // last (a half-drop repeat)
@@ -92,7 +92,7 @@ function motelWall(i, u, uStep, z, d, mx, my, L) {
     if (Math.abs(u - 6.0) > 0.5 || z < 1.5 || z > 2.1) { BG[i] = C(GRAY, 0.8); return set(i, ' ', 0), true; }
     const n = hash(Math.floor(u * 9), Math.floor(z * 9), Math.floor(T * 1.5)); BG[i] = C([BLUE, CYAN, GREEN, WHITE][n * 4 | 0], 3 + n * 4); return set(i, ' ', 0), true;
   }
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 3.0, 2.5, 0.26, 0.3, C(RED, 13), C(YEL, 5))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 3.0, 2.5, 0.325, 0.375, C(RED, 13), C(YEL, 5))) return true;
   if (z < 1.0) { BG[i] = C(BRICK, 1.5 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WARM, 3)), true; } // wood-look panelling
   BG[i] = C(YEL, 3.6 + L * 0.15); return set(i, fract(u / 0.25) < 0.04 ? ':' : ' ', C(ORANGE, 4)), true; // stripy wallpaper
 }
@@ -124,7 +124,7 @@ const gasBottle = (x, y, col) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.12, 0.12, 1.48]);
 const carSeat = (x, y, fx, fy) => [{ ...BX(x, y, 0.27, 0.27, 0.2, 0.5, solid(GRAY, { top: '=', bright: 0.9 })), seat: true, x, y, fx, fy, h: 0.5 }, BX(x - fx * 0.25, y - fy * 0.25, 0.27, 0.07, 0.5, 1.2, solid(GRAY, { bright: 0.9 }), fy, -fx)];
 function weldWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.48, 0.3, 0.36, C(ORANGE, 14), C(GRAY, 1))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.48, 0.375, 0.45, C(ORANGE, 14), C(GRAY, 1))) return true;
   if (backWall(my) && z > 1.5 && z < 2.0 && Math.abs(u - 9.0) < 1.0) { BG[i] = C(YEL, 7); return wallText(i, u, uStep, z, d, 'SAFETY FIRST', 9.0, 1.75, 0.13, 0.2, C(GRAY, 1), C(YEL, 7)) || (set(i, ' ', 0), true); }
   const scorch = Math.max(0, 1 - Math.hypot(u - 4.0, (z - 1.1) * 1.5) / 1.6), footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
@@ -146,7 +146,7 @@ const tyreStack = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.32, 0.32, n * 0.22]);
 function tyreWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 7.5, 2.5, 0.3, 0.36, C(YEL, 15), C(GRAY, 0.6))) return true;
+  if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 7.5, 2.5, 0.375, 0.45, C(YEL, 15), C(GRAY, 0.6))) return true;
   const footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
   if (backWall(my) && z > 1.1 && z < 2.1 && Math.abs(u - 7.5) < 2.3) { // the tread patterns, a poster of them
@@ -178,7 +178,7 @@ function tailorWall(i, u, uStep, z, d, mx, my, L) {
     const r = Math.hypot(bu - 0.5, (bz - 0.55) * 1.1);
     BG[i] = r < 0.1 ? C(BRICK, 1) : r < 0.42 ? C([BLUE, GRAY, BRICK, GREEN, RED, WHITE, YEL][hash(k, 1, 142) * 7 | 0], 3 + L * 0.2) : C(BRICK, 1); return true;
   }
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.58, 0.26, 0.3, C(YEL, 12), C(BRICK, 1.5))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.58, 0.325, 0.375, C(YEL, 12), C(BRICK, 1.5))) return true;
   set(i, ' ', 0);
   if (z < 0.95) { BG[i] = C(BRICK, 1.4 + L * 0.2 - coveGroove(u, 1 / 3, 0.02, footprint)); return true; }
   BG[i] = C(STONE, 3.8 + L * 0.15 - coveGroove(u, 0.12, 0.012, footprint) * 2); return true; // pinstripe
@@ -213,7 +213,7 @@ const gramophone = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 const chandelier = (x, y) => hung(x, y, 2.5, (vx, vy, z) => { drum(vx, vy, 0.04, z - 0.4, z, solid(YEL)); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; dot(vx + Math.cos(a) * 0.3, vy + Math.sin(a) * 0.3, z - 0.35, 0.03, (i, t, L) => { BG[i] = C(YEL, 12); return set(i, '*', C(WHITE, 15)), true; }); rod(vx, vy, z - 0.3, vx + Math.cos(a) * 0.3, vy + Math.sin(a) * 0.3, z - 0.35, 0.01, YEL, 1.4); } });
 function antiqueWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.26, 0.3, C(YEL, 12), C(GREEN, 1.4))) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.325, 0.375, C(YEL, 12), C(GREEN, 1.4))) return true;
   const footprint = Math.max(uStep, d / projY);
   set(i, ' ', 0);
   if (my !== room.H - 1 && z > 1.3 && z < 2.2 && fract(Math.abs(u) / 2.6) > 0.25 && fract(Math.abs(u) / 2.6) < 0.75) { // landscapes in gilt frames
@@ -238,7 +238,7 @@ ROOM_FLOORS.gloss = (i, f, wx, wy, r, x, L) => { const fp = sharedFloorDepth(r);
 const popSign = (x, y, col) => hung(x, y, 2.4, (vx, vy, z) => drawBox(boxAt(vx, vy, 1, 0, 0.35, 0.01, z - 0.35, z), (i, t, L) => { BG[i] = C(col, 8); return set(i, HIT.w > z - 0.15 ? '!' : fract(HIT.u * 9) < 0.4 ? '%' : ' ', C(RED, 12)), true; }));
 function drugWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
+  if (backWall(my) && z > 2.2 && z < 2.8 && Math.abs(u - room.W / 2) < 3) { BG[i] = C(RED, 5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.375, 0.45, C(YEL, 15), C(RED, 5)) || set(i, ' ', 0), true; }
   if (z > 2.0 && z < 2.2) { BG[i] = fract(u * 2) < 0.5 ? C(RED, 6) : C(YEL, 8); return set(i, ' ', 0), true; } // price banners all round
   BG[i] = C(WHITE, 6 + L * 0.2); return set(i, ' ', 0), true;
 }
@@ -259,7 +259,7 @@ function delicatessenWall(i, u, uStep, z, d, mx, my, L) {
     const wine = hash(k, 1, 146) < 0.45, on = wine ? Math.abs(cu - 0.5) < (bz > 0.65 ? 0.08 : 0.25) && bz < 0.95 : Math.abs(cu - 0.5) < 0.32 && bz < 0.6;
     BG[i] = on ? (bz > 0.25 && bz < 0.45 ? C(WHITE, 4) : wine ? C(GREEN, 1.6) : C([RED, ORANGE, YEL, GREEN][k & 3], 5)) : C(BRICK, 1); return true; // (a paper label on each)
   }
-  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.6, 0.22, 0.28, C(YEL, 12), C(GREEN, 1.3))) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.6, 0.275, 0.35, C(YEL, 12), C(GREEN, 1.3))) return true;
   set(i, ' ', 0);
   if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2 - 2.5 * coveGroove(z, 0.15, 0.008, d / projY)); return true; }
   BG[i] = C(GREEN, 1.5 + L * 0.12); return true;
@@ -296,7 +296,7 @@ function turnGacha() {
 }
 function gachaWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.3, 0.36, C(MAG, 15), C(WHITE, 7))) return true;
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.48, 0.375, 0.45, C(MAG, 15), C(WHITE, 7))) return true;
   set(i, ' ', 0);
   if (z > 1.95) { const k = Math.floor(Math.abs(u) / 0.9), cu = fract(Math.abs(u) / 0.9) - 0.5, r = Math.hypot(cu, (z - 2.35) * 1.4); // the characters, painted round the top
     if (r < 0.3) { BG[i] = Math.abs(Math.abs(cu) - 0.1) < 0.04 && Math.abs(z - 2.4) < 0.05 ? C(GRAY, 1) : C([MAG, CYAN, YEL, GREEN][k & 3], 8); return true; } }

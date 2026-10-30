@@ -32,12 +32,14 @@ function GYM_MIRROR_FRAME(x,normal) {
 }
 // A mounted board, so a room's name and line stop painting straight on its wall.
 function wallTitleBoard(x,y,hl,title,subtitle,ink,z0,marker) {
+  // Each line as wide as the board allows, as tall as a letter that wide can usefully be.
+  const width=2*hl*.94,fit=(text,band)=>Math.min(width/text.length,band*1.5),titleBand=.36,subBand=.24;
   const parts=[],board=(i,t,L)=>{
     BG[i]=C(GRAY,.7+L*.07);
-    if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,title,0,z0+.38,.30,.26,ink,BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,subtitle,0,z0+.08,.17,.17,C(WHITE,12),BG[i])))return true;
+    if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,title,0,z0+.47,fit(title,titleBand),titleBand,ink,BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,subtitle,0,z0+.15,fit(subtitle,subBand),subBand,C(WHITE,12),BG[i])))return true;
     set(i,' ',0);return true;
   };
-  hotelLobbyRound(parts,'board',hl,.025,z0,z0+.6,.012,board);
+  hotelLobbyRound(parts,'board',hl,.025,z0,z0+.68,.012,board);
   return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:hl+.02,[marker]:{parts}};
 }
 // Rooms can lack their building's cell in old saves: use the nearest one by name.

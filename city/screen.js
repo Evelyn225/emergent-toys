@@ -29,23 +29,48 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
   if (Math.abs(z - z0) > bandH / 2 && !oneCell(z - z0, d / projY)) return false;
   const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
   if (p < 0 || p >= text.length) return false;
-  if (wallTextBig(u, uStep, d, u0, cwid, bandH, text.length)) { // close enough: every letter drawn large in blocks
-    BG[i] = bgc; const ch = text[p];
-    return set(i, GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor(fract(q) * 4), Math.floor((z0 + bandH / 2 - z) / bandH * 5)) ? '#' : ' ', col), true;
+  BG[i] = bgc;
+  if (wallTextIsBig(u, uStep, d, text, u0, z0, cwid, bandH)) { // every letter drawn large in blocks, for as long as it fits
+    return set(i, blockGlyph(text, q, (z0 + bandH / 2 - z) / bandH, uStep / cwid, d / projY / bandH), col), true;
   }
-  const centered = (uStep >= cwid || oneCell((fract(q) - 0.5) * cwid, uStep)) && oneCell(z - z0, d / projY);
-  set(i, centered ? text[p] : ' ', col); BG[i] = bgc;
+  // Too small for blocks: the word set solid along its middle row, not spread out over the width it would fill.
+  const k = uStep >= cwid ? p : wallTextLetter(i % cols, u, uStep, text, u0);
+  set(i, oneCell(z - z0, d / projY) && k >= 0 && k < text.length ? text[k] : ' ', col);
   return true;
 }
 
 // is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
 // switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+// Which letter a column shows when the word is set tight. Worked out once per view and then counted off in whole
+// columns, so that however the wall is angled each letter gets exactly one column and none is skipped or repeated.
+function wallTextLetter(column, u, uStep, text, u0) {
+  const m = wallTextSizes.get(text);
+  if (m.column === undefined) { m.column = column; m.u = u; m.letter = text.length / 2 - columnsToCentre(u, uStep, u0) + 0.0137; m.dir = 0; }
+  if (column === m.column) return Math.floor(m.letter);
+  if (!m.dir) m.dir = Math.sign(u - m.u) * Math.sign(column - m.column) || 1;
+  return Math.floor(m.letter + m.dir * (column - m.column));
+}
+// How many screen columns from u to u0 along this wall. A column covers more wall the more obliquely the ray meets it,
+// so an even step would lose letters off the far end of an angled word: this is that step's exact integral.
+function columnsToCentre(u, uStep, u0) {
+  const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1;
+  return (D * D + s0 * s0) / (uStep * D) * sgn * (Math.atan((s0 + sgn * (u0 - u)) / D) - Math.atan(s0 / D));
+}
+// (Decided once per view for each sign: judged column by column, an oblique sign could go half large, half small.)
+const wallTextSizes = new Map();
+function wallTextIsBig(u, uStep, d, text, u0, z0, cwid, bandH) {
+  let m = wallTextSizes.get(text);
+  if (m && m.u0 === u0 && m.z0 === z0 && Math.abs(m.dn - WH.dn) < 0.01 && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.hor === hor && m.projX === projX) return m.big;
+  m = { u0, z0, dn: WH.dn, px, py, dx, dy, hor, projX, big: wallTextBig(u, uStep, d, u0, cwid, bandH, text.length) };
+  wallTextSizes.set(text, m);
+  return m.big;
+}
 function wallTextBig(u, uStep, d, u0, cwid, bandH, len) {
-  if (cwid / uStep < 1.5) return false;
+  if (cwid / uStep < LETTER_MIN_COLS * 0.75) return false;
   const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1, r0 = D * D + s0 * s0;
   for (const e of [-1, 1]) {
     const s = s0 + sgn * (u0 + e * (len / 2 - 0.5) * cwid - u), r = (D * D + s * s) / r0;
-    if (cwid / (uStep * r) < 2.2 || bandH * projY / (d * Math.sqrt(r)) < 2.8) return false;
+    if (cwid / (uStep * r) < LETTER_MIN_COLS || bandH * projY / (d * Math.sqrt(r)) < LETTER_MIN_ROWS) return false;
   }
   return true;
 }

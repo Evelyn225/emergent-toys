@@ -1169,7 +1169,7 @@ function tattooWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.0) { BG[i] = z > 0.95 ? C(YEL, 4 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return true; } // black wainscot, a brass rail
   if (backWall(my)) {
     if (z > 2.35 && z < 2.85) { // NO REGRETS, in pink neon, a glow round it
-      if (wallText(i, u, uStep, z, d, 'NO REGRETS', W / 2, 2.6, 0.22, 0.34, C(WHITE, 15))) { BG[i] = C(MAG, 9); return true; }
+      if (wallText(i, u, uStep, z, d, 'NO REGRETS', W / 2, 2.6, 0.27, 0.44, C(WHITE, 15))) { BG[i] = C(MAG, 9); return true; }
       if (Math.abs(u - W / 2) < 1.4) { BG[i] = C(MAG, 2.4); return set(i, ' ', 0), true; }
     }
     for (const sx of [2.6, 7, 11.4]) { // over each station: a mirror, two flash sheets either side

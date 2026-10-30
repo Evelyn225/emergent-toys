@@ -62,7 +62,7 @@ function modernApartmentDetails(b, f) {
   }
   if (r.core >= 0) {
     const along = f.start + r.margin + (r.core + .5) * r.spacing;
-    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .44, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
+    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .45, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
   }
 }
 function tenementEscapeDetails(b, f) {

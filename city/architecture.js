@@ -115,7 +115,7 @@ function downtownDetails(b) {
     const piers = Math.max(2, Math.round((f.end - f.start) / 0.7));
     for (let p = 0; p <= piers; p++) {
       const along = f.start + 0.06 + p / piers * (f.end - f.start - 0.12);
-      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.43, f.low), f.height - 0.035, 'pier');
+      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.45, f.low), f.height - 0.035, 'pier');
     }
   }
   if (b.sty !== 14 || b.access) return;
@@ -133,15 +133,15 @@ const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painte
 const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
 function architectureSignSpec(b, f, sh) {
   const width = f.end - f.start, n = sh.word.length;
-  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .38, cmax: .067, margin: .3, band: .043, edge: .012, style: 'board' }
-    : b.region === 'brownstones' ? { zc: .39, cmax: .07, margin: .25, band: .038, edge: .012, style: 'painted' }
-    : { zc: .36, cmax: .085, margin: .3, band: .055, edge: .014, style: 'box' };
+  const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .39, cmax: .09, margin: .3, band: .1, edge: .01, style: 'board' }
+    : b.region === 'brownstones' ? { zc: .39, cmax: .09, margin: .25, band: .1, edge: .01, style: 'painted' }
+    : { zc: .39, cmax: .1, margin: .3, band: .1, edge: .01, style: 'box' };
   return { ...g, width, cwid: Math.min(g.cmax, (width - g.margin) / n) };
 }
 // A shop's fascia board on each face that carries its name, standing off the wall over the window, and on some
 // brownstone and midtown shops a striped awning over the window below it: a sloping canopy on its frame, a valance
 // along the front. (Downtown towers and the apartment blocks with entrance canopies get no awning.)
-const ARCH_FASCIA = { depth: .012, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
+const ARCH_FASCIA = { depth: .04, awning: { out: .1, top: .325, drop: .05, valance: .02, thick: .005, keep: .6 } };
 function architectureShopfront(b) {
   const sh = b.sh;
   if (sh.kind === SHOP_APTS) return;

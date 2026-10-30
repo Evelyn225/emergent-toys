@@ -37,7 +37,7 @@ test('native exit and ocean-hall labels use their visible interior wall faces',(
 test('native gift-shop approaches show every letter by day and night, and close lettering resolves into larger glyphs',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
   const original=wallText,bad=[];let owners=null,big=0;
-  wallText=(...args)=>{const hit=original(...args);if(hit&&args[5]==='GIFT SHOP'&&CH[args[0]]!==' '){const p=Math.floor((args[1]-args[6])/args[8]+args[5].length/2);owners[args[0]]=p;BG[args[0]]=C(MAG,15);if(CH[args[0]]==='#')big++;}return hit;};
+  wallText=(...args)=>{const hit=original(...args);if(hit&&args[5]==='GIFT SHOP'&&CH[args[0]]!==' '){const block=BLOCK_CELLS.includes(CH[args[0]]);const p=block?Math.floor((args[1]-args[6])/args[8]+args[5].length/2):args[5].indexOf(CH[args[0]]);owners[args[0]]=p;BG[args[0]]=C(MAG,15);if(block)big++;}return hit;};
   try{for(const [name,x,y,time]of [['wide',16.5,12.8,12],['close',20.5,12.5,12],['oblique',18,14,12],['night',18.5,12.6,23]]){
    px=x;py=y;tod=time;env(0);a=Math.atan2(15-py,20.5-px);pitch=0;owners=new Int16Array(cols*rows).fill(-1);big=0;render(0);pitch=(2.3-1.7)/Math.hypot(20.5-px,15-py)*projY/rows;owners=new Int16Array(cols*rows).fill(-1);big=0;render(0);
    if(!free(px,py))bad.push([name,'camera not on clear floor']);const visible=new Set();let pixels=0;for(let i=0;i<owners.length;i++)if(owners[i]>=0&&BG[i]===C(MAG,15)){visible.add(owners[i]);pixels++;}

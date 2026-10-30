@@ -147,7 +147,7 @@ test('terminal lettering reads forward on both faces, enlarges up close and neve
    }
   }
   const stop=FERRY_STOPS[1];[px,py]=ferrySignPosition(stop);py+=.3;a=-Math.PI/2;render(0);ZB.fill(Infinity);CH.fill(' ');drawFerryTerminal(stop);
-  const ink=CH.filter(ch=>ch==='#').length,inkRows=new Set();CH.forEach((ch,i)=>{if(ch==='#')inkRows.add(Math.floor(i/cols));});
+  const isInk=ch=>ch!==' '&&BLOCK_CELLS.includes(ch),ink=CH.filter(isInk).length,inkRows=new Set();CH.forEach((ch,i)=>{if(isInk(ch))inkRows.add(Math.floor(i/cols));});
   return {samples,ink,rows:inkRows.size};
  });
  for(const sample of result.samples)assert.deepEqual(sample.lines,['ISLANDFERRY'],JSON.stringify(sample));

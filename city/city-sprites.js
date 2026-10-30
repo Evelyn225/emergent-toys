@@ -710,14 +710,29 @@ function drawBike(o, vx, vy) {
 // room for it, on the row the line's middle projects into at the sign's middle, so the line stays straight on screen
 // even seen at an angle. zc: the line's middle height; tc: the sign's middle depth (see midDepth); (ex, ey): the way the
 // text runs, a unit vector. hz only matters for blocks.
+// The column a tight word starts in, fixed once per view for each sign. Worked out afresh in every cell, rounding
+// noise near a column's edge could shift part of the word by one and repeat or lose a letter.
+const signLineStarts = new Map();
+function signLineStart(word, PX, PY, dep) {
+  const m = signLineStarts.get(word);
+  if (m && m.px === px && m.py === py && m.dx === dx && m.dy === dy && m.projX === projX && Math.abs(m.PX - PX) + Math.abs(m.PY - PY) < 0.02) return m.start;
+  const start = Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep - word.length / 2);
+  signLineStarts.set(word, { px, py, dx, dy, projX, PX, PY, start });
+  return start;
+}
 function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   if (signIsBig(letterW, bandH, far)) return signGlyph(word, lq, hz, t, letterW, bandH, far);
   const k = Math.floor(lq);
   if (k < -1 || k > word.length) return null;
   if (Math.floor(i / cols) !== Math.floor(hor - (zc - eye) * projY / tc)) return ' ';
   const c = i % cols, cx = 2 * (c + 0.5) / cols - 1, X = (dx - dy * tf * cx) * t, Y = (dy + dx * tf * cx) * t; // where this cell's ray met the sign
+  // The word set solid, centred on the column its middle projects into, not spread out over the sign's width.
+  const off = (word.length / 2 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
+  if (dep <= 0.05) return ' ';
+  if (letterW * projX / far >= 1) return word[c - signLineStart(word, PX, PY, dep)] ?? ' ';
+  // (narrower than a cell per letter on screen: whichever letter's middle lands in this cell)
   let best = ' ', bd = Infinity;
-  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) { // this letter or a neighbour, whichever's middle lands here
+  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) {
     const off = (j + 0.5 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
     if (dep > 0.05 && Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep) === c && Math.abs(off) < bd) { bd = Math.abs(off); best = word[j]; }
   }
