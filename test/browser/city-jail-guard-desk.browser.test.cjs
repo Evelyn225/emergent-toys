@@ -34,7 +34,9 @@ test('guard desk has cached grounded feet and legs, joined frame, supported work
   const gap=A.map(q=>q.ray(o.x-.2,o.y,.01,0,0,1,q.b)).filter(t=>t>0);if(Math.abs(Math.min(...gap)-.75)>1e-8)bad.push('filled leg space');
   if(o.walk||o.box.hl!==.5||o.box.hw!==.9||o.box.z0!==0||o.box.z1!==.8||o.radius<Math.hypot(.5,.9))bad.push('changed native footprint');
   if(room.props.some(p=>!p.jailDesk&&p.box?.x===19.6&&p.box.y===7.5&&p.box.hl===.5&&p.box.hw===.9))bad.push('legacy slab retained');
-  const monitor=room.props.find(p=>p.box?.x===19.6&&p.box.y===7.3),cup=room.props.find(p=>p.x===19.6&&p.y===8.2);if(!monitor||!cup||Math.abs(monitor.box.z0-top(topper))>1e-8||Math.abs(cup.z-top(topper))>1e-8)bad.push('monitor/coffee no longer supported');
+  const monitor=room.props.find(p=>p.box?.x===19.6&&p.box.y===7.3),cup=room.props.find(p=>p.x===19.6&&p.y===8.2);let cupBottom=cup?.z;
+  if(cup?.jailCoffee){cupBottom=Infinity;drawBox=(b,shade,ray=rayBox)=>{const t=ray(cup.x,cup.y,-1,0,0,1,b);if(t>0)cupBottom=Math.min(cupBottom,t-1);};try{cup.draw(cup.x,cup.y);}finally{drawBox=draw;}}
+  if(!monitor||!cup||Math.abs(monitor.box.z0-top(topper))>1e-8||Math.abs(cupBottom-top(topper))>1e-8)bad.push('monitor/coffee no longer supported');
   return{bad,checked:A.length};
  });assert.equal(r.checked,22);assert.deepEqual(r.bad,[]);
 }));
