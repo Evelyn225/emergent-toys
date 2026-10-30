@@ -50,10 +50,10 @@ function casinoFloor(i, f, wx, wy) { // the carpet: red, a gold diamond pattern,
   BG[i] = C(RED, 1 + f * 1.4);
   return set(i, edge ? '+' : dot ? '*' : ' ', C(YEL, 3 + f * 6));
 }
-function casinoCeil(i, wx, wy) { // chandeliers
+function casinoCeil(i, wx, wy) { // chandeliers: bright drops round a gilt rose, on a dark ceiling
   const d = Math.hypot(fract(wx / 4) - 0.5, fract(wy / 4) - 0.5) * 4;
-  if (d < 0.32) { BG[i] = C(YEL, 3 + (d < 0.15 ? 4 : 0)); return set(i, hash(Math.floor(wx * 9), Math.floor(wy * 9), Math.floor(T * 4)) > 0.7 ? '*' : 'o', C(WHITE, 15)); }
-  return set(i, d < 0.7 && hash(Math.floor(wx * 6), Math.floor(wy * 6), 1403) > 0.7 ? '.' : ' ', C(YEL, 6));
+  set(i, ' ', 0);
+  BG[i] = d < 0.15 ? C(WHITE, 13) : d < 0.32 ? C(YEL, 6) : d < 0.7 ? C(YEL, 1.6) : C(GRAY, 0.9);
 }
 // cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
 const BJ_CARDS = [];

@@ -69,12 +69,12 @@ const washbasin = (x,y,fx,fy) => BATHROOM_SINK(x,y,fx,fy);
 // A hollow oval enamel bath, with supported shell and a fitted tap.
 const BATHTUB = (x,y) => BATHROOM_TUB(x,y);
 // a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
-function wcWall(i, u, z, L) {
-  if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
-  if (z > 1.22) { BG[i] = C(BLUE, 2.5 + L * 0.15); return set(i, '=', C(WHITE, L * 0.5)); }
-  BG[i] = C(WHITE, 2.6 + L * 0.12);
-  const gu = fract(u * 4) < 0.05, gz = fract(z * 4) < 0.05;
-  return set(i, z < 0.1 ? '_' : gu && gz ? '+' : gz ? '-' : gu ? '|' : ' ', C(GRAY, L * 0.3));
+function wcWall(i, u, z, L, uStep = 0, d = 1) {
+  set(i, ' ', 0);
+  if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return; }
+  if (z > 1.22) { BG[i] = C(BLUE, 2.5 + L * 0.15); return; }
+  const footprint = Math.max(uStep, d / projY);
+  BG[i] = C(WHITE, 2.6 + L * 0.12 - 2.5 * Math.max(coveGroove(u, 0.25, 0.006, footprint), coveGroove(z, 0.25, 0.006, d / projY)));
 }
 function roomAt(x, y) {
   x = Math.floor(x); y = Math.floor(y);
@@ -958,9 +958,10 @@ function karaokeWall(i, u, uStep, z, d, mx, my, L) { // the lyrics are on the mo
   set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 9 ? ' ' : '*', C(NEON[(Math.floor(u) + (T * 2 | 0)) & 3], 8)); return true; // glitter
 }
 function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
-  if (z < 0.78) { set(i, '#', C(BRICK, L * 0.6)); return true; }
+  set(i, ' ', 0);
+  if (z < 0.78) { BG[i] = C(BRICK, 1.5 + L * 0.12); return true; }
   if (z > 1.92) return false;
-  if (z < 0.82 || z > 1.88 || fract(u / 1.6) < 0.03) { set(i, '=', C(GRAY, L)); return true; }
+  if (z < 0.82 || z > 1.88 || fract(u / 1.6) < 0.03) { BG[i] = C(GRAY, 1.6 + L * 0.2); return true; }
   BG[i] = C(BLUE, 3);
   const lane = Math.floor(z * 7), dir = lane & 1 ? 1 : -1, s = fract(u * 0.7 - T * 0.25 * dir + hash(lane, mx + my, 3));
   if (s < 0.14) { // one of the aquarium's little species, 20 cm long (s runs 0.7 to the metre), swimming along its lane
@@ -975,7 +976,10 @@ function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
 function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the side walls
   if (my === 0 || z > 2.3) return false;
   const h = hash(Math.floor(u * 5), Math.floor(z * 5), 17);
-  set(i, h > 0.85 ? '*' : h > 0.5 ? '~' : ' ', C(h > 0.85 ? ITEM_COL[h * 100 & 7] : GREEN, L)); return true;
+  set(i, ' ', 0);
+  // Leaf patches and flowers settle to a plain green wall further off, so they never shimmer.
+  if (Math.max(uStep, d / projY) > 0.07) { BG[i] = C(GREEN, 1.7 + L * 0.12); return true; }
+  BG[i] = h > 0.85 ? C(ITEM_COL[h * 100 & 7], 3.5 + L * 0.15) : h > 0.5 ? C(GREEN, 2.2 + L * 0.15) : C(GREEN, 1.2 + L * 0.1); return true;
 }
 function stationWall(i, u, uStep, z, d, mx, my, L) {
   if (mx < 9 || mx > 36) {
@@ -1030,7 +1034,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (wcFaceInside(mx, my, side)) return wcWall(i, u, z, L); // in the bathroom
+  if (wcFaceInside(mx, my, side)) return wcWall(i, u, z, L, uStep, d); // in the bathroom
   if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: the room's own walls (or a plain one), the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
