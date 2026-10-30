@@ -269,6 +269,11 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   if (Math.abs(du) > width - 0.15 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > width - 0.15 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
   if(room.exterior)homeView(i,u,z,'north');else viewOut(i,u,z,room.suite?22:14,18);return true; // six floors up, across the avenue
 }
+// Running-bond courses, shared by the brick and tile walls: both joints filter with distance.
+function coursedJoint(u, z, course, stretcher, uStep, d) {
+  const footprint = Math.max(uStep, d / projY);
+  return Math.max(coveGroove(z, course, 0.02, d / projY), coveGroove(u + (Math.floor(z / course) & 1) * stretcher / 2, stretcher, 0.02, footprint));
+}
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
   const board = room.def.keeper[0];
   if (my === 0 && Math.abs(u - board) < 2 && z > 1.4 && z < 2.5) {
@@ -277,7 +282,7 @@ function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind th
       if (wallText(i, u, uStep, z, d, item, board, 2.3 - k * 0.25, 0.15, 0.2, C(WHITE, 13), C(GRAY, 1))) return true;
     set(i, ' ', 0); return true;
   }
-  if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
+  if (z < 2.6) { set(i, ' ', 0); BG[i] = C(BRICK, 1.5 + L * 0.15 - 1.5 * coursedJoint(u, z, 0.125, 0.25, uStep, d)); return true; }
   return false;
 }
 // Tall timber bookcases round the walls; the right-hand run stops short of the till.
@@ -289,7 +294,7 @@ function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind
     BG[i]=C(GRAY,2+L*.16-seam*.7);set(i,' ',0);return true;
   }
   if (z > 1.4 && z < 2.2 && fract(u / 2) < 0.3) { // hanging signs
-    BG[i] = C(RED, 3); set(i, fract(z * 6) < 0.3 ? '-' : ' ', C(YEL, 12)); return true;
+    BG[i] = C(RED, 3); set(i, ' ', 0); return true;
   }
   set(i, ' ', 0); BG[i] = C(RED, 1 + L * 0.08); return true;
 }
@@ -303,9 +308,9 @@ function garageWall(i, u, uStep, z, d, mx, my, L) { // pegboard of tools, roll-u
 }
 function teaWall(i, u, uStep, z, d, mx, my, L) { // red and gold, with long hanging scrolls
   if (z > 0.8 && z < 2.4 && Math.abs(fract(u / 2.5) - 0.5) < 0.12) {
-    BG[i] = C(WHITE, 3); set(i, Math.abs(fract(u / 2.5) - 0.5) < 0.04 && fract(z * 5) < 0.5 ? '#' : ' ', C(GRAY, 2)); return true;
+    BG[i] = C(WHITE, 3); set(i, ' ', 0); return true;
   }
-  if (Math.abs(z - 2.5) < 0.05) { set(i, '=', C(YEL, Math.max(L, 10))); return true; }
+  if (Math.abs(z - 2.5) < 0.05) { set(i, ' ', 0); BG[i] = C(YEL, 4 + L * 0.2); return true; }
   set(i, ' ', 0); BG[i] = C(RED, 1 + L * 0.1); return true;
 }
 // a few more room kinds' worth of props
@@ -958,7 +963,7 @@ function bankWall(i, u, uStep, z, d, mx, my, L) {
   set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
 }
 function karaokeWall(i, u, uStep, z, d, mx, my, L) { // the lyrics are on the mounted screen (karaoke-stage.js)
-  set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 9 ? ' ' : '*', C(NEON[(Math.floor(u) + (T * 2 | 0)) & 3], 8)); return true; // glitter
+  set(i, ' ', 0); BG[i] = C(MAG, 0.7 + L * 0.05); return true; // a dark plum, the screen and the disco ceiling do the rest
 }
 function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
   set(i, ' ', 0);

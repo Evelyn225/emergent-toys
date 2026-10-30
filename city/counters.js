@@ -10,7 +10,7 @@ function chickenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.7, 0.32, 0.4, C(RED, 15), C(WHITE, 7))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 6.4, 2.0, menuLines(), 1.45, C(RED, 2.5), C(WHITE, 15))) return true;
-  if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2); return set(i, fract(u * 5) < 0.05 || fract(z * 5) < 0.05 ? '+' : ' ', C(GRAY, 3)), true; } // white tiles
+  if (z < 1.0) { BG[i] = C(WHITE, 4 + L * 0.2); return set(i, ' ', 0), true; } // white tiles
   if (z < 1.12) { BG[i] = C(RED, 4); return set(i, ' ', 0), true; }
   BG[i] = fract(u / 0.6) < 0.5 ? C(RED, 3 + L * 0.2) : C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true; // the stripes
 }
@@ -40,8 +40,8 @@ function kebabWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.6, 2.7, 0.32, 0.4, C(GREEN, 15), C(GRAY, 0.5))) return true; // green neon
   if (backWall(my) && photoMenu(i, u, uStep, z, d, 5.6, 1.62, C(GRAY, 0.5))) return true;
-  if (z < 1.2) { BG[i] = C(WHITE, 4.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 || fract(z * 4) < 0.05 ? '+' : ' ', C(GRAY, 3)), true; }
-  BG[i] = C(GREEN, 1.6 + L * 0.15); return set(i, fract(u / 0.3) < 0.04 || fract(z / 0.3) < 0.04 ? '+' : fract((u + z) * 2) < 0.05 ? '/' : ' ', C(WHITE, 5)), true; // mirror tiles
+  if (z < 1.2) { BG[i] = C(WHITE, 4.2 + L * 0.2 - 2.5 * Math.max(coveGroove(u, 0.25, 0.006, Math.max(uStep, d / projY)), coveGroove(z, 0.25, 0.006, d / projY))); return set(i, ' ', 0), true; }
+  BG[i] = C(GREEN, 1.6 + L * 0.15); return set(i, ' ', 0), true; // mirror tiles
 }
 const sodaCooler = (x, y, hl, hw, fx = 0, fy = 1) => KITCHEN_DRINKS_COOLER(x, y, hl, hw, fx, fy); // glass doors facing (fx, fy)
 ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: 'strip', sign: false, wall: kebabWall, keeper: [5.6, 1.6],
@@ -54,7 +54,7 @@ ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: '
 // kitchen door; a ledge and a bench to eat at
 function noren(i, u, z, u0, hw, col, z0 = 1.35, z1 = 2.1) { // a split curtain over a doorway (the dark of it below)
   if (Math.abs(u - u0) > hw || z > z1) return false;
-  if (z > z0) { BG[i] = C(col, 3.2); return set(i, Math.abs(fract((u - u0 + hw) / (hw * 2 / 3)) - 0.5) > 0.47 ? ' ' : z > z0 + 0.25 && z < z0 + 0.45 && Math.abs(fract(u * 4 + z * 2) - 0.5) < 0.15 ? '~' : ' ', C(WHITE, 13)), true; }
+  if (z > z0) { BG[i] = C(col, 3.2); if (Math.abs(fract((u - u0 + hw) / (hw * 2 / 3)) - 0.5) <= 0.47 && z > z0 + 0.25 && z < z0 + 0.45 && Math.abs(fract(u * 4 + z * 2) - 0.5) < 0.15) BG[i] = C(WHITE, 6); return set(i, ' ', 0), true; }
   BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true;
 }
 function bentoWall(i, u, uStep, z, d, mx, my, L) {
@@ -64,10 +64,10 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 1.55 && z < 2.15 && u > 3.3 && u < 7.6) { // photo cards of every box, pinned in a row
     const cu = fract((u - 3.3) / 0.62), k = Math.floor((u - 3.3) / 0.62);
     if (cu < 0.1 || cu > 0.9 || z < 1.6 || z > 2.1) { BG[i] = C(STONE, 3.4 + L * 0.15); return set(i, ' ', 0), true; }
-    BG[i] = z > 1.72 ? C([ORANGE, GREEN, YEL, RED, WHITE, MAG, ORANGE][k % 7], 6) : C(WHITE, 8); return set(i, z < 1.72 && fract(cu * 6) < 0.4 ? '-' : ' ', C(GRAY, 3)), true;
+    BG[i] = z > 1.72 ? C([ORANGE, GREEN, YEL, RED, WHITE, MAG, ORANGE][k % 7], 6) : C(WHITE, 8); return set(i, ' ', 0), true;
   }
-  if (z < 0.9) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, fract(u * 5) < 0.06 ? '|' : ' ', C(GRAY, 2)), true; }
-  BG[i] = C(STONE, 3.4 + L * 0.15); return set(i, fract(u / 0.9) < 0.03 ? '|' : ' ', C(BRICK, 5)), true; // pale wood
+  if (z < 0.9) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, ' ', 0), true; }
+  BG[i] = C(STONE, 3.4 + L * 0.15); return set(i, ' ', 0), true; // pale wood
 }
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [KITCHEN_FOOD_CASE(4.6,2.2,2,.35,1.05,'bento',STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
@@ -83,12 +83,12 @@ function takoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 1.25 && z < 2.75 && Math.abs(u - 2.2) < 0.9) { // the octopus: a round red head, two eyes, its legs waving
     const cu = u - 2.2, cz = z - 2.25, head = Math.hypot(cu, cz * 1.15) < 0.42, eye = Math.hypot(Math.abs(cu) - 0.15, cz + 0.02) < 0.07;
     const leg = cz < -0.25 && cz > -0.95 && Math.abs(fract((cu + Math.sin(cz * 7 + T * 2) * 0.06) / 0.18) - 0.5) < 0.22 && Math.abs(cu) < 0.55 + cz * 0.2;
-    BG[i] = head || leg ? C(RED, eye ? 1 : 6) : C(WHITE, 6); return set(i, eye ? 'o' : head && cz > 0.25 && fract(cu * 9) < 0.2 ? '.' : ' ', C(WHITE, 15)), true;
+    BG[i] = head || leg ? C(RED, eye ? 1 : 6) : C(WHITE, 6); return set(i, ' ', 0), true;
   }
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.6, 2.5, 0.25, 0.32, C(RED, 14), C(WHITE, 6))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.6, 1.95, menuLines(), 1.1, C(BRICK, 1.5), C(YEL, 14))) return true;
-  if (z < 1.0) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, fract(u * 4) < 0.06 ? '|' : ' ', C(GRAY, 2)), true; }
-  BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, z > 2.8 && fract(u * 3) < 0.4 ? '~' : ' ', C(RED, 8)), true; // white, a red wave round the top
+  if (z < 1.0) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, ' ', 0), true; }
+  BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, ' ', 0), true; // white, a red wave round the top
 }
 ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: takoWall, keeper: [4.5, 1.6],
   props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.4, 0.45, 0.35),
@@ -104,13 +104,13 @@ function yakiWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 1.3 && z < 2.15 && Math.abs(u - room.W / 2) > 1.2 && Math.abs(u - room.W / 2) < 4.4) { // the menu tags, hung in a row: each a dish, brushed on
     const tu = fract(u / 0.3), k = Math.floor(u / 0.3);
     if (tu < 0.18 || tu > 0.82 || z < 1.36 + hash(k, 1, 112) * 0.08) { BG[i] = C(BRICK, 1.4 + L * 0.15); return set(i, ' ', 0), true; }
-    BG[i] = C(YEL, 6); return set(i, fract(z * 9 + hash(k, 2, 113)) < 0.45 ? '=' : ' ', C(GRAY, 2)), true;
+    BG[i] = C(YEL, 6); return set(i, ' ', 0), true;
   }
   if (!backWall(my) && z > 1.3 && z < 2.3 && fract(Math.abs(u) / 3.1) > 0.4 && fract(Math.abs(u) / 3.1) < 0.7) { // beer posters: a gold glass on red
     const pu = fract(Math.abs(u) / 3.1), glass = Math.abs(pu - 0.55) < 0.06 && z > 1.5 && z < 2.0;
-    BG[i] = glass ? C(z > 1.9 ? WHITE : YEL, z > 1.9 ? 10 : 9) : C(RED, 4); return set(i, glass && fract(z * 12) < 0.2 ? 'o' : ' ', C(YEL, 13)), true;
+    BG[i] = glass ? C(z > 1.9 ? WHITE : YEL, z > 1.9 ? 10 : 9) : C(RED, 4); return set(i, ' ', 0), true;
   }
-  BG[i] = C(BRICK, 1.5 + L * 0.15 - Math.max(0, z - 2) * 0.4); return set(i, fract(u * 2.5) < 0.05 ? '|' : ' ', C(GRAY, 2)), true; // dark wood, smoked darker up top
+  BG[i] = C(BRICK, 1.5 + L * 0.15 - Math.max(0, z - 2) * 0.4); return set(i, ' ', 0), true; // dark wood, smoked darker up top
 }
 ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'lantern', sign: false, wall: yakiWall, keeper: [5.5, 1.45],
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
@@ -126,12 +126,12 @@ function donutWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 1.4 && z < 2.7 && Math.abs(u - 2.1) < 0.7) { // the big one, in neon: a pink ring, sprinkles
     const r = Math.hypot(u - 2.1, z - 2.05);
-    if (r < 0.6 && r > 0.22) { BG[i] = C(MAG, 9 + Math.sin(T * 3) * 2); return set(i, hash(Math.floor(u * 14), Math.floor(z * 14), 115) > 0.75 ? '\'' : ' ', C([YEL, CYAN, WHITE][Math.floor(u * 14) % 3], 15)), true; }
+    if (r < 0.6 && r > 0.22) { BG[i] = C(MAG, 9 + Math.sin(T * 3) * 2); return set(i, ' ', 0), true; }
   }
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.3, 0.36, C(MAG, 15), C(BRICK, 2))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.4, 2.0, menuLines(), 1.0, C(BRICK, 1.6), C(WHITE, 14))) return true;
-  if (z < 1.0) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(WARM, 4)), true; } // a chocolate wainscot
-  BG[i] = C(MAG, 6 + L * 0.2); return set(i, hash(Math.floor(u * 6), Math.floor(z * 6), 116) > 0.9 ? '\'' : ' ', C([YEL, CYAN, WHITE][Math.floor(u * 6 + z * 6) % 3], 11)), true; // pink, sprinkled
+  if (z < 1.0) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, ' ', 0), true; } // a chocolate wainscot
+  BG[i] = C(MAG, 6 + L * 0.2); return set(i, ' ', 0), true; // pink, sprinkled
 }
 ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil: 'pendant', sign: false, neon: true, wall: donutWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.35,1.15,'donuts',MAG), { ...standing(5.0, 1.55, MAG), face: [0, 1] },
@@ -149,9 +149,9 @@ function juiceWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 5.0, 2.0, menuLines(), 1.2, C(GREEN, 2), C(WHITE, 15))) return true;
   if (z > 1.1) { // painted oranges, halved, every so often
     const cu = fract(Math.abs(u) / 1.7) - 0.5, cz = z - 1.75 - (Math.floor(Math.abs(u) / 1.7) & 1) * 0.5, r = Math.hypot(cu * 1.7, cz);
-    if (r < 0.28) { BG[i] = C(r > 0.24 ? WHITE : ORANGE, r > 0.24 ? 9 : 9); return set(i, r < 0.22 && Math.abs(Math.sin(Math.atan2(cz, cu) * 4)) < 0.15 ? '-' : ' ', C(WHITE, 12)), true; }
+    if (r < 0.28) { BG[i] = C(r > 0.24 ? WHITE : ORANGE, r > 0.24 ? 9 : 9); return set(i, ' ', 0), true; }
   }
-  if (z < 1.0) { BG[i] = C(GREEN, 3 + L * 0.2); return set(i, fract(u * 4) < 0.05 ? '|' : ' ', C(WHITE, 4)), true; }
+  if (z < 1.0) { BG[i] = C(GREEN, 3 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(YEL, 7 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil: 'pendant', sign: false, wall: juiceWall, keeper: [5.0, 1.55],
@@ -166,7 +166,7 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
 function bagelWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.4 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.62, 0.3, 0.34, C(YEL, 14), C(GREEN, 1.4))) return true;
-  if (z < 1.35) { BG[i] = C(WHITE, 4.6 + L * 0.2); return set(i, fract(z / 0.15) < 0.12 ? '-' : fract(u / 0.3 + (Math.floor(z / 0.15) & 1) * 0.5) < 0.06 ? '|' : ' ', C(GRAY, 3)), true; } // subway tiles
+  if (z < 1.35) { BG[i] = C(WHITE, 4.6 + L * 0.2 - 2.5 * coursedJoint(u, z, 0.15, 0.3, uStep, d)); return set(i, ' ', 0), true; } // subway tiles
   BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil: 'tin', sign: false, wall: bagelWall, keeper: [5.0, 1.55],
