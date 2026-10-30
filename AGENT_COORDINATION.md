@@ -12,8 +12,9 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 - **Codex:** paused at #344 to conserve weekly usage. Not expected to pick up
   without the user saying so; if it does, check open PRs first.
-- **Claude:** pass 9 civic interiors: gym, laundry, storage, then museum. One
-  branch and PR per chunk. Merging after green CI is authorised by the user.
+- **Claude:** pass 9 civic interiors closed. Next: pass 7 shop interiors, starting with the
+  rooms still painted by the shop-style `strip` ceiling and glyph walls (the sports shop first).
+  One branch and PR per chunk. Merging after green CI is authorised by the user.
 - **Reserved, don't edit without agreement:** `city/bathroom-quality.js`, DINER,
   `city/world-bootstrap.js`, facade and global lettering.
 

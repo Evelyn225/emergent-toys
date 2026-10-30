@@ -9,18 +9,6 @@
 // is gone for good: the case stands empty, with a card.
 const MUSEUM_W = 26, MUSEUM_H = 18;
 let museumStolen = {}; // { diamond: true, orrery: true } once they're gone (kept in the save)
-const DINO = pad([
-  '                       ___',
-  '                     _/ o \\___',
-  '                    |  .--, ^^>',
-  '                    |  |  \\VVV/',
-  '       ,,,,,,,,,,,,_|  |',
-  '  ___,)))))))))))))   /',
-  ' <___  ))))))))))))  /',
-  '     \\_/ \\__/  \\_/ \\_/',
-  '      ||  ||    ||  ||',
-  '     _||_ ||   _||_ ||']);
-const ANUBIS = pad(['  /\\ /\\', '  \\ V /', '  (o o)', '   \\=/', '  /|#|\\', '   |#|', '   |#|', '  _|_|_']);
 
 // ---- outside
 const MUSEUM_EAVE = 1.32, MUSEUM_RIDGE = 1.75;
@@ -258,19 +246,11 @@ const museumGrid = () => {
 ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', ceil: 'strip', fx: museumTorchFx, keeper: [20.5, 15.4], spawn: [12.5, 16.2],
   props: r => {
     const p = [...counterBox(20.5, 15.9, 1.6), standing(20.5, 15.4, MAG)]; // the ticket desk and gift shop, by the door
-    const bone = (c, row, L) => C(c === 'o' ? RED : WHITE, Math.max(L, 6) * (r.burgled ? 0.4 : 1));
-    p.push(BX(12.5, 12, 3, 0.9, 0, 0.35, solid(GRAY, { top: '=' })), SP(12.5, 12, 5.6, 3.4, DINO, bone, 0.35)); // the T. rex, on its plinth
-    p.push(BX(3.5, 6, 1.1, 0.5, 0, 0.85, (i, t, L) => { // the sarcophagus: gold, a face on the lid, bands of glyphs down the sides
-      const f = HIT.face; BG[i] = C(YEL, (2.2 + L * 0.3) * shadeFace(f) * (r.burgled ? 0.4 : 1));
-      if (f === 5) return set(i, Math.abs(HIT.u + 0.6) < 0.25 && Math.abs(HIT.v) < 0.25 ? 'o' : fract(HIT.u * 4) < 0.15 ? '=' : ' ', C(BLUE, L)), true;
-      return set(i, fract(HIT.w * 8) < 0.2 ? '=' : '<o>+~'[Math.floor(Math.abs(HIT.u) * 8) % 5], C(BLUE, L)), true; }));
-    p.push(SP(5.5, 1.9, 1, 1.9, ANUBIS, (c, row, L) => C(c === 'o' ? YEL : row > 3 ? YEL : GRAY, Math.max(L, 6) * (r.burgled ? 0.4 : 1))));
+    p.push(MUSEUM_TREX(12.5, 12), MUSEUM_SARCOPHAGUS(3.5, 6), MUSEUM_ANUBIS(5.5, 1.3));
     for (const c of CASES) { // the gem room's cases: a pedestal, the glass, what's in it, velvet ropes round it
-      p.push(BX(c.x, c.y, 0.45, 0.45, 0, 0.9, solid(GRAY, { panel: 0.3, top: '=' })));
-      for (const [ox, oy] of [[-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]]) p.push(SP(c.x + ox, c.y + oy, 0.2, 0.95, [' o', ' |', ' |', '_|_'], (ch, row, L) => C(row ? YEL : RED, Math.max(L, 8))));
-      if (museumStolen[c.id]) { p.push(SP(c.x, c.y, 0.7, 0.3, ['[STOLEN]'], () => C(RED, 14), 0.95)); continue; }
-      p.push({ ...BX(c.x, c.y, 0.38, 0.38, 0.9, 1.5, (i, t, L) => { const f = HIT.face; if (f === 5 || Math.abs(fract(HIT.u * 2.6) - 0.5) > 0.46 || HIT.w > 1.47) return set(i, f === 5 ? ' ' : '|', C(CYAN, 12)), true; return false; }), exhibit: c.id }); // the glass
-      p.push({ ...SP(c.x, c.y, 0.5, 0.45, c.id === 'diamond' ? [' /\\', '<**>', ' \\/'] : [' .o.', 'o(@)o', " `o'"], (ch, row, L) => c.id === 'diamond' ? C(fract(T * 1.5 + row * 0.3) < 0.2 ? WHITE : CYAN, 15) : C(ch === '@' ? YEL : ch === 'o' ? [CYAN, RED, GREEN][row % 3] : YEL, 14), 1.0), exhibit: c.id });
+      p.push(MUSEUM_PEDESTAL(c.x, c.y), MUSEUM_ROPES(c.x, c.y));
+      if (museumStolen[c.id]) { p.push(MUSEUM_STOLEN_CARD(c.x, c.y)); continue; }
+      p.push(MUSEUM_CASE_GLASS(c.x, c.y, c.id), c.id === 'diamond' ? MUSEUM_STAR(c.x, c.y, c.id) : MUSEUM_ORRERY(c.x, c.y, c.id));
     }
     if (r.burgled) { // after dark: two guards with torches, walking their rounds
       GUARD_PATHS.forEach((path, k) => p.push({ ...figProp(path[0][0], path[0][1], figGuardLook(k), { h: 1.8, chat: false, light: 5 }), guard: true, dir: 0,
