@@ -190,6 +190,7 @@
     "city/jail-bunks.js",
     "city/jail-guard-desk.js",
     "city/jail-desk-accessories.js",
+    "city/jail-exit-door.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
