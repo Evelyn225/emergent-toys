@@ -3243,3 +3243,23 @@ Codex codex/bank-front-entrance complete: brass paired public frames/leaves, gro
 Codex active: codex/bank-closing-audit owns documentation only. Review finished bank day/night across counter, visible teller, vault, title/lighting and public doors, then recheck the final-state fixture/native/service/route controls. #336 merged95b6ada. Next jail interior, followed by gym/laundry/storage/museum. Reserved/shared files unchanged.
 
 Codex codex/bank-closing-audit complete: first bank interior quality pass closes after #332–#336. Reviewed12 final clear-floor occupied day/night views across counter, visible teller, vault, public entrance and ceiling fixtures, without errors. Eight final-state vault/counter/glazing/support/native-face/conversation/shot/route/title/scaling/context/floor/border/light controls pass; #336's three final-state all19-bank normal+legacy/public-door/E+walking checks also passed. Production sources and bundle are unchanged by this documentation audit, with #336 recording the last geometry ABAB. First-pass apartment lobbies, hospital and bank complete; overall9 remains open for jail, gym, laundry, storage and museum. Next jail cell bars: replace the flat glyph-mask planes with cached closed round uprights/rails while preserving the cell grid, block policy, pee-through flag, inmates, guard and release flows. Reserved/shared helpers unchanged.
+
+Codex active: codex/jail-cell-bars owns new jail-cell-bars.js, focused coverage and manifest entry. Replace six flat mask fronts with cached closed round steel uprights and joined grounded sill/top bands, preserving quarter-metre pitch, native grid/block/collider/pee-through policy, inmates, guard and release flows. Update only the actual-jail officer-skin test to measure visible face/opaque steel occlusion instead of requiring legacy | glyphs; retain its separate generic glyph/skin regression. #337 merged70d8785. Next jail bunks, desk/electronics and wall/surface fittings. Shared/reserved helpers unchanged.
+
+Codex codex/jail-cell-bars complete: six native fronts now have 25 round steel
+uprights each, grounded sills and joined bands (162 cached closed parts).
+End rods bury into actual cell walls; rounded caps bury in the sill and meet
+the ceiling. Call existing capsule/subcell rod helpers unchanged so distant
+bars stay continuous without widening nearby gaps. Native grid/block/collider,
+pee-through policy, inmates and guard remain. Actual-jail skin coverage now
+checks visible face identity and opaque steel occlusion; the separate generic
+glyph/skin regression stays unchanged. Two new geometry/native checks, two skin
+controls, actual arrest/release/jailbreak/cell-boundary controls and three Node
+files pass. Nine isolated missing/oversized/flat/floating/short/detached/legacy/
+distant-coverage/native-omission defects fail assertions. Reviewed 16 clear-floor
+close/wide/oblique/night/join comparisons, no errors. Serial ABAB 177x66 against
+main 70d8785: wide 3.8→3.7ms, close 2.4–2.6→2.3–2.4, oblique 3.1–3.2→4.0,
+band 6.3–6.4→6.0–6.2. Oblique detail costs ~.8–.9ms; other small differences
+are local observations, not a speedup claim. #336 full CI green 40992814123;
+#337 still running last checked. Next jail bunks, desk/electronics, wall/surface
+fittings. Reserved files/shared helpers unchanged.
