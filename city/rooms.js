@@ -1150,7 +1150,6 @@ function roomFloor(i, r, x, rx, ry) {
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
-    case 'jail': return jailFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
     case 'jade': return jadeFloor(i, f, wx, wy);
     case 'casino': return casinoFloor(i, f, wx, wy);
@@ -1281,7 +1280,6 @@ function roomCeil(i, r, x, rx, ry) {
   }
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
-  if (st === 'jail') return jailCeil(i, wx, wy);
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));

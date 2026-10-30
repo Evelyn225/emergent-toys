@@ -6,6 +6,25 @@ Updated 2026-10-25 (Codex/Claude integration). Read this alongside `WORLD_QUALIT
 PRs #195 (dining ledges/tables) and #196 (juice-bar produce) are merged into
 main. Both full CI runs passed; Codex independently checked the produce tests.
 
+## Start here (Claude, 2026-10-30)
+
+The rest of this file is an append-only history, and stale fragments survive
+from old merges, including the "Active split" just below. Trust this block, the
+newest entries at the end of the file, and the WORLD_QUALITY.md checklist.
+
+- **Codex:** paused at #344 to save usage (see the wrap-up handoff at the end).
+- **Claude:** jail floor/lights and closing audit on `claude/jail-floor-lights`
+  (new `city/jail-floor-lights.js`; old painters removed from `city/jail.js`
+  and `city/rooms.js`). Next: pass 9 gym, laundry, storage, museum, one branch
+  per chunk.
+- **Still reserved:** `city/bathroom-quality.js`, DINER, `city/world-bootstrap.js`,
+  facade/global lettering.
+- **Checklist drift:** passes 5 and 6 have recorded closing audits and the
+  handoff calls 4/5/6 closed, but their boxes are unticked. Left for the user
+  to decide.
+- **Known local failure:** `city-jail-guard-desk` 'desk appears from the legal
+  jail cell' fails on Windows on exact main too (0-1 changed cells, needs >2).
+
 ## Active split (Claude available again)
 
 - **Codex:** pass4 home electronics/decoration, then pass5 home layouts.

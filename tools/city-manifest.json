@@ -193,6 +193,7 @@
     "city/jail-exit-door.js",
     "city/jail-west-window.js",
     "city/jail-wall-finishes.js",
+    "city/jail-floor-lights.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
