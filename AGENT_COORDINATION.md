@@ -3344,3 +3344,30 @@ coffee4.3–4.4→4.8–4.9, oblique3.0–3.1→3.5. Added detail costs~0–.6ms
 locally, no speedup claim. #339 full CI green40996458656; #340 running last
 checked. Next jail door/window and wall/surface fittings. Reserved files and
 shared helpers unchanged.
+
+Codex active: codex/jail-exit-door owns new jail-exit-door.js, focused coverage
+and manifest entry. Replace east corridor painted door/EXIT with a grounded
+closed steel frame/leaf, real circular bore, recessed wired pane, joined lever,
+hinges and scaling sign. Reuse bore/circular/rounded rays unchanged; local
+rotated sign context and projected small-letter centres avoid shared lettering
+edits. Preserve solid wall, native grid/block, guard/desk and release/jailbreak
+flows. #341 merged9097d37. Next west window and jail wall/surface finishes.
+
+Codex codex/jail-exit-door complete:18 cached closed frame/leaf/window-trim/
+pane/lever/hinge/sign parts replace the painted east door and EXIT. Grounded
+sill/jambs join a slim head; real circular bore has an inner surface, recessed
+wired pane and open annular trim. Lever and both hinge plates/barrels share
+actual support planes. Local rotated lettering caches small-letter centres,
+keeps close block text and restores wall context without shared edits. Visual
+review caught invisible wire after palette quantization; calibrate filtered
+contrast and require actual native pane pixels of distinct brightness. Three
+new actual-ray/support/cache/bore/recess/text/context/native-wire checks,
+three real arrest/release/jailbreak/cell controls and three Node files pass.
+Thirteen isolated sill/head/bore/pane/trim/lever/hinge/old-paint/sign/text/context/
+native-omission/invisible-wire defects fail assertions. Reviewed16 final cell/
+wide/close/oblique/night/pane/lever/hinge comparisons without errors; macros use
+actual freecam in clear3D space, player held in the legal cell. Serial ABAB177x66
+main9097d37: cell4.0–4.3→4.2–4.3ms, leaf.9–1.0→3.1–3.3, pane.8→3.5–3.6,
+oblique1.4→2.8–2.9. Detail costs~0–2.8ms locally, no speedup claim.
+#340/#341 full CI green40997479459/40998531471. Next west high window and wall/
+floor/ceiling finishes, then jail closing review. Reserved/shared files unchanged.
