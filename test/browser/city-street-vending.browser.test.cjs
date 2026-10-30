@@ -90,7 +90,7 @@ test('coin returns are real closed recesses in every facing and READY becomes sc
    const display=parts.find(p=>Math.abs(p.box.z0-1.37*k)<1e-8&&Math.abs(p.box.z1-1.49*k)<1e-8);if(!display){bad.push('no READY panel');continue;}
    const calls=[];worldText=(...args)=>{if(args[0]==='READY')calls.push(args);return word(...args);};let ink=0;
    try{for(let x=0;x<20;x++)for(let z=0;z<5;z++){
-    HIT.face=fs>0?3:4;HIT.u=((x+.5)/20-.5)*.16*k*fs;HIT.w=(1.4+(z+.5)*.06/5)*k;CH[0]='?';display.shade(0,.1*sc,8);if(CH[0]==='#')ink++;
+    HIT.face=fs>0?3:4;HIT.u=((x+.5)/20-.5)*.16*k*fs;HIT.w=(1.4+(z+.5)*.06/5)*k;CH[0]='?';display.shade(0,.1*sc,8);if(CH[0]!==' '&&BLOCK_CELLS.includes(CH[0]))ink++;
    }}finally{worldText=word;}
    if(!calls.length||calls.some(a=>a[11]<.05*k||a[10]*5>.19*k+1e-8)||ink<4)bad.push('READY cannot scale inside its panel');
    HIT.face=fs>0?3:4;HIT.u=(.2-.5)*(VM.a1-VM.a0)*k*fs;HIT.w=(VM.z0+(VM.z1-VM.z0)*(.16/.9))*k;CH[0]='?';

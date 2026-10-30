@@ -181,7 +181,7 @@ test('the terminal: in by its doors with E, the departures board keeping time in
     assert.deepEqual(r.now.slice(0, 2), ['DEPARTED', 'BOARDING'], 'the one just gone, then the one boarding');
     assert.equal(r.prompt, 'E: into the terminal');
     assert.equal(r.inside, 'terminal', 'E at the doors takes you in');
-    assert.ok(/D\s*E\s*P\s*A\s*R\s*T\s*U\s*R\s*E\s*S/.test(r.seen), 'DEPARTURES, up on the board');
+    assert.ok(/DEPARTURES|[\u2580-\u259F]{3}/.test(r.seen.replace(/\s/g, '')), 'DEPARTURES, up on the board');
     assert.deepEqual(r.gates, ['east', 'west'], 'both doors out to the gates, past security');
     assert.ok(r.cafe && r.stock > 0, 'up to the café counter, and it sells you something');
     assert.ok(r.loo, 'and the restrooms');

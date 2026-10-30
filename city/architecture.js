@@ -115,7 +115,7 @@ function downtownDetails(b) {
     const piers = Math.max(2, Math.round((f.end - f.start) / 0.7));
     for (let p = 0; p <= piers; p++) {
       const along = f.start + 0.06 + p / piers * (f.end - f.start - 0.12);
-      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.43, f.low), f.height - 0.035, 'pier');
+      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.45, f.low), f.height - 0.035, 'pier');
     }
   }
   if (b.sty !== 14 || b.access) return;

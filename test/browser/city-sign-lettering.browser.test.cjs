@@ -33,7 +33,7 @@ test('at the smallest block size every font pixel of every letter reaches the sc
 }));
 test('wall lettering: blocks as long as they fit, then the whole word tight on one row, and one size for the whole sign',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
-  const bad=[],row=(text,cwid,band,d,step)=>{const out=[];WH.dn=d;WH.sl=0;WH.wc=0;for(let u=-cwid*text.length/2;u<cwid*text.length/2;u+=step){CH[0]='?';if(!wallText(0,u+step/2,step,0,d,text,0,0,cwid,band,C(WHITE,12),C(GRAY,1)))out.push('!');else out.push(CH[0]);}return out;};
+  const bad=[],row=(text,cwid,band,d,step)=>{const out=[];WH.dn=d;WH.sl=0;WH.wc=0;let col=0;wallTextSizes.clear();for(let u=-cwid*text.length/2+step/2;u<cwid*text.length/2;u+=step,col++){CH[col]='?';if(wallText(col,u,step,0,d,text,0,0,cwid,band,C(WHITE,12),C(GRAY,1)))out.push(CH[col]);}return out;};
   const stepAt=d=>d/projX;
   // 4m: an ordinary title is blocks
   const near=row('HOTEL',.3,.36,4,stepAt(4));if(!near.some(c=>BLOCK_CELLS.includes(c)&&c!==' '))bad.push('no blocks up close');if(near.some(c=>/[A-Z]/.test(c)))bad.push('small letters up close');

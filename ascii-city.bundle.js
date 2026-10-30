@@ -3075,7 +3075,7 @@ function modernApartmentDetails(b, f) {
   }
   if (r.core >= 0) {
     const along = f.start + r.margin + (r.core + .5) * r.spacing;
-    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .44, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
+    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .45, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
   }
 }
 function tenementEscapeDetails(b, f) {
@@ -3225,7 +3225,7 @@ function downtownDetails(b) {
     const piers = Math.max(2, Math.round((f.end - f.start) / 0.7));
     for (let p = 0; p <= piers; p++) {
       const along = f.start + 0.06 + p / piers * (f.end - f.start - 0.12);
-      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.43, f.low), f.height - 0.035, 'pier');
+      architectureDetail(b, f, along, 0.022, 0.025, 0.04, Math.max(0.45, f.low), f.height - 0.035, 'pier');
     }
   }
   if (b.sty !== 14 || b.access) return;
@@ -11891,13 +11891,22 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
     return set(i, blockGlyph(text, q, (z0 + bandH / 2 - z) / bandH, uStep / cwid, d / projY / bandH), col), true;
   }
   // Too small for blocks: the word set solid along its middle row, not spread out over the width it would fill.
-  const k = uStep >= cwid ? p : Math.floor(text.length / 2 - columnsToCentre(u, uStep, u0) + 0.0137);
+  const k = uStep >= cwid ? p : wallTextLetter(i % cols, u, uStep, text, u0);
   set(i, oneCell(z - z0, d / projY) && k >= 0 && k < text.length ? text[k] : ' ', col);
   return true;
 }
 
 // is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
 // switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+// Which letter a column shows when the word is set tight. Worked out once per view and then counted off in whole
+// columns, so that however the wall is angled each letter gets exactly one column and none is skipped or repeated.
+function wallTextLetter(column, u, uStep, text, u0) {
+  const m = wallTextSizes.get(text);
+  if (m.column === undefined) { m.column = column; m.u = u; m.letter = text.length / 2 - columnsToCentre(u, uStep, u0) + 0.0137; m.dir = 0; }
+  if (column === m.column) return Math.floor(m.letter);
+  if (!m.dir) m.dir = Math.sign(u - m.u) * Math.sign(column - m.column) || 1;
+  return Math.floor(m.letter + m.dir * (column - m.column));
+}
 // How many screen columns from u to u0 along this wall. A column covers more wall the more obliquely the ray meets it,
 // so an even step would lose letters off the far end of an angled word: this is that step's exact integral.
 function columnsToCentre(u, uStep, u0) {
