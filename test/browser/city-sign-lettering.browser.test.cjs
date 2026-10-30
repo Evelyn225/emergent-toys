@@ -48,6 +48,9 @@ test('wall lettering: blocks as long as they fit, then the whole word tight on o
   px+=.1;const fresh=wallTextIsBig(1.5,.5,3,'SIGN',0,2,.3,.36);if(fresh===big&&big)bad.push('size kept after the view moved');
   // an angled word keeps all its letters: the columns from each end of the word to its centre match the word's length
   const D=2,base=5,seen=new Map();WH.dn=D;for(let u=-1.5;u<1.5;){const s=base+u,step=(D*D+s*s)/(D*projX);WH.sl=s/D;WH.wc=u;const q=Math.floor(3-columnsToCentre(u,step,0)+.0137);if(q>=0&&q<6)seen.set(q,(seen.get(q)||0)+1);u+=step;}if(seen.size!==6||[...seen.values()].some(n=>n!==1))bad.push(['angled word lost or repeated letters',[...seen]]);
+  // a free-standing sign's word: rounding noise right on a column's edge can't move part of it
+  signLineStarts.clear();const first=signLineStart('WORD',2,3,4);if(signLineStart('WORD',2.001,3.001,4)!==first)bad.push('sign start moved with noise');
+  if(signLineStart('WORD',4,3,4)===first)bad.push('another sign shares its start');
   return bad;
  });
  assert.deepEqual(r,[]);
