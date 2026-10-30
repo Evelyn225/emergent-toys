@@ -3290,3 +3290,30 @@ close2.0–2.1→5.7–5.8, oblique1.4–1.5→2.9–3.0, pillow1.8–1.9→4.5.
 Detail costs ~1.1–3.8ms here, no speedup claim. #337 full CI green40993488294;
 #338 running last checked. Next jail guard desk/electronics, wall/surface
 fittings. Reserved/shared helpers unchanged.
+
+Codex active: codex/jail-guard-desk owns new city/jail-guard-desk.js, focused
+coverage and manifest entry. Replace the old guard desk slab with cached steel
+feet/legs/joined aprons, supported timber worktop and hung drawer cabinet with
+joined handles. Keep the original footprint/top height so CCTV and coffee stay
+supported. Cap the guard's eastward patrol just before the desk, retaining its
+west end and pause at the desk instead of phasing through it. Native jail
+boundaries and interactions remain. Macro review uses the actual dev freecam;
+player-cell views remain in the legal cell. #339 merged21b31b6. Next CCTV/coffee
+then jail wall/surface fittings. Reserved/shared helpers unchanged.
+
+Codex codex/jail-guard-desk complete:22 cached closed feet/legs/aprons/worktop/
+hung-cabinet/drawer/handle parts replace the painted slab. Joined supports keep
+the original .8m top and footprint; existing CCTV/coffee remain supported, with
+open space beneath the frame. Eastward patrol pauses at18.75 before the desk,
+keeping the old west end, figure identity and jail rules. Two new actual-ray/
+support/cache/native-cell/visible-leg+drawer/freecam/patrol checks, officer-skin
+control and three Node files pass. Twelve isolated float/support/frame/cabinet/
+drawer/handle/legacy/patrol/visible-leg/visible-drawer/native-omission defects
+fail assertions. Reviewed16 final day/night/cell/close/wide/oblique/handle/
+underframe comparisons without errors. Macro views use actual dev freecam on
+physically clear corridor positions, with player held in the legal cell; no
+jail-policy bypass. Serial ABAB177x66 main21b31b6: cell3.6→3.6–4.2ms,
+wide2.6–2.7→3.1–3.3, oblique2.2–2.3→3.3, drawer2.3→3.0. Added detail
+costs~0–1.1ms here, no speedup claim. #338 full CI green40995224638; #339 still
+running last checked. Next CCTV and coffee, then jail wall/surface fittings.
+Reserved files/shared helpers unchanged.
