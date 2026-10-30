@@ -3263,3 +3263,30 @@ band 6.3–6.4→6.0–6.2. Oblique detail costs ~.8–.9ms; other small differe
 are local observations, not a speedup claim. #336 full CI green 40992814123;
 #337 still running last checked. Next jail bunks, desk/electronics, wall/surface
 fittings. Reserved files/shared helpers unchanged.
+
+Codex active: codex/jail-bunks owns new city/jail-bunks.js, focused browser
+coverage and manifest entry. Replace six painted mattress/base pairs with
+cached grounded steel feet/legs/joined frame, supported mattress/blanket and
+shaped pillow. Mirror far bunks against the back wall, put all seats and seated
+inmates on the supported clear long edge at the actual .58m mattress height,
+and retain the cabbie's identity/conversation. Preserve jail grid/block/bars,
+standing inmates, toilet fixtures and release rules. #338 merged bc12db9.
+Next desk/electronics, wall/surface fittings. Shared/reserved files unchanged.
+
+Codex codex/jail-bunks complete: six cached open steel frames replace painted
+base/mattress pairs (96 closed parts). Four feet/legs meet the joined frame;
+platform, mattress, blanket and shaped pillow share actual support planes.
+Thin platform stays flat and blanket radius fits its thickness. Far row now
+mirrors the near row at the back wall, clearing the pacing inmate. All twelve
+seat markers move to supported .58m mattress edges; seated inmate height and
+outward direction, and cabbie edge/direction are corrected without changing
+identity or conversation. Three new actual-geometry/native-visible-leg/open-
+frame/support/collision/C-sit+stand checks, two real cell/cabbie controls and
+three Node files pass. Twelve isolated foot/leg/frame/bedding/pillow/mirror/
+legacy/seat/inmate/collider/visible-leg/native-omission defects fail assertions.
+Reviewed16 final clear-floor close/wide/oblique/night/legs/far/cabbie comparisons,
+no errors. Serial ABAB177x66 mainbc12db9: wide1.5–1.6→2.7–2.8ms,
+close2.0–2.1→5.7–5.8, oblique1.4–1.5→2.9–3.0, pillow1.8–1.9→4.5.
+Detail costs ~1.1–3.8ms here, no speedup claim. #337 full CI green40993488294;
+#338 running last checked. Next jail guard desk/electronics, wall/surface
+fittings. Reserved/shared helpers unchanged.
