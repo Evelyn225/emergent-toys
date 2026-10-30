@@ -17431,8 +17431,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (z > STATION_EXIT_Z - STATION_EXIT_H / 2 - 0.04) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, STATION_EXIT_Z, 0.25, STATION_EXIT_H, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
     }
-    if (z > 2.3) return set(i, '=', C(GRAY, L));
-    return fract(u) < 0.08 ? set(i, '|', C(GRAY, L)) : set(i, ':', C(day > 0.3 ? CYAN : WARM, 6 + day * 6));
+    return sharedGlassDoor(i, u, z, L);
   }
   if (c === 'E') { // elevator (or whatever this building has instead: lobbies.js)
     if (D.liftWall) return D.liftWall(i, u, uStep, z, d, mx, my, L);
@@ -17450,19 +17449,11 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : !D.builtSkirting && z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-    if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
-    if (z < 0.95) return set(i, '=', C(GRAY, L));
-    BG[i] = C(WHITE, 1.1 + L * 0.12); // (a solid painted partition standing in the room, not the dotted dark of the far walls)
-    return set(i, fract(z * 2.4) < 0.04 ? '-' : ' ', C(GRAY, L * 0.3));
+    return sharedWallFinish(i, u, uStep, z, d, mx, my, L);
   }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
-  if (D.neon && z > 2.75 && z < 2.85) return set(i, '=', C(R.neon, 15));
-  if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6)); // wainscot
-  if (z < 0.95) return set(i, '=', C(GRAY, L));
-  if (D.posters && hash(Math.floor(u / 1.2), Math.floor(z), mx + my * 10) > 0.8 && fract(u / 1.2) > 0.15 && fract(u / 1.2) < 0.85 && fract(z) > 0.2 && fract(z) < 0.8)
-    return set(i, '%', C(ITEM_COL[hash(Math.floor(u / 1.2), 5) * 8 | 0], L));
-  set(i, '.', C(GRAY, L * 0.3));
+  sharedWallFinish(i, u, uStep, z, d, mx, my, L, D.posters, D.neon ? R.neon : undefined);
 }
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
@@ -17609,21 +17600,19 @@ function roomCeil(i, r, x, rx, ry) {
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
     if(prepareInteriorHanging()){BG[i]=C(BRICK,2);return set(i,' ',0);}
-    const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
-    return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
+    return sharedPendantCeil(i, ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1);
   }
   if (st === 'lantern') { // Light comes from the fitted paper shells below.
     BG[i]=C(BRICK,2);return set(i,' ',0);
   }
   if (st === 'disco') { // spots of coloured light sweeping across the ceiling
-    const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;
-    return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
+    return sharedDiscoCeil(i, wx, wy);
   }
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
-  if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
+  if (st === 'dark') return sharedDarkCeil(i);
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
@@ -36869,6 +36858,32 @@ Object.assign(ROOM_FLOORS,{
   // The loft's boards, with the fitted floors' filtering and light response.
   wood:(i,f,wx,wy,r,x,L)=>{homeFloorWood(i,wx,wy,L,sharedFloorDepth(r),1);return true;},
 });
+// What any room's walls fall back to where its own painter leaves them alone:
+// a panelled timber dado and rail under plaster, with posters as plain printed
+// sheets. Also the plain glass door and the ceilings many rooms share. No glyphs.
+function sharedWallFinish(i,u,uStep,z,d,mx,my,L,posters,neon) {
+  const footprint=Math.max(uStep,d/projY);set(i,' ',0);
+  if(neon!==undefined&&z>2.75&&z<2.85){BG[i]=C(neon,12);return;}
+  if(z<.9){BG[i]=C(BRICK,1.6+L*.16-2.5*coveGroove(u,.6,.025,footprint));return;}
+  if(z<.95){BG[i]=C(BRICK,2.8+L*.2);return;}
+  if(posters) {
+    const fu=fract(u/1.2),fz=fract(z);
+    if(hash(Math.floor(u/1.2),Math.floor(z),mx+my*10)>.8&&fu>.15&&fu<.85&&fz>.2&&fz<.8){BG[i]=C(ITEM_COL[hash(Math.floor(u/1.2),5)*8|0],2.4+L*.2);return;}
+  }
+  BG[i]=C(WHITE,2.6+L*.2);
+}
+function sharedGlassDoor(i,u,z,L) {
+  set(i,' ',0);
+  BG[i]=z>2.3||fract(u)<.08?C(GRAY,1.4+L*.2):C(day>.3?CYAN:WARM,2+day*4);
+}
+function sharedPendantCeil(i,on){BG[i]=on?C(WARM,14):C(BRICK,2);set(i,' ',0);}
+// Coloured spots sweeping over a dark ceiling: they're big enough to read, and
+// their hue changes as a whole so nothing flickers cell by cell.
+function sharedDiscoCeil(i,wx,wy) {
+  const on=hash(Math.floor(wx),Math.floor(wy),9)>.72;
+  BG[i]=on?C(NEON[Math.floor(wx+wy*2+T*1.5)&3],4):C(GRAY,.5);set(i,' ',0);
+}
+function sharedDarkCeil(i){BG[i]=C(GRAY,.4);set(i,' ',0);}
 // Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
 const COAST_GATHERINGS=[];
 function coastPatchClear(x,y,r=.8){
@@ -42442,7 +42457,7 @@ function CEILING_BATTEN(x,y,length,ceiling) {
 // partition-aware ceiling layout, including its doorway and tall-prop gaps.
 function prepareInteriorBattens() {
   const R=room,style=R?.def.ceil;
-  if(!R||!INTERIOR_BATTEN_ROOMS.has(R.kind)||style!=='strip'||ROOM_CEILS[style])return false;
+  if(!R||R.kind==='station'||R.kind==='train'||style!=='strip'||ROOM_CEILS[style])return false;
   if(R.interiorBattens)return true;
   const runs=[],spec={...CEIL_STRIP,onFitting:(x0,y0,x1,y1,value)=>{if(value===1)runs.push({x:(x0+x1)/2,y:(y0+y1)/2,length:y1-y0});}};
   const mask=ceilMask('physical-strip',spec),ceiling=R.def.height||3;

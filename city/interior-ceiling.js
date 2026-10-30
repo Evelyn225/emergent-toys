@@ -29,7 +29,7 @@ function CEILING_BATTEN(x,y,length,ceiling) {
 // partition-aware ceiling layout, including its doorway and tall-prop gaps.
 function prepareInteriorBattens() {
   const R=room,style=R?.def.ceil;
-  if(!R||!INTERIOR_BATTEN_ROOMS.has(R.kind)||style!=='strip'||ROOM_CEILS[style])return false;
+  if(!R||R.kind==='station'||R.kind==='train'||style!=='strip'||ROOM_CEILS[style])return false;
   if(R.interiorBattens)return true;
   const runs=[],spec={...CEIL_STRIP,onFitting:(x0,y0,x1,y1,value)=>{if(value===1)runs.push({x:(x0+x1)/2,y:(y0+y1)/2,length:y1-y0});}};
   const mask=ceilMask('physical-strip',spec),ceiling=R.def.height||3;
