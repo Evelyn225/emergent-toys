@@ -198,6 +198,7 @@
     "city/gym-equipment.js",
     "city/laundry-quality.js",
     "city/storage-quality.js",
+    "city/museum-shell.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",

@@ -107,53 +107,6 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 
 // ---- inside: the walls of each room
 const museumWing = (x, y) => y < 9 && x > 7 && x < 18 ? 'gems' : x < 7 ? 'egypt' : x > 18 ? 'gallery' : 'hall';
-function museumWall(i, su, uStep, z, d, mx, my, L) {
-  // Choose the wing on the visible side of this wall, rather than the player's current section.
-  const screenX = 2 * (i % cols + 0.5) / cols - 1;
-  const rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
-  const u = Math.abs(su), wing = museumWing(px + rx * (d - 0.01), py + ry * (d - 0.01)), lit = room.burgled ? 0.35 : 1;
-  if (z > 3.6) { BG[i] = C(WHITE, 1.2 * lit); return set(i, '=', C(GRAY, L * 0.5)), true; } // the cornice
-  if (wing === 'egypt') { // sandstone, carved all over: eyes, ankhs, birds, wavy water
-    BG[i] = C(WARM, (2 + L * 0.15) * lit);
-    const band = Math.floor(z * 2.5), fz = fract(z * 2.5);
-    if (z > 0.6 && z < 3.2 && fz > 0.3 && fz < 0.7) { // bands of carving with plain stone between: eyes, ankhs, birds, water, people
-      const gx = Math.floor(u * 2.2), g = ['<o>', 'Y', '~~', 'o/', '|o|', '^^', '8', 'w'][(gx * 5 + band * 3) & 7], k = Math.floor(fract(u * 2.2) * 4);
-      return set(i, g[k] || ' ', C(band & 1 ? BRICK : BLUE, L * (band & 1 ? 0.9 : 1.1))), true;
-    }
-    if (fz < 0.06 && z > 0.6 && z < 3.2) return set(i, '-', C(BRICK, L * 0.6)), true; // the lines ruled between the bands
-    return set(i, fract(z * 6) < 0.15 ? '=' : ' ', C(BRICK, L * 0.6)), true;
-  }
-  if (wing === 'gallery' && z > 0.9 && z < 2.6) { // a picture every three metres along the wall: gold frame, a painting nobody's seen before
-    const k = Math.floor(u / 3), fu = u - k * 3 - 0.4, w = 2.2;
-    if (fu > 0 && fu < w) {
-      const edge = fu < 0.08 || fu > w - 0.08 || z < 0.98 || z > 2.52;
-      if (edge) { BG[i] = C(YEL, 3 * lit); return set(i, fu < 0.08 || fu > w - 0.08 ? '|' : '=', C(ORANGE, L)), true; }
-      const seed = k * 13 + mx * 7 + my * 3, n = noise(fu * (1 + (seed & 3)), z * (2 + (seed >> 2 & 3)), seed), n2 = noise(fu * 3 + 9, z * 3, seed + 1);
-      const pal = [[BLUE, CYAN, WHITE], [RED, ORANGE, YEL], [GREEN, YEL, BRICK], [MAG, BLUE, CYAN], [BRICK, WARM, ORANGE]][seed % 5];
-      BG[i] = C(pal[Math.floor(n * 2.99)], (2 + n2 * 4) * lit);
-      return set(i, n2 > 0.7 ? '~' : n2 < 0.2 ? '.' : ' ', C(pal[2], L * 1.2)), true;
-    }
-    if (fu > w / 2 - 0.15 && fu < w / 2 + 0.15 && z < 0.98 && z > 0.9) return set(i, '_', C(WHITE, L)), true; // its little plaque
-  }
-  if (wing === 'gems') { BG[i] = C(RED, (1.2 + L * 0.1) * lit); return set(i, fract(u * 2 + z) < 0.08 ? '|' : ' ', C(MAG, L * 0.4)), true; } // red velvet
-  // the hall: marble, a dado rail, the museum's name over the arch to the gem room
-  if (my === 9 && z > 2.6 && z < 3.1 && wallText(i, su, uStep, z, d, 'THE GEM ROOM', 13 * Math.sign(su), 2.85, 0.28, 0.4, C(YEL, 13), C(GRAY, 1))) return true;
-  BG[i] = C(WHITE, (1.6 + L * 0.1) * lit);
-  return set(i, Math.abs(z - 1) < 0.04 ? '=' : noise(u * 2, z * 3, 1702) > 0.72 ? '~' : ' ', C(GRAY, L * 0.5)), true;
-}
-// the floors: marble chequers in the hall, parquet in the wings, carpet in the gem room. After dark it's black but for
-// the guards' torch beams on it
-function museumFloor(i, f, wx, wy) {
-  const wing = museumWing(wx, wy);
-  if (room.burgled) {
-    const beam = torchAt(wx, wy, 0);
-    if (beam > 0) { BG[i] = C(YEL, 1.5 + beam * 6); return set(i, '.', C(WARM, 6 + beam * 6)); }
-    BG[i] = C(GRAY, 0.25); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 1703) > 0.9 ? '.' : ' ', C(GRAY, 2));
-  }
-  if (wing === 'hall') { BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1.2); return set(i, ' ', 0); }
-  if (wing === 'gems') { BG[i] = C(RED, 1 + f * 1.2); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 1704) > 0.8 ? '+' : ' ', C(MAG, f * 6)); }
-  BG[i] = C(BRICK, 1 + f * 1.5); return set(i, fract(wx * 2 + Math.floor(wy * 2) * 0.5) < 0.1 ? '|' : '=', C(BRICK, f * 7)); // parquet
-}
 
 // ---- the guards: walking set loops; by night each carries a torch, and a beam on the floor shows what it sees
 const GUARD_PATHS = [[[3.5, 3], [3.5, 13], [21.5, 13], [21.5, 3], [21.5, 13], [3.5, 13]], // the wings and the hall
@@ -302,7 +255,7 @@ const museumGrid = () => {
   for (let x = 8; x < 18; x++) if (x < 12 || x > 13) extra[x + ',9'] = '#'; // the gem room's wall, the arch in the middle
   return boxRoom(MUSEUM_W, MUSEUM_H, extra);
 };
-ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', ceil: 'strip', wall: museumWall, fx: museumTorchFx, keeper: [20.5, 15.4], spawn: [12.5, 16.2],
+ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', ceil: 'strip', fx: museumTorchFx, keeper: [20.5, 15.4], spawn: [12.5, 16.2],
   props: r => {
     const p = [...counterBox(20.5, 15.9, 1.6), standing(20.5, 15.4, MAG)]; // the ticket desk and gift shop, by the door
     const bone = (c, row, L) => C(c === 'o' ? RED : WHITE, Math.max(L, 6) * (r.burgled ? 0.4 : 1));
