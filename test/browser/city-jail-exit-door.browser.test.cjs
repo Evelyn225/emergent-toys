@@ -26,7 +26,7 @@ test('jail exit door has grounded joined cached steel frame, real window bore an
   if(Math.abs(esc.b.x+esc.b.hw-(leaf.b.x-leaf.b.hw))>1e-8||Math.abs(spindle.b.ax-(esc.b.x-esc.b.hw))>1e-8||Math.abs(spindle.b.bx-lever.b.ax)>1e-8||spindle.b.by!==lever.b.ay||spindle.b.bz!==lever.b.az)bad.push('handle support gap');
   const overlaps=(a,b)=>a.x-a.hw<=b.x+b.hw&&a.x+a.hw>=b.x-b.hw&&a.y-a.hl<=b.y+b.hl&&a.y+a.hl>=b.y-b.hl;
   for(let k=0;k<2;k++){const j=many('hinge-jamb')[k].b,l=many('hinge-leaf')[k].b,h=many('hinge-barrel')[k].b;if(Math.abs(j.x+j.hw-(jambs[0].b.x-jambs[0].b.hw))>1e-8||Math.abs(l.x+l.hw-(leaf.b.x-leaf.b.hw))>1e-8||!overlaps(j,h)||!overlaps(l,h))bad.push('hinge not attached');}
-  for(const[u,z]of [[7.95,1.05],[7.5,2.45],[7,.2]]){ROOM_DEFS.jail.wall(0,u,.01,z,2,21,7,8);const c=[BG[0],CH[0],COL[0]];jailWall(0,u,.01,z,2,20,7,8);if(c.some((v,k)=>v!==[BG[0],CH[0],COL[0]][k]))bad.push('old door/EXIT paint retained');}
+  for(const[u,z]of [[7.95,1.05],[7.5,2.45],[7,.2]]){ROOM_DEFS.jail.wall(0,u,.01,z,2,21,7,8);const c=[BG[0],CH[0],COL[0]];jailWallFinish(0,u,.01,z,2,20,7,8);if(c.some((v,k)=>v!==[BG[0],CH[0],COL[0]][k]))bad.push('old door/EXIT paint retained');}
   if(!o.walk||o.box||room.grid!==JAIL_GRID||room.def.block!==jailBlock||o.x!==21||o.y!==7.5)bad.push('jail policy or mounting changed');
   return{bad,checked:A.length};
  });assert.equal(r.checked,18);assert.deepEqual(r.bad,[]);

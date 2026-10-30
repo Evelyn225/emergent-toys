@@ -32,7 +32,7 @@ test('west jail privacy window has cached closed casing, supported sill, recesse
    if(b.z0>bottom.z1||b.z1<top.z0||b.x-r>bottom.x+bottom.hw||b.x-r<bottom.x-bottom.hw)bad.push('bar not welded into frame');
   }
   const gap=[...F,...A].map(q=>({q,t:q.ray(2,7.8,2.45,-1,0,0,q.b)})).filter(q=>q.t>0).sort((a,b)=>a.t-b.t)[0];if(!gap||role(gap.q)!=='pane'||Math.abs(gap.t-.982)>1e-8)bad.push('window gaps blocked');
-  for(const[u,z]of [[7.5,2.4],[7.5,1.6]]){ROOM_DEFS.jail.wall(0,u,.01,z,2,0,7,8);const c=[BG[0],CH[0],COL[0]];jailWall(0,u,.01,z,2,1,7,8);if(c.some((v,k)=>v!==[BG[0],CH[0],COL[0]][k]))bad.push('old window/plaque paint retained');}
+  for(const[u,z]of [[7.5,2.4],[7.5,1.6]]){ROOM_DEFS.jail.wall(0,u,.01,z,2,0,7,8);const c=[BG[0],CH[0],COL[0]];jailWallFinish(0,u,.01,z,2,1,7,8);if(c.some((v,k)=>v!==[BG[0],CH[0],COL[0]][k]))bad.push('old window/plaque paint retained');}
   if(o.box||!o.walk||room.grid!==JAIL_GRID||room.def.block!==jailBlock)bad.push('jail policy changed');return{bad,checked:F.length+A.length};
  });assert.equal(r.checked,15);assert.deepEqual(r.bad,[]);
 }));
