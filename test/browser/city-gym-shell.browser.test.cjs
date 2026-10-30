@@ -18,7 +18,7 @@ test('gym floor, ceiling and walls are glyph-free filtered finishes with the sam
   if(floor(3,3.5)===floor(3.5,3.5))bad.push('no mat joint');
   const far=new Set();for(let y=1;y<9;y+=.17)for(let x=1;x<14;x+=.23)far.add(floor(x,y,2));if(far.size!==1)bad.push('joints alias at distance');
   if(floor(3.5,3.5,.001,0)===floor(3.5,3.5,.001,12))bad.push('floor ignores light');
-  ROOM_CEILS.gymPlaster(0);if(CH[0]!==' ')bad.push('ceiling glyph');
+  ROOM_CEILS.civicPlaster(0);if(CH[0]!==' ')bad.push('ceiling glyph');
   const wall=(u,z,mx,my)=>{gymWallFinish(0,u,.001,z,2,mx,my,8);if(CH[0]!==' ')bad.push('wall glyph');return hue();};
   // both signs of u: it runs whichever way reads left to right
   for(const u of [5,-5])if(wall(u,1.2,0,5)!==CYAN)bad.push('west mirror missing at '+u);

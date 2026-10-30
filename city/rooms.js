@@ -255,21 +255,6 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
 const counterBox = (x,y,half,z1=1.05) => [FURNITURE_COUNTER(x,y,half,z1),FURNITURE_REGISTER(x-half*.6,y,z1)];
 // a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
 // the old sprite picked a new one every frame, so the heap strobed)
-const laundryCart = (x, y) => {
-  const seed = Math.random() * 100;
-  return [BX(x, y, 0.36, 0.26, 0.12, 0.7, (i, t, L) => { // the wire basket: see-through between the wires
-    const f = HIT.face, a_ = f <= 2 ? HIT.v : HIT.u;
-    if (f === 5 || f === 6) return false;
-    if (HIT.w > 0.66 || HIT.w < 0.16 || Math.abs(fract(a_ * 8) - 0.5) > 0.4) return set(i, HIT.w > 0.66 ? '=' : '|', C(GRAY, L * 1.1)), true;
-    return Math.abs(fract(HIT.w * 10) - 0.5) > 0.42 ? (set(i, '-', C(GRAY, L * 0.8)), true) : false;
-  }), BX(x, y, 0.33, 0.23, 0.14, 0.78, (i, t, L) => { // the washing, piled up above the rim
-    if (HIT.face === 6) return false;
-    const k = hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w * 9 + (HIT.u - HIT.v) * 3), Math.floor(seed));
-    const lumpy = HIT.w > 0.72 && hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 7) > 0.6;
-    BG[i] = C(ITEM_COL[k * 8 | 0], (lumpy ? 1.5 : 1.2) + L * 0.3 * shadeFace(HIT.face));
-    return set(i, lumpy ? (k > 0.55 ? '~' : '_') : k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
-  }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
-};
 const tableBox = (x, y, hl = 0.6, hw = 0.4) => [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureTable(vx,vy,hl,hw),[hl,hw,.78])];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
@@ -379,9 +364,9 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(2.8, 3.6, 0, -1), ...laundryCart(7.6, 4.6),
-      BX(6.2, 3.3, 0.9, 0.35, 0, 0.85, solid(WHITE, { top: '_', panel: 0.4 })), // the folding table
+  laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip',
+    props: r => [BENCHP(2.8, 3.6, 0, -1), LAUNDRY_CART(7.6, 4.6),
+      KITCHEN_SERVICE_COUNTER(5.7, 3.3, 0.9, 0.35, 0.85, WHITE, STONE), // the folding table
       ...(tod > 7 && tod < 23 || chance(0.3) ? [sitting(2.8, 3.58, shirt(), 0.45)] : [])] }, // (somebody waiting on a load, mostly in the day)
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
     props: r => {
@@ -679,19 +664,6 @@ function arcadeWall(i, u, uStep, z, d, mx, my, L) { // dark walls with a neon zi
   const zig = Math.abs(fract(u * 0.8) - 0.5) * 0.6 + 1.5;
   if (Math.abs(z - zig) < 0.05) { set(i, '~', C(NEON[Math.floor(u) & 3], 15)); return true; }
   set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 7 ? ' ' : '.', C(MAG, 3)); return true;
-}
-function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums (yours, if it's in one)
-  if (my === 0 && z >= 1.9) return wallText(i, u, uStep, z, d, 'OPEN 24 HOURS', room.W / 2, 2.05, 0.22, 0.25, C(CYAN, fract(T * 0.7) < 0.93 ? 15 : 6)); // (the tube flickers)
-  if (z >= 1.9 || !(my === 0 || mx === 0 || mx === room.W - 1)) return false;
-  const n = Math.floor(u / 0.75), fu = fract(u / 0.75), du = (fu - 0.5) * 0.75, dz = z - 0.85, rr = Math.hypot(du, dz);
-  const mine = my === 0 && myLaundromat() && wash.n === n, done = mine && T >= wash.done;
-  if (fu < 0.05 || z < 0.1) { set(i, '|', C(GRAY, L)); return true; }
-  if (mine && z > 1.25 && z < 1.4 && Math.abs(du) < 0.2) { set(i, done ? (fract(T * 2) < 0.5 ? '*' : ' ') : ':', C(done ? GREEN : YEL, 15)); return true; } // its little light
-  if (rr < 0.2 && done) { set(i, '~', C(WHITE, 14)); return true; } // still, and clean
-  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * (mine ? 12 : 6) * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(mine ? WHITE : ITEM_COL[n & 7], mine ? 15 : L)); return true; }
-  if (rr < 0.26) { set(i, 'O', C(GRAY, L * 1.2)); return true; }
-  if (z > 1.55) { set(i, fract(u * 4) < 0.3 ? 'o' : '=', C(CYAN, L)); return true; }
-  set(i, '#', C(WHITE, L * 0.5)); return true;
 }
 function cinemaWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0 && z > 0.7 && z < 2.7 && Math.abs(u - room.W / 2) < 5.2) { // the movie

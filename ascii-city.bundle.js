@@ -16665,21 +16665,6 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
 const counterBox = (x,y,half,z1=1.05) => [FURNITURE_COUNTER(x,y,half,z1),FURNITURE_REGISTER(x-half*.6,y,z1)];
 // a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
 // the old sprite picked a new one every frame, so the heap strobed)
-const laundryCart = (x, y) => {
-  const seed = Math.random() * 100;
-  return [BX(x, y, 0.36, 0.26, 0.12, 0.7, (i, t, L) => { // the wire basket: see-through between the wires
-    const f = HIT.face, a_ = f <= 2 ? HIT.v : HIT.u;
-    if (f === 5 || f === 6) return false;
-    if (HIT.w > 0.66 || HIT.w < 0.16 || Math.abs(fract(a_ * 8) - 0.5) > 0.4) return set(i, HIT.w > 0.66 ? '=' : '|', C(GRAY, L * 1.1)), true;
-    return Math.abs(fract(HIT.w * 10) - 0.5) > 0.42 ? (set(i, '-', C(GRAY, L * 0.8)), true) : false;
-  }), BX(x, y, 0.33, 0.23, 0.14, 0.78, (i, t, L) => { // the washing, piled up above the rim
-    if (HIT.face === 6) return false;
-    const k = hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w * 9 + (HIT.u - HIT.v) * 3), Math.floor(seed));
-    const lumpy = HIT.w > 0.72 && hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 7) > 0.6;
-    BG[i] = C(ITEM_COL[k * 8 | 0], (lumpy ? 1.5 : 1.2) + L * 0.3 * shadeFace(HIT.face));
-    return set(i, lumpy ? (k > 0.55 ? '~' : '_') : k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
-  }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
-};
 const tableBox = (x, y, hl = 0.6, hw = 0.4) => [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureTable(vx,vy,hl,hw),[hl,hw,.78])];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
@@ -16789,9 +16774,9 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(2.8, 3.6, 0, -1), ...laundryCart(7.6, 4.6),
-      BX(6.2, 3.3, 0.9, 0.35, 0, 0.85, solid(WHITE, { top: '_', panel: 0.4 })), // the folding table
+  laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip',
+    props: r => [BENCHP(2.8, 3.6, 0, -1), LAUNDRY_CART(7.6, 4.6),
+      KITCHEN_SERVICE_COUNTER(5.7, 3.3, 0.9, 0.35, 0.85, WHITE, STONE), // the folding table
       ...(tod > 7 && tod < 23 || chance(0.3) ? [sitting(2.8, 3.58, shirt(), 0.45)] : [])] }, // (somebody waiting on a load, mostly in the day)
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
     props: r => {
@@ -17089,19 +17074,6 @@ function arcadeWall(i, u, uStep, z, d, mx, my, L) { // dark walls with a neon zi
   const zig = Math.abs(fract(u * 0.8) - 0.5) * 0.6 + 1.5;
   if (Math.abs(z - zig) < 0.05) { set(i, '~', C(NEON[Math.floor(u) & 3], 15)); return true; }
   set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 7 ? ' ' : '.', C(MAG, 3)); return true;
-}
-function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums (yours, if it's in one)
-  if (my === 0 && z >= 1.9) return wallText(i, u, uStep, z, d, 'OPEN 24 HOURS', room.W / 2, 2.05, 0.22, 0.25, C(CYAN, fract(T * 0.7) < 0.93 ? 15 : 6)); // (the tube flickers)
-  if (z >= 1.9 || !(my === 0 || mx === 0 || mx === room.W - 1)) return false;
-  const n = Math.floor(u / 0.75), fu = fract(u / 0.75), du = (fu - 0.5) * 0.75, dz = z - 0.85, rr = Math.hypot(du, dz);
-  const mine = my === 0 && myLaundromat() && wash.n === n, done = mine && T >= wash.done;
-  if (fu < 0.05 || z < 0.1) { set(i, '|', C(GRAY, L)); return true; }
-  if (mine && z > 1.25 && z < 1.4 && Math.abs(du) < 0.2) { set(i, done ? (fract(T * 2) < 0.5 ? '*' : ' ') : ':', C(done ? GREEN : YEL, 15)); return true; } // its little light
-  if (rr < 0.2 && done) { set(i, '~', C(WHITE, 14)); return true; } // still, and clean
-  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * (mine ? 12 : 6) * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(mine ? WHITE : ITEM_COL[n & 7], mine ? 15 : L)); return true; }
-  if (rr < 0.26) { set(i, 'O', C(GRAY, L * 1.2)); return true; }
-  if (z > 1.55) { set(i, fract(u * 4) < 0.3 ? 'o' : '=', C(CYAN, L)); return true; }
-  set(i, '#', C(WHITE, L * 0.5)); return true;
 }
 function cinemaWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0 && z > 0.7 && z < 2.7 && Math.abs(u - room.W / 2) < 5.2) { // the movie
@@ -26845,7 +26817,7 @@ const WASH_FEE = 3, WASH_T = 45;
 let wash = null; // { cell: the laundromat (its door's cell), n: which machine, done: when it finishes, told }
 const myLaundromat = () => !!wash && mode === 'room' && room.kind === 'laundry' && !!room.cell && room.cell[0] === wash.cell[0] && room.cell[1] === wash.cell[1];
 // the machine you're standing at, along the back wall (0.75m each), or -1
-const machineHere = () => mode === 'room' && room.kind === 'laundry' && py < 1.9 && px > 1.1 && px < room.W - 1.1 ? Math.floor(px / 0.75) : -1;
+const machineHere = () => mode === 'room' && room.kind === 'laundry' && py < 1.9 && px > LAUNDRY_WASHER.first * LAUNDRY_BAY && px < room.W - 1 ? Math.floor(px / 0.75) : -1;
 function laundryPrompt() {
   const n = machineHere();
   if (n < 0) return '';
@@ -36376,7 +36348,7 @@ function gymFloorFinish(i,wx,wy,L,footprint) {
   BG[i]=C(GRAY,1.5+L*.14-5*joint);set(i,' ',0);return true;
 }
 ROOM_FLOORS.gymRubber=(i,f,wx,wy,r,x,L)=>gymFloorFinish(i,wx,wy,L,homeBalconyPavingFootprint(eye*projY/(r-hor+.5),eye));
-ROOM_CEILS.gymPlaster=i=>{BG[i]=C(WHITE,3+room.def.light*.4);set(i,' ',0);};
+ROOM_CEILS.civicPlaster=i=>{BG[i]=C(WHITE,3+room.def.light*.4);set(i,' ',0);};
 function gymWallFinish(i,u,uStep,z,d,mx,my,L) {
   const footprint=Math.max(uStep,d/projY);
   if((mx===0||mx===room.W-1)&&my>0&&my<room.H-1&&z>GYM_MIRROR.z0&&z<GYM_MIRROR.z1) {
@@ -36397,27 +36369,28 @@ function GYM_MIRROR_FRAME(x,normal) {
   for(let k=1;k<panels;k++)add('joint',y0+k*gymMirrorPitch()-mid,.012,z0,z1);
   return {...ROOM_MODEL(x,mid,hotelLobbyDraw(parts)),walk:true,radius:(y1-y0)/2+.05,gymMirrorFrame:{parts,normal}};
 }
-// A mounted board, so the name and the slogan stop painting straight on the wall.
-function GYM_WALL_BOARD(x,y) {
-  const parts=[],ink=C(ORANGE,14),board=(i,t,L)=>{
+// A mounted board, so a room's name and line stop painting straight on its wall.
+function wallTitleBoard(x,y,hl,title,subtitle,ink,z0,marker) {
+  const parts=[],board=(i,t,L)=>{
     BG[i]=C(GRAY,.7+L*.07);
-    if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,'GYM',0,2.64,.30,.26,ink,BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,'NO PAIN NO GAIN',0,2.34,.17,.17,C(WHITE,12),BG[i])))return true;
+    if(HIT.face===3&&(hotelFittingText(i,HIT.u,HIT.w,t,title,0,z0+.38,.30,.26,ink,BG[i])||hotelFittingText(i,HIT.u,HIT.w,t,subtitle,0,z0+.08,.17,.17,C(WHITE,12),BG[i])))return true;
     set(i,' ',0);return true;
   };
-  hotelLobbyRound(parts,'board',1.5,.025,2.26,2.86,.012,board);
-  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:1.52,gymWallBoard:{parts}};
+  hotelLobbyRound(parts,'board',hl,.025,z0,z0+.6,.012,board);
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),walk:true,radius:hl+.02,[marker]:{parts}};
 }
-const gymEntranceExterior=r=>{
-  if(r.cell&&SHOP[idx(...r.cell)]?.word==='GYM'&&map[idx(...r.cell)]>1)return hotelEntranceExterior(r);
+// Rooms can lack their building's cell in old saves: use the nearest one by name.
+function wordEntranceExterior(r,word) {
+  if(r.cell&&SHOP[idx(...r.cell)]?.word===word&&map[idx(...r.cell)]>1)return hotelEntranceExterior(r);
   const ret=r.ret||[px,py];let cell=null,best=Infinity;
-  for(let k=0;k<SHOP.length;k++)if(SHOP[k]?.word==='GYM'&&map[k]>1){const d=near(ret[0],ret[1],k%N+.5,(k/N|0)+.5);if(d<best){best=d;cell=[k%N,k/N|0];}}
+  for(let k=0;k<SHOP.length;k++)if(SHOP[k]?.word===word&&map[k]>1){const d=near(ret[0],ret[1],k%N+.5,(k/N|0)+.5);if(d<best){best=d;cell=[k%N,k/N|0];}}
   return hotelEntranceExterior(cell?{...r,cell}:r);
-};
+}
 const GYM_SHELL_PROPS=ROOM_DEFS.gym.props;
 ROOM_DEFS.gym.props=r=>{
-  r.hotelEntranceExterior=gymEntranceExterior(r);
+  r.hotelEntranceExterior=wordEntranceExterior(r,'GYM');
   const entry=HOTEL_FRONT_ENTRANCE(r.W/2,r.H-1);entry.gymEntrance=entry.hotelEntrance;delete entry.hotelEntrance;
-  const props=[...GYM_SHELL_PROPS(r),entry,GYM_MIRROR_FRAME(1,1),GYM_MIRROR_FRAME(r.W-1,-1),GYM_WALL_BOARD(r.W/2,1.025)];
+  const props=[...GYM_SHELL_PROPS(r),entry,GYM_MIRROR_FRAME(1,1),GYM_MIRROR_FRAME(r.W-1,-1),wallTitleBoard(r.W/2,1.025,1.5,'GYM','NO PAIN NO GAIN',C(ORANGE,14),2.26,'gymWallBoard')];
   const height=r.def.height||3;
   for(const x of [3,8,13])for(const y of [2.8,7.6]){
     const o=CEILING_BATTEN(x,y,1.8,height);o.gymCeilingLight=o.ceilingBatten;delete o.ceilingBatten;props.push(o);
@@ -36431,7 +36404,7 @@ ROOM_DEFS.gym.doorWall=true;
 ROOM_DEFS.gym.wall=(i,u,uStep,z,d,mx,my,L)=>hotelEntranceGlass(i,u,z,mx,my)||gymWallFinish(i,u,uStep,z,d,mx,my,L);
 ROOM_DEFS.gym.footstepFloor=ROOM_DEFS.gym.floor;
 ROOM_DEFS.gym.floor='gymRubber';
-ROOM_DEFS.gym.ceil='gymPlaster';
+ROOM_DEFS.gym.ceil='civicPlaster';
 // The gym's machines, the sports shop's too. Every piece is closed and joined:
 // treadmill uprights end in the deck and the console, dumbbell heads sit on the
 // rack's rails, ring ropes end inside the corner pads. Parts prepare once.
@@ -36524,6 +36497,126 @@ function GYM_HEAVY_BAG(x,y,height) {
   hotelLobbyTurned(parts,'plate',0,0,[[height-.02,0],[height-.02,.06],[height,.06],[height,0]],gymSteel);
   return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),box:boxAt(x,y,1,0,.17,.17,bottom,height),radius:.2,heavyBag:{parts,bottom,shoulder,height}};
 }
+// The laundromat's machines were painted on its walls. They stand in the room
+// now, on the same 75cm bays machineHere() counts, each with a round porthole.
+// The drum's state is read when it's drawn, so your load shows in its machine.
+const LAUNDRY_BAY=.75,LAUNDRY_WASHER={first:2,last:11,hl:.345,hw:.25,top:1.22},LAUNDRY_DRYER={hl:.36,hw:.3,each:.92,ys:[2.45,3.2,3.95,4.7]};
+// A short round boss on a machine's front: flat face first, then its rim. b.x and
+// b.y are on the cabinet, fx/fy point out of it, front is how far the boss stands.
+function laundryPortRay(ox,oy,oz,rx,ry,rz,b) {
+  const along=rx*b.fx+ry*b.fy,cross=-rx*b.fy+ry*b.fx,dx0=ox-b.x,dy0=oy-b.y;
+  const ou=-dx0*b.fy+dy0*b.fx,ov=dx0*b.fx+dy0*b.fy,oh=oz-b.cz,r2=b.r*b.r;
+  if(along<0) {
+    const t=(b.front-ov)/along;
+    if(t>.01){const u=ou+cross*t,h=oh+rz*t;if(u*u+h*h<=r2){HIT.u=u;HIT.v=b.front;HIT.w=h;HIT.nx=b.fx;HIT.ny=b.fy;HIT.nz=0;HIT.face=3;return t;}}
+  }
+  const A=cross*cross+rz*rz,B=ou*cross+oh*rz,D=B*B-A*(ou*ou+oh*oh-r2);
+  if(A<1e-9||D<0)return -1;
+  const t=(-B-Math.sqrt(D))/A,v=ov+along*t;
+  if(t<.01||v<0||v>b.front)return -1;
+  const u=ou+cross*t,h=oh+rz*t;
+  HIT.u=u;HIT.v=v;HIT.w=h;HIT.nx=-b.fy*u/b.r;HIT.ny=b.fx*u/b.r;HIT.nz=h/b.r;HIT.face=0;return t;
+}
+function laundryPort(parts,x,y,z,fx,fy,r,shade) {
+  const ex=Math.abs(fy)*r+Math.abs(fx)*.04,ey=Math.abs(fx)*r+Math.abs(fy)*.04;
+  const box={...boxAt(x,y,1,0,ex,ey,z-r,z+r),fx,fy,cz:z,r,front:.04};
+  parts.push({role:'port',box,view:{...box},shade,ray:laundryPortRay});
+}
+// A drum seen through its glass: the load tumbles up close and settles to its
+// average colour further off, so it never shimmers.
+function laundryDrumShade(state) {
+  return (i,t,L)=>{
+    set(i,' ',0);const r=Math.hypot(HIT.u,HIT.w),s=state();
+    if(HIT.face!==3||r>.15)return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+    if(s.clean){BG[i]=C(WHITE,8);return true;}
+    if(!s.turning){BG[i]=C(BLUE,.9+L*.05);return true;}
+    const lump=coveDetail(t)>.3?Math.sin(Math.atan2(HIT.w,HIT.u)*3+T*s.speed)>.1:r<.1;
+    BG[i]=lump?C(s.col,s.mine?8:3.2):C(BLUE,1.2);return true;
+  };
+}
+const laundryEnamel=(i,t,L)=>{BG[i]=C(WHITE,3.3+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+const laundryPlinth=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.08);set(i,' ',0);return true;};
+function LAUNDRY_WASHER_MODEL(n,wallY) {
+  const parts=[],{hl,hw,top}=LAUNDRY_WASHER,x=(n+.5)*LAUNDRY_BAY,y=wallY+hw,steel=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  const yours=()=>myLaundromat()&&wash.n===n;
+  const state=()=>{
+    if(yours())return T<wash.done?{turning:true,mine:true,col:WHITE,speed:12}:{clean:true};
+    return n%3?{turning:true,col:ITEM_COL[n&7],speed:n&1?6:-6}:{};
+  };
+  const lamp=(i,t,L)=>{
+    const own=yours(),done=own&&T>=wash.done;
+    BG[i]=done?C(GREEN,fract(T*2)<.5?12:3):own?C(YEL,12):C(GRAY,.8);set(i,' ',0);return true;
+  };
+  const add=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=v;};
+  add('console',0,-hw+.06,hl,.06,1.02,top,.012,steel);
+  add('lamp',.24,-hw+.122,.016,.003,1.1,1.13,0,lamp);
+  add('coin',-.2,-hw+.122,.04,.004,1.07,1.17,.002,steel);
+  laundryPort(parts,0,hw,.62,0,1,.2,laundryDrumShade(state));
+  add('cabinet',0,0,hl,hw,.06,1.02,.012,laundryEnamel);
+  add('plinth',0,-.01,hl-.02,hw-.03,0,.06,.004,laundryPlinth);
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts),[hl,hw,top]),radius:Math.hypot(hl,hw)+.05,laundryWasher:{n,parts}};
+}
+// Stacked dryers along the side walls. They run or they don't, and you can't use them.
+function LAUNDRY_DRYER_STACK(x,y,fx,seed) {
+  const parts=[],{hl,hw,each}=LAUNDRY_DRYER;
+  const add=(role,u,v,a,b,z0,z1,round,shade)=>{const p=hotelLobbyRound(parts,role,a,b,z0,z1,round,shade);p.box.x=u;p.box.y=v;};
+  for(let k=0;k<2;k++) {
+    const z0=.06+k*each,running=hash(seed,k,311)>.45,col=ITEM_COL[(seed+k)&7],state=()=>running?{turning:true,col,speed:fx*4}:{};
+    laundryPort(parts,fx*hw,0,z0+each/2,fx,0,.25,laundryDrumShade(state));
+    add('cabinet',0,0,hw,hl,z0,z0+each-.004,.012,laundryEnamel);
+  }
+  add('plinth',-fx*.01,0,hw-.03,hl-.02,0,.06,.004,laundryPlinth);
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts),[hw,hl,.06+2*each]),radius:Math.hypot(hl,hw)+.05,laundryDryer:{parts,fx}};
+}
+// A wire cart on castors, a heap of washing in it.
+function LAUNDRY_CART(x,y) {
+  const parts=[],hl=.36,hw=.26,floor=.16,rim=.68,steel=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  const wire=(ax,ay,az,bx,by,bz,r=.005)=>{hotelLobbyTube(parts,'wire',ax,ay,az,bx,by,bz,r,steel);parts.at(-1).ray=hotelCurtainRodRay;};
+  const cloth=(col)=>{const fold=gymPaint(col,3.2,.35);return (i,t,L)=>fold(i,t,L);};
+  const corners=[[-hl,-hw],[hl,-hw],[hl,hw],[-hl,hw]],heap=[[-.14,-.08,.15,.14,.5,RED],[.14,-.06,.17,.15,.56,BLUE],[-.1,.1,.16,.12,.62,WHITE],[.16,.1,.14,.12,.48,GREEN],[0,0,.24,.18,.74,YEL]];
+  for(const [u,v,a,b,z1,col]of heap){const p=hotelLobbyRound(parts,'washing',a,b,floor,z1,.05,cloth(col));p.box.x=u;p.box.y=v;}
+  for(let c=0;c<4;c++) {
+    const [ax,ay]=corners[c],[bx,by]=corners[(c+1)%4];
+    wire(ax,ay,rim,bx,by,rim,.008);wire(ax,ay,floor,bx,by,floor,.008);wire(ax,ay,(floor+rim)/2,bx,by,(floor+rim)/2);
+    for(const k of [.25,.5,.75])wire(ax+(bx-ax)*k,ay+(by-ay)*k,floor,ax+(bx-ax)*k,ay+(by-ay)*k,rim);
+    wire(ax,ay,.045,ax,ay,rim,.011);
+    hotelLobbyTurned(parts,'castor',ax,ay,[[0,0],[.002,.025],[.04,.03],[.05,.012],[.05,0]],laundryPlinth);
+  }
+  const base=hotelLobbyRound(parts,'tray',hl-.01,hw-.01,floor-.012,floor,.003,steel);base.box.x=0;base.box.y=0;
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts),[hl,hw,.74]),radius:Math.hypot(hl,hw)+.03,laundryCart:{parts,floor,rim}};
+}
+function laundryFloorFinish(i,wx,wy,L,footprint) {
+  const joint=Math.max(coveGroove(wx,.4,.003,footprint),coveGroove(wy,.4,.003,footprint));
+  const check=footprint>.2?.5:(Math.floor(wx/.4)+Math.floor(wy/.4))&1;
+  BG[i]=C(GRAY,2.3+check*.9+L*.25-5*joint);set(i,' ',0);return true;
+}
+ROOM_FLOORS.laundryVinyl=(i,f,wx,wy,r,x,L)=>laundryFloorFinish(i,wx,wy,L,homeBalconyPavingFootprint(eye*projY/(r-hor+.5),eye));
+function laundryWallFinish(i,u,uStep,z,d,mx,my,L) {
+  const footprint=Math.max(uStep,d/projY);set(i,' ',0);
+  if(z<1.35) {
+    const grout=Math.max(coveGroove(u,.3,.003,footprint),coveGroove(z,.3,.003,footprint));
+    BG[i]=C(CYAN,2.4+L*.2-4*grout);return true;
+  }
+  BG[i]=C(WHITE,3.2+L*.28);return true;
+}
+const LAUNDRY_SHELL_PROPS=ROOM_DEFS.laundry.props;
+ROOM_DEFS.laundry.props=r=>{
+  r.hotelEntranceExterior=wordEntranceExterior(r,'LAUNDRY');
+  const entry=HOTEL_FRONT_ENTRANCE(r.W/2,r.H-1);entry.laundryEntrance=entry.hotelEntrance;delete entry.hotelEntrance;
+  const props=[...LAUNDRY_SHELL_PROPS(r),entry,wallTitleBoard(r.W/2,1.025,1.45,r.word||'LAUNDRY','OPEN 24 HOURS',C(CYAN,14),1.95,'laundryWallBoard')];
+  for(let n=LAUNDRY_WASHER.first;n<=LAUNDRY_WASHER.last;n++)props.push(LAUNDRY_WASHER_MODEL(n,1));
+  for(const y of LAUNDRY_DRYER.ys){props.push(LAUNDRY_DRYER_STACK(1+LAUNDRY_DRYER.hw,y,1,Math.round(y*4)),LAUNDRY_DRYER_STACK(r.W-1-LAUNDRY_DRYER.hw,y,-1,Math.round(y*4)+1));}
+  const height=r.def.height||3;
+  for(const x of [3,7])for(const y of [2.4,4.6]){const o=CEILING_BATTEN(x,y,1.8,height);o.laundryCeilingLight=o.ceilingBatten;delete o.ceilingBatten;props.push(o);}
+  const base=homeSkirting({...r,def:{...r.def,tier:1,height,builtSkirting:true},props:[...props,{box:boxAt(r.W/2,r.H-.5,1,0,1,.51,0,2.32)}]});
+  for(const o of base){o.laundrySkirting=o.homeSkirting;delete o.homeSkirting;}
+  return [...props,...base];
+};
+ROOM_DEFS.laundry.sign=false;
+ROOM_DEFS.laundry.doorWall=true;
+ROOM_DEFS.laundry.wall=(i,u,uStep,z,d,mx,my,L)=>hotelEntranceGlass(i,u,z,mx,my)||laundryWallFinish(i,u,uStep,z,d,mx,my,L);
+ROOM_DEFS.laundry.floor='laundryVinyl';
+ROOM_DEFS.laundry.ceil='civicPlaster';
 // Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
 const COAST_GATHERINGS=[];
 function coastPatchClear(x,y,r=.8){
