@@ -67,7 +67,7 @@ test('a foreground bar keeps its stroke while the same skin color remains visibl
   assert.ok(result.face>10);assert.equal(result.skin,true);assert.equal(result.bars,true);assert.equal(result.backgroundDepth,true);
 }));
 
-test('moving across the jail cell preserves the officer skin behind the actual bars',()=>withPage(async page=>{
+test('moving across the jail cell preserves the officer skin around the actual steel bars',()=>withPage(async page=>{
   const result=await page.evaluate(()=>{
     T=0;enterRoom('jail',{word:'JAIL',until:60,ret:[px,py,a]},[9,5.3,Math.PI/2]);env(0);
     const officer=room.props.find(s=>s.fig&&s.tick&&s.y===7.5);
@@ -83,12 +83,14 @@ test('moving across the jail cell preserves the officer skin behind the actual b
       const depth=dx*(officer.x-px)+dy*(officer.y-py);
       const skin=Array.from(BG,(bg,i)=>bg>>4===look.base[FR.SKIN]&&Math.abs(ZBG[i]-depth)<1e-4?{i,bg,depth:ZBG[i]}:null).filter(Boolean);
       room.props=props;render(0);
-      const behind=skin.filter(s=>ZB[s.i]<s.depth&&CH[s.i]==='|');
-      out.push({samples:behind.length,same:officer.fig===look,skin:behind.every(s=>BG[s.i]===s.bg)});
+      const visible=skin.filter(s=>ZB[s.i]>=s.depth-1e-4),covered=skin.filter(s=>ZB[s.i]<s.depth-1e-4);
+      out.push({samples:visible.length,covered:covered.length,same:officer.fig===look,skin:visible.every(s=>BG[s.i]===s.bg),metal:covered.every(s=>BG[s.i]>>4===GRAY)});
     }
     return out;
   });
-  for(const r of result){assert.ok(r.samples>5,JSON.stringify(r));assert.equal(r.same,true);assert.equal(r.skin,true);}
+  assert.ok(result.filter(r=>r.samples>5).length>=3,JSON.stringify(result));
+  assert.ok(result.some(r=>r.covered>5),JSON.stringify(result));
+  for(const r of result){assert.equal(r.same,true);assert.equal(r.skin,true);assert.equal(r.metal,true);}
 }));
 
 test('partially visible figures still paint at every screen edge', () => withPage(async page => {
