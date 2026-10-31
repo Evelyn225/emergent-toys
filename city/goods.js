@@ -108,7 +108,7 @@ const STOCK_WORD = {
   BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper', 'eggs', 'bread', 'pasta', 'rice'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'],
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
   GROCERY: ['apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
-  MARKET: ['apple', 'chips', 'water', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon'], FRUIT: ['apple', 'lemon', 'tomatoes'],
+  MARKET: ['potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'apple'], FRUIT: ['apple', 'lemon', 'tomatoes'], // (MARKET: the market hall's greengrocer, at the keeper's spot; the other stalls: MARKET_STALL_STOCK)
   PAWN: ['telescope', 'skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
   HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
@@ -128,6 +128,15 @@ const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'co
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
 // (and the pawnbroker, after nine, has something under the counter: gun.js)
 const stockFor = (kind, word) => word === 'PAWN' && underCounter(tod) ? [...STOCK_WORD.PAWN, ...UNDER_COUNTER] : STOCK_WORD[word] || STOCK_ROOM[kind] || [];
+// the market hall's other stalls (storefronts.js), each its own trade: [sign, stock], by stall kind (market-hall.js)
+const MARKET_STALL_STOCK = {
+  fish: ['FISHMONGER', ['mackerel', 'herring', 'seabass', 'flounder', 'cod', 'squid', 'crab', 'lemon']],
+  butcher: ['BUTCHER', ['rawchicken', 'mince', 'bacon']],
+  cheese: ['DAIRY', ['cheese', 'butter', 'eggs']],
+  flowers: ['FLOWERS', ['flowers']],
+  bread: ['BREAD', ['bread', 'bagel', 'croissant', 'donut']],
+  coffee: ['COFFEE STAND', ['coffee', 'latte', 'tea', 'smoothie', 'water']],
+};
 // the street carts
 const VENDOR_STOCK = { 'COTTON CANDY': ['cottoncandy', 'lemonade'], 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
 
@@ -348,7 +357,7 @@ function useHeld(near) {
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];
     case 'skateboard':
-      if (near.indoors || mode !== 'walk') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
+      if (near.indoors || mode !== 'walk' && mode !== 'roof') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
@@ -490,7 +499,7 @@ function pickUpDropped(d) {
   return [true, `You pick up the ${itemName(it)}.`];
 }
 function stepGoods(dt) {
-  if (fx.skating && (mode !== 'walk' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
+  if (fx.skating && (mode !== 'walk' && mode !== 'roof' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)

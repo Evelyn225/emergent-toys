@@ -98,7 +98,7 @@ function FERN_KITCHEN(r) {
     coveRound(oven,vy+.424,1,0,.28,.014,.26,.63,.025,GRAY);
     coveTube(oven-.21,vy+.456,.69,oven+.21,vy+.456,.69,.014,GRAY);
     kitchenHobware(vx,vy,.95,1,0,1.08);
-  }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95)};
+  }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95),sinkTap:{x:14.45,y:1.39,z:1.22,bowl:.8}}; // (where the tap runs: room-fixtures.js)
 }
 function fernHomeQuality() {
   const def=ROOM_DEFS.islandhome,extra={};

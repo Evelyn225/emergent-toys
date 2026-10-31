@@ -19,6 +19,7 @@ const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
 const skateAir = () => body.z > 0 || body.vz > 0;
+const skateGround = (x, y) => mode === 'roof' ? roofH : walkGround(x, y); // (the street, or the roof you're rolling across)
 // the arrows held down, as a TRICKS key (moves.js)
 function arrowTrick() {
   const l = K.ArrowLeft, r = K.ArrowRight;
@@ -128,7 +129,8 @@ function skateClear(yaw) { // how far back from you the camera can go that way
   let back = 0;
   for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
     const x = px - bx * step, y = py - by * step;
-    if ([-0.03, 0.03].some(ox => [-0.03, 0.03].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)))) break;
+    if ([-0.03, 0.03].some(ox => [-0.03, 0.03].some(oy => mode === 'roof' ? roofHeightAt(x + ox, y + oy) > roofH + ROOF_STEP // (up top: only something taller than the roof)
+      : map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)))) break;
     back = step;
   }
   return back;
@@ -143,7 +145,7 @@ function skateCam(dt) {
   SK.camYaw += (mod(target - SK.camYaw + Math.PI, 2 * Math.PI) - Math.PI) * ease(4);
   const room_ = skateClear(SK.camYaw); // (in at once, back out gently)
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
-  const want = walkGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
+  const want = skateGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
   return [worldCoord(px - Math.cos(SK.camYaw) * SK.camBack), worldCoord(py - Math.sin(SK.camYaw) * SK.camBack), SK.camYaw, SK.camZ];
 }
@@ -252,7 +254,7 @@ function drawSkater() {
     drawSkateBoard(...R(bx + Math.cos(dir) * 0.08, by + Math.sin(dir) * 0.08), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
     return drawSkaterFigure(vx, vy, g, SB.rider, Math.cos(dir), Math.sin(dir), look, 'sprawl');
   }
-  const { x, y } = skateView, [vx, vy] = R(x, y), g = walkGround(x, y), z = g + body.z / 10;
+  const { x, y } = skateView, [vx, vy] = R(x, y), g = skateGround(x, y), z = g + body.z / 10;
   drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = skateView.a + (tr ? e * tr.turn * Math.PI * 2 : 0), nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0;
   drawSkateBoard(vx, vy, z, yaw, nose, roll);

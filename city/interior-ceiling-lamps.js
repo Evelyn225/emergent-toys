@@ -4,7 +4,7 @@ const INTERIOR_HANGING_ROOMS=new Set([...INTERIOR_BATTEN_ROOMS,'skate']);
 function CEILING_TRACK(x,y,length,ceiling,spots) {
   const parts=[],half=length/2;
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.16*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7?12:3.5);set(i,' ',0);return true;};
+  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7&&!room?.lightsOff?12:3.5);set(i,' ',0);return true;};
   parts.push({role:'track',box:{...ceilingBattenPrism(half,.04,ceiling-.045,ceiling,.004),c:1,s:0},shade:dark,ray:homeRayWorktop});
   for(const sx of spots){
     const add=(p,shade)=>parts.push({...p,box:{...p.box,x:sx-x},shade,ray:coveRayLathe});
@@ -31,7 +31,7 @@ function prepareInteriorHanging() {
     const tall=R.props.filter(p=>p.box&&p.box.z1>ceiling-.72&&p.box.z0<ceiling);
     for(const q of spots){
       if(feature.some(p=>Math.hypot(p.x-q.x,p.y-q.y)<.7)||tall.some(p=>inBox(p.box,q.x,q.y,.28)))continue;
-      fixtures.push({...homeLampModel(q.x,q.y,'pendant',ceiling,()=>true),overhead:true,ceilingPendant:{ceiling}});
+      fixtures.push({...homeLampModel(q.x,q.y,'pendant',ceiling,()=>!R.lightsOff),overhead:true,ceilingPendant:{ceiling}});
     }
   }
   R.interiorHanging={mask,fixtures};R.props.push(...fixtures);return true;
