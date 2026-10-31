@@ -6400,7 +6400,7 @@ const STOCK_WORD = {
   BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper', 'eggs', 'bread', 'pasta', 'rice'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'],
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
   GROCERY: ['apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
-  MARKET: ['apple', 'chips', 'water', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon'], FRUIT: ['apple', 'lemon', 'tomatoes'],
+  MARKET: ['potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'apple'], FRUIT: ['apple', 'lemon', 'tomatoes'], // (MARKET: the market hall's greengrocer, at the keeper's spot; the other stalls: MARKET_STALL_STOCK)
   PAWN: ['telescope', 'skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
   HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
@@ -6420,6 +6420,15 @@ const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'co
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
 // (and the pawnbroker, after nine, has something under the counter: gun.js)
 const stockFor = (kind, word) => word === 'PAWN' && underCounter(tod) ? [...STOCK_WORD.PAWN, ...UNDER_COUNTER] : STOCK_WORD[word] || STOCK_ROOM[kind] || [];
+// the market hall's other stalls (storefronts.js), each its own trade: [sign, stock], by stall kind (market-hall.js)
+const MARKET_STALL_STOCK = {
+  fish: ['FISHMONGER', ['mackerel', 'herring', 'seabass', 'flounder', 'cod', 'squid', 'crab', 'lemon']],
+  butcher: ['BUTCHER', ['rawchicken', 'mince', 'bacon']],
+  cheese: ['DAIRY', ['cheese', 'butter', 'eggs']],
+  flowers: ['FLOWERS', ['flowers']],
+  bread: ['BREAD', ['bread', 'bagel', 'croissant', 'donut']],
+  coffee: ['COFFEE STAND', ['coffee', 'latte', 'tea', 'smoothie', 'water']],
+};
 // the street carts
 const VENDOR_STOCK = { 'COTTON CANDY': ['cottoncandy', 'lemonade'], 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
 
@@ -6640,7 +6649,7 @@ function useHeld(near) {
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];
     case 'skateboard':
-      if (near.indoors || mode !== 'walk') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
+      if (near.indoors || mode !== 'walk' && mode !== 'roof') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
@@ -6782,7 +6791,7 @@ function pickUpDropped(d) {
   return [true, `You pick up the ${itemName(it)}.`];
 }
 function stepGoods(dt) {
-  if (fx.skating && (mode !== 'walk' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
+  if (fx.skating && (mode !== 'walk' && mode !== 'roof' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
@@ -10345,7 +10354,7 @@ function serveDish(r, verdict, pantry = []) {
   for (const m of ms.filter(m => m.from === 'bag').sort((p, q) => q.k - p.k)) { const it = takeSlot(m.k); if (m.need === 'fish') fish = it; }
   const uses = r.uses + (fish && fish.kg ? clamp(Math.floor(fish.kg / 2), 0, 3) : 0); // (a bigger fish goes further)
   const dish = { id: r.id, uses, q: verdict, ...(fish ? { of: fish.id } : {}) };
-  carryItem(dish, false);
+  carryItem(dish); // (straight into your hand)
   return `${verdict === 'perfect' ? 'Perfect.' : verdict === 'burnt' ? 'Burnt.' : 'Not bad.'} ${cap(dishName(dish))}${verdict === 'perfect' ? ', exactly as it should be' : verdict === 'burnt' ? ', mostly black. You could still eat it' : ''}.`;
 }
 
@@ -21712,8 +21721,9 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
 // cheese, flowers, bread), a coffee stand with stools, benches back to back down the middle
 // a stall along (ca, sa), its customers on (sa, ca) and its stallholder behind: built in market-hall.js
+// (the stallholder sells that stall's own stock: goods.js MARKET_STALL_STOCK; the greengrocer is the keeper)
 const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
-  ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
+  ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca], stall: MARKET_STALL_STOCK[MARKET_KINDS[kind]] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.375, 0.45, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
   const footprint = Math.max(uStep, d / projY);
@@ -21729,7 +21739,7 @@ function marketWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 'concrete', ceil: 'strip', sign: false, wall: marketWall, keeper: [8.0, 1.4],
   props: r => [...stall(3.5, 2.0, 1.4, 0, BLUE, WHITE), ...stall(8.0, 2.0, 1.6, 1, GREEN, r.neon), ...stall(12.5, 2.0, 1.4, 3, YEL, BRICK), // fish, the greengrocer, cheese
     ...stall(2.0, 5.5, 1.2, 2, RED, WHITE, 0, 1), ...stall(2.0, 8.6, 1.2, 4, MAG, shirt(), 0, 1), ...stall(14.0, 8.6, 1.2, 5, ORANGE, shirt(), 0, -1), // the butcher, flowers, bread
-    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
+    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0], stall: MARKET_STALL_STOCK.coffee }, // the coffee stand
     ...stoolsY(13.25, 4.3, 5.7, 0.7, GRAY, 1, 0.4),
     ...plainBench(8.0, 6.3, 1.1, 0, -1, BRICK, 0.4), ...plainBench(8.0, 6.75, 1.1, 0, 1, BRICK, 0.4),
     ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => KITCHEN_BEER_CRATE(x, y, { levels: 2, hl: 0.32, hw: 0.25, h: 0.275, col: BRICK }))] }; // crates, stacked
@@ -24935,6 +24945,7 @@ function interactionFocus() {
       if(!best)for(const t of homeShelfAim())offer('home-shelf',t,t.x,t.y,t.z,t.z+.01,.025,2.2,t.surface.owner,true);
     }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
+    for(const t of roomFixtureTargets())offer('room-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part||null,t.kind==='lamp'); // (taps, switches: room-fixtures.js)
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
       const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
@@ -24955,7 +24966,9 @@ function focusedInteractionPrompt(target=interactionFocus()) {
   if(target?.kind==='home-display')return `E: take ${itemName(target.who.it)}`;
   if(target?.kind==='home-shelf')return heldItem()?'E: put on shelf':'E: display shelves';
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
+  if(target?.kind==='room-fixture')return roomFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
+  if(target?.kind==='room-person'&&target.who.stall)return `E: ${target.who.stall[0].toLowerCase()}`;
   if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
   return '';
 }
@@ -24964,8 +24977,10 @@ function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='home-display'){homeShelfTake(target.who);return true;}
   if(target?.kind==='home-shelf'){homeShelfUse(target.who);return true;}
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
+  if(target?.kind==='room-fixture'){roomFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
+  if(target?.kind==='room-person'&&target.who.stall){openShop(...target.who.stall);return true;}
   if(target?.kind==='room-person'&&!target.who.cabbie){talkInRoom();return true;}
   return false;
 }
@@ -29020,7 +29035,7 @@ const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= col
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk' && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
+  if (skatingNow() && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
@@ -33671,7 +33686,7 @@ const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
-const skatingNow = () => fx.skating && mode === 'walk';
+const skatingNow = () => fx.skating && (mode === 'walk' || mode === 'roof'); // (on the street, or across the rooftops)
 const wheelsRolling = () => fx.skating && !body.z && !body.vz && (SK.v > 0.05 || !!K.KeyW); // (the roar: on the ground, going somewhere)
 
 // a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the eight directions
@@ -33895,7 +33910,7 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = (eye - walkGround(px, py)) * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob;
+  const cy = (eye - (mode === 'roof' ? roofH : walkGround(px, py))) * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob;
   const cz = 2.0; // Slightly ahead of the feet, visible with a shallower downward glance.
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = projX, pY = projY;
@@ -33949,6 +33964,7 @@ const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
 const skateAir = () => body.z > 0 || body.vz > 0;
+const skateGround = (x, y) => mode === 'roof' ? roofH : walkGround(x, y); // (the street, or the roof you're rolling across)
 // the arrows held down, as a TRICKS key (moves.js)
 function arrowTrick() {
   const l = K.ArrowLeft, r = K.ArrowRight;
@@ -34058,7 +34074,8 @@ function skateClear(yaw) { // how far back from you the camera can go that way
   let back = 0;
   for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
     const x = px - bx * step, y = py - by * step;
-    if ([-0.03, 0.03].some(ox => [-0.03, 0.03].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)))) break;
+    if ([-0.03, 0.03].some(ox => [-0.03, 0.03].some(oy => mode === 'roof' ? roofHeightAt(x + ox, y + oy) > roofH + ROOF_STEP // (up top: only something taller than the roof)
+      : map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)))) break;
     back = step;
   }
   return back;
@@ -34073,7 +34090,7 @@ function skateCam(dt) {
   SK.camYaw += (mod(target - SK.camYaw + Math.PI, 2 * Math.PI) - Math.PI) * ease(4);
   const room_ = skateClear(SK.camYaw); // (in at once, back out gently)
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
-  const want = walkGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
+  const want = skateGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
   return [worldCoord(px - Math.cos(SK.camYaw) * SK.camBack), worldCoord(py - Math.sin(SK.camYaw) * SK.camBack), SK.camYaw, SK.camZ];
 }
@@ -34182,7 +34199,7 @@ function drawSkater() {
     drawSkateBoard(...R(bx + Math.cos(dir) * 0.08, by + Math.sin(dir) * 0.08), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
     return drawSkaterFigure(vx, vy, g, SB.rider, Math.cos(dir), Math.sin(dir), look, 'sprawl');
   }
-  const { x, y } = skateView, [vx, vy] = R(x, y), g = walkGround(x, y), z = g + body.z / 10;
+  const { x, y } = skateView, [vx, vy] = R(x, y), g = skateGround(x, y), z = g + body.z / 10;
   drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = skateView.a + (tr ? e * tr.turn * Math.PI * 2 : 0), nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0;
   drawSkateBoard(vx, vy, z, yaw, nose, roll);
@@ -38181,7 +38198,7 @@ function FERN_KITCHEN(r) {
     coveRound(oven,vy+.424,1,0,.28,.014,.26,.63,.025,GRAY);
     coveTube(oven-.21,vy+.456,.69,oven+.21,vy+.456,.69,.014,GRAY);
     kitchenHobware(vx,vy,.95,1,0,1.08);
-  }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95)};
+  }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95),sinkTap:{x:14.45,y:1.39,z:1.22,bowl:.8}}; // (where the tap runs: room-fixtures.js)
 }
 function fernHomeQuality() {
   const def=ROOM_DEFS.islandhome,extra={};
@@ -42558,7 +42575,7 @@ const INTERIOR_HANGING_ROOMS=new Set([...INTERIOR_BATTEN_ROOMS,'skate']);
 function CEILING_TRACK(x,y,length,ceiling,spots) {
   const parts=[],half=length/2;
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.16*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7?12:3.5);set(i,' ',0);return true;};
+  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7&&!room?.lightsOff?12:3.5);set(i,' ',0);return true;};
   parts.push({role:'track',box:{...ceilingBattenPrism(half,.04,ceiling-.045,ceiling,.004),c:1,s:0},shade:dark,ray:homeRayWorktop});
   for(const sx of spots){
     const add=(p,shade)=>parts.push({...p,box:{...p.box,x:sx-x},shade,ray:coveRayLathe});
@@ -42585,7 +42602,7 @@ function prepareInteriorHanging() {
     const tall=R.props.filter(p=>p.box&&p.box.z1>ceiling-.72&&p.box.z0<ceiling);
     for(const q of spots){
       if(feature.some(p=>Math.hypot(p.x-q.x,p.y-q.y)<.7)||tall.some(p=>inBox(p.box,q.x,q.y,.28)))continue;
-      fixtures.push({...homeLampModel(q.x,q.y,'pendant',ceiling,()=>true),overhead:true,ceilingPendant:{ceiling}});
+      fixtures.push({...homeLampModel(q.x,q.y,'pendant',ceiling,()=>!R.lightsOff),overhead:true,ceilingPendant:{ceiling}});
     }
   }
   R.interiorHanging={mask,fixtures};R.props.push(...fixtures);return true;
@@ -44000,7 +44017,7 @@ function refreshFurnishedRoom() {
   // Keep constructor-added doors/surrounds and their live privacy state. Raw
   // figures include bodies; rebuilding must not revive or remove residents.
   const figures=room.props.filter(p=>p.fig);
-  room.props=[...room.def.props(room).filter(p=>!p.fig),...(room.homeStructuralProps||[]),...figures,...workshopProps(room),...furnishingProps(room)];updateHomeLights();
+  room.props=[...room.def.props(room).filter(p=>!p.fig),...(room.homeStructuralProps||[]),...figures,...workshopProps(room),...furnishingProps(room)];room.taps=null;updateHomeLights(); // (the taps find their sinks again: room-fixtures.js)
 }
 
 function updateHomeLights() {
@@ -44234,6 +44251,125 @@ function heldFurnitureFlatpack(it) {
   });
 }
 for(const id of Object.keys(HOME_FURNITURE))if(id.startsWith('f_'))DENSE[id]=heldFurnitureFlatpack;
+// ---- the fixtures anybody can use, in any room: the tap on every sink (bathroom basins, fitted kitchens) and a
+// light switch on the wall beside the way out. Aim and E. Taps run till you turn them off (or leave); the switch
+// takes the room down to a glow, and the ceiling lamps in shops go with it (render.js dims by homeBaseLight).
+// In your own place the switch flips the fixed lamps the same as aiming at them does (home-furnishing-ui.js).
+const ROOM_DIM = .2; // how much light is left with the switch off
+// where each sink's water comes out, and where it lands. Bathroom basins and fitted kitchens share bathroomTap, whose
+// spout ends .06 in front of the tap, .18 above its base
+function roomTaps(r = room) {
+  if (r.taps) return r.taps;
+  const taps = [];
+  for (const p of r.props) {
+    const b = p.bathroomSink, k = p.kitchen;
+    if (b) taps.push({ x: b.x - .06 * b.fx, y: b.y - .06 * b.fy, z: 1.03, bowl: .8, prop: p });
+    if (k) {
+      const c = Math.cos(k.angle), s = Math.sin(k.angle), v = .19 - k.radius - .045, tx = p.x + c * k.sink - s * v, ty = p.y + s * k.sink + c * v;
+      taps.push({ x: tx + s * .06, y: ty - c * .06, z: k.height + .17, bowl: .78, prop: p });
+    }
+    if (p.sinkTap) taps.push({ ...p.sinkTap, prop: p });
+  }
+  for (const t of taps) {
+    t.on = false;
+    t.stream = { ...ROOM_MODEL(t.x, t.y, (vx, vy) => {
+      if (!t.on) return;
+      drawRod(vx, vy, t.z, vx, vy, t.bowl, .008, (i, tt, L) => {
+        const ripple = Math.sin(T * 40 + HIT.w * 90) * .5 + .5;
+        BG[i] = C(CYAN, 2.6 + L * .2 + ripple * .9); set(i, ripple > .7 ? ':' : '|', C(WHITE, L * .5)); return true;
+      });
+    }), radius: .2 };
+  }
+  return r.taps = taps;
+}
+// the switch: on the wall beside the first doorway, a hand's width from the frame. null if the room has no door
+function roomSwitchSpot(r) {
+  const g = r.grid, at = (x, y) => g[y]?.[x];
+  for (let y = 0; y < g.length; y++) for (let x = 0; x < g[y].length; x++) {
+    if (at(x, y) !== 'D') continue;
+    for (const [nx, ny] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { // the way into the room
+      if (at(x + nx, y + ny) !== '.') continue;
+      const tx = -ny, ty = nx;
+      for (const dir of [1, -1]) {
+        let k = 1; while (at(x + tx * dir * k, y + ty * dir * k) === 'D') k++;
+        const wx = x + tx * dir * k, wy = y + ty * dir * k;
+        if (at(wx, wy) !== '#' || at(wx + nx, wy + ny) !== '.') continue;
+        const along = -dir * .25, sx = wx + .5 + nx * .52 + tx * along, sy = wy + .5 + ny * .52 + ty * along;
+        if (r.props.some(p => p.box && !p.walk && p.box.z1 > 1 && p.box.z0 < 1.4 && inBox(p.box, sx + nx * .1, sy + ny * .1, .05))) continue;
+        return { x: sx, y: sy, nx, ny };
+      }
+    }
+  }
+  return null;
+}
+const roomLightsOn = (r = room) => {
+  const home = homeRecord(r);
+  return home ? !(r.def.lamps || []).length || (r.def.lamps || []).some((_, k) => home.lights?.['fixed' + k] !== false) : !r.lightsOff;
+};
+function roomSwitch(r = room) {
+  if (r.lightSwitch !== undefined) return r.lightSwitch;
+  const at = r.kind === 'train' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
+  if (!at) return r.lightSwitch = null;
+  const c = -at.ny, s = at.nx, plate = (i, t, L) => { BG[i] = C(WHITE, 3.4 + L * .25); set(i, ' ', 0); return true; };
+  const rocker = (i, t, L) => { BG[i] = C(GRAY, 2 + L * .3); set(i, ' ', 0); return true; };
+  const model = { ...ROOM_MODEL(at.x, at.y, (vx, vy) => {
+    drawBox(boxAt(vx, vy, c, s, .045, .006, 1.15, 1.27), plate);
+    const up = roomLightsOn(r) ? .012 : -.012; // (down for off, as switches go)
+    drawBox(boxAt(vx + at.nx * .01, vy + at.ny * .01, c, s, .014, .006, 1.2 + up - .02, 1.2 + up + .02), rocker);
+  }), radius: .1, lightSwitch: true };
+  r.props.push(model);
+  return r.lightSwitch = { ...at, model };
+}
+// apply the switch: a shop's own lights; at home, every fixed lamp at once
+function setRoomLights(on, r = room) {
+  const home = homeRecord(r);
+  if (home) {
+    home.lights ||= {};
+    (r.def.lamps || []).forEach((_, k) => { home.lights['fixed' + k] = on; });
+    updateHomeLights(); saveGame(); return;
+  }
+  r.lightsOff = !on;
+  r.homeBaseLight ??= r.def.light;
+  r.def = { ...r.def, light: r.homeBaseLight * (on ? 1 : ROOM_DIM) };
+}
+// what E can aim at: the switch, any tap, and (in shops) the ceiling lamps themselves
+function roomFixtureTargets() {
+  if (mode !== 'room' || !room) return [];
+  const out = [], sw = roomSwitch();
+  if (sw) {
+    if (!room.props.includes(sw.model)) room.props.push(sw.model); // (a furnished home rebuilds its props)
+    out.push({ kind: 'switch', x: sw.x, y: sw.y, z0: 1.12, z1: 1.3, radius: .08, reach: 2 });
+  }
+  for (const t of roomTaps()) {
+    if (!room.props.includes(t.stream)) room.props.push(t.stream);
+    out.push({ kind: 'tap', tap: t, x: t.x, y: t.y, z0: t.bowl, z1: t.z + .05, radius: .12, reach: 1.8, part: t.prop });
+  }
+  if (!homeRecord(room)) for (const p of room.props) if (p.ceilingPendant || p.ceilingTrack) {
+    const top = room.def.height || 3;
+    out.push({ kind: 'lamp', x: p.x, y: p.y, z0: top - .8, z1: top, radius: p.ceilingTrack ? Math.min(.4, p.ceilingTrack.length / 2) : .25, reach: 3.2, part: p });
+  }
+  return out;
+}
+function roomFixturePrompt(t) {
+  if (t.kind === 'tap') return t.tap.on ? 'E: turn the tap off' : 'E: turn the tap on';
+  return roomLightsOn() ? 'E: switch the lights off' : 'E: switch the lights on';
+}
+function roomFixtureUse(t) {
+  if (t.kind === 'tap') {
+    t.tap.on = !t.tap.on;
+    if (actx) burst(actx.currentTime, t.tap.on ? .5 : .12, [filt('bandpass', 2800, .8)], t.tap.on ? .07 : .03);
+    if (!t.tap.on) return say('You turn the tap off. It drips once, and stops.', 2);
+    if (needs.drink < 70 && !heldItem()) { // (empty-handed and thirsty: you cup your hands under it)
+      needs.drink = Math.min(100, needs.drink + 15);
+      return say('You cup your hands under the tap and drink. Cold, and a bit metallic.', 3);
+    }
+    return say(pick(['The tap coughs, then runs clear.', 'Water drums into the basin.', 'You run the tap. It takes a moment to get cold.']), 2);
+  }
+  const on = !roomLightsOn();
+  setRoomLights(on);
+  if (actx) sfxUse('click');
+  say(on ? 'Click. The lights come back up.' : 'Click. The room drops into shadow.', 2);
+}
 // Assemble the generated city after authored outdoor geometry has been created,
 // before saves or the first frame. Interior coordinates never enter this pass.
 function assembleArchipelago() {

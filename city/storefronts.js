@@ -30,8 +30,9 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
 // cheese, flowers, bread), a coffee stand with stools, benches back to back down the middle
 // a stall along (ca, sa), its customers on (sa, ca) and its stallholder behind: built in market-hall.js
+// (the stallholder sells that stall's own stock: goods.js MARKET_STALL_STOCK; the greengrocer is the keeper)
 const stall = (x, y, hl, kind, col, vendor, ca = 1, sa = 0) => [...MARKET_STALL(x, y, hl, kind, col, sa, ca),
-  ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca] }] : [])];
+  ...(vendor ? [{ ...standing(x - sa * 0.6, y - ca * 0.6, vendor), face: [sa, ca], stall: MARKET_STALL_STOCK[MARKET_KINDS[kind]] }] : [])];
 function marketWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && z > 2.4 && z < 3.0 && Math.abs(u - room.W / 2) < 2.4) { BG[i] = C(GREEN, 2); return wallText(i, u, uStep, z, d, room.word + ' HALL', room.W / 2, 2.7, 0.375, 0.45, C(WHITE, 14), C(GREEN, 2)) || (set(i, ' ', 0), true); }
   const footprint = Math.max(uStep, d / projY);
@@ -47,7 +48,7 @@ function marketWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.markethall = { grid: boxRoom(16, 12), light: 1.0, height: 3.8, floor: 'concrete', ceil: 'strip', sign: false, wall: marketWall, keeper: [8.0, 1.4],
   props: r => [...stall(3.5, 2.0, 1.4, 0, BLUE, WHITE), ...stall(8.0, 2.0, 1.6, 1, GREEN, r.neon), ...stall(12.5, 2.0, 1.4, 3, YEL, BRICK), // fish, the greengrocer, cheese
     ...stall(2.0, 5.5, 1.2, 2, RED, WHITE, 0, 1), ...stall(2.0, 8.6, 1.2, 4, MAG, shirt(), 0, 1), ...stall(14.0, 8.6, 1.2, 5, ORANGE, shirt(), 0, -1), // the butcher, flowers, bread
-    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0] }, // the coffee stand
+    SHOP_COUNTER(14.0, 5.0, 1.0, 0.35, 1.0, 0, 1, BRICK), KITCHEN_ESPRESSO(14.0, 4.6), { ...standing(14.7, 5.0, BRICK), face: [-1, 0], stall: MARKET_STALL_STOCK.coffee }, // the coffee stand
     ...stoolsY(13.25, 4.3, 5.7, 0.7, GRAY, 1, 0.4),
     ...plainBench(8.0, 6.3, 1.1, 0, -1, BRICK, 0.4), ...plainBench(8.0, 6.75, 1.1, 0, 1, BRICK, 0.4),
     ...[[5.6, 9.2], [10.4, 9.2]].map(([x, y]) => KITCHEN_BEER_CRATE(x, y, { levels: 2, hl: 0.32, hw: 0.25, h: 0.275, col: BRICK }))] }; // crates, stacked

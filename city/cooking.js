@@ -90,7 +90,7 @@ function serveDish(r, verdict, pantry = []) {
   for (const m of ms.filter(m => m.from === 'bag').sort((p, q) => q.k - p.k)) { const it = takeSlot(m.k); if (m.need === 'fish') fish = it; }
   const uses = r.uses + (fish && fish.kg ? clamp(Math.floor(fish.kg / 2), 0, 3) : 0); // (a bigger fish goes further)
   const dish = { id: r.id, uses, q: verdict, ...(fish ? { of: fish.id } : {}) };
-  carryItem(dish, false);
+  carryItem(dish); // (straight into your hand)
   return `${verdict === 'perfect' ? 'Perfect.' : verdict === 'burnt' ? 'Burnt.' : 'Not bad.'} ${cap(dishName(dish))}${verdict === 'perfect' ? ', exactly as it should be' : verdict === 'burnt' ? ', mostly black. You could still eat it' : ''}.`;
 }
 

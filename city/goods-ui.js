@@ -194,7 +194,7 @@ const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= col
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk' && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
+  if (skatingNow() && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
