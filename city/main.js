@@ -366,7 +366,7 @@ function loop(t) {
   else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
   else if (law === 'cab' && wanted.stars > 0) jailWithCabbie(); // and you were wanted already: you both go down
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
-    const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
+    const c = me; c.stopT = T + 25; leaveCar(); c.v = 0; // (the driver's cuffed: no fare)
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
   }
   if (fract(T / 2) < dt / 2) tidyPolice();

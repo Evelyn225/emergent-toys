@@ -126,3 +126,22 @@ test('moving a placed piece hides the original until it goes down again',()=>fix
  });
  assert.deepEqual(r,[]);
 }));
+
+test('no fare once the cab has no driver or is on fire, and no getting into an empty or wrecked one',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],taxi=cars.find(c=>c.body===TAXI&&!c.player&&!c.rider);if(!taxi)return ['no taxi'];
+  const ride=()=>{money=100;px=taxi.ex=taxi.x;py=taxi.ey=taxi.y;taxi.v=0;me=taxi;mode='taxi';taxi.rider=true;taxi.fare=5;taxi.dest=null;};
+  const reset=()=>{Object.assign(taxi,{wrecked:false,fireT:null,bail:false,ejected:false,stopT:0,parked:false,dmg:0});me=null;mode='walk';};
+  ride();leaveCar();if(!(money<100))bad.push('a normal ride was free');
+  reset();ride();damageCar(taxi,DMG_FIRE);stepCarDamage(0);if(!taxi.bail)bad.push('driver did not bail from the fire');
+  leaveCar();if(money!==100)bad.push(['paid a fleeing driver',money]);
+  reset();ride();taxi.stopT=T+25;leaveCar();if(money!==100)bad.push(['paid an arrested driver',money]);
+  reset();ride();taxi.wrecked=true;leaveCar();if(money!==100)bad.push(['paid for a wreck',money]);
+  for(const [k,v] of [['wrecked',true],['bail',true],['stopT',T+25]]){
+   reset();taxi[k]=v;taxi.v=0;px=taxi.x;py=taxi.y;mode='walk';me=null;interact();
+   if(mode==='taxi'){bad.push(['rode a cab with',k]);leaveCar();}
+  }
+  reset();return bad;
+ });
+ assert.deepEqual(r,[]);
+}));

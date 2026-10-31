@@ -24720,7 +24720,7 @@ function promptText() {
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
-  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
+  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && !cabUnmanned(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return fishPrompt();
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
@@ -25039,6 +25039,10 @@ function leaveCar() {
     c.player = false; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
     a = Math.atan2(rel(py - c.y), rel(px - c.x));
   }
+  else if (cabUnmanned(c)) { // nobody up front to pay: you just get out
+    say(c.wrecked || c.fireT != null ? 'You scramble out of the cab. Nobody\'s asking for the fare.' : 'You climb out. The driver\'s gone, and the meter with them.', 3);
+    c.rider = c.dest = c.arrived = c.rush = false;
+  }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
@@ -25047,6 +25051,8 @@ function leaveCar() {
   }
   me = null; mode = 'walk'; look = 0;
 }
+// a cab with nobody driving it: on fire or burnt out, its driver bailed, or pulled over and cuffed (stopT)
+const cabUnmanned = c => !!(c.wrecked || c.fireT != null || c.bail || c.stopT > T);
 // taxi destinations: always a point in the middle of a street that exists
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
 function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
@@ -25268,6 +25274,7 @@ function interact() {
   if (c && c.v < 0.6) {
     me = c;
     if (c.body === TAXI) {
+      if (cabUnmanned(c)) { me = null; return say(c.wrecked || c.fireT != null ? 'It\'s a wreck. Nobody\'s driving that anywhere.' : 'The cab\'s empty. No driver, no ride.', 3); }
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
       a = camYaw = carYaw(c);
@@ -25417,7 +25424,7 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 function hail() {
   if (mode !== 'walk') return;
   let best = null, bd = 3;
-  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
 // ===== the taxi job: J at an idle taxi and you drive it yourself. Now and then someone on the sidewalk nearby flags
@@ -25826,7 +25833,7 @@ function stepChopperSound(dt) {
 let carSmokeT = 0;
 function stepCarDamage(dt) {
   for (const c of stepCarFires(dt)) carBang(c);
-  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); } // (the driver, out and running)
+  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); if (c === me && mode === 'taxi') say('Your driver bails out and runs. E: get out, now!', 4); } // (the driver, out and running; no fare after that)
   if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the bonnet. Get out, now!', 4); }
   if (me && !burning(me)) me.warnedFire = false;
   if ((carSmokeT -= dt) > 0) return;
@@ -25846,7 +25853,7 @@ function carBang(c) {
     r: 0.1, rMax: 0.35, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.3, life: 1, fade: 1 / 5, seed: Math.random() * 100 });
   const d = Math.hypot(rel(c.x - px), rel(c.y - py));
   if (actx) { const p = worldClip('crash', 1, c.x, c.y, terrainHeight(c.x, c.y) + 0.05, 60, 12); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 40, 0.9, 0.12 * p.gain, 'sawtooth', p.pan); }
-  if (c === me && mode === 'drive') { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
+  if (c === me && (mode === 'drive' || mode === 'taxi')) { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
   if (onFootMode() && mode === 'walk' && d < 0.6) { hurt(25 * (1 - d / 0.6)); say('The blast knocks you flat.', 3); }
   if (c.owned) say(`Your ${ITEMS[c.model].name} is a burnt-out shell. The garage will tow it and fix it up (the key fob, ${fmt$(TOW_FEE)}).`, 6);
 }
@@ -46633,7 +46640,7 @@ function loop(t) {
   else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
   else if (law === 'cab' && wanted.stars > 0) jailWithCabbie(); // and you were wanted already: you both go down
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
-    const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
+    const c = me; c.stopT = T + 25; leaveCar(); c.v = 0; // (the driver's cuffed: no fare)
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
   }
   if (fract(T / 2) < dt / 2) tidyPolice();

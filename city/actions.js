@@ -51,6 +51,10 @@ function leaveCar() {
     c.player = false; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
     a = Math.atan2(rel(py - c.y), rel(px - c.x));
   }
+  else if (cabUnmanned(c)) { // nobody up front to pay: you just get out
+    say(c.wrecked || c.fireT != null ? 'You scramble out of the cab. Nobody\'s asking for the fare.' : 'You climb out. The driver\'s gone, and the meter with them.', 3);
+    c.rider = c.dest = c.arrived = c.rush = false;
+  }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
@@ -59,6 +63,8 @@ function leaveCar() {
   }
   me = null; mode = 'walk'; look = 0;
 }
+// a cab with nobody driving it: on fire or burnt out, its driver bailed, or pulled over and cuffed (stopT)
+const cabUnmanned = c => !!(c.wrecked || c.fireT != null || c.bail || c.stopT > T);
 // taxi destinations: always a point in the middle of a street that exists
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
 function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
@@ -280,6 +286,7 @@ function interact() {
   if (c && c.v < 0.6) {
     me = c;
     if (c.body === TAXI) {
+      if (cabUnmanned(c)) { me = null; return say(c.wrecked || c.fireT != null ? 'It\'s a wreck. Nobody\'s driving that anywhere.' : 'The cab\'s empty. No driver, no ride.', 3); }
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
       a = camYaw = carYaw(c);
@@ -429,6 +436,6 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 function hail() {
   if (mode !== 'walk') return;
   let best = null, bd = 3;
-  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
