@@ -1220,8 +1220,10 @@ function roomCeil(i, r, x, rx, ry) {
 }
 function roomSprites() {
   prepareInteriorBattens();prepareInteriorHanging();
+  const moving = furnishingPlacement?.part?.key; // (the piece you're moving shows only as its preview: home-furnishing-ui.js)
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
+    if (moving != null && s.furnishingKey === moving) continue;
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }

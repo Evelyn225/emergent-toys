@@ -27,7 +27,7 @@ function homeFixtureTargets() {
   const home=mode==='room'&&homeRecord(room);if(!home)return [];
   const targets=(room.def.lamps||[]).map(([x,y],k)=>({kind:'fixed-lamp',key:'fixed'+k,x,y,z0:(room.def.height||3)-.8,z1:room.def.height||3,radius:.25,reach:3.2}));
   for(const part of homeFurnishings(home).parts) {
-    const d=HOME_FURNITURE[part.id];if(d.fixture)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
+    const d=HOME_FURNITURE[part.id];if(d.fixture&&part!==furnishingPlacement?.part)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
   }
   return targets;
 }

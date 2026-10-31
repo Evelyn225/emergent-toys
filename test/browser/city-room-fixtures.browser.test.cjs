@@ -109,3 +109,20 @@ test('placing furniture or workshop gear shows the model itself, see-through, re
  });
  assert.deepEqual(r,[]);
 }));
+
+test('moving a placed piece hides the original until it goes down again',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];tod=12;money=30000;body.z=body.vz=0;[px,py]=FERN_HOUSE.door;buyProperty('home_island',px,py);interact();px=18;py=19;a=0;pitch=-.25;env(0);render(0);
+  carryItem({id:'f_sofa',uses:0});beginFurnishingPlacement(inv[inv.length-1]);if(!furnishingCandidate().ok)return ['first spot blocked'];confirmFurnishingPlacement();
+  const part=homeFurnishings(homeRecord()).parts[0],prop=room.props.find(o=>o.furnishingKey===part.key);
+  let drawn=0;const d=prop.draw;prop.draw=(...q)=>{drawn++;return d(...q);};
+  render(0);if(!drawn)bad.push('placed sofa not drawn');
+  beginFurnishingPlacement(null,part);a=Math.PI/2;drawn=0;render(0);
+  if(drawn)bad.push('original still drawn while moving');
+  if(!free(part.x,part.y))bad.push('original still blocks while moving');
+  cancelFurnishingPlacement();drawn=0;render(0);
+  if(!drawn)bad.push('original gone after cancelling');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));

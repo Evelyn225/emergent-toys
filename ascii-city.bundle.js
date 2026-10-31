@@ -17684,8 +17684,10 @@ function roomCeil(i, r, x, rx, ry) {
 }
 function roomSprites() {
   prepareInteriorBattens();prepareInteriorHanging();
+  const moving = furnishingPlacement?.part?.key; // (the piece you're moving shows only as its preview: home-furnishing-ui.js)
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
+    if (moving != null && s.furnishingKey === moving) continue;
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
@@ -44031,7 +44033,7 @@ function homeFixtureTargets() {
   const home=mode==='room'&&homeRecord(room);if(!home)return [];
   const targets=(room.def.lamps||[]).map(([x,y],k)=>({kind:'fixed-lamp',key:'fixed'+k,x,y,z0:(room.def.height||3)-.8,z1:room.def.height||3,radius:.25,reach:3.2}));
   for(const part of homeFurnishings(home).parts) {
-    const d=HOME_FURNITURE[part.id];if(d.fixture)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
+    const d=HOME_FURNITURE[part.id];if(d.fixture&&part!==furnishingPlacement?.part)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
   }
   return targets;
 }
@@ -46409,7 +46411,7 @@ addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.pr
 
 const free = (x, y) => {
   if (mode === 'room') return x >= 0 && y >= 0 && x < room.W && y < room.H && !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
-    !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
+    !room.props.some(s => s.box && !s.walk && !(s.furnishingKey != null && s.furnishingKey === furnishingPlacement?.part?.key) && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (mode === 'walk') {
