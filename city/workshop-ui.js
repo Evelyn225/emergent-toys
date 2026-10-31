@@ -1,10 +1,10 @@
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
 const workshopHome = () => mode === 'room' ? homeRecord(room) : null;
-function workshopProps(r) {
+function workshopProps(r, parts = null) { // (parts: draw these instead, as the placement preview does)
   const home = homeRecord(r); if (!home) return [];
   const w = workshopState(home), props = [];
-  for (const p of w.parts) {
+  for (const p of parts || w.parts) {
     const ca = Math.cos(p.a), sa = Math.sin(p.a), box = (ox, oy, hl, hw, z0, z1, shade) =>
       BX(p.x + ox * ca - oy * sa, p.y + ox * sa + oy * ca, hl, hw, z0, z1, shade, ca, sa);
     if (p.id === 'bench') {
@@ -176,8 +176,8 @@ function workshopKey(e) {
 function drawWorkshopPreview() {
   if (!workshopPlacement) return;
   const p=workshopCandidate(); if (!Number.isFinite(p.x)) return;
-  const d=WORKSHOP_PARTS[p.id], floor=!!d.halfX, b=boxAt(p.x-px,p.y-py,Math.cos(p.a),Math.sin(p.a),d.halfX||.25,d.halfY||.25,floor ? .02 : .94,floor ? .08 : 1.5);
-  drawBox(b,(i,t,L)=>{set(i,'+',C(p.ok?GREEN:RED,13));return true;});
+  const {ok,reason,...part}=p;
+  drawGhostProps(workshopProps(room,[{...part,key:-1}]),p.ok); // (the piece itself, see-through: home-furnishing-ui.js)
 }
 // ---- the batch, heard: the rotor humming up and down with the power you give it, the hiss of a vent, the press
 // coming down on a seal (a miss and the end: the arcade's own blips, minigame-ui.js)

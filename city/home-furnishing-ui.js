@@ -187,10 +187,23 @@ function homeFurnishingKey(e) {
   }else if(e.code==='KeyF'&&!e.repeat){openHomeFurnishings();return true;}
   return false;
 }
+// A placement preview: the real model, every other cell left see-through so it reads as a ghost and the room shows
+// through it (which way it faces is plain to see). Red where it can't go.
+function drawGhostProps(props,ok) {
+  const draw=drawBox;
+  drawBox=(b,shade,ray)=>draw(b,(i,t,L)=>{
+    if((i%cols+Math.floor(i/cols))&1)return false;
+    if(!shade(i,t,L))return false;
+    if(!ok){BG[i]=C(RED,BG[i]&15);COL[i]=C(RED,Math.max(8,COL[i]&15));}
+    return true;
+  },ray);
+  try{for(const s of props){if(s.draw)s.draw(s.x-px,s.y-py,s);else if(s.box)drawBox({...s.box,x:s.box.x-px,y:s.box.y-py},s.shade);}}
+  finally{drawBox=draw;}
+}
 function drawFurnishingPreview() {
   if(!furnishingPlacement||mode!=='room')return;
-  const p=furnishingCandidate(),b=furnishingBox(p);
-  drawBox({...b,x:b.x-px,y:b.y-py},(i,t,L)=>{if(HIT.face<5&&fract(HIT.u*10)>.12&&fract(HIT.w*10)>.12)return false;set(i,p.ok?'+':'x',C(p.ok?GREEN:RED,14));return true;});
+  const q=furnishingPlacement,p=furnishingCandidate();if(!Number.isFinite(p.x)||!p.x&&!p.y)return; // (no wall in sight yet)
+  drawGhostProps([furnishingProp({on:p.id!=='f_recordplayer',photo:0,track:0,...(q.item?furnishingItemState(q.item).furnishing:q.part),...p,key:-1},room)],p.ok);
 }
 function takeHomePhoto() {
   if(T-photoLastT<.6)return;photoLastT=T;

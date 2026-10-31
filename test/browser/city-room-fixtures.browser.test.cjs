@@ -84,3 +84,28 @@ test('the board comes out on a roof, and rolls',()=>fixture(async p=>{
  });
  assert.deepEqual(r,['roof',true]);
 }));
+
+test('placing furniture or workshop gear shows the model itself, see-through, red where it will not fit',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];tod=12;money=30000;body.z=body.vz=0;[px,py]=FERN_HOUSE.door;buyProperty('home_island',px,py);interact();px=18;py=19;a=0;pitch=-.25;env(0);render(0);
+  const frame=()=>{render(0);return Array.from(BG);},changed=(x,y)=>x.map((v,i)=>v!==y[i]?i:-1).filter(i=>i>=0);
+  const check=(name,start,stop)=>{
+   const plain=frame();start();const ghost=frame(),cells=changed(plain,ghost);
+   let calls=0;const draw=drawBox;drawBox=(...q)=>{calls++;return draw(...q);};try{render(0);}finally{drawBox=draw;}stop();
+   if(cells.length<50)bad.push([name,'barely drawn',cells.length]);
+   if(cells.some(i=>(i%cols+Math.floor(i/cols))&1))bad.push([name,'not see-through']);
+   return calls;
+  };
+  carryItem({id:'f_sofa',uses:0});
+  check('sofa',()=>beginFurnishingPlacement(inv[inv.length-1]),()=>cancelFurnishingPlacement());
+  buyWorkshopKit(homeRecord());workshopState(homeRecord()).owned.growrack=1;
+  check('grow rack',()=>beginWorkshopPlacement('growrack'),()=>endWorkshopPlacement());
+  // pushed half into the far wall: it doesn't fit, and it shows red
+  carryItem({id:'f_sofa',uses:0});px=room.W-1-.5-1.8;py=19;a=0;beginFurnishingPlacement(inv[inv.length-1]);
+  if(furnishingCandidate().ok)bad.push('sofa fits into the wall');
+  render(0);if(!Array.from(BG).some(v=>v>>4===RED))bad.push('blocked preview not red');
+  cancelFurnishingPlacement();
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
