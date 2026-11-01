@@ -34351,7 +34351,7 @@ const atLookoutScope = () => mode==='walk'&&!fx.lookout&&near(px,py,...FERN_LOOK
 function useLookoutScope() {
   if(fx.lookout){fx.lookout=false;return say('You straighten up from the eyepiece.',2);}
   fx.telescope=false;body.crouch=0;body.seat=null;[px,py]=FERN_LOOKOUT.eye;a=FERN_LOOKOUT.dir;pitch=0;fx.lookout=true;
-  say(`You bend to the eyepiece. Across the water: ${FERN_LOOKOUT.target}, its two stacks white with birds. Walk or E to step back.`,6);
+  say(`You bend to the eyepiece. Across the water: ${FERN_LOOKOUT.target}, its sea stacks crowned with nests and cormorants wheeling over them. Walk or E to step back.`,6);
 }
 // (stepped away, or off somewhere else entirely: the telescope's left behind)
 function stepLookoutScope(){if(fx.lookout&&(mode!=='walk'||near(px,py,...FERN_LOOKOUT.eye)>.05||K.KeyW||K.KeyA||K.KeyS||K.KeyD))fx.lookout=false;}
