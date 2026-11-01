@@ -24332,8 +24332,8 @@ function render(dt,sceneOnly=false,mask=null) {
     if (mode === 'fair') fairFrame();
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
+  drawTelescope(); // (the eyepiece, in the grid: held-curios.js)
   present();
-  drawTelescope();
   drawDrugVision();
   if (freecam) freecamHud();
   else {
@@ -31043,12 +31043,29 @@ DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
  return [Math.abs(x+5)<.5||Math.abs(x-7)<.5?'|':'=',C(YEL,8+Math.max(0,5-Math.abs(y)))];
 });
 DROPPED_ART.telescope=()=>[[' ___============(O)'],ch=>C(ch==='O'?CYAN:YEL,12)];
+// The eyepiece, drawn in the character grid before the frame is presented: black all round; a brass ring of glyphs,
+// a bright inner lip and an outer edge that follow the circle (- / | \) with a knurled grip of short radial strokes
+// between them, lit from the upper left; and the view darkening a little towards the rim. Measured in pixels, so the circle is round whatever the cell's shape
 function drawTelescope(){
  if(!telescopeActive())return;
- const x=cv.width/2,y=cv.height/2,r=Math.min(x,y)*.84;
- g.save();g.fillStyle='#050506';g.beginPath();g.rect(0,0,cv.width,cv.height);g.arc(x,y,r,0,TAU,true);g.fill('evenodd');
- g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
- g.font='12px monospace';g.fillStyle='#ddd';if(!fx.lookout)g.fillText('6×   Q: lower telescope',x-80,y+r+22); // (at the lookout the prompt says how to step back)g.restore();
+ const cx=cols*cw/2,cy=rows*FS/2,R=Math.min(cx,cy)*.82,band=cw*3.6,lip=cw*1.1,edge=cw*.9;
+ for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+  const i=r*cols+c,dx_=(c+.5)*cw-cx,dy_=(r+.5)*FS-cy,d=Math.hypot(dx_,dy_);
+  if(d<R*.88)continue;
+  if(d<R){const k=Math.round((d-R*.88)/(R*.12)*3);if(BG[i]!==NONE)BG[i]=(BG[i]&0xF0)|Math.max(0,(BG[i]&15)-k);COL[i]=(COL[i]&0xF0)|Math.max(0,(COL[i]&15)-k);continue;} // (vignette)
+  FOGS[i]=FOGB[i]=0;
+  if(d>R+band){BG[i]=NONE;set(i,' ',0);continue;}
+  const th=Math.atan2(dy_,dx_),tx=-Math.sin(th),ty=Math.cos(th),deg=(Math.atan2(ty,tx)*180/Math.PI+360)%180;
+  const along=deg<22.5||deg>157.5?'-':deg>67.5&&deg<112.5?'|':tx*ty<0?'/':'\\',across={'-':'|','|':'-','/':'\\','\\':'/'}[along];
+  const shine=.75+.35*Math.cos(th+Math.PI*.75),inner=d<R+lip,outer=d>R+band-edge; // (the light from over your left shoulder)
+  const knurl=!inner&&!outer&&fract(th*64/TAU)<.5;
+  BG[i]=C(BRICK,(inner?3:outer?1.2:2)*shine);
+  set(i,inner||outer?along:knurl?across:' ',C(inner?YEL:WARM,(inner?13:outer?7:9)*shine));
+ }
+ if(!fx.lookout){ // the caption, under the ring (at the lookout the prompt says how to step back)
+  const text='6x   Q: lower telescope',r=Math.min(rows-2,Math.floor((cy+R+band)/FS)+1),c0=Math.floor(cols/2-text.length/2);
+  for(let k=0;k<text.length;k++){const c=c0+k;if(c>=0&&c<cols)set(r*cols+c,text[k],C(GRAY,11));}
+ }
 }
 // Item art can change on use, but its hand stays steady.
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);

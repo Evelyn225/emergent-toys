@@ -264,8 +264,8 @@ function render(dt,sceneOnly=false,mask=null) {
     if (mode === 'fair') fairFrame();
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
+  drawTelescope(); // (the eyepiece, in the grid: held-curios.js)
   present();
-  drawTelescope();
   drawDrugVision();
   if (freecam) freecamHud();
   else {

@@ -235,3 +235,19 @@ test('aviary birds veer away when you walk right up to one',()=>fixture(async p=
  });
  assert.deepEqual(r,[true,true]);
 }));
+
+test('the telescope ring is drawn in characters: black corners, a brass ring of glyphs round the view, the caption in the grid',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];clearInventory();carryItem({id:'telescope',uses:0});mode='walk';room=null;fx.telescope=true;env(0);render(0);
+  if(!telescopeActive())return ['not raised'];
+  const cx=cols*cw/2,cy=rows*FS/2,R=Math.min(cx,cy)*.82;let ring=0,round=0;
+  for(let k=0;k<64;k++){const th=k*TAU/64;for(const out of [.5,1.5,2.5]){const c=Math.floor((cx+Math.cos(th)*(R+cw*out))/cw),r=Math.floor((cy+Math.sin(th)*(R+cw*out))/FS);
+   if(c<0||c>=cols||r<0||r>=rows)continue;round++;const i=r*cols+c;if(BG[i]>>4===BRICK)ring++;}}
+  if(ring<round*.8)bad.push(['ring',ring,round]);
+  if(!['-','|','/','\\'].every(ch=>CH.includes(ch)))bad.push('ring glyphs');
+  if(BG[0]!==NONE||BG[cols-1]!==NONE||BG[(rows-1)*cols]!==NONE)bad.push('corners not black');
+  if(!Array.from({length:rows},(_,r)=>CH.slice(r*cols,r*cols+cols).join('')).some(l=>l.includes('Q: lower telescope')))bad.push('no caption');
+  fx.telescope=false;return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
