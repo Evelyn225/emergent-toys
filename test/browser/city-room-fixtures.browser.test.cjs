@@ -164,3 +164,27 @@ test('caught in a heist and let off with a fine, you are walked out onto the str
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the Fern Ridge telescope can be looked through, and Cormorant Rock is in its sights',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],L=FERN_LOOKOUT,rock=WILD_ISLANDS.find(i=>i.id==='rock');tod=13;
+  // a clear line over Fern's ridge to the top of the stacks
+  const eye=walkGround(...L.eye)+.17,D=near(...L.eye,700.6,350.6);let worst=-9;
+  for(let s=.6;s<D-rock.rx*.6;s+=.2){const x=L.eye[0]+Math.cos(L.dir)*s,y=L.eye[1]+Math.sin(L.dir)*s;worst=Math.max(worst,(Math.max(terrainHeight(x,y),islandSightHeight(x,y))-eye)/s);}
+  if(worst>=(1.2-eye)/D)bad.push('the ridge hides the rock');
+  if(Math.abs(mod(L.dir-Math.atan2(rock.y-L.y,rock.x-L.x)+Math.PI,TAU)-Math.PI)>.1)bad.push('not pointed at the rock');
+  [px,py]=L.eye;py+=.1;mode='walk';room=null;env(0);render(0);
+  if(!/telescope/.test(promptText()))bad.push(['prompt',promptText()]);
+  interact();env(0);render(0);
+  if(!fx.lookout||!telescopeActive()||vis<=MAXD*2)bad.push(['not looking through it',fx.lookout,vis]);
+  if(Math.abs(mod(a-L.dir+Math.PI,TAU)-Math.PI)>1e-6)bad.push('facing elsewhere');
+  // the far stacks are drawn: something solid out past 100 cells near the middle of the view
+  let far=0;for(let r=0;r<rows;r++)for(let c=cols*.35|0;c<cols*.65;c++){const i=r*cols+c;if(ZB[i]>100&&ZB[i]<vis)far++;}
+  if(far<20)bad.push(['rock not drawn',far]);
+  K.KeyW=1;stepLookoutScope();K.KeyW=0;if(fx.lookout)bad.push('walking did not step back');
+  env(0);if(vis>MAXD)bad.push('still seeing far');
+  interact();interact();if(fx.lookout)bad.push('E did not step back');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));

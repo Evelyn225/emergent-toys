@@ -393,7 +393,7 @@ function env(dt) {
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
   overcast = Math.max(rain, fogAmt, snow * 0.8);
   amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast) * (1 - 0.3 * storm) + flash() * 0.9;
-  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow);
+  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow) * (typeof telescopeActive === 'function' && telescopeActive() ? TELESCOPE_REACH : 1); // (through a telescope you see further: held-curios.js)
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
@@ -2068,7 +2068,7 @@ const FERN_TRAILS = [
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
   [[521.5,235.5],[525.5,236.2],[528,237.5]],
-  [[590,243],[597,247],[603,250]],
+  [[590,243],[597,247],[603,250],[604,260],[604.5,270]], // (on up the ridge, stopping short of the lookout so the summit keeps its view)
 ];
 const ISLAND_PATHS = {
   cabin: [[[478.5,395.5],[484,395.5],[488.5,394],[492,394],[492,392.2]]],
@@ -2076,9 +2076,15 @@ const ISLAND_PATHS = {
   rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
   sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
 };
+// Fern Ridge Lookout: the brass telescope on the south ridge, trained across the water on Cormorant Rock's stacks (the
+// one island whose silhouette clears the horizon from Fern). eye: where you stand to look through it; dir: its heading
+const FERN_LOOKOUT = (() => {
+  const x = 606.8, y = 276, rock = [700.6, 350.6], dir = Math.atan2(rock[1] - y, rock[0] - x), c = Math.cos(dir), s = Math.sin(dir);
+  return { x, y, dir, target: 'Cormorant Rock', eye: [x - c * .28, y - s * .28], cairn: [x + s * .62, y - c * .62], sign: [x - c * .75 - s * .7, y - s * .75 + c * .7] };
+})();
 const ISLAND_SIGHTS = [
   {id:'fern-camp',island:'fern',name:'Fern woodland camp',x:527.8,y:237.5,text:'A little canvas camp above the landing. The board asks visitors to use the existing fire ring and leave no trace.'},
-  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:603,y:250,text:'FERN RIDGE LOOKOUT. An old survey cairn marks the woodland ridge. The brass telescope points north between the trees towards the rough airstrip. Someone has left a smooth white stone on the cairn.'},
+  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:FERN_LOOKOUT.sign[0],y:FERN_LOOKOUT.sign[1],text:'FERN RIDGE LOOKOUT. An old survey cairn marks the top of the ridge. The brass telescope is trained south-east across the water on the sea stacks of Cormorant Rock. Someone has left a smooth white stone on the cairn.'},
   {id:'cabin-nets',island:'cabin',name:'Cabin Cove drying racks',x:489,y:394.8,text:'Hand-mended fishing nets dry in the sea breeze. A note on the rack: "Shelter unlocked. Logbook inside. Good luck out there."'},
   {id:'cormorant-roost',island:'rock',name:'Cormorant roost',x:698,y:353.5,text:'Two weathered stacks rise above the tide. Cormorants spread their wings to dry; pale streaks mark the ledges. Keep a respectful distance from the roost.'},
   {id:'crescent-pools',island:'sand',name:'Crescent tide pools',x:719,y:115,text:'Small tide pools gleam between the sand and the inlet. Shells, ribbons of seaweed and tiny shore birds gather at their edges.'},
@@ -30975,8 +30981,10 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
   return null;
 });
 
-// The telescope magnifies the existing scene, without another world render.
-const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()&&!freecam;
+// The telescope magnifies the existing scene, without another world render, and lets you see that much further
+// (state.js stretches the view distance): far enough to make out the other islands across the water.
+const TELESCOPE_REACH=5;
+const telescopeActive=()=>(!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()||!!fx.lookout&&mode==='walk')&&!freecam; // (yours, or the lookout's: islands-content.js)
 DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
@@ -30988,7 +30996,7 @@ function drawTelescope(){
  const x=cv.width/2,y=cv.height/2,r=Math.min(x,y)*.84;
  g.save();g.fillStyle='#050506';g.beginPath();g.rect(0,0,cv.width,cv.height);g.arc(x,y,r,0,TAU,true);g.fill('evenodd');
  g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
- g.font='12px monospace';g.fillStyle='#ddd';g.fillText('6×   Q: lower telescope',x-80,y+r+22);g.restore();
+ g.font='12px monospace';g.fillStyle='#ddd';if(!fx.lookout)g.fillText('6×   Q: lower telescope',x-80,y+r+22); // (at the lookout the prompt says how to step back)g.restore();
 }
 // Item art can change on use, but its hand stays steady.
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
@@ -34285,9 +34293,21 @@ function islandCabinAtDoor() {
 function nearIslandLogbook() {
   return mode==='room'&&room.kind==='islandshelter'&&Math.hypot(px-4,py-4.3)<1.1;
 }
+// the lookout's telescope (islands.js FERN_LOOKOUT): E behind it and you're at the eyepiece, looking where it points.
+// held-curios.js does the magnifying (and state.js the seeing further); walk, or E again, and you step back
+const atLookoutScope = () => mode==='walk'&&!fx.lookout&&near(px,py,...FERN_LOOKOUT.eye)<.45;
+function useLookoutScope() {
+  if(fx.lookout){fx.lookout=false;return say('You straighten up from the eyepiece.',2);}
+  fx.telescope=false;body.crouch=0;body.seat=null;[px,py]=FERN_LOOKOUT.eye;a=FERN_LOOKOUT.dir;pitch=0;fx.lookout=true;
+  say(`You bend to the eyepiece. Across the water: ${FERN_LOOKOUT.target}, its two stacks white with birds. Walk or E to step back.`,6);
+}
+// (stepped away, or off somewhere else entirely: the telescope's left behind)
+function stepLookoutScope(){if(fx.lookout&&(mode!=='walk'||near(px,py,...FERN_LOOKOUT.eye)>.05||K.KeyW||K.KeyA||K.KeyS||K.KeyD))fx.lookout=false;}
 function islandBuildingPrompt() {
   if(nearIslandLogbook())return 'E: read the visitors\' log';
   if(mode!=='walk')return '';
+  if(fx.lookout)return 'E: step back from the telescope';
+  if(atLookoutScope())return `E: look through the telescope (${FERN_LOOKOUT.target})`;
   const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
   if(sight)return `E: read ${sight.name}`;
   const cabin=islandCabinAtDoor();
@@ -34306,6 +34326,7 @@ function islandBuildingUse() {
     return true;
   }
   if(mode!=='walk')return false;
+  if(fx.lookout||atLookoutScope()){useLookoutScope();return true;}
   const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
   if(sight){say(sight.text,7);return true;}
   const cabin=islandCabinAtDoor();
@@ -34737,17 +34758,20 @@ function buildIslandSights() {
     for(const side of [-1,1])islandGroundModel(fire.x+side*.045,fire.y,.07,.014,.025,'driftwood');
     islandWaymark(fire.x+.28,fire.y-.2,'FIRE RING',.36);
   }
-  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE']])islandWaymark(x,y,word,.42);
+  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE'],[604.5,270.5,'LOOKOUT']])islandWaymark(x,y,word,.42);
   // A survey cairn and a brass telescope give the ridge a recognisable silhouette.
+  const [cx,cy]=FERN_LOOKOUT.cairn;
   for(let k=0;k<3;k++) {
-    const r=.18-k*.045,z=terrainHeight(604.1,250.1);
-    const stone=islandDetail(604.1,250.1,r,r,z+k*.085,z+(k+1)*.085,'rock');
+    const r=.18-k*.045,z=terrainHeight(cx,cy);
+    const stone=islandDetail(cx,cy,r,r,z+k*.085,z+(k+1)*.085,'rock');
     ISLAND_OBSTACLES.push(stone);
     stone.seed=.72;stone.planes=landmarkPlanes(r,r,stone.z0,stone.z1,null).concat([[1,0,1,stone.z1+r*.8],[-1,0,1,stone.z1+r*.8],[0,1,1,stone.z1+r*.8],[0,-1,1,stone.z1+r*.8]]);
   }
-  const z=terrainHeight(603.8,249.5);
-  for(const x of [603.72,603.88])islandDetail(x,249.5,.015,.035,z-.02,z+.18,'metal');
-  Object.assign(islandDetail(603.8,249.5,.08,.015,z+.175,z+.205,'metal',Math.PI/2),{base:YEL});
+  { // the telescope: two legs either side of the tube, the tube along its heading (usable: islands-content.js)
+    const {x,y,dir}=FERN_LOOKOUT,z=terrainHeight(x,y),c=Math.cos(dir),s=Math.sin(dir);
+    for(const side of [-1,1])islandDetail(x-s*side*.08,y+c*side*.08,.015,.035,z-.02,z+.18,'metal',dir+Math.PI/2);
+    Object.assign(islandDetail(x,y,.08,.015,z+.175,z+.205,'metal',dir),{base:YEL});
+  }
   for(const [x,y]of [[626.3,194.8],[627.9,195.7],[626.1,197.2]])islandCover(x,y,'fern',hash(x,y,1941),.27);
   // Cabin Cove: repaired nets and floats, a fish box, and a little hauled-up skiff.
   for(const x of [488.55,489.65])islandGroundModel(x,395.15,.025,.025,.3,'timber');
@@ -46655,6 +46679,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepLookoutScope(); // (the lookout's telescope: islands-content.js)
   updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)

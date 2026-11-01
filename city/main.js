@@ -371,6 +371,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepLookoutScope(); // (the lookout's telescope: islands-content.js)
   updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)

@@ -111,7 +111,7 @@ function env(dt) {
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
   overcast = Math.max(rain, fogAmt, snow * 0.8);
   amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast) * (1 - 0.3 * storm) + flash() * 0.9;
-  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow);
+  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow) * (typeof telescopeActive === 'function' && telescopeActive() ? TELESCOPE_REACH : 1); // (through a telescope you see further: held-curios.js)
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows

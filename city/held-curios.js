@@ -215,8 +215,10 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
   return null;
 });
 
-// The telescope magnifies the existing scene, without another world render.
-const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()&&!freecam;
+// The telescope magnifies the existing scene, without another world render, and lets you see that much further
+// (state.js stretches the view distance): far enough to make out the other islands across the water.
+const TELESCOPE_REACH=5;
+const telescopeActive=()=>(!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()||!!fx.lookout&&mode==='walk')&&!freecam; // (yours, or the lookout's: islands-content.js)
 DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
@@ -228,5 +230,5 @@ function drawTelescope(){
  const x=cv.width/2,y=cv.height/2,r=Math.min(x,y)*.84;
  g.save();g.fillStyle='#050506';g.beginPath();g.rect(0,0,cv.width,cv.height);g.arc(x,y,r,0,TAU,true);g.fill('evenodd');
  g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
- g.font='12px monospace';g.fillStyle='#ddd';g.fillText('6×   Q: lower telescope',x-80,y+r+22);g.restore();
+ g.font='12px monospace';g.fillStyle='#ddd';if(!fx.lookout)g.fillText('6×   Q: lower telescope',x-80,y+r+22); // (at the lookout the prompt says how to step back)g.restore();
 }

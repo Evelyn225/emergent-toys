@@ -30,7 +30,7 @@ const FERN_TRAILS = [
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
   [[521.5,235.5],[525.5,236.2],[528,237.5]],
-  [[590,243],[597,247],[603,250]],
+  [[590,243],[597,247],[603,250],[604,260],[604.5,270]], // (on up the ridge, stopping short of the lookout so the summit keeps its view)
 ];
 const ISLAND_PATHS = {
   cabin: [[[478.5,395.5],[484,395.5],[488.5,394],[492,394],[492,392.2]]],
@@ -38,9 +38,15 @@ const ISLAND_PATHS = {
   rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
   sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
 };
+// Fern Ridge Lookout: the brass telescope on the south ridge, trained across the water on Cormorant Rock's stacks (the
+// one island whose silhouette clears the horizon from Fern). eye: where you stand to look through it; dir: its heading
+const FERN_LOOKOUT = (() => {
+  const x = 606.8, y = 276, rock = [700.6, 350.6], dir = Math.atan2(rock[1] - y, rock[0] - x), c = Math.cos(dir), s = Math.sin(dir);
+  return { x, y, dir, target: 'Cormorant Rock', eye: [x - c * .28, y - s * .28], cairn: [x + s * .62, y - c * .62], sign: [x - c * .75 - s * .7, y - s * .75 + c * .7] };
+})();
 const ISLAND_SIGHTS = [
   {id:'fern-camp',island:'fern',name:'Fern woodland camp',x:527.8,y:237.5,text:'A little canvas camp above the landing. The board asks visitors to use the existing fire ring and leave no trace.'},
-  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:603,y:250,text:'FERN RIDGE LOOKOUT. An old survey cairn marks the woodland ridge. The brass telescope points north between the trees towards the rough airstrip. Someone has left a smooth white stone on the cairn.'},
+  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:FERN_LOOKOUT.sign[0],y:FERN_LOOKOUT.sign[1],text:'FERN RIDGE LOOKOUT. An old survey cairn marks the top of the ridge. The brass telescope is trained south-east across the water on the sea stacks of Cormorant Rock. Someone has left a smooth white stone on the cairn.'},
   {id:'cabin-nets',island:'cabin',name:'Cabin Cove drying racks',x:489,y:394.8,text:'Hand-mended fishing nets dry in the sea breeze. A note on the rack: "Shelter unlocked. Logbook inside. Good luck out there."'},
   {id:'cormorant-roost',island:'rock',name:'Cormorant roost',x:698,y:353.5,text:'Two weathered stacks rise above the tide. Cormorants spread their wings to dry; pale streaks mark the ledges. Keep a respectful distance from the roost.'},
   {id:'crescent-pools',island:'sand',name:'Crescent tide pools',x:719,y:115,text:'Small tide pools gleam between the sand and the inlet. Shells, ribbons of seaweed and tiny shore birds gather at their edges.'},

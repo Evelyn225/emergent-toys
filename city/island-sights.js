@@ -55,17 +55,20 @@ function buildIslandSights() {
     for(const side of [-1,1])islandGroundModel(fire.x+side*.045,fire.y,.07,.014,.025,'driftwood');
     islandWaymark(fire.x+.28,fire.y-.2,'FIRE RING',.36);
   }
-  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE']])islandWaymark(x,y,word,.42);
+  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE'],[604.5,270.5,'LOOKOUT']])islandWaymark(x,y,word,.42);
   // A survey cairn and a brass telescope give the ridge a recognisable silhouette.
+  const [cx,cy]=FERN_LOOKOUT.cairn;
   for(let k=0;k<3;k++) {
-    const r=.18-k*.045,z=terrainHeight(604.1,250.1);
-    const stone=islandDetail(604.1,250.1,r,r,z+k*.085,z+(k+1)*.085,'rock');
+    const r=.18-k*.045,z=terrainHeight(cx,cy);
+    const stone=islandDetail(cx,cy,r,r,z+k*.085,z+(k+1)*.085,'rock');
     ISLAND_OBSTACLES.push(stone);
     stone.seed=.72;stone.planes=landmarkPlanes(r,r,stone.z0,stone.z1,null).concat([[1,0,1,stone.z1+r*.8],[-1,0,1,stone.z1+r*.8],[0,1,1,stone.z1+r*.8],[0,-1,1,stone.z1+r*.8]]);
   }
-  const z=terrainHeight(603.8,249.5);
-  for(const x of [603.72,603.88])islandDetail(x,249.5,.015,.035,z-.02,z+.18,'metal');
-  Object.assign(islandDetail(603.8,249.5,.08,.015,z+.175,z+.205,'metal',Math.PI/2),{base:YEL});
+  { // the telescope: two legs either side of the tube, the tube along its heading (usable: islands-content.js)
+    const {x,y,dir}=FERN_LOOKOUT,z=terrainHeight(x,y),c=Math.cos(dir),s=Math.sin(dir);
+    for(const side of [-1,1])islandDetail(x-s*side*.08,y+c*side*.08,.015,.035,z-.02,z+.18,'metal',dir+Math.PI/2);
+    Object.assign(islandDetail(x,y,.08,.015,z+.175,z+.205,'metal',dir),{base:YEL});
+  }
   for(const [x,y]of [[626.3,194.8],[627.9,195.7],[626.1,197.2]])islandCover(x,y,'fern',hash(x,y,1941),.27);
   // Cabin Cove: repaired nets and floats, a fish box, and a little hauled-up skiff.
   for(const x of [488.55,489.65])islandGroundModel(x,395.15,.025,.025,.3,'timber');
