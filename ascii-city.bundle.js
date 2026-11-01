@@ -2076,6 +2076,12 @@ const ISLAND_PATHS = {
   rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
   sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
 };
+// Cormorant Rock's sea stacks along its seaward ridge: the foot's centre, radius and height above the ground (cells).
+// Each is built as stepped, tapering tiers (island-sights.js); the first is the one the Fern Ridge telescope is trained on
+const CORMORANT_SPIRES = [
+  { x: 700.6, y: 350.6, r: .55, h: 1.35 }, { x: 702.2, y: 352.7, r: .6, h: 1.6 }, { x: 703.7, y: 349.7, r: .42, h: 1.05 },
+  { x: 699.2, y: 348.3, r: .38, h: .8 }, { x: 704.3, y: 354.1, r: .34, h: .7 },
+];
 // Fern Ridge Lookout: the brass telescope on the south ridge, trained across the water on Cormorant Rock's stacks (the
 // one island whose silhouette clears the horizon from Fern). eye: where you stand to look through it; dir: its heading
 const FERN_LOOKOUT = (() => {
@@ -2236,10 +2242,15 @@ function islandSurface(x,y) {
     }
     if(trailDistance(x,y)<.08+patch*.07)return {base:WARM,background:BRICK,ch:grain>.86?':':'.',color:'#8c805c',tone:.9};
   }
-  if(island.id==='rock') {
-    let ch=grain>.75?':':' ';
-    if(grain>.9)ch='o';
-    return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
+  if(island.id==='rock') { // bare jointed rock: a wet black tide zone, whitewash round the stacks, lichen, sea pinks
+    if(edge<.9+patch*.4)return {base:GREEN,background:grain>.88?GREEN:GRAY,ch:' ',color:'#3d4542',tone:.68+patch*.12};
+    const stack=CORMORANT_SPIRES.reduce((m,s)=>Math.min(m,near(x,y,s.x,s.y)-s.r),9);
+    if(stack<1.4&&noise(x*6,y*6,1997)>.25+stack*.35)return {base:WHITE,background:WHITE,ch:' ',color:'#c9c7bc',tone:.75+grain*.1,lift:.6};
+    if(islandPathDistance(x,y,island)<.1+patch*.05)return {base:STONE,background:STONE,ch:' ',color:'#8d8a80',tone:.85};
+    if(noise(x*4,y*4,1998)>.8)return {base:ORANGE,background:ORANGE,ch:' ',color:'#8a6a3a',tone:.95+grain*.1};
+    if(edge>2&&noise(x*2.5,y*2.5,1999)>.76)return {base:MAG,background:GREEN,ch:grain>.8?'*':' ',color:'#4f6a44',tone:1};
+    const slab=noise(x*2.2,y*2.2,1996),crack=Math.abs(fract(x*1.7+y*.6+slab*.6)-.5)<.03||Math.abs(fract(y*1.9-x*.4)-.5)<.025;
+    return {base:GRAY,background:GRAY,ch:crack&&grain>.4?'-':' ',color:'#727777',tone:(.75+slab*.35)*(crack?.72:1)};
   }
   if(island.id==='sand') {
     if(TIDE_POOL_SITES.some(p=>near(x,y,p.x,p.y)<p.r+.12))return {base:GRAY,background:GRAY,ch:grain>.9?':':' ',color:'#727777',tone:1};
@@ -34614,6 +34625,33 @@ function islandRockShade(model,i,t,L) {
   set(i,streak?'|':model.stack&&fract(HIT.w*9+model.seed)<.045?'_':grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
   return true;
 }
+// Cormorant Rock's stacks: warped bedding planes with darker partings, vertical joints, lichen low down, the tops
+// crusted white and white runs of guano down the faces from every ledge. Small detail fades with distance
+function islandStackShade(m,i,t,L) {
+  const p=m.planes[HIT.face],n=Math.hypot(p[0],p[1],p[2]),nx=p[0]/n,ny=p[1]/n,nz=p[2]/n,light=coveLight(nx,ny,nz);
+  const z=HIT.w,wx=m.x+HIT.u,wy=m.y+HIT.v,foot=t/projY,fine=coveDetail(t,.15),lit=.2+.8*day; // (its own colour fades with the daylight, like the ground's)
+  if(nz>.9) { // the top, whitewashed, darker rock showing through
+    const crust=noise(wx*30,wy*30,1991)*fine+.5*(1-fine);
+    BG[i]=C(crust>.35?WHITE:GRAY,((crust>.35?4.2:2)+L*.3*light)*lit);set(i,' ',0);return true;
+  }
+  if(nz<-.9){BG[i]=C(GRAY,.5*lit);set(i,' ',0);return true;}
+  const along=-ny*wx+nx*wy,bed=z*16+Math.sin(along*2.3+m.seed*9)*.35;
+  const layer=hash(Math.floor(bed),m.spire,1992),parting=coveGroove(bed,1,.12,foot*16),joint=coveGroove(along+hash(Math.floor(bed),3,1993)*.3,.23,.012,foot)*.8;
+  const run=hash(Math.floor(along*28),m.tier,1994),guano=run>.45&&m.z1-z<(.2+.6*run*run)*(m.top?1:.6)*(m.z1-m.z0);
+  const rim=m.z1-z<.03,lichen=!guano&&z-m.ground<.55&&noise(along*14,z*18,1995+m.spire)>.78;
+  let col=GRAY,level=1.55+(layer-.5)*.8*fine;
+  if(lichen){col=ORANGE;level=1.7;}
+  if(guano||rim){col=WHITE;level=3.8;}
+  level*=(1-.45*parting)*(1-.5*joint);
+  BG[i]=C(col,(level+L*.26*light)*lit);set(i,' ',0);return true;
+}
+// a cormorant's nest: a heaped ring of sticks and weed round a hollow, streaked white
+const islandNestShade=m=>(i,t,L)=>{
+  const r=Math.hypot(HIT.u,HIT.v),ang=Math.atan2(HIT.v,HIT.u),fine=coveDetail(t,.03),inner=HIT.nz>.4&&r<.02;
+  const stick=hash(Math.floor(ang*14+r*90),Math.floor(HIT.w*300),m.seed*97|0)>.5,splash=r>.026&&hash(Math.floor(ang*9),Math.floor(r*250),1990)>.84;
+  BG[i]=C(splash&&fine>.3?WHITE:inner?BRICK:stick?WARM:BRICK,(splash?2.6:inner?.8:1.4+(stick?.5:0)*fine)*(.2+.8*day)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));
+  set(i,' ',0);return true;
+};
 function drawIslandShrub(model,vx,vy) {
   const grass=model.kind==='grass',height=model.z1-model.z0;
   drawShape(vx,vy,model.z0,model.hl,height,(i,u,z,du,dz,L)=>{
@@ -34717,6 +34755,8 @@ function drawWildScenery() {
       drawBox({...model,x:vx,y:vy+sway},(i,t,L)=>islandFabricShade(model,i,t,L),model.planes?rayMansard:rayBox);return;
     }
     if(model.kind==='shrub'||model.kind==='grass'){drawIslandShrub(model,vx,vy);return;}
+    if(model.kind==='stack'){drawBox({...model,x:vx,y:vy},(i,t,L)=>islandStackShade(model,i,t,L),rayMansard);return;}
+    if(model.kind==='nest'){if(near(px,py,model.x,model.y)<16)coveLathe(vx,vy,model.z0,model.profile,islandNestShade(model));return;}
     if(model.kind==='lamp') {
       drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,'o',C(YEL,10+night*5));return true;});return;
     }
@@ -34746,6 +34786,61 @@ function drawWildScenery() {
 // Built once and drawn through the existing spatial buckets and figure caches.
 const ISLAND_BIRDS=[];
 const ISLAND_FLOWERS=[];
+const ISLAND_CIRCLERS=[]; // birds wheeling round Cormorant Rock's stacks: { cx, cy, r, z, w (rad/s), ph, kind, seed }
+// One stepped tier of a sea stack: an eight-sided frustum, rb across at its foot and rt at its top, each face a little
+// in or out (weathered). The planes are the drawn surface and the collision (landmarkSurfaceHeight) alike
+function stackTier(x,y,rb,rt,z0,z1,seed) {
+  const k=(rb-rt)/(z1-z0),turn=hash(seed,0,1983)*.8,planes=[[0,0,1,z1],[0,0,-1,-z0]];
+  for(let f=0;f<8;f++){const th=f*TAU/8+turn,j=1+(hash(seed,f,1984)-.5)*.12;planes.push([Math.cos(th),Math.sin(th),k,rb*j+k*z0]);}
+  const o=islandDetail(x,y,rb*1.1,rb*1.1,z0,z1,'stack');
+  Object.assign(o,{planes,seed:hash(seed,1,1985),rb,rt});
+  return o;
+}
+// Cormorant Rock: the stacks, the cormorants' nests crowded on their tops and ledges with birds sitting them, and
+// more wheeling round overhead
+function buildCormorantRock() {
+  ISLAND_CIRCLERS.length=0;
+  // a nest (~60 cm across, a heaped rim round a shallow hollow), sat on, or with its owner standing on the rock beside
+  // it (outward, so from below it stands up over the edge), or empty
+  const nest=(x,y,z,seed,cx,cy)=>{
+    const o=islandDetail(x,y,.03,.03,z,z+.016,'nest'),who=hash(seed,1,1988),out=Math.atan2(y-cy,x-cx);
+    o.seed=seed;o.profile=[[0,0],[0,.025],[.009,.03],[.015,.028],[.016,.023],[.01,.016],[.006,.01],[.006,0]];
+    if(who<.5)ISLAND_BIRDS.push({x,y,z:z+.011,seed:seed*13,kind:'cormorant',nest:true,scaredAt:-99});
+    else if(who<.85)ISLAND_BIRDS.push({x:x+Math.cos(out)*.04,y:y+Math.sin(out)*.04,z,seed:seed*13,kind:'cormorant',scaredAt:-99});
+  };
+  for(const [n,sp] of CORMORANT_SPIRES.entries()) {
+    let ground=terrainHeight(sp.x,sp.y);
+    for(let k=0;k<8;k++)ground=Math.min(ground,terrainHeight(sp.x+Math.cos(k*TAU/8)*sp.r,sp.y+Math.sin(k*TAU/8)*sp.r));
+    const tiers=sp.h>1.2?4:3,top=terrainHeight(sp.x,sp.y)+sp.h;
+    let z0=ground-.03,r=sp.r,cx=sp.x,cy=sp.y;
+    for(let k=0;k<tiers;k++) {
+      const last=k===tiers-1,z1=last?top:z0+(top-z0)/(tiers-k)*(.85+hash(n,k,1981)*.3),rt=r*(last?.62:.8);
+      const tier=stackTier(cx,cy,r,rt,z0,z1,n*7+k);
+      Object.assign(tier,{spire:n,tier:k,top:last,ground});
+      ISLAND_OBSTACLES.push(tier);
+      if(last) { // the top: as many nests as fit, round the edge, one in the middle if there's room
+        const count=clamp(Math.round(rt/.045),3,7);
+        for(let j=0;j<count;j++){const a=j*TAU/count+hash(n,j,1987),q=rt*.6;nest(cx+Math.cos(a)*q,cy+Math.sin(a)*q,z1,n*10+j,cx,cy);}
+        if(rt>.25)nest(cx,cy,z1,n*10+9,cx,cy);
+        break;
+      }
+      // the next tier stands back from this one's rim, a little off centre, leaving a ledge to nest on
+      const nr=rt*.78,a=hash(n,k,1982)*TAU,off=(rt-nr)*.35,ledge=rt-nr;
+      const nx=cx+Math.cos(a)*off,ny=cy+Math.sin(a)*off;
+      if(ledge>.065)for(let j=0;j<2;j++) {
+        const b=a+Math.PI+(j-.5)*1.3,q=rt*.84,x=cx+Math.cos(b)*q,y=cy+Math.sin(b)*q;
+        nest(x,y,landmarkSurfaceHeight(tier,x,y),n*10+5+j,cx,cy);
+      }
+      cx=nx;cy=ny;z0=z1;r=nr;
+    }
+  }
+  // overhead: three loose rings round the stacks, mostly cormorants, a few gulls, some going the other way
+  for(let k=0;k<16;k++) {
+    const sp=CORMORANT_SPIRES[k%3],top=terrainHeight(sp.x,sp.y)+sp.h,ring=Math.floor(k/3)%3,r=.6+ring*.5+hash(k,3,1986)*.3;
+    ISLAND_CIRCLERS.push({cx:sp.x+(hash(k,1,1986)-.5)*.4,cy:sp.y+(hash(k,2,1986)-.5)*.4,r,z:top+.2+ring*.18+hash(k,4,1986)*.2,
+      w:(.55+hash(k,5,1986)*.25)/r*(k%4===3?-1:1),ph:hash(k,6,1986)*TAU,kind:k%5===4?'gull':'cormorant',seed:k});
+  }
+}
 function islandGroundModel(x,y,hl,hw,height,kind,obstacle=false) {
   const samples=[terrainHeight(x,y),terrainHeight(x-hl,y-hw),terrainHeight(x+hl,y-hw),terrainHeight(x-hl,y+hw),terrainHeight(x+hl,y+hw)];
   const o=islandDetail(x,y,hl,hw,Math.min(...samples)-.018,Math.max(...samples)+height,kind);
@@ -34823,18 +34918,7 @@ function buildIslandSights() {
   }
   islandGroundModel(489.9,395.3,.12,.08,.075,'timber');
   islandSkiff(481,397.2);
-  // Cormorant Rock: two solid, faceted sea stacks with bird perches.
-  for(const [x,y,hl,hw,height]of [[700.6,350.6,.62,.5,.95],[702.1,352.5,.45,.5,1.25]]) {
-    const rock=islandGroundModel(x,y,hl,hw,height,'rock',true);
-    rock.seed=.8;rock.stack=true;
-    const sx=.4/hl,sy=.35/hw;
-    rock.planes=landmarkPlanes(hl,hw,rock.z0,rock.z1,null).concat([
-      [1,1,0,hl+hw-.15],[-1,-1,0,hl+hw-.12],
-      [sx,0,1,rock.z1+sx*hl*.3],[-sx,0,1,rock.z1+sx*hl*.25],
-      [0,sy,1,rock.z1+sy*hw*.45],[0,-sy,1,rock.z1+sy*hw*.3],
-    ]);
-    ISLAND_BIRDS.push({x,y,z:rock.z1+.008,seed:x,kind:'cormorant',scaredAt:-99});
-  }
+  buildCormorantRock();
   islandWaymark(698,353.9,'BIRD ROOST',.4);
   for(let k=0;k<4;k++) {
     const x=699.1+k*.24,y=353.1+Math.sin(k)*.16;
@@ -34938,15 +35022,66 @@ ANIMAL_BODIES.islandbird=frame=>{
   return {parts,decals:animalEyes([0,3.4,5],1.5,1)};
 };
 // life size, beside people and pigeons: a herring gull ~60 cm nose to tail, a cormorant ~80 cm (the body is ~10.5 units long)
-const ISLAND_BIRD_SIZE={gull:.15,cormorant:.2};
+const ISLAND_BIRD_SIZE={gull:.15,cormorant:.2},ISLAND_BIRD_SPAN={gull:.13,cormorant:.14},ISLAND_BIRD_TALL={gull:.035,cormorant:.055};
+// A figure covering less than about half a cell isn't drawn (people far off don't flicker), so past a few dozen metres
+// a bird would vanish. Then it's painted as a few solid cells at its true place and size: a body and wings that rise
+// and fall with the wingbeat (frame 1 up, 2 down, else held level) or, perched, a short dark upright. Returns false
+// when it's near enough to draw properly (true when it's done: painted, or too far off to see)
+function drawBirdSpeck(vx,vy,z,kind,flying,frame) {
+  const depth=dx*vx+dy*vy;if(depth<.05||depth>vis)return true;
+  const sc=projX/depth,span=(flying?ISLAND_BIRD_SPAN[kind]:.04)*sc,tall=(flying?.02:ISLAND_BIRD_TALL[kind])*projY/depth;
+  if(span>6||tall>3)return false;
+  if(flying?span<.35:tall<.35)return true; // (too far off to see at all)
+  const c=Math.floor(cols/2+(-dy*vx+dx*vy)*sc),r=Math.floor(hor-(z+(flying?0:ISLAND_BIRD_TALL[kind]/2)-eye)*projY/depth);
+  const fade=Math.max(0,1-depth/vis),col=kind==='gull'?C(WHITE,4+9*fade*amb):C(GRAY,.6+fade*.8);
+  const paint=(cc,rr)=>{if(cc<0||cc>=cols||rr<0||rr>=rows)return;const i=rr*cols+cc;if(ZB[i]<=depth)return;BG[i]=col;set(i,' ',0);ZB[i]=depth;FL[i]=0;};
+  if(!flying){for(let k=0;k<Math.max(1,Math.round(tall));k++)paint(c,r-k);return true;}
+  const half=Math.round(span/2),lift=frame===1?-1:frame===2?1:0; // (under a cell and a half across: just the one cell)
+  paint(c,r);for(let k=1;k<=half;k++){paint(c-k,r+(k===half?lift:0));paint(c+k,r+(k===half?lift:0));}
+  return true;
+}
 const ISLAND_GULL_LOOK=animalLook('islandbird',{body:[WHITE,14],wing:[GRAY,10],mark:[GRAY,2],beak:[YEL,13]});
-const ISLAND_CORMORANT_LOOK=animalLook('islandbird',{body:[GRAY,3],wing:[GRAY,2],mark:[GRAY,1],beak:[WARM,10]});
+// A great cormorant: black with a bronze sheen on the wings, a long hooked grey bill, a yellow throat patch, a
+// slim neck, a stiff wedge tail and short legs on big webbed feet. Frames: 0 standing upright, 1 wings up and 2
+// wings down in flight (neck straight out), 3 standing with its wings hung out to dry, 4 sitting a nest, 5 gliding
+ANIMAL_BODIES.cormorant=frame=>{
+  const R=AR,parts=[],fly=frame===1||frame===2||frame===5,sit=frame===4;
+  let head;
+  if(fly) {
+    head=[0,5.8,4.7];
+    parts.push(figEll([0,0,4],AN_I,[1.4,3.4,1.3],()=>R.BODY),figCap([0,2.6,4.3],[0,5.2,4.6],.5,()=>R.BODY),
+      figCap([0,-2.6,4],[0,-5.4,3.9],.55,()=>R.BODY),figEll(head,AN_I,[.7,1,.7],()=>R.HEAD),
+      figCap([0,6.6,4.7],[0,8.4,4.5],.2,()=>R.BEAK),figCap([0,8.4,4.5],[0,8.55,4.25],.18,()=>R.BEAK),figEll([0,6.4,4.35],AN_I,[.35,.45,.3],()=>R.PALE));
+    for(const side of [-1,1]) {
+      const elbow=frame===1?[side*5,0,7]:frame===2?[side*5,0,3]:[side*5,0,4.6],tip=frame===1?[side*9.5,-.6,7.6]:frame===2?[side*9,-.6,1.4]:[side*9.8,-.8,4.4];
+      parts.push(figCap([side*1.2,.3,4.4],elbow,.75,()=>R.WING),figCap(elbow,tip,.55,()=>R.MARK));
+    }
+  } else if(sit) {
+    head=[0,3,6];
+    parts.push(figEll([0,0,2.2],AN_I,[1.8,3.2,1.6],()=>R.BODY),figCap([0,2.2,3],[0,2.7,5.5],.55,()=>R.BODY),
+      figCap([0,-2.8,2.4],[0,-4.6,2],.5,()=>R.BODY),figEll(head,AN_I,[.75,1.05,.75],()=>R.HEAD),
+      figCap([0,3.9,6],[0,5.6,5.8],.21,()=>R.BEAK),figCap([0,5.6,5.8],[0,5.75,5.55],.18,()=>R.BEAK),figEll([0,3.5,5.6],AN_I,[.4,.5,.38],()=>R.PALE));
+    for(const side of [-1,1])parts.push(figEll([side*1.2,-.5,2.8],AN_I,[.6,2.6,1],()=>R.WING));
+  } else {
+    head=[0,3.1,5.7]; // (stood hunched at forty-five degrees, its tail propped out behind)
+    parts.push(figCap([0,-1.2,2.6],[0,1.4,4],1.6,()=>R.BODY),figCap([0,-2.2,2.4],[0,-4.6,1.2],.5,()=>R.BODY),
+      figCap([0,1.8,4.2],[0,2.6,5.4],.5,()=>R.BODY),figEll(head,AN_I,[.7,1,.7],()=>R.HEAD),
+      figCap([0,4,5.7],[0,5.8,5.5],.2,()=>R.BEAK),figCap([0,5.8,5.5],[0,5.95,5.25],.18,()=>R.BEAK),figEll([0,3.6,5.3],AN_I,[.42,.48,.36],()=>R.PALE));
+    for(const side of [-1,1]) {
+      parts.push(figCap([side*.7,0,1.2],[side*.7,.3,.2],.35,()=>R.LEG),figEll([side*.7,.8,.15],AN_I,[.55,.85,.15],()=>R.LEG));
+      if(frame===3)parts.push(figCap([side*1.3,0,4.2],[side*4.5,-.3,5.2],.8,()=>R.WING),figCap([side*4.5,-.3,5.2],[side*7.5,-.6,3.8],.6,()=>R.WING),figCap([side*7.5,-.6,3.8],[side*8,-.8,2.2],.4,()=>R.MARK));
+      else parts.push(figEll([side*1.3,-.6,3.2],AN_I,[.6,2.4,1.4],()=>R.WING));
+    }
+  }
+  return {parts,decals:animalEyes(head,.75,1)};
+};
+const ISLAND_CORMORANT_LOOK=animalLook('cormorant',{body:[GRAY,2],head:[GRAY,2],wing:[BRICK,3],mark:[GRAY,1],beak:[GRAY,5],pale:[YEL,9],leg:[GRAY,1],eye:[GREEN,11]});
 function islandBirdPose(b,time=T) {
   const cycle=mod(time+b.seed*.13,54),scare=time-b.scaredAt;
   const flight=scare>=0&&scare<7?scare/7:cycle>43?(cycle-43)/11:0;
   const lift=Math.sin(flight*Math.PI);
   return {x:b.x+lift*Math.sin(flight*TAU)*1.2,y:b.y+lift*Math.cos(flight*TAU)*.7,z:b.z+lift*.55,
-    frame:flight?1+(Math.floor(time*5+b.seed)&1):b.kind==='cormorant'&&Math.sin(time*.2+b.seed)>.2?3:0};
+    frame:flight?1+(Math.floor(time*5+b.seed)&1):b.nest?4:b.kind==='cormorant'&&Math.sin(time*.2+b.seed)>.2?3:0};
 }
 function drawIslandLife() {
   if(!worldReady||px<465)return;
@@ -34955,7 +35090,15 @@ function drawIslandLife() {
     if(!freecam&&!paused&&near(px,py,bird.x,bird.y)<.65&&T-bird.scaredAt>12)bird.scaredAt=T;
     const p=islandBirdPose(bird),vx=p.x-px,vy=p.y-py;
     if(!inView(vx,vy,.12))continue;
+    if(drawBirdSpeck(vx,vy,p.z,bird.kind,p.frame===1||p.frame===2,p.frame))continue;
     drawAnimal(vx,vy,p.z,ISLAND_BIRD_SIZE[bird.kind]??.15,Math.cos(bird.seed),Math.sin(bird.seed),bird.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,p.frame);
+  }
+  for(const c of ISLAND_CIRCLERS) { // wheeling round the stacks: flapping a while, then gliding
+    const th=c.ph+T*c.w,x=c.cx+Math.cos(th)*c.r,y=c.cy+Math.sin(th)*c.r*.8,z=c.z+Math.sin(T*.4+c.seed)*.15,vx=x-px,vy=y-py;
+    if(Math.hypot(vx,vy)>vis||!inView(vx,vy,.12))continue;
+    const glide=c.kind==='cormorant'&&fract(T*.12+c.seed*.37)>.55,frame=glide?5:1+(Math.floor(T*(c.kind==='gull'?3:5)+c.seed)&1);
+    if(drawBirdSpeck(vx,vy,z,c.kind,true,frame))continue;
+    drawAnimal(vx,vy,z,ISLAND_BIRD_SIZE[c.kind],-Math.sin(th)*Math.sign(c.w),Math.cos(th)*.8*Math.sign(c.w),c.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,frame);
   }
   if(rain>.2||season()==='winter')return;
   let drawn=0;

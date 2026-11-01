@@ -81,8 +81,10 @@ test('large island scenery has shared walking, aircraft and shot collision geome
       px=o.x-o.hl-.2;py=o.y;body.z=0;
       const visibleTop=Math.max(ground,...ISLAND_OBSTACLES.map(other=>landmarkSurfaceHeight(other,o.x,o.y)));
       if(free(o.x,o.y)||Math.abs(builtHeight(o.x,o.y)-visibleTop)>1e-6)errors.push(['collision',o.kind]);
-      const z=ground+Math.min(.1,(top-ground)/2),hit=traceShot(o.x-o.hl-.2,o.y,z,1,0,0);
-      if(hit.what!=='wall'||hit.x>o.x+o.hl)errors.push(['shot',o.kind,hit.what]);
+      // fired level at it from the side the ground falls away (a sea stack on a slope is approached from below it)
+      const z=ground+Math.min(.1,(top-ground)/2),side=terrainHeight(o.x-o.hl-.2,o.y)<=terrainHeight(o.x+o.hl+.2,o.y)?1:-1;
+      const hit=traceShot(o.x-side*(o.hl+.2),o.y,z,side,0,0);
+      if(hit.what!=='wall'||side*(hit.x-o.x)>o.hl)errors.push(['shot',o.kind,hit.what]);
     }
     const strip=[];for(let x=FERN_STRIP.x0-20;x<FERN_STRIP.x1+20;x+=.4)for(const y of [FERN_STRIP.y-1,FERN_STRIP.y,FERN_STRIP.y+1])
       if(islandSightBlocked(x,y,0)||terrainHeight(x,y)>.001)strip.push([x,y]);
@@ -103,7 +105,7 @@ test('birds animate and take off from actual terrain or rock perches, while free
     freecam=null;render(0);const startled=b.scaredAt===T;
     return {gulls:ground.length,roost:roost.length,errors,frozen,startled};
   });
-  assert.ok(result.gulls>=9);assert.equal(result.roost,2);
+  assert.ok(result.gulls>=9);assert.ok(result.roost>=10,'cormorants on the stacks: '+result.roost); // (nesting on Cormorant Rock's tops and ledges)
   assert.deepEqual(result.errors,[]);assert.equal(result.frozen,true);assert.equal(result.startled,true);
 }));
 
