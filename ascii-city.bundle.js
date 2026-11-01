@@ -22308,6 +22308,23 @@ function stepGardens(dt) {
   if (inside && !gardensOpen(tod) && !stepGardens.rang) { stepGardens.rang = true; say('A bell rings: the Gardens are closing. You can still let yourself out.', 4); }
   if (gardensOpen(tod)) stepGardens.rang = false;
 }
+// birds are shy: walk within BIRD_SHY of one (cells) and it takes off away from you, up over the trees and out of
+// sight, and glides back to where it was BIRD_AWAY seconds later. Returns where it is, relative to its spot, and the
+// way it's flying: { dx, dy, dz, fx, fy }, or null on the ground, or { gone: true } while it's away
+const BIRD_SHY = .35, BIRD_AWAY = 30, BIRD_OUT = 6, BIRD_BACK = 4;
+function birdFlight(b, x, y) {
+  if ((mode === 'walk' || mode === 'boat') && !freecam && !(T - (b.scaredAt ?? -99) < BIRD_AWAY) && Math.hypot(rel(x - px), rel(y - py)) < BIRD_SHY) {
+    const ax = rel(x - px), ay = rel(y - py), n = Math.hypot(ax, ay) || 1, k = (Math.random() - .5) * .8;
+    b.scaredAt = T; b.fx = ax / n * Math.cos(k) - ay / n * Math.sin(k); b.fy = ay / n * Math.cos(k) + ax / n * Math.sin(k);
+    if (actx) burst(actx.currentTime, .5, [filt('bandpass', 1200, .7)], .08); // a clatter of wings
+  }
+  const t = T - (b.scaredAt ?? -99);
+  if (!(t >= 0 && t < BIRD_AWAY)) return null;
+  if (t > BIRD_OUT && t < BIRD_AWAY - BIRD_BACK) return { gone: true };
+  const out = t <= BIRD_OUT ? t / BIRD_OUT : (BIRD_AWAY - t) / BIRD_BACK, e = out * out, back = t > BIRD_OUT;
+  return { dx: b.fx * e * 4, dy: b.fy * e * 4, dz: e * 1.6, fx: back ? -b.fx : b.fx, fy: back ? -b.fy : b.fy };
+}
+const peacock = { k: 0 };
 const GARDEN_FOLK = [], GARDEN_ANIMALS = {}; // the paddlers and picnickers' looks, made the first time they're drawn
 const GARDEN_ACTORS=Array.from({length:8},()=>({}));
 function gardenFigureTargets() {
@@ -22334,10 +22351,19 @@ function gardenSprites() {
     tortoise: animalLook('tortoise', { body: [BRICK, 8], mark: [BRICK, 5], head: [GREEN, 6], pale: [YEL, 7] }),
     bear: animalLook('bear', { body: [BRICK, 5], head: [BRICK, 6], pale: [BRICK, 9], beak: [GRAY, 1] }),
     peacock: animalLook('peacock', { body: [BLUE, 9], wing: [GREEN, 7], mark: [CYAN, 12], pale: [BLUE, 4], beak: [GRAY, 10], leg: [GRAY, 8] }),
+    // in the air: the pigeon's body (ambient.js), which has its wings out, in each one's colours
+    flamingoFlying: animalLook('pigeon', { body: [MAG, 11], head: [MAG, 11], wing: [MAG, 8], mark: [MAG, 9], pupil: [GRAY, 1], beak: [GRAY, 1], pale: [WHITE, 12], leg: [MAG, 8] }),
+    duckFlying: animalLook('pigeon', { body: [BRICK, 7], head: [GREEN, 8], wing: [GRAY, 8], mark: [GREEN, 6], pupil: [GRAY, 3], beak: [YEL, 12], pale: [WHITE, 14], leg: [YEL, 10] }),
+    peacockFlying: animalLook('pigeon', { body: [BLUE, 9], head: [BLUE, 10], wing: [GREEN, 7], mark: [CYAN, 12], pupil: [GREEN, 4], beak: [GRAY, 10], pale: [BLUE, 4], leg: [GRAY, 8] }),
   };
   const animal = (gx, gy, z, h, fx, fy, look, frame = 0) => drawFigure(...V(gx, gy), z, h, fx, fy, look, 'f' + frame, { light: 4 });
-  for (const f of flamingos) { const th = f.k * 2.4; animal(f.gx, f.gy, 0, 0.104, Math.cos(th), Math.sin(th), A.flamingo, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? 1 : 0); }
-  for (const d of ducks) animal(d.gx, d.gy, 0, 0.12, d.hx ?? (d.dir || 1), d.hy ?? 0, A.duck);
+  const bird = (b, gx, gy, h, fx, fy, look, frame, flying) => { // (on the ground, or startled and up and away)
+    const o = birdFlight(b, ...gw(gx, gy));
+    if (!o) return animal(gx, gy, 0, h, fx, fy, look, frame);
+    if (!o.gone) animal(gx + o.dx, gy + o.dy, o.dz, h * .9, o.fx, o.fy, flying, fract(T * 6 + b.k * .37) < .5 ? 2 : 3);
+  };
+  for (const f of flamingos) { const th = f.k * 2.4; bird(f, f.gx, f.gy, 0.104, Math.cos(th), Math.sin(th), A.flamingo, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? 1 : 0, A.flamingoFlying); }
+  for (const d of ducks) bird(d, d.gx, d.gy, 0.12, d.hx ?? (d.dir || 1), d.hy ?? 0, A.duck, 0, A.duckFlying);
   if (duckFeed) for (const c of duckFeed.crumbs) { // the crumbs: arcing out from your hand, then floating till they're eaten
     if (c.eaten) continue;
     const k = clamp(1 - (c.lands - T) / (0.35 + Math.hypot(c.gx - c.fx, c.gy - c.fy) * 0.4), 0, 1);
@@ -22351,7 +22377,7 @@ function gardenSprites() {
   animal((bp.gx0 + bp.gx1) / 2, (bp.gy0 + bp.gy1) / 2, 0, 0.29, 1, 0, A.bear);
   art((bp.gx0 + bp.gx1) / 2 + 0.16, (bp.gy0 + bp.gy1) / 2, 0.14 + fract(T * 0.3) * 0.08, 0.025, 0.025, ['z'], () => C(WHITE, 12 * (1 - fract(T * 0.3)))); // zzz
   const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
-  animal(pgx, pgy, 0, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3);
+  bird(peacock, pgx, pgy, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3, A.peacockFlying);
   BOATS_PARKED.forEach(([bx, by], k) => { if (!boat || boat.from !== k) drawSwanBoat(...V(bx, by), 1, 0); }); // moored along the jetty, pointing out over the lake (less the one you're out in)
   for(const p of gardenFigureTargets()) {
     if(p.who.hidden)continue;
@@ -22704,6 +22730,8 @@ function aviaryProps(r) {
       const fed = T - seedT < 12, th = T * (0.4 + (k % 5) * 0.12) + k * 1.7;
       const tx = fed ? px + Math.cos(th * 2) * (1.4 + (k % 3) * 0.4) : 7 + Math.cos(th) * (2 + (k % 4) * 0.8), ty = fed ? py + Math.sin(th * 2) * (1.4 + (k % 3) * 0.4) : 6 + Math.sin(th) * (1.5 + (k % 3) * 0.6);
       s.x += (tx - s.x) * 0.05; s.y += (ty - s.y) * 0.05; s.z = fed ? 1.2 + Math.sin(th * 3) * 0.4 : 2 + Math.sin(th * 1.3) * 1.5;
+      const ax = s.x - px, ay = s.y - py, d = Math.hypot(ax, ay); // (walk right up to one and it veers off, up and away)
+      if (!fed && d < 1.2 && d > 1e-6) { s.x += ax / d * (1.2 - d) * .2; s.y += ay / d * (1.2 - d) * .2; s.z = Math.max(s.z, 2.6); }
     }));
   }
   p.push(...counterBox(11.5, 10, 0.8, 0.9), standing(11.5, 9.4, GREEN)); // the keeper with the seed
@@ -29345,6 +29373,15 @@ function dropHere() {
   else if (mode !== 'room') z = outdoorGroundHeight(x, y);
   say(`You put the ${dropHeldAt(x, y, at, z)} down.`);
 }
+// put down item k from the bag (the inventory's drop buttons): as if you'd taken it in hand and pressed X, and then
+// whatever you were holding is back in your hand
+function dropSlot(k) {
+  if (!inv[k]) return;
+  const prev = held, count = inv.length;
+  held = k; dropHere();
+  if (inv.length === count) held = prev; // (couldn't put it down here: nothing changes)
+  else if (prev !== k) held = prev > k ? prev - 1 : prev;
+}
 const droppedHere = () => {
   const target=interactionFocus();if(target?.kind==='drop')return target.who;
   const at = placeKey();
@@ -29481,14 +29518,18 @@ function startShift() {
 }
 function openInventory() {
   invEl = invEl || panel('inventory');
-  if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
+  if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; } #inventory .drop { padding:2px 8px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.6); background:transparent; font:inherit; cursor:pointer; } #inventory .drop:hover, #inventory .drop:focus-visible { color:#fff; background:rgba(255,255,255,0.12); }`; document.head.appendChild(style); invStyle = true; }
+  const canDrop = placeKey() !== null;
   const rows_ = inv.length ? inv.map((it, k) => {
     const slot = quickSlots.indexOf(k), name = itemName(it);
-    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
+    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label>${canDrop ? `<button class="drop" data-drop="${k}" aria-label="Drop ${name}">drop</button>` : ''}</div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
   showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; ${placeKey()!==null?'X drop &middot; ':''}I / Esc close</p>`);
-  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
+  invEl.onclick = e => {
+    const d = e.target.closest('[data-drop]'); if (d) { dropSlot(+d.dataset.drop); return openInventory(); }
+    const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); }
+  };
   invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);

@@ -188,3 +188,50 @@ test('the Fern Ridge telescope can be looked through, and Cormorant Rock is in i
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the inventory can drop any item, keeping what is in your hand',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];clearInventory();mode='walk';room=null;
+  carryItem({id:'apple',uses:3},false);carryItem({id:'umbrella',uses:0},false);carryItem({id:'soda',uses:3});
+  const before=dropped.length;openInventory();
+  const btn=document.querySelector('#inventory [data-drop="1"]');if(!btn)return ['no drop button'];
+  btn.click();
+  if(inv.some(it=>it.id==='umbrella'))bad.push('umbrella still carried');
+  if(dropped.length!==before+1||dropped[dropped.length-1].id!=='umbrella')bad.push('not on the ground');
+  if(heldItem()?.id!=='soda')bad.push(['hand changed',heldItem()?.id]);
+  if(document.querySelectorAll('#inventory [data-drop]').length!==2)bad.push('menu not refreshed');
+  // the item in hand drops too
+  document.querySelector(`#inventory [data-drop="${held}"]`).click();if(inv.some(it=>it.id==='soda'))bad.push('soda still carried');
+  closeInventory();return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('ducks, flamingos and the peacock fly off when you come close, then come back',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];tod=12;mode='walk';room=null;
+  for(const [name,b,gx,gy] of [['duck',ducks[0],ducks[0].gx,ducks[0].gy],['flamingo',flamingos[0],flamingos[0].gx,flamingos[0].gy],['peacock',peacock,12,6.2]]){
+   const [x,y]=gw(gx,gy);px=x+.6;py=y;T+=40;
+   if(birdFlight(b,x,y))bad.push([name,'flew from afar']);
+   px=x+.2;const o0=birdFlight(b,x,y);T+=2;const o=birdFlight(b,x,y);
+   if(!o0||!o||o.gone||!(o.dz>0)||!(o.dx<0))bad.push([name,'did not take off away from you',o]); // (you're east of it: it goes west)
+   T+=8;if(!birdFlight(b,x,y)?.gone)bad.push([name,'not away']);
+   px=x+5;T+=25;if(birdFlight(b,x,y))bad.push([name,'never came back']);
+  }
+  // drawn in the air without errors
+  const [x,y]=gw(ducks[1].gx,ducks[1].gy);px=x+.2;py=y;a=Math.PI;env(0);render(0);T+=2;render(0);
+  if(!(T-ducks[1].scaredAt<5))bad.push('drawing near a duck did not scare it');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('aviary birds veer away when you walk right up to one',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  enterRoom('aviary',{word:'AVIARY',ret:[100,100,0]},[7,9,-Math.PI/2]);seedT=-99;
+  const b=room.props.find(o=>o.tick&&o.draw&&o.z!==undefined);for(let k=0;k<30;k++){T+=.05;b.tick(b);}
+  px=b.x+.3;py=b.y;const d0=Math.hypot(b.x-px,b.y-py);for(let k=0;k<5;k++){T+=.05;b.tick(b);}
+  return [Math.hypot(b.x-px,b.y-py)>d0,b.z>=2.6];
+ });
+ assert.deepEqual(r,[true,true]);
+}));
