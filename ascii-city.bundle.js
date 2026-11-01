@@ -393,7 +393,7 @@ function env(dt) {
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
   overcast = Math.max(rain, fogAmt, snow * 0.8);
   amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast) * (1 - 0.3 * storm) + flash() * 0.9;
-  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow);
+  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow) * (typeof telescopeActive === 'function' && telescopeActive() ? TELESCOPE_REACH : 1); // (through a telescope you see further: held-curios.js)
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
@@ -2068,7 +2068,7 @@ const FERN_TRAILS = [
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
   [[521.5,235.5],[525.5,236.2],[528,237.5]],
-  [[590,243],[597,247],[603,250]],
+  [[590,243],[597,247],[603,250],[604,260],[604.5,270]], // (on up the ridge, stopping short of the lookout so the summit keeps its view)
 ];
 const ISLAND_PATHS = {
   cabin: [[[478.5,395.5],[484,395.5],[488.5,394],[492,394],[492,392.2]]],
@@ -2076,9 +2076,15 @@ const ISLAND_PATHS = {
   rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
   sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
 };
+// Fern Ridge Lookout: the brass telescope on the south ridge, trained across the water on Cormorant Rock's stacks (the
+// one island whose silhouette clears the horizon from Fern). eye: where you stand to look through it; dir: its heading
+const FERN_LOOKOUT = (() => {
+  const x = 606.8, y = 276, rock = [700.6, 350.6], dir = Math.atan2(rock[1] - y, rock[0] - x), c = Math.cos(dir), s = Math.sin(dir);
+  return { x, y, dir, target: 'Cormorant Rock', eye: [x - c * .28, y - s * .28], cairn: [x + s * .62, y - c * .62], sign: [x - c * .75 - s * .7, y - s * .75 + c * .7] };
+})();
 const ISLAND_SIGHTS = [
   {id:'fern-camp',island:'fern',name:'Fern woodland camp',x:527.8,y:237.5,text:'A little canvas camp above the landing. The board asks visitors to use the existing fire ring and leave no trace.'},
-  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:603,y:250,text:'FERN RIDGE LOOKOUT. An old survey cairn marks the woodland ridge. The brass telescope points north between the trees towards the rough airstrip. Someone has left a smooth white stone on the cairn.'},
+  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:FERN_LOOKOUT.sign[0],y:FERN_LOOKOUT.sign[1],text:'FERN RIDGE LOOKOUT. An old survey cairn marks the top of the ridge. The brass telescope is trained south-east across the water on the sea stacks of Cormorant Rock. Someone has left a smooth white stone on the cairn.'},
   {id:'cabin-nets',island:'cabin',name:'Cabin Cove drying racks',x:489,y:394.8,text:'Hand-mended fishing nets dry in the sea breeze. A note on the rack: "Shelter unlocked. Logbook inside. Good luck out there."'},
   {id:'cormorant-roost',island:'rock',name:'Cormorant roost',x:698,y:353.5,text:'Two weathered stacks rise above the tide. Cormorants spread their wings to dry; pale streaks mark the ledges. Keep a respectful distance from the roost.'},
   {id:'crescent-pools',island:'sand',name:'Crescent tide pools',x:719,y:115,text:'Small tide pools gleam between the sand and the inlet. Shells, ribbons of seaweed and tiny shore birds gather at their edges.'},
@@ -17684,8 +17690,10 @@ function roomCeil(i, r, x, rx, ry) {
 }
 function roomSprites() {
   prepareInteriorBattens();prepareInteriorHanging();
+  const moving = furnishingPlacement?.part?.key; // (the piece you're moving shows only as its preview: home-furnishing-ui.js)
   for (const s of room.props) {
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
+    if (moving != null && s.furnishingKey === moving) continue;
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
@@ -24718,7 +24726,7 @@ function promptText() {
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
-  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
+  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && !cabUnmanned(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return fishPrompt();
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
@@ -25037,6 +25045,10 @@ function leaveCar() {
     c.player = false; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
     a = Math.atan2(rel(py - c.y), rel(px - c.x));
   }
+  else if (cabUnmanned(c)) { // nobody up front to pay: you just get out
+    say(c.wrecked || c.fireT != null ? 'You scramble out of the cab. Nobody\'s asking for the fare.' : 'You climb out. The driver\'s gone, and the meter with them.', 3);
+    c.rider = c.dest = c.arrived = c.rush = false;
+  }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
@@ -25045,6 +25057,8 @@ function leaveCar() {
   }
   me = null; mode = 'walk'; look = 0;
 }
+// a cab with nobody driving it: on fire or burnt out, its driver bailed, or pulled over and cuffed (stopT)
+const cabUnmanned = c => !!(c.wrecked || c.fireT != null || c.bail || c.stopT > T);
 // taxi destinations: always a point in the middle of a street that exists
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
 function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
@@ -25266,6 +25280,7 @@ function interact() {
   if (c && c.v < 0.6) {
     me = c;
     if (c.body === TAXI) {
+      if (cabUnmanned(c)) { me = null; return say(c.wrecked || c.fireT != null ? 'It\'s a wreck. Nobody\'s driving that anywhere.' : 'The cab\'s empty. No driver, no ride.', 3); }
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
       a = camYaw = carYaw(c);
@@ -25415,7 +25430,7 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 function hail() {
   if (mode !== 'walk') return;
   let best = null, bd = 3;
-  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
 // ===== the taxi job: J at an idle taxi and you drive it yourself. Now and then someone on the sidewalk nearby flags
@@ -25824,7 +25839,7 @@ function stepChopperSound(dt) {
 let carSmokeT = 0;
 function stepCarDamage(dt) {
   for (const c of stepCarFires(dt)) carBang(c);
-  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); } // (the driver, out and running)
+  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); if (c === me && mode === 'taxi') say('Your driver bails out and runs. E: get out, now!', 4); } // (the driver, out and running; no fare after that)
   if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the bonnet. Get out, now!', 4); }
   if (me && !burning(me)) me.warnedFire = false;
   if ((carSmokeT -= dt) > 0) return;
@@ -25844,7 +25859,7 @@ function carBang(c) {
     r: 0.1, rMax: 0.35, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.3, life: 1, fade: 1 / 5, seed: Math.random() * 100 });
   const d = Math.hypot(rel(c.x - px), rel(c.y - py));
   if (actx) { const p = worldClip('crash', 1, c.x, c.y, terrainHeight(c.x, c.y) + 0.05, 60, 12); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 40, 0.9, 0.12 * p.gain, 'sawtooth', p.pan); }
-  if (c === me && mode === 'drive') { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
+  if (c === me && (mode === 'drive' || mode === 'taxi')) { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
   if (onFootMode() && mode === 'walk' && d < 0.6) { hurt(25 * (1 - d / 0.6)); say('The blast knocks you flat.', 3); }
   if (c.owned) say(`Your ${ITEMS[c.model].name} is a burnt-out shell. The garage will tow it and fix it up (the key fob, ${fmt$(TOW_FEE)}).`, 6);
 }
@@ -30966,8 +30981,10 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
   return null;
 });
 
-// The telescope magnifies the existing scene, without another world render.
-const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()&&!freecam;
+// The telescope magnifies the existing scene, without another world render, and lets you see that much further
+// (state.js stretches the view distance): far enough to make out the other islands across the water.
+const TELESCOPE_REACH=5;
+const telescopeActive=()=>(!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()||!!fx.lookout&&mode==='walk')&&!freecam; // (yours, or the lookout's: islands-content.js)
 DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
@@ -30979,7 +30996,7 @@ function drawTelescope(){
  const x=cv.width/2,y=cv.height/2,r=Math.min(x,y)*.84;
  g.save();g.fillStyle='#050506';g.beginPath();g.rect(0,0,cv.width,cv.height);g.arc(x,y,r,0,TAU,true);g.fill('evenodd');
  g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
- g.font='12px monospace';g.fillStyle='#ddd';g.fillText('6×   Q: lower telescope',x-80,y+r+22);g.restore();
+ g.font='12px monospace';g.fillStyle='#ddd';if(!fx.lookout)g.fillText('6×   Q: lower telescope',x-80,y+r+22); // (at the lookout the prompt says how to step back)g.restore();
 }
 // Item art can change on use, but its hand stays steady.
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
@@ -33055,13 +33072,23 @@ function bustedChoice(how) {
   const armed = inv.some(it => ITEMS[it.id].kind === 'gun'),stolen=inv.some(stolenGoods);
   if (how === 'fine' && !payFine()) return;
   hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
-  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}${stolen?' They confiscate the stolen goods.':''}`, 4);
+  const escorted = how === 'fine' && escortOut();
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine.${escorted ? ' They walk you out onto the street.' : ''} "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}${stolen?' They confiscate the stolen goods.':''}`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars
   say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
 }
 
+// caught inside a building (a heist, a robbed shop) and let off with a fine: marched out the front door to the
+// street, never left standing in the vault. Not from your own home. True if you were walked out
+function escortOut() {
+  if (mode !== 'room' || homeRecord(room)) return false;
+  const ret = room.ret || room.lobby?.ret; if (!ret) return false;
+  hotelAlarm = null; body.seat = null;
+  [px, py, a] = ret; a += Math.PI; room = null; mode = 'walk';
+  transitSync(); return true;
+}
 // the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
 // share a cell. He has some things to say about that
 function jailWithCabbie() {
@@ -33244,10 +33271,10 @@ const tellyNews = () => { const l = newsLines(true); return l.length ? ` The loc
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
 const workshopHome = () => mode === 'room' ? homeRecord(room) : null;
-function workshopProps(r) {
+function workshopProps(r, parts = null) { // (parts: draw these instead, as the placement preview does)
   const home = homeRecord(r); if (!home) return [];
   const w = workshopState(home), props = [];
-  for (const p of w.parts) {
+  for (const p of parts || w.parts) {
     const ca = Math.cos(p.a), sa = Math.sin(p.a), box = (ox, oy, hl, hw, z0, z1, shade) =>
       BX(p.x + ox * ca - oy * sa, p.y + ox * sa + oy * ca, hl, hw, z0, z1, shade, ca, sa);
     if (p.id === 'bench') {
@@ -33419,8 +33446,8 @@ function workshopKey(e) {
 function drawWorkshopPreview() {
   if (!workshopPlacement) return;
   const p=workshopCandidate(); if (!Number.isFinite(p.x)) return;
-  const d=WORKSHOP_PARTS[p.id], floor=!!d.halfX, b=boxAt(p.x-px,p.y-py,Math.cos(p.a),Math.sin(p.a),d.halfX||.25,d.halfY||.25,floor ? .02 : .94,floor ? .08 : 1.5);
-  drawBox(b,(i,t,L)=>{set(i,'+',C(p.ok?GREEN:RED,13));return true;});
+  const {ok,reason,...part}=p;
+  drawGhostProps(workshopProps(room,[{...part,key:-1}]),p.ok); // (the piece itself, see-through: home-furnishing-ui.js)
 }
 // ---- the batch, heard: the rotor humming up and down with the power you give it, the hiss of a vent, the press
 // coming down on a seal (a miss and the end: the arcade's own blips, minigame-ui.js)
@@ -34266,9 +34293,21 @@ function islandCabinAtDoor() {
 function nearIslandLogbook() {
   return mode==='room'&&room.kind==='islandshelter'&&Math.hypot(px-4,py-4.3)<1.1;
 }
+// the lookout's telescope (islands.js FERN_LOOKOUT): E behind it and you're at the eyepiece, looking where it points.
+// held-curios.js does the magnifying (and state.js the seeing further); walk, or E again, and you step back
+const atLookoutScope = () => mode==='walk'&&!fx.lookout&&near(px,py,...FERN_LOOKOUT.eye)<.45;
+function useLookoutScope() {
+  if(fx.lookout){fx.lookout=false;return say('You straighten up from the eyepiece.',2);}
+  fx.telescope=false;body.crouch=0;body.seat=null;[px,py]=FERN_LOOKOUT.eye;a=FERN_LOOKOUT.dir;pitch=0;fx.lookout=true;
+  say(`You bend to the eyepiece. Across the water: ${FERN_LOOKOUT.target}, its two stacks white with birds. Walk or E to step back.`,6);
+}
+// (stepped away, or off somewhere else entirely: the telescope's left behind)
+function stepLookoutScope(){if(fx.lookout&&(mode!=='walk'||near(px,py,...FERN_LOOKOUT.eye)>.05||K.KeyW||K.KeyA||K.KeyS||K.KeyD))fx.lookout=false;}
 function islandBuildingPrompt() {
   if(nearIslandLogbook())return 'E: read the visitors\' log';
   if(mode!=='walk')return '';
+  if(fx.lookout)return 'E: step back from the telescope';
+  if(atLookoutScope())return `E: look through the telescope (${FERN_LOOKOUT.target})`;
   const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
   if(sight)return `E: read ${sight.name}`;
   const cabin=islandCabinAtDoor();
@@ -34287,6 +34326,7 @@ function islandBuildingUse() {
     return true;
   }
   if(mode!=='walk')return false;
+  if(fx.lookout||atLookoutScope()){useLookoutScope();return true;}
   const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
   if(sight){say(sight.text,7);return true;}
   const cabin=islandCabinAtDoor();
@@ -34718,17 +34758,20 @@ function buildIslandSights() {
     for(const side of [-1,1])islandGroundModel(fire.x+side*.045,fire.y,.07,.014,.025,'driftwood');
     islandWaymark(fire.x+.28,fire.y-.2,'FIRE RING',.36);
   }
-  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE']])islandWaymark(x,y,word,.42);
+  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE'],[604.5,270.5,'LOOKOUT']])islandWaymark(x,y,word,.42);
   // A survey cairn and a brass telescope give the ridge a recognisable silhouette.
+  const [cx,cy]=FERN_LOOKOUT.cairn;
   for(let k=0;k<3;k++) {
-    const r=.18-k*.045,z=terrainHeight(604.1,250.1);
-    const stone=islandDetail(604.1,250.1,r,r,z+k*.085,z+(k+1)*.085,'rock');
+    const r=.18-k*.045,z=terrainHeight(cx,cy);
+    const stone=islandDetail(cx,cy,r,r,z+k*.085,z+(k+1)*.085,'rock');
     ISLAND_OBSTACLES.push(stone);
     stone.seed=.72;stone.planes=landmarkPlanes(r,r,stone.z0,stone.z1,null).concat([[1,0,1,stone.z1+r*.8],[-1,0,1,stone.z1+r*.8],[0,1,1,stone.z1+r*.8],[0,-1,1,stone.z1+r*.8]]);
   }
-  const z=terrainHeight(603.8,249.5);
-  for(const x of [603.72,603.88])islandDetail(x,249.5,.015,.035,z-.02,z+.18,'metal');
-  Object.assign(islandDetail(603.8,249.5,.08,.015,z+.175,z+.205,'metal',Math.PI/2),{base:YEL});
+  { // the telescope: two legs either side of the tube, the tube along its heading (usable: islands-content.js)
+    const {x,y,dir}=FERN_LOOKOUT,z=terrainHeight(x,y),c=Math.cos(dir),s=Math.sin(dir);
+    for(const side of [-1,1])islandDetail(x-s*side*.08,y+c*side*.08,.015,.035,z-.02,z+.18,'metal',dir+Math.PI/2);
+    Object.assign(islandDetail(x,y,.08,.015,z+.175,z+.205,'metal',dir),{base:YEL});
+  }
   for(const [x,y]of [[626.3,194.8],[627.9,195.7],[626.1,197.2]])islandCover(x,y,'fern',hash(x,y,1941),.27);
   // Cabin Cove: repaired nets and floats, a fish box, and a little hauled-up skiff.
   for(const x of [488.55,489.65])islandGroundModel(x,395.15,.025,.025,.3,'timber');
@@ -44031,7 +44074,7 @@ function homeFixtureTargets() {
   const home=mode==='room'&&homeRecord(room);if(!home)return [];
   const targets=(room.def.lamps||[]).map(([x,y],k)=>({kind:'fixed-lamp',key:'fixed'+k,x,y,z0:(room.def.height||3)-.8,z1:room.def.height||3,radius:.25,reach:3.2}));
   for(const part of homeFurnishings(home).parts) {
-    const d=HOME_FURNITURE[part.id];if(d.fixture)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
+    const d=HOME_FURNITURE[part.id];if(d.fixture&&part!==furnishingPlacement?.part)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
   }
   return targets;
 }
@@ -44191,10 +44234,23 @@ function homeFurnishingKey(e) {
   }else if(e.code==='KeyF'&&!e.repeat){openHomeFurnishings();return true;}
   return false;
 }
+// A placement preview: the real model, every other cell left see-through so it reads as a ghost and the room shows
+// through it (which way it faces is plain to see). Red where it can't go.
+function drawGhostProps(props,ok) {
+  const draw=drawBox;
+  drawBox=(b,shade,ray)=>draw(b,(i,t,L)=>{
+    if((i%cols+Math.floor(i/cols))&1)return false;
+    if(!shade(i,t,L))return false;
+    if(!ok){BG[i]=C(RED,BG[i]&15);COL[i]=C(RED,Math.max(8,COL[i]&15));}
+    return true;
+  },ray);
+  try{for(const s of props){if(s.draw)s.draw(s.x-px,s.y-py,s);else if(s.box)drawBox({...s.box,x:s.box.x-px,y:s.box.y-py},s.shade);}}
+  finally{drawBox=draw;}
+}
 function drawFurnishingPreview() {
   if(!furnishingPlacement||mode!=='room')return;
-  const p=furnishingCandidate(),b=furnishingBox(p);
-  drawBox({...b,x:b.x-px,y:b.y-py},(i,t,L)=>{if(HIT.face<5&&fract(HIT.u*10)>.12&&fract(HIT.w*10)>.12)return false;set(i,p.ok?'+':'x',C(p.ok?GREEN:RED,14));return true;});
+  const q=furnishingPlacement,p=furnishingCandidate();if(!Number.isFinite(p.x)||!p.x&&!p.y)return; // (no wall in sight yet)
+  drawGhostProps([furnishingProp({on:p.id!=='f_recordplayer',photo:0,track:0,...(q.item?furnishingItemState(q.item).furnishing:q.part),...p,key:-1},room)],p.ok);
 }
 function takeHomePhoto() {
   if(T-photoLastT<.6)return;photoLastT=T;
@@ -46396,7 +46452,7 @@ addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.pr
 
 const free = (x, y) => {
   if (mode === 'room') return x >= 0 && y >= 0 && x < room.W && y < room.H && !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
-    !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
+    !room.props.some(s => s.box && !s.walk && !(s.furnishingKey != null && s.furnishingKey === furnishingPlacement?.part?.key) && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (mode === 'walk') {
@@ -46618,11 +46674,12 @@ function loop(t) {
   else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
   else if (law === 'cab' && wanted.stars > 0) jailWithCabbie(); // and you were wanted already: you both go down
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
-    const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
+    const c = me; c.stopT = T + 25; leaveCar(); c.v = 0; // (the driver's cuffed: no fare)
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepLookoutScope(); // (the lookout's telescope: islands-content.js)
   updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)

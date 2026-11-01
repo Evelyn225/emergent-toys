@@ -56,9 +56,21 @@ function islandCabinAtDoor() {
 function nearIslandLogbook() {
   return mode==='room'&&room.kind==='islandshelter'&&Math.hypot(px-4,py-4.3)<1.1;
 }
+// the lookout's telescope (islands.js FERN_LOOKOUT): E behind it and you're at the eyepiece, looking where it points.
+// held-curios.js does the magnifying (and state.js the seeing further); walk, or E again, and you step back
+const atLookoutScope = () => mode==='walk'&&!fx.lookout&&near(px,py,...FERN_LOOKOUT.eye)<.45;
+function useLookoutScope() {
+  if(fx.lookout){fx.lookout=false;return say('You straighten up from the eyepiece.',2);}
+  fx.telescope=false;body.crouch=0;body.seat=null;[px,py]=FERN_LOOKOUT.eye;a=FERN_LOOKOUT.dir;pitch=0;fx.lookout=true;
+  say(`You bend to the eyepiece. Across the water: ${FERN_LOOKOUT.target}, its two stacks white with birds. Walk or E to step back.`,6);
+}
+// (stepped away, or off somewhere else entirely: the telescope's left behind)
+function stepLookoutScope(){if(fx.lookout&&(mode!=='walk'||near(px,py,...FERN_LOOKOUT.eye)>.05||K.KeyW||K.KeyA||K.KeyS||K.KeyD))fx.lookout=false;}
 function islandBuildingPrompt() {
   if(nearIslandLogbook())return 'E: read the visitors\' log';
   if(mode!=='walk')return '';
+  if(fx.lookout)return 'E: step back from the telescope';
+  if(atLookoutScope())return `E: look through the telescope (${FERN_LOOKOUT.target})`;
   const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
   if(sight)return `E: read ${sight.name}`;
   const cabin=islandCabinAtDoor();
@@ -77,6 +89,7 @@ function islandBuildingUse() {
     return true;
   }
   if(mode!=='walk')return false;
+  if(fx.lookout||atLookoutScope()){useLookoutScope();return true;}
   const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
   if(sight){say(sight.text,7);return true;}
   const cabin=islandCabinAtDoor();

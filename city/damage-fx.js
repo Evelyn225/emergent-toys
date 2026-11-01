@@ -4,7 +4,7 @@
 let carSmokeT = 0;
 function stepCarDamage(dt) {
   for (const c of stepCarFires(dt)) carBang(c);
-  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); } // (the driver, out and running)
+  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); if (c === me && mode === 'taxi') say('Your driver bails out and runs. E: get out, now!', 4); } // (the driver, out and running; no fare after that)
   if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the bonnet. Get out, now!', 4); }
   if (me && !burning(me)) me.warnedFire = false;
   if ((carSmokeT -= dt) > 0) return;
@@ -24,7 +24,7 @@ function carBang(c) {
     r: 0.1, rMax: 0.35, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.3, life: 1, fade: 1 / 5, seed: Math.random() * 100 });
   const d = Math.hypot(rel(c.x - px), rel(c.y - py));
   if (actx) { const p = worldClip('crash', 1, c.x, c.y, terrainHeight(c.x, c.y) + 0.05, 60, 12); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 40, 0.9, 0.12 * p.gain, 'sawtooth', p.pan); }
-  if (c === me && mode === 'drive') { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
+  if (c === me && (mode === 'drive' || mode === 'taxi')) { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
   if (onFootMode() && mode === 'walk' && d < 0.6) { hurt(25 * (1 - d / 0.6)); say('The blast knocks you flat.', 3); }
   if (c.owned) say(`Your ${ITEMS[c.model].name} is a burnt-out shell. The garage will tow it and fix it up (the key fob, ${fmt$(TOW_FEE)}).`, 6);
 }

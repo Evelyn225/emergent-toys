@@ -84,3 +84,107 @@ test('the board comes out on a roof, and rolls',()=>fixture(async p=>{
  });
  assert.deepEqual(r,['roof',true]);
 }));
+
+test('placing furniture or workshop gear shows the model itself, see-through, red where it will not fit',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];tod=12;money=30000;body.z=body.vz=0;[px,py]=FERN_HOUSE.door;buyProperty('home_island',px,py);interact();px=18;py=19;a=0;pitch=-.25;env(0);render(0);
+  const frame=()=>{render(0);return Array.from(BG);},changed=(x,y)=>x.map((v,i)=>v!==y[i]?i:-1).filter(i=>i>=0);
+  const check=(name,start,stop)=>{
+   const plain=frame();start();const ghost=frame(),cells=changed(plain,ghost);
+   let calls=0;const draw=drawBox;drawBox=(...q)=>{calls++;return draw(...q);};try{render(0);}finally{drawBox=draw;}stop();
+   if(cells.length<50)bad.push([name,'barely drawn',cells.length]);
+   if(cells.some(i=>(i%cols+Math.floor(i/cols))&1))bad.push([name,'not see-through']);
+   return calls;
+  };
+  carryItem({id:'f_sofa',uses:0});
+  check('sofa',()=>beginFurnishingPlacement(inv[inv.length-1]),()=>cancelFurnishingPlacement());
+  buyWorkshopKit(homeRecord());workshopState(homeRecord()).owned.growrack=1;
+  check('grow rack',()=>beginWorkshopPlacement('growrack'),()=>endWorkshopPlacement());
+  // pushed half into the far wall: it doesn't fit, and it shows red
+  carryItem({id:'f_sofa',uses:0});px=room.W-1-.5-1.8;py=19;a=0;beginFurnishingPlacement(inv[inv.length-1]);
+  if(furnishingCandidate().ok)bad.push('sofa fits into the wall');
+  render(0);if(!Array.from(BG).some(v=>v>>4===RED))bad.push('blocked preview not red');
+  cancelFurnishingPlacement();
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('moving a placed piece hides the original until it goes down again',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];tod=12;money=30000;body.z=body.vz=0;[px,py]=FERN_HOUSE.door;buyProperty('home_island',px,py);interact();px=18;py=19;a=0;pitch=-.25;env(0);render(0);
+  carryItem({id:'f_sofa',uses:0});beginFurnishingPlacement(inv[inv.length-1]);if(!furnishingCandidate().ok)return ['first spot blocked'];confirmFurnishingPlacement();
+  const part=homeFurnishings(homeRecord()).parts[0],prop=room.props.find(o=>o.furnishingKey===part.key);
+  let drawn=0;const d=prop.draw;prop.draw=(...q)=>{drawn++;return d(...q);};
+  render(0);if(!drawn)bad.push('placed sofa not drawn');
+  beginFurnishingPlacement(null,part);a=Math.PI/2;drawn=0;render(0);
+  if(drawn)bad.push('original still drawn while moving');
+  if(!free(part.x,part.y))bad.push('original still blocks while moving');
+  cancelFurnishingPlacement();drawn=0;render(0);
+  if(!drawn)bad.push('original gone after cancelling');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('no fare once the cab has no driver or is on fire, and no getting into an empty or wrecked one',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],taxi=cars.find(c=>c.body===TAXI&&!c.player&&!c.rider);if(!taxi)return ['no taxi'];
+  const ride=()=>{money=100;px=taxi.ex=taxi.x;py=taxi.ey=taxi.y;taxi.v=0;me=taxi;mode='taxi';taxi.rider=true;taxi.fare=5;taxi.dest=null;};
+  const reset=()=>{Object.assign(taxi,{wrecked:false,fireT:null,bail:false,ejected:false,stopT:0,parked:false,dmg:0});me=null;mode='walk';};
+  ride();leaveCar();if(!(money<100))bad.push('a normal ride was free');
+  reset();ride();damageCar(taxi,DMG_FIRE);stepCarDamage(0);if(!taxi.bail)bad.push('driver did not bail from the fire');
+  leaveCar();if(money!==100)bad.push(['paid a fleeing driver',money]);
+  reset();ride();taxi.stopT=T+25;leaveCar();if(money!==100)bad.push(['paid an arrested driver',money]);
+  reset();ride();taxi.wrecked=true;leaveCar();if(money!==100)bad.push(['paid for a wreck',money]);
+  for(const [k,v] of [['wrecked',true],['bail',true],['stopT',T+25]]){
+   reset();taxi[k]=v;taxi.v=0;px=taxi.x;py=taxi.y;mode='walk';me=null;interact();
+   if(mode==='taxi'){bad.push(['rode a cab with',k]);leaveCar();}
+  }
+  reset();return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('caught in a heist and let off with a fine, you are walked out onto the street',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],street=[px,py,a];
+  const caught=(name,go)=>{
+   money=50000;go();addWanted('heist',street[0],street[1],true);openBusted();bustedChoice('fine');
+   if(mode!=='walk'||room)bad.push([name,'still inside',mode,room?.kind]);
+   else if(Math.hypot(rel(px-street[0]),rel(py-street[1]))>.01)bad.push([name,'not at the door']);
+   if(wanted.stars)bad.push([name,'still wanted']);
+  };
+  caught('museum',()=>enterRoom('museum',{...MUSEUM.sh,ret:[...street],line:'',burgled:true,light:.28,loot:0},[12.5,10.5,-Math.PI/2]));
+  caught('hotel gallery',()=>enterRoom('grandhotelheist',{word:'PRIVATE GALLERY',ret:[...street],lobby:{word:'GRAND HOTEL',ret:[...street],grandHotel:true},burgled:true,spot:0},[12,14.6,-Math.PI/2]));
+  // jail is still jail
+  enterRoom('museum',{...MUSEUM.sh,ret:[...street],line:'',burgled:true,light:.28,loot:0},[12.5,10.5,-Math.PI/2]);addWanted('heist',street[0],street[1],true);openBusted();bustedChoice('jail');
+  if(room?.kind!=='jail')bad.push(['jail',room?.kind]);
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
+
+test('the Fern Ridge telescope can be looked through, and Cormorant Rock is in its sights',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],L=FERN_LOOKOUT,rock=WILD_ISLANDS.find(i=>i.id==='rock');tod=13;
+  // a clear line over Fern's ridge to the top of the stacks
+  const eye=walkGround(...L.eye)+.17,D=near(...L.eye,700.6,350.6);let worst=-9;
+  for(let s=.6;s<D-rock.rx*.6;s+=.2){const x=L.eye[0]+Math.cos(L.dir)*s,y=L.eye[1]+Math.sin(L.dir)*s;worst=Math.max(worst,(Math.max(terrainHeight(x,y),islandSightHeight(x,y))-eye)/s);}
+  if(worst>=(1.2-eye)/D)bad.push('the ridge hides the rock');
+  if(Math.abs(mod(L.dir-Math.atan2(rock.y-L.y,rock.x-L.x)+Math.PI,TAU)-Math.PI)>.1)bad.push('not pointed at the rock');
+  [px,py]=L.eye;py+=.1;mode='walk';room=null;env(0);render(0);
+  if(!/telescope/.test(promptText()))bad.push(['prompt',promptText()]);
+  interact();env(0);render(0);
+  if(!fx.lookout||!telescopeActive()||vis<=MAXD*2)bad.push(['not looking through it',fx.lookout,vis]);
+  if(Math.abs(mod(a-L.dir+Math.PI,TAU)-Math.PI)>1e-6)bad.push('facing elsewhere');
+  // the far stacks are drawn: something solid out past 100 cells near the middle of the view
+  let far=0;for(let r=0;r<rows;r++)for(let c=cols*.35|0;c<cols*.65;c++){const i=r*cols+c;if(ZB[i]>100&&ZB[i]<vis)far++;}
+  if(far<20)bad.push(['rock not drawn',far]);
+  K.KeyW=1;stepLookoutScope();K.KeyW=0;if(fx.lookout)bad.push('walking did not step back');
+  env(0);if(vis>MAXD)bad.push('still seeing far');
+  interact();interact();if(fx.lookout)bad.push('E did not step back');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
