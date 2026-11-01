@@ -489,6 +489,15 @@ function dropHere() {
   else if (mode !== 'room') z = outdoorGroundHeight(x, y);
   say(`You put the ${dropHeldAt(x, y, at, z)} down.`);
 }
+// put down item k from the bag (the inventory's drop buttons): as if you'd taken it in hand and pressed X, and then
+// whatever you were holding is back in your hand
+function dropSlot(k) {
+  if (!inv[k]) return;
+  const prev = held, count = inv.length;
+  held = k; dropHere();
+  if (inv.length === count) held = prev; // (couldn't put it down here: nothing changes)
+  else if (prev !== k) held = prev > k ? prev - 1 : prev;
+}
 const droppedHere = () => {
   const target=interactionFocus();if(target?.kind==='drop')return target.who;
   const at = placeKey();
@@ -625,14 +634,18 @@ function startShift() {
 }
 function openInventory() {
   invEl = invEl || panel('inventory');
-  if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
+  if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; } #inventory .drop { padding:2px 8px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.6); background:transparent; font:inherit; cursor:pointer; } #inventory .drop:hover, #inventory .drop:focus-visible { color:#fff; background:rgba(255,255,255,0.12); }`; document.head.appendChild(style); invStyle = true; }
+  const canDrop = placeKey() !== null;
   const rows_ = inv.length ? inv.map((it, k) => {
     const slot = quickSlots.indexOf(k), name = itemName(it);
-    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
+    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label>${canDrop ? `<button class="drop" data-drop="${k}" aria-label="Drop ${name}">drop</button>` : ''}</div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
   showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; ${placeKey()!==null?'X drop &middot; ':''}I / Esc close</p>`);
-  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
+  invEl.onclick = e => {
+    const d = e.target.closest('[data-drop]'); if (d) { dropSlot(+d.dataset.drop); return openInventory(); }
+    const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); }
+  };
   invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);

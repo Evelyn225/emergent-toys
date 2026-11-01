@@ -115,6 +115,33 @@ function islandRockShade(model,i,t,L) {
   set(i,streak?'|':model.stack&&fract(HIT.w*9+model.seed)<.045?'_':grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
   return true;
 }
+// Cormorant Rock's stacks: warped bedding planes with darker partings, vertical joints, lichen low down, the tops
+// crusted white and white runs of guano down the faces from every ledge. Small detail fades with distance
+function islandStackShade(m,i,t,L) {
+  const p=m.planes[HIT.face],n=Math.hypot(p[0],p[1],p[2]),nx=p[0]/n,ny=p[1]/n,nz=p[2]/n,light=coveLight(nx,ny,nz);
+  const z=HIT.w,wx=m.x+HIT.u,wy=m.y+HIT.v,foot=t/projY,fine=coveDetail(t,.15),lit=.2+.8*day; // (its own colour fades with the daylight, like the ground's)
+  if(nz>.9) { // the top, whitewashed, darker rock showing through
+    const crust=noise(wx*30,wy*30,1991)*fine+.5*(1-fine);
+    BG[i]=C(crust>.35?WHITE:GRAY,((crust>.35?4.2:2)+L*.3*light)*lit);set(i,' ',0);return true;
+  }
+  if(nz<-.9){BG[i]=C(GRAY,.5*lit);set(i,' ',0);return true;}
+  const along=-ny*wx+nx*wy,bed=z*16+Math.sin(along*2.3+m.seed*9)*.35;
+  const layer=hash(Math.floor(bed),m.spire,1992),parting=coveGroove(bed,1,.12,foot*16),joint=coveGroove(along+hash(Math.floor(bed),3,1993)*.3,.23,.012,foot)*.8;
+  const run=hash(Math.floor(along*28),m.tier,1994),guano=run>.45&&m.z1-z<(.2+.6*run*run)*(m.top?1:.6)*(m.z1-m.z0);
+  const rim=m.z1-z<.03,lichen=!guano&&z-m.ground<.55&&noise(along*14,z*18,1995+m.spire)>.78;
+  let col=GRAY,level=1.55+(layer-.5)*.8*fine;
+  if(lichen){col=ORANGE;level=1.7;}
+  if(guano||rim){col=WHITE;level=3.8;}
+  level*=(1-.45*parting)*(1-.5*joint);
+  BG[i]=C(col,(level+L*.26*light)*lit);set(i,' ',0);return true;
+}
+// a cormorant's nest: a heaped ring of sticks and weed round a hollow, streaked white
+const islandNestShade=m=>(i,t,L)=>{
+  const r=Math.hypot(HIT.u,HIT.v),ang=Math.atan2(HIT.v,HIT.u),fine=coveDetail(t,.03),inner=HIT.nz>.4&&r<.02;
+  const stick=hash(Math.floor(ang*14+r*90),Math.floor(HIT.w*300),m.seed*97|0)>.5,splash=r>.026&&hash(Math.floor(ang*9),Math.floor(r*250),1990)>.84;
+  BG[i]=C(splash&&fine>.3?WHITE:inner?BRICK:stick?WARM:BRICK,(splash?2.6:inner?.8:1.4+(stick?.5:0)*fine)*(.2+.8*day)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));
+  set(i,' ',0);return true;
+};
 function drawIslandShrub(model,vx,vy) {
   const grass=model.kind==='grass',height=model.z1-model.z0;
   drawShape(vx,vy,model.z0,model.hl,height,(i,u,z,du,dz,L)=>{
@@ -218,6 +245,8 @@ function drawWildScenery() {
       drawBox({...model,x:vx,y:vy+sway},(i,t,L)=>islandFabricShade(model,i,t,L),model.planes?rayMansard:rayBox);return;
     }
     if(model.kind==='shrub'||model.kind==='grass'){drawIslandShrub(model,vx,vy);return;}
+    if(model.kind==='stack'){drawBox({...model,x:vx,y:vy},(i,t,L)=>islandStackShade(model,i,t,L),rayMansard);return;}
+    if(model.kind==='nest'){if(near(px,py,model.x,model.y)<16)coveLathe(vx,vy,model.z0,model.profile,islandNestShade(model));return;}
     if(model.kind==='lamp') {
       drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,'o',C(YEL,10+night*5));return true;});return;
     }

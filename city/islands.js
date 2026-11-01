@@ -38,6 +38,12 @@ const ISLAND_PATHS = {
   rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
   sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
 };
+// Cormorant Rock's sea stacks along its seaward ridge: the foot's centre, radius and height above the ground (cells).
+// Each is built as stepped, tapering tiers (island-sights.js); the first is the one the Fern Ridge telescope is trained on
+const CORMORANT_SPIRES = [
+  { x: 700.6, y: 350.6, r: .55, h: 1.35 }, { x: 702.2, y: 352.7, r: .6, h: 1.6 }, { x: 703.7, y: 349.7, r: .42, h: 1.05 },
+  { x: 699.2, y: 348.3, r: .38, h: .8 }, { x: 704.3, y: 354.1, r: .34, h: .7 },
+];
 // Fern Ridge Lookout: the brass telescope on the south ridge, trained across the water on Cormorant Rock's stacks (the
 // one island whose silhouette clears the horizon from Fern). eye: where you stand to look through it; dir: its heading
 const FERN_LOOKOUT = (() => {
@@ -198,10 +204,15 @@ function islandSurface(x,y) {
     }
     if(trailDistance(x,y)<.08+patch*.07)return {base:WARM,background:BRICK,ch:grain>.86?':':'.',color:'#8c805c',tone:.9};
   }
-  if(island.id==='rock') {
-    let ch=grain>.75?':':' ';
-    if(grain>.9)ch='o';
-    return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
+  if(island.id==='rock') { // bare jointed rock: a wet black tide zone, whitewash round the stacks, lichen, sea pinks
+    if(edge<.9+patch*.4)return {base:GREEN,background:grain>.88?GREEN:GRAY,ch:' ',color:'#3d4542',tone:.68+patch*.12};
+    const stack=CORMORANT_SPIRES.reduce((m,s)=>Math.min(m,near(x,y,s.x,s.y)-s.r),9);
+    if(stack<1.4&&noise(x*6,y*6,1997)>.25+stack*.35)return {base:WHITE,background:WHITE,ch:' ',color:'#c9c7bc',tone:.75+grain*.1,lift:.6};
+    if(islandPathDistance(x,y,island)<.1+patch*.05)return {base:STONE,background:STONE,ch:' ',color:'#8d8a80',tone:.85};
+    if(noise(x*4,y*4,1998)>.8)return {base:ORANGE,background:ORANGE,ch:' ',color:'#8a6a3a',tone:.95+grain*.1};
+    if(edge>2&&noise(x*2.5,y*2.5,1999)>.76)return {base:MAG,background:GREEN,ch:grain>.8?'*':' ',color:'#4f6a44',tone:1};
+    const slab=noise(x*2.2,y*2.2,1996),crack=Math.abs(fract(x*1.7+y*.6+slab*.6)-.5)<.03||Math.abs(fract(y*1.9-x*.4)-.5)<.025;
+    return {base:GRAY,background:GRAY,ch:crack&&grain>.4?'-':' ',color:'#727777',tone:(.75+slab*.35)*(crack?.72:1)};
   }
   if(island.id==='sand') {
     if(TIDE_POOL_SITES.some(p=>near(x,y,p.x,p.y)<p.r+.12))return {base:GRAY,background:GRAY,ch:grain>.9?':':' ',color:'#727777',tone:1};
