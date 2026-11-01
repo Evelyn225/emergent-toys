@@ -74,13 +74,23 @@ function bustedChoice(how) {
   const armed = inv.some(it => ITEMS[it.id].kind === 'gun'),stolen=inv.some(stolenGoods);
   if (how === 'fine' && !payFine()) return;
   hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
-  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}${stolen?' They confiscate the stolen goods.':''}`, 4);
+  const escorted = how === 'fine' && escortOut();
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine.${escorted ? ' They walk you out onto the street.' : ''} "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}${stolen?' They confiscate the stolen goods.':''}`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars
   say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
 }
 
+// caught inside a building (a heist, a robbed shop) and let off with a fine: marched out the front door to the
+// street, never left standing in the vault. Not from your own home. True if you were walked out
+function escortOut() {
+  if (mode !== 'room' || homeRecord(room)) return false;
+  const ret = room.ret || room.lobby?.ret; if (!ret) return false;
+  hotelAlarm = null; body.seat = null;
+  [px, py, a] = ret; a += Math.PI; room = null; mode = 'walk';
+  transitSync(); return true;
+}
 // the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
 // share a cell. He has some things to say about that
 function jailWithCabbie() {

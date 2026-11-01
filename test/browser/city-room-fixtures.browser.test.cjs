@@ -145,3 +145,22 @@ test('no fare once the cab has no driver or is on fire, and no getting into an e
  });
  assert.deepEqual(r,[]);
 }));
+
+test('caught in a heist and let off with a fine, you are walked out onto the street',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],street=[px,py,a];
+  const caught=(name,go)=>{
+   money=50000;go();addWanted('heist',street[0],street[1],true);openBusted();bustedChoice('fine');
+   if(mode!=='walk'||room)bad.push([name,'still inside',mode,room?.kind]);
+   else if(Math.hypot(rel(px-street[0]),rel(py-street[1]))>.01)bad.push([name,'not at the door']);
+   if(wanted.stars)bad.push([name,'still wanted']);
+  };
+  caught('museum',()=>enterRoom('museum',{...MUSEUM.sh,ret:[...street],line:'',burgled:true,light:.28,loot:0},[12.5,10.5,-Math.PI/2]));
+  caught('hotel gallery',()=>enterRoom('grandhotelheist',{word:'PRIVATE GALLERY',ret:[...street],lobby:{word:'GRAND HOTEL',ret:[...street],grandHotel:true},burgled:true,spot:0},[12,14.6,-Math.PI/2]));
+  // jail is still jail
+  enterRoom('museum',{...MUSEUM.sh,ret:[...street],line:'',burgled:true,light:.28,loot:0},[12.5,10.5,-Math.PI/2]);addWanted('heist',street[0],street[1],true);openBusted();bustedChoice('jail');
+  if(room?.kind!=='jail')bad.push(['jail',room?.kind]);
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
