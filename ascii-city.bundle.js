@@ -2607,6 +2607,12 @@ function pondSD(lx, ly, bx, by) {
 const inPond = (lx, ly, bx, by, pad = 0) => pondSD(lx, ly, bx, by) < pad;
 // relative to block center, and the way each faces: toward the path through the middle
 const BENCH = [[0.35, -2, -1, 0], [0.35, 2, -1, 0], [-2, 0.35, 0, -1], [2, -0.35, 0, 1]];
+// the skatepark: smooth concrete in the south-east quarter of one park, clear of its pond, paths and benches. Set
+// once the city is in its final place (skatepark.js buildSkatepark, from world-bootstrap.js), which also builds the
+// ledges and rails on it; skatepark-render.js draws them and the concrete
+let SKATEPARK = null;
+const inSkatepark = (x, y, pad = 0) => !!SKATEPARK && x > SKATEPARK.bx * 8 + SKATEPARK.x0 - pad && x < SKATEPARK.bx * 8 + SKATEPARK.x1 + pad &&
+  y > SKATEPARK.by * 8 + SKATEPARK.y0 - pad && y < SKATEPARK.by * 8 + SKATEPARK.y1 + pad;
 const trees = [], benches = [], parks = [];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), dist = districtOf(bx, by);
@@ -2941,9 +2947,9 @@ for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, 
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
-function solidAt(x, y, pad) {
+function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    if (o.z0 > 0) continue;
+    if (o.z0 > 0 || o.low && feet >= o.z1 - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
   }
@@ -3046,6 +3052,56 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
 }
 const roofsB = bucketed(roofs);
+// ===== the skatepark (props.js SKATEPARK) and everything you can grind. On the park's concrete: two flat bars, a low
+// and a high granite ledge with steel coping, and a manual pad. Each is a solid you collide with below its top and can
+// ride along on top of (skateparkGround); every edge you can grind is in GRINDS, with the benches' seat fronts all
+// round the city. Cells (1 = 10 m)
+const GRINDS = []; // { ax, ay, bx, by: the edge; z: its top above the ground there; material: 'metal' | 'stone' | 'wood'; kind }
+const SKATE_FEATURES = [];
+let grindsB = [];
+// built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
+function buildSkatepark() {
+  GRINDS.length = SKATE_FEATURES.length = 0;
+  const park = parks.find(([bx, by]) => bx === 13 && by === 34);
+  SKATEPARK = park ? { bx: 13, by: 34, x0: 5.5, y0: 5.45, x1: 7.85, y1: 7.85 } : null;
+  if (SKATEPARK) {
+    for (let k = trees.length - 1; k >= 0; k--) if (inSkatepark(trees[k].x, trees[k].y, .3)) trees.splice(k, 1); // (the concrete's clear)
+    const ox = SKATEPARK.bx * 8, oy = SKATEPARK.by * 8;
+    const add = (x, y, alongX, hl, hw, z1, kind) => {
+      const o = { x: ox + x, y: oy + y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0: 0, z1, kind, low: true };
+      solids.push(o); SKATE_FEATURES.push(o);
+      return o;
+    };
+    const edge = (o, side, material) => { // a long top edge: side -1 / +1 across it, 0 along its middle (a bar)
+      const ex = o.x - o.s * side * o.hw, ey = o.y + o.c * side * o.hw;
+      GRINDS.push({ ax: ex - o.c * o.hl, ay: ey - o.s * o.hl, bx: ex + o.c * o.hl, by: ey + o.s * o.hl, z: o.z1, material, kind: o.kind, feature: o });
+    };
+    edge(add(6.0, 6.0, true, .3, .004, .035, 'skaterail'), 0, 'metal'); // a 6 m flat bar, 35 cm up
+    edge(add(7.3, 6.9, false, .35, .004, .03, 'skaterail'), 0, 'metal'); // and a 7 m one, 30 cm
+    for (const [x, y, hl, hw, z] of [[6.5, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
+      const o = add(x, y, true, hl, hw, z, 'skateledge');
+      edge(o, -1, 'metal'); edge(o, 1, 'metal'); // (steel coping on both edges)
+    }
+    const pad = add(7.1, 5.9, false, .25, .15, .02, 'manualpad'); // a 5 x 3 m manual pad, 20 cm
+    edge(pad, -1, 'stone'); edge(pad, 1, 'stone');
+  }
+  // a bench's seat front: 1.5 m of timber at 45 cm, facing out
+  for (const b of benches) {
+    const c = -b.fy, s = b.fx, ex = b.x + b.fx * .02, ey = b.y + b.fy * .02;
+    GRINDS.push({ ax: ex - c * .075, ay: ey - s * .075, bx: ex + c * .075, by: ey + s * .075, z: .045, material: 'wood', kind: 'bench', bench: b, feature: b });
+  }
+  grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
+}
+// the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
+function skateparkGround(x, y) {
+  if (!inSkatepark(x, y, .1)) return 0;
+  let top = 0;
+  for (const o of SKATE_FEATURES) {
+    const qx = x - o.x, qy = y - o.y;
+    if (Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.z1);
+  }
+  return top;
+}
 // Authored apartment and walk-up families. Balconies and escapes use the same exposed faces as the windows.
 const RESIDENTIAL_PROFILES = {
   modern: [
@@ -11589,7 +11645,7 @@ function terrainHeight(x, y) {
 }
 
 function outdoorGroundHeight(x, y) {
-  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y));
+  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y), typeof skateparkGround === 'function' ? skateparkGround(x, y) : 0); // (the skatepark's ledges: skatepark.js)
 }
 
 buildTerrain();
@@ -12821,6 +12877,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+    } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
+      soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -15958,6 +16016,36 @@ function fairSprites() {
     if (ch !== null && (ch !== ' ' || Math.abs(HIT.w - 0.47) < 0.03)) return set(i, ch, C(YEL, 15)), true;
     return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
   });
+}
+// ===== the skatepark drawn (skatepark.js builds it): steel flat bars on posts, granite ledges with steel coping, a
+// concrete manual pad, and the park's smooth concrete with its saw-cut joints. Fine detail fades with distance
+const SK_STEEL = (L, top) => C(GRAY, (top ? 4.2 : 2.6) + L * .35);
+// a flat bar: the round bar along the top, square posts 30 cm in from each end, nothing in between
+SOLID_SHADE.skaterail = o => (i, t, L) => {
+  const w = HIT.w, bar = w > o.z1 - .005, post = Math.abs(Math.abs(HIT.u) - (o.hl - .03)) < .004;
+  if (!bar && !post) return false; // (see-through under the bar)
+  BG[i] = SK_STEEL(L, bar && HIT.face === 5); return set(i, ' ', 0), true;
+};
+// granite: a speckled pale grey block, darker low down where boards scuff it; steel coping along the top edges
+SOLID_SHADE.skateledge = o => (i, t, L) => {
+  const f = HIT.face, top = f === 5, edge = top ? o.hw - Math.abs(HIT.v) < .006 : o.z1 - HIT.w < .006;
+  if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
+  const fine = coveDetail(t, .05), fleck = hash(Math.floor((o.x + HIT.u) * 160), Math.floor(HIT.w * 160 + HIT.v * 160), 2101) * fine;
+  const scuff = !top && HIT.w < o.z1 * .45 ? .5 : 0;
+  BG[i] = C(STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
+};
+// the manual pad: poured concrete, steel angle on its long edges, a joint across the middle
+SOLID_SHADE.manualpad = o => (i, t, L) => {
+  const f = HIT.face, top = f === 5, edge = top ? o.hw - Math.abs(HIT.v) < .005 : o.z1 - HIT.w < .005;
+  if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
+  const joint = top ? coveGroove(HIT.u, o.hl, .004, t / projX) : 0;
+  BG[i] = C(GRAY, (top ? 4.4 : 3) * shadeFace(f) * (1 - joint * .5) + L * .25); return set(i, ' ', 0), true;
+};
+// the park's concrete (floorBaseCell): smooth, pale, saw-cut every 3 m, a few dark scuffs and wax marks
+function skateparkFloor(wx, wy, r, x, d) {
+  const foot = d / projY, joint = Math.max(coveGroove(wx, .3, .004, foot), coveGroove(wy, .3, .004, foot));
+  const scuff = noise(wx * 9, wy * 9, 2102) > .78 ? .8 : 1;
+  return [' ', GRAY, (2.3 - joint * .7) * scuff];
 }
 // Fixed kerb parts prepare once per object/detail level. Camera translation
 // and the fixture's terrain height are applied when drawing.
@@ -24911,6 +24999,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() && SK.grind ? 'GRINDING: A/D balance (keep the mark in the middle) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
@@ -24966,6 +25055,12 @@ function hud() {
     const w = Math.min(240, cv.width * .4), x = cv.width / 2 - w / 2, y = msgY + Math.max(1, msg.length) * (FS + 4) + 2;
     g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, y - 3, w + 6, 10);
     g.fillStyle = left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44'; g.fillRect(x, y, w * left_, 4);
+    if (SK.grind) { // the balance: a mark that wanders off the middle; A and D bring it back
+      const b = clamp(SK.grind.bal, -1, 1), yb = y + 12;
+      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, yb - 3, w + 6, 12);
+      g.fillStyle = '#555'; g.fillRect(x, yb + 2, w, 2); g.fillStyle = '#8f8'; g.fillRect(x + w / 2 - 1, yb, 2, 6);
+      g.fillStyle = Math.abs(b) > .7 ? '#f44' : '#fff'; g.fillRect(x + w / 2 + b * w / 2 - 3, yb - 1, 6, 8);
+    }
   }
 }
 // E and its prompt resolve the same visible target before proximity fallbacks.
@@ -28395,6 +28490,7 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
   for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
+  if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, granite ledges and a manual pad on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
     const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
@@ -33900,13 +33996,16 @@ function standUp() { // back where you sat down from (it was walkable)
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
   const ground = mode === 'walk' ? walkGround(px, py) : 0;
-  if (body.groundMode === mode && (body.z > 0 || body.vz > 0)) body.z += ((body.ground || 0) - ground) * 10;
+  if (typeof skateGrinding === 'function' && skateGrinding() && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
+  const wasAir = body.z > 0 || body.vz > 0; // (in the air coming into this frame: you land this frame or later, never get skipped)
+  if (body.groundMode === mode && wasAir) body.z += ((body.ground || 0) - ground) * 10;
+  if (body.vz > 0 && body.z < 0) body.z = 0; // (still going up: rising ground under you can't land you, it lifts you with it)
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
   body.lastA = a; body.lx = px; body.ly = py;
   if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; body.buf = body.landedAt = -9; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
-  if (body.z > 0 || body.vz > 0) {
+  if (wasAir) { // (uphill the ground can come up past you between frames: you still land, rather than being stranded mid-trick)
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
     const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
@@ -34131,6 +34230,7 @@ function stepSkate(dt) {
     if (SK.bail <= 0) { SK.bailAt = null; a = SK.dir; }
     return;
   }
+  if (SK.grind) return stepGrind(dt);
   const air = skateAir(), f = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
   SK.steer = s; SK.kicking = false;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
@@ -34164,20 +34264,31 @@ function stepSkate(dt) {
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
+  if (air && body.vz <= 0) grindCatch();
   if (SK.combo && !air && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
 }
 // Space on the board: down crouches, up pops (or a tap off the touch button, or a flick: straight away)
 function skateSpace(down) {
+  if (SK.grind) { if (down) grindPop(); return; } // (off the rail with an ollie: straight away, no wind-up)
   if (SK.bail > 0 || skateAir()) { if (!down) SK.charge = -1; return; }
   if (down) { if (SK.charge < 0) SK.charge = T; return; }
   if (SK.charge >= 0) skatePop();
 }
 function skatePop(trick) {
+  if (SK.grind) return grindPop(trick); // (the touch Ollie button, or a flick, on a rail)
   if (SK.bail > 0 || skateAir()) return;
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   SK.charge = -1; SK.dir = a; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
-  body.vz = POP_V * (1 + 0.35 * load); body.trick = { name, flip, turn, t: 0, air: 2 * body.vz / GRAV };
+  body.vz = POP_V * (1 + 0.35 * load);
+  body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) };
   if (actx) sfxUse('ollie');
+}
+// how long you'll be in the air from a pop at vz (m/s), given the slope ahead: uphill the ground comes up to meet you
+// sooner, downhill it falls away, so a flip times itself to finish as you touch down
+function skateAirTime(vz) {
+  const ahead = .25, x = px + Math.cos(SK.dir) * ahead, y = py + Math.sin(SK.dir) * ahead;
+  const slope = (skateGround(worldCoord(x), worldCoord(y)) - skateGround(px, py)) / ahead, rise = slope * SK.v * 10; // (metres a second)
+  return 2 * clamp(vz - rise, vz * .45, vz * 1.6) / GRAV; // (z = vz t - g t^2 / 2 meets ground rising at rise m/s)
 }
 function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.trickKeyT = T; }
 // back on the ground (stepBody): rolling away clean, or not
@@ -34195,6 +34306,8 @@ function skateLand() {
   else if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
   if (sloppy && !standing && Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance;
   a = SK.dir;
+  if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
+  SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
   const label = (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
@@ -34211,7 +34324,74 @@ function skateLand() {
 }
 // how long is left to land the next trick and keep the combo going, 0..1 (full while you're in the air: the clock
 // only runs on the ground). null: no combo running
-const comboLeft = () => SK.combo ? (skateAir() ? 1 : clamp(1 - (T - SK.combo.t) / SK_COMBO_GAP, 0, 1)) : null;
+const comboLeft = () => SK.combo || SK.grind ? (SK.grind || skateAir() ? 1 : clamp(1 - (T - SK.combo.t) / SK_COMBO_GAP, 0, 1)) : null;
+// ---- grinds (skatepark.js GRINDS: the park's bars, ledges and pad, and every bench). Come down onto an edge going
+// more or less along it and you lock on: the grind is named by how your board sits on it (along it a 50-50, or a
+// nosegrind holding up, a 5-0 holding down; at an angle a crooked grind; across it a boardslide on a bar, a lipslide
+// on a ledge). You slide on, slowing, balancing with A and D against a wobble that grows the longer you stay on;
+// lose it and you bail. Space pops you off (arrows: a flip trick off it); run off the end and you drop. The grind
+// scores by how long you held it and joins the combo; while you're on, the combo clock doesn't run
+const GRIND_CATCH = .08, GRIND_POINTS = { '50-50': 100, nosegrind: 150, '5-0': 150, 'crooked grind': 200, boardslide: 175, lipslide: 200 };
+const skateGrinding = () => !!SK.grind;
+function grindCatch() {
+  const feet = skateGround(px, py) + body.z / 10, dirX = Math.cos(SK.dir), dirY = Math.sin(SK.dir);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const g of grindsB[bi(Math.floor(px / 8) + i, Math.floor(py / 8) + j)]) {
+    if (SK.leftGrind && g.feature === SK.leftGrind.feature && T - SK.leftGrindT < .7) continue; // (not straight back onto the thing you just came off)
+    const ex = g.bx - g.ax, ey = g.by - g.ay, len = Math.hypot(ex, ey), ux = ex / len, uy = ey / len;
+    const qx = rel(px - g.ax), qy = rel(py - g.ay), t = (qx * ux + qy * uy) / len;
+    if (t < .02 || t > .98) continue;
+    if (Math.abs(-qx * uy + qy * ux) > GRIND_CATCH) continue;
+    const top = terrainHeight(g.x, g.y) + g.z;
+    if (feet < top - .012 || feet > top + .035) continue; // (coming down onto it, not under it or well clear)
+    const along = dirX * ux + dirY * uy;
+    if (Math.abs(along) < .5) continue; // (more or less along it: within 60 degrees)
+    return startGrind(g, t, Math.sign(along), top);
+  }
+}
+function startGrind(g, t, dir, top) {
+  const tr = body.trick;
+  if (tr && tr.t < tr.air * .8 && tr.name !== 'ollie') return skateBail('BAIL! Still mid-flip when you hit it.');
+  if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
+  const edgeA = Math.atan2(g.by - g.ay, g.bx - g.ax), off = Math.abs(mod(a - edgeA + Math.PI / 2, Math.PI) - Math.PI / 2); // (board to edge, 0..90 degrees)
+  const name = off > 1.13 ? (g.kind === 'skateledge' || g.kind === 'manualpad' ? 'lipslide' : 'boardslide') : off > .44 ? 'crooked grind' : K.ArrowUp ? 'nosegrind' : K.ArrowDown ? '5-0' : '50-50';
+  SK.grind = { g, t, dir, top, name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, len: Math.hypot(g.bx - g.ax, g.by - g.ay), scrapeT: 0 };
+  SK.dir = Math.atan2(g.by - g.ay, g.bx - g.ax) + (dir < 0 ? Math.PI : 0); SK.v = Math.max(SK.v * .92, .25);
+  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t); // (onto the edge)
+  body.trick = null; body.vz = 0; SK.spin = 0; body.z = Math.max(.001, (top - skateGround(px, py)) * 10);
+  if (actx) sfxSkate('scrape', .9);
+  say(name.toUpperCase() + '!', 1);
+}
+function stepGrind(dt) {
+  const G = SK.grind, g = G.g, metal = g.material === 'metal', held = T - G.t0;
+  SK.v = Math.max(0, SK.v - (metal ? .16 : .26) * dt); // (steel slides; stone and timber bite)
+  // the wobble: it drifts, and grows the further off you are and the longer you're on; A and D lean you back
+  const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  G.balV += ((Math.random() - .5) * (1.6 + held * .5) + G.bal * 1.4 - s * 3.2) * dt; G.balV *= 1 - dt * .8;
+  G.bal += G.balV * dt;
+  if (Math.abs(G.bal) > 1) { SK.grind = null; body.z = Math.max(body.z, .01); return skateBail('BAIL! You lost your balance.'); }
+  G.t += G.dir * SK.v * dt / G.len;
+  const off = G.t < 0 || G.t > 1;
+  const t = clamp(G.t, 0, 1);
+  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t);
+  body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
+  if (actx && (G.scrapeT -= dt) <= 0) { G.scrapeT = .11; sfxSkate('scrape', metal ? .55 : .35); }
+  const pts = grindPoints(G);
+  if (off || SK.v < SK_STILL) return endGrind(); // (off the end, or stalled: you drop)
+  say(`${G.name.toUpperCase()}  ${pts}`, .5);
+}
+const grindPoints = G => Math.round((GRIND_POINTS[G.name] || 100) + (T - G.t0) * 140);
+function endGrind() { // into the combo; off you go, and down
+  const G = SK.grind, c = SK.combo ||= { names: [], pts: 0, t: T };
+  SK.grind = null; c.names.push(G.name.toUpperCase()); c.pts += grindPoints(G); c.t = T; SK.offGrind = true; SK.leftGrind = G.g; SK.leftGrindT = T;
+  body.z = Math.max(body.z, .02); body.vz = 0;
+  say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
+}
+function grindPop(trick) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
+  const key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+  endGrind(); SK.offGrind = false;
+  body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) }; SK.popT = T;
+  if (actx) sfxUse('ollie');
+}
 function bankCombo() {
   const c = SK.combo, total = c.pts * c.names.length;
   SK.combo = null; SK.score += total; SK.best = Math.max(SK.best, total);
@@ -45031,6 +45211,7 @@ function assembleArchipelago() {
       else { const l = Math.max(.1, length), e = -Math.sign(u) || 1; o.x += ax * e * (o.hl - l / 2); o.y += ay * e * (o.hl - l / 2); o.hl = l / 2; }
     }
   }
+  buildSkatepark(); // (the skatepark: its solids and the trees it clears are bucketed just below; skatepark.js)
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
@@ -46727,7 +46908,7 @@ const free = (x, y) => {
   } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {

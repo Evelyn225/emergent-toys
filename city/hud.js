@@ -342,6 +342,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() && SK.grind ? 'GRINDING: A/D balance (keep the mark in the middle) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
@@ -397,5 +398,11 @@ function hud() {
     const w = Math.min(240, cv.width * .4), x = cv.width / 2 - w / 2, y = msgY + Math.max(1, msg.length) * (FS + 4) + 2;
     g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, y - 3, w + 6, 10);
     g.fillStyle = left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44'; g.fillRect(x, y, w * left_, 4);
+    if (SK.grind) { // the balance: a mark that wanders off the middle; A and D bring it back
+      const b = clamp(SK.grind.bal, -1, 1), yb = y + 12;
+      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, yb - 3, w + 6, 12);
+      g.fillStyle = '#555'; g.fillRect(x, yb + 2, w, 2); g.fillStyle = '#8f8'; g.fillRect(x + w / 2 - 1, yb, 2, 6);
+      g.fillStyle = Math.abs(b) > .7 ? '#f44' : '#fff'; g.fillRect(x + w / 2 + b * w / 2 - 3, yb - 1, 6, 8);
+    }
   }
 }

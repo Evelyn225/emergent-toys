@@ -666,6 +666,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+    } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
+      soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
