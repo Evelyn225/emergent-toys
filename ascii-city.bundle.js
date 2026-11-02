@@ -14230,7 +14230,7 @@ function residentialDetailShade(o, i, t, L) {
   if (o.kind === 'service-spine' && HIT.face < 5) {
     const fl = Math.floor((z - .48) / o.fh), floor0 = .48 + fl * o.fh;
     if (fl >= 0 && fl < o.floors && brownstoneWindow(i, HIT.u, z, Math.min(.12, o.hl * .55), floor0 + o.fh * .25, floor0 + o.fh * .76,
-      hash(fl, 7, sk0(o.seed)) > litT, L, p.trim)) return true;
+      hash(fl, 7, sk0(o.seed)) > litT, L, p.trim, t / projY)) return true;
   }
   let base = p.trim;
   if (o.kind === 'planter') base = BRICK;
