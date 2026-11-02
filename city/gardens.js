@@ -534,7 +534,15 @@ function glassCeil(i, wx, wy) {
   if (room.kind === 'conservatory' && wx < 13 && noise(wx * 1.2, wy * 1.2, 847) > 0.6) { BG[i] = C(GREEN, 1.2 + (noise(wx * 4, wy * 4, 883) - .5)); return set(i, ' ', 0); }
   BG[i] = consSky(); return set(i, ' ', 0);
 }
-function consSteel(i, t, L) { BG[i] = C(WHITE, (3 + L * .45) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+// A slender bar given as a box, drawn as a rod down its long axis: rods keep at least a cell's width, so a bar far off
+// stays a continuous line instead of breaking into dashes where it falls between cells.
+function frameBar(b, shade) {
+  const hz = (b.z1 - b.z0) / 2, zc = (b.z0 + b.z1) / 2, x = b.x - px, y = b.y - py;
+  if (hz >= b.hl && hz >= b.hw) { const r = Math.max(b.hl, b.hw); return drawRod(x, y, b.z0 + r, x, y, b.z1 - r, r, shade); }
+  if (b.hl >= b.hw) { const r = Math.max(b.hw, hz); return drawRod(x - b.hl + r, y, zc, x + b.hl - r, y, zc, r, shade); }
+  const r = Math.max(b.hl, hz); return drawRod(x, y - b.hw + r, zc, x, y + b.hw - r, zc, r, shade);
+}
+function consSteel(i, t, L) { BG[i] = C(WHITE, 3.4 + L * .42); return set(i, ' ', 0), true; }
 function CONS_FRAME(W, H, h) {
   const boxes = [], bar = CONS_GLAZE.bar / 2, z0 = CONS_GLAZE.plinth;
   const walls = [[1, 1, 1, H - 1], [W - 1, 1, W - 1, H - 1], [1, 1, W - 1, 1], [1, H - 1, W - 1, H - 1]];
@@ -555,7 +563,7 @@ function CONS_FRAME(W, H, h) {
   }
   for (let x = 1 + 2; x < W - 1; x += 2) boxes.push(boxAt(x, H / 2, 1, 0, .06, H / 2 - 1, h - .14, h));
   for (let y = 1 + 2; y < H - 1; y += 2) boxes.push(boxAt(W / 2, y, 1, 0, W / 2 - 1, .06, h - .14, h));
-  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, consFrame: { boxes }, draw: () => { for (const b of boxes) drawBox({ ...b, x: b.x - px, y: b.y - py }, consSteel); } };
+  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, consFrame: { boxes }, draw: () => { for (const b of boxes) frameBar(b, consSteel); } };
 }
 // the aviary: a mesh dome, trees inside, a pond, birds everywhere; a keeper with cups of seed
 const AV_W = 14, AV_H = 12;
