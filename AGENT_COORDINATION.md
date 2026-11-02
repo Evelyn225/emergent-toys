@@ -12,9 +12,11 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 - **Codex:** paused at #344 to conserve weekly usage. Not expected to pick up
   without the user saying so; if it does, check open PRs first.
-- **Claude:** passes 7, 8 and 9 closed. Next: pass 10 leisure, starting with the aviary and
-  conservatory. A glyph scan of all rooms ranks what's left. One branch and PR per chunk.
-  Merging after green CI is authorised by the user.
+- **Claude:** passes 7, 8, 9 and 10 closed. Next: the six "New reported fixes, 26 October" rows in
+  `WORLD_QUALITY.md` (queued ahead of the remaining passes), then pass 11 (street objects). A glyph scan of
+  all rooms ranks what's left. One branch and PR per chunk. Merging after green CI is authorised by the user.
+  Another Claude session is working on skate parks, grinding and then ocean waves (#364 and after): check
+  open PRs before touching `city/skate*.js`, `city/skatepark*.js` or the ocean.
 - **Reserved, don't edit without agreement:** `city/bathroom-quality.js`, DINER,
   `city/world-bootstrap.js`, facade and global lettering.
 
