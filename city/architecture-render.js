@@ -12,13 +12,16 @@ function architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   else downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
   return true;
 }
-function brownstoneWindow(i, du, z, half, z0, z1, lit, L, base) {
+// A thin line's coverage of a cell (dist from its middle, w its width, fp the cell's footprint, city units): frames and
+// bars wider than half a cell are drawn in their own colour, thinner ones just darken what's behind them.
+const facadeLine = (dist, w, fp) => clamp((w / 2 - dist) / Math.max(fp, 1e-4) + .5, 0, 1) * Math.min(1, w / Math.max(fp, w));
+function brownstoneWindow(i, du, z, half, z0, z1, lit, L, base, fp = 0) {
   if (Math.abs(du) > half + 0.025 || z < z0 - 0.025 || z > z1 + 0.035) return false;
-  if (Math.abs(du) > half || z < z0 || z > z1) {
-    set(i, Math.abs(du) > half ? '|' : '=', C(base, L * 1.1)); return true;
-  }
-  BG[i] = C(lit ? WARM : CYAN, lit ? 2 + night * 5 : 1 + day * 1.4);
-  set(i, Math.abs(du) < 0.011 ? '|' : Math.abs(z - (z0 + z1) / 2) < 0.012 ? '-' : lit ? ' ' : ':', C(lit ? WARM : WHITE, Math.max(L * 0.6, lit ? night * 13 : 0)));
+  set(i, ' ', 0);
+  if (Math.abs(du) > half || z < z0 || z > z1) { BG[i] = C(base, 1.6 + L * 0.3); return true; } // the frame, its sill and head
+  const bar = Math.max(facadeLine(Math.abs(du), 0.022, fp), facadeLine(Math.abs(z - (z0 + z1) / 2), 0.024, fp)); // the glazing bars
+  if (bar > .5) { BG[i] = C(base, 1.4 + L * 0.25); return true; }
+  BG[i] = C(lit ? WARM : CYAN, (lit ? 2 + night * 5 : 1 + day * 1.4) * (1 - bar * .5));
   return true;
 }
 // a shop's way in, down to the pavement: du across it (0 its middle), up to SHOP_DOOR_TOP (clear of the awnings and
@@ -27,19 +30,20 @@ const SHOP_DOOR_HALF = 0.055, SHOP_DOOR_TOP = 0.26;
 function shopDoor(i, du, z, sh, L, trim, d) {
   if (Math.abs(du) > SHOP_DOOR_HALF + 0.012 || z > SHOP_DOOR_TOP + 0.014) return false;
   if (architectureShutter(i, z, sh, L, d, du, -SHOP_DOOR_HALF - 0.012, SHOP_DOOR_HALF + 0.012, 0, SHOP_DOOR_TOP + 0.014)) return true;
-  if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1 + L * 0.2); return set(i, z > SHOP_DOOR_TOP ? '=' : '|', C(trim, L)), true; }
-  return doorGlass(i, du, z, openAt(sh, tod), L, trim);
+  if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1.4 + L * 0.25); return set(i, ' ', 0), true; } // the frame
+  return doorGlass(i, du, z, openAt(sh, tod), L, trim, d / projY);
 }
 // the glass of a shop's double door, du across it (0 where the two leaves meet): a solid panel at the foot, a push bar
 // across each leaf, the meeting stiles; by day the street and a streak of sky in it, after dark the shop lit up behind
 // it (if it's open). True: it drew (i)
-function doorGlass(i, du, z, open, L, trim) {
-  if (z < 0.035) { BG[i] = C(trim, 1.1 + L * 0.2); return set(i, z < 0.006 ? '_' : ' ', C(GRAY, L * 0.7)), true; }
-  if (Math.abs(du) < 0.006) { BG[i] = C(trim, 1 + L * 0.2); return set(i, '|', C(GRAY, L * 0.8)), true; }
-  if (Math.abs(z - 0.11) < 0.008 && Math.abs(du) > 0.012 && Math.abs(du) < 0.04) { BG[i] = C(GRAY, 1.5 + L * 0.2); return set(i, '-', C(WHITE, L)), true; }
-  const warm = open && (night > 0.3 || overcast > 0.6), streak = fract(du * 7 + z * 4) < 0.07;
-  BG[i] = warm ? C(WARM, 1.2 + night * 3.2) : C(CYAN, 0.55 + day * 1.25);
-  return set(i, streak ? '/' : warm && hash(Math.floor(du * 60), Math.floor(z * 50), 377) > 0.86 ? '.' : ' ', C(warm ? YEL : WHITE, warm ? Math.max(L * 0.5, night * 8) : 4 + day * 7)), true;
+function doorGlass(i, du, z, open, L, trim, fp = 0) {
+  set(i, ' ', 0);
+  if (z < 0.035) { BG[i] = C(trim, 1.1 + L * 0.2); return true; } // the kick plate
+  if (facadeLine(Math.abs(du), 0.012, fp) > .5) { BG[i] = C(trim, 1 + L * 0.2); return true; } // the meeting stiles
+  if (Math.abs(du) > 0.012 && Math.abs(du) < 0.04 && facadeLine(Math.abs(z - 0.11), 0.016, fp) > .5) { BG[i] = C(GRAY, 2.5 + L * 0.25); return true; } // the push bars
+  const warm = open && (night > 0.3 || overcast > 0.6), streak = fp < .02 && fract(du * 7 + z * 4) < 0.07; // (a streak of sky in the glass, up close)
+  BG[i] = warm ? C(WARM, 1.2 + night * 3.2) : C(CYAN, 0.55 + day * 1.25 + (streak ? 1.2 : 0));
+  return true;
 }
 // a shop's opening when it's shut: the roller shutter (shop-shutters.js), a across the opening, a0..a1 and z0..z1 its
 // sides and its sill and head, along the wall. True if it drew (i)
@@ -57,9 +61,11 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   const center = (unit + 0.5) * f.spacing, local = along - center, corner = Math.min(along, f.end - f.start - along);
   const stone = b.material === 1 || b.material === 3, grain = hash(Math.floor(wc * 16), Math.floor(z * 22), sk);
   BG[i] = C(base, 2.5 + L * (stone ? 0.36 : 0.25) + grain * 0.45);
-  if (corner < 0.07 || Math.abs(Math.abs(local) - f.spacing / 2) < 0.025)
-    return set(i, fract(z * 10) < 0.11 ? '=' : '|', C(base, L * 0.9));
-  if (b.h - z < 0.12 || Math.abs(z - 0.44) < 0.025) return set(i, '=', C(stone ? WHITE : STONE, L));
+  const fpW = Math.max(uStep, d / projY);
+  if (corner < 0.07 || Math.abs(Math.abs(local) - f.spacing / 2) < 0.025) { // quoins and the party piers: blocks a course apart, their joints filtered
+    BG[i] = C(base, 2.9 + L * 0.3 - coveGroove(z, .1, .008, fpW) * 1.1); return set(i, ' ', 0);
+  }
+  if (b.h - z < 0.12 || Math.abs(z - 0.44) < 0.025) { BG[i] = C(stone ? WHITE : STONE, 2 + L * 0.32); return set(i, ' ', 0); } // cornice and string course
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
@@ -70,11 +76,13 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
       const door = local + f.spacing * 0.24, half = f.spacing * 0.125;
       const top = 0.35 - (door / half) ** 2 * 0.018;
       if (Math.abs(door) < half + 0.025 && z > 0.12 && z < top + 0.025) {
-        if (Math.abs(door) > half || z > top) return set(i, z > top ? '^' : '|', C(STONE, L));
-        BG[i] = C(BRICK, 1 + L * 0.12);
-        return set(i, z > 0.3 ? ':' : Math.abs(door) < 0.01 ? '|' : z < 0.15 ? '=' : '#', C(z > 0.3 ? WARM : BRICK, z > 0.3 ? Math.max(L, night * 11) : L * 0.65));
+        set(i, ' ', 0);
+        if (Math.abs(door) > half || z > top) { BG[i] = C(STONE, 1.8 + L * 0.3); return; } // its stone surround and arched head
+        if (z > 0.3) { BG[i] = C(WARM, 1.5 + Math.max(L * .1, night * 3)); return; } // the fanlight
+        const fpD = d / projY, stile = facadeLine(Math.abs(door), 0.02, fpD) > .5, panel = fpD < .02 && (Math.abs(fract(z / .075) - .5) > .4 || Math.abs(Math.abs(door) - half * .5) > half * .4);
+        BG[i] = C(BRICK, (stile ? .8 : 1.2) + L * 0.14 - (panel ? .4 : 0)); return; // two leaves of panelled door
       }
-      if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE)) return;
+      if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE, Math.max(uStep, d / projY))) return;
     } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE, d)) return; // (where the walk-ups have theirs)
     else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L, d, local, -f.spacing * 0.39, f.spacing * 0.39, 0.04, 0.34)) return;
@@ -82,10 +90,12 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         const e = Math.sign(local), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + center + e * f.spacing * 0.03), ub = sg * (f.start + center + e * f.spacing * 0.39);
         if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.3, sh, openAt(sh, tod), L, sk + unit * 2 + (e > 0 ? 1 : 0))) return;
       }
-      BG[i] = C(CYAN, 1 + night * 2);
-      return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
-    } else if (brownstoneWindow(i, local, z, f.spacing * 0.15, 0.13, 0.3, hash(unit, 5, sk) > litT, L, STONE)) return;
-    if (z < 0.12) return set(i, fract(z * 30) < 0.15 ? '_' : ' ', C(GRAY, L * 0.8));
+      const fp = Math.max(uStep, d / projY), mullion = facadeLine(Math.abs(local), f.spacing * 0.06, fp);
+      set(i, ' ', 0);
+      if (mullion > .5 || z > 0.3) { BG[i] = C(STONE, 1.6 + L * 0.28); return; } // the mullion and transom
+      BG[i] = C(CYAN, (1 + night * 2 + day * .6) * (1 - mullion * .5)); return; // the shop's glass
+    } else if (brownstoneWindow(i, local, z, f.spacing * 0.15, 0.13, 0.3, hash(unit, 5, sk) > litT, L, STONE, Math.max(uStep, d / projY))) return;
+    if (z < 0.12) { BG[i] = C(GRAY, 1.6 + L * 0.2 - coveGroove(z, 1 / 30, .005, d / projY) * .8); return set(i, ' ', 0); } // the stone plinth, coursed
   } else {
     const fl = Math.floor((z - 0.45) / f.fh), floor0 = 0.45 + fl * f.fh;
     if (fl >= 0 && fl < f.floors) {
@@ -95,15 +105,16 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         hash(unit * 3 + bay, fl, sk) > litT - 0.1, L, STONE)) return;
     }
   }
-  return set(i, fract(z * (stone ? 10 : 24)) < 0.045 ? '_' : fract(wc * (stone ? 4 : 15) + (Math.floor(z * 24) & 1) * 0.5) < 0.04 ? '|' : grain > 0.97 ? '.' : ' ', C(base, L * 0.62));
+  // brick (or stone) coursing, the joints filtered so the wall settles to its colour far off
+  const course = stone ? .1 : 1 / 24, joint = Math.max(coveGroove(z, course, stone ? .006 : .004, fpW), coveGroove(wc + (Math.floor(z / course) & 1) * (stone ? .125 : 1 / 30), stone ? .25 : 1 / 15, stone ? .006 : .004, fpW));
+  BG[i] = C(base, (BG[i] & 15) + .4 - joint * 1.2); return set(i, ' ', 0);
 }
 function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   const width = f.end - f.start;
   const base = b.sty === 14 ? [STONE, WHITE, STONE, WARM, GRAY][b.material] : b.sty === 1 ? BLUE : GRAY;
   const podium = b.tiers[0].h, onPodium = z < podium && b.tiers.length > 1, stone = b.sty === 14 || onPodium;
   BG[i] = C(stone ? base : b.sty === 1 ? BLUE : GRAY, stone ? 2 + L * 0.3 : 0.6 + day * 0.7);
-  if (f.height - z < 0.065 || Math.abs(z - 0.42) < 0.025 || onPodium && podium - z < 0.06)
-    return set(i, '=', C(b.sty === 14 ? STONE : GRAY, L));
+  if (f.height - z < 0.065 || Math.abs(z - 0.42) < 0.025 || onPodium && podium - z < 0.06) { BG[i] = C(b.sty === 14 ? STONE : GRAY, 2 + L * 0.32); return set(i, ' ', 0); } // the parapet and band courses
   const corner = Math.min(along, width - along), bays = Math.max(1, Math.floor((width - 0.12) / (b.sty === 1 ? 0.22 : 0.32)));
   const spacing = (width - 0.12) / bays, bay = Math.floor((along - 0.06) / spacing), fu = fract((along - 0.06) / spacing);
   if (corner < 0.06) return set(i, '|', C(stone ? base : GRAY, L));
@@ -122,10 +133,12 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         const a0 = 0.06 + (bay + 0.16) * spacing, a1 = 0.06 + (bay + 0.84) * spacing, sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
         if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.245, sh, openAt(sh, tod), L, sk0(b.seed) + bay)) return;
       }
-      BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);
-      return set(i, fu < 0.08 || fu > 0.92 || Math.abs(z - 0.26) < 0.014 ? '|' : ':', C(WHITE, Math.max(L * 0.65, night * 10)));
+      const fp = Math.max(uStep, d / projY), bar = Math.max(facadeLine(Math.min(fu, 1 - fu) * spacing, spacing * .16, fp), facadeLine(Math.abs(z - 0.26), .028, fp));
+      set(i, ' ', 0);
+      BG[i] = bar > .5 ? C(stone ? base : GRAY, 1.8 + L * 0.3) : C(lobby ? WARM : CYAN, (1 + night * 3 + day * .5) * (1 - bar * .5)); // glass in its frames
+      return;
     }
-    return set(i, fract(z * 14) < 0.08 ? '_' : ' ', C(base, L * 0.8));
+    BG[i] = C(BG[i] >> 4, (BG[i] & 15) - coveGroove(z, 1 / 14, .006, d / projY) * 1.2); return set(i, ' ', 0); // coursed stone
   }
   const floors = Math.max(1, Math.round((f.height - 0.5) * 3)), fh = (f.height - 0.5) / floors;
   const fl = Math.floor((z - 0.43) / fh), fz = fract((z - 0.43) / fh), lit = hash(bay, fl, sk0(b.seed)) > litT;
