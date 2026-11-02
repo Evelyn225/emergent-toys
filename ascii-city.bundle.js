@@ -23345,19 +23345,29 @@ function casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 
 // ---- inside
 const CASINO_W = 22, CASINO_H = 16;
+// a thin line's coverage of a cell: dist from its middle, w its width, fp the cell's footprint (metres)
+const casinoLine = (dist, w, fp) => clamp((w / 2 - dist) / Math.max(fp, .002) + .5, 0, 1) * Math.min(1, w / Math.max(fp, w));
 function casinoWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su);
-  if (Math.abs(fract(u / 2.5) - 0.5) < 0.06) return set(i, '|', C(YEL, Math.max(L, 9))), true; // gold pilasters
-  if (z < 0.9) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, fract(z / 0.3) < 0.1 ? '=' : ' ', C(YEL, L * 0.6)), true; }
-  if (Math.abs(z - 0.95) < 0.05 || Math.abs(z - 3.1) < 0.05) return set(i, '=', C(YEL, Math.max(L, 9))), true;
-  if (z > 1.2 && z < 2.9) { BG[i] = C(GRAY, 1 + L * 0.06); return set(i, hash(Math.floor(u * 5), Math.floor(z * 5), 1402) > 0.94 ? '*' : ' ', C(YEL, 10)), true; } // mirrors, the lights twinkling in them
-  BG[i] = C(RED, 1 + L * 0.1); return set(i, ' ', 0), true;
+  const u = Math.abs(su), fp = Math.max(uStep, d / projY), gold = C(YEL, 4 + L * .3);
+  set(i, ' ', 0);
+  if (casinoLine(Math.abs(fract(u / 2.5) - 0.5) * 2.5, .3, fp) > .5) { BG[i] = gold; return true; } // gold pilasters
+  if (z < 0.9) { BG[i] = coveGroove(z, .3, .03, fp) > .5 ? C(YEL, 2.4 + L * .15) : C(BRICK, 1 + L * 0.1); return true; } // the dado, gold beads in it
+  if (Math.abs(z - 0.95) < 0.05 || Math.abs(z - 3.1) < 0.05) { BG[i] = gold; return true; } // the rails
+  if (z > 1.2 && z < 2.9) { // mirrors, the chandeliers' lights twinkling in them (up close)
+    const cu = Math.floor(u * 5), cz = Math.floor(z * 5), tw = hash(cu, cz, 1402) > 0.94 ? casinoLine(Math.hypot(u * 5 - cu - .5, z * 5 - cz - .5) / 5, .05, fp) : 0;
+    BG[i] = tw > .5 ? C(YEL, 10) : C(GRAY, 1 + L * 0.06 + tw * 2); return true;
+  }
+  BG[i] = C(RED, 1 + L * 0.1); return true;
 }
-function casinoFloor(i, f, wx, wy) { // the carpet: red, a gold diamond pattern, busy enough to keep you awake
-  const a = fract((wx + wy) * 0.8), b = fract((wx - wy) * 0.8), edge = a < 0.08 || b < 0.08, dot = Math.abs(a - 0.5) < 0.12 && Math.abs(b - 0.5) < 0.12;
-  BG[i] = C(RED, 1 + f * 1.4);
-  return set(i, edge ? '+' : dot ? '*' : ' ', C(YEL, 3 + f * 6));
+function casinoFloor(i, f, wx, wy, fp = 0) { // the carpet: red, a gold diamond pattern, busy enough to keep you awake; it settles far off
+  const a = fract((wx + wy) * 0.8), b = fract((wx - wy) * 0.8), k = .8 * Math.SQRT2; // (the lattice's lines run diagonally, 1/k apart)
+  const edge = Math.max(casinoLine(Math.min(a, 1 - a) / k, .1, fp), casinoLine(Math.min(b, 1 - b) / k, .1, fp));
+  const dot = Math.abs(a - 0.5) < 0.12 && Math.abs(b - 0.5) < 0.12 && fp < .25;
+  set(i, ' ', 0);
+  // (lines narrower than a cell would only break into dashes: past that they warm the red instead)
+  BG[i] = fp < .07 && (edge > .5 || dot) ? C(YEL, 2 + f * 3) : C(RED, 1 + f * 1.4 + edge * (fp < .07 ? .6 : 1.4));
 }
+ROOM_FLOORS.casinoCarpet = (i, f, wx, wy, r) => casinoFloor(i, f, wx, wy, homeBalconyPavingFootprint(eye * projY / Math.max(.5, r - hor + .5), eye));
 function casinoCeil(i, wx, wy) { // chandeliers: bright drops round a gilt rose, on a dark ceiling
   const d = Math.hypot(fract(wx / 4) - 0.5, fract(wy / 4) - 0.5) * 4;
   set(i, ' ', 0);
@@ -23367,7 +23377,7 @@ function casinoCeil(i, wx, wy) { // chandeliers: bright drops round a gilt rose,
 const BJ_CARDS = [];
 for (const [u, v] of [[-0.85, 0.36], [0, 0.4], [0.85, 0.36], [-0.1, -0.3]]) for (const k of [0, 1]) BJ_CARDS.push([u + k * 0.09, v - k * 0.02, '♠♥♦♣'[(BJ_CARDS.length * 7) & 3], (BJ_CARDS.length * 7) & 3 && ((BJ_CARDS.length * 7) & 3) < 3 ? RED : GRAY]);
 // (the tables, the slots and the cage are built: leisure-fittings.js)
-ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6, floor: 'casino', ceil: 'chandelier', sign: true, signAt: CASINO_W / 2, wall: casinoWall, keeper: [11, 1.5],
+ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6, floor: 'casinoCarpet', footstepFloor: 'casino', ceil: 'chandelier', sign: true, signAt: CASINO_W / 2, wall: casinoWall, keeper: [11, 1.5],
   props: r => {
     const p = [...counterBox(11, 2.2, 2.4, 1.1), standing(11, 1.5, GREEN)];
     p.push(CASHIER_CAGE_BARS([8.4, 9.6, 10.8, 12, 13.2], 2.5, 1.1, 2.4)); // the cage's bars
