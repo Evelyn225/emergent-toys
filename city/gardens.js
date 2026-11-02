@@ -439,15 +439,6 @@ function consWaterEdge(x, y) {
   return Math.max(pond, stream);
 }
 const inConsPool = (x, y) => consWaterEdge(x, y) > 0;
-const PLANT_ART = {
-  palm: pad(['  __ _ __', ' /  \\|/  \\', '/  .-+-.  \\', '    /|\\', '     |', '     |', '     |', '     |', '    /|\\']),
-  fern: pad(['\\ | /', ' \\|/ ', '--+--', ' /|\\ ']),
-  banana: pad([' \\\\ //', '  \\|/', '  (|)', '   |', '   |']),
-  saguaro: pad(['    _', '   | |', ' _ | |', '| || | _', '|_|| || |', '   | ||_|', '   | |', '   | |']),
-  barrel: pad([' .*. ', '(:::)', " `-' "]),
-  agave: pad(['\\ | /', ' \\|/', '--+--']),
-  butterfly: ['}{'], lizard: ['~=<'],
-};
 // The glasshouse's glazing: white bars every 1.2 m with transoms every 1.5 m, on a brick plinth, and ribs across the
 // roof. The bars are built (CONS_FRAME) so they hold their width at any distance; these painters do what's between.
 const CONS_GLAZE = { pitch: 1.2, transom: 1.5, plinth: 0.8, bar: .08 };
@@ -652,15 +643,16 @@ function aviaryFloor(i, f, wx, wy) {
   BG[i] = C(GREEN, f * 1.1); return set(i, (Math.floor(wx * 6) + Math.floor(wy * 6)) % 3 ? '"' : ',', C(GREEN, 4 + f * 5));
 }
 function conservatoryProps(r) {
-  const p = [], plant = (k, x, y, w, h, col) => p.push(SP(x, y, w, h, PLANT_ART[k], col));
-  const green = (c, row, L) => C(GREEN, L), palmCol = (c, row, L) => row < 4 ? C(GREEN, L) : C(BRICK, L);
-  for (const [x, y, s] of [[2, 2, 1.3], [11, 2.2, 1.5], [2.2, 7, 1.2], [10.8, 6.5, 1.4], [3, 12, 1.1], [11, 12.4, 1.3], [8.8, 9.8, 1]]) plant('palm', x, y, 1.6 * s, 5 * s, palmCol);
-  for (const [x, y] of [[4.6, 6], [9, 5.4], [1.6, 9.6], [10.5, 9.6], [4.2, 10.8], [8.6, 13.2], [2, 4.6], [11.6, 4.4]]) plant('fern', x, y, 0.8, 0.8, green);
-  for (const [x, y] of [[5, 8.6], [8, 11.6], [12, 10.6]]) plant('banana', x, y, 0.8, 2.2, (c, row, L) => c === '(' || c === ')' ? C(YEL, L) : C(GREEN, L));
-  for (const [x, y, s] of [[16, 3, 1], [20.5, 2.5, 1.3], [23.5, 5, 0.9], [18, 9, 1.2], [22.5, 11.5, 1], [16.5, 12.5, 0.8]]) plant('saguaro', x, y, 0.9 * s, 3.4 * s, (c, row, L) => C(GREEN, Math.max(L * 1.4, 7)));
-  for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, 0.5, 0.5, (c, row, L) => c === '*' ? C(MAG, 15) : C(GREEN, L));
-  for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, 0.8, 0.7, (c, row, L) => C(CYAN, L * 0.9));
-  for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) p.push(BX(x, y, w, w * 0.7, 0, w * 0.6, solid(BRICK, { top: '.', bright: 1.2 }))); // rocks
+  const p = [];
+  let seed = 0;
+  const plant = (k, x, y, h, foot) => p.push(CONS_PLANT(k, x, y, h, seed++, foot));
+  for (const [x, y, s] of [[2, 2, 1.3], [11, 2.2, 1.5], [2.2, 7, 1.2], [10.8, 6.5, 1.4], [3, 12, 1.1], [11, 12.4, 1.3], [8.8, 9.8, 1]]) plant('palm', x, y, 5 * s, [.12 * s, .12 * s, 3.5 * s]);
+  for (const [x, y] of [[4.6, 6], [9, 5.4], [1.6, 9.6], [10.5, 9.6], [4.2, 10.8], [8.6, 13.2], [2, 4.6], [11.6, 4.4]]) plant('fern', x, y, .8);
+  for (const [x, y] of [[5, 8.6], [8, 11.6], [12, 10.6]]) plant('banana', x, y, 2.2, [.13, .13, 1.4]);
+  for (const [x, y, s] of [[16, 3, 1], [20.5, 2.5, 1.3], [23.5, 5, 0.9], [18, 9, 1.2], [22.5, 11.5, 1], [16.5, 12.5, 0.8]]) plant('saguaro', x, y, 3.4 * s, [.27 * s, .27 * s, 3.1 * s]);
+  for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, .5, [.2, .2, .4]);
+  for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, .7);
+  for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) plant('rock', x, y, w * 14 / 13, [w, w * 0.7, w * 0.6]); // rocks
   // a lizard basking on a warm rock, shuffling along it now and then (~0.35 m)
   p.push(animalProp(19.5, 4.4, 0.42, 0.75, LIZARD_LOOK, o => Math.abs(Math.cos(T * 0.2)) > 0.3 ? Math.floor(T * 4) & 1 : 0, s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; }));
   for (let k = 0; k < 10; k++) // butterflies (~8 cm across)

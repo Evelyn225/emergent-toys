@@ -47,3 +47,31 @@ test('the waterfall falls in strands that move, and its detail settles with dist
  });
  assert.deepEqual(r.bad,[]);
 }));
+test('the planting is built: palms, ferns, bananas, saguaros, barrels, agaves and rocks as shaped models, under 1% glyphs with everything in',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],W=room.W,H=room.H,plants=room.props.filter(o=>o.consPlant),count={};
+  if(room.props.some(o=>o.art))bad.push('a sprite is left');
+  for(const o of plants)count[o.consPlant.kind]=(count[o.consPlant.kind]||0)+1;
+  const want={palm:7,fern:8,banana:3,saguaro:6,barrel:6,agave:3,rock:3};
+  for(const k in want)if(count[k]!==want[k])bad.push(['count',k,count[k]]);
+  for(const o of plants){const {kind,heightM}=o.consPlant,blocks=!!o.box&&!o.walk;
+   if((['palm','banana','saguaro','barrel','rock'].includes(kind))!==blocks)bad.push(['collision',kind,o.x,o.y]);
+   if(inConsPool(o.x,o.y))bad.push(['in the pool',kind,o.x,o.y]);
+   if((o.x>13)!==['saguaro','barrel','agave','rock'].includes(kind))bad.push(['wrong house',kind,o.x]);
+   if(o.box&&o.box.z1>heightM+.01)bad.push(['collision above the plant',kind]);}
+  // drawn as shaped animals, at the size they're meant to be
+  const seen=[],df=drawFigure;drawFigure=(vx,vy,z,h,fx,fy,look)=>seen.push({h,look});
+  try{for(const o of plants)o.draw(o.x-px,o.y-py,o);}finally{drawFigure=df;}
+  if(seen.length!==plants.length)bad.push(['drawn',seen.length]);
+  plants.forEach((o,k)=>{const s=seen[k],u=PLANT_UNITS[o.consPlant.kind];if(!s||Math.abs(s.h/FIG_TALL*u-o.consPlant.heightM)>1e-6||s.look!==PLANT_LOOKS[o.consPlant.kind])bad.push(['size or look',o.consPlant.kind]);});
+  // the lizard still basks on its rock's top
+  const rock=plants.find(o=>o.consPlant.kind==='rock'&&Math.hypot(o.x-19.5,o.y-4.4)<.01),liz=room.props.find(o=>o.tick&&Math.abs(o.z-.42)<1e-6);
+  if(!rock||!liz||rock.box.z1>liz.z||liz.z-rock.box.z1>.1)bad.push(['lizard and rock',rock?.box?.z1,liz?.z]);
+  // and with everything in, still glyph-free
+  let g=0,n=0;for(const [x,y,ang,pt]of [[7,14.4,-1.57,.1],[2,13,-.6,.15],[20,13,-1.9,.1],[9,9,-2.4,.2],[18,4,-2.6,.3]]){px=x;py=y;a=ang;pitch=pt;render(0);
+   for(let i=0;i<cols*rows;i++){n++;const c=CH[i];if(c!==' '&&c!==''&&!/[A-Z&]/.test(c))g++;}}
+  if(g/n>.01)bad.push(['glyph share',+(100*g/n).toFixed(2)]);
+  return {bad};
+ });
+ assert.deepEqual(r.bad,[]);
+}));
