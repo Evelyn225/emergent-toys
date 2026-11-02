@@ -24,7 +24,8 @@ test('open water is shaded swell with few glyphs, calm far off, and dark at nigh
   if(far.length&&near.length&&spread(far)>spread(near))bad.push(['far water busier than near',spread(far),spread(near)]);
   const mean=s=>s.reduce((m,i)=>m+(BG[i]&15),0)/s.length,dayMean=mean(day);
   const night=look(23,.35),nightMean=mean(night);
-  if(!(nightMean<dayMean*.5))bad.push(['not dark at night',+nightMean.toFixed(2),+dayMean.toFixed(2)]);
+  if(!(nightMean<dayMean-.8))bad.push(['not dark at night',+nightMean.toFixed(2),+dayMean.toFixed(2)]);
+  if(night.some(i=>BG[i]===NONE||(BG[i]&15)<1))bad.push('black holes in the night sea');
   if(night.some(i=>CH[i]!==' '&&(COL[i]&15)>6&&(COL[i]>>4)===CYAN))bad.push('bright glyphs at night');
   // at dusk the moon is up in the east: looking at it, a path of brighter water under it; looking away, none
   const path=a_=>{const s=look(19.3,a_),mid=s.filter(i=>Math.abs(i%cols-cols/2)<cols*.08);return mid.filter(i=>(BG[i]>>4)===BLUE&&(BG[i]&15)>=3||CH[i]==='-').length/Math.max(1,mid.length);};
@@ -44,8 +45,23 @@ test('surf at night: the foam and the wash running up the sand still catch the m
   for(let k=0;k<12;k++){T=1400+k*period/12;env(0);render(0);
    for(let i=0;i<BG.length;i++){const t=ZB[i];if(!(t>.05&&t<2))continue;const q=2*(i%cols)/cols-1,x=px+(dx-dy*tf*q)*t,y=py+(dy+dx*tf*q)*t,band=seaShoreBand(x,y);
     if(!band?.beach||band.edge<low||band.edge>band.limit)continue;const s=islandShoreSurface(x,y,band.edge,true);
-    if(s.foam||s.film||s.water){if((BG[i]&15)>=2)lit++;else dark++;}}}
+    // foam and the thin film catch the moon; the deeper wash is just never black
+    if(s.foam||s.film||s.water){if(BG[i]!==NONE&&(BG[i]&15)>=(s.foam||s.film?2:1))lit++;else dark++;}}}
   return {lit,dark};
  });
  assert.ok(r.lit>40&&r.lit>r.dark*2,JSON.stringify(r));
+}));
+
+test('at night no water, wash or foam on an island beach is drawn black, whichever painter draws it',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  tod=23;T=1402;let black=0,lit=0;
+  for(const id of ['sand','fern','wood']){const I=WILD_ISLANDS.find(i=>i.id===id),la=Math.atan2(I.landing[1]-I.y,I.landing[0]-I.x)+Math.PI/2;let at=null;
+   for(let s=0;s<Math.max(I.rx,I.ry)*1.5&&!at;s+=.05){const x=I.x+Math.cos(la)*s,y=I.y+Math.sin(la)*s;if(wildIslandEdge(x,y,I)<.75)at=[x,y];}
+   [px,py]=at;a=la;pitch=-.15;freecam=null;mode='walk';env(0);render(0);
+   for(let i=0;i<BG.length;i++){const t=ZB[i];if(!(t>.05&&t<20))continue;const q=2*(i%cols)/cols-1,x=px+(dx-dy*tf*q)*t,y=py+(dy+dx*tf*q)*t;
+    const s=seaAt(x,y)?{water:true}:islandSurface(x,y);if(!s||!(s.water||s.foam||s.film))continue;
+    if(BG[i]===NONE||(BG[i]&15)<1)black++;else lit++;}}
+  return {black,lit};
+ });
+ assert.ok(r.lit>500&&r.black<r.lit*.01,JSON.stringify(r));
 }));

@@ -251,3 +251,44 @@ test('the telescope ring is drawn in characters: black corners, a brass ring of 
  });
  assert.deepEqual(r,[]);
 }));
+
+test('coming down sideways on the board: slow, a sloppy landing you ride out for half points; fast, a bail',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const land=(v,turn,trick='kickflip')=>{SK.bail=0;SK.combo=null;SK.stance=1;SK.v=v;SK.dir=0;a=turn;SK.spin=0;SK.popT=T-.5;
+   body.trick={name:trick,flip:1,turn:0,t:1,air:1};skateLand();body.trick=null;
+   const out={bail:SK.bail>0,msg:msgText,v:SK.v,dir:SK.dir,a,stance:SK.stance};SK.bail=0;return out;};
+  const clean=land(.3,0),slow=land(.3,Math.PI/2),fast=land(.7,Math.PI/2),still=land(.05,Math.PI/2),back=land(.3,Math.PI*.7);
+  const pts=s=>+(s.msg.match(/(\d+)$/)||[])[1];
+  return {clean,slow,fast,still,back,half:pts(slow)/pts(clean)};
+ });
+ assert.ok(!r.slow.bail&&/^SLOPPY KICKFLIP!/.test(r.slow.msg),JSON.stringify(r.slow));
+ assert.ok(Math.abs(r.half-.5)<.05,'half points: '+r.half);
+ assert.ok(Math.abs(r.slow.v-.15)<1e-9&&Math.abs(r.slow.dir-r.slow.a)<1e-9,'scrubs speed, rolls the way the board points: '+JSON.stringify(r.slow));
+ assert.ok(r.back.stance===-1&&!r.back.bail,'more than a quarter round: rides away switch');
+ assert.ok(r.fast.bail&&/^BAIL!/.test(r.fast.msg),'fast: still a bail');
+ assert.ok(!r.still.bail&&/^SLOPPY KICKFLIP!/.test(r.still.msg)&&r.still.v===.05,'barely moving: no bail, no speed lost, scored on its own (sloppy)');
+}));
+
+test('combos need you moving: a trick landed standing still scores alone, stopping or waiting too long banks the combo, and a bar shows the time left',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  mode='walk';room=null;clearInventory();carryItem({id:'skateboard',uses:0});fx.skating=true;body.z=body.vz=0;SK.lastT=T;
+  const land=(v,trick)=>{SK.bail=0;SK.v=v;SK.dir=a;SK.spin=0;SK.popT=T-.4;body.trick={name:trick,flip:1,turn:0,t:1,air:1};skateLand();body.trick=null;};
+  const out={};
+  SK.combo=null;SK.score=0;land(.05,'kickflip');out.standing={score:SK.score,combo:!!SK.combo,msg:msgText};
+  SK.score=0;land(.5,'kickflip');T+=.5;land(.5,'heelflip');out.moving={names:SK.combo?.names.length,score:SK.score,msg:msgText};
+  out.bar=comboLeft();T+=SK_COMBO_GAP*.5;out.half=comboLeft();
+  T+=SK_COMBO_GAP;SK.lastT=T;stepSkate(0);out.timedOut={combo:!!SK.combo,score:SK.score};
+  SK.score=0;land(.5,'kickflip');land(.5,'heelflip');SK.v=.05;SK.lastT=T;stepSkate(0);out.stopped={combo:!!SK.combo,score:SK.score};
+  SK.score=0;land(.5,'kickflip');land(.05,'heelflip');out.standAfter={combo:!!SK.combo,score:SK.score};
+  // the bar is drawn under the trick
+  land(.5,'kickflip');say('KICKFLIP!  100',2);const fill=g.fillRect,bars=[];g.fillRect=function(x,y,w,h){if(h===4)bars.push(w);return fill.apply(this,arguments);};try{hud();}finally{g.fillRect=fill;}out.drawn=bars.length;
+  fx.skating=false;return out;
+ });
+ assert.ok(r.standing.score>0&&!r.standing.combo,'standing: scored, no combo '+JSON.stringify(r.standing));
+ assert.equal(r.moving.names,2);assert.equal(r.moving.score,0,'moving: into a combo, not scored yet');
+ assert.ok(r.bar===1&&Math.abs(r.half-.5)<.01,'the bar empties over the gap: '+r.bar+' '+r.half);
+ assert.ok(!r.timedOut.combo&&r.timedOut.score>0,'too long: banked');
+ assert.ok(!r.stopped.combo&&r.stopped.score>0,'rolled to a stop: banked');
+ assert.ok(!r.standAfter.combo&&r.standAfter.score>0,'landing one standing ends the combo and scores both');
+ assert.equal(r.drawn,1,'one timer bar');
+}));

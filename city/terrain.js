@@ -150,7 +150,7 @@ function terrainHeight(x, y) {
 }
 
 function outdoorGroundHeight(x, y) {
-  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y));
+  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y), typeof skateparkGround === 'function' ? skateparkGround(x, y) : 0); // (the skatepark's ledges: skatepark.js)
 }
 
 buildTerrain();
