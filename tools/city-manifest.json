@@ -88,6 +88,7 @@
     "city/storefronts.js",
     "city/backrooms.js",
     "city/gardens.js",
+    "city/conservatory-plants.js",
     "city/jade.js",
     "city/casino.js",
     "city/exchange.js",
