@@ -661,9 +661,11 @@ function drawMarketLantern(o, vx, vy) {
   rod(vx, vy, top, vx, vy, z1, 0.0015, GRAY, 0.7);
   const lw = Math.max(0.016, 0.55 * d / projX); // a cell wide at least, far off
   drawBox(boxAt(vx, vy, 1, 0, lw, lw, z0, z1), (i, t, L) => {
-    const cap = HIT.w > z1 - 0.008 || HIT.w < z0 + 0.008;
-    BG[i] = cap ? C(GRAY, 2) : C(RED, 3 + lit * 9 + L * 0.2);
-    return set(i, cap ? '=' : lit > 0.3 ? '@' : ' ', C(YEL, 15)), true;
+    // round paper: brightest down its middle, darker toward its sides, ribbed up close; a dark cap and foot
+    const cap = HIT.w > z1 - 0.008 || HIT.w < z0 + 0.008, across = Math.min(1, Math.abs((HIT.face <= 2 ? HIT.v : HIT.u) / lw));
+    const round = Math.sqrt(Math.max(0, 1 - across * across)), rib = t / projY < .004 && fract((HIT.w - z0) * 220) < .2 ? .7 : 1;
+    BG[i] = cap ? C(GRAY, 1.6 + L * .15) : C(RED, (2.2 + lit * 9 + L * 0.2) * (.55 + .45 * round) * rib);
+    return set(i, ' ', 0), true;
   });
 }
 
@@ -1027,22 +1029,26 @@ const SOLID_SHADE = {
   },
   // the night market's stalls (props.js): by day a blue tarp's roped down over everything
   stall: o => (i, t, L) => { // the counter: planks along the front, the goods laid out on top
-    const f = HIT.face, w = HIT.w;
-    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f)); return set(i, fract(HIT.u * 6 + w * 3) < 0.12 ? '\\' : ' ', C(GRAY, L * 0.7)), true; }
-    if (f !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.25) * shadeFace(f)); return set(i, w > 0.09 ? '=' : fract(HIT.u * 12) < 0.12 ? '|' : ' ', C(BRICK, Math.max(L, 7))), true; }
-    BG[i] = C(WARM, 1.6 + night * 1.4); // a cloth on top, lit by the lanterns
-    const u = HIT.u * 13, m = mod(Math.floor(u * 3), 3), back = HIT.v * -o.fs < 0, col = mod(Math.floor(u), 60);
-    let ch = ' ', c = WHITE;
-    if (o.k === 0) { ch = back ? '([=])'[mod(Math.floor(u * 5), 5)] : 'oO'[col & 1]; c = back ? WARM : WHITE; } // steamer baskets at the back, buns at the front
-    else if (o.k === 1) { ch = back ? (col & 1 ? 'Y' : '|') : (col % 3 ? 'o' : '@'); c = back ? RED : col % 3 ? RED : YEL; } // tassels, knots, coins
-    else if (o.k === 2) { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
-    else if (o.k === 3) { ch = back ? (col % 4 === 1 ? '(O)'[m] : ' ') : '#=='[m]; c = back ? (Math.sin(T * 1.5) > 0 ? CYAN : MAG) : col & 1 ? YEL : RED; } // a crystal ball at the back, tarot cards laid out
-    else { ch = back ? '(~)'[m] : (col + Math.floor(T * 2)) % 3 ? '~' : '>'; c = back ? CYAN : (col + Math.floor(T * 2)) % 3 ? BLUE : ORANGE; } // bags of fish hung up, the tub with fish darting in it
-    return set(i, ch, C(c, Math.max(L, 11))), true;
+    const f = HIT.face, w = HIT.w, fp = t / projY, fine = clamp(1 - fp / .02, 0, 1);
+    set(i, ' ', 0);
+    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f) - coveGroove(HIT.u * 6 + w * 3, 1, .1, fp * 6) * .7); return true; } // a tarp, roped down
+    if (f !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.25) * shadeFace(f) * (w > 0.09 ? 1.15 : 1) - coveGroove(HIT.u, 1 / 12, .008, fp) * .6); return true; } // the plank front, its top rail
+    // the cloth on top, lit by the lanterns, and the goods on it in two rows: each its own shape and colour
+    const u = HIT.u * 65, col = mod(Math.floor(u), 60), cu = fract(u) - .5, vv = clamp(HIT.v * -o.fs / o.hw, -1, 1), back = vv < 0, cv = (back ? vv + .5 : vv - .5) * 1.4;
+    const r = Math.hypot(cu, cv), lit = 1.6 + night * 1.4, glint = cu < -.1 && cv < -.05 && fine > .3 ? 1.2 : 0;
+    const put = (base, lvl) => { BG[i] = C(base, lvl + glint); return true; };
+    BG[i] = C(WARM, lit);
+    if (o.k === 0) { if (back) return r < .42 ? put(WARM, (r > .32 ? 2.2 : 3) + night * 1.2 - Math.abs(fract((cv + .5) * 4) - .5) * .8 * fine) : true; if (col % 3 === 2) return Math.abs(cv) < .25 && Math.abs(cu) < .4 ? put(ORANGE, 3.6 + night) : true; return r < .3 ? put(WHITE, 4.2 + night) : true; } // steamer baskets at the back (their rims), buns and skewers at the front
+    if (o.k === 1) { if (back) return Math.abs(cu) < .12 && cv > -.4 ? put(RED, 3.2 + night) : true; return r < .22 ? put(col % 3 ? RED : YEL, (col % 3 ? 3 : 4.5) + night) : true; } // hanging tassels, knots and coins
+    if (o.k === 2) { if (back) return Math.abs(cu) < .36 && Math.abs(cv) < .36 ? put(ORANGE, 2.6 + night - (Math.abs(cu) > .3 ? .6 : 0)) : true; return r < .28 ? put(col % 5 === 0 ? YEL : CYAN, 2.4 + night + (Math.sin(T * 2 + col) > .85 ? 3 : 0)) : true; } // boxes, glass jars catching the light
+    if (o.k === 3) { if (back) return col % 4 === 1 && r < .4 ? put(Math.sin(T * 1.5) > 0 ? CYAN : MAG, 4 + night * 2 - r * 3) : true; return Math.abs(cu) < .25 && Math.abs(cv) < .38 ? put(col & 1 ? YEL : RED, 3.6 + night) : true; } // a crystal ball glowing at the back, tarot cards laid out
+    if (back) { if (r < .4) { const fish = Math.hypot(cu - .08 * Math.sin(T * 2 + col), cv) < .12; return put(fish ? ORANGE : CYAN, (fish ? 4 : 2.6) + night); } return true; } // bags of fish hung up, one fish each
+    const fx = fract((col * .37 + T * .3)) - .5, darting = Math.hypot(cu - fx * .6, cv) < .1; // the tub, fish darting in it
+    return put(darting ? ORANGE : BLUE, (darting ? 4 : 2) + night + (darting ? 0 : Math.sin((cu + cv) * 9 + T * 3) * .4 * fine));
   },
   stallroof: o => (i, t, L) => { // the canopy: stripes, a scalloped valance along the front with the sign on it
     const f = HIT.face, w = HIT.w, q = (HIT.u * o.fs / o.hl + 1) / 2, stripe = c => C(fract(HIT.u * 9) < 0.5 ? o.canopy : YEL, c);
-    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f)); return set(i, w > 0.24 ? '~' : ' ', C(GRAY, L * 0.7)), true; }
+    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f) * (w > 0.24 ? .85 : 1)); return set(i, ' ', 0), true; } // the tarp over it by day, its folded edge in shadow
     if (f === 5 || f === 6) { BG[i] = stripe(f === 5 ? 3 + L * 0.3 : 1.8 + night * 1.5); return set(i, ' ', 0), true; }
     const front = (f === 3 || f === 4) && Math.sign(HIT.v) === o.fs;
     if (!front) { BG[i] = stripe((1.4 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; }
@@ -1051,7 +1057,7 @@ const SOLID_SHADE = {
     const n = o.word.length + 2, ch = signLine(o.word, q * n - 1, (0.255 - w) / 0.045, i, 0.2325, midDepth(rel(o.x - px), rel(o.y - py)), t, 2 * o.hl / n, 0.045, farDepth(rel(o.x - px), rel(o.y - py), o.hl), o.fs * o.c, o.fs * o.s);
     return ch !== null && ch !== ' ' ? (set(i, ch, C(YEL, 15)), true) : (set(i, ' ', 0), true);
   },
-  stallpole: () => (i, t, L) => { BG[i] = C(GRAY, 1.5); return set(i, '|', C(GRAY, Math.max(L, 8))), true; },
+  stallpole: () => (i, t, L) => { BG[i] = C(GRAY, (1.8 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }, // a steel pole, lit on its sunward side
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;
@@ -1280,7 +1286,7 @@ const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
 function drawLanternString(vx, vy, ax, ay) {
   // Grow the cord to one character cell at a distance, keeping the same dark material as it widens.
   const d = Math.hypot(vx, vy), th = Math.max(0.004, 0.55 * d / projY), tw = Math.max(0.004, 0.55 * d / projX);
-  const segs = 8, cord = i => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, 2)), true; };
+  const segs = 8, cord = i => { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; };
   for (let k = 0; k < segs; k++) {
     const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
     drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, tw, z - th, z + th), cord);
@@ -1290,9 +1296,11 @@ function drawLanternString(vx, vy, ax, ay) {
     const z = sagZ(t), gold = t === 0;
     const lw = Math.max(0.018, tw); // at a distance a lantern stays at least a cell wide too
     drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, lw, lw, z - 0.05, z - 0.006), (i, tt, L) => {
-      const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042;
-      BG[i] = cap ? C(GRAY, 2) : C(gold ? YEL : RED, 3 + lit * 9 + L * 0.2);
-      return set(i, cap ? '=' : lit > 0.3 ? 'o' : ' ', C(YEL, 15)), true;
+      // a round paper lantern: brightest down its middle, darker toward its sides, ribbed up close, dark caps
+      const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042, across = Math.min(1, Math.abs((HIT.face <= 2 ? HIT.v : HIT.u) / lw));
+      const round = Math.sqrt(Math.max(0, 1 - across * across)), rib = tt / projY < .004 && fract((HIT.w - z) * 220) < .2 ? .7 : 1;
+      BG[i] = cap ? C(GRAY, 1.6 + L * .15) : C(gold ? YEL : RED, (2.2 + lit * 9 + L * 0.2) * (.55 + .45 * round) * rib);
+      return set(i, ' ', 0), true;
     });
   }
 }
