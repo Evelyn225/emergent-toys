@@ -22622,97 +22622,114 @@ const PLANT_ART = {
   agave: pad(['\\ | /', ' \\|/', '--+--']),
   butterfly: ['}{'], lizard: ['~=<'],
 };
+// The glasshouse's glazing: white bars every 1.2 m with transoms every 1.5 m, on a brick plinth, and ribs across the
+// roof. The bars are built (CONS_FRAME) so they hold their width at any distance; these painters do what's between.
+const CONS_GLAZE = { pitch: 1.2, transom: 1.5, plinth: 0.8, bar: .08 };
+const consSky = (k = 1) => day > 0.3 ? C(CYAN, (2 + day * 4) * k) : dusk > 0.3 ? C(ORANGE, 3 * k) : C(BLUE, 1 * k);
 function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), c = roomAt(mx, my);
+  const u = Math.abs(su), c = roomAt(mx, my), fp = Math.max(uStep, d / projY), fine = clamp(1 - fp / .25, 0, 1);
   if (c === 'G') { // fixed botanical displays: their subjects stay the same from either side of the divider
     const desert = my > 8, word = desert ? 'DESERT PLANTS' : 'PALMS & FERNS', u0 = desert ? 11.8 : 4;
     if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(desert ? BRICK : GREEN, 3))) return true;
-    if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
+    if (z > 3.92) { BG[i] = consSky(); return set(i, ' ', 0), true; }
     return conservatoryScreen(i, u, z, desert);
   }
   const left = mx < 13 || mx === 0;
-  if (my === 0 && left && Math.abs(u - CONS_FALL.x) < CONS_FALL.half + 0.25) {
-    const edge = Math.abs(u - CONS_FALL.x), n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
-    if (edge > CONS_FALL.half) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '%', C(GRAY, L)), true; }
-    BG[i] = C(CYAN, 2 + n * 3);
-    let ch = ' ';
-    if (z < 0.3) ch = n < 0.5 ? '*' : '~';
-    else if (n < 0.3) ch = '|';
-    else if (n < 0.5) ch = ':';
-    return set(i, ch, C(WHITE, 15)), true;
+  if (my === 0 && left && Math.abs(u - CONS_FALL.x) < CONS_FALL.half + 0.25) { // the waterfall, down through the plinth to the pool
+    const edge = Math.abs(u - CONS_FALL.x);
+    if (edge > CONS_FALL.half) { BG[i] = C(GRAY, 1 + L * 0.15 + (noise(u * 6, z * 4, 880) - .5) * 1.2 * fine); return set(i, ' ', 0), true; }
+    // falling sheets in narrow vertical strands, each its own speed; white where it hits the pool
+    const strand = Math.floor(u * 14), n = fract(z * 0.9 + T * (2.2 + hash(strand, 0, 884) * 0.8) + hash(strand, 1, 884)), foam = clamp((0.45 - z) / 0.3, 0, 1);
+    if (foam > .5 && fine > .3 && noise(u * 9, z * 9 - T * 3, 885) > .45) { BG[i] = C(CYAN, 11 + L * .2); return set(i, ' ', 0), true; }
+    BG[i] = C(CYAN, 4.6 + L * .1 + (n < .35 ? 1.6 : 0) * fine + (1 - fine) * .6 + foam * 1.5);
+    return set(i, ' ', 0), true;
   }
-  if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
-  // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
-  if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
+  if (z < CONS_GLAZE.plinth) { BG[i] = C(BRICK, 1.3 + L * 0.12 - 1.4 * coursedJoint(u, z, .2, .5, uStep, d)); return set(i, ' ', 0), true; } // the brick plinth
   const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
   if (!left) { // the city's towers beyond the glass, far off: they stay put against the sky as you walk about
     const [gsu, gsz] = glassSlopes(su, z), ang = Math.atan2(gsu, 1) + (mx === 0 || mx === CONS_W - 1 ? 1.6 * Math.sign(mx - 1) : my === 0 ? 0 : 3.1), col = Math.floor(ang * 14);
-    if (gsz < 0.08 + 0.35 * hash(col, 1, 864) * hash(col >> 1, 2, 864)) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(ang * 60), Math.floor(gsz * 60), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+    if (gsz < 0.08 + 0.35 * hash(col, 1, 864) * hash(col >> 1, 2, 864)) {
+      const lit = night > 0.4 && hash(Math.floor(ang * 60), Math.floor(gsz * 60), 865) > 0.8;
+      BG[i] = lit ? C(YEL, 2.5) : C(GRAY, 1.5 + day * 2); return set(i, ' ', 0), true;
+    }
   }
-  BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
-  return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
+  if (leaf) { BG[i] = C(GREEN, 1 + L * 0.1 + (noise(u * 6, z * 6, 842) - .5) * 1.4 * fine); return set(i, ' ', 0), true; } // leaves pressed against the glass
+  BG[i] = consSky(); return set(i, ' ', 0), true;
 }
 // Sample the panorama in wall coordinates, with painted depth rather than camera-dependent parallax.
 function conservatoryScreen(i, u, z, desert) {
   const ground = 0.25 + noise(u * 0.7, 0, 867) * 0.22;
-  if (z < ground) {
-    BG[i] = C(desert ? YEL : GREEN, desert ? 4 : 2);
-    return set(i, desert ? '~' : '"', C(desert ? WARM : GREEN, desert ? 9 : 7)), true;
-  }
+  set(i, ' ', 0);
+  if (z < ground) { BG[i] = C(desert ? YEL : GREEN, desert ? 4 + noise(u * 3, z * 9, 881) : 2 + noise(u * 3, z * 9, 881)); return true; }
   for (let layer = 0; layer < 3; layer++) {
     const spacing = 2.6, shift = layer * 0.85, slot = Math.floor((u + shift) / spacing);
     const centre = (slot + 0.5) * spacing - shift, tall = 1.8 + hash(slot, layer, 869) * 0.95;
-    const offset = u - centre, light = 11 - layer * 2;
+    const offset = u - centre, light = 4.2 - layer * .8;
     if (desert) {
       const armSide = slot & 1 ? 1 : -1, arm = offset * armSide;
       const onArm = (arm > 0 && arm < 0.45 && Math.abs(z - tall * 0.55) < 0.09) ||
         (Math.abs(arm - 0.45) < 0.09 && z > tall * 0.55 && z < tall * 0.8);
-      if ((Math.abs(offset) < 0.12 && z < tall) || onArm) { BG[i] = C(GREEN, 2); return set(i, '|', C(GREEN, light)), true; }
+      if ((Math.abs(offset) < 0.12 && z < tall) || onArm) { BG[i] = C(GREEN, light - (Math.abs(offset) > .07 ? .8 : 0)); return true; }
     } else {
       const lean = 0.1 * z / tall * (slot & 1 ? 1 : -1), stem = offset - lean;
       const spread = 0.85 + hash(slot, layer, 870) * 0.25, reach = Math.abs(stem) / spread;
       const frond = tall + Math.sin(reach * Math.PI) * 0.2 - reach * 0.55;
-      if (reach < 1 && (Math.abs(z - frond) < 0.1 || Math.abs(z - frond - 0.25 * (1 - reach)) < 0.07)) {
-        BG[i] = C(GREEN, 2 + (2 - layer));
-        return set(i, stem < 0 ? '/' : '\\', C(GREEN, light + 1)), true;
-      }
-      if (Math.abs(stem) < 0.05 && z < tall) return set(i, '|', C(BRICK, light)), true;
+      if (reach < 1 && (Math.abs(z - frond) < 0.1 || Math.abs(z - frond - 0.25 * (1 - reach)) < 0.07)) { BG[i] = C(GREEN, light + .6); return true; }
+      if (Math.abs(stem) < 0.05 && z < tall) { BG[i] = C(BRICK, light - 1); return true; }
     }
   }
-  if (!desert && z < 0.85 + noise(u * 1.8, 0, 871) * 0.3) {
-    BG[i] = C(GREEN, 2);
-    return set(i, fract(u * 5 + z * 4) < 0.5 ? '/' : '\\', C(GREEN, 7)), true;
-  }
+  if (!desert && z < 0.85 + noise(u * 1.8, 0, 871) * 0.3) { BG[i] = C(GREEN, 2.2 + noise(u * 4, z * 4, 882) * 1.2); return true; }
   BG[i] = C(desert ? CYAN : GREEN, desert ? 3 : 1);
-  return set(i, ' ', 0), true;
+  return true;
 }
-function conservatoryFloor(i, f, wx, wy) {
+function conservatoryFloor(i, f, wx, wy, r) {
+  const fp = r === undefined ? 0 : homeBalconyPavingFootprint(eye * projY / Math.max(.5, r - hor + .5), eye), fine = clamp(1 - fp / .2, 0, 1);
+  set(i, ' ', 0);
   if (wx > 13) { // sand, rippled by the wind that never blows in here
-    BG[i] = C(YEL, 1 + f * 1.5);
-    return set(i, fract(wy * 3 + Math.sin(wx * 2) * 0.3) < 0.2 ? '~' : hash(Math.floor(wx * 6), Math.floor(wy * 6), 843) > 0.92 ? '.' : ' ', C(WARM, 4 + f * 6));
+    BG[i] = C(YEL, 1.6 + f * 1.8 + Math.sin((wy * 3 + Math.sin(wx * 2) * 0.3) * Math.PI * 2) * .7 * fine + (noise(wx * 5, wy * 5, 843) - .5) * .6 * fine);
+    return;
   }
   const waterEdge = consWaterEdge(wx, wy);
   if (waterEdge > 0) {
     const n = noise(wx * 3 + T * 0.5, wy * 3, 844), splash = wy < 1.65 && Math.abs(wx - CONS_FALL.x) < CONS_FALL.half;
     const ripple = fract(Math.hypot((wx - CONS_FALL.x) * 0.8, wy - CONS_FALL.y) * 3 - T * 1.5) < 0.15;
-    BG[i] = C(splash ? CYAN : BLUE, splash ? 3 + n * 2 : 1 + f * 2); FL[i] = 3;
-    let ch = ' ';
-    if (splash) ch = n > 0.5 ? '*' : '~';
-    else if (ripple) ch = '~';
-    else if (n > 0.45) ch = '-';
-    return set(i, ch, C(splash ? WHITE : CYAN, splash ? 13 : 6 + f * 6));
+    BG[i] = splash ? C(CYAN, 3 + n * 2 * fine + (1 - fine) * 1) : C(BLUE, 1 + f * 2 + ((ripple ? .8 : 0) + (n - .5)) * fine); FL[i] = 3;
+    return;
   }
-  if (waterEdge > -0.18) { BG[i] = C(GRAY, 1 + f); return set(i, noise(wx * 5, wy * 5, 849) > 0.5 ? 'o' : '%', C(GRAY, 4 + f * 5)); }
-  if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(BRICK, 1 + f); return set(i, fract(wy * 2) < 0.15 ? '=' : '|', C(WARM, 5 + f * 6)); } // a boardwalk up from the door
-  BG[i] = C(GREEN, f * 1.2); // moss and soil, steaming
-  const mist = noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) > 0.62;
-  return set(i, mist ? '~' : hash(Math.floor(wx * 5), Math.floor(wy * 5), 846) > 0.6 ? '"' : '.', C(mist ? WHITE : GREEN, mist ? 5 : 3 + f * 5));
+  if (waterEdge > -0.18) { BG[i] = C(GRAY, 1.3 + f * 1.5 + (noise(wx * 5, wy * 5, 849) - .5) * 1.4 * fine); return; } // the rocks round the pool
+  if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(WARM, 1.6 + f * 2 - 2 * coveGroove(wy, .5, .02, fp)); return; } // a boardwalk up from the door
+  // moss and soil, steaming
+  const mist = clamp((noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) - .55) * 6, 0, 1);
+  BG[i] = C(GREEN, .9 + f * 1.6 + (noise(wx * 5, wy * 5, 846) - .5) * 1.2 * fine + mist * 1.2);
 }
-function glassCeil(i, wx, wy) { // the glass roof: ribs, the sky through it, vines hanging on the tropical side
-  if (fract(wx / 2) < 0.05 || fract(wy / 2) < 0.05) { BG[i] = C(WHITE, 2 + day * 2); return set(i, '=', C(WHITE, 9)); }
-  if (wx < 13 && noise(wx * 1.2, wy * 1.2, 847) > 0.6) { BG[i] = C(GREEN, 1); return set(i, '(', C(GREEN, 7)); }
-  BG[i] = day > 0.3 ? C(CYAN, 2 + day * 5) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 0.5);
-  return set(i, night > 0.5 && hash(Math.floor(wx * 5), Math.floor(wy * 5), 848) > 0.97 ? '.' : ' ', C(WHITE, 10));
+ROOM_FLOORS.conservatoryGround = (i, f, wx, wy, r) => conservatoryFloor(i, f, wx, wy, r);
+// the glass roof: the sky through it, vines hanging on the tropical side (the ribs are built, in CONS_FRAME)
+function glassCeil(i, wx, wy) {
+  if (room.kind === 'conservatory' && wx < 13 && noise(wx * 1.2, wy * 1.2, 847) > 0.6) { BG[i] = C(GREEN, 1.2 + (noise(wx * 4, wy * 4, 883) - .5)); return set(i, ' ', 0); }
+  BG[i] = consSky(); return set(i, ' ', 0);
+}
+function consSteel(i, t, L) { BG[i] = C(WHITE, (3 + L * .45) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+function CONS_FRAME(W, H, h) {
+  const boxes = [], bar = CONS_GLAZE.bar / 2, z0 = CONS_GLAZE.plinth;
+  const walls = [[1, 1, 1, H - 1], [W - 1, 1, W - 1, H - 1], [1, 1, W - 1, 1], [1, H - 1, W - 1, H - 1]];
+  for (const [x0, y0, x1, y1] of walls) {
+    const alongY = x0 === x1, len = alongY ? y1 - y0 : x1 - x0, nx = alongY ? (x0 === 1 ? 1 : -1) : 0, ny = alongY ? 0 : (y0 === 1 ? 1 : -1);
+    const at = (s, off) => alongY ? [x0 + nx * off, y0 + s] : [x0 + s, y0 + ny * off];
+    const fall = !alongY && y0 === 1 ? [CONS_FALL.x - CONS_FALL.half - 0.25, CONS_FALL.x + CONS_FALL.half + 0.25] : null; // (no bars down the waterfall's rock)
+    for (let s = 0; s <= len + 1e-6; s += CONS_GLAZE.pitch) {
+      const wx = x0 + (alongY ? 0 : s); if (fall && wx > fall[0] && wx < fall[1]) continue;
+      const [x, y] = at(s, bar); boxes.push(boxAt(x, y, 1, 0, bar, bar, z0, h));
+    }
+    for (let z = z0; z < h + 1e-6; z += CONS_GLAZE.transom) {
+      const zz = clamp(z, z0 + bar, h - bar), [x, y] = at(len / 2, bar), hl = alongY ? bar : len / 2, hw = alongY ? len / 2 : bar;
+      if (fall) { // the transoms stop either side of the falls
+        for (const [a, b] of [[1, fall[0]], [fall[1], W - 1]]) boxes.push(boxAt((a + b) / 2, y, 1, 0, (b - a) / 2, bar, zz - bar, zz + bar));
+      } else boxes.push(boxAt(x, y, 1, 0, hl, hw, zz - bar, zz + bar));
+    }
+  }
+  for (let x = 1 + 2; x < W - 1; x += 2) boxes.push(boxAt(x, H / 2, 1, 0, .06, H / 2 - 1, h - .14, h));
+  for (let y = 1 + 2; y < H - 1; y += 2) boxes.push(boxAt(W / 2, y, 1, 0, W / 2 - 1, .06, h - .14, h));
+  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, consFrame: { boxes }, draw: () => { for (const b of boxes) drawBox({ ...b, x: b.x - px, y: b.y - py }, consSteel); } };
 }
 // the aviary: a mesh dome, trees inside, a pond, birds everywhere; a keeper with cups of seed
 const AV_W = 14, AV_H = 12;
@@ -22812,12 +22829,12 @@ function conservatoryProps(r) {
       const th = T * (0.5 + (k % 3) * 0.2) + k * 2.3;
       s.x = 6.5 + Math.cos(th) * (2 + k % 4) + Math.sin(th * 2.7) * 0.6; s.y = 7.5 + Math.sin(th * 0.8) * (2.5 + k % 3); s.z = 1 + Math.sin(th * 3.1) * 0.6 + (k % 3) * 0.5;
     }));
-  p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1));
+  p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1), CONS_FRAME(r.W, r.H, r.def.height || 9));
   if (chance(0.7)) p.push(standing(8.2, 8.4, shirt())); if (chance(0.6)) p.push(standing(18.5, 6.6, shirt()));
   return p;
 }
 Object.assign(ROOM_DEFS, {
-  conservatory: { grid: CONS_GRID, spawn: [7, CONS_H - 1.6], light: 0.85, height: 9, floor: 'conservatory', ceil: 'glass', wall: conservatoryWall, block: (x, y) => inConsPool(x, y), props: conservatoryProps },
+  conservatory: { grid: CONS_GRID, spawn: [7, CONS_H - 1.6], light: 0.85, height: 9, floor: 'conservatoryGround', footstepFloor: 'conservatory', ceil: 'glass', wall: conservatoryWall, block: (x, y) => inConsPool(x, y), props: conservatoryProps },
   aviary: { grid: boxRoom(AV_W, AV_H), spawn: [7, AV_H - 1.6], light: 0.85, height: 7, floor: 'aviary', ceil: 'glass', wall: aviaryWall, keeper: [11.5, 9.4], block: (x, y) => Math.hypot((x - 7) / 2, (y - 6) / 1.2) < 1, props: aviaryProps },
 });
 Object.assign(ROOM_FOR, { CONSERVATORY: 'conservatory', AVIARY: 'aviary' });
