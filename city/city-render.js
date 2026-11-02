@@ -555,6 +555,31 @@ function subwayHole(wx, wy, bx, by) {
   return Math.abs(u) < SUBWAY_HOLE[0] && Math.abs(v) < SUBWAY_HOLE[1] ? (u + SUBWAY_HOLE[0]) / (2 * SUBWAY_HOLE[0]) : -1;
 }
 let stHole = -1;
+// Open water, as the sea reads from the shore: many thin swell bands crowding together towards the horizon, from two
+// crossing swells (~6 m and ~4.5 m) and a little chop, each fading out once a row of the screen is wider than a third
+// of its wavelength, so the far water goes calm instead of striping; the surface lightening towards the horizon, where
+// it mirrors more sky; faint broken marks of a lighter blue along the near crests; and a glitter path on the swells
+// under the sun by day or the moon by night, long and broad when it's low
+function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
+  const fp = d / projY, keep = w => clamp(1 - fp / (w * .33), 0, 1);
+  const s1 = Math.sin(wx * 9.5 + wy * 4.2 - T * 1.6), s2 = Math.sin(wy * 12.5 - wx * 5.5 - T * 1.3 + 1.3), chop = noise(wx * 22 + T * .7, wy * 22 - T * .5, 97) * 2 - 1;
+  const k1 = keep(.6), k2 = keep(.46), h = s1 * k1 * .55 + s2 * k2 * .35 + chop * keep(.25) * .25;
+  const far = smooth(clamp(d / (vis * .55), 0, 1)), night = 1 - day;
+  const level = day * (3.3 + far * 2.4) + night * (.95 + far * .8) + h * (.55 + day * .35);
+  BG[i] = C(BLUE, Math.max(0, level));
+  const crest = s1 * k1 > .86 && chop > .2 && k1 > .3; // (broken: only where the chop lifts the crest)
+  set(i, crest ? (chop > .45 ? '~' : '-') : ' ', C(day > .3 ? CYAN : BLUE, (day > .3 ? 4 + day * 3 : 2.6) * f));
+  const sunEl = Math.sin((tod - 6) / 12 * Math.PI), up = Math.abs(sunEl), body = sunEl > 0 ? sunAz() : sunAz() + Math.PI;
+  const align = Math.cos(Math.atan2(ry, rx) - body), width = .992 - (1 - up) * .03; // (a low sun or moon lays a wider path)
+  if (up > .03 && align > width && h > 0) {
+    const glint = noise(wx * 14 + T * 1.7, wy * 14 - T * .9, 98) * (align - width) / (1 - width);
+    if (glint > .22) { // mostly the water brightening, a fleck of light now and then
+      const moon = sunEl <= 0;
+      BG[i] = C(moon ? BLUE : CYAN, moon ? 2 + glint * 6 : 5 + glint * 8);
+      set(i, glint > .55 ? '-' : ' ', C(moon ? WHITE : YEL, moon ? 6 + glint * 6 : 10 + glint * 5));
+    }
+  }
+}
 function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
@@ -600,18 +625,16 @@ function floorBaseCell(i, r, x, rx, ry) {
         // The whole intertidal surface changes ownership. Backwash exposes
         // wet sand outside the resting coastline instead of drawing a stripe
         // over water that never retreats.
-        if(!surface.water||surface.foam) {
-          BG[i]=bgAt(surface.background,day*(surface.foam?9:3)*f,d);
+        if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
+          BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
           set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
         }
       }
-      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
-      set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
-      BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+      seaCell(i, r, x, rx, ry, wx, wy, d, f); FL[i] = 3;
       const foam=shore?shoreWaveFoam(wx,wy,shore.edge,shore.limit):0;
-      if(foam>.15) {
-        set(i,foam>.45?'~':'.',C(WHITE,L*1.4));
-        BG[i]=C(foam>.55?WHITE:CYAN,day*9+1);
+      if(foam>.15) { // the breaker rolling in (and at rocks and walls, the surge): white, moonlit by night
+        set(i,' ',0);
+        BG[i]=C(foam>.55?WHITE:CYAN,day*(7+foam*6)+(1-day)*(3+foam*4));
         FL[i]=0; // breaking foam stays visible over the skyline reflection
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her

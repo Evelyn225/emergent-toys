@@ -16,7 +16,7 @@ test('shore breakers advance, retreat and stay below the wet-sand limit', () => 
       }
       return {edge,strength};
     };
-    const early=peak(.2),landing=peak(.7),retreat=peak(.9);
+    const early=peak(.03),landing=peak(SWASH_UP-.01),retreat=peak(.7); // (fast up the beach, slowly back)
     let escaped=0,deep=0;
     for(let n=0;n<140;n++) {
       T=n*.1;
@@ -27,8 +27,8 @@ test('shore breakers advance, retreat and stay below the wet-sand limit', () => 
     T=7;const repeat=shoreWaveFoam(x,y,-.6,limit);
     return {early,landing,retreat,escaped,deep,repeat:Math.abs(start-repeat)};
   })()`);
-  assert.ok(result.landing.edge > result.early.edge + .8,JSON.stringify(result));
-  assert.ok(result.landing.edge > result.retreat.edge + .5,JSON.stringify(result));
+  assert.ok(result.landing.edge > result.early.edge + .3,JSON.stringify(result));
+  assert.ok(result.landing.edge > result.retreat.edge + .25,JSON.stringify(result));
   assert.ok(result.landing.strength > .9,JSON.stringify(result));
   assert.equal(result.escaped,0);
   assert.equal(result.deep,0);
@@ -39,11 +39,11 @@ test('foam rides the water: never ahead of the wave front on dry sand, and joine
   const r=ev(`(() => {
     const x=719,y=115,limit=.5;let ahead=0,gaps=0;
     for(let n=0;n<140;n++) {
-      T=n*.1;const crest=shoreWaveFront(shoreWavePhase(x,y),limit);
+      T=n*.1;const crest=shoreWaveFront(shoreWavePhase(x,y),limit)+swashRag(x,y);
       for(let e=-1.5;e<limit;e+=.005) if(e>crest&&shoreWaveFoam(x,y,e,limit)>0)ahead++;
-      // the foam's shoreward end is the waterline itself
+      // running up the beach, the foam's shoreward end is the waterline itself (draining, it thins to lace)
       const at=shoreWaveFoam(x,y,crest-.001,limit),phase=shoreWavePhase(x,y);
-      if(Math.min(phase,1-phase)>.1&&at<.5)gaps++;
+      if(phase>.03&&phase<SWASH_UP&&at<.5)gaps++;
     }
     return {ahead,gaps};
   })()`);
@@ -77,7 +77,7 @@ test('beach wash animates only the existing wet sand', () => {
   assert.equal(result.dry,1);
 });
 
-test('backwash exposes sand seaward of the resting coast and foam has an opaque pale surface',()=>{
- const r=ev(`(()=>{const x=707,y=100,patch=.5,offset=.12*Math.sin(x*.13+y*.17),samples=[];for(let phase=0;phase<1;phase+=.02){T=(phase-offset)*7;samples.push(islandShoreSurface(x,y,-.4,true,false,.8,patch));}return {exposed:samples.some(s=>!s.water&&s.background===BRICK),covered:samples.some(s=>s.water&&s.background===BLUE),foam:samples.some(s=>s.foam&&[WHITE,CYAN].includes(s.background)),join:Math.abs(shoreWaveFront(0,.5)-shoreWaveFront(1,.5))};})()`);
- assert.equal(r.exposed,true);assert.equal(r.covered,true);assert.equal(r.foam,true);assert.ok(r.join<1e-9);
+test('backwash exposes a little sand seaward of the resting coast (never metres of it) and foam has an opaque pale surface',()=>{
+ const r=ev(`(()=>{const x=707,y=100,patch=.5,offset=.12*Math.sin(x*.13+y*.17),samples=[],deep=[];for(let phase=0;phase<1;phase+=.02){T=(phase-offset)*7;samples.push(islandShoreSurface(x,y,-.06,true,false,.8,patch));deep.push(islandShoreSurface(x,y,-.4,true,false,.8,patch));}return {deepDry:deep.some(s=>!s.water),exposed:samples.some(s=>!s.water&&s.background===BRICK),covered:samples.some(s=>s.water&&s.background===BLUE),foam:samples.some(s=>s.foam&&[WHITE,CYAN].includes(s.background)),join:Math.abs(shoreWaveFront(0,.5)-shoreWaveFront(1,.5))};})()`);
+ assert.equal(r.deepDry,false,'four metres out stays sea');assert.equal(r.exposed,true);assert.equal(r.covered,true);assert.equal(r.foam,true);assert.ok(r.join<1e-9);
 });
