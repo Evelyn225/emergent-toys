@@ -655,17 +655,23 @@ function dinerWall(i, u, uStep, z, d, mx, my, L) {
   }
   return false;
 }
+// a thin line's coverage of a cell, kept at least a cell wide when keep is set (a neon tube should never vanish)
+const wallLine = (dist, w, fp, keep = false) => { const f = keep ? Math.min(fp, w) : fp; return clamp((w / 2 - dist) / Math.max(f, .002) + .5, 0, 1) * Math.min(1, w / Math.max(f, w)); };
 function arcadeWall(i, u, uStep, z, d, mx, my, L) { // dark walls with a neon zigzag
-  const zig = Math.abs(fract(u * 0.8) - 0.5) * 0.6 + 1.5;
-  if (Math.abs(z - zig) < 0.05) { set(i, '~', C(NEON[Math.floor(u) & 3], 15)); return true; }
-  set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 7 ? ' ' : '.', C(MAG, 3)); return true;
+  const fp = Math.max(uStep, d / projY), zig = Math.abs(fract(u * 0.8) - 0.5) * 0.6 + 1.5;
+  set(i, ' ', 0);
+  BG[i] = wallLine(Math.abs(z - zig), .1, fp, true) > .4 ? C(NEON[Math.floor(u) & 3], 11) : C(MAG, .5 + L * .03);
+  return true;
 }
 function cinemaWall(i, u, uStep, z, d, mx, my, L) {
+  set(i, ' ', 0);
   if (my === 0 && z > 0.7 && z < 2.7 && Math.abs(u - room.W / 2) < 5.2) { // the movie
     const v = noise(u * 0.9 + T * 0.6, z * 2.2 - T * 0.3, 101) * 0.7 + noise(u * 3 - T, z * 6, 102) * 0.3, hue = [CYAN, ORANGE, MAG, GREEN][Math.floor(T / 8) & 3];
-    set(i, ' .:-=+*#'[v * 8 | 0], C(hue, 6 + v * 9)); BG[i] = C(hue, 1 + v * 3); return true;
+    BG[i] = C(hue, 1.5 + v * 7); return true;
   }
-  set(i, fract(u * 3) < 0.3 ? '|' : ' ', C(RED, L * 0.8)); BG[i] = C(RED, 1); return true; // curtains
+  // curtains: soft folds every third of a metre, settling to a plain red far off
+  const fp = Math.max(uStep, d / projY), fold = Math.cos(u * 3 * Math.PI * 2) * clamp(1 - fp / .15, 0, 1);
+  BG[i] = C(RED, 1.2 + L * .05 + fold * .6); return true;
 }
 function hotelWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.1) { set(i, fract(u * 2) < 0.06 ? '|' : '=', C(BRICK, L)); return true; }
