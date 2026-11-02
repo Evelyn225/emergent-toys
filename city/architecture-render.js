@@ -90,7 +90,9 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         const e = Math.sign(local), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + center + e * f.spacing * 0.03), ub = sg * (f.start + center + e * f.spacing * 0.39);
         if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.3, sh, openAt(sh, tod), L, sk + unit * 2 + (e > 0 ? 1 : 0))) return;
       }
-      const fp = Math.max(uStep, d / projY), mullion = facadeLine(Math.abs(local), f.spacing * 0.06, fp);
+      const fp = Math.max(uStep, d / projY);
+      if (sh.kind !== SHOP_NEON) return shopfrontBay(i, local + f.spacing * .39, f.spacing * .78, z, 0, .34, sh, L, fp, openAt(sh, tod) && (night > .3 || overcast > .6), d); // its own style of front (shopfront-kit.js)
+      const mullion = facadeLine(Math.abs(local), f.spacing * 0.06, fp);
       set(i, ' ', 0);
       if (mullion > .5 || z > 0.3) { BG[i] = C(STONE, 1.6 + L * 0.28); return; } // the mullion and transom
       BG[i] = C(CYAN, (1 + night * 2 + day * .6) * (1 - mullion * .5)); return; // the shop's glass
@@ -133,7 +135,10 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         const a0 = 0.06 + (bay + 0.16) * spacing, a1 = 0.06 + (bay + 0.84) * spacing, sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
         if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.245, sh, openAt(sh, tod), L, sk0(b.seed) + bay)) return;
       }
-      const fp = Math.max(uStep, d / projY), bar = Math.max(facadeLine(Math.min(fu, 1 - fu) * spacing, spacing * .16, fp), facadeLine(Math.abs(z - 0.26), .028, fp));
+      const fp = Math.max(uStep, d / projY);
+      if (!lobby && sh.kind !== SHOP_APTS && sh.kind !== SHOP_NEON) // a shop's bay: its own style of front (shopfront-kit.js)
+        return shopfrontBay(i, (fu - .16) * spacing, .68 * spacing, z, 0, .31, sh, L, fp, openAt(sh, tod) && (night > .3 || overcast > .6), d);
+      const bar = Math.max(facadeLine(Math.min(fu, 1 - fu) * spacing, spacing * .16, fp), facadeLine(Math.abs(z - 0.26), .028, fp));
       set(i, ' ', 0);
       BG[i] = bar > .5 ? C(stone ? base : GRAY, 1.8 + L * 0.3) : C(lobby ? WARM : CYAN, (1 + night * 3 + day * .5) * (1 - bar * .5)); // glass in its frames
       return;
