@@ -9,6 +9,15 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
   if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim, d)) return; // (the shop's door, to the pavement)
   const fp = Math.max(uStep, d / projY);
+  if (sh.kind !== SHOP_APTS && sh.kind !== SHOP_NEON && along > .14 && along < width - .14 && z < .325) { // a shop's front: its own style (shopfront-kit.js)
+    const w0 = .14 + Math.floor((along - .14) / .48) * .48, w1 = Math.min(w0 + .48, width - .14);
+    if (architectureShutter(i, z, sh, L, d, along, w0, w1, .045, .31)) return;
+    if (d < SHOP_WINDOW.near && z > .07 && z < .27) { // up close, the display behind the glass (shop-windows.js)
+      const sg = Math.sign(u * wc) || 1, ua = sg * (f.start + w0 + .03), ub = sg * (f.start + w1 - .03);
+      if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .07, .27, sh, open, L, sk0(b.seed) + Math.floor(w0 * 9))) return;
+    }
+    return shopfrontBay(i, along - w0, w1 - w0, z, 0, .325, sh, L, fp, open && (night > .3 || overcast > .6), d);
+  }
   if (z > .325 || z < .045 && !(f.front && sh.kind === SHOP_APTS && door < doorHalf)) { BG[i] = C(trim, 1.6 + L * .25); return set(i, ' ', 0); } // the head and the stallriser
   if (f.front && sh.kind === SHOP_APTS) {
     if (door < doorHalf && z < .30) { // (the lobby doors, to the pavement)

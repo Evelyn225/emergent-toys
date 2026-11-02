@@ -26,24 +26,33 @@ function shopGoodsCell(shape, du, h, ht, hw) {
   return true; // a stack, a screen, a box
 }
 function shopWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
+  shopWindowBehind(i, u, z, u0, u1, z0, z1, sh, open, L, seed);
+  // the glass in front of it all: a soft streak or two of reflected sky, the same as on the shop's other panes
+  const diag = (u - u0) * .8 + z, f = fract(diag * 2.2 + seed * .37), streak = Math.max(0, 1 - Math.abs(f - .3) / .07) * .7 + Math.max(0, 1 - Math.abs(f - .42) / .025) * .5;
+  if (streak > .05) BG[i] = C(BG[i] >> 4, (BG[i] & 15) + streak * (1.2 + day));
+  return true;
+}
+function shopWindowBehind(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
   const w = SHOP_WINDOW, base = z0 + w.plinth, [su, sz] = glassSlopes(u, z), lit = open && (night > .3 || overcast > .6);
-  if (z < base) { BG[i] = C(sh.neon, .8 + L * .05); return set(i, ' ', 0), true; } // the plinth's front, in its own shadow behind the glass
+  set(i, ' ', 0);
+  if (z < base) { BG[i] = C(sh.neon, .8 + L * .05 + (base - z < .004 ? .6 : 0)); return; } // the plinth's front, in its own shadow behind the glass, its lip catching the light
   const b = boxBehind(u, z, u0, u1, base, z1, w.dep), qg = w.dep * w.goods, n = Math.max(1, Math.round((u1 - u0) / w.spacing)), step = (u1 - u0) / n;
   if (b.q > qg) { // the goods, standing on the plinth, before the back
     const pu = u + su * qg, pz = z + sz * qg, [shape, ht, hw] = shopDisplay(sh);
     const k = clamp(Math.floor((pu - u0) / step), 0, n - 1), du = pu - (u0 + (k + .5) * step), tall = ht * (.75 + hash(seed, k, 1490) * .5);
     if (pz >= base && pz < z1 && shopGoodsCell(shape, du, pz - base, tall, hw)) {
-      const col = shape === 'screen' ? CYAN : shape === 'mannequin' ? WHITE : ITEM_COL[(hash(seed, k, 1491) * 8) | 0];
-      if (shape === 'screen') { BG[i] = C(BLUE, 4 + Math.sin(T * 5 + k) * 2 + (lit ? 3 : 0)); return set(i, Math.abs(du) > hw - .004 || pz - base < .004 ? '|' : ' ', C(GRAY, 3)), true; }
-      if (shape === 'stack') { BG[i] = C(ITEM_COL[(Math.floor((pz - base) * 120) + k) & 7], 2.4 + L * .15); return set(i, fract((pz - base) * 120) < .2 ? '_' : ' ', C(GRAY, 2)), true; }
-      BG[i] = C(col, (shape === 'mannequin' ? 3.2 : 2.4) + L * .18 + (lit ? 1.5 : 0)); return set(i, ' ', 0), true;
+      const h = (pz - base) / tall, col = shape === 'mannequin' ? WHITE : ITEM_COL[(hash(seed, k, 1491) * 8) | 0];
+      const round = 1 + .32 * clamp(-du / hw, -1, 1) + .18 * (h - .5); // lit from the upper left, as everything here is
+      if (shape === 'screen') { const edge = Math.abs(du) > hw - .004 || pz - base < .004; BG[i] = edge ? C(GRAY, 1.4) : C(BLUE, 4 + Math.sin(T * 5 + k) * 2 + (lit ? 3 : 0) + h); return; } // a screen in its bezel
+      if (shape === 'stack') { const book = Math.floor((pz - base) * 120) + k; BG[i] = C(ITEM_COL[book & 7], (2.4 + L * .15) * (fract((pz - base) * 120) < .2 ? .75 : 1) * round); return; } // books, their page edges in shadow
+      BG[i] = C(col, ((shape === 'mannequin' ? 3.2 : 2.4) + L * .18 + (lit ? 1.5 : 0)) * round); return;
     }
   }
-  if (b.s === 'floor') { BG[i] = C(sh.neon, 1.6 + L * .12 + (lit ? 1 : 0)); return set(i, ' ', 0), true; } // the plinth's cloth
-  if (b.s === 'side') { BG[i] = C(GRAY, 1.2 + L * .1); return set(i, ' ', 0), true; }
-  if (b.s === 'ceil') { const spot = lit && Math.abs(fract((b.u - u0) / step) - .5) < .12; BG[i] = spot ? C(YEL, 12) : C(GRAY, .8); return set(i, ' ', 0), true; } // spotlights
-  // the back: the shop beyond, its shelves and its light
-  const shelf = fract((b.z - base) * 40) < .12;
-  BG[i] = C(WARM, (lit ? 2.2 + night * 2.5 : open ? 1.4 + day : .6) + (shelf ? .5 : 0));
-  return set(i, shelf ? '=' : ' ', C(BRICK, L * .4)), true;
+  if (b.s === 'floor') { BG[i] = C(sh.neon, 1.6 + L * .12 + (lit ? 1 : 0)); return; } // the plinth's cloth
+  if (b.s === 'side') { BG[i] = C(GRAY, 1.2 + L * .1); return; }
+  if (b.s === 'ceil') { const spot = lit && Math.abs(fract((b.u - u0) / step) - .5) < .12; BG[i] = spot ? C(YEL, 12) : C(GRAY, .8); return; } // spotlights
+  // the back: the shop beyond, shelves of its goods in its light
+  const sz2 = (b.z - base) * 40, shelf = fract(sz2) < .12, item = hash(Math.floor((b.u - u0) * 90), Math.floor(sz2), seed + 1492);
+  const glow = lit ? 2.2 + night * 2.5 : open ? 1.4 + day : .6;
+  BG[i] = shelf ? C(BRICK, glow * .7 + .4) : item > .45 && fract(sz2) > .3 ? C(ITEM_COL[(item * 97) & 7], glow * .85 + .3) : C(WARM, glow);
 }

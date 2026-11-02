@@ -58,3 +58,28 @@ test('Chinatown, the Shotengai, Belle and the generic and industrial fronts are 
  });
  assert.deepEqual(r.bad,[]);
 }));
+test('every shop has its own front: styles vary, frames bevel, glass reflects the sky, stallrisers and brick have texture up close that settles far off',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[],kinds=new Set(),paints=new Set();
+  for(const sh of SHOP.filter(s=>s&&s.word).slice(0,600)){const st=shopfrontStyle(sh);kinds.add(st.kind);paints.add(st.paint);if(shopfrontStyle(sh)!==st)bad.push('style not fixed per shop');}
+  if(kinds.size<5||paints.size<6)bad.push(['too little variety',[...kinds],paints.size]);
+  const sh=SHOP.find(s=>s&&s.word&&shopfrontStyle(s).kind==='timber'),st=shopfrontStyle(sh),w=.46,H=.32;
+  const at=(a,z,fp=.002)=>{BG[0]=0;CH[0]='?';shopfrontBay(0,a,w,z,0,H,sh,10,fp,false,1);return {bg:BG[0],ch:CH[0]};};
+  tod=14;env(0);
+  const glassLow=at(.12,.08),glassHigh=at(.12,.2),riser=at(.12,.03),pil=at(.01,.15);
+  if(glassLow.bg>>4!==CYAN||glassHigh.bg>>4!==CYAN||!((glassHigh.bg&15)>(glassLow.bg&15)))bad.push(['glass reflection',glassLow,glassHigh]);
+  if(riser.bg>>4!==st.paint&&st.paint!==BLACK)bad.push(['stallriser',riser]);if(pil.bg>>4!==st.paint&&st.paint!==BLACK)bad.push(['pilaster',pil]);
+  for(const c of [glassLow,glassHigh,riser,pil])if(c.ch!==' ')bad.push(['a character on the front',c.ch]);
+  // the pilaster's bevel: its outer edge lit, its inner edge shaded, up close; one tone far off
+  const pe=at(.002,.15),pi=at(.02,.15),pef=at(.002,.15,.05),pif=at(.02,.15,.05);
+  if(!((pe.bg&15)>(pi.bg&15)))bad.push(['no bevel up close',pe,pi]);if(pef.bg!==pif.bg)bad.push(['bevel far off',pef,pif]);
+  // the sheen: streaks up close somewhere across the pane, gone far off
+  const lv=fp=>{const s=new Set();for(let a=.03;a<.43;a+=.003)s.add(at(a,.15,fp).bg);return s.size;};
+  if(!(lv(.002)>lv(.05)))bad.push(['sheen does not settle',lv(.002),lv(.05)]);
+  // brick: tones up close, one colour far off
+  const brick=fp=>{const s=new Set();for(let a=0;a<.2;a+=.0031)for(let z=0;z<.1;z+=.0019){brickFace(0,a,z,BRICK,10,fp,3);s.add(BG[0]);}return s.size;};
+  if(!(brick(.001)>3&&brick(.05)<=2))bad.push(['brick',brick(.001),brick(.05)]);
+  return {bad};
+ });
+ assert.deepEqual(r.bad,[]);
+}));

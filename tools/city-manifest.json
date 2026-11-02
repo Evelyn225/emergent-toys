@@ -62,6 +62,7 @@
     "city/road-surface.js",
     "city/shop-windows.js",
     "city/shop-shutters.js",
+    "city/shopfront-kit.js",
     "city/graffiti.js",
     "city/belle.js",
     "city/architecture-render.js",
