@@ -470,20 +470,30 @@ function roofTop(i, wx, wy, h, d) {
   }
   const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
+  const fp = d / projY, fine = clamp(1 - fp / .02, 0, 1), lit = 1.2 + day * 2.2 + L * .08;
   BG[i] = bgAt(GRAY, day * 2.5);
-  if (edge) { set(i, '#', C(GRAY, L * 1.3)); paintSettledSnow(i, wx, wy, L, 0.35,0,h); return; }
+  // the parapet: a coping stone along the top, lit, its inner face in shadow toward the roof
+  const inset = Math.min(lx < .5 && map[idx(mx - 1, my)] !== h ? lx : 1, lx >= .5 && map[idx(mx + 1, my)] !== h ? 1 - lx : 1, ly < .5 && map[idx(mx, my - 1)] !== h ? ly : 1, ly >= .5 && map[idx(mx, my + 1)] !== h ? 1 - ly : 1);
+  if (edge) { BG[i] = C(STONE, lit * (inset < .02 ? 1.25 : .8)); set(i, ' ', 0); paintSettledSnow(i, wx, wy, L, 0.35,0,h); return; }
   const sh = SHOP[idx(mx, my)];
   if (sh && sh.pad && STY[idx(mx, my)] === 13) { // the hospital's helipad: a yellow ring round a big H
     const ex = wx - sh.pad[0], ey = wy - sh.pad[1], rr = Math.hypot(ex, ey);
-    if (Math.abs(rr - 1.05) < 0.07) { set(i, '#', C(YEL, Math.max(L * 1.4, night * 12))); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
+    if (Math.abs(rr - 1.05) < 0.07) { BG[i] = C(YEL, Math.max(3 + L * .2, night * 6)); set(i, ' ', 0); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
-    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
+    if (rr < 1.12) { BG[i] = H ? C(WHITE, 5 + L * .2) : C(GREEN, 1 + day * 1.5); set(i, ' ', 0); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
   }
   if (STY[idx(mx, my)] === 6) { // a frame's top deck: ribbed steel decking, rebar laid out for the next pour
-    const bar = fract(wx * 5) < 0.06 || fract(wy * 5) < 0.06;
-    BG[i] = bgAt(GRAY, 1 + day * 2); set(i, bar ? '+' : fract(wy * 14) < 0.2 ? '=' : ' ', C(bar ? BRICK : GRAY, L * (bar ? 0.8 : 0.5)));
-  } else if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
-  else set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+    const bar = Math.max(coveGroove(wx, .2, .012, fp), coveGroove(wy, .2, .012, fp));
+    BG[i] = bar > .5 ? C(BRICK, lit * .9) : C(GRAY, lit * (1 - coveGroove(wy, 1 / 14, .015, fp) * .25)); set(i, ' ', 0); // ribbed decking, the rebar laid out
+  } else if (STY[idx(mx, my)] === 24) { BG[i] = C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, lit * (1 + (hash(Math.floor(wx * 60), Math.floor(wy * 60), 883) - .5) * .4 * fine)); set(i, ' ', 0); } // a mansard's slates or a green roof
+  else { // each building its own roof: gravel, a tar membrane with welded seams, pavers, or now and then a green roof
+    const kind = hash(mx >> 1, my >> 1, 885), grain = (hash(Math.floor(wx * 160), Math.floor(wy * 160), 61) - .5) * fine;
+    if (kind < .45) BG[i] = C(GRAY, lit * (1.05 + grain * .35)); // gravel
+    else if (kind < .75) BG[i] = C(GRAY, lit * (.7 - coveGroove(wx + (kind > .6 ? wy : 0) * 0, .1, .004, fp) * .2) + grain * .15); // tar membrane, its seams
+    else if (kind < .93) BG[i] = C(STONE, lit * (.95 - Math.max(coveGroove(wx, .06, .004, fp), coveGroove(wy, .06, .004, fp)) * .3 + (hash(Math.floor(wx / .06), Math.floor(wy / .06), 886) - .5) * .2 * fine)); // pavers
+    else BG[i] = C(GREEN, lit * (.9 + grain * .5)); // a green roof
+    set(i, ' ', 0);
+  }
   if (spill) BG[i] = C(spill[1], 1 + spill[0] * 2);
   paintSettledSnow(i, wx, wy, L,1,0,h);
 }
