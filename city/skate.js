@@ -10,6 +10,7 @@
 // Units: cells (10m), seconds, radians, as everywhere outdoors.
 const SK_PUSH = 0.75, SK_TOP = 0.9, SK_RUN_TOP = 1.2, SK_ROLL = 0.05, SK_BRAKE = 1.3, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
 const SK_STILL = 0.12; // (slower than this, a messy landing is only a hop: nothing to fall off)
+const SK_SLOPPY = 0.45; // (slower than this, coming down sideways is a sloppy landing you ride out, not a bail: half points)
 const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0.9, SK_BAIL_T = 1.3;
 // v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
@@ -96,13 +97,16 @@ function skateLand() {
   const flubbed = tr && tr.t < tr.air * 0.8, sideways = Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND;
   if ((flubbed || sideways) && SK.v < SK_STILL) { SK.dir = a; SK.spin = 0; return; } // (standing still: you just come down where you are, facing however you ended up)
   if (flubbed) return skateBail('BAIL! Your feet never found the board.');
-  if (sideways) return skateBail('BAIL! You came down sideways.');
-  if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
+  if (sideways && SK.v >= SK_SLOPPY) return skateBail('BAIL! You came down sideways.');
+  const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
+  if (sloppy) { SK.v *= 0.5; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
+  else if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
+  if (sloppy && Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance;
   a = SK.dir;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
-  const pts = Math.round((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60);
+  const label = (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
+  const pts = Math.round(((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
   const c = SK.combo ||= { names: [], pts: 0, t: T };
   c.names.push(label); c.pts += pts; c.t = T;
   say(c.names.length > 1 ? `${c.names.join(' + ')}  ${c.pts} x ${c.names.length}` : `${label}!  ${pts}`, 2);
