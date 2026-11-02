@@ -24951,13 +24951,21 @@ function hud() {
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
   const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
+  const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
-                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
+                                   [msg, msgY, '#fff', cv.width / 2]]) {
     ls.forEach((s, k) => {
       const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
       g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);
       g.fillStyle = col; g.fillText(s, cx - w / 2, yy);
     });
+  }
+  // the combo clock, under the trick: how long is left to land the next one (skate.js)
+  const left_ = skatingNow() ? comboLeft() : null;
+  if (left_ !== null) {
+    const w = Math.min(240, cv.width * .4), x = cv.width / 2 - w / 2, y = msgY + Math.max(1, msg.length) * (FS + 4) + 2;
+    g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, y - 3, w + 6, 10);
+    g.fillStyle = left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44'; g.fillRect(x, y, w * left_, 4);
   }
 }
 // E and its prompt resolve the same visible target before proximity fallbacks.
@@ -34093,7 +34101,7 @@ function drawBoard3D() {
 const SK_PUSH = 0.75, SK_TOP = 0.9, SK_RUN_TOP = 1.2, SK_ROLL = 0.05, SK_BRAKE = 1.3, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
 const SK_STILL = 0.12; // (slower than this, a messy landing is only a hop: nothing to fall off)
 const SK_SLOPPY = 0.45; // (slower than this, coming down sideways is a sloppy landing you ride out, not a bail: half points)
-const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0.9, SK_BAIL_T = 1.3;
+const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 1.2, SK_BAIL_T = 1.3;
 // v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
@@ -34156,7 +34164,7 @@ function stepSkate(dt) {
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
-  if (SK.combo && !air && T - SK.combo.t > SK_COMBO_GAP) bankCombo();
+  if (SK.combo && !air && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
 }
 // Space on the board: down crouches, up pops (or a tap off the touch button, or a flick: straight away)
 function skateSpace(down) {
@@ -34177,23 +34185,33 @@ function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   const flubbed = tr && tr.t < tr.air * 0.8, sideways = Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND;
-  if ((flubbed || sideways) && SK.v < SK_STILL) { SK.dir = a; SK.spin = 0; return; } // (standing still: you just come down where you are, facing however you ended up)
+  const standing = SK.v < SK_STILL; // (barely moving: nothing to fall off, and nothing to carry a combo)
+  if (standing && flubbed) { SK.dir = a; SK.spin = 0; return; } // (you just come down where you are, facing however you ended up)
   if (flubbed) return skateBail('BAIL! Your feet never found the board.');
   if (sideways && SK.v >= SK_SLOPPY) return skateBail('BAIL! You came down sideways.');
   const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
-  if (sloppy) { SK.v *= 0.5; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
+  if (sloppy && standing) SK.dir = a; // (stood still, you just turn the board under you)
+  else if (sloppy) { SK.v *= 0.5; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
   else if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
-  if (sloppy && Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance;
+  if (sloppy && !standing && Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance;
   a = SK.dir;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
   const label = (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
   const pts = Math.round(((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
+  if (standing) { // the one trick, scored by itself: a combo needs you moving
+    if (SK.combo) bankCombo();
+    SK.score += pts; SK.best = Math.max(SK.best, pts); SK.spin = 0;
+    return say(`${label}!  ${pts}`, 2);
+  }
   const c = SK.combo ||= { names: [], pts: 0, t: T };
   c.names.push(label); c.pts += pts; c.t = T;
   say(c.names.length > 1 ? `${c.names.join(' + ')}  ${c.pts} x ${c.names.length}` : `${label}!  ${pts}`, 2);
   SK.spin = 0;
 }
+// how long is left to land the next trick and keep the combo going, 0..1 (full while you're in the air: the clock
+// only runs on the ground). null: no combo running
+const comboLeft = () => SK.combo ? (skateAir() ? 1 : clamp(1 - (T - SK.combo.t) / SK_COMBO_GAP, 0, 1)) : null;
 function bankCombo() {
   const c = SK.combo, total = c.pts * c.names.length;
   SK.combo = null; SK.score += total; SK.best = Math.max(SK.best, total);

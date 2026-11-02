@@ -382,12 +382,20 @@ function hud() {
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
   const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
+  const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
-                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
+                                   [msg, msgY, '#fff', cv.width / 2]]) {
     ls.forEach((s, k) => {
       const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
       g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);
       g.fillStyle = col; g.fillText(s, cx - w / 2, yy);
     });
+  }
+  // the combo clock, under the trick: how long is left to land the next one (skate.js)
+  const left_ = skatingNow() ? comboLeft() : null;
+  if (left_ !== null) {
+    const w = Math.min(240, cv.width * .4), x = cv.width / 2 - w / 2, y = msgY + Math.max(1, msg.length) * (FS + 4) + 2;
+    g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, y - 3, w + 6, 10);
+    g.fillStyle = left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44'; g.fillRect(x, y, w * left_, 4);
   }
 }
