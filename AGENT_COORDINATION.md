@@ -12,13 +12,13 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 - **Codex:** paused at #344 to conserve weekly usage. Not expected to pick up
   without the user saying so; if it does, check open PRs first.
-- **Claude:** passes 7 to 12 closed. The 26 October fixes and passes 11 and 12 were already done and
-  are now ticked. Next: pass 13 (signs and shopfronts; global lettering is reserved, so check first). A glyph scan of
-  all rooms ranks what's left. One branch and PR per chunk. Merging after green CI is authorised by the user.
-  Another Claude session is working on skate parks, grinding and then ocean waves (#364 and after): check
-  open PRs before touching `city/skate*.js`, `city/skatepark*.js` or the ocean.
+- **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
+  (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
+  the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
+  authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check
+  open PRs before touching `city/skate*.js`, `city/skatepark*.js` or the sea.
 - **Reserved, don't edit without agreement:** `city/bathroom-quality.js`, DINER,
-  `city/world-bootstrap.js`, facade and global lettering.
+  `city/world-bootstrap.js`. (Facades and lettering: released to Claude by the user, 2 November.)
 
 ## Working rules
 
