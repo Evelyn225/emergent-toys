@@ -285,8 +285,9 @@ function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x
     if(foam>.15)return {base:WHITE,background:foam>.55&&noise(x*26+phase,y*26,1880)>.38?WHITE:CYAN,ch:' ', // (lacy: white flecks on pale water)
       color:'#d5eff3',tone:1.25,lift:9,foam:true,water:true,night:3+foam*4};
     // the water running up the beach is a thin, clear film, the sand showing through; out past the film it's sea
-    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:.95,lift:depth<.05?1.5:.6,film:true,water:true,night:.8};
-    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:.9,water:true,night:.7};
+    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:1.1,lift:depth<.05?1.5:.6,film:true,water:true,night:2.3};
+    // (the sea itself where it's drawn as raised ground near an island: the same brightness as the open water beside it)
+    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:1.25,water:true,night:1.9};
     // wet sand: darkest and glossy just behind the draining water, drying towards the top of the run-up
     const gloss=phase>SWASH_UP?Math.max(0,1-(edge-front)/.12):0,dry=clamp((edge-SWASH_LOW)/(limit-SWASH_LOW),0,1);
     if(gloss>.35)return {base:WARM,background:STONE,ch:' ',color:'#8f8a7c',tone:.8+gloss*.25,lift:1.6,night:.5}; // (catching the sky)

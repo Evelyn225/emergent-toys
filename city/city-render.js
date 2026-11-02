@@ -565,7 +565,7 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
   const s1 = Math.sin(wx * 9.5 + wy * 4.2 - T * 1.6), s2 = Math.sin(wy * 12.5 - wx * 5.5 - T * 1.3 + 1.3), chop = noise(wx * 22 + T * .7, wy * 22 - T * .5, 97) * 2 - 1;
   const k1 = keep(.6), k2 = keep(.46), h = s1 * k1 * .55 + s2 * k2 * .35 + chop * keep(.25) * .25;
   const far = smooth(clamp(d / (vis * .55), 0, 1)), night = 1 - day;
-  const level = day * (3.3 + far * 2.4) + night * (.95 + far * .8) + h * (.55 + day * .35);
+  const level = day * (3.3 + far * 2.4) + night * (1.8 + far * .9) + h * (.4 + day * .5); // (at night dark, but a trough never goes all the way to black)
   BG[i] = C(BLUE, Math.max(0, level));
   const crest = s1 * k1 > .86 && chop > .2 && k1 > .3; // (broken: only where the chop lifts the crest)
   set(i, crest ? (chop > .45 ? '~' : '-') : ' ', C(day > .3 ? CYAN : BLUE, (day > .3 ? 4 + day * 3 : 2.6) * f));
@@ -666,6 +666,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+    } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
+      soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -697,7 +699,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
-  if(islandTexture)BG[i]=bgAt(islandTexture.background,day*(2.6*islandTexture.tone+(islandTexture.lift||0))*f,d);
+  if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {

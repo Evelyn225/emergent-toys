@@ -2323,8 +2323,9 @@ function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x
     if(foam>.15)return {base:WHITE,background:foam>.55&&noise(x*26+phase,y*26,1880)>.38?WHITE:CYAN,ch:' ', // (lacy: white flecks on pale water)
       color:'#d5eff3',tone:1.25,lift:9,foam:true,water:true,night:3+foam*4};
     // the water running up the beach is a thin, clear film, the sand showing through; out past the film it's sea
-    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:.95,lift:depth<.05?1.5:.6,film:true,water:true,night:.8};
-    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:.9,water:true,night:.7};
+    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:1.1,lift:depth<.05?1.5:.6,film:true,water:true,night:2.3};
+    // (the sea itself where it's drawn as raised ground near an island: the same brightness as the open water beside it)
+    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:1.25,water:true,night:1.9};
     // wet sand: darkest and glossy just behind the draining water, drying towards the top of the run-up
     const gloss=phase>SWASH_UP?Math.max(0,1-(edge-front)/.12):0,dry=clamp((edge-SWASH_LOW)/(limit-SWASH_LOW),0,1);
     if(gloss>.35)return {base:WARM,background:STONE,ch:' ',color:'#8f8a7c',tone:.8+gloss*.25,lift:1.6,night:.5}; // (catching the sky)
@@ -2607,6 +2608,12 @@ function pondSD(lx, ly, bx, by) {
 const inPond = (lx, ly, bx, by, pad = 0) => pondSD(lx, ly, bx, by) < pad;
 // relative to block center, and the way each faces: toward the path through the middle
 const BENCH = [[0.35, -2, -1, 0], [0.35, 2, -1, 0], [-2, 0.35, 0, -1], [2, -0.35, 0, 1]];
+// the skatepark: smooth concrete in the south-east quarter of one park, clear of its pond, paths and benches. Set
+// once the city is in its final place (skatepark.js buildSkatepark, from world-bootstrap.js), which also builds the
+// ledges and rails on it; skatepark-render.js draws them and the concrete
+let SKATEPARK = null;
+const inSkatepark = (x, y, pad = 0) => !!SKATEPARK && x > SKATEPARK.bx * 8 + SKATEPARK.x0 - pad && x < SKATEPARK.bx * 8 + SKATEPARK.x1 + pad &&
+  y > SKATEPARK.by * 8 + SKATEPARK.y0 - pad && y < SKATEPARK.by * 8 + SKATEPARK.y1 + pad;
 const trees = [], benches = [], parks = [];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), dist = districtOf(bx, by);
@@ -2941,9 +2948,9 @@ for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, 
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
-function solidAt(x, y, pad) {
+function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    if (o.z0 > 0) continue;
+    if (o.z0 > 0 || o.low && feet >= o.z1 - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
   }
@@ -3046,6 +3053,56 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
 }
 const roofsB = bucketed(roofs);
+// ===== the skatepark (props.js SKATEPARK) and everything you can grind. On the park's concrete: two flat bars, a low
+// and a high granite ledge with steel coping, and a manual pad. Each is a solid you collide with below its top and can
+// ride along on top of (skateparkGround); every edge you can grind is in GRINDS, with the benches' seat fronts all
+// round the city. Cells (1 = 10 m)
+const GRINDS = []; // { ax, ay, bx, by: the edge; z: its top above the ground there; material: 'metal' | 'stone' | 'wood'; kind }
+const SKATE_FEATURES = [];
+let grindsB = [];
+// built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
+function buildSkatepark() {
+  GRINDS.length = SKATE_FEATURES.length = 0;
+  const park = parks.find(([bx, by]) => bx === 13 && by === 34);
+  SKATEPARK = park ? { bx: 13, by: 34, x0: 5.5, y0: 5.45, x1: 7.85, y1: 7.85 } : null;
+  if (SKATEPARK) {
+    for (let k = trees.length - 1; k >= 0; k--) if (inSkatepark(trees[k].x, trees[k].y, .3)) trees.splice(k, 1); // (the concrete's clear)
+    const ox = SKATEPARK.bx * 8, oy = SKATEPARK.by * 8;
+    const add = (x, y, alongX, hl, hw, z1, kind) => {
+      const o = { x: ox + x, y: oy + y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0: 0, z1, kind, low: true };
+      solids.push(o); SKATE_FEATURES.push(o);
+      return o;
+    };
+    const edge = (o, side, material) => { // a long top edge: side -1 / +1 across it, 0 along its middle (a bar)
+      const ex = o.x - o.s * side * o.hw, ey = o.y + o.c * side * o.hw;
+      GRINDS.push({ ax: ex - o.c * o.hl, ay: ey - o.s * o.hl, bx: ex + o.c * o.hl, by: ey + o.s * o.hl, z: o.z1, material, kind: o.kind, feature: o });
+    };
+    edge(add(6.0, 6.0, true, .3, .004, .035, 'skaterail'), 0, 'metal'); // a 6 m flat bar, 35 cm up
+    edge(add(7.3, 6.9, false, .35, .004, .03, 'skaterail'), 0, 'metal'); // and a 7 m one, 30 cm
+    for (const [x, y, hl, hw, z] of [[6.5, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
+      const o = add(x, y, true, hl, hw, z, 'skateledge');
+      edge(o, -1, 'metal'); edge(o, 1, 'metal'); // (steel coping on both edges)
+    }
+    const pad = add(7.1, 5.9, false, .25, .15, .02, 'manualpad'); // a 5 x 3 m manual pad, 20 cm
+    edge(pad, -1, 'stone'); edge(pad, 1, 'stone');
+  }
+  // a bench's seat front: 1.5 m of timber at 45 cm, facing out
+  for (const b of benches) {
+    const c = -b.fy, s = b.fx, ex = b.x + b.fx * .02, ey = b.y + b.fy * .02;
+    GRINDS.push({ ax: ex - c * .075, ay: ey - s * .075, bx: ex + c * .075, by: ey + s * .075, z: .045, material: 'wood', kind: 'bench', bench: b, feature: b });
+  }
+  grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
+}
+// the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
+function skateparkGround(x, y) {
+  if (!inSkatepark(x, y, .1)) return 0;
+  let top = 0;
+  for (const o of SKATE_FEATURES) {
+    const qx = x - o.x, qy = y - o.y;
+    if (Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.z1);
+  }
+  return top;
+}
 // Authored apartment and walk-up families. Balconies and escapes use the same exposed faces as the windows.
 const RESIDENTIAL_PROFILES = {
   modern: [
@@ -11589,7 +11646,7 @@ function terrainHeight(x, y) {
 }
 
 function outdoorGroundHeight(x, y) {
-  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y));
+  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y), typeof skateparkGround === 'function' ? skateparkGround(x, y) : 0); // (the skatepark's ledges: skatepark.js)
 }
 
 buildTerrain();
@@ -12720,7 +12777,7 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
   const s1 = Math.sin(wx * 9.5 + wy * 4.2 - T * 1.6), s2 = Math.sin(wy * 12.5 - wx * 5.5 - T * 1.3 + 1.3), chop = noise(wx * 22 + T * .7, wy * 22 - T * .5, 97) * 2 - 1;
   const k1 = keep(.6), k2 = keep(.46), h = s1 * k1 * .55 + s2 * k2 * .35 + chop * keep(.25) * .25;
   const far = smooth(clamp(d / (vis * .55), 0, 1)), night = 1 - day;
-  const level = day * (3.3 + far * 2.4) + night * (.95 + far * .8) + h * (.55 + day * .35);
+  const level = day * (3.3 + far * 2.4) + night * (1.8 + far * .9) + h * (.4 + day * .5); // (at night dark, but a trough never goes all the way to black)
   BG[i] = C(BLUE, Math.max(0, level));
   const crest = s1 * k1 > .86 && chop > .2 && k1 > .3; // (broken: only where the chop lifts the crest)
   set(i, crest ? (chop > .45 ? '~' : '-') : ' ', C(day > .3 ? CYAN : BLUE, (day > .3 ? 4 + day * 3 : 2.6) * f));
@@ -12821,6 +12878,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+    } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
+      soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -12852,7 +12911,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
-  if(islandTexture)BG[i]=bgAt(islandTexture.background,day*(2.6*islandTexture.tone+(islandTexture.lift||0))*f,d);
+  if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
@@ -15958,6 +16017,36 @@ function fairSprites() {
     if (ch !== null && (ch !== ' ' || Math.abs(HIT.w - 0.47) < 0.03)) return set(i, ch, C(YEL, 15)), true;
     return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
   });
+}
+// ===== the skatepark drawn (skatepark.js builds it): steel flat bars on posts, granite ledges with steel coping, a
+// concrete manual pad, and the park's smooth concrete with its saw-cut joints. Fine detail fades with distance
+const SK_STEEL = (L, top) => C(GRAY, (top ? 4.2 : 2.6) + L * .35);
+// a flat bar: the round bar along the top, square posts 30 cm in from each end, nothing in between
+SOLID_SHADE.skaterail = o => (i, t, L) => {
+  const w = HIT.w, bar = w > o.z1 - .005, post = Math.abs(Math.abs(HIT.u) - (o.hl - .03)) < .004;
+  if (!bar && !post) return false; // (see-through under the bar)
+  BG[i] = SK_STEEL(L, bar && HIT.face === 5); return set(i, ' ', 0), true;
+};
+// granite: a speckled pale grey block, darker low down where boards scuff it; steel coping along the top edges
+SOLID_SHADE.skateledge = o => (i, t, L) => {
+  const f = HIT.face, top = f === 5, edge = top ? o.hw - Math.abs(HIT.v) < .006 : o.z1 - HIT.w < .006;
+  if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
+  const fine = coveDetail(t, .05), fleck = hash(Math.floor((o.x + HIT.u) * 160), Math.floor(HIT.w * 160 + HIT.v * 160), 2101) * fine;
+  const scuff = !top && HIT.w < o.z1 * .45 ? .5 : 0;
+  BG[i] = C(STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
+};
+// the manual pad: poured concrete, steel angle on its long edges, a joint across the middle
+SOLID_SHADE.manualpad = o => (i, t, L) => {
+  const f = HIT.face, top = f === 5, edge = top ? o.hw - Math.abs(HIT.v) < .005 : o.z1 - HIT.w < .005;
+  if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
+  const joint = top ? coveGroove(HIT.u, o.hl, .004, t / projX) : 0;
+  BG[i] = C(GRAY, (top ? 4.4 : 3) * shadeFace(f) * (1 - joint * .5) + L * .25); return set(i, ' ', 0), true;
+};
+// the park's concrete (floorBaseCell): smooth, pale, saw-cut every 3 m, a few dark scuffs and wax marks
+function skateparkFloor(wx, wy, r, x, d) {
+  const foot = d / projY, joint = Math.max(coveGroove(wx, .3, .004, foot), coveGroove(wy, .3, .004, foot));
+  const scuff = noise(wx * 9, wy * 9, 2102) > .78 ? .8 : 1;
+  return [' ', GRAY, (2.3 - joint * .7) * scuff];
 }
 // Fixed kerb parts prepare once per object/detail level. Camera translation
 // and the fixture's terrain height are applied when drawing.
@@ -20995,7 +21084,6 @@ const CATH_H = 16, CATH_W = 22, CATH_D = 40; // vault height, width, length (m)
 const CATH_GRID = Array.from({ length: CATH_D }, (_, y) => Array.from({ length: CATH_W }, (_, x) => {
   if (y === CATH_D - 1 && (x === 10 || x === 11)) return 'D';
   if (x === 0 || y === 0 || x === CATH_W - 1 || y === CATH_D - 1) return '#';
-  if ((x === 6 || x === 15) && y >= 7 && y <= 31 && (y - 7) % 4 === 0) return 'P'; // the arcade's pillars
   return '.';
 }).join(''));
 const CATH_BAYS = [9, 13, 17, 21, 25, 29]; // window bays down each side, between the pillars
@@ -21052,116 +21140,173 @@ function lancet(du, z, z0, z1, hw) {
   if (z > top + 0.15) return 0;
   return z < z0 || z > top || ad > hw ? 2 : 1;
 }
-// stained glass: leaded panes in jewel colours, a round medallion up the middle; it glows with the daylight
-function glassCell(i, du, z, seed, cz, hw) {
+// A thin line's coverage of a cell: dist from its middle, w its width, fp the cell's footprint, all in metres.
+const cathLine = (dist, w, fp) => clamp((w / 2 - dist) / Math.max(fp, .002) + .5, 0, 1) * Math.min(1, w / Math.max(fp, w));
+// stained glass: leaded panes in jewel colours, a round medallion up the middle; it glows with the daylight. The
+// leading thins out with distance rather than breaking up.
+function glassCell(i, du, z, seed, cz, hw, fp = 0) {
   const lit = 4 + day * 10 + dusk * 3, rr = Math.hypot(du, (z - cz) * 0.9);
+  set(i, ' ', 0);
   if (rr < hw * 0.75) { // the medallion: rings, a gold halo in the middle
-    if (Math.abs(rr - hw * 0.72) < 0.05) { BG[i] = C(GRAY, 1); return set(i, 'o', C(GRAY, 6)); }
+    if (cathLine(Math.abs(rr - hw * 0.72), .1, fp) > .5) { BG[i] = C(GRAY, 1); return; }
     const ring = Math.floor(rr / (hw * 0.18)), sec = Math.floor((Math.atan2(du, z - cz) + Math.PI) / (Math.PI / 4));
     BG[i] = C(ring === 0 ? YEL : GLASS[(ring * 3 + sec + seed) & 7], lit * (ring === 0 ? 1.1 : 0.8));
-    return set(i, ring === 0 ? '+' : (sec + ring) & 1 ? ' ' : '.', C(WHITE, lit));
+    return;
   }
-  if (fract(du / 0.28 + 0.5) < 0.1 || fract(z / 0.4) < 0.08) { BG[i] = C(GRAY, 1); return set(i, '+', C(GRAY, 5)); } // the leading
+  const lead = Math.max(coveGroove(du + 0.14, 0.28, 0.028, fp), coveGroove(z, 0.4, 0.032, fp));
+  if (lead > .5) { BG[i] = C(GRAY, 1); return; } // the leading
   const k = hash(Math.floor(du / 0.28 + 0.5) + seed * 7, Math.floor(z / 0.4), 501);
-  BG[i] = C(GLASS[k * 8 | 0], lit * (0.6 + 0.4 * k));
-  return set(i, k > 0.85 ? '*' : ' ', C(WHITE, lit));
+  BG[i] = C(GLASS[k * 8 | 0], lit * (0.6 + 0.4 * k) * (1 - lead * .8));
 }
-const stone = (i, u, z, L) => { // coursed stone blocks
-  BG[i] = C(GRAY, 1 + L * 0.12);
-  return set(i, fract(z / 0.5) < 0.08 ? '-' : fract(u + (Math.floor(z / 0.5) & 1) * 0.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.7));
+const stone = (i, u, z, L, uStep = 0, d = 0) => { // coursed stone blocks, their joints filtered with distance
+  BG[i] = C(GRAY, 1.4 + L * 0.13 - 1.1 * coursedJoint(u, z, .5, 1, uStep, d));
+  return set(i, ' ', 0);
 };
+const cathMoulding = (i, L) => { BG[i] = C(GRAY, 1.9 + L * .16); return set(i, ' ', 0), true; }; // a window or door's stone frame
 function cathedralWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), c = roomAt(mx, my);
-  if (c === 'P') { // a clustered pillar: shafts running up into the vault, a carved capital
-    BG[i] = C(GRAY, 1.5 + L * 0.15);
-    if (z < 0.6) return set(i, fract(z / 0.2) < 0.2 ? '=' : '#', C(GRAY, L)), true; // the base
-    if (z > 7 && z < 7.7) return set(i, z > 7.55 ? '=' : '%', C(z > 7.55 ? GRAY : YEL, L * (z > 7.55 ? 1 : 0.6))), true; // capital, leaves picked out in gilt
-    return set(i, fract(u / 0.2) < 0.25 ? '|' : ' ', C(GRAY, L)), true;
-  }
+  const u = Math.abs(su), fp = Math.max(uStep, d / projY);
+  set(i, ' ', 0);
   if (my === CATH_D - 1) { // the west end: the great doors, the organ gallery over them
     const dx = u - 11;
     const door = lancet(dx, z, 0, 5, 1.2);
-    if (door === 1) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, Math.abs(dx) < 0.04 ? '|' : hash(Math.floor(dx * 6), Math.floor(z * 6), 502) > 0.92 ? 'o' : fract(dx * 4) < 0.15 ? '|' : ' ', C(Math.abs(dx) < 0.04 ? GRAY : BRICK, L * 1.1)), true; }
-    if (door === 2) return set(i, '#', C(GRAY, L)), true;
-    if (Math.abs(z - 5.8) < 0.15 && Math.abs(dx) < 7) return set(i, '=', C(BRICK, L * 1.2)), true; // the gallery rail
+    if (door === 1) { // oak boards, the meeting stiles darker
+      const meet = cathLine(Math.abs(dx), .08, fp);
+      BG[i] = C(BRICK, 2 + L * 0.2 - 1.2 * coveGroove(dx, .25, .015, fp) - 1.5 * meet);
+      return true;
+    }
+    if (door === 2) return cathMoulding(i, L);
+    if (Math.abs(z - 5.8) < 0.15 && Math.abs(dx) < 7) { BG[i] = C(BRICK, 1.8 + L * .2); return true; } // the gallery rail
     if (z > 6 && Math.abs(dx) < 6.5) { // organ pipes, tallest in the middle and at the towers either side
       const p = Math.floor(dx / 0.3), top = 13 - Math.abs(p) * 0.18 + (Math.abs(p) % 7 === 0 ? 1.2 : 0) + 0.5 * Math.cos(p * 0.9);
-      if (z > top) return stone(i, u, z, L), true;
-      const fp = fract(dx / 0.3);
-      if (fp < 0.15 || fp > 0.85) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-      BG[i] = C(Math.abs(p) % 7 === 0 ? YEL : GRAY, 2 + L * 0.25);
-      return set(i, z < 6.6 && z > 6.35 ? 'v' : fract(fp * 3) < 0.3 ? '|' : ' ', C(WHITE, L * 1.2)), true;
+      if (z > top) return stone(i, u, z, L, uStep, d), true;
+      const fpp = fract(dx / 0.3), gap = cathLine(Math.min(fpp, 1 - fpp) * .3, .09, fp) > .5;
+      if (gap) { BG[i] = C(GRAY, 1); return true; }
+      const round = 1 - Math.abs(fpp - .45) * 1.6, mouth = z < 6.6 && z > 6.35;
+      BG[i] = C(Math.abs(p) % 7 === 0 ? YEL : GRAY, (2 + L * 0.25) * (.75 + .35 * round) * (mouth ? .55 : 1));
+      return true;
     }
-    if (Math.abs(u - CATH_TOWER[0]) < 0.6 && z < 2.4) { // the tower stair's little door
-      BG[i] = C(BRICK, 1.5); return set(i, z > 2.25 || Math.abs(u - CATH_TOWER[0]) > 0.5 ? '#' : fract(u * 5) < 0.2 ? '|' : ' ', C(GRAY, L)), true;
+    if (Math.abs(u - CATH_TOWER[0]) < 0.6 && z < 2.4) { // the tower stair's little door in its frame
+      if (z > 2.25 || Math.abs(u - CATH_TOWER[0]) > 0.5) return cathMoulding(i, L);
+      BG[i] = C(BRICK, 1.5 + L * .1 - coveGroove(u, .2, .015, fp)); return true;
     }
     if (Math.abs(u - CATH_TOWER[0]) < 1 && Math.abs(z - 2.75) < 0.2 && wallText(i, su, uStep, z, d, 'TOWER', CATH_TOWER[0] * Math.sign(su), 2.75, 0.18, 0.25, C(WHITE, 13))) return true;
-    return stone(i, u, z, L), true;
+    return stone(i, u, z, L, uStep, d), true;
   }
   if (my === 0) { // the east end: the rose window, three lancets, a gilded reredos behind the altar
     const dx = u - 11, rz = z - 11, rr = Math.hypot(dx, rz);
     if (rr < 3.6) {
-      if (rr > 3.3) { BG[i] = C(GRAY, 2); return set(i, '#', C(GRAY, L)), true; }
+      if (rr > 3.3) return cathMoulding(i, L);
       const ang = Math.atan2(dx, rz), sec = Math.floor((ang + Math.PI) / (Math.PI / 6)), lit = 4 + day * 10 + dusk * 3;
-      const rings = [0.7, 1.6, 2.5, 3.3], ring = rings.findIndex(q => rr < q);
-      if (rings.some(q => Math.abs(rr - q) < 0.07) || Math.abs(fract((ang + Math.PI) / (Math.PI / 6)) - 0.5) > 0.47 && rr > 0.7) { BG[i] = C(GRAY, 1); return set(i, '+', C(GRAY, 6)), true; } // the tracery
+      const rings = [0.7, 1.6, 2.5, 3.3], ring = rings.findIndex(q => rr < q), spoke = Math.abs(fract((ang + Math.PI) / (Math.PI / 6)) - 0.5);
+      const tracery = Math.max(...rings.map(q => cathLine(Math.abs(rr - q), .14, fp)), rr > .7 ? cathLine((.5 - spoke) * rr * Math.PI / 6, .1, fp) : 0);
+      if (tracery > .5) { BG[i] = C(GRAY, 1.2); return true; }
       const petal = ring === 2 ? Math.hypot(fract((ang + Math.PI) / (Math.PI / 6)) - 0.5, (rr - 2.05) / 0.9) < 0.42 : true;
-      BG[i] = C(ring === 0 ? YEL : petal ? GLASS[(sec + ring * 2) & 7] : BLUE, lit * (ring === 0 ? 1.2 : 0.85));
-      return set(i, ring === 0 ? '*' : petal && ring === 2 ? '.' : ' ', C(WHITE, lit)), true;
+      BG[i] = C(ring === 0 ? YEL : petal ? GLASS[(sec + ring * 2) & 7] : BLUE, lit * (ring === 0 ? 1.2 : 0.85) * (1 - tracery * .7));
+      return true;
     }
     for (const [cx, hw] of [[8.3, 0.7], [11, 0.9], [13.7, 0.7]]) {
       const w = lancet(u - cx, z, 3, cx === 11 ? 7.2 : 6.6, hw);
-      if (w === 1) return glassCell(i, u - cx, z, cx | 0, cx === 11 ? 5.6 : 5.2, hw), true;
-      if (w === 2) { BG[i] = C(GRAY, 1.5); return set(i, '#', C(GRAY, L)), true; }
+      if (w === 1) return glassCell(i, u - cx, z, cx | 0, cx === 11 ? 5.6 : 5.2, hw, fp), true;
+      if (w === 2) return cathMoulding(i, L);
     }
-    if (Math.abs(dx) < 3.2 && z > 0.9 && z < 2.6) { // the reredos: gilt niches
-      BG[i] = C(YEL, 2 + L * 0.2);
-      const nf = fract((dx + 3.2) / 0.8);
-      return set(i, nf < 0.1 ? '|' : z > 2.4 ? '^' : nf > 0.3 && nf < 0.7 && z > 1.2 && z < 2.2 ? (z > 1.9 ? 'o' : '|') : ' ', C(YEL, Math.max(L * 1.3, 9))), true;
+    if (Math.abs(dx) < 3.2 && z > 0.9 && z < 2.6) { // the reredos: gilt niches, each with a carved saint
+      const nf = fract((dx + 3.2) / 0.8), post = cathLine(Math.min(nf, 1 - nf) * .8, .08, fp) > .5;
+      const niche = !post && nf > .2 && nf < .8 && z < 2.4, saint = nf > .38 && nf < .62 && z > 1.2 && z < 2.2;
+      BG[i] = C(YEL, (2 + L * 0.22) * (post || z > 2.4 ? 1.15 : niche ? (saint ? .95 : .6) : 1));
+      return true;
     }
-    return stone(i, u, z, L), true;
+    return stone(i, u, z, L, uStep, d), true;
   }
   // the long walls: a tall window in every bay, the stations of the cross small and framed below them
   for (const [k, by] of CATH_BAYS.entries()) {
     const w = lancet(u - by, z, 3.5, 11.5, 1.05);
-    if (w === 1) return glassCell(i, u - by, z, k * 3 + (mx ? 1 : 0), 8.6, 1.05), true;
-    if (w === 2) { BG[i] = C(GRAY, 1.5); return set(i, '#', C(GRAY, L)), true; }
-    if (Math.abs(u - by) < 0.35 && z > 1.6 && z < 2.3) { // a station of the cross: a small carved panel
-      BG[i] = C(BRICK, 1.5);
-      return set(i, Math.abs(u - by) > 0.3 || z < 1.65 || z > 2.25 ? '#' : Math.abs(u - by) < 0.04 || Math.abs(z - 2.05) < 0.03 ? '+' : ' ', C(YEL, L)), true;
+    if (w === 1) return glassCell(i, u - by, z, k * 3 + (mx ? 1 : 0), 8.6, 1.05, fp), true;
+    if (w === 2) return cathMoulding(i, L);
+    if (Math.abs(u - by) < 0.35 && z > 1.6 && z < 2.3) { // a station of the cross: a small carved panel, a gilt cross on it
+      const du = u - by, frame = Math.abs(du) > 0.3 || z < 1.65 || z > 2.25, cross = Math.abs(du) < .045 && z > 1.72 && z < 2.2 || Math.abs(z - 2.05) < .04 && Math.abs(du) < .14;
+      BG[i] = frame ? C(GRAY, 1.9 + L * .15) : cross ? C(YEL, 2.4 + L * .3) : C(BRICK, 1.5 + L * .1);
+      return true;
     }
   }
-  if (z < 1.1) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, z > 1.02 ? '=' : fract(u / 0.6) < 0.1 ? '|' : ' ', C(BRICK, L)), true; } // oak panelling
-  return stone(i, u, z, L), true;
+  if (z < 1.1) { BG[i] = z > 1.02 ? C(BRICK, 1.8 + L * .14) : C(BRICK, 1.1 + L * 0.1 - .8 * coveGroove(u, .6, .02, fp)); return true; } // oak panelling under its rail
+  return stone(i, u, z, L, uStep, d), true;
 }
-// overhead: a ribbed vault, bay by bay, the nave's webs painted deep blue with gold stars
-function cathedralCeil(i, wx, wy) {
+// overhead: a ribbed vault, bay by bay, the nave's webs painted deep blue with gold stars; ribs and stars filter
+// with distance, as the vault is always far off
+function cathedralCeil(i, wx, wy, fp = .2) {
   const bay = (wy - 7) / 4, ly = fract(bay), nave = wx > 6 && wx < 16, x0 = nave ? 6 : wx < 6 ? 0 : 16, x1 = nave ? 16 : wx < 6 ? 6 : CATH_W;
-  const lx = (wx - x0) / (x1 - x0), e = 0.035;
-  if (ly < e * 1.2 || ly > 1 - e * 1.2 || Math.abs(lx - ly) < e || Math.abs(lx + ly - 1) < e || nave && Math.abs(wx - 11) < 0.08 || lx < 0.02 || lx > 0.98) {
-    BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, 8)); // the ribs
+  const wd = x1 - x0, lx = (wx - x0) / wd, X = lx * wd, Y = ly * 4, diag = Math.hypot(4, wd);
+  // (the ribs are drawn a little wider than they are and kept to a cell's width: the vault is always far off and seen
+  // at a slant, and filtered to their true width they'd vanish into the webs)
+  const rf = Math.min(fp, .35), rib = Math.max(cathLine(Math.min(Y, 4 - Y), .45, rf), cathLine(Math.abs(4 * X - wd * Y) / diag, .35, rf), cathLine(Math.abs(4 * (wd - X) - wd * Y) / diag, .35, rf),
+    nave ? cathLine(Math.abs(wx - 11), .3, rf) : 0, cathLine(Math.min(X, wd - X), .4, rf));
+  set(i, ' ', 0);
+  if (Math.hypot(X - wd / 2, Y - 2) < .4) { BG[i] = C(YEL, 6); return; } // a gilt boss where they cross
+  if (rib > .4) { BG[i] = C(GRAY, 2.4); return; }
+  if (nave) {
+    const cx = Math.floor(wx), cy = Math.floor(wy), star = hash(cx, cy, 503) > 0.55 ? cathLine(Math.hypot(wx - cx - .2 - .6 * hash(cx, cy, 505), wy - cy - .2 - .6 * hash(cx, cy, 506)), .22, fp) : 0;
+    BG[i] = star > .5 ? C(YEL, 6) : C(BLUE, 1.5 + rib); return;
   }
-  if (Math.abs(lx - 0.5) < 0.04 && Math.abs(ly - 0.5) < 0.04) return set(i, '@', C(YEL, 12)); // a gilt boss where they cross
-  if (nave) { BG[i] = C(BLUE, 1.5); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 503) > 0.9 ? '*' : ' ', C(YEL, 10)); }
-  BG[i] = C(GRAY, 1); return set(i, (Math.floor(wx * 2) + Math.floor(wy * 2)) % 5 ? ' ' : '.', C(GRAY, 4));
+  BG[i] = C(GRAY, 1.1 + rib * .8);
 }
-// underfoot: worn flagstones, a red runner up the middle aisle, and pools of coloured light under the windows
-function cathedralFloor(i, f, wx, wy) {
-  if (Math.abs(wx - 11) < 0.65 && wy > 6.5) { BG[i] = C(RED, 1.5 + f * 2); return set(i, Math.abs(wx - 11) > 0.55 ? '|' : ' ', C(YEL, 4 + f * 6)); }
+// underfoot: worn flagstones, a red runner with a gold border up the middle aisle, and pools of coloured light under
+// the windows
+function cathedralFloor(i, f, wx, wy, fp = 0) {
+  set(i, ' ', 0);
+  if (Math.abs(wx - 11) < 0.65 && wy > 6.5) { BG[i] = Math.abs(wx - 11) > 0.55 ? C(YEL, 1.5 + f * 3) : C(RED, 1.5 + f * 2); return; }
   if (day > 0.2) for (const [k, by] of CATH_BAYS.entries()) for (const side of [0, 1]) { // the sun through the glass
     const off = side ? CATH_W - wx : wx, shift = (tod - 12) * 0.25 * (side ? -1 : 1);
     if (off > 2.2 && off < 5.8 && Math.abs(wy - by - shift) < 0.9) { // (thrown well out across the floor: the sun's coming in high)
       const kk = hash(Math.floor((wy - by - shift) / 0.28), Math.floor(off / 0.5) + k * 3, 504);
       BG[i] = C(GLASS[kk * 8 | 0], 1 + day * 3 * f * (1 - Math.abs(off - 4) / 2.5));
-      return set(i, ' ', 0);
+      return;
     }
   }
-  const edge = fract(wx / 1.2) < 0.04 || fract(wy / 1.2 + (Math.floor(wx / 1.2) & 1) * 0.5) < 0.04;
-  BG[i] = C(GRAY, (Math.floor(wx / 1.2) + Math.floor(wy / 1.2)) & 1 ? 1 : 1.6);
-  return set(i, edge ? '+' : ' ', C(GRAY, 3 + f * 4));
+  const joint = Math.max(coveGroove(wx, 1.2, .04, fp), coveGroove(wy + (Math.floor(wx / 1.2) & 1) * .6, 1.2, .04, fp));
+  const fine = clamp(1 - fp / .6, 0, 1); // (the stones' alternating tones settle to one far off, so they don't stripe)
+  BG[i] = C(GRAY, 1.4 + ((Math.floor(wx / 1.2) + Math.floor(wy / 1.2)) & 1 ? -.2 : .2) * fine + f * .6 - joint);
 }
-
-ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cathedral', ceil: 'cathedral', wall: cathedralWall, keeper: [11, 4.9],
+ROOM_FLOORS.cathedralFlags = (i, f, wx, wy, r) => cathedralFloor(i, f, wx, wy, homeBalconyPavingFootprint(eye * projY / Math.max(.5, r - hor + .5), eye));
+ROOM_CEILS.cathedralVault = (i, r, x, wx, wy) => cathedralCeil(i, wx, wy, homeBalconyPavingFootprint((CATH_H - eye) * projY / Math.max(.5, hor - r - .5), CATH_H - eye));
+// The arcade's pillars: a round core with four shafts running up into the vault, on a stepped base, under a gilt
+// capital at 7 m. Rounded surfaces lit by their normals.
+const CATH_PILLARS = [6, 15].flatMap(x => [7, 11, 15, 19, 23, 27, 31].map(y => [x + .5, y + .5]));
+function cathColumnRay(ox, oy, oz, rx, ry, rz, b) { // an upright cylinder from z0 to z1, its flat top
+  const x = ox - b.x, y = oy - b.y, A = rx * rx + ry * ry, B = x * rx + y * ry, D = B * B - A * (x * x + y * y - b.r * b.r);
+  if (A > 1e-12 && D >= 0) {
+    const t = (-B - Math.sqrt(D)) / A, z = oz + rz * t;
+    if (t > .01 && z >= b.z0 && z <= b.z1) { const hx = x + rx * t, hy = y + ry * t; HIT.face = 0; HIT.nx = hx / b.r; HIT.ny = hy / b.r; HIT.nz = 0; HIT.w = z; return t; }
+  }
+  if (Math.abs(rz) > 1e-9) { const t = (b.z1 - oz) / rz; if (t > .01) { const hx = x + rx * t, hy = y + ry * t; if (hx * hx + hy * hy <= b.r * b.r) { HIT.face = 5; HIT.nx = HIT.ny = 0; HIT.nz = 1; HIT.w = b.z1; return t; } } }
+  return -1;
+}
+// a cluster of upright cylinders sharing z0..z1 (a core and its shafts): the nearest hit of any of them
+function cathClusterRay(ox, oy, oz, rx, ry, rz, b) {
+  let best = -1, nx = 0, ny = 0, nz = 0, face = 0;
+  for (const c of b.cols) {
+    const t = cathColumnRay(ox, oy, oz, rx, ry, rz, { x: b.x + c[0], y: b.y + c[1], r: c[2], z0: b.z0, z1: b.z1 });
+    if (t > 0 && (best < 0 || t < best)) { best = t; nx = HIT.nx; ny = HIT.ny; nz = HIT.nz; face = HIT.face; }
+  }
+  if (best > 0) { HIT.nx = nx; HIT.ny = ny; HIT.nz = nz; HIT.face = face; }
+  return best;
+}
+const cathColumnShade = (base, k = 1) => (i, t, L) => { BG[i] = C(base, (1.2 + L * .26) * k * coveLight(HIT.nx, HIT.ny, HIT.nz)); return set(i, ' ', 0), true; };
+function CATH_PILLAR(x, y) {
+  const parts = [], col = (dx, dy, r, z0, z1, shade) => parts.push({ b: { x: dx, y: dy, r, z0, z1 }, shade });
+  const stone_ = cathColumnShade(GRAY), gilt = cathColumnShade(YEL, 1.2);
+  col(0, 0, .5, 0, .3, stone_); col(0, 0, .44, .3, .6, stone_); // the stepped base
+  col(0, 0, .34, .6, CATH_H, stone_); // the core
+  for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) col(sx * .25, sy * .25, .11, .6, CATH_H, stone_); // shafts
+  col(0, 0, .43, 7, 7.55, gilt); col(0, 0, .48, 7.55, 7.7, stone_); // the capital, its abacus
+  // (the core and its shafts are traced together, so the tall cluster scans its strip of the screen once)
+  const cluster = parts.filter(p => p.b.z1 === CATH_H), rest = parts.filter(p => p.b.z1 !== CATH_H), reach = .36 + .11;
+  const o = ROOM_MODEL(x, y, (vx, vy) => {
+    drawBox({ x: vx, y: vy, c: 1, s: 0, hl: reach, hw: reach, z0: .6, z1: CATH_H, cols: cluster.map(p => [p.b.x, p.b.y, p.b.r]) }, stone_, cathClusterRay);
+    for (const p of rest) drawBox({ x: vx + p.b.x, y: vy + p.b.y, c: 1, s: 0, hl: p.b.r, hw: p.b.r, z0: p.b.z0, z1: p.b.z1, r: p.b.r }, p.shade, cathColumnRay);
+  }, [.5, .5, CATH_H]);
+  return { ...o, radius: .6, cathPillar: { parts } };
+}
+ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cathedralFlags', footstepFloor: 'cathedral', ceil: 'cathedralVault', wall: cathedralWall, keeper: [11, 4.9],
   props: r => {
     const sanctuary=.3,altar=ALTAR(11, 3.1, 1.46, .46, 1, sanctuary);
     const p = [ // (built: cathedral-fittings.js)
@@ -21173,6 +21318,7 @@ ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cat
       {...standing(11, 4.9, WHITE), z:sanctuary}, // the priest, standing on the sanctuary
       FONT(11, 36), // the font
       VOTIVE_STAND(19, 34, 0.8, () => room.candles), // the votive stand: as many lit as there are
+      ...CATH_PILLARS.map(([x, y]) => CATH_PILLAR(x, y)), // the arcade
     ];
     for (let y = 11; y <= 30; y += 2.1) for (const cx of [8.8, 13.2]) { // the pews, either side of the aisle
       p.push({ ...PEW(cx, y, 1.6), seatRow: { x0: cx - 1.4, x1: cx + 1.4, y, fx: 0, fy: -1 } });
@@ -22642,106 +22788,127 @@ function consWaterEdge(x, y) {
   return Math.max(pond, stream);
 }
 const inConsPool = (x, y) => consWaterEdge(x, y) > 0;
-const PLANT_ART = {
-  palm: pad(['  __ _ __', ' /  \\|/  \\', '/  .-+-.  \\', '    /|\\', '     |', '     |', '     |', '     |', '    /|\\']),
-  fern: pad(['\\ | /', ' \\|/ ', '--+--', ' /|\\ ']),
-  banana: pad([' \\\\ //', '  \\|/', '  (|)', '   |', '   |']),
-  saguaro: pad(['    _', '   | |', ' _ | |', '| || | _', '|_|| || |', '   | ||_|', '   | |', '   | |']),
-  barrel: pad([' .*. ', '(:::)', " `-' "]),
-  agave: pad(['\\ | /', ' \\|/', '--+--']),
-  butterfly: ['}{'], lizard: ['~=<'],
-};
+// The glasshouse's glazing: white bars every 1.2 m with transoms every 1.5 m, on a brick plinth, and ribs across the
+// roof. The bars are built (CONS_FRAME) so they hold their width at any distance; these painters do what's between.
+const CONS_GLAZE = { pitch: 1.2, transom: 1.5, plinth: 0.8, bar: .08 };
+const consSky = (k = 1) => day > 0.3 ? C(CYAN, (2 + day * 4) * k) : dusk > 0.3 ? C(ORANGE, 3 * k) : C(BLUE, 1 * k);
 function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), c = roomAt(mx, my);
+  const u = Math.abs(su), c = roomAt(mx, my), fp = Math.max(uStep, d / projY), fine = clamp(1 - fp / .25, 0, 1);
   if (c === 'G') { // fixed botanical displays: their subjects stay the same from either side of the divider
     const desert = my > 8, word = desert ? 'DESERT PLANTS' : 'PALMS & FERNS', u0 = desert ? 11.8 : 4;
     if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(desert ? BRICK : GREEN, 3))) return true;
-    if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
+    if (z > 3.92) { BG[i] = consSky(); return set(i, ' ', 0), true; }
     return conservatoryScreen(i, u, z, desert);
   }
   const left = mx < 13 || mx === 0;
-  if (my === 0 && left && Math.abs(u - CONS_FALL.x) < CONS_FALL.half + 0.25) {
-    const edge = Math.abs(u - CONS_FALL.x), n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
-    if (edge > CONS_FALL.half) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '%', C(GRAY, L)), true; }
-    BG[i] = C(CYAN, 2 + n * 3);
-    let ch = ' ';
-    if (z < 0.3) ch = n < 0.5 ? '*' : '~';
-    else if (n < 0.3) ch = '|';
-    else if (n < 0.5) ch = ':';
-    return set(i, ch, C(WHITE, 15)), true;
+  if (my === 0 && left && Math.abs(u - CONS_FALL.x) < CONS_FALL.half + 0.25) { // the waterfall, down through the plinth to the pool
+    const edge = Math.abs(u - CONS_FALL.x);
+    if (edge > CONS_FALL.half) { BG[i] = C(GRAY, 1 + L * 0.15 + (noise(u * 6, z * 4, 880) - .5) * 1.2 * fine); return set(i, ' ', 0), true; }
+    // falling sheets in narrow vertical strands, each its own speed; white where it hits the pool
+    const strand = Math.floor(u * 14), n = fract(z * 0.9 + T * (2.2 + hash(strand, 0, 884) * 0.8) + hash(strand, 1, 884)), foam = clamp((0.45 - z) / 0.3, 0, 1);
+    if (foam > .5 && fine > .3 && noise(u * 9, z * 9 - T * 3, 885) > .45) { BG[i] = C(CYAN, 11 + L * .2); return set(i, ' ', 0), true; }
+    BG[i] = C(CYAN, 4.6 + L * .1 + (n < .35 ? 1.6 : 0) * fine + (1 - fine) * .6 + foam * 1.5);
+    return set(i, ' ', 0), true;
   }
-  if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
-  // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
-  if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
+  if (z < CONS_GLAZE.plinth) { BG[i] = C(BRICK, 1.3 + L * 0.12 - 1.4 * coursedJoint(u, z, .2, .5, uStep, d)); return set(i, ' ', 0), true; } // the brick plinth
   const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
   if (!left) { // the city's towers beyond the glass, far off: they stay put against the sky as you walk about
     const [gsu, gsz] = glassSlopes(su, z), ang = Math.atan2(gsu, 1) + (mx === 0 || mx === CONS_W - 1 ? 1.6 * Math.sign(mx - 1) : my === 0 ? 0 : 3.1), col = Math.floor(ang * 14);
-    if (gsz < 0.08 + 0.35 * hash(col, 1, 864) * hash(col >> 1, 2, 864)) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(ang * 60), Math.floor(gsz * 60), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+    if (gsz < 0.08 + 0.35 * hash(col, 1, 864) * hash(col >> 1, 2, 864)) {
+      const lit = night > 0.4 && hash(Math.floor(ang * 60), Math.floor(gsz * 60), 865) > 0.8;
+      BG[i] = lit ? C(YEL, 2.5) : C(GRAY, 1.5 + day * 2); return set(i, ' ', 0), true;
+    }
   }
-  BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
-  return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
+  if (leaf) { BG[i] = C(GREEN, 1 + L * 0.1 + (noise(u * 6, z * 6, 842) - .5) * 1.4 * fine); return set(i, ' ', 0), true; } // leaves pressed against the glass
+  BG[i] = consSky(); return set(i, ' ', 0), true;
 }
 // Sample the panorama in wall coordinates, with painted depth rather than camera-dependent parallax.
 function conservatoryScreen(i, u, z, desert) {
   const ground = 0.25 + noise(u * 0.7, 0, 867) * 0.22;
-  if (z < ground) {
-    BG[i] = C(desert ? YEL : GREEN, desert ? 4 : 2);
-    return set(i, desert ? '~' : '"', C(desert ? WARM : GREEN, desert ? 9 : 7)), true;
-  }
+  set(i, ' ', 0);
+  if (z < ground) { BG[i] = C(desert ? YEL : GREEN, desert ? 4 + noise(u * 3, z * 9, 881) : 2 + noise(u * 3, z * 9, 881)); return true; }
   for (let layer = 0; layer < 3; layer++) {
     const spacing = 2.6, shift = layer * 0.85, slot = Math.floor((u + shift) / spacing);
     const centre = (slot + 0.5) * spacing - shift, tall = 1.8 + hash(slot, layer, 869) * 0.95;
-    const offset = u - centre, light = 11 - layer * 2;
+    const offset = u - centre, light = 4.2 - layer * .8;
     if (desert) {
       const armSide = slot & 1 ? 1 : -1, arm = offset * armSide;
       const onArm = (arm > 0 && arm < 0.45 && Math.abs(z - tall * 0.55) < 0.09) ||
         (Math.abs(arm - 0.45) < 0.09 && z > tall * 0.55 && z < tall * 0.8);
-      if ((Math.abs(offset) < 0.12 && z < tall) || onArm) { BG[i] = C(GREEN, 2); return set(i, '|', C(GREEN, light)), true; }
+      if ((Math.abs(offset) < 0.12 && z < tall) || onArm) { BG[i] = C(GREEN, light - (Math.abs(offset) > .07 ? .8 : 0)); return true; }
     } else {
       const lean = 0.1 * z / tall * (slot & 1 ? 1 : -1), stem = offset - lean;
       const spread = 0.85 + hash(slot, layer, 870) * 0.25, reach = Math.abs(stem) / spread;
       const frond = tall + Math.sin(reach * Math.PI) * 0.2 - reach * 0.55;
-      if (reach < 1 && (Math.abs(z - frond) < 0.1 || Math.abs(z - frond - 0.25 * (1 - reach)) < 0.07)) {
-        BG[i] = C(GREEN, 2 + (2 - layer));
-        return set(i, stem < 0 ? '/' : '\\', C(GREEN, light + 1)), true;
-      }
-      if (Math.abs(stem) < 0.05 && z < tall) return set(i, '|', C(BRICK, light)), true;
+      if (reach < 1 && (Math.abs(z - frond) < 0.1 || Math.abs(z - frond - 0.25 * (1 - reach)) < 0.07)) { BG[i] = C(GREEN, light + .6); return true; }
+      if (Math.abs(stem) < 0.05 && z < tall) { BG[i] = C(BRICK, light - 1); return true; }
     }
   }
-  if (!desert && z < 0.85 + noise(u * 1.8, 0, 871) * 0.3) {
-    BG[i] = C(GREEN, 2);
-    return set(i, fract(u * 5 + z * 4) < 0.5 ? '/' : '\\', C(GREEN, 7)), true;
-  }
+  if (!desert && z < 0.85 + noise(u * 1.8, 0, 871) * 0.3) { BG[i] = C(GREEN, 2.2 + noise(u * 4, z * 4, 882) * 1.2); return true; }
   BG[i] = C(desert ? CYAN : GREEN, desert ? 3 : 1);
-  return set(i, ' ', 0), true;
+  return true;
 }
-function conservatoryFloor(i, f, wx, wy) {
+function conservatoryFloor(i, f, wx, wy, r) {
+  const fp = r === undefined ? 0 : homeBalconyPavingFootprint(eye * projY / Math.max(.5, r - hor + .5), eye), fine = clamp(1 - fp / .2, 0, 1);
+  set(i, ' ', 0);
   if (wx > 13) { // sand, rippled by the wind that never blows in here
-    BG[i] = C(YEL, 1 + f * 1.5);
-    return set(i, fract(wy * 3 + Math.sin(wx * 2) * 0.3) < 0.2 ? '~' : hash(Math.floor(wx * 6), Math.floor(wy * 6), 843) > 0.92 ? '.' : ' ', C(WARM, 4 + f * 6));
+    BG[i] = C(YEL, 1.6 + f * 1.8 + Math.sin((wy * 3 + Math.sin(wx * 2) * 0.3) * Math.PI * 2) * .7 * fine + (noise(wx * 5, wy * 5, 843) - .5) * .6 * fine);
+    return;
   }
   const waterEdge = consWaterEdge(wx, wy);
   if (waterEdge > 0) {
     const n = noise(wx * 3 + T * 0.5, wy * 3, 844), splash = wy < 1.65 && Math.abs(wx - CONS_FALL.x) < CONS_FALL.half;
     const ripple = fract(Math.hypot((wx - CONS_FALL.x) * 0.8, wy - CONS_FALL.y) * 3 - T * 1.5) < 0.15;
-    BG[i] = C(splash ? CYAN : BLUE, splash ? 3 + n * 2 : 1 + f * 2); FL[i] = 3;
-    let ch = ' ';
-    if (splash) ch = n > 0.5 ? '*' : '~';
-    else if (ripple) ch = '~';
-    else if (n > 0.45) ch = '-';
-    return set(i, ch, C(splash ? WHITE : CYAN, splash ? 13 : 6 + f * 6));
+    BG[i] = splash ? C(CYAN, 3 + n * 2 * fine + (1 - fine) * 1) : C(BLUE, 1 + f * 2 + ((ripple ? .8 : 0) + (n - .5)) * fine); FL[i] = 3;
+    return;
   }
-  if (waterEdge > -0.18) { BG[i] = C(GRAY, 1 + f); return set(i, noise(wx * 5, wy * 5, 849) > 0.5 ? 'o' : '%', C(GRAY, 4 + f * 5)); }
-  if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(BRICK, 1 + f); return set(i, fract(wy * 2) < 0.15 ? '=' : '|', C(WARM, 5 + f * 6)); } // a boardwalk up from the door
-  BG[i] = C(GREEN, f * 1.2); // moss and soil, steaming
-  const mist = noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) > 0.62;
-  return set(i, mist ? '~' : hash(Math.floor(wx * 5), Math.floor(wy * 5), 846) > 0.6 ? '"' : '.', C(mist ? WHITE : GREEN, mist ? 5 : 3 + f * 5));
+  if (waterEdge > -0.18) { BG[i] = C(GRAY, 1.3 + f * 1.5 + (noise(wx * 5, wy * 5, 849) - .5) * 1.4 * fine); return; } // the rocks round the pool
+  if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(WARM, 1.6 + f * 2 - 2 * coveGroove(wy, .5, .02, fp)); return; } // a boardwalk up from the door
+  // moss and soil, steaming
+  const mist = clamp((noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) - .55) * 6, 0, 1);
+  BG[i] = C(GREEN, .9 + f * 1.6 + (noise(wx * 5, wy * 5, 846) - .5) * 1.2 * fine + mist * 1.2);
 }
-function glassCeil(i, wx, wy) { // the glass roof: ribs, the sky through it, vines hanging on the tropical side
-  if (fract(wx / 2) < 0.05 || fract(wy / 2) < 0.05) { BG[i] = C(WHITE, 2 + day * 2); return set(i, '=', C(WHITE, 9)); }
-  if (wx < 13 && noise(wx * 1.2, wy * 1.2, 847) > 0.6) { BG[i] = C(GREEN, 1); return set(i, '(', C(GREEN, 7)); }
-  BG[i] = day > 0.3 ? C(CYAN, 2 + day * 5) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 0.5);
-  return set(i, night > 0.5 && hash(Math.floor(wx * 5), Math.floor(wy * 5), 848) > 0.97 ? '.' : ' ', C(WHITE, 10));
+ROOM_FLOORS.conservatoryGround = (i, f, wx, wy, r) => conservatoryFloor(i, f, wx, wy, r);
+// the glass roof: the sky through it, vines hanging on the tropical side (the ribs are built, in CONS_FRAME)
+function glassCeil(i, wx, wy) {
+  if (room.kind === 'conservatory' && wx < 13 && noise(wx * 1.2, wy * 1.2, 847) > 0.6) { BG[i] = C(GREEN, 1.2 + (noise(wx * 4, wy * 4, 883) - .5)); return set(i, ' ', 0); }
+  BG[i] = consSky(); return set(i, ' ', 0);
+}
+// A slender bar given as a box, drawn as a rod down its long axis: rods keep at least a cell's width, so a bar far off
+// stays a continuous line instead of breaking into dashes where it falls between cells.
+function frameBar(b, shade) {
+  const hz = (b.z1 - b.z0) / 2, zc = (b.z0 + b.z1) / 2, x = b.x - px, y = b.y - py;
+  if (hz >= b.hl && hz >= b.hw) { const r = Math.max(b.hl, b.hw); return drawRod(x, y, b.z0 + r, x, y, b.z1 - r, r, shade); }
+  // a long rail goes in short lengths: a rod's screen bounds are its whole box, and one seen obliquely down a wall
+  // would test every cell of that rectangle
+  const alongX = b.hl >= b.hw, half = alongX ? b.hl : b.hw, r = Math.max(alongX ? b.hw : b.hl, hz), n = Math.max(1, Math.ceil(half / 1.2));
+  for (let k = 0; k < n; k++) {
+    const s0 = -half + 2 * half * k / n, s1 = -half + 2 * half * (k + 1) / n;
+    if (alongX) drawRod(x + s0, y, zc, x + s1, y, zc, r, shade); else drawRod(x, y + s0, zc, x, y + s1, zc, r, shade);
+  }
+}
+function consSteel(i, t, L) { BG[i] = C(WHITE, 3.4 + L * .42); return set(i, ' ', 0), true; }
+function CONS_FRAME(W, H, h) {
+  const boxes = [], bar = CONS_GLAZE.bar / 2, z0 = CONS_GLAZE.plinth;
+  const walls = [[1, 1, 1, H - 1], [W - 1, 1, W - 1, H - 1], [1, 1, W - 1, 1], [1, H - 1, W - 1, H - 1]];
+  for (const [x0, y0, x1, y1] of walls) {
+    const alongY = x0 === x1, len = alongY ? y1 - y0 : x1 - x0, nx = alongY ? (x0 === 1 ? 1 : -1) : 0, ny = alongY ? 0 : (y0 === 1 ? 1 : -1);
+    const at = (s, off) => alongY ? [x0 + nx * off, y0 + s] : [x0 + s, y0 + ny * off];
+    const fall = !alongY && y0 === 1 ? [CONS_FALL.x - CONS_FALL.half - 0.25, CONS_FALL.x + CONS_FALL.half + 0.25] : null; // (no bars down the waterfall's rock)
+    for (let s = 0; s <= len + 1e-6; s += CONS_GLAZE.pitch) {
+      const wx = x0 + (alongY ? 0 : s); if (fall && wx > fall[0] && wx < fall[1]) continue;
+      const [x, y] = at(s, bar); boxes.push(boxAt(x, y, 1, 0, bar, bar, z0, h));
+    }
+    for (let z = z0; z < h + 1e-6; z += CONS_GLAZE.transom) {
+      const zz = clamp(z, z0 + bar, h - bar), [x, y] = at(len / 2, bar), hl = alongY ? bar : len / 2, hw = alongY ? len / 2 : bar;
+      if (fall) { // the transoms stop either side of the falls
+        for (const [a, b] of [[1, fall[0]], [fall[1], W - 1]]) boxes.push(boxAt((a + b) / 2, y, 1, 0, (b - a) / 2, bar, zz - bar, zz + bar));
+      } else boxes.push(boxAt(x, y, 1, 0, hl, hw, zz - bar, zz + bar));
+    }
+  }
+  for (let x = 1 + 2; x < W - 1; x += 2) boxes.push(boxAt(x, H / 2, 1, 0, .06, H / 2 - 1, h - .14, h));
+  for (let y = 1 + 2; y < H - 1; y += 2) boxes.push(boxAt(W / 2, y, 1, 0, W / 2 - 1, .06, h - .14, h));
+  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, consFrame: { boxes }, draw: () => { for (const b of boxes) frameBar(b, consSteel); } };
 }
 // the aviary: a mesh dome, trees inside, a pond, birds everywhere; a keeper with cups of seed
 const AV_W = 14, AV_H = 12;
@@ -22825,15 +22992,16 @@ function aviaryFloor(i, f, wx, wy) {
   BG[i] = C(GREEN, f * 1.1); return set(i, (Math.floor(wx * 6) + Math.floor(wy * 6)) % 3 ? '"' : ',', C(GREEN, 4 + f * 5));
 }
 function conservatoryProps(r) {
-  const p = [], plant = (k, x, y, w, h, col) => p.push(SP(x, y, w, h, PLANT_ART[k], col));
-  const green = (c, row, L) => C(GREEN, L), palmCol = (c, row, L) => row < 4 ? C(GREEN, L) : C(BRICK, L);
-  for (const [x, y, s] of [[2, 2, 1.3], [11, 2.2, 1.5], [2.2, 7, 1.2], [10.8, 6.5, 1.4], [3, 12, 1.1], [11, 12.4, 1.3], [8.8, 9.8, 1]]) plant('palm', x, y, 1.6 * s, 5 * s, palmCol);
-  for (const [x, y] of [[4.6, 6], [9, 5.4], [1.6, 9.6], [10.5, 9.6], [4.2, 10.8], [8.6, 13.2], [2, 4.6], [11.6, 4.4]]) plant('fern', x, y, 0.8, 0.8, green);
-  for (const [x, y] of [[5, 8.6], [8, 11.6], [12, 10.6]]) plant('banana', x, y, 0.8, 2.2, (c, row, L) => c === '(' || c === ')' ? C(YEL, L) : C(GREEN, L));
-  for (const [x, y, s] of [[16, 3, 1], [20.5, 2.5, 1.3], [23.5, 5, 0.9], [18, 9, 1.2], [22.5, 11.5, 1], [16.5, 12.5, 0.8]]) plant('saguaro', x, y, 0.9 * s, 3.4 * s, (c, row, L) => C(GREEN, Math.max(L * 1.4, 7)));
-  for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, 0.5, 0.5, (c, row, L) => c === '*' ? C(MAG, 15) : C(GREEN, L));
-  for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, 0.8, 0.7, (c, row, L) => C(CYAN, L * 0.9));
-  for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) p.push(BX(x, y, w, w * 0.7, 0, w * 0.6, solid(BRICK, { top: '.', bright: 1.2 }))); // rocks
+  const p = [];
+  let seed = 0;
+  const plant = (k, x, y, h, foot) => p.push(CONS_PLANT(k, x, y, h, seed++, foot));
+  for (const [x, y, s] of [[2, 2, 1.3], [11, 2.2, 1.5], [2.2, 7, 1.2], [10.8, 6.5, 1.4], [3, 12, 1.1], [11, 12.4, 1.3], [8.8, 9.8, 1]]) plant('palm', x, y, 5 * s, [.12 * s, .12 * s, 3.5 * s]);
+  for (const [x, y] of [[4.6, 6], [9, 5.4], [1.6, 9.6], [10.5, 9.6], [4.2, 10.8], [8.6, 13.2], [2, 4.6], [11.6, 4.4]]) plant('fern', x, y, .8);
+  for (const [x, y] of [[5, 8.6], [8, 11.6], [12, 10.6]]) plant('banana', x, y, 2.2, [.13, .13, 1.4]);
+  for (const [x, y, s] of [[16, 3, 1], [20.5, 2.5, 1.3], [23.5, 5, 0.9], [18, 9, 1.2], [22.5, 11.5, 1], [16.5, 12.5, 0.8]]) plant('saguaro', x, y, 3.4 * s, [.27 * s, .27 * s, 3.1 * s]);
+  for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, .5, [.2, .2, .4]);
+  for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, .7);
+  for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) plant('rock', x, y, w * 14 / 13, [w, w * 0.7, w * 0.6]); // rocks
   // a lizard basking on a warm rock, shuffling along it now and then (~0.35 m)
   p.push(animalProp(19.5, 4.4, 0.42, 0.75, LIZARD_LOOK, o => Math.abs(Math.cos(T * 0.2)) > 0.3 ? Math.floor(T * 4) & 1 : 0, s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; }));
   for (let k = 0; k < 10; k++) // butterflies (~8 cm across)
@@ -22841,16 +23009,234 @@ function conservatoryProps(r) {
       const th = T * (0.5 + (k % 3) * 0.2) + k * 2.3;
       s.x = 6.5 + Math.cos(th) * (2 + k % 4) + Math.sin(th * 2.7) * 0.6; s.y = 7.5 + Math.sin(th * 0.8) * (2.5 + k % 3); s.z = 1 + Math.sin(th * 3.1) * 0.6 + (k % 3) * 0.5;
     }));
-  p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1));
+  p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1), CONS_FRAME(r.W, r.H, r.def.height || 9));
   if (chance(0.7)) p.push(standing(8.2, 8.4, shirt())); if (chance(0.6)) p.push(standing(18.5, 6.6, shirt()));
   return p;
 }
 Object.assign(ROOM_DEFS, {
-  conservatory: { grid: CONS_GRID, spawn: [7, CONS_H - 1.6], light: 0.85, height: 9, floor: 'conservatory', ceil: 'glass', wall: conservatoryWall, block: (x, y) => inConsPool(x, y), props: conservatoryProps },
+  conservatory: { grid: CONS_GRID, spawn: [7, CONS_H - 1.6], light: 0.85, height: 9, floor: 'conservatoryGround', footstepFloor: 'conservatory', ceil: 'glass', wall: conservatoryWall, block: (x, y) => inConsPool(x, y), props: conservatoryProps },
   aviary: { grid: boxRoom(AV_W, AV_H), spawn: [7, AV_H - 1.6], light: 0.85, height: 7, floor: 'aviary', ceil: 'glass', wall: aviaryWall, keeper: [11.5, 9.4], block: (x, y) => Math.hypot((x - 7) / 2, (y - 6) / 1.2) < 1, props: aviaryProps },
 });
 Object.assign(ROOM_FOR, { CONSERVATORY: 'conservatory', AVIARY: 'aviary' });
 const aviaryKeeper = () => mode === 'room' && room.kind === 'aviary' && nearKeeper();
+// The conservatory's planting, built like the animals (figures.js): parts cast
+// into a cached sprite from the side you see, painted as solid colour, so a palm
+// reads as clearly as a person at any distance. Each body is built `tall` units
+// high and drawn at its height in metres. Roles: BODY trunks and stems, WING
+// leaves, MARK flowers and fruit, LEG soil and rock.
+const PLANT_UNITS = { palm: 30, fern: 13, banana: 30, saguaro: 30, barrel: 22, agave: 14, rock: 14 };
+const pv = (a, b, k) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+const pnorm = v => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const pcross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+// a leaf blade: an ellipsoid from `from` along dir (len long, wid wide, thin), flat to the side
+function plantBlade(from, dir, len, wid, thin, role) {
+  const d = pnorm(dir), side = pnorm(Math.abs(d[2]) > .95 ? [1, 0, 0] : pcross(d, [0, 0, 1])), n = pcross(side, d);
+  return figEll(pv(from, d, len), [d, side, n], [len, wid, thin], role);
+}
+// a frond that rises then droops: two blades end to end
+function plantFrond(from, ang, rise, len, wid, droop, role) {
+  const out = [Math.cos(ang), Math.sin(ang), 0], d1 = pnorm([out[0], out[1], rise]), mid = pv(from, d1, len);
+  const d2 = pnorm([out[0], out[1], rise - droop]);
+  return [plantBlade(from, d1, len / 2, wid, .25, role), plantBlade(mid, d2, len * .45, wid * .8, .22, role)];
+}
+const PLANT_BODIES = {
+  palm: f => { // a slim trunk leaning a little, in four tapering pieces, with a crown of nine arching fronds
+    const R = AR, lean = f === 1 ? -1 : 1, trunk = [[0, 0, 0], [.3 * lean, 0, 8], [.8 * lean, 0, 16], [1.4 * lean, 0, 24]], parts = [];
+    for (let k = 1; k < trunk.length; k++) parts.push(figCap(trunk[k - 1], trunk[k], .78 - k * .1, () => R.BODY));
+    const top = trunk[3];
+    parts.push(figEll(pv(top, [0, 0, 1], .3), AN_I, [.8, .8, .8], () => R.MARK)); // the crownshaft's coconuts
+    for (let k = 0; k < 9; k++) parts.push(...plantFrond(pv(top, [0, 0, 1], 1), k / 9 * Math.PI * 2 + f, k % 3 === 0 ? .8 : .35, 9.5 + (k % 2) * 1.6, 1.6, 1.9, () => R.WING));
+    return { parts, decals: [] };
+  },
+  fern: f => { // a low rosette of fine fronds arching out from a crown
+    const R = AR, parts = [figEll([0, 0, 1], AN_I, [1.4, 1.4, 1], () => R.LEG)];
+    for (let k = 0; k < 9; k++) parts.push(...plantFrond([0, 0, 1.6], k / 9 * Math.PI * 2 + f * .4, 1.3 - (k % 3) * .2, 4.2 + (k % 2), 1.1, 2.4, () => R.WING));
+    return { parts, decals: [] };
+  },
+  banana: f => { // a pseudostem, broad leaves held up and out, a bunch of yellow fruit hanging under them
+    const R = AR, parts = [figCap([0, 0, 0], [0, 0, 18], 1.7, () => R.BODY)];
+    for (let k = 0; k < 6; k++) {
+      const ang = k / 6 * Math.PI * 2 + f, out = [Math.cos(ang), Math.sin(ang), 0];
+      parts.push(figCap(pv([0, 0, 17], out, .5), pv([0, 0, 20.5], out, 2.5), .45, () => R.BODY), plantBlade(pv([0, 0, 20.5], out, 2.5), pnorm([out[0], out[1], k & 1 ? 1.2 : .55]), 6.8, 3, .3, () => R.WING));
+    }
+    for (let k = 0; k < 5; k++) parts.push(figEll([2.1 + (k & 1) * .6, .3 * k - .6, 13.5 - k * 1.1], AN_I, [.55, .55, 1], () => R.MARK));
+    return { parts, decals: [] };
+  },
+  saguaro: f => { // a ribbed column with two arms that turn up, and a flower on top
+    const R = AR, s = f === 1 ? -1 : 1, parts = [figCap([0, 0, 0], [0, 0, 27.5], 2.4, () => R.BODY)];
+    parts.push(figCap([2 * s, 0, 11], [5.2 * s, 0, 11.5], 1.5, () => R.BODY), figCap([5.2 * s, 0, 11.5], [5.4 * s, 0, 19], 1.5, () => R.BODY));
+    parts.push(figCap([-2 * s, 0, 15.5], [-4.4 * s, 0, 16], 1.3, () => R.BODY), figCap([-4.4 * s, 0, 16], [-4.6 * s, 0, 21.5], 1.3, () => R.BODY));
+    parts.push(figEll([0, 0, 29.5], AN_I, [1.1, 1.1, .7], () => R.MARK));
+    return { parts, decals: [] };
+  },
+  barrel: () => { // a squat ribbed globe crowned with magenta flowers
+    const R = AR, parts = [figEll([0, 0, 8.5], AN_I, [9, 9, 8.5], () => R.BODY)];
+    for (let k = 0; k < 5; k++) { const ang = k / 5 * Math.PI * 2; parts.push(figEll([Math.cos(ang) * 2.2, Math.sin(ang) * 2.2, 17], AN_I, [1.4, 1.4, 1.1], () => R.MARK)); }
+    return { parts, decals: [] };
+  },
+  agave: f => { // a rosette of stiff pointed leaves, the outer ones lower
+    const R = AR, parts = [];
+    for (let k = 0; k < 12; k++) {
+      const ang = k / 12 * Math.PI * 2 + f * .3 + (k & 1) * .26, out = [Math.cos(ang), Math.sin(ang), 0], rise = k & 1 ? 1.9 : .9;
+      parts.push(plantBlade([0, 0, 1], pnorm([out[0], out[1], rise]), 6.2 - (k & 1) * .8, 1.3, .55, () => R.WING));
+    }
+    return { parts, decals: [] };
+  },
+  rock: f => { // a weathered boulder: two overlapping lumps
+    const R = AR, parts = [figEll([0, 0, 3.6], AN_I, [13, 9, 4.2], () => R.LEG), figEll([4 - f * 8, 1.5, 4.6], AN_I, [6.5, 5.5, 3.6], () => R.LEG)];
+    return { parts, decals: [] };
+  },
+};
+Object.assign(ANIMAL_BODIES, Object.fromEntries(Object.entries(PLANT_BODIES).map(([k, v]) => ['plant_' + k, v])));
+const PLANT_LOOKS = {
+  palm: animalLook('plant_palm', { body: [BRICK, 7], wing: [GREEN, 9], mark: [BRICK, 4], leg: [GREEN, 5] }),
+  fern: animalLook('plant_fern', { body: [GREEN, 7], wing: [GREEN, 10], leg: [BRICK, 4] }),
+  banana: animalLook('plant_banana', { body: [GREEN, 7], wing: [GREEN, 11], mark: [YEL, 12] }),
+  saguaro: animalLook('plant_saguaro', { body: [GREEN, 8], mark: [WHITE, 13] }),
+  barrel: animalLook('plant_barrel', { body: [GREEN, 9], mark: [MAG, 13] }),
+  agave: animalLook('plant_agave', { wing: [CYAN, 8] }),
+  rock: animalLook('plant_rock', { leg: [BRICK, 6] }),
+};
+// A plant at (x, y), heightM tall, turned by its seed; trunks and boulders block, leafy plants don't.
+function CONS_PLANT(kind, x, y, heightM, seed, foot) {
+  const ang = hash(seed, 3, 886) * Math.PI * 2, fx = Math.cos(ang), fy = Math.sin(ang), frame = seed & 1;
+  const h = heightM * FIG_TALL / PLANT_UNITS[kind], look = PLANT_LOOKS[kind];
+  const o = ROOM_MODEL(x, y, (vx, vy) => drawAnimal(vx, vy, 0, h, fx, fy, look, frame), foot);
+  return { ...o, radius: heightM, consPlant: { kind, heightM, unit: h / FIG_TALL } };
+}
+// The aviary: its painted mesh, grass, pond and sprite trees, built properly.
+// The walls are steel posts and rails with fine mesh between, the planting and
+// sky behind it seen darker through the mesh. Fine mesh is never resolved, so
+// it is an average, and posts and rails filter with distance. The trees are
+// tapered trunks with limbs into a crown of leaf clumps, lit by their own
+// normals, with a leafy mottle that settles to plain colour far off.
+const AVIARY_POST = { pitch: 2, width: .1 }, AVIARY_RAIL = { pitch: 1.75, width: .08 }, AVIARY_KERB = .4;
+const AVIARY_POND = { x: 7, y: 6, rx: 2, ry: 1.2, rim: .16 };
+// [x, y, scale]: the sprite trees' old spots, so routes and the birds' loops are unchanged
+const AVIARY_TREES = [[3, 3, 1.2], [10.5, 3.5, 1.4], [4, 8.5, 1], [11, 8, 1.1]].map(([x, y, s], k) => aviaryTreeShape(x, y, s, k));
+function aviaryTreeShape(x, y, s, k) {
+  const trunk = { r0: .11 * s, r1: .06 * s, h: 2.1 * s }, crown = 2.1 * s + .55 * s, clumps = [], limbs = [];
+  const n = 7, spread = .75 * s;
+  for (let j = 0; j < n; j++) {
+    const ang = j / n * Math.PI * 2 + hash(k, j, 871) * .7, out = j === n - 1 ? 0 : spread * (.65 + hash(k, j, 872) * .35);
+    const cx = x + Math.cos(ang) * out, cy = y + Math.sin(ang) * out, cz = crown + (j === n - 1 ? .45 * s : (hash(k, j, 873) - .5) * .5 * s);
+    clumps.push({ x: cx, y: cy, z: cz, r: (j === n - 1 ? .62 : .5 + hash(k, j, 874) * .16) * s });
+    if (j < n - 1 && j % 2 === 0) limbs.push({ ax: x, ay: y, az: trunk.h * .78, bx: x + (cx - x) * .7, by: y + (cy - y) * .7, bz: cz - .1 * s, r: .035 * s });
+  }
+  return { x, y, s, k, trunk, clumps, limbs, top: Math.max(...clumps.map(c => c.z + c.r)) };
+}
+// A vertical tapered trunk: radius r0 at the floor narrowing to r1 at h.
+function aviaryTrunkRay(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, k = (b.r0 - b.r1) / b.h, a0 = b.r0 - k * oz, b0 = -k * rz;
+  const A = rx * rx + ry * ry - b0 * b0, B = x * rx + y * ry - a0 * b0, D0 = x * x + y * y - a0 * a0, D = B * B - A * D0;
+  if (D < 0 || Math.abs(A) < 1e-12) return -1;
+  const q = Math.sqrt(D);
+  for (const t of [(-B - q) / A, (-B + q) / A].sort((p, q2) => p - q2)) {
+    if (t < .01) continue;
+    const z = oz + rz * t;
+    if (z < 0 || z > b.h || a0 + b0 * t <= 0) continue;
+    const hx = x + rx * t, hy = y + ry * t, rad = Math.hypot(hx, hy) || 1, len = Math.hypot(1, k);
+    HIT.face = 0; HIT.u = Math.atan2(hy, hx); HIT.w = z; HIT.nx = hx / rad / len; HIT.ny = hy / rad / len; HIT.nz = k / len;
+    return t;
+  }
+  return -1;
+}
+function aviaryBark(i, t, L) {
+  const ridge = coveDetail(t, .4) * Math.sin(HIT.u * 9 + Math.sin(HIT.w * 3) * .6) * .45;
+  BG[i] = C(BRICK, (1 + L * .22) * coveLight(HIT.nx || 0, HIT.ny || 0, HIT.nz || 0) + ridge);
+  return set(i, ' ', 0), true;
+}
+function aviaryLimb(i, t, L) { BG[i] = C(BRICK, .9 + L * .18); return set(i, ' ', 0), true; }
+// leaf clumps: lighter on top and toward the light, mottled up close in world space
+function aviaryLeaves(seed) {
+  return (i, t, L) => {
+    const nx = HIT.u, ny = HIT.v, nz = HIT.w, b = AVIARY_VIEW.clump, wx = b.wx + nx * b.r, wy = b.wy + ny * b.r, wz = b.wz + nz * b.r;
+    const fine = coveDetail(t, .5), mottle = fine ? (noise(wx * 6 + seed, wy * 6 + wz * 4, 875) - .5) * 2.2 * fine : 0;
+    BG[i] = C(GREEN, Math.max(1, (1.4 + L * .36) * (.4 + .8 * coveLight(nx, ny, nz)) + mottle));
+    return set(i, ' ', 0), true;
+  };
+}
+const AVIARY_VIEW = { clump: null };
+function drawAviaryTree(tree, vx, vy) {
+  const dx0 = vx - tree.x, dy0 = vy - tree.y; // (model space to view space)
+  drawBox({ x: vx, y: vy, c: 1, s: 0, hl: tree.trunk.r0 + .01, hw: tree.trunk.r0 + .01, z0: 0, z1: tree.trunk.h, ...tree.trunk, aviaryTrunk: true }, aviaryBark, aviaryTrunkRay);
+  for (const l of tree.limbs) drawRod(l.ax + dx0, l.ay + dy0, l.az, l.bx + dx0, l.by + dy0, l.bz, l.r, aviaryLimb);
+  tree.clumps.forEach((c, j) => {
+    drawBox({ x: c.x + dx0, y: c.y + dy0, c: 1, s: 0, hl: c.r, hw: c.r, z0: c.z - c.r, z1: c.z + c.r, aviaryClump: true }, (i, t, L) => {
+      AVIARY_VIEW.clump = { wx: c.x, wy: c.y, wz: c.z, r: c.r }; return tree.leaves(i, t, L);
+    }, raySphere);
+  });
+}
+const AVIARY_TREE = tree => {
+  tree.leaves = aviaryLeaves(tree.k * 13.7);
+  return { ...ROOM_MODEL(tree.x, tree.y, (vx, vy) => drawAviaryTree(tree, vx, vy), [tree.trunk.r0 + .04, tree.trunk.r0 + .04, tree.trunk.h]), radius: 1.6 * tree.s, aviaryTree: tree };
+};
+// the sky by the time of day, as the old painters had it
+const aviarySky = (k = 1) => day > 0.3 ? C(CYAN, (2 + day * 4) * k) : dusk > 0.3 ? C(ORANGE, 3 * k) : C(BLUE, 1 * k);
+function aviaryWallFinish(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su), fp = Math.max(uStep, d / projY);
+  if (z < AVIARY_KERB) { BG[i] = C(GRAY, 1.6 + L * .14 - 3 * coveGroove(u, 2, .006, fp)); return set(i, ' ', 0), true; } // a concrete kerb the mesh stands on
+  // planting outside, thinning toward the roof, seen dim and cool through the mesh (the posts and rails are built: AVIARY_FRAME)
+  const leaf = noise(u * 1.3, z * 1.3, 851) > 0.48 - 0.3 * (1 - z / 7), fine = clamp(1 - fp / .25, 0, 1);
+  if (leaf) BG[i] = C(GREEN, .7 + L * .04 + (noise(u * 5, z * 5, 876) - .5) * .8 * fine);
+  else BG[i] = aviarySky(.75);
+  return set(i, ' ', 0), true;
+}
+// The mesh's steel: a post every 2 m round the walls and rails along them, standing on the kerb and meeting the roof
+// rail, and roof ribs over the room. Built, so they keep their width at any distance.
+function aviarySteel(i, t, L) { BG[i] = C(GRAY, 1.1 + L * .17); return set(i, ' ', 0), true; }
+// each bar drawn as a rod down its long axis: rods keep at least a cell's width, so far bars stay continuous lines
+function aviaryBar(b, shade) {
+  const hz = (b.z1 - b.z0) / 2, zc = (b.z0 + b.z1) / 2, x = b.x - px, y = b.y - py;
+  if (hz >= b.hl && hz >= b.hw) { const r = Math.max(b.hl, b.hw); return drawRod(x, y, b.z0 + r, x, y, b.z1 - r, r, shade); }
+  // long rails in short lengths, so each rod's screen bounds stay tight
+  const alongX = b.hl >= b.hw, half = alongX ? b.hl : b.hw, r = Math.max(alongX ? b.hw : b.hl, hz), n = Math.max(1, Math.ceil(half / 1.2));
+  for (let k = 0; k < n; k++) {
+    const s0 = -half + 2 * half * k / n, s1 = -half + 2 * half * (k + 1) / n;
+    if (alongX) drawRod(x + s0, y, zc, x + s1, y, zc, r, shade); else drawRod(x, y + s0, zc, x, y + s1, zc, r, shade);
+  }
+}
+function AVIARY_FRAME(W, H, h) {
+  const boxes = [], post = AVIARY_POST.width / 2, rail = AVIARY_RAIL.width / 2;
+  const walls = [[1, 1, 1, H - 1], [W - 1, 1, W - 1, H - 1], [1, 1, W - 1, 1], [1, H - 1, W - 1, H - 1]];
+  for (const [x0, y0, x1, y1] of walls) {
+    const along = x0 === x1 ? 'y' : 'x', len = along === 'y' ? y1 - y0 : x1 - x0, nx = x0 === x1 ? (x0 === 1 ? 1 : -1) : 0, ny = nx ? 0 : (y0 === 1 ? 1 : -1);
+    const at = (s, off) => along === 'y' ? [x0 + nx * off, y0 + s] : [x0 + s, y0 + ny * off];
+    for (let s = 0; s <= len + 1e-6; s += AVIARY_POST.pitch) { const [x, y] = at(s, post); boxes.push(boxAt(x, y, 1, 0, post, post, AVIARY_KERB, h)); }
+    for (let z = AVIARY_KERB + AVIARY_RAIL.pitch; z < h + 1e-6; z += AVIARY_RAIL.pitch) {
+      const [x, y] = at(len / 2, rail), zz = Math.min(z, h - rail);
+      boxes.push(boxAt(x, y, 1, 0, along === 'x' ? len / 2 : rail, along === 'y' ? len / 2 : rail, zz - rail, zz + rail));
+    }
+    const [x, y] = at(len / 2, rail); boxes.push(boxAt(x, y, 1, 0, along === 'x' ? len / 2 : rail, along === 'y' ? len / 2 : rail, h - 2 * rail, h)); // the roof rail
+  }
+  for (let x = 1 + AVIARY_POST.pitch; x < W - 1; x += AVIARY_POST.pitch) boxes.push(boxAt(x, H / 2, 1, 0, .07, H / 2 - 1, h - .18, h));
+  for (let y = 1 + AVIARY_POST.pitch; y < H - 1; y += AVIARY_POST.pitch) boxes.push(boxAt(W / 2, y, 1, 0, W / 2 - 1, .07, h - .18, h));
+  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, aviaryFrame: { boxes }, draw: () => { for (const b of boxes) aviaryBar(b, aviarySteel); } };
+}
+ROOM_CEILS.aviaryMesh = (i, r, x, wx, wy) => {
+  const h = room.def.height || 7, fp = homeBalconyPavingFootprint((h - eye) * projY / Math.max(.5, hor - r - .5), h - eye);
+  BG[i] = aviarySky(.75 - .1 * clamp(fp / .2, 0, 1)); return set(i, ' ', 0);
+};
+function aviaryGround(i, wx, wy, f, fp) {
+  const p = AVIARY_POND, e = 1 - Math.hypot((wx - p.x) / p.rx, (wy - p.y) / p.ry), fine = clamp(1 - fp / .2, 0, 1);
+  if (e > 0) { // the pond: dark water, slow ripples that calm with distance
+    const ripple = (noise(wx * 3 + T * .3, wy * 3, 852) - .5) * 1.6 * fine;
+    BG[i] = C(BLUE, 1 + f * 2 + ripple); FL[i] = 3; return set(i, ' ', 0);
+  }
+  if (e > -p.rim / Math.min(p.rx, p.ry)) { BG[i] = C(GRAY, 1.2 + f * 1.4 + (noise(wx * 7, wy * 7, 849) - .5) * 1.2 * fine); return set(i, ' ', 0); } // a ring of flat stones
+  if (Math.abs(wx - 7) < 0.5 && wy > 7.2) { BG[i] = C(WARM, 1.6 + f * 2 + (hash(Math.floor(wx * 30), Math.floor(wy * 30), 877) - .5) * 1.2 * fine); return set(i, ' ', 0); } // the gravel path in
+  BG[i] = C(GREEN, .9 + f * 1.8 + (noise(wx * 4, wy * 4, 878) - .5) * 1.4 * fine + (noise(wx * .7, wy * .7, 879) - .5) * .8);
+  return set(i, ' ', 0);
+}
+ROOM_FLOORS.aviaryGrass = (i, f, wx, wy, r) => aviaryGround(i, wx, wy, f, homeBalconyPavingFootprint(eye * projY / (r - hor + .5), eye));
+{
+  const props = ROOM_DEFS.aviary.props, def = ROOM_DEFS.aviary;
+  def.props = r => [...props(r).filter(o => !(o.art === ART.tree)), ...AVIARY_TREES.map(AVIARY_TREE), AVIARY_FRAME(r.W, r.H, r.def.height || 7)];
+  def.wall = aviaryWallFinish;
+  def.footstepFloor = def.floor;
+  def.floor = 'aviaryGrass';
+  def.ceil = 'aviaryMesh';
+}
 // ===== the jade shop, in Chinatown: red lacquer walls with gold trim and a lattice, a carved jade dragon coiling
 // across the back wall through gold clouds, hanging scrolls, red lanterns overhead, glass cases of bangles and little
 // figures, a tall vase in the corner, a lucky cat waving on the counter, incense curling up. The bangles and dragons
@@ -24097,7 +24483,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
-  BG[i] = bgAt(background, brightness * fog * light, depth);
+  BG[i] = bgAt(background, brightness * fog * (surface?.water ? 1 : light), depth); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
 }
@@ -24940,6 +25326,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() && SK.grind ? 'GRINDING: A/D balance (keep the mark in the middle) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
@@ -24980,13 +25367,27 @@ function hud() {
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
   const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
+  const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
-                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
+                                   [msg, msgY, '#fff', cv.width / 2]]) {
     ls.forEach((s, k) => {
       const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
       g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);
       g.fillStyle = col; g.fillText(s, cx - w / 2, yy);
     });
+  }
+  // the combo clock, under the trick: how long is left to land the next one (skate.js)
+  const left_ = skatingNow() ? comboLeft() : null;
+  if (left_ !== null) {
+    const w = Math.min(240, cv.width * .4), x = cv.width / 2 - w / 2, y = msgY + Math.max(1, msg.length) * (FS + 4) + 2;
+    g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, y - 3, w + 6, 10);
+    g.fillStyle = left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44'; g.fillRect(x, y, w * left_, 4);
+    if (SK.grind) { // the balance: a mark that wanders off the middle; A and D bring it back
+      const b = clamp(SK.grind.bal, -1, 1), yb = y + 12;
+      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, yb - 3, w + 6, 12);
+      g.fillStyle = '#555'; g.fillRect(x, yb + 2, w, 2); g.fillStyle = '#8f8'; g.fillRect(x + w / 2 - 1, yb, 2, 6);
+      g.fillStyle = Math.abs(b) > .7 ? '#f44' : '#fff'; g.fillRect(x + w / 2 + b * w / 2 - 3, yb - 1, 6, 8);
+    }
   }
 }
 // E and its prompt resolve the same visible target before proximity fallbacks.
@@ -28416,6 +28817,7 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
   for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
+  if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, granite ledges and a manual pad on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
     const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
@@ -33921,13 +34323,16 @@ function standUp() { // back where you sat down from (it was walkable)
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
   const ground = mode === 'walk' ? walkGround(px, py) : 0;
-  if (body.groundMode === mode && (body.z > 0 || body.vz > 0)) body.z += ((body.ground || 0) - ground) * 10;
+  if (typeof skateGrinding === 'function' && skateGrinding() && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
+  const wasAir = body.z > 0 || body.vz > 0; // (in the air coming into this frame: you land this frame or later, never get skipped)
+  if (body.groundMode === mode && wasAir) body.z += ((body.ground || 0) - ground) * 10;
+  if (body.vz > 0 && body.z < 0) body.z = 0; // (still going up: rising ground under you can't land you, it lifts you with it)
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
   body.lastA = a; body.lx = px; body.ly = py;
   if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; body.buf = body.landedAt = -9; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
-  if (body.z > 0 || body.vz > 0) {
+  if (wasAir) { // (uphill the ground can come up past you between frames: you still land, rather than being stranded mid-trick)
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
     const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
@@ -34121,7 +34526,8 @@ function drawBoard3D() {
 // Units: cells (10m), seconds, radians, as everywhere outdoors.
 const SK_PUSH = 0.75, SK_TOP = 0.9, SK_RUN_TOP = 1.2, SK_ROLL = 0.05, SK_BRAKE = 1.3, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
 const SK_STILL = 0.12; // (slower than this, a messy landing is only a hop: nothing to fall off)
-const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0.9, SK_BAIL_T = 1.3;
+const SK_SLOPPY = 0.45; // (slower than this, coming down sideways is a sloppy landing you ride out, not a bail: half points)
+const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 1.2, SK_BAIL_T = 1.3;
 // v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
@@ -34151,6 +34557,7 @@ function stepSkate(dt) {
     if (SK.bail <= 0) { SK.bailAt = null; a = SK.dir; }
     return;
   }
+  if (SK.grind) return stepGrind(dt);
   const air = skateAir(), f = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
   SK.steer = s; SK.kicking = false;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
@@ -34184,20 +34591,31 @@ function stepSkate(dt) {
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
-  if (SK.combo && !air && T - SK.combo.t > SK_COMBO_GAP) bankCombo();
+  if (air && body.vz <= 0) grindCatch();
+  if (SK.combo && !air && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
 }
 // Space on the board: down crouches, up pops (or a tap off the touch button, or a flick: straight away)
 function skateSpace(down) {
+  if (SK.grind) { if (down) grindPop(); return; } // (off the rail with an ollie: straight away, no wind-up)
   if (SK.bail > 0 || skateAir()) { if (!down) SK.charge = -1; return; }
   if (down) { if (SK.charge < 0) SK.charge = T; return; }
   if (SK.charge >= 0) skatePop();
 }
 function skatePop(trick) {
+  if (SK.grind) return grindPop(trick); // (the touch Ollie button, or a flick, on a rail)
   if (SK.bail > 0 || skateAir()) return;
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   SK.charge = -1; SK.dir = a; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
-  body.vz = POP_V * (1 + 0.35 * load); body.trick = { name, flip, turn, t: 0, air: 2 * body.vz / GRAV };
+  body.vz = POP_V * (1 + 0.35 * load);
+  body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) };
   if (actx) sfxUse('ollie');
+}
+// how long you'll be in the air from a pop at vz (m/s), given the slope ahead: uphill the ground comes up to meet you
+// sooner, downhill it falls away, so a flip times itself to finish as you touch down
+function skateAirTime(vz) {
+  const ahead = .25, x = px + Math.cos(SK.dir) * ahead, y = py + Math.sin(SK.dir) * ahead;
+  const slope = (skateGround(worldCoord(x), worldCoord(y)) - skateGround(px, py)) / ahead, rise = slope * SK.v * 10; // (metres a second)
+  return 2 * clamp(vz - rise, vz * .45, vz * 1.6) / GRAV; // (z = vz t - g t^2 / 2 meets ground rising at rise m/s)
 }
 function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.trickKeyT = T; }
 // back on the ground (stepBody): rolling away clean, or not
@@ -34205,19 +34623,101 @@ function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   const flubbed = tr && tr.t < tr.air * 0.8, sideways = Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND;
-  if ((flubbed || sideways) && SK.v < SK_STILL) { SK.dir = a; SK.spin = 0; return; } // (standing still: you just come down where you are, facing however you ended up)
+  const standing = SK.v < SK_STILL; // (barely moving: nothing to fall off, and nothing to carry a combo)
+  if (standing && flubbed) { SK.dir = a; SK.spin = 0; return; } // (you just come down where you are, facing however you ended up)
   if (flubbed) return skateBail('BAIL! Your feet never found the board.');
-  if (sideways) return skateBail('BAIL! You came down sideways.');
-  if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
+  if (sideways && SK.v >= SK_SLOPPY) return skateBail('BAIL! You came down sideways.');
+  const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
+  if (sloppy && standing) SK.dir = a; // (stood still, you just turn the board under you)
+  else if (sloppy) { SK.v *= 0.5; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
+  else if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
+  if (sloppy && !standing && Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance;
   a = SK.dir;
+  if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
+  SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
-  const pts = Math.round((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60);
+  const label = (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
+  const pts = Math.round(((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
+  if (standing) { // the one trick, scored by itself: a combo needs you moving
+    if (SK.combo) bankCombo();
+    SK.score += pts; SK.best = Math.max(SK.best, pts); SK.spin = 0;
+    return say(`${label}!  ${pts}`, 2);
+  }
   const c = SK.combo ||= { names: [], pts: 0, t: T };
   c.names.push(label); c.pts += pts; c.t = T;
   say(c.names.length > 1 ? `${c.names.join(' + ')}  ${c.pts} x ${c.names.length}` : `${label}!  ${pts}`, 2);
   SK.spin = 0;
+}
+// how long is left to land the next trick and keep the combo going, 0..1 (full while you're in the air: the clock
+// only runs on the ground). null: no combo running
+const comboLeft = () => SK.combo || SK.grind ? (SK.grind || skateAir() ? 1 : clamp(1 - (T - SK.combo.t) / SK_COMBO_GAP, 0, 1)) : null;
+// ---- grinds (skatepark.js GRINDS: the park's bars, ledges and pad, and every bench). Come down onto an edge going
+// more or less along it and you lock on: the grind is named by how your board sits on it (along it a 50-50, or a
+// nosegrind holding up, a 5-0 holding down; at an angle a crooked grind; across it a boardslide on a bar, a lipslide
+// on a ledge). You slide on, slowing, balancing with A and D against a wobble that grows the longer you stay on;
+// lose it and you bail. Space pops you off (arrows: a flip trick off it); run off the end and you drop. The grind
+// scores by how long you held it and joins the combo; while you're on, the combo clock doesn't run
+const GRIND_CATCH = .08, GRIND_POINTS = { '50-50': 100, nosegrind: 150, '5-0': 150, 'crooked grind': 200, boardslide: 175, lipslide: 200 };
+const skateGrinding = () => !!SK.grind;
+function grindCatch() {
+  const feet = skateGround(px, py) + body.z / 10, dirX = Math.cos(SK.dir), dirY = Math.sin(SK.dir);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const g of grindsB[bi(Math.floor(px / 8) + i, Math.floor(py / 8) + j)]) {
+    if (SK.leftGrind && g.feature === SK.leftGrind.feature && T - SK.leftGrindT < .7) continue; // (not straight back onto the thing you just came off)
+    const ex = g.bx - g.ax, ey = g.by - g.ay, len = Math.hypot(ex, ey), ux = ex / len, uy = ey / len;
+    const qx = rel(px - g.ax), qy = rel(py - g.ay), t = (qx * ux + qy * uy) / len;
+    if (t < .02 || t > .98) continue;
+    if (Math.abs(-qx * uy + qy * ux) > GRIND_CATCH) continue;
+    const top = terrainHeight(g.x, g.y) + g.z;
+    if (feet < top - .012 || feet > top + .035) continue; // (coming down onto it, not under it or well clear)
+    const along = dirX * ux + dirY * uy;
+    if (Math.abs(along) < .5) continue; // (more or less along it: within 60 degrees)
+    return startGrind(g, t, Math.sign(along), top);
+  }
+}
+function startGrind(g, t, dir, top) {
+  const tr = body.trick;
+  if (tr && tr.t < tr.air * .8 && tr.name !== 'ollie') return skateBail('BAIL! Still mid-flip when you hit it.');
+  if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
+  const edgeA = Math.atan2(g.by - g.ay, g.bx - g.ax), off = Math.abs(mod(a - edgeA + Math.PI / 2, Math.PI) - Math.PI / 2); // (board to edge, 0..90 degrees)
+  const name = off > 1.13 ? (g.kind === 'skateledge' || g.kind === 'manualpad' ? 'lipslide' : 'boardslide') : off > .44 ? 'crooked grind' : K.ArrowUp ? 'nosegrind' : K.ArrowDown ? '5-0' : '50-50';
+  SK.grind = { g, t, dir, top, name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, len: Math.hypot(g.bx - g.ax, g.by - g.ay), scrapeT: 0 };
+  SK.dir = Math.atan2(g.by - g.ay, g.bx - g.ax) + (dir < 0 ? Math.PI : 0); SK.v = Math.max(SK.v * .92, .25);
+  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t); // (onto the edge)
+  body.trick = null; body.vz = 0; SK.spin = 0; body.z = Math.max(.001, (top - skateGround(px, py)) * 10);
+  if (actx) sfxSkate('scrape', .9);
+  say(name.toUpperCase() + '!', 1);
+}
+function stepGrind(dt) {
+  const G = SK.grind, g = G.g, metal = g.material === 'metal', held = T - G.t0;
+  SK.v = Math.max(0, SK.v - (metal ? .16 : .26) * dt); // (steel slides; stone and timber bite)
+  // the wobble: it drifts, and grows the further off you are and the longer you're on; A and D lean you back
+  const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  G.balV += ((Math.random() - .5) * (1.6 + held * .5) + G.bal * 1.4 - s * 3.2) * dt; G.balV *= 1 - dt * .8;
+  G.bal += G.balV * dt;
+  if (Math.abs(G.bal) > 1) { SK.grind = null; body.z = Math.max(body.z, .01); return skateBail('BAIL! You lost your balance.'); }
+  G.t += G.dir * SK.v * dt / G.len;
+  const off = G.t < 0 || G.t > 1;
+  const t = clamp(G.t, 0, 1);
+  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t);
+  body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
+  if (actx && (G.scrapeT -= dt) <= 0) { G.scrapeT = .11; sfxSkate('scrape', metal ? .55 : .35); }
+  const pts = grindPoints(G);
+  if (off || SK.v < SK_STILL) return endGrind(); // (off the end, or stalled: you drop)
+  say(`${G.name.toUpperCase()}  ${pts}`, .5);
+}
+const grindPoints = G => Math.round((GRIND_POINTS[G.name] || 100) + (T - G.t0) * 140);
+function endGrind() { // into the combo; off you go, and down
+  const G = SK.grind, c = SK.combo ||= { names: [], pts: 0, t: T };
+  SK.grind = null; c.names.push(G.name.toUpperCase()); c.pts += grindPoints(G); c.t = T; SK.offGrind = true; SK.leftGrind = G.g; SK.leftGrindT = T;
+  body.z = Math.max(body.z, .02); body.vz = 0;
+  say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
+}
+function grindPop(trick) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
+  const key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+  endGrind(); SK.offGrind = false;
+  body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) }; SK.popT = T;
+  if (actx) sfxUse('ollie');
 }
 function bankCombo() {
   const c = SK.combo, total = c.pts * c.names.length;
@@ -45038,6 +45538,7 @@ function assembleArchipelago() {
       else { const l = Math.max(.1, length), e = -Math.sign(u) || 1; o.x += ax * e * (o.hl - l / 2); o.y += ay * e * (o.hl - l / 2); o.hl = l / 2; }
     }
   }
+  buildSkatepark(); // (the skatepark: its solids and the trees it clears are bucketed just below; skatepark.js)
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
@@ -46734,7 +47235,7 @@ const free = (x, y) => {
   } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {

@@ -339,6 +339,7 @@ function assembleArchipelago() {
       else { const l = Math.max(.1, length), e = -Math.sign(u) || 1; o.x += ax * e * (o.hl - l / 2); o.y += ay * e * (o.hl - l / 2); o.hl = l / 2; }
     }
   }
+  buildSkatepark(); // (the skatepark: its solids and the trees it clears are bucketed just below; skatepark.js)
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
