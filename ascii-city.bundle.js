@@ -12362,7 +12362,7 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
-  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]));
+  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]);
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   if (windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc)) return;
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
@@ -21445,34 +21445,42 @@ function shotengaiFront(i, u, z, sh, sk, open, L, glowL, fp = 0) {
   BG[i] = fine > .3 ? C(ITEM_COL[item * 8 | 0], 1.6 + lit * .15) : C(GRAY, 1.4 + glowL * .15); // (far off the goods blur into the lit window)
 }
 function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL) {
-  const bays = 1.5, fu = fract(u * bays), bay = Math.floor(u * bays);
+  const bays = 1.5, fu = fract(u * bays), bay = Math.floor(u * bays), fp = Math.max(uStep, d / projY), fine = clamp(1 - fp / .02, 0, 1);
   // a vertical neon sign down the edge of every bay: the shop's name, top to bottom, chasing lights along its edges
   if (fu > 0.04 && fu < 0.16 && zz < h - 0.55 && zz > 0.05) {
     const w = sh.kind === SHOP_APTS ? ['HOTEL', 'BAR', 'KARAOKE', 'MAHJONG', 'CLINIC', 'DANCE'][(bay + sk) % 6] : sh.word, col = NEON[(bay + sk) & 3];
     BG[i] = C(col, 2 + night * 2);
-    if (fu < 0.05 || fu > 0.15) return set(i, fract(zz * 12 - T * 2) < 0.4 ? '*' : '|', C(YEL, Math.max(L, night * 15)));
+    if (fu < 0.05 || fu > 0.15) { BG[i] = fract(zz * 12 - T * 2) < 0.4 ? C(YEL, 5 + night * 8) : C(YEL, 2 + night * 2); return set(i, ' ', 0); } // its edges: bulbs chasing up
     const q = (h - 0.65 - zz) / 0.09, p = Math.floor(q);
     const on = oneCell((fract(q) - 0.5) * 0.09, d / projY) && (uStep >= 0.06 || oneCell((fu - 0.1) * 0.66, uStep));
     return set(i, on && p >= 0 && p < w.length ? w[p] : ' ', C(WHITE, Math.max(L, night * 15)));
   }
-  if (fz > 0.8) { // a lit signboard across each floor: somebody's bar, clinic, mahjong parlour
-    const lit_ = hash(bay, fl, sk + 3) > 0.3;
-    BG[i] = C(lit_ ? NEON[(bay * 3 + fl) & 3] : GRAY, lit_ ? 2 + night * 4 : 1);
-    return set(i, lit_ && fract(u * 9) < 0.5 ? '=' : ' ', C(WHITE, Math.max(L, lit_ ? night * 13 : 0)));
+  set(i, ' ', 0);
+  if (fz > 0.8) { // a lit signboard across each floor: somebody's bar, clinic, mahjong parlour; its frame and a lighter face
+    const lit_ = hash(bay, fl, sk + 3) > 0.3, rim = fz > .97 || fz < .82;
+    BG[i] = lit_ ? C(NEON[(bay * 3 + fl) & 3], (rim ? 1.5 : 2.2) + night * (rim ? 2 : 4.5)) : C(GRAY, rim ? 1.4 : 1); return;
   }
-  if (fz > 0.12 && fz < 0.32 && fu > 0.7 && fu < 0.82 && hash(bay, fl, sk + 5) > 0.4) return set(i, fz > 0.29 || fz < 0.15 ? '-' : '#', C(GRAY, L)); // an air-conditioner
+  if (fz > 0.12 && fz < 0.32 && fu > 0.7 && fu < 0.82 && hash(bay, fl, sk + 5) > 0.4) { // an air-conditioner: its casing, the grille in its face
+    const edge = fz > 0.29 || fz < 0.15 || fu < .71 || fu > .81;
+    BG[i] = C(GRAY, edge ? 2.4 + L * .2 : 1.8 + L * .15 - coveGroove(z, .006, .0015, fp) * .8); return;
+  }
   const wu = fract(u * bays * 2);
-  if (fu > 0.2 && wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.72) { // small windows: lamp-lit, TV-blue, or dark
-    const k = hash(Math.floor(u * bays * 2), fl, sk);
-    if (k > litT - 0.1) return set(i, fract(wu * 3) < 0.15 ? '|' : '#', C(k > 0.93 ? CYAN : WARM, Math.max(L, glowL)));
-    return set(i, '.', C(GRAY, L * 0.3));
+  if (fu > 0.2 && wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.72) { // small windows: lamp-lit, TV-blue, or dark, each in its frame
+    const k = hash(Math.floor(u * bays * 2), fl, sk), frame = wu < .24 || wu > .76 || fz < .28 || fz > .69;
+    if (frame) { BG[i] = C(GRAY, 2.2 + L * .22); return; }
+    const bar = facadeLine(Math.abs(wu - .5) * .67 / bays / 2, .006, fp) > .5;
+    if (k > litT - 0.1) { BG[i] = bar ? C(GRAY, 1.6) : C(k > 0.93 ? CYAN : WARM, 1.6 + Math.max(L * .12, glowL * .3)); return; }
+    BG[i] = bar ? C(GRAY, 1.6) : C(CYAN, .7 + day * 1.2 + (fz - .28) * 1.2); return;
   }
-  return set(i, (Math.floor(u * 10) + Math.floor(zz * 20)) % 6 ? ' ' : '.', C(GRAY, L * 0.6)); // tiled render
+  // tiled render: small square tiles, each its own faint tone, the grout filtered
+  const tu = Math.floor(u * 60), tz = Math.floor(zz * 60), grout = Math.max(coveGroove(u, 1 / 60, .002, fp), coveGroove(zz, 1 / 60, .002, fp));
+  BG[i] = C(STONE, 1.9 + L * .2 + (hash(tu, tz, sk + 1801) - .5) * .7 * fine - grout * .6);
 }
-
 // ---- the arcade roof over the streets, seen from underneath
-// It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
-// ribs) and between them you see the sky, and the buildings above the roofline
+// Ribbed translucent panels on a steel frame: beams down the sides, a rib every 5m, a bar down the middle and across
+// between the ribs. The panels are milky: they glow with the daylight (brighter where the sun's on them) and catch
+// the lamps' light after dark, so the busy upper floors above the roofline are hidden, as they are under a real
+// covered street. Steel is bevelled, lit along its lower face; the panels' corrugations show up close only.
 function arcadeRoofPart(wx, wy) {
   const span=arcadeSpanAt(wx,wy);if(!span)return null;
   const across=((span.ns?wx:wy)-span.lo)/(span.hi-span.lo),along=span.ns?wy:wx;
@@ -21481,22 +21489,28 @@ function arcadeRoofPart(wx, wy) {
   if(fract(along)<.035 && !arcadeSpanFor(span.ns,lane,Math.floor(along)-1) || fract(along)>.965 && !arcadeSpanFor(span.ns,lane,Math.floor(along)+1))return 'rib';
   if (fract(along * 2) < 0.035) return 'rib';
   if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
-  return null; // glass
+  return 'panel';
 }
-function arcadeRoofCell(i, wx, wy) {
-  const part = arcadeRoofPart(wx, wy);
-  const steel = 4 + day * 4 + lampsOn * 2;
-  if (part === 'beam') { BG[i] = C(GRAY, steel); return set(i, '#', C(WHITE, 9)), true; }
-  if (part === 'rib') { BG[i] = C(GRAY, steel * 0.8); return set(i, '=', C(WHITE, 10)), true; }
-  if (part === 'bar') { BG[i] = C(GRAY, steel * 0.7); return set(i, '-', C(WHITE, 8)), true; }
-  return false;
+function arcadeRoofCell(i, wx, wy, t = 2) {
+  const part = arcadeRoofPart(wx, wy), fp = t / projY, fine = clamp(1 - fp / .02, 0, 1);
+  set(i, ' ', 0);
+  const steel = 2.2 + day * 2.4 + lampsOn * 1.2;
+  if (part === 'beam') { BG[i] = C(GRAY, steel * 1.05); return true; }
+  if (part === 'rib') { const span = arcadeSpanAt(wx, wy), along = span && span.ns ? wy : wx, f = fract(along * 2); BG[i] = C(GRAY, steel * (f < .012 || f > .988 ? 1.2 : .85)); return true; } // its lit edge and its shadowed web
+  if (part === 'bar') { BG[i] = C(GRAY, steel * .8); return true; }
+  // a translucent panel: daylight through it, warmer where the lamps below light it at night; corrugations up close
+  const span = arcadeSpanAt(wx, wy), across = span ? ((span.ns ? wx : wy) - span.lo) / (span.hi - span.lo) : .5;
+  const rib = fine > .1 ? (Math.abs(fract(across * 40) - .5) < .15 ? -.5 : .2) * fine : 0;
+  const glow = day * (4.2 + overcast * -1) + dusk * 2.5, lamp = lampsOn * (1.5 + glow * 0);
+  BG[i] = lampsOn > .3 && day < .3 ? C(WARM, 1.6 + lamp + rib) : C(WHITE, Math.max(1.2, glow + 1.4 + rib + (1 - Math.abs(across - .5) * 2) * .6)); // (brighter down the middle, away from the eaves)
+  return true;
 }
 // does the ray to this wall cell pass under the arcade roof first? (wall points above it are hidden by it)
 function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy] : null; // (through the glass: the wall)
+  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, Math.hypot(hx - px, hy - py, ARCADE_Z - eye)] : null;
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {
@@ -21504,11 +21518,10 @@ function arcadeSky(i, rx, ry, up) {
   const t = (ARCADE_Z - eye) / up;
   if (t > 40) return false;
   const hx = px + rx * t, hy = py + ry * t;
-  if (!arcadeAt(hx, hy) || !arcadeRoofPart(worldCoord(hx), worldCoord(hy))) return false; // (through the glass: the sky)
-  ZB[i] = t; arcadeRoofCell(i, worldCoord(hx), worldCoord(hy));
+  if (!arcadeAt(hx, hy) || !arcadeRoofPart(worldCoord(hx), worldCoord(hy))) return false;
+  ZB[i] = t; arcadeRoofCell(i, worldCoord(hx), worldCoord(hy), t);
   return true;
 }
-
 // ---- inside: the pachinko parlour, the crane game shop, the capsule hotel
 // a pachinko machine: chrome and lights, the glass full of pins with silver balls raining down, a tray of balls
 const pachinkoMachine = (x, y, k, fy) => ({ ...BX(x, y, 0.3, 0.25, 0, 1.9, (i, t, L) => {
