@@ -19,7 +19,7 @@ test('behind a shop window up close: the plinth, the goods standing on it in fro
   const step=(u1-u0)/Math.round((u1-u0)/SHOP_WINDOW.spacing),c0=u0+step/2,[,ht]=SHOP_DISPLAYS.flowers;
   const head=look(c0,base+ht*.7,0),gap=look(u0+step,base+ht*.7,0);
   if(!ITEM_COL.some(col=>[2.4,3.9].some(k=>Math.abs(head-C(col,k+10*.18))<1e-9)))bad.push(['no flowers on the plinth',head]);
-  if(gap===head||![C(WARM,1.4+day),C(WARM,1.4+day+.5)].includes(gap))bad.push(['no shop beyond between the goods',gap]);
+  if(gap===head||![WARM,BRICK,...ITEM_COL].includes(gap>>4))bad.push(['no shop beyond between the goods',gap]); // (its wall, shelves and the goods on them)
   // the goods stand part-way in: a ray at an angle sees them shift against the back
   const slid=look(c0+.03,base+ht*.7,-1.2);if(slid!==head)bad.push('the goods not standing in front of the back');
   if(look(u0+.005,base+.1,-6)!==C(GRAY,1.2+10*.1))bad.push('no side wall at a steep angle');
