@@ -2323,8 +2323,9 @@ function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x
     if(foam>.15)return {base:WHITE,background:foam>.55&&noise(x*26+phase,y*26,1880)>.38?WHITE:CYAN,ch:' ', // (lacy: white flecks on pale water)
       color:'#d5eff3',tone:1.25,lift:9,foam:true,water:true,night:3+foam*4};
     // the water running up the beach is a thin, clear film, the sand showing through; out past the film it's sea
-    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:.95,lift:depth<.05?1.5:.6,film:true,water:true,night:.8};
-    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:.9,water:true,night:.7};
+    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:1.1,lift:depth<.05?1.5:.6,film:true,water:true,night:2.3};
+    // (the sea itself where it's drawn as raised ground near an island: the same brightness as the open water beside it)
+    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:1.25,water:true,night:1.9};
     // wet sand: darkest and glossy just behind the draining water, drying towards the top of the run-up
     const gloss=phase>SWASH_UP?Math.max(0,1-(edge-front)/.12):0,dry=clamp((edge-SWASH_LOW)/(limit-SWASH_LOW),0,1);
     if(gloss>.35)return {base:WARM,background:STONE,ch:' ',color:'#8f8a7c',tone:.8+gloss*.25,lift:1.6,night:.5}; // (catching the sky)
@@ -12776,7 +12777,7 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
   const s1 = Math.sin(wx * 9.5 + wy * 4.2 - T * 1.6), s2 = Math.sin(wy * 12.5 - wx * 5.5 - T * 1.3 + 1.3), chop = noise(wx * 22 + T * .7, wy * 22 - T * .5, 97) * 2 - 1;
   const k1 = keep(.6), k2 = keep(.46), h = s1 * k1 * .55 + s2 * k2 * .35 + chop * keep(.25) * .25;
   const far = smooth(clamp(d / (vis * .55), 0, 1)), night = 1 - day;
-  const level = day * (3.3 + far * 2.4) + night * (.95 + far * .8) + h * (.55 + day * .35);
+  const level = day * (3.3 + far * 2.4) + night * (1.8 + far * .9) + h * (.4 + day * .5); // (at night dark, but a trough never goes all the way to black)
   BG[i] = C(BLUE, Math.max(0, level));
   const crest = s1 * k1 > .86 && chop > .2 && k1 > .3; // (broken: only where the chop lifts the crest)
   set(i, crest ? (chop > .45 ? '~' : '-') : ' ', C(day > .3 ? CYAN : BLUE, (day > .3 ? 4 + day * 3 : 2.6) * f));
@@ -12910,7 +12911,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
-  if(islandTexture)BG[i]=bgAt(islandTexture.background,day*(2.6*islandTexture.tone+(islandTexture.lift||0))*f,d);
+  if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
@@ -24156,7 +24157,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
-  BG[i] = bgAt(background, brightness * fog * light, depth);
+  BG[i] = bgAt(background, brightness * fog * (surface?.water ? 1 : light), depth); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
 }
