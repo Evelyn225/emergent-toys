@@ -12800,7 +12800,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
-  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null;
+  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
     if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
@@ -12889,34 +12889,35 @@ function floorBaseCell(i, r, x, rx, ry) {
       else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
-    } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
+    } else surf = plazaSurface(wx, wy, lx, ly, d, L); // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
     set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(deep > 0.5 ? YEL : GRAY, deep > 0.5 ? 8 + night * 5 : L * (1 - deep * 0.85) * 1.5)); // the station's light, coming up the stairs
     BG[i] = deep > 0.5 ? C(YEL, 2 + (deep - 0.5) * 6 + night * 3) : C(GRAY, 1 + (1 - deep) * 2);
     return;
-  } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
-    const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;
-    if (n === 0 || w === 0) { ch = ','; k = 1.3; }
-    else if (n === 1 && fract(lx * 4) < 0.5 || w === 1 && fract(ly * 4) < 0.5) { ch = '='; base = WHITE; }
+  } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain pavement where none does
+    surf = roadSurface(wx, wy, road, lx, ly, bx, by, d, L);
   } else {
     const e = road === 1 ? lx : ly, along = road === 1 ? wy : wx, bridge = road === 1 && onBridge(bx, by);
     const mh = manholeCell(wx, wy, L); // a manhole cover
     if (mh) { set(i, mh[0], mh[1]); BG[i] = mh[2]; return; }
     const gr = streetGrateCell(wx, wy, L, d, road, bx, by); // a gully, tree or vent grate (street-drains.js)
     if (gr) { set(i, gr[0], gr[1]); BG[i] = gr[2]; return; }
-    if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
+    surf = roadSurface(wx, wy, road, lx, ly, bx, by, d, L); // (null on a bridge: its plates and railings below)
+    if (surf) ;
+    else if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
     else if (e < 0.3 || e > 1.7) { ch = bridge ? '=' : ','; k = 1.3; } // sidewalk (on a bridge, a walkway of plates)
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
+  if (surf) { ch = ' '; BG[i] = C(surf[0], clamp(surf[1], .6, 15)); } // a built surface: no dither, lit by itself (so it stays visible at night)
   if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
-    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
+    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (surf) BG[i] = C(gl > .35 ? WARM : surf[0], Math.max(surf[1], gl * 5)); else if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
   { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
   if (gunLit()) { const mf = muzzleGlow(wx, wy); if (mf > 0.02) { col = C(mf > 0.4 ? WHITE : YEL, Math.max(L * k, 5 + mf * 10)); BG[i] = C(ORANGE, 1 + mf * 6); if (ch === ' ') ch = '.'; } } // a shot's flash (gun-ui.js)
@@ -13251,6 +13252,52 @@ function streetGrateCell(wx, wy, L, d, road, bx, by) {
         return grateTone(grateBars(v, VENT_GRATE.bar, footprint), frame, L);
       } } }
   return null;
+}
+// Roads and pavements as surfaces (pass 16). City units: 1 = 10 m. The street
+// used to be a '.' dither on every other cell with ',' pavements, '=' crossings
+// and dashes; now it is colour. Asphalt has a faint, filtered grain; pavements
+// are 60 cm slabs whose joints thin out with distance; a kerb line runs along
+// the pavement edge; the centre dashes and zebra stripes are paint that settles
+// to a tint once a cell is wider than a stripe, so they don't break up far off.
+// Returns [base, level] for the cell's background, or null to leave the cell to
+// the old painter (bridges: pass 17).
+const ROAD_SURFACE = { kerb: .3, kerbW: .016, slab: .06, joint: .0035, centreW: .06, dash: .5, stripe: .25 };
+// a stripe or line's coverage of a cell: dist from its middle, w its width, fp the cell's footprint
+const roadLine = (dist, w, fp) => clamp((w / 2 - dist) / Math.max(fp, 1e-4) + .5, 0, 1) * Math.min(1, w / Math.max(fp, w));
+// the share of a repeating band (period p, filled for `fill` of it) a cell covers, filtered to its average far off
+function roadBands(u, p, fill, fp) {
+  const f = fract(u / p), cov = clamp((fill * p / 2 - Math.min(f, 1 - f) * p) / Math.max(fp, 1e-4) + .5, 0, 1), far = clamp(fp / (p * .5), 0, 1);
+  return cov * (1 - far) + fill * far;
+}
+const roadDark = () => .4 + .6 * day;
+function roadSurface(wx, wy, road, lx, ly, bx, by, d, L) {
+  const S = ROAD_SURFACE, fp = homeBalconyPavingFootprint(d, eye);
+  L *= roadDark(); // (darker at night, so the lamps' pools show)
+  const asphalt = (shade = 0) => [GRAY, L * (.3 + shade)];
+  const pavement = () => { // slabs in a running bond, joints filtered
+    const j = Math.max(coveGroove(wx, S.slab, S.joint, fp), coveGroove(wy + (Math.floor(wx / S.slab) & 1) * S.slab / 2, S.slab, S.joint, fp));
+    return [GRAY, L * (.44 - j * .18)];
+  };
+  if (road === 3) { // intersection: crosswalks across the streets that come in, plain pavement at the corners where none does
+    const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;
+    if (n === 0 || w === 0) return pavement();
+    if (n === 1 || w === 1) { const z = roadBands(n === 1 ? lx : ly, S.stripe, .5, fp); return z > .5 ? [WHITE, L * (.25 + .4 * z)] : asphalt(z * .25); }
+    return asphalt();
+  }
+  if (road === 1 && onBridge(bx, by)) return null;
+  const e = road === 1 ? lx : ly, along = road === 1 ? wy : wx, edge = Math.min(e, 2 - e);
+  if (edge < S.kerb - S.kerbW / 2) return pavement();
+  if (roadLine(Math.abs(edge - S.kerb + S.kerbW / 2), S.kerbW, fp) > .5 || edge < S.kerb) return [GRAY, L * .62]; // the kerbstones
+  // the centre line: dashes up close, a faint continuous tint where a cell spans several of them
+  const centre = roadLine(Math.abs(e - 1), S.centreW, fp) * roadBands(along + S.dash / 4, S.dash, .5, fp);
+  if (centre > .5) return [YEL, L * .55];
+  return asphalt(centre * .2);
+}
+// plazas and the waterfront: 5 m flagged paving, its joints filtered
+function plazaSurface(wx, wy, lx, ly, d, L) {
+  L *= roadDark();
+  const fp = homeBalconyPavingFootprint(d, eye), j = Math.max(coveGroove(lx, .5, .03, fp), coveGroove(ly, .5, .03, fp));
+  return [GRAY, L * (.4 - j * .15)];
 }
 // Shop windows with depth: behind the glass, a display bay 70 cm deep with its floor raised as a plinth, the shop's
 // goods standing on it at their own depth (so they slide against the back as you walk past), and the lit shop beyond.
