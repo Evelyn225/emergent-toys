@@ -6,23 +6,25 @@
 
 // ---- facades (STY 17)
 const NOREN = [RED, BLUE, GRAY, BRICK];
-function shotengaiFront(i, u, z, sh, sk, open, L, glowL) { // the ground floor, under the shop sign
+function shotengaiFront(i, u, z, sh, sk, open, L, glowL, fp = 0) {
   const fs = fract(u * 2), lit = Math.max(L, glowL);
-  if (fs < 0.06) return set(i, '|', C(BRICK, L));
-  if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // shutters down
-  if ((Math.abs(fs - 0.14) < 0.05 || Math.abs(fs - 0.86) < 0.05) && z > 0.17 && z < 0.28) { // paper lanterns either side of the door
-    BG[i] = C(RED, 3 + night * 5); return set(i, z > 0.265 || z < 0.18 ? '=' : fract(z * 40) < 0.4 ? '-' : 'O', C(z > 0.265 || z < 0.18 ? GRAY : YEL, lit));
+  set(i, ' ', 0);
+  if (fs < 0.06) { BG[i] = C(BRICK, 1.5 + L * .2); return; } // the piers
+  if (!open) { BG[i] = C(GRAY, 1.6 + L * .15 - coveGroove(z, 1 / 60, .004, fp) * .8); return; } // shutters down, their slats filtered
+  if ((Math.abs(fs - 0.14) < 0.05 || Math.abs(fs - 0.86) < 0.05) && z > 0.17 && z < 0.28) { // paper lanterns either side of the door: ribbed, capped top and bottom
+    const cap = z > 0.265 || z < 0.18;
+    BG[i] = cap ? C(GRAY, 1.4 + L * .15) : C(RED, 3 + night * 5 - coveGroove(z, 1 / 40, .005, fp) * 1.2); return;
   }
   if (z > 0.24 && fs > 0.22 && fs < 0.78) { // the noren: cloth panels hanging in the doorway, split, the shop's mark on them
-    if (fract(fs * 8) < 0.12) return set(i, ' ', 0);
-    BG[i] = C(NOREN[sk & 3], 2 + L * 0.15);
-    return set(i, Math.abs(fs - 0.5) < 0.05 && z > 0.27 ? 'o' : ' ', C(WHITE, lit));
+    if (fract(fs * 8) < 0.12) return;
+    const mark = Math.hypot((fs - 0.5) * .5, z - .285) < Math.max(.012, fp * .6);
+    BG[i] = mark ? C(WHITE, 5 + L * .3) : C(NOREN[sk & 3], 2 + L * 0.15); return;
   }
-  if (z < 0.24 && fs > 0.22 && fs < 0.78) { BG[i] = C(WARM, 2 + glowL * 0.15); return set(i, fract(z * 30) < 0.15 ? '-' : ':', C(WARM, lit)); } // the warm doorway
-  // display windows: plastic food, capsule toys, magazines, whatever they sell
-  BG[i] = C(GRAY, 1 + glowL * 0.1);
-  if (fract(z * 16) < 0.2) return set(i, '=', C(GRAY, L));
-  return set(i, sh.glyphs[hash(Math.floor(u * 20), Math.floor(z * 16), sk) * sh.glyphs.length | 0], C(ITEM_COL[hash(Math.floor(u * 20), Math.floor(z * 16), sk + 1) * 8 | 0], lit));
+  if (z < 0.24 && fs > 0.22 && fs < 0.78) { BG[i] = C(WARM, 2 + glowL * 0.15); return; } // the warm doorway
+  // display windows: plastic food, capsule toys, magazines, whatever they sell, on glass shelves
+  if (coveGroove(z, 1 / 16, .012, fp) > .5) { BG[i] = C(GRAY, 1.5 + L * .2); return; }
+  const fine = clamp(1 - fp / .05, 0, 1), item = hash(Math.floor(u * 20), Math.floor(z * 16), sk + 1);
+  BG[i] = fine > .3 ? C(ITEM_COL[item * 8 | 0], 1.6 + lit * .15) : C(GRAY, 1.4 + glowL * .15); // (far off the goods blur into the lit window)
 }
 function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL) {
   const bays = 1.5, fu = fract(u * bays), bay = Math.floor(u * bays);
