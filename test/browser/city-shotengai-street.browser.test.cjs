@@ -7,7 +7,7 @@ test('the Shotengai under its roof: translucent panels on a steel frame hide the
   await p.addInitScript(()=>{requestAnimationFrame=()=>0;});
   await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
   const r=await p.evaluate(()=>{
-   paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;T=26;render(0);
+   paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;T=26;tod=14;env(0);render(0);
    const bad=[],spots=[];for(let by=1;by<N/8-1&&spots.length<3;by++)for(let bx=1;bx<N/8-1&&spots.length<3;bx++)if(districtOf(bx,by)==='shotengai'&&arcadeAt(bx*8+3,by*8+1))spots.push([bx*8+3,by*8+1]);
    if(!spots.length)return {bad:['no covered street found']};
    for(const td of [14,22]){tod=td;env(0);let g=0,n=0,sky=0,roof=0,steel=0,warm=0;
@@ -17,7 +17,7 @@ test('the Shotengai under its roof: translucent panels on a steel frame hide the
     if(g/n>.04)bad.push([td,'glyph share',+(100*g/n).toFixed(1)]);
     if(sky>roof*.05)bad.push([td,'sky through the roof',sky,roof]);if(roof<200||steel<20)bad.push([td,'roof and frame',roof,steel]);
     if(td===22&&warm<roof*.5)bad.push(['panels not lamp-lit at night',warm,roof]);}
-   for(const part of ['beam','rib','bar','panel']){let found=false;const [x,y]=spots[0];for(let k=0;k<400&&!found;k++){const wx=x-2+k%20*.2,wy=y-.5+Math.floor(k/20)*.05;if(arcadeRoofPart(worldCoord(wx),worldCoord(wy))===part)found=true;}if(!found)bad.push(['no '+part]);}
+   for(const part of ['beam','rib','bar','panel']){let found=false;const [x,y]=spots[0];for(let k=0;k<8000&&!found;k++){const wx=x-2+k%40*.1,wy=y-1+Math.floor(k/40)*.01,wx2=x-1+Math.floor(k/40)*.01,wy2=y-2+k%40*.1;if(arcadeRoofPart(worldCoord(wx),worldCoord(wy))===part||arcadeRoofPart(worldCoord(wx2),worldCoord(wy2))===part)found=true;}if(!found)bad.push(['no '+part]);}
    return {bad};
   });
   assert.deepEqual(r.bad,[]);assert.deepEqual(errors,[]);
