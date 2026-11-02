@@ -78,7 +78,14 @@ function aviaryWallFinish(i, su, uStep, z, d, mx, my, L) {
 }
 // The mesh's steel: a post every 2 m round the walls and rails along them, standing on the kerb and meeting the roof
 // rail, and roof ribs over the room. Built, so they keep their width at any distance.
-function aviarySteel(i, t, L) { BG[i] = C(GRAY, (1.4 + L * .22) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+function aviarySteel(i, t, L) { BG[i] = C(GRAY, 1.1 + L * .17); return set(i, ' ', 0), true; }
+// each bar drawn as a rod down its long axis: rods keep at least a cell's width, so far bars stay continuous lines
+function aviaryBar(b, shade) {
+  const hz = (b.z1 - b.z0) / 2, zc = (b.z0 + b.z1) / 2, x = b.x - px, y = b.y - py;
+  if (hz >= b.hl && hz >= b.hw) { const r = Math.max(b.hl, b.hw); return drawRod(x, y, b.z0 + r, x, y, b.z1 - r, r, shade); }
+  if (b.hl >= b.hw) { const r = Math.max(b.hw, hz); return drawRod(x - b.hl + r, y, zc, x + b.hl - r, y, zc, r, shade); }
+  const r = Math.max(b.hl, hz); return drawRod(x, y - b.hw + r, zc, x, y + b.hw - r, zc, r, shade);
+}
 function AVIARY_FRAME(W, H, h) {
   const boxes = [], post = AVIARY_POST.width / 2, rail = AVIARY_RAIL.width / 2;
   const walls = [[1, 1, 1, H - 1], [W - 1, 1, W - 1, H - 1], [1, 1, W - 1, 1], [1, H - 1, W - 1, H - 1]];
@@ -94,7 +101,7 @@ function AVIARY_FRAME(W, H, h) {
   }
   for (let x = 1 + AVIARY_POST.pitch; x < W - 1; x += AVIARY_POST.pitch) boxes.push(boxAt(x, H / 2, 1, 0, .07, H / 2 - 1, h - .18, h));
   for (let y = 1 + AVIARY_POST.pitch; y < H - 1; y += AVIARY_POST.pitch) boxes.push(boxAt(W / 2, y, 1, 0, W / 2 - 1, .07, h - .18, h));
-  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, aviaryFrame: { boxes }, draw: () => { for (const b of boxes) drawBox({ ...b, x: b.x - px, y: b.y - py }, aviarySteel); } };
+  return { x: W / 2, y: H / 2, radius: Math.hypot(W, H), walk: true, aviaryFrame: { boxes }, draw: () => { for (const b of boxes) aviaryBar(b, aviarySteel); } };
 }
 ROOM_CEILS.aviaryMesh = (i, r, x, wx, wy) => {
   const h = room.def.height || 7, fp = homeBalconyPavingFootprint((h - eye) * projY / Math.max(.5, hor - r - .5), h - eye);
