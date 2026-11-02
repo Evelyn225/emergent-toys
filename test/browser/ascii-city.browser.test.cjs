@@ -94,7 +94,7 @@ test('modern balcony rails and fire escapes have open gaps, fitted glazing, and 
     const bare=COL[0]>>4===WHITE||BG[0]>>4===WHITE;
     snowCover=1;residentialDetailShade(slab,0,1,10);
     const snowy=COL[0]>>4===WHITE||BG[0]>>4===WHITE;
-    const spine=ARCH_DETAILS.find(o=>o.kind==='service-spine');HIT.u=0;HIT.w=.48+spine.fh*.5;HIT.face=3;
+    const spine=ARCH_DETAILS.find(o=>o.kind==='service-spine');HIT.u=Math.min(.12,spine.hl*.55)*.5;HIT.w=.48+spine.fh*.38;HIT.face=3; // (in a pane, clear of the glazing bars)
     residentialDetailShade(spine,0,1,10);const glazing=[CYAN,WARM].includes(BG[0]>>4);
     return{glass:gaps(glass),iron:gaps(iron),snow:!bare&&snowy,glazing};
   });
@@ -595,7 +595,7 @@ test('redesigned storefronts keep their opening hours, glazing and closed shutte
   });
   for (const r of result) {
     assert.ok(r.glass.includes(r.pixels[0].palette), JSON.stringify(r));
-    assert.ok(['=', '-'].includes(r.pixels[1].char) && r.pixels[1].palette === r.shutter, JSON.stringify(r));
+    assert.ok(r.pixels[1].char === ' ' && r.pixels[1].palette === r.shutter, JSON.stringify(r)); // (the shutter, drawn in its paint)
     assert.ok(r.pixels.every(p => Math.abs(p.depth - 0.7) < 0.03), 'the storefront is in view');
   }
 }));

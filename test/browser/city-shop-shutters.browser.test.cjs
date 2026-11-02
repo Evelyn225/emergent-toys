@@ -8,7 +8,7 @@ async function fixture(run){const p=await browser.newPage(),errors=[];p.on('page
  await run(p);assert.deepEqual(errors,[]);
 }finally{await p.close();}}
 
-test('a shutter up close: housing, slats with lit lips and shadowed creases, rails in the reveal, the bottom bar and its padlock; plain ribs further off',()=>fixture(async p=>{
+test('a shutter up close, in colour: housing, slats with lit lips and shadowed creases, rails in the reveal, the bottom bar and its padlock; plain ribs further off',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   const bad=[],sh={word:'TOBACCO',neon:RED},a0=0,a1=.4,z0=0,z1=.3,W=SHOP_SHUTTER,top=z1-W.housing,paint=shutterPaint(sh);
   const look=(a,z,d,sl=0)=>{WH.dn=.3;WH.sl=sl;eye=z;BG[0]=-1;CH[0]='?';const drew=shopShutter(0,a,z,a0,a1,z0,z1,sh,10,d,sl);return {bg:BG[0],ch:CH[0],drew};};
@@ -18,17 +18,17 @@ test('a shutter up close: housing, slats with lit lips and shadowed creases, rai
   // a lip near the top of a slat and the crease at its foot, straight on through the middle
   const slat=k=>top-(k+.1)*W.slat,crease=k=>top-(k+.93)*W.slat;
   const lip=look(.2,slat(8),near),cr=look(.2,crease(8),near);
-  if(lip.ch!=='-'||cr.ch!=='_'||lip.bg===cr.bg)bad.push(['slats without relief',lip,cr]);
+  if(lip.ch!==' '||cr.ch!==' '||!(lip.bg>cr.bg))bad.push(['slats without relief',lip,cr]); // (lit lips over shadowed creases, as colour)
   if(lip.bg!==C(paint,1.9+10*.12+day*.4))bad.push(['slat not in the shop\'s paint',lip.bg]);
   // further off the slats run together into an even texture
   const fl=look(.2,slat(8),far),fc=look(.2,crease(8),far);
-  if(fl.bg!==fc.bg||fl.ch!=='=')bad.push(['slats drawn from too far',fl,fc]);
+  if(fl.bg!==fc.bg||fl.ch!==' ')bad.push(['slats drawn from too far',fl,fc]);
   // looking along the wall from the side, the ray meets the guide rail's channel in the reveal before the curtain
-  const side=look(a0+.003,.15,near,-3);if(side.ch!=='|'||side.bg!==C(GRAY,.9+10*.1))bad.push(['no reveal at the side',side]);
-  const edge=look(a0+.002,.15,near);if(edge.ch!=='|')bad.push(['curtain edge not in its rail',edge]);
+  const side=look(a0+.003,.15,near,-3);if(side.ch!==' '||side.bg!==C(GRAY,.9+10*.1))bad.push(['no reveal at the side',side]);
+  const edge=look(a0+.002,.15,near);if(edge.bg!==C(GRAY,1.2+10*.12))bad.push(['curtain edge not in its rail',edge]);
   const lock=look((a0+a1)/2,z0+.006,near),barEnd=look(.06,z0+.006,near);
-  if(lock.ch!=='o')bad.push(['no padlock in the bottom bar',lock]);
-  if(barEnd.ch!=='='||barEnd.bg!==C(paint,1.8+10*.15))bad.push(['no bottom bar',barEnd]);
+  if(lock.bg!==C(YEL,1.4+10*.08))bad.push(['no padlock in the bottom bar',lock]);
+  if(barEnd.ch!==' '||barEnd.bg!==C(paint,1.8+10*.15))bad.push(['no bottom bar',barEnd]);
   // one colour for one shop, and not every shop galvanised
   if(shutterPaint(sh)!==paint||shutterPaint({...sh})!==paint)bad.push('paint not fixed per shop');
   const cols=new Set(SHOP.filter(s=>s&&s.word).slice(0,400).map(shutterPaint));if(cols.size<3)bad.push(['every shutter the same colour',[...cols]]);
