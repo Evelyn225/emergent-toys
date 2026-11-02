@@ -18176,20 +18176,45 @@ function skateWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.9) { BG[i] = C(GRAY, 1); return set(i, fract(u * 2.5) < 0.06 ? '|' : ' ', C(GRAY, L * 0.5)), true; }
   return false;
 }
-// a quarter pipe along y, its deck at the +x end against the wall: slices of plywood climbing the curve, steel coping on top
-const quarterPipe = (x, y, hw) => ROOM_MODEL(x, y, (vx, vy) => {
-  const R = 1.25, n = 12, len = 1.15;
-  for (let k = 0; k < n; k++) {
-    const u0 = k / n * len, u1 = (k + 1) / n * len, z = R - Math.sqrt(Math.max(0, R * R - u1 * u1));
-    BXD(vx - len / 2 + (u0 + u1) / 2, vy, (u1 - u0) / 2 + 0.002, hw, 0, z, (i, t, L) => {
-      const f = HIT.face;
-      if (f === 5) { BG[i] = C(WARM, 2 + L * 0.3); return set(i, fract(HIT.v * 1.2) < 0.03 ? '|' : '=', C(BRICK, L * 0.5)), true; }
-      BG[i] = C(BRICK, (1.4 + L * 0.25) * shadeFace(f)); return set(i, f === 1 || f === 2 ? '#' : ' ', C(WARM, L * 0.4)), true;
-    });
+// a quarter pipe along y, its deck at the +x end against the wall: one curved plywood transition (the solid is its box
+// less a cylinder along y, so the surface is a true arc, not steps), steel coping on top, and the deck behind it
+const QP_R = 1.25, QP_LEN = 1.15, QP_TOP = QP_R - Math.sqrt(QP_R * QP_R - QP_LEN * QP_LEN);
+function quarterPipeRay(ox, oy, oz, rx, ry, rz, b) {
+  const qx = ox - b.x, qy = oy - b.y, u0 = qx * b.c + qy * b.s, v0 = -qx * b.s + qy * b.c;
+  const du = rx * b.c + ry * b.s, dv = -rx * b.s + ry * b.c;
+  let enter = -Infinity, leave = Infinity, face = 0;
+  for (const [o, d, lo, hi, fLo, fHi] of [[u0, du, -b.hl, b.hl, 2, 1], [v0, dv, -b.hw, b.hw, 4, 3], [oz, rz, b.z0, b.z1, 6, 5]]) {
+    if (Math.abs(d) < 1e-12) { if (o < lo || o > hi) return -1; continue; }
+    let t1 = (lo - o) / d, t2 = (hi - o) / d, f1 = fLo, f2 = fHi;
+    if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; f1 = fHi; f2 = fLo; }
+    if (t1 > enter) { enter = t1; face = f1; }
+    if (t2 < leave) leave = t2;
   }
-  const top = R - Math.sqrt(R * R - len * len);
-  rod(vx + len / 2, vy - hw, top + 0.02, vx + len / 2, vy + hw, top + 0.02, 0.03, GRAY, 1.6); // the coping
-  BXD(vx + len / 2 + 0.25, vy, 0.25, hw, 0, top, solid(BRICK, { top: '=', panel: 0.4 })); // the deck behind it
+  if (enter > leave || leave < .01) return -1;
+  // the cylinder's axis runs along v at the foot of the curve (u = -hl), R above the floor
+  const cu = u0 + b.hl, cz = oz - b.z0 - QP_R, R = QP_R, inCyl = t => { const s = cu + du * t, h = cz + rz * t; return s * s + h * h < R * R; };
+  if (enter > .01 && !inCyl(enter)) { HIT.face = face; HIT.u = u0 + du * enter; HIT.v = v0 + dv * enter; HIT.w = oz + rz * enter; HIT.nx = HIT.ny = HIT.nz = 0; return enter; }
+  const A = du * du + rz * rz, B = cu * du + cz * rz, D = B * B - A * (cu * cu + cz * cz - R * R);
+  if (A < 1e-12 || D < 0) return -1;
+  const t = (-B + Math.sqrt(D)) / A; // leaving the cylinder: onto the ramp's face
+  if (t < Math.max(enter, .01) || t > leave) return -1;
+  const s = cu + du * t, h = cz + rz * t, nu = -s / R, nz = -h / R;
+  HIT.face = 0; HIT.u = u0 + du * t; HIT.v = v0 + dv * t; HIT.w = oz + rz * t;
+  HIT.nx = nu * b.c; HIT.ny = nu * b.s; HIT.nz = nz; HIT.arc = Math.atan2(s, -h) * R; // (distance up the curve from its foot)
+  return t;
+}
+function quarterPipeShade(i, t, L) {
+  if (HIT.face === 0) { // the riding face: smooth birch ply, lit by its own normal, the sheet joins as faint lines that fade with distance
+    const footprint = t / projY, seam = coveGroove(HIT.arc, .61, .004, footprint);
+    BG[i] = C(WARM, (1.2 + L * .45) * (.2 + .6 * HIT.nz + .3 * coveLight(HIT.nx, HIT.ny, HIT.nz)) - seam * 3);
+    return set(i, ' ', 0), true;
+  }
+  BG[i] = C(BRICK, (1.4 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the framed side panels
+}
+const quarterPipe = (x, y, hw) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox({ ...boxAt(vx, vy, 1, 0, QP_LEN / 2, hw, 0, QP_TOP), quarterPipe: true }, quarterPipeShade, quarterPipeRay);
+  rod(vx + QP_LEN / 2, vy - hw, QP_TOP + 0.02, vx + QP_LEN / 2, vy + hw, QP_TOP + 0.02, 0.03, GRAY, 1.6); // the coping
+  BXD(vx + QP_LEN / 2 + 0.25, vy, 0.25, hw, 0, QP_TOP, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WARM : BRICK, (1.4 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }); // the deck behind it
 }, [0.85, 1.3, 1]);
 const skateboard = (x, y, a_ = 0.4) => ROOM_MODEL(x, y, (vx, vy) => {
   const c = Math.cos(a_), s_ = Math.sin(a_);
