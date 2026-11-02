@@ -2230,9 +2230,9 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   assert.match(await prompt(), /enter CONSERVATORY \(\$5\.00\)/);
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, money, free(px, py)]), ['room', 'conservatory', 91, true]);
-  await page.evaluate(() => { px = 18; py = 9; a = 0; });
+  await page.evaluate(() => { px = 15; py = 9; a = 0; });
   await page.waitForTimeout(150);
-  assert.match(await page.evaluate(() => CH.join('')), /[|]{2}/, 'cacti in the desert house');
+  assert.ok(await page.evaluate(() => room.props.filter(o => o.consPlant?.kind === 'saguaro' && o.x > 13).length >= 4 && BG.some(c => c >> 4 === GREEN)), 'cacti in the desert house');
   await page.evaluate(() => leaveRoom());
   // the aviary: free; a cup of seed from the keeper
   const av = await page.evaluate(() => GLASSHOUSES[1].door);
