@@ -625,16 +625,16 @@ function floorBaseCell(i, r, x, rx, ry) {
         // The whole intertidal surface changes ownership. Backwash exposes
         // wet sand outside the resting coastline instead of drawing a stripe
         // over water that never retreats.
-        if(!surface.water||surface.foam) {
-          BG[i]=bgAt(surface.background,day*(surface.foam?9:3)*f,d);
+        if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
+          BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
           set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
         }
       }
       seaCell(i, r, x, rx, ry, wx, wy, d, f); FL[i] = 3;
       const foam=shore?shoreWaveFoam(wx,wy,shore.edge,shore.limit):0;
-      if(foam>.15) {
-        set(i,foam>.45?'~':'.',C(WHITE,L*1.4));
-        BG[i]=C(foam>.55?WHITE:CYAN,day*9+1);
+      if(foam>.15) { // the breaker rolling in (and at rocks and walls, the surge): white, moonlit by night
+        set(i,' ',0);
+        BG[i]=C(foam>.55?WHITE:CYAN,day*(7+foam*6)+(1-day)*(3+foam*4));
         FL[i]=0; // breaking foam stays visible over the skyline reflection
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her

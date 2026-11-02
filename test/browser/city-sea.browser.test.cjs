@@ -34,3 +34,18 @@ test('open water is shaded swell with few glyphs, calm far off, and dark at nigh
  });
  assert.deepEqual(r,[]);
 }));
+
+test('surf at night: the foam and the wash running up the sand still catch the moonlight',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const I=WILD_ISLANDS.find(i=>i.id==='sand'),period=typeof SWASH_T==='number'?SWASH_T:7,low=typeof SWASH_LOW==='number'?SWASH_LOW:-1;let at=null;
+  for(let y=I.y;y<I.y+16&&!at;y+=.02)if(wildIslandEdge(716,y,I)<.75)at=[716,y];
+  [px,py]=at;a=Math.PI/2;pitch=-.17;freecam=null;mode='walk';tod=23;
+  let lit=0,dark=0;
+  for(let k=0;k<12;k++){T=1400+k*period/12;env(0);render(0);
+   for(let i=0;i<BG.length;i++){const t=ZB[i];if(!(t>.05&&t<2))continue;const q=2*(i%cols)/cols-1,x=px+(dx-dy*tf*q)*t,y=py+(dy+dx*tf*q)*t,band=seaShoreBand(x,y);
+    if(!band?.beach||band.edge<low||band.edge>band.limit)continue;const s=islandShoreSurface(x,y,band.edge,true);
+    if(s.foam||s.film||s.water){if((BG[i]&15)>=2)lit++;else dark++;}}}
+  return {lit,dark};
+ });
+ assert.ok(r.lit>40&&r.lit>r.dark*2,JSON.stringify(r));
+}));

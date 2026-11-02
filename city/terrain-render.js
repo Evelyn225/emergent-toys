@@ -57,7 +57,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   if (surface) { base = surface.base; background = surface.background; ch = surface.ch; }
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
-  const brightness=day*2.6*tone+day*(surface?.lift||0);
+  const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
   BG[i] = bgAt(background, brightness * fog * light, depth);
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);

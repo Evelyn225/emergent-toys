@@ -2262,10 +2262,16 @@ function islandSurface(x,y) {
 // Foam rolls shoreward, then thins as the wash retreats. The existing wet sand
 // is the run-up limit; geometry, swimming and collision keep their usual coast.
 const shoreWetSandLimit = patch => .4 + patch * .2;
-const shoreWavePhase = (x,y) => fract(T/7+.12*Math.sin(x*.13+y*.17));
+// The swash, one wave every SWASH_T seconds (a little later or sooner along the coast): a breaker line rolls in over
+// the last few metres of water and breaks; the water runs fast up the beach as a thin film behind a bright foam
+// front, slows, then drains back slowly to just below the resting waterline (SWASH_LOW), thinning to lace and
+// leaving a glossy wet strip behind it. The front is ragged along the shore
+const SWASH_T = 7, SWASH_LOW = -.15, SWASH_UP = .3, SWASH_BREAK = .74;
+const shoreWavePhase = (x,y) => fract(T/SWASH_T+.12*Math.sin(x*.13+y*.17));
+const swashRag = (x,y) => (noise(x*4,y*4,1879)-.5)*.06;
 function shoreWaveFront(phase,wetLimit) {
-  const run=phase<.65?smooth(phase/.65):1-smooth((phase-.65)/.35);
-  return -1.05+(1.05+wetLimit-.04)*run;
+  const run=phase<SWASH_UP?1-(1-phase/SWASH_UP)**2.2:1-smooth((phase-SWASH_UP)/(1-SWASH_UP)); // (fast up, slow back)
+  return SWASH_LOW+(wetLimit-.04-SWASH_LOW)*run;
 }
 function shoreWaveFoam(x,y,edge,wetLimit=0,phase=shoreWavePhase(x,y)) {
   if(edge<=-1.4||edge>=wetLimit)return 0;
@@ -2275,12 +2281,18 @@ function shoreWaveFoam(x,y,edge,wetLimit=0,phase=shoreWavePhase(x,y)) {
     const band=Math.max(0,1+edge/.18),surge=phase<.55||phase>.9?0:Math.sin((phase-.55)/.35*Math.PI);
     return band*surge;
   }
-  const crest=shoreWaveFront(phase,wetLimit),width=.065+.035*(crest+1.05)/(1.05+wetLimit-.04);
-  const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*10);
+  const lace=noise(x*18+phase*1.1,y*18-phase*.7,1878); // (drifting with the wave, so each repeats)
+  const front=shoreWaveFront(phase,wetLimit)+swashRag(x,y),offset=edge-front;
   if(offset>0)return 0; // (the foam rides the water: none on the sand ahead of it, and it ends at the waterline)
-  const foam=Math.max(0,1+offset/width);
-  const trail=.15*Math.max(0,1-Math.abs(offset+.1)/.15);
-  return Math.max(foam,trail)*fade;
+  let foam=0;
+  if(phase>SWASH_BREAK) { // the breaker rolling in, whitening as it nears the beach
+    const p=(phase-SWASH_BREAK)/(1-SWASH_BREAK),line=-.6+(.6+SWASH_LOW)*smooth(p),width=.04+.06*p;
+    foam=Math.max(0,1-Math.abs(edge-line)/width)*(.45+.55*p)*(.55+.45*lace);
+  }
+  const up=phase<SWASH_UP,drain=up?0:(phase-SWASH_UP)/(1-SWASH_UP);
+  const band=Math.max(0,1+offset/(up?.07:.04))*(up?1:(lace>.45?.85:.35)*(1-drain*.7)); // the bright front
+  const behind=Math.max(0,1+offset/(up?.2:.12))*(lace>.6?.6:0)*(1-drain*.5); // lace on the film behind it
+  return clamp(Math.max(foam,band,behind),0,1);
 }
 function seaShoreBand(x,y) {
   // Mainland and wild-island edges already use cached distance fields. Bound
@@ -2305,12 +2317,18 @@ function seaShoreFoam(x,y){const band=seaShoreBand(x,y);return band?shoreWaveFoa
 function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
   if(!beach&&edge<1.2+patch*.6)return {base:GRAY,background:GRAY,ch:grain>.93?':':' ',color:'#727777',tone:.9};
   if(edge<shoreWetSandLimit(patch)) {
-    const phase=shoreWavePhase(x,y),limit=shoreWetSandLimit(patch);
-    const foam=shoreWaveFoam(x,y,edge,limit,phase),washed=edge<shoreWaveFront(phase,limit);
-    const background=washed?BLUE:BRICK,color=washed?'#284e68':'#827858';
-    if(foam>.15)return {base:WHITE,background:foam>.55?WHITE:CYAN,ch:foam>.55?'~':' ',color:'#d5eff3',tone:1.25,lift:4,foam:true,water:true};
-    if(washed)return {base:CYAN,background,ch:grain>.9?'-':' ',color,tone:.9,water:true};
-    return {base:WARM,background:BRICK,ch:grain>.92?':':' ',color:'#827858',tone:.8};
+    const phase=shoreWavePhase(x,y),limit=shoreWetSandLimit(patch),front=shoreWaveFront(phase,limit)+swashRag(x,y);
+    const foam=shoreWaveFoam(x,y,edge,limit,phase),washed=edge<front,depth=front-edge;
+    // (night: what moonlight there is; the terrain and floor painters add it to their daylight brightness)
+    if(foam>.15)return {base:WHITE,background:foam>.55&&noise(x*26+phase,y*26,1880)>.38?WHITE:CYAN,ch:' ', // (lacy: white flecks on pale water)
+      color:'#d5eff3',tone:1.25,lift:9,foam:true,water:true,night:3+foam*4};
+    // the water running up the beach is a thin, clear film, the sand showing through; out past the film it's sea
+    if(washed&&depth<.12)return {base:CYAN,background:depth<.05?CYAN:BLUE,ch:' ',color:'#3e7f8f',tone:depth<.05?.8:.95,lift:depth<.05?1.5:.6,film:true,water:true,night:.8};
+    if(washed)return {base:CYAN,background:BLUE,ch:' ',color:'#284e68',tone:.9,water:true,night:.7};
+    // wet sand: darkest and glossy just behind the draining water, drying towards the top of the run-up
+    const gloss=phase>SWASH_UP?Math.max(0,1-(edge-front)/.12):0,dry=clamp((edge-SWASH_LOW)/(limit-SWASH_LOW),0,1);
+    if(gloss>.35)return {base:WARM,background:STONE,ch:' ',color:'#8f8a7c',tone:.8+gloss*.25,lift:1.6,night:.5}; // (catching the sky)
+    return {base:WARM,background:BRICK,ch:grain>.94?'.':' ',color:'#827858',tone:.95+dry*.3,lift:.8+dry*1.5};
   }
   if(beach&&(edge<2.3+patch*1.2||allSand)) {
     const grass=edge>1.6&&grain>.91&&patch>.55;
@@ -12762,16 +12780,16 @@ function floorBaseCell(i, r, x, rx, ry) {
         // The whole intertidal surface changes ownership. Backwash exposes
         // wet sand outside the resting coastline instead of drawing a stripe
         // over water that never retreats.
-        if(!surface.water||surface.foam) {
-          BG[i]=bgAt(surface.background,day*(surface.foam?9:3)*f,d);
+        if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
+          BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
           set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
         }
       }
       seaCell(i, r, x, rx, ry, wx, wy, d, f); FL[i] = 3;
       const foam=shore?shoreWaveFoam(wx,wy,shore.edge,shore.limit):0;
-      if(foam>.15) {
-        set(i,foam>.45?'~':'.',C(WHITE,L*1.4));
-        BG[i]=C(foam>.55?WHITE:CYAN,day*9+1);
+      if(foam>.15) { // the breaker rolling in (and at rocks and walls, the surge): white, moonlit by night
+        set(i,' ',0);
+        BG[i]=C(foam>.55?WHITE:CYAN,day*(7+foam*6)+(1-day)*(3+foam*4));
         FL[i]=0; // breaking foam stays visible over the skyline reflection
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
@@ -24049,7 +24067,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   if (surface) { base = surface.base; background = surface.background; ch = surface.ch; }
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
-  const brightness=day*2.6*tone+day*(surface?.lift||0);
+  const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
   BG[i] = bgAt(background, brightness * fog * light, depth);
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
