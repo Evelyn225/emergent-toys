@@ -58,7 +58,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
-  BG[i] = bgAt(background, brightness * fog * light, depth);
+  BG[i] = bgAt(background, brightness * fog * (surface?.water ? 1 : light), depth); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
 }
