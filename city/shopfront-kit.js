@@ -116,3 +116,25 @@ function shopWall(i, a, z, sty, L, fp, seed) {
   const j = Math.max(coveGroove(z, bh, .003, fp), coveGroove(a + off, bl, .003, fp));
   BG[i] = C(GRAY, 1.9 + L * .24 + (hash(k, row, 1703 + seed) - .5) * .7 * fine - j * .7);
 }
+// An upper-floor window, after the shopfronts: a bevelled frame round glass that reflects the sky (or glows when
+// lit), the reveal's shadow under the head, a sill that catches the light. a: across from its left edge, 0..w;
+// z: up from its sill, 0..h (city units). True if (i) fell on it.
+function facadeWindow(i, a, w, z, h, lit, litCol, L, fp, frame, seed, bars = 1) {
+  const fw = .007, fine = clamp(1 - fp / .02, 0, 1);
+  if (a < -fw || a > w + fw || z < -fw * 1.4 || z > h + fw) return false;
+  set(i, ' ', 0);
+  if (z < 0) { BG[i] = sfPaint(frame, (2.5 + L * .3) * (z > -.003 ? 1.18 : .9)); return true; } // the sill, its lip lit
+  if (a < 0 || a > w || z > h) { // the frame: lit along its outer top and left edges, shaded on the others
+    const s = z > h ? (z > h + fw * .5 ? .7 : -.5) : a < 0 ? (a < -fw * .5 ? .7 : -.4) : (a > w + fw * .5 ? -.7 : .3);
+    BG[i] = sfPaint(frame, (2 + L * .28) * sfBevel(s, fine)); return true;
+  }
+  for (let k = 1; k <= bars; k++) if (facadeLine(Math.abs(a - w * k / (bars + 1)), .007, fp) > .5) { BG[i] = sfPaint(frame, (1.9 + L * .26) * sfBevel(a < w * k / (bars + 1) ? .6 : -.6, fine)); return true; } // glazing bars
+  if (lit) { BG[i] = C(litCol, (1.6 + night * 3.2 + z / h * .5) * (1 - clamp(1 - (h - z) / .01, 0, 1) * .4)); return true; }
+  sfGlass(i, a, z, 0, h, w, false, L, fine, seed);
+  return true;
+}
+// corrugated sheet: ribs every 7.5 cm, a lit crest and a shadowed trough up close, an even tone far off
+function corrugated(i, a, base, L, fp, lift = 0) {
+  const fine = clamp(1 - fp / .02, 0, 1), f = fract(a / .0075);
+  BG[i] = C(base, 1.7 + L * .24 + lift + (f < .3 ? .5 : f > .65 ? -.45 : 0) * fine);
+}

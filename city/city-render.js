@@ -258,7 +258,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty !== 1 && sty !== 14 && sty !== 8 && sty !== 17 && !(sty >= 11 && sty <= 13)) {
     const base = 0.4 + fl / 3, room_ = h - 0.07 - base;
     if (room_ < 1 / 3) {
-      if (room_ < 0.22) return set(i, fract(u * 6) < 0.08 ? '|' : z > h - 0.07 ? '_' : ' ', C(sty === 2 || sty === 9 ? BRICK : GRAY, L * 0.6));
+      if (room_ < 0.22) { set(i, ' ', 0); shopWall(i, u, z, sty === 2 || sty === 9 ? 2 : 0, L, Math.max(uStep, d / projY), sk); if (z > h - .07) BG[i] = C(BG[i] >> 4, (BG[i] & 15) + .5); return; } // a plain parapet, its coping lit
       fz = Math.min(1, (z - base) / room_);
     }
   }
@@ -266,17 +266,18 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
+  const fpU = Math.max(uStep, d / projY), floorH = 1 / 3, litNow = k => hash(k, fl, sk) > litT - 0.1;
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
-    if (top && fw > 0.08 && fw < 0.92 && z < h - 0.08) return set(i, '#', hash(Math.floor(u * 2), 7, sk) > 0.7 ? C(YEL, Math.max(L * 0.5, glowL * 0.8)) : C(GRAY, L * 0.4));
-    return set(i, fract(u * 20) < 0.5 ? '|' : ':', C(sk & 1 ? ORANGE : GRAY, L * (sk & 1 ? 0.55 : 0.8))); // rusty or grey
+    if (top && fw > 0.08 && fw < 0.92 && z < h - 0.08) { set(i, ' ', 0); const lit = hash(Math.floor(u * 2), 7, sk) > 0.7; if (facadeWindow(i, (fw - .08) * .5, .42, z - (h - .3), .22, lit, YEL, L, fpU, GRAY, sk, 3)) return; }
+    set(i, ' ', 0); return corrugated(i, u, sk & 1 ? ORANGE : GRAY, L, fpU, sk & 1 ? -.3 : 0); // rusty or grey
   }
-  if (sty === 9) { // brownstone: tall narrow windows with stone lintels
-    const fu = fract(u * 4);
-    if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.8)
-      return hash(Math.floor(u * 4), fl, sk) > litT - 0.1 ? inside(4, WARM) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
-    if (fu > 0.25 && fu < 0.75 && fz >= 0.8 && fz < 0.9) return set(i, '-', C(GRAY, L));
-    return set(i, (Math.floor(u * 12) + Math.floor(zz * 18)) % 5 ? ' ' : '.', C(BRICK, L * 0.7));
+  if (sty === 9) { // brownstone: tall narrow windows with stone lintels, in brick
+    const fu = fract(u * 4), bay = Math.floor(u * 4);
+    set(i, ' ', 0);
+    if (fu >= .25 && fu <= .75 && fz >= .8 && fz < .9) { BG[i] = C(STONE, (2.4 + L * .3) * (fz > .885 ? 1.15 : fz < .81 ? .85 : 1)); return; } // the stone lintel
+    if (fu > .27 && fu < .73 && fz > .17 && fz < .8) { const lit = litNow(bay); if (lit && inside(4, WARM)) return; if (facadeWindow(i, (fu - .3) * .25, .1, (fz - .2) * floorH, .6 * floorH, lit, WARM, L, fpU, STONE, sk + bay)) return; }
+    return brickFace(i, u, zz, BRICK, L, fpU, sk);
   }
   if (sty === 10) { // chinatown shophouse: balconies, red lanterns under the eaves, a tall vertical sign
     const fu = fract(u * 1.25), w = sh.word, vs = Math.abs(fu - 0.5) < 0.06 && zz < 1.2 && sh.kind !== SHOP_APTS;
@@ -286,80 +287,84 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const on = oneCell((fract(q) - 0.5) * 0.11, d / projY) && (uStep >= 0.096 || oneCell((fu - 0.5) * 0.8, uStep));
       return set(i, on && p >= 0 && p < w.length ? w[p] : ' ', C(sh.neon, open ? Math.max(L, night * 15) : L * 0.6));
     }
-    if (fz < 0.1) return set(i, fract(u * 10) < 0.3 ? '|' : '=', C(GREEN, L)); // balcony rail
-    if (fz > 0.86 && Math.abs(fract(u * 3) - 0.5) < 0.08) return set(i, 'o', C(RED, Math.max(L, night * 14)));
-    const wu = fract(u * 3);
-    if (wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.8)
-      return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? inside(3, RED) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
-    return set(i, ' ', 0);
+    set(i, ' ', 0);
+    if (fz < 0.1) { BG[i] = C(GREEN, (1.7 + L * .25) * (coveGroove(u, .1, .02, fpU) > .5 ? 1.25 : fz > .085 ? 1.1 : .85)); return; } // the balcony rail and its balusters
+    if (fz > 0.86 && Math.abs(fract(u * 3) - 0.5) < 0.08) { const r = Math.abs(fract(u * 3) - .5) / .08; BG[i] = C(RED, (2.4 + Math.max(L * .2, night * 9)) * (1 - r * .45)); return; } // a lantern under the eaves
+    const wu = fract(u * 3), bay = Math.floor(u * 3);
+    if (wu > 0.18 && wu < 0.82 && fz > 0.23 && fz < 0.82) { const lit = litNow(bay); if (lit && inside(3, RED)) return; if (facadeWindow(i, (wu - .2) / 3, .6 / 3, (fz - .25) * floorH, .55 * floorH, lit, WARM, L, fpU, RED, sk + bay)) return; }
+    BG[i] = C(WARM, 1.6 + L * .22 + (noise(u * 30, zz * 30, 1810 + sk) - .5) * .5 * clamp(1 - fpU / .02, 0, 1)); return; // rendered wall
   }
   if (sty === 14) { // art deco: limestone piers running the full height, gold chevrons round the crown, spandrels between floors
-    const fu = fract(u * 4), crown = h - z < 0.32;
-    if (fu < 0.16) return set(i, '|', C(WHITE, L * 0.9)); // the piers
-    if (crown) return set(i, (Math.floor(u * 16) + Math.floor(z * 24)) & 1 ? '^' : 'v', C(YEL, Math.max(L, night * fog * 11)));
-    if (fz < 0.2) return set(i, fract(u * 16) < 0.5 ? '=' : '#', C(WARM, L * 0.55)); // spandrel panel
-    return hash(Math.floor(u * 4), fl, sk) > litT ? set(i, '#', C(YEL, Math.max(L * 0.8, glowL))) : set(i, ':', C(day > 0.5 ? CYAN : GRAY, L * 0.4));
+    const fu = fract(u * 4), crown = h - z < 0.32, bay = Math.floor(u * 4);
+    set(i, ' ', 0);
+    if (fu < 0.16) { BG[i] = C(WHITE, (2.2 + L * .3) * sfBevel(fu < .03 ? .7 : fu > .13 ? -.7 : 0, clamp(1 - fpU / .02, 0, 1))); return; } // the piers, rounded
+    if (crown) { const zig = Math.abs(fract(u * 8) - .5) * 2, band = fract((h - z) * 12 - zig * .5); BG[i] = C(YEL, Math.max(2.2 + L * .25, night * fog * 6) * (band < .5 ? 1.25 : .8)); return; } // gilt chevrons
+    if (fz < 0.2) { BG[i] = C(WARM, (1.6 + L * .22) * (Math.abs(fract(u * 16) - .5) < .1 ? .8 : 1.05)); return; } // a spandrel panel, its ribs
+    const lit = hash(bay, fl, sk) > litT;
+    if (facadeWindow(i, (fu - .19) * .25, .62 * .25, (fz - .24) * floorH, .7 * floorH, lit, YEL, L, fpU, WHITE, sk + bay, 2)) return;
+    BG[i] = C(WHITE, 2 + L * .26); return;
   }
   if (sty === 15) { // parking garage: open concrete decks, cars nose-out behind the parapet, sodium lamps at night
     const fu = fract(u * 2);
-    if (fu < 0.06) return set(i, '|', C(GRAY, L)); // columns
-    if (fz < 0.22) return set(i, '=', C(GRAY, L * 1.1)); // the deck edge and parapet
-    if (fz > 0.85 && Math.abs(fract(u * 4) - 0.5) < 0.08) return set(i, 'o', C(ORANGE, Math.max(L * 0.6, night * fog * 14)));
-    const bay = Math.floor(u * 3), car = hash(bay, fl, sk + 9);
-    if (car > 0.4 && fz < 0.55 && Math.abs(fract(u * 3) - 0.5) < 0.32) {
-      if (fz > 0.45) return set(i, '_', C(GRAY, L * 0.7)); // the roofline
-      return set(i, Math.abs(fract(u * 3) - 0.5) > 0.24 && fz < 0.33 ? 'o' : '#', C(ITEM_COL[car * 97 & 7], L * 0.8));
+    set(i, ' ', 0);
+    if (fu < 0.06) { BG[i] = C(GRAY, (1.9 + L * .28) * (fu < .015 ? 1.15 : fu > .045 ? .85 : 1)); return; } // columns
+    if (fz < 0.22) { BG[i] = C(GRAY, (2.1 + L * .3) * (fz > .205 ? 1.15 : 1) - coveGroove(u, .3, .004, fpU) * .5); return; } // the deck edge and parapet, its joints
+    if (fz > 0.85 && Math.abs(fract(u * 4) - 0.5) < 0.08) { BG[i] = C(ORANGE, Math.max(2 + L * .2, night * fog * 9)); return; } // sodium lamps
+    const bay = Math.floor(u * 3), car = hash(bay, fl, sk + 9), cu = Math.abs(fract(u * 3) - 0.5);
+    if (car > 0.4 && fz < 0.55 && cu < 0.32) { // a car nosed out: its roof, glass, body and wheels
+      if (fz > 0.45) { BG[i] = C(ITEM_COL[car * 97 & 7], 1.8 + L * .2); return; }
+      if (fz > .36 && cu < .25) { BG[i] = C(CYAN, 1 + day * .8); return; }
+      if (cu > 0.24 && fz < 0.33) { BG[i] = C(GRAY, .6); return; }
+      BG[i] = C(ITEM_COL[car * 97 & 7], (2 + L * .25) * (fz > .33 ? 1.1 : .9)); return;
     }
-    BG[i] = C(GRAY, 1); return set(i, ' ', 0); // dark inside
+    BG[i] = C(GRAY, 1); return; // dark inside
   }
   if (sty === 16) { // modern apartments: a balcony a bay, glass rails, sliding doors, the odd plant
     const fu = fract(u * 2), bay = Math.floor(u * 2);
-    if (fu < 0.05) return set(i, '|', C(WHITE, L * 0.8));
-    if (fz < 0.08) return set(i, '=', C(WHITE, L * 1.1)); // the balcony slab
+    set(i, ' ', 0);
+    if (fu < 0.05) { BG[i] = C(WHITE, 2.2 + L * .28); return; }
+    if (fz < 0.08) { BG[i] = C(WHITE, (2.4 + L * .3) * (fz > .065 ? 1.15 : .9)); return; } // the balcony slab, its lit edge
     if (fz < 0.36) { // the glass rail, a plant behind it now and then
-      if (hash(bay, fl, sk + 4) > 0.75 && Math.abs(fu - 0.75) < 0.1) return set(i, '%', C(GREEN, L));
-      return set(i, fz > 0.32 ? '-' : ':', C(CYAN, L * (fz > 0.32 ? 0.9 : 0.4)));
+      if (hash(bay, fl, sk + 4) > 0.75 && Math.abs(fu - 0.75) < 0.1) { BG[i] = C(GREEN, 1.8 + L * .25 + (noise(u * 60, z * 60, 1811) - .5) * .8); return; }
+      BG[i] = fz > 0.32 ? C(GRAY, 2.4 + L * .25) : C(CYAN, .9 + day * 1.1); return;
     }
-    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? inside(2, WARM) || set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
-    return set(i, ' ', 0);
+    if (fu > 0.15 && fu < 0.85 && fz < 0.88) { const lit = hash(bay, fl, sk) > litT - 0.05; if (lit && inside(2, WARM)) return; if (facadeWindow(i, (fu - .15) * .5, .35, (fz - .36) * floorH, .52 * floorH, lit, WARM, L, fpU, WHITE, sk + bay)) return; }
+    BG[i] = C(WHITE, 2 + L * .26); return;
   }
-  if (sty === 0) { // office
-    const fu = fract(u * 4);
-    if (fu > 0.15 && fu < 0.85 && fz > 0.25 && fz < 0.85)
-      return hash(Math.floor(u * 4), fl, sk) > litT ? inside(4, WHITE) || set(i, '#', C(YEL, Math.max(L * 0.7, glowL))) : set(i, '.', C(day > 0.5 ? CYAN : GRAY, L * 0.35));
-    return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(GRAY, L));
+  if (sty === 0) { // office: punched windows in a concrete frame
+    const fu = fract(u * 4), bay = Math.floor(u * 4);
+    set(i, ' ', 0);
+    if (fu > 0.13 && fu < 0.87 && fz > 0.23 && fz < 0.87) { const lit = hash(bay, fl, sk) > litT; if (lit && inside(4, WHITE)) return; if (facadeWindow(i, (fu - .15) * .25, .7 * .25, (fz - .25) * floorH, .6 * floorH, lit, YEL, L, fpU, GRAY, sk + bay)) return; }
+    BG[i] = C(GRAY, 2 + L * .26 - Math.max(coveGroove(u, .25, .003, fpU), coveGroove(zz, floorH, .003, fpU)) * .6); return; // precast panels, their joints
   }
-  if (sty === 1) { // glass tower
-    const fu = fract(u * 8);
-    if (fu < 0.1) return set(i, '|', C(GRAY, L));
-    if (fz < 0.12) return set(i, '-', C(GRAY, L));
-    if (hash(Math.floor(u * 8), fl, sk) > litT + 0.15) return set(i, '+', C(CYAN, Math.max(L, glowL)));
-    if (fract((u * 0.7 + zz) * 2) < 0.06) return set(i, '/', C(CYAN, L * 0.6));
-    if (BG[i] === NONE) BG[i] = C(GRAY, 1); // dark glass at night, a shade off the sky so the tower doesn't vanish into it
-    return set(i, ' ', 0);
+  if (sty === 1) { // glass tower: a curtain wall of mullions and spandrels, the sky in it
+    const fu = fract(u * 8), bay = Math.floor(u * 8);
+    set(i, ' ', 0);
+    if (fu < 0.1) { BG[i] = C(GRAY, (1.8 + L * .26) * (fu < .03 ? 1.15 : .9)); return; } // mullions
+    if (fz < 0.12) { BG[i] = C(GRAY, 1.4 + L * .2); return; } // spandrel
+    if (hash(bay, fl, sk) > litT + 0.15) { BG[i] = C(CYAN, Math.max(2 + L * .2, glowL * .5)); return; }
+    sfGlass(i, fu * .125, fz * floorH, .12 * floorH, floorH, .1, false, L, clamp(1 - fpU / .02, 0, 1), sk + bay);
+    if (BG[i] === NONE) BG[i] = C(GRAY, 1); return; // (dark glass at night, a shade off the sky)
   }
   if (sty === 7) { // tenement: cream plaster, two windows a bay, black fire escapes zig-zagging up the front
-    BG[i] = bgAt(WARM, day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1));
+    set(i, ' ', 0);
     const fe = fract(u / 3);
     if (fe > 0.35 && fe < 0.65) {
-      if (fz < 0.06) return set(i, '=', C(GRAY, L * 1.2)); // landing
-      if (fz < 0.3 && (fe < 0.37 || fe > 0.63)) return set(i, '|', C(GRAY, L)); // railing posts
+      if (fz < 0.06) { BG[i] = C(GRAY, 1.3 + L * .15); return; } // landing
+      if (fz < 0.3 && (fe < 0.37 || fe > 0.63)) { BG[i] = C(GRAY, 1.1 + L * .12); return; } // railing posts
       const t = (fe - 0.35) / 0.3, up = fl & 1 ? t : 1 - t; // the ladder runs the other way on each floor
-      if (Math.abs(fz - up) < 0.07) return set(i, fl & 1 ? '/' : '\\', C(GRAY, L));
+      if (Math.abs(fz - up) < 0.07) { BG[i] = C(GRAY, 1.2 + L * .14); return; }
     }
-    const wu = fract(u * 4);
-    if (wu > 0.2 && wu < 0.8 && fz > 0.3 && fz < 0.85)
-      return hash(Math.floor(u * 4), fl, sk) > litT - 0.05 ? inside(4, WARM) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
-    if (fz < 0.08) return set(i, '_', C(WARM, L * 0.6)); // floor line
-    return set(i, ' ', 0);
+    const wu = fract(u * 4), bay = Math.floor(u * 4);
+    if (wu > 0.18 && wu < 0.82 && fz > 0.28 && fz < 0.87) { const lit = hash(bay, fl, sk) > litT - 0.05; if (lit && inside(4, WARM)) return; if (facadeWindow(i, (wu - .2) * .25, .6 * .25, (fz - .3) * floorH, .55 * floorH, lit, WARM, L, fpU, WHITE, sk + bay)) return; }
+    BG[i] = C(WARM, 2 + L * .24 + (noise(u * 30, zz * 30, 1812 + sk) - .5) * .5 * clamp(1 - fpU / .02, 0, 1) - (fz < .08 ? .5 : 0)); return; // plaster, the floor line in shadow
   }
   // brick
-  const fu = fract(u * 3);
-  if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.75)
-    return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? inside(3, ORANGE) || set(i, '#', C(ORANGE, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
-  if (fu > 0.25 && fu < 0.75 && fz > 0.18 && fz <= 0.25) return set(i, '=', C(GRAY, L));
-  if (d > 8) return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(BRICK, L));
-  return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+  const fu = fract(u * 3), bay = Math.floor(u * 3);
+  set(i, ' ', 0);
+  if (fu > 0.25 && fu < 0.75 && fz > 0.18 && fz <= 0.25) { BG[i] = C(STONE, (2.3 + L * .28) * (fz > .24 ? 1.15 : .9)); return; } // the sill course
+  if (fu > 0.28 && fu < 0.72 && fz > 0.25 && fz < 0.77) { const lit = litNow(bay); if (lit && inside(3, ORANGE)) return; if (facadeWindow(i, (fu - .3) / 3, .4 / 3, (fz - .25) * floorH, .5 * floorH, lit, ORANGE, L, fpU, STONE, sk + bay)) return; }
+  return brickFace(i, u, zz, BRICK, L, fpU, sk);
 }
 
 // the ground floor of a police station (lit windows, a blue lamp either side of the door), a fire station (tall red
