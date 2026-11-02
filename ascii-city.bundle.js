@@ -22713,8 +22713,13 @@ function glassCeil(i, wx, wy) {
 function frameBar(b, shade) {
   const hz = (b.z1 - b.z0) / 2, zc = (b.z0 + b.z1) / 2, x = b.x - px, y = b.y - py;
   if (hz >= b.hl && hz >= b.hw) { const r = Math.max(b.hl, b.hw); return drawRod(x, y, b.z0 + r, x, y, b.z1 - r, r, shade); }
-  if (b.hl >= b.hw) { const r = Math.max(b.hw, hz); return drawRod(x - b.hl + r, y, zc, x + b.hl - r, y, zc, r, shade); }
-  const r = Math.max(b.hl, hz); return drawRod(x, y - b.hw + r, zc, x, y + b.hw - r, zc, r, shade);
+  // a long rail goes in short lengths: a rod's screen bounds are its whole box, and one seen obliquely down a wall
+  // would test every cell of that rectangle
+  const alongX = b.hl >= b.hw, half = alongX ? b.hl : b.hw, r = Math.max(alongX ? b.hw : b.hl, hz), n = Math.max(1, Math.ceil(half / 1.2));
+  for (let k = 0; k < n; k++) {
+    const s0 = -half + 2 * half * k / n, s1 = -half + 2 * half * (k + 1) / n;
+    if (alongX) drawRod(x + s0, y, zc, x + s1, y, zc, r, shade); else drawRod(x, y + s0, zc, x, y + s1, zc, r, shade);
+  }
 }
 function consSteel(i, t, L) { BG[i] = C(WHITE, 3.4 + L * .42); return set(i, ' ', 0), true; }
 function CONS_FRAME(W, H, h) {
