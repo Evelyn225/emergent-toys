@@ -588,7 +588,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
-  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null;
+  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
     if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
@@ -677,34 +677,35 @@ function floorBaseCell(i, r, x, rx, ry) {
       else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
-    } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
+    } else surf = plazaSurface(wx, wy, lx, ly, d, L); // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
     set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(deep > 0.5 ? YEL : GRAY, deep > 0.5 ? 8 + night * 5 : L * (1 - deep * 0.85) * 1.5)); // the station's light, coming up the stairs
     BG[i] = deep > 0.5 ? C(YEL, 2 + (deep - 0.5) * 6 + night * 3) : C(GRAY, 1 + (1 - deep) * 2);
     return;
-  } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
-    const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;
-    if (n === 0 || w === 0) { ch = ','; k = 1.3; }
-    else if (n === 1 && fract(lx * 4) < 0.5 || w === 1 && fract(ly * 4) < 0.5) { ch = '='; base = WHITE; }
+  } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain pavement where none does
+    surf = roadSurface(wx, wy, road, lx, ly, bx, by, d, L);
   } else {
     const e = road === 1 ? lx : ly, along = road === 1 ? wy : wx, bridge = road === 1 && onBridge(bx, by);
     const mh = manholeCell(wx, wy, L); // a manhole cover
     if (mh) { set(i, mh[0], mh[1]); BG[i] = mh[2]; return; }
     const gr = streetGrateCell(wx, wy, L, d, road, bx, by); // a gully, tree or vent grate (street-drains.js)
     if (gr) { set(i, gr[0], gr[1]); BG[i] = gr[2]; return; }
-    if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
+    surf = roadSurface(wx, wy, road, lx, ly, bx, by, d, L); // (null on a bridge: its plates and railings below)
+    if (surf) ;
+    else if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
     else if (e < 0.3 || e > 1.7) { ch = bridge ? '=' : ','; k = 1.3; } // sidewalk (on a bridge, a walkway of plates)
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
+  if (surf) { ch = ' '; BG[i] = C(surf[0], clamp(surf[1], .6, 15)); } // a built surface: no dither, lit by itself (so it stays visible at night)
   if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
-    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
+    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (surf) BG[i] = C(gl > .35 ? WARM : surf[0], Math.max(surf[1], gl * 5)); else if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
   { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
   if (gunLit()) { const mf = muzzleGlow(wx, wy); if (mf > 0.02) { col = C(mf > 0.4 ? WHITE : YEL, Math.max(L * k, 5 + mf * 10)); BG[i] = C(ORANGE, 1 + mf * 6); if (ch === ' ') ch = '.'; } } // a shot's flash (gun-ui.js)
