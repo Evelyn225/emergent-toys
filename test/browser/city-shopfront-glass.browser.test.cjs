@@ -6,7 +6,7 @@ async function fixture(run){
  try{
   await p.addInitScript(()=>{requestAnimationFrame=()=>0;});
   await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
-  await p.evaluate(()=>{paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;T=26;tod=14;env(0);render(0);});
+  await p.evaluate(s=>{window.SHOW_SHARES=s;paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;T=26;tod=14;env(0);render(0);},!!process.env.SHOW_SHARES);
   await run(p);assert.deepEqual(errors,[]);
  }finally{await p.close();}
 }
@@ -20,7 +20,7 @@ test('brownstone, midtown, downtown and housing shopfronts are glass, frames and
    try{for(let by=1;by<N/8-1;by++)for(let bx=1;bx<N/8-1;bx++){const dist=districtOf(bx,by);if(!['brownstones','midtown','downtown'].includes(dist)||(seen[dist]=(seen[dist]||0)+1)>5)continue;
     for(const [ox,oy,ang] of [[4,.15,Math.PI/2],[4,.15,-Math.PI/2],[.15,4,0],[.15,4,Math.PI]]){px=bx*8+ox;py=by*8+oy;if(!ROAD[idx(Math.floor(px),Math.floor(py))])continue;a=ang;pitch=0;render(0);}}}
    finally{CITY.wall=orig;}
-   for(const [k,[g,n]] of Object.entries(stat)){if(n<2000)continue;if(g/n>.03)bad.push([td,k,'glyph share',+(100*g/n).toFixed(1)]);}
+   for(const [k,[g,n]] of Object.entries(stat)){if(n<2000)continue;if(g/n>.025||window.SHOW_SHARES)bad.push([td,k,'glyph share',+(100*g/n).toFixed(1)]);}
    if(Object.keys(stat).length<3)bad.push(['families seen',Object.keys(stat)]);
   }
   return {bad};

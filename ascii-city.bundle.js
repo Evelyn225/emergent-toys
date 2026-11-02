@@ -13323,7 +13323,8 @@ function shopShutter(i, a, z, a0, a1, z0, z1, sh, L, d, sa = WH.sl) {
   const w = SHOP_SHUTTER, paint = shutterPaint(sh), top = z1 - w.housing;
   if (z > top) { // the housing, its lower lip
     BG[i] = C(GRAY, 1.5 + L * .12 + day * .3);
-    return set(i, z - top < .004 ? '_' : ' ', C(GRAY, L * .6)), true;
+    if (z - top < .004) BG[i] = C(GRAY, 1 + L * .1); // its lower lip, in shadow
+    return set(i, ' ', 0), true;
   }
   let ca = a, cz = z;
   if (d < SHOP_WINDOW.near) { // up close: set back in the reveal, the rails and the head either side of it
@@ -13333,22 +13334,23 @@ function shopShutter(i, a, z, a0, a1, z0, z1, sh, L, d, sa = WH.sl) {
     if (sa < -1e-6 && (a0 - a) / sa < q) { q = (a0 - a) / sa; s = 'side'; }
     if (sz > 1e-6 && (top - z) / sz < q) { q = (top - z) / sz; s = 'ceil'; }
     if (sz < -1e-6 && (z0 - z) / sz < q) { q = (z0 - z) / sz; s = 'floor'; }
-    if (s === 'side') { BG[i] = C(GRAY, .9 + L * .1); return set(i, '|', C(GRAY, L * .5)), true; } // the guide rail's channel
+    if (s === 'side') { BG[i] = C(GRAY, .9 + L * .1); return set(i, ' ', 0), true; } // the guide rail's channel
     if (s === 'ceil') { BG[i] = C(GRAY, .5); return set(i, ' ', 0), true; } // under the housing
-    if (s === 'floor') { BG[i] = C(GRAY, 1 + L * .1); return set(i, '_', C(GRAY, L * .5)), true; } // the sill
+    if (s === 'floor') { BG[i] = C(GRAY, 1 + L * .1); return set(i, ' ', 0), true; } // the sill
     ca = a + sa * q; cz = z + sz * q;
   }
   const fine = w.slat * projY / d; // (rows a slat spans on screen)
-  if (ca - a0 < w.rail || a1 - ca < w.rail) { BG[i] = C(GRAY, 1.2 + L * .12); return set(i, '|', C(GRAY, L * .7)), true; } // its edges in the rails
+  if (ca - a0 < w.rail || a1 - ca < w.rail) { BG[i] = C(GRAY, 1.2 + L * .12); return set(i, ' ', 0), true; } // its edges in the rails
   if (cz - z0 < w.bar) { // the bottom bar, the padlock through it
     const lock = fine > 1 && Math.abs(ca - (a0 + a1) / 2) < w.lock && cz - z0 > .002 && cz - z0 < w.bar - .002;
     BG[i] = lock ? C(YEL, 1.4 + L * .08) : C(paint, 1.8 + L * .15);
-    return set(i, lock ? 'o' : cz - z0 < .002 ? '_' : '=', C(lock ? GRAY : paint, L * .8)), true;
+    if (!lock && cz - z0 < .002) BG[i] = C(paint, 1.2 + L * .1); // its foot, in shadow
+    return set(i, ' ', 0), true;
   }
-  if (fine < 2) { BG[i] = C(paint, 1.2 + L * .12 + day * .4); return set(i, '=', C(paint, L * .6)), true; } // too far to make out each slat: their ribs as one texture
+  if (fine < 2) { BG[i] = C(paint, 1.2 + L * .12 + day * .4); return set(i, ' ', 0), true; } // too far to make out each slat: their ribs as one even panel
   const q = fract((top - cz) / w.slat), lip = q < .22, crease = q > .84;
   BG[i] = C(paint, (crease ? .7 : lip ? 1.9 : 1.3) + L * .12 + day * .4);
-  return set(i, crease ? '_' : lip ? '-' : ' ', C(paint, L * .5)), true;
+  return set(i, ' ', 0), true;
 }
 // ===== graffiti: murals painted across some buildings' upper floors, each district in its own style (rust and anchors on
 // the docks, dragons in Chinatown, flowers in the Brownstones, a lone stencil downtown), quick tags low on the shutters, and the tags
