@@ -20904,13 +20904,16 @@ function fishAt(run, u, z) {
 function tankCell(i, su, uStep, z, d, side, mx, my, L, c, u) {
   const flip = su < 0 !== u < 0 ? -1 : 1;
   const tk = TANKS[c], run = tankRun(mx, my, side, c), Lt = clamp(15 - d * 0.6, 6, 15) * tk.bright, dz = d / projY;
-  if (z < tk.base) { BG[i] = C(GRAY, 1); return set(i, z > tk.base - 0.05 ? '=' : fract(u * 2) < 0.06 ? '|' : ' ', C(GRAY, L * 0.7)); } // the cabinet
+  const fp = Math.max(uStep, dz);
+  set(i, ' ', 0);
+  if (z < tk.base) { BG[i] = z > tk.base - 0.05 ? C(GRAY, 1.8 + L * .1) : C(GRAY, 1 + L * .05 - .6 * coveGroove(u, .5, .012, fp)); return; } // the cabinet, panelled, under its trim
   if (z > tk.top) { // the hood, with the tank's name on it (the ocean has no room for one: it's labelled on the hall wall)
     BG[i] = C(GRAY, 1);
     if (c !== 'O' && wallText(i, su, uStep, z, d, tk.name, flip * (run.u0 + run.u1) / 2, (tk.top + 3) / 2, 0.16, 0.25, C(WHITE, 14), C(GRAY, 1))) return;
-    return set(i, z < tk.top + 0.04 ? '=' : ' ', C(GRAY, L));
+    if (z < tk.top + 0.04) BG[i] = C(GRAY, 1.8 + L * .1); // the hood's trim
+    return;
   }
-  if (u - run.u0 < 0.04 || run.u1 - u < 0.04) { BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L)); } // corner posts
+  if (u - run.u0 < 0.04 || run.u1 - u < 0.04) { BG[i] = C(GRAY, 1.4 + L * .06); return; } // corner posts
   placeFish(run);
   const caustic = noise(u * 2.2 + T * 0.25, z * 3 - T * 0.15, 33);
   BG[i] = C(tk.water, (1 + caustic * 2.2) * tk.bright * (0.6 + 0.4 * Lt / 15));
@@ -20918,37 +20921,37 @@ function tankCell(i, su, uStep, z, d, side, mx, my, L, c, u) {
   if (fish) { BG[i] = C(fish[0], clamp(Lt * fish[1] * 0.75, 1, 15)); return set(i, ' ', 0); } // (solid, like the animals)
   for (let b = 0; b < 6; b++) { // bubbles, rising off the bubbler in the corner
     const bz = tk.base + mod(T * 0.45 + b * 0.37, tk.top - tk.base), bu = run.u0 + 0.22 + 0.025 * Math.sin(T * 3 + b);
-    if (Math.abs(u - bu) < Math.max(uStep / 2, 0.018) && Math.abs(z - bz) < Math.max(dz / 2, 0.018)) return set(i, 'o', C(WHITE, Lt * 0.8));
+    if (Math.abs(u - bu) < Math.max(uStep / 2, 0.018) && Math.abs(z - bz) < Math.max(dz / 2, 0.018)) { BG[i] = C(WHITE, Lt * 0.55); return; }
   }
   const floor = tk.base + 0.18;
   if (c === 'K' || c === 'O' && hash(Math.floor(u * 3), side ? my : mx, 77) > 0.8) { // kelp, swaying up from the bottom
     const ks = Math.floor(u * 5), sx = (ks + 0.5) / 5 + 0.05 * Math.sin(T * 0.6 + z * 2 + ks), tall = tk.base + (tk.top - tk.base) * (0.55 + 0.45 * hash(ks, 3, 78));
-    if (z < tall && Math.abs(u - sx) < Math.max(uStep / 2, 0.025) && hash(ks, 2, 78) > (c === 'K' ? 0.2 : 0.5)) return set(i, Math.sin(T * 0.6 + z * 2 + ks) > 0 ? ')' : '(', C(GREEN, Lt * 0.8));
+    if (z < tall && Math.abs(u - sx) < Math.max(uStep / 2, 0.025) && hash(ks, 2, 78) > (c === 'K' ? 0.2 : 0.5)) { BG[i] = C(GREEN, Lt * (0.3 + 0.1 * Math.sin(T * 0.6 + z * 2 + ks))); return; }
   }
   if (c === 'R' && z < floor + 0.3) { // coral: branching, fans, brain coral in a riot of colour
     const ck = Math.floor(u * 6), ch = floor + 0.3 * hash(ck, 1, 79);
-    if (z < ch) return set(i, 'Y*@%&'[hash(ck, 2, 79) * 5 | 0], C([MAG, ORANGE, YEL, RED, GREEN][hash(ck, 3, 79) * 5 | 0], Lt));
+    if (z < ch) { const top = 1 - (ch - z) / .3; BG[i] = C([MAG, ORANGE, YEL, RED, GREEN][hash(ck, 3, 79) * 5 | 0], Lt * (.4 + .25 * top)); return; }
   }
-  if (c === 'H' && z < floor + 0.35 && Math.abs(fract(u * 4) - 0.5) < 0.08) return set(i, '|', C(GREEN, Lt * 0.7)); // seagrass for their tails
+  if (c === 'H' && z < floor + 0.35 && cathLineAq(Math.abs(fract(u * 4) - 0.5) / 4, .04, fp) > .5) { BG[i] = C(GREEN, Lt * 0.35); return; } // seagrass for their tails
   if (z < floor) { // sand, and rocks
     const rk = hash(Math.floor(u * 4), 1, 80);
-    if (rk > 0.75 && z < tk.base + 0.18 * (rk - 0.6) * 3) return set(i, '#', C(GRAY, Lt * 0.6));
-    BG[i] = C(YEL, 1 + Lt * 0.08); return set(i, (Math.floor(u * 30) + Math.floor(z * 30)) % 3 ? '.' : ',', C(WARM, Lt * 0.6));
+    if (rk > 0.75 && z < tk.base + 0.18 * (rk - 0.6) * 3) { BG[i] = C(GRAY, Lt * 0.3); return; }
+    BG[i] = C(YEL, 1 + Lt * 0.1 + (noise(u * 9, z * 9, 83) - .5) * clamp(1 - fp / .1, 0, 1)); return;
   }
-  if (c === 'J') return set(i, hash(Math.floor(u * 20), Math.floor(z * 20 - T), 81) > 0.97 ? '.' : ' ', C(MAG, 8)); // specks in the dark
-  return set(i, z > tk.top - 0.08 && fract(u * 3 - T * 0.2) < 0.4 ? '~' : hash(Math.floor(u * 15), Math.floor(z * 15 + T * 0.5), 82) > 0.985 ? '.' : ' ', C(WHITE, Lt * 0.6)); // the surface, and drifting motes
+  if (z > tk.top - 0.08) BG[i] = C(tk.water, (2.2 + (fract(u * 3 - T * 0.2) < 0.4 ? 1.4 : 0) * clamp(1 - fp / .2, 0, 1)) * tk.bright * (0.6 + 0.4 * Lt / 15)); // the surface, rippling
 }
 // the plain walls: deep blue, a wave frieze, signs for the galleries and the shop
 function aquaWall(i, u, uStep, z, d, mx, my, L) {
-  BG[i] = C(BLUE, 1);
-  if (Math.abs(z - 2.65) < 0.08) return set(i, fract(u * 2.5 + T * 0.1) < 0.5 ? '~' : '-', C(CYAN, Math.max(L, 9))), true;
+  BG[i] = C(BLUE, 1); set(i, ' ', 0);
+  const fp = Math.max(uStep, d / projY);
+  if (Math.abs(z - 2.65) < 0.08) { BG[i] = C(CYAN, 2.5 + (Math.sin((u * 2.5 + T * 0.1) * Math.PI * 2 + (z - 2.65) * 40) > 0 ? 1.5 : 0) * clamp(1 - fp / .2, 0, 1)); return true; } // a wave frieze
   // Interior left/front faces run in negative wall coordinates so lettering
   // reads toward the viewer. The gift label sits above its actual counter.
   const sign = mx === room.W - 1 ? [['CORAL REEF', 7.5]] : mx === 0 ? [['JELLYFISH', -4.6], ['SEAHORSES', -13]] : my === room.H - 1 ? [['THANK YOU FOR VISITING', -6], ['GIFT SHOP', -room.def.keeper[0]]] : [];
   for (const [s, u0] of sign) if (wallText(i, u, uStep, z, d, s, u0, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
   if (my === 1 || my === 2 && (mx === 0 || mx === room.W - 1)) // the hall's side walls, by the big window
     if (wallText(i, u, uStep, z, d, 'OPEN OCEAN', mx === 0 ? -2.6 : 2.6, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
-  return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(BLUE, L * 0.5)), true;
+  BG[i] = C(BLUE, 1 + L * .03); return true;
 }
 // one of the big ones as you see it from underneath, in solid colour: along 0 its snout .. 1 its tail, across -1 .. 1
 // its half width. Pale bellies; the shark's pectoral fins swept back and its tail fin edge on, the ray's diamond and
@@ -20979,12 +20982,12 @@ function tunnelBelly(kind, along, across, col) {
 }
 // overhead: the tunnel's water with the big ones gliding across it, dark everywhere else with a few blue lights
 function aquaCeil(i, r, x, wx, wy) {
-  const tn = AQUA_TUNNEL;
+  const tn = AQUA_TUNNEL, fp = homeBalconyPavingFootprint((3 - eye) * projY / Math.max(.5, hor - r - .5), 3 - eye);
   if (wx < tn.x0 || wx > tn.x1 || wy < tn.y0 || wy > tn.y1) {
-    const on = Math.hypot(fract(wx / 3) - 0.5, fract(wy / 3) - 0.5) < 0.05;
-    return set(i, on ? 'o' : ' ', C(CYAN, on ? 12 : 2));
+    const on = Math.hypot(fract(wx / 3) - 0.5, fract(wy / 3) - 0.5) * 3 < Math.max(.12, fp * .6); // little blue downlights, a cell at least
+    BG[i] = on ? C(CYAN, 10) : C(BLUE, .5); return set(i, ' ', 0);
   }
-  if (fract(wy / 1.5) < 0.04) return set(i, '=', C(GRAY, 7)); // the tunnel's ribs
+  if (cathLineAq(Math.min(fract(wy / 1.5), 1 - fract(wy / 1.5)) * 1.5, .1, Math.min(fp, .1)) > .4) { BG[i] = C(GRAY, 3); return set(i, ' ', 0); } // the tunnel's ribs, kept to a cell far off
   const caustic = noise(wx * 1.5 + T * 0.3, wy * 1.5 - T * 0.2, 34);
   BG[i] = C(BLUE, 1 + caustic * 3);
   // seen from below: [lane x, length, width, speed, colour, kind]
@@ -21004,9 +21007,10 @@ function aquaCeil(i, r, x, wx, wy) {
 // underfoot: dark blue carpet with the light off the tanks rippling over it
 function aquaFloor(i, f, wx, wy) {
   const c = noise(wx * 1.8 + T * 0.35, wy * 1.8 - T * 0.2, 36);
-  BG[i] = C(BLUE, 1 + c * 1.5 * f);
-  return set(i, c > 0.62 ? '~' : ' ', C(CYAN, 4 + f * 6));
+  BG[i] = c > .62 ? C(CYAN, 1.2 + (c - .62) * 6 * f) : C(BLUE, 1 + c * 1.5 * f);
+  return set(i, ' ', 0);
 }
+const cathLineAq = (dist, w, fp) => clamp((w / 2 - dist) / Math.max(fp, .002) + .5, 0, 1) * Math.min(1, w / Math.max(fp, w));
 const TOUCH_LINES = ['You stroke a starfish. It feels like a wet cat tongue.', 'A hermit crab pulls itself back into its shell. Rude.',
   'The sea urchin is spikier than it looks. Ow.', 'A little ray glides under your hand. Smooth as a wet mushroom.', 'You touch an anemone and it closes up round your finger.'];
 const nearTouchPool = () => mode === 'room' && room.kind === 'aquarium' && Math.abs(px - TOUCH_POOL.x) < TOUCH_POOL.hl + 0.7 && Math.abs(py - TOUCH_POOL.y) < TOUCH_POOL.hw + 0.8;
