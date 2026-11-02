@@ -98,14 +98,20 @@ function drawVelvetRope(ax, ay, bx, by) {
 // ---- inside
 const CLUB_W = 18, CLUB_H = 14;
 function clubWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su);
-  if (z > 2.4 && z < 2.55) return set(i, '=', C(NEON[(Math.floor(u * 2 + T * 4)) & 3], 14)), true; // a strip of light chasing round the room
+  const u = Math.abs(su), fp = Math.max(uStep, d / projY);
+  set(i, ' ', 0);
+  if (z > 2.4 && z < 2.55) { BG[i] = C(NEON[(Math.floor(u * 2 + T * 4)) & 3], 10); return true; } // a strip of light chasing round the room
   if (my === 0 && z > 1.4 && z < 2.2 && Math.abs(u - CLUB_W / 2) < 2.5) { // XXX over the stage
     if (wallText(i, su, uStep, z, d, 'X X X', CLUB_W / 2 * Math.sign(su), 1.8, 0.6, 0.6, C(MAG, fract(T * 1.3) < 0.7 ? 15 : 6), C(GRAY, 0.3))) return true;
   }
-  if (z > 0.9 && z < 2.3 && Math.abs(fract(u / 3) - 0.5) < 0.3) { BG[i] = C(MAG, 0.8 + L * 0.05); return set(i, hash(Math.floor(u * 5), Math.floor(z * 5), Math.floor(T * 2)) > 0.95 ? '*' : ' ', C(WHITE, 12)), true; } // mirrors, the lights in them
-  BG[i] = C(MAG, 0.5 + L * 0.04); // padded purple velvet
-  return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) & 1 ? '+' : ' ', C(MAG, L * 0.6)), true;
+  if (z > 0.9 && z < 2.3 && Math.abs(fract(u / 3) - 0.5) < 0.3) { // mirrors, the lights glinting in them up close
+    const cu = Math.floor(u * 5), cz = Math.floor(z * 5), glint = fp < .1 && hash(cu, cz, Math.floor(T * 2)) > 0.95 && Math.hypot(u * 5 - cu - .5, z * 5 - cz - .5) < .3;
+    BG[i] = glint ? C(WHITE, 9) : C(MAG, 0.8 + L * 0.05); return true;
+  }
+  // padded purple velvet, buttoned on a diamond grid; the buttons settle into it far off
+  const bu = fract(u * 3 + (Math.floor(z * 3) & 1) * .5) - .5, bz = fract(z * 3) - .5, button = Math.hypot(bu, bz) / 3 < Math.max(.025, fp * .3) && fp < .08;
+  const tuft = Math.hypot(bu, bz) * clamp(1 - fp / .12, 0, 1);
+  BG[i] = button ? C(MAG, .3) : C(MAG, 1.1 + L * 0.04 + tuft * .9); return true;
 }
 const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
   [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
