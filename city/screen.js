@@ -100,15 +100,16 @@ function litRoom(i, u, z, u0, u1, z0, z1, col, lit, seed) {
   const fu = (b.u - u0) / w, fz = (b.z - z0) / hh, edge = b.s === 'back' && (fu < 0.03 || fu > 0.97 || fz < 0.03 || fz > 0.97);
   const k = hash(seed, 1, 881), lamp = Math.hypot(fu - 0.5, (b.s === 'ceil' ? b.q / (w * 0.9) : 9) - 0.45) < 0.11;
   if (b.s === 'ceil') { BG[i] = lamp ? C(YEL, 12) : C(col, 2.5); return set(i, ' ', 0); } // a lampshade's glow
-  if (b.s === 'floor') { BG[i] = C(BRICK, 1.5 + (1 - b.q / (w * 0.9)) * 1.5); return set(i, fract(b.u * 40) < 0.2 ? '|' : ' ', C(BRICK, lit * 0.5)); }
-  if (b.s === 'side') { BG[i] = C(col, 2.2); return set(i, (Math.floor(b.q * 60) + Math.floor(b.z * 60)) % 4 ? ' ' : '.', C(col, lit * 0.4)); }
-  if (edge) { BG[i] = C(col, 2); return set(i, fz < 0.03 || fz > 0.97 ? '_' : '|', C(GRAY, lit * 0.5)); }
+  if (b.s === 'floor') { BG[i] = C(BRICK, 1.5 + (1 - b.q / (w * 0.9)) * 1.5 - (fract(b.u * 40) < 0.2 ? .4 : 0)); return set(i, ' ', 0); } // floorboards
+  if (b.s === 'side') { BG[i] = C(col, 2.2 - b.q / (w * .9) * .4); return set(i, ' ', 0); } // the side wall, darker toward the back
+  if (edge) { BG[i] = C(col, 2.6); return set(i, ' ', 0); } // the back wall's corners and skirting
   BG[i] = C(col, 4);
-  if (k < 0.25 && fz < 0.75 && Math.abs(fu - 0.3) < 0.18) return set(i, fract(fz * 5) < 0.2 ? '=' : '#', C(ITEM_COL[(fu * 20 | 0) & 7], lit)); // a bookshelf
-  if (k < 0.45 && fz < 0.3 && Math.abs(fu - 0.55) < 0.3) return set(i, fz > 0.24 ? '_' : '#', C(WHITE, lit * 0.8)); // a bed
+  set(i, ' ', 0);
+  if (k < 0.25 && fz < 0.75 && Math.abs(fu - 0.3) < 0.18) { BG[i] = fract(fz * 5) < 0.2 ? C(BRICK, 2.4) : C(ITEM_COL[(fu * 20 | 0) & 7], 3 + lit * .1); return; } // a bookshelf: its boards, the books' spines
+  if (k < 0.45 && fz < 0.3 && Math.abs(fu - 0.55) < 0.3) { BG[i] = C(WHITE, fz > 0.24 ? 5 : 3.6); return; } // a bed, its cover lit along the top
   if (k < 0.65 && fz > 0.2 && fz < 0.5 && Math.abs(fu - 0.6) < 0.15) { BG[i] = C(BLUE, 6 + Math.sin(T * 7 + seed) * 2); return set(i, ' ', 0); } // the telly
-  if (k < 0.8 && fz < 0.62 && Math.abs(fu - 0.4 - 0.15 * Math.sin(T * 0.3 + seed)) < 0.06) return set(i, fz > 0.5 ? 'o' : '|', C(GRAY, 3)); // somebody home
-  return set(i, (Math.floor(b.u * 50) + Math.floor(b.z * 50)) % 5 ? ' ' : '.', C(col, lit * 0.4));
+  if (k < 0.8 && fz < 0.62 && Math.abs(fu - 0.4 - 0.15 * Math.sin(T * 0.3 + seed)) < 0.06) { BG[i] = C(GRAY, fz > 0.5 ? 2.4 : 1.4); return; } // somebody home, a silhouette
+  BG[i] = C(col, 4 - fz * .6); // the back wall, the lamp's light falling off toward the ceiling
 }
 // out of a window: a building across the street `near` away (its lit windows), the skyline at the horizon (fixed to
 // the direction you look, so it stays put as you walk past), and the sky. `up`: how high the window is above the

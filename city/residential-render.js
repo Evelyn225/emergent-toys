@@ -104,25 +104,24 @@ function residentialDetailShade(o, i, t, L) {
   const z = HIT.w, p = o.profile, rail = o.kind === 'balcony-rail' || o.kind === 'escape-rail' || o.kind === 'escape-flight-rail';
   if (o.kind === 'escape-drop') {
     if (Math.abs(HIT.u) < .016 && fract(z * 40) > .15) return false;
-    BG[i] = C(GRAY, 1); set(i, Math.abs(HIT.u) < .016 ? '-' : '|', C(GRAY, L * .85)); return true;
+    BG[i] = C(GRAY, (1.2 + L * .15) * (Math.abs(HIT.u) < .016 ? 1.2 : 1)); set(i, ' ', 0); return true; // the drop ladder: rails and rungs in black iron
   }
   if (rail) {
     const top = o.kind === 'escape-flight-rail' ? o.mid + o.slope * HIT.u + o.railHeight : o.z1;
     const bottom = o.kind === 'escape-flight-rail' ? top - o.railHeight : o.z0;
     if (z < bottom || z > top + .006) return false;
     const bar = Math.abs(z - top) < .01 || Math.abs(z - bottom) < .008 || Math.abs(fract(HIT.u * (o.kind === 'balcony-rail' ? 5 : 16)) - .5) < .09;
-    if (bar) { BG[i] = C(GRAY, 1); set(i, Math.abs(z - top) < .01 ? '-' : '|', C(o.kind === 'balcony-rail' ? p.trim : GRAY, L * .8)); return true; }
+    if (bar) { BG[i] = C(o.kind === 'balcony-rail' ? p.trim : GRAY, (1.3 + L * .18) * (Math.abs(z - top) < .01 ? 1.25 : 1)); set(i, ' ', 0); return true; } // rails and balusters, the handrail catching the light
     if (o.kind !== 'balcony-rail' || !p.glass || Math.abs(fract(HIT.u * 7 + z * 3) - .5) > .045) return false;
-    set(i, ':', C(CYAN, L * .48)); return true;
+    BG[i] = C(CYAN, 1.2 + day * .8); set(i, ' ', 0); return true; // a glass panel's sheen
   }
   if (o.kind === 'escape-stair') {
     if (HIT.face >= 7 && fract((HIT.u + o.hl) * 55) < .28) return false;
-    BG[i] = C(GRAY, 1 + L * .16);
-    set(i, HIT.face >= 7 ? '=' : '|', C(GRAY, L * .8)); return true;
+    BG[i] = C(GRAY, (1.1 + L * .16) * (HIT.face >= 7 ? 1.2 : 1)); set(i, ' ', 0); return true; // the stair's treads lit, its stringers in shadow
   }
   if (o.kind === 'leaves') {
     if (Math.abs(HIT.u / o.hl) + Math.abs((z - (o.z0 + o.z1) / 2) / (o.z1 - o.z0)) > 1.15) return false;
-    BG[i] = C(GREEN, 1 + L * .16); set(i, '%', C(GREEN, L * .9)); return true;
+    BG[i] = C(GREEN, 1.3 + L * .2 + (hash(Math.floor(HIT.u * 400), Math.floor(z * 400), 1820) - .5) * .9 * clamp(1 - t / projY / .01, 0, 1)); set(i, ' ', 0); return true; // leaves, each its own tone up close
   }
   if (o.kind === 'service-spine' && HIT.face < 5) {
     const fl = Math.floor((z - .48) / o.fh), floor0 = .48 + fl * o.fh;
@@ -134,8 +133,8 @@ function residentialDetailShade(o, i, t, L) {
   else if (o.kind === 'escape-platform') base = GRAY;
   else if (o.kind === 'service-spine') base = p.accent;
   BG[i] = C(base, (1.8 + L * .33) * shadeFace(HIT.face));
-  set(i, HIT.face === 5 || o.kind === 'residential-cornice' || o.kind === 'balcony-slab' ? '=' :
-    o.kind === 'service-spine' && fract(z * 18) < .08 ? '_' : ' ', C(base, L * .88));
+  if (o.kind === 'service-spine' && HIT.face < 5) BG[i] = C(base, (BG[i] & 15) - coveGroove(z, 1 / 18, .004, t / projY) * .6);
+  set(i, ' ', 0);
   if (HIT.face === 5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7,1,0,HIT.w);
   return true;
 }

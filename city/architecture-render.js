@@ -119,7 +119,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (f.height - z < 0.065 || Math.abs(z - 0.42) < 0.025 || onPodium && podium - z < 0.06) { BG[i] = C(b.sty === 14 ? STONE : GRAY, 2 + L * 0.32); return set(i, ' ', 0); } // the parapet and band courses
   const corner = Math.min(along, width - along), bays = Math.max(1, Math.floor((width - 0.12) / (b.sty === 1 ? 0.22 : 0.32)));
   const spacing = (width - 0.12) / bays, bay = Math.floor((along - 0.06) / spacing), fu = fract((along - 0.06) / spacing);
-  if (corner < 0.06) return set(i, '|', C(stone ? base : GRAY, L));
+  if (corner < 0.06) { BG[i] = C(stone ? base : GRAY, (2.3 + L * .3) * (corner < .015 ? 1.15 : 1)); return set(i, ' ', 0); } // the corner, its arris catching the light
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
@@ -147,14 +147,18 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   }
   const floors = Math.max(1, Math.round((f.height - 0.5) * 3)), fh = (f.height - 0.5) / floors;
   const fl = Math.floor((z - 0.43) / fh), fz = fract((z - 0.43) / fh), lit = hash(bay, fl, sk0(b.seed)) > litT;
-  if (b.sty === 14) {
-    if (fu < 0.15 || fu > 0.85) return set(i, '|', C(base, L));
-    if (fz < 0.2) return set(i, fl % 4 === 0 ? '=' : '-', C(STONE, L * 0.65));
-    if (f.height - z < 0.3) return set(i, Math.abs(fu - 0.5) < 0.15 ? '^' : '|', C(YEL, Math.max(L, night * 10)));
-  } else if (fu < 0.07 || fz < 0.1) return set(i, fu < 0.07 ? '|' : '-', C(GRAY, L * 0.75));
-  if (stone && (fu < 0.15 || fu > 0.85 || fz < 0.2 || fz > 0.86)) return set(i, fract(z * 12) < 0.06 ? '_' : ' ', C(base, L * 0.7));
-  BG[i] = C(lit ? WARM : b.sty === 1 ? BLUE : CYAN, lit ? 1.8 + night * 4 : 0.7 + day * 1.1);
-  return set(i, lit ? ' ' : b.sty === 1 && fract((along + z * 0.5) * 5) < 0.05 ? '/' : ':', C(lit ? WARM : CYAN, Math.max(L * 0.45, lit ? night * 12 : 0)));
+  const fpU = Math.max(uStep, d / projY), fine = clamp(1 - fpU / .02, 0, 1);
+  set(i, ' ', 0);
+  if (b.sty === 14) { // art deco: rounded limestone piers, spandrel panels, gilt at the crown
+    if (fu < 0.15 || fu > 0.85) { const e = fu < .5 ? fu / .15 : (1 - fu) / .15; BG[i] = C(base, (2.4 + L * .3) * sfBevel(e < .25 ? .7 : e > .8 ? -.6 : 0, fine)); return; }
+    if (fz < 0.2) { BG[i] = C(STONE, (1.8 + L * .24) * (fl % 4 === 0 ? 1.15 : 1) * (Math.abs(fract(fu * 6) - .5) < .1 ? .85 : 1)); return; } // a spandrel, ribbed; every fourth a band course
+    if (f.height - z < 0.3) { const zig = Math.abs(fu - .5) * 2; BG[i] = C(YEL, Math.max(2.2 + L * .25, night * 5) * (fract((f.height - z) * 14 - zig) < .5 ? 1.25 : .8)); return; } // gilt chevrons at the crown
+  } else if (fu < 0.07 || fz < 0.1) { BG[i] = C(GRAY, (1.8 + L * .26) * (fu < .07 ? (fu < .02 ? 1.15 : .9) : 1)); return; } // mullions and spandrels
+  if (stone && (fu < 0.15 || fu > 0.85 || fz < 0.2 || fz > 0.86)) { BG[i] = C(base, 2.3 + L * .28 - coveGroove(z, 1 / 12, .004, fpU) * .7); return; } // coursed stone round the window
+  // the window: lit, or the sky reflected in it (with a streak), its glass set in the bay's frame
+  const a0 = stone ? .15 : .07, a1 = stone ? .85 : 1, z0 = stone ? .2 : .1, z1 = stone ? .86 : 1;
+  if (facadeWindow(i, (fu - a0) * spacing, (a1 - a0) * spacing, (fz - z0) * fh, (z1 - z0) * fh, lit, WARM, L, fpU, stone ? base : GRAY, sk0(b.seed) + bay, b.sty === 1 ? 0 : 1)) return;
+  BG[i] = C(GRAY, 2 + L * .26);
 }
 // A shop's fascia board (architecture.js): its name across the front, in the same lettering that's painted on the wall
 // past ARCH_FASCIA_VIS, and a frame round it. Brownstones paint theirs, gold leaf on a dark board; downtown it's a
