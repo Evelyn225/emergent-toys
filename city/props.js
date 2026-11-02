@@ -72,6 +72,12 @@ function pondSD(lx, ly, bx, by) {
 const inPond = (lx, ly, bx, by, pad = 0) => pondSD(lx, ly, bx, by) < pad;
 // relative to block center, and the way each faces: toward the path through the middle
 const BENCH = [[0.35, -2, -1, 0], [0.35, 2, -1, 0], [-2, 0.35, 0, -1], [2, -0.35, 0, 1]];
+// the skatepark: smooth concrete in the south-east quarter of one park, clear of its pond, paths and benches. Set
+// once the city is in its final place (skatepark.js buildSkatepark, from world-bootstrap.js), which also builds the
+// ledges and rails on it; skatepark-render.js draws them and the concrete
+let SKATEPARK = null;
+const inSkatepark = (x, y, pad = 0) => !!SKATEPARK && x > SKATEPARK.bx * 8 + SKATEPARK.x0 - pad && x < SKATEPARK.bx * 8 + SKATEPARK.x1 + pad &&
+  y > SKATEPARK.by * 8 + SKATEPARK.y0 - pad && y < SKATEPARK.by * 8 + SKATEPARK.y1 + pad;
 const trees = [], benches = [], parks = [];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), dist = districtOf(bx, by);
@@ -406,9 +412,9 @@ for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, 
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
-function solidAt(x, y, pad) {
+function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    if (o.z0 > 0) continue;
+    if (o.z0 > 0 || o.low && feet >= o.z1 - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
   }
