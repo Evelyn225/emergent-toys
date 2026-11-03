@@ -195,6 +195,7 @@ function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k)
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
   if (skatingNow() && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
+  drawSeatedLegs(); // sat down: your legs, when you look down at them (seated-legs.js)
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
