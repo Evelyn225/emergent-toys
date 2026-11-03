@@ -38,7 +38,8 @@ function damageDash() {
   if (fire && !chaseOn) for (let x = 0; x < cols; x++) { // flames over the hood, flickering
     const h = Math.floor((0.5 + 0.5 * Math.sin(x * 0.7 + T * 11)) * (1 + Math.sin(x * 0.23 - T * 3)) * 2), mid = Math.abs(x - cols / 2) < cols * 0.3;
     if (!mid) continue;
-    for (let r = rows - 5; r > rows - 5 - h; r--) { const i = r * cols + x; set(i, r === rows - 5 ? 'W' : '^', C(r === rows - 5 ? ORANGE : YEL, 15)); BG[i] = C(ORANGE, 6 + h); FOGS[i] = FOGB[i] = 0; }
+    const b0 = rows - DASH_ROWS - 1; // (just above the bonnet)
+    for (let r = b0; r > b0 - h; r--) { const i = r * cols + x; set(i, r === b0 ? 'W' : '^', C(r === b0 ? ORANGE : YEL, 15)); BG[i] = C(ORANGE, 6 + h); FOGS[i] = FOGB[i] = 0; }
   }
 }
 // ---- the respray

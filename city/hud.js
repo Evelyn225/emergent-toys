@@ -1,14 +1,29 @@
 // a readout over the view: its letters stay out of the fog (the street behind them doesn't)
 const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
+// rows at the foot of the screen the bonnet and dashboard take from the driver's seat (the prompt and a fire on the bonnet sit above them)
+const DASH_ROWS = 8;
 function dash() {
   const c = me;
-  if (!chaseOn) { // hood and dashboard only from the driver's seat (and they're never in the fog)
-    FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols);
-    for (let r = rows - 4; r < rows; r++) for (let x = 0; x < cols; x++) {
-      const i = r * cols + x;
-      set(i, r === rows - 4 ? '_' : ' ', C(c.body, 6)); BG[i] = r === rows - 4 ? NONE : C(GRAY, 1);
+  if (!chaseOn) { // the bonnet and dashboard, only from the driver's seat (and never in the fog), as colour
+    const top = rows - DASH_ROWS, cx = (cols - 1) / 2, lit = .6 + day * .8, glow = Math.max(night, overcast * .6);
+    const wr = Math.max(10, cols * .14), wy = rows - 1.2, wh = DASH_ROWS - 3.2; // (the wheel: its hub just above the screen's foot) 
+    for (let r = top; r < rows; r++) for (let x = 0; x < cols; x++) {
+      const i = r * cols + x, dx = (x - cx) / cols;
+      let bg = NONE;
+      if (r === top) { if (Math.abs(dx) < .34) bg = C(c.body, 3.5 + lit * 4 - Math.abs(dx) * 6 + (Math.abs(dx) < .012 ? 1.2 : 0)); } // the bonnet's crown, the sky along its crease
+      else if (r === top + 1) bg = C(c.body, 2.6 + lit * 3.2 - Math.abs(dx) * 5 + (Math.abs(Math.abs(dx) - .34) < .008 ? 1.2 : 0)); // its shoulders, falling away to the wings
+      else if (r === top + 2) bg = C(GRAY, 2.2 + lit * .6); // the dashboard's top, catching the light
+      else bg = C(GRAY, .9 - (r - top) * .06); // the dashboard, darker toward you
+      if (mode === 'drive' && r > top + 1) {
+        const ex = (x - cx) / wr, ey = (r - wy) / wh, d = Math.hypot(ex, ey);
+        for (const sx of [-.4, .4]) { const dd = Math.hypot(((x - cx) / wr - sx) / .2, (r - (top + 3.6)) / 1.25); if (dd < 1) bg = dd > .7 ? C(GRAY, 3.5 + lit * .5) : C(glow > .3 ? CYAN : GRAY, glow > .3 ? 4 + glow * 3 : 2); } // two dials behind the wheel: a bright bezel, the face lit after dark
+        if (Math.abs(d - 1) < .1) bg = C(GRAY, ey < -.8 ? 4.5 + lit : 2.6); // the rim, lit along its top
+        else if (d < .24) bg = C(GRAY, d < .1 ? 5 + lit : 3); // the hub and its boss
+        else if (d < 1 && Math.abs(ey + .12) < .09) bg = C(GRAY, 2.4); // the spokes out to each side
+      }
+      if (bg === NONE) continue; // (beside the bonnet: the road)
+      set(i, ' ', 0); BG[i] = bg; FOGS[i] = FOGB[i] = 0;
     }
-    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => dashText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
   }
   if (mode === 'drive' && job) { // on a taxi shift
     dashText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
@@ -381,7 +396,7 @@ function hud() {
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
-  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
+  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
