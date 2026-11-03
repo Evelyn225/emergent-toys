@@ -18,22 +18,22 @@ function exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (front && z > 0.88 && z < 1.25) { // the pediment: a stone triangle, EXCHANGE on its frieze
     const peak = 1.25 - Math.abs(along - len / 2) / (len / 2) * 0.3;
     if (z > peak) return set(i, ' ', 0);
-    if (z > peak - 0.03) return set(i, '/', C(WHITE, L));
+    if (z > peak - 0.03) { BG[i] = C(STONE, 2.2 + L * .3 + (z > peak - .012 ? .8 : 0)); return set(i, ' ', 0); } // the raking cornice, lit along its top
     if (Math.abs(z - 0.95) < 0.04 && wallText(i, u, uStep, z, d, 'STOCK EXCHANGE', sgn * (a0 + len / 2), 0.95, 0.07, 0.06, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
-    return set(i, fract(z * 30) < 0.15 ? '-' : ' ', C(WHITE, L * 0.8));
+    BG[i] = C(STONE, 1.6 + L * .25 - (fract(z * 30) < 0.15 ? .5 : 0)); return set(i, ' ', 0); // the tympanum in courses
   }
   if (z < 0.88) { // the colonnade: fat fluted columns, steps at the foot, bronze doors in the middle
-    if (z < 0.08) return set(i, '=', C(WHITE, L));
-    if (z > 0.8) return set(i, '=', C(WHITE, L * 1.1));
+    if (z < 0.08) { BG[i] = C(STONE, 1.9 + L * .3 + (fract(z / .02) > .75 ? .8 : -.2)); return set(i, ' ', 0); } // the steps, each nosing lit
+    if (z > 0.8) { BG[i] = C(STONE, 2.1 + L * .3 + (z > .86 ? .7 : 0)); return set(i, ' ', 0); } // the architrave
     const fc = fract(along * 1.2);
-    if (Math.abs(fc - 0.5) < 0.16) return set(i, Math.abs(fc - 0.5) < 0.05 ? '|' : ':', C(WHITE, L * (1 - Math.abs(fc - 0.5) * 2)));
-    if (front && Math.abs(along - len / 2) < 0.3 && z < 0.5) { BG[i] = C(BRICK, 1.5 + glow * 2); return set(i, Math.abs(along - len / 2) < 0.02 ? '|' : '#', C(ORANGE, L * 0.8)); }
+    if (Math.abs(fc - 0.5) < 0.16) { const r = (fc - .5) / .16; BG[i] = C(STONE, (1.4 + L * .32) * (1 - r * .45) - (Math.abs(fract(r * 3.5) - .5) < .12 ? .4 : 0)); return set(i, ' ', 0); } // a fat fluted column, round: lit on one side, its flutes in shadow
+    if (front && Math.abs(along - len / 2) < 0.3 && z < 0.5) { BG[i] = Math.abs(along - len / 2) < 0.02 ? C(ORANGE, 2) : C(ORANGE, 1.6 + glow * 2 + L * .15 - (Math.abs(fract(z * 12) - .5) < .1 ? .5 : 0)); return set(i, ' ', 0); } // the bronze doors, panelled
     BG[i] = C(GRAY, 0.5 + glow * 1.5); return set(i, ' ', 0); // shadow behind the columns
   }
   // the upper floors: stone in courses, tall windows, lit late (somebody's always trading)
   const fu = fract(along * 2), fz = fract(z * 3);
-  if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.85) return hash(Math.floor(along * 2), Math.floor(z * 3), 1501) > 0.5 - glow * 0.3 ? set(i, '#', C(YEL, Math.max(L, glow * 13))) : set(i, ':', C(day > 0.5 ? CYAN : GRAY, L * 0.4));
-  return set(i, fract(z * 9) < 0.12 ? '_' : ' ', C(WHITE, L * 0.6));
+  if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.85) { BG[i] = hash(Math.floor(along * 2), Math.floor(z * 3), 1501) > 0.5 - glow * 0.3 ? C(YEL, Math.max(2.5, glow * 9)) : C(CYAN, 1 + L * .12 + (fz > .6 ? .5 + day * .6 : 0)); return set(i, ' ', 0); } // tall windows, lit late
+  BG[i] = C(STONE, 1.8 + L * .3 - (fract(z * 9) < 0.12 ? .6 : 0) + (fu > .25 && fu < .75 && fz > .15 && fz <= .2 ? .7 : 0)); return set(i, ' ', 0); // stone in courses; the sills
 }
 // ---- inside: the trading floor
 const EXCH_W = 20, EXCH_H = 14;

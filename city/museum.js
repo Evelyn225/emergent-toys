@@ -45,11 +45,12 @@ function drawMuseumRoof() {
     const gable = Math.abs(Math.abs(v) - 3) < 0.001;
     if (gable) {
       const rim = z > MUSEUM_RIDGE - Math.abs(u) * (MUSEUM_RIDGE - MUSEUM_EAVE) / 3 - 0.035;
-      BG[i] = C(WHITE, 2 + L * 0.18);
-      set(i, rim ? (u < 0 ? '/' : '\\') : Math.abs(u) < 0.3 && z < 1.55 && z > 1.38 ? 'o' : ' ', C(rim ? WHITE : YEL, L));
-    } else {
-      BG[i] = C(GRAY, 1.5 + L * (u < 0 ? 0.14 : 0.09));
-      set(i, fract(v * 5) < 0.12 ? '-' : fract(u * 8 + (Math.floor(v * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(GRAY, L * 0.7));
+      const oculus = Math.abs(u) < 0.3 && z < 1.55 && z > 1.38; // a round window in the gable
+      BG[i] = rim ? C(STONE, 2.6 + L * .3) : oculus ? C(YEL, 2.4 + L * .2 + Math.max(night, overcast * .5) * 4) : C(STONE, 1.8 + L * 0.2); // the raking cornice lit, the pediment
+      set(i, ' ', 0);
+    } else { // the roof: lead sheet in bays, its rolls and seams catching the light
+      BG[i] = C(GRAY, 1.5 + L * (u < 0 ? 0.14 : 0.09) + (fract(v * 5) < 0.12 ? .6 : 0) - (fract(u * 8 + (Math.floor(v * 5) & 1) * 0.5) < 0.08 ? .4 : 0));
+      set(i, ' ', 0);
     }
     return true;
   }, museumRoofRay);
@@ -60,23 +61,24 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const front = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - y0)) < 0.01;
   BG[i] = bgAt(WHITE, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.75 : 1), d);
   if (h > 2.5) { // the dome: copper gone green, ribbed, a ring of little windows, a lantern on top
-    if (z < 2.2) return set(i, fract(z * 9) < 0.12 ? '_' : ' ', C(WHITE, L * 0.6));
+    if (z < 2.2) { BG[i] = C(STONE, 1.8 + L * .3 - (fract(z * 9) < 0.12 ? .6 : 0)); return set(i, ' ', 0); }
     const top = 2.2 + 1.2 * Math.sqrt(Math.max(0, 1 - ((fract((wc - (side ? c.bx * 8 + 4 : y0 + 2)) / 2 + 0.5) - 0.5) * 2) ** 2));
     if (z > top) return set(i, ' ', 0);
     BG[i] = C(GREEN, (1.6 + L * 0.2) * (side ? 0.9 : 0.7));
     if (z > 2.45 && z < 2.6 && fract(wc * 3) < 0.4) { BG[i] = C(YEL, 1 + glow * 5); return set(i, ' ', 0); }
-    return set(i, fract(wc * 4) < 0.1 ? '|' : z > top - 0.06 ? '^' : ' ', C(CYAN, L * 0.7));
+    if (fract(wc * 4) < 0.1 || z > top - 0.06) BG[i] = C(GREEN, (2.2 + L * .25) * (side ? 0.9 : 0.7)); // the copper ribs, standing proud
+    return set(i, ' ', 0);
   }
   if (front && z > 1.18 && z <= 1.32) { // the frieze
     if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
-    return set(i, fract(z * 30) < 0.15 ? '-' : ' ', C(WHITE, L * 0.8));
+    BG[i] = C(STONE, 1.9 + L * .3 - (fract(z * 30) < 0.15 ? .5 : 0)); return set(i, ' ', 0);
   }
   if (z < 1.18) { // the colonnade: steps, eight fluted columns, banners hung between them, the bronze doors
-    if (z < 0.08) return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(WHITE, L));
-    if (z > 1.1) return set(i, '=', C(WHITE, L * 1.1));
+    if (z < 0.08) { BG[i] = C(STONE, 1.9 + L * .3 + (fract(z * 40) < 0.5 ? .8 : -.2)); return set(i, ' ', 0); } // the steps, each nosing lit
+    if (z > 1.1) { BG[i] = C(STONE, 2.1 + L * .3 + (z > 1.15 ? .7 : 0)); return set(i, ' ', 0); } // the architrave
     const fc = fract(along * 1.25);
-    if (Math.abs(fc - 0.5) < 0.15) return set(i, Math.abs(fc - 0.5) < 0.05 ? '|' : ':', C(WHITE, L * (1 - Math.abs(fc - 0.5) * 2)));
-    if (front && Math.abs(along - len / 2) < 0.35 && z < 0.55) { BG[i] = C(BRICK, 1.5 + glow * 2); return set(i, Math.abs(along - len / 2) < 0.02 ? '|' : '#', C(ORANGE, L * 0.8)); } // the doors
+    if (Math.abs(fc - 0.5) < 0.15) { const r = (fc - .5) / .15; BG[i] = C(STONE, (1.4 + L * .32) * (1 - r * .45) - (Math.abs(fract(r * 3.5) - .5) < .12 ? .4 : 0)); return set(i, ' ', 0); } // a fluted column, round
+    if (front && Math.abs(along - len / 2) < 0.35 && z < 0.55) { BG[i] = Math.abs(along - len / 2) < 0.02 ? C(ORANGE, 2) : C(ORANGE, 1.6 + glow * 2 + L * .15 - (Math.abs(fract(z * 12) - .5) < .1 ? .5 : 0)); return set(i, ' ', 0); } // the bronze doors
     const bk = Math.floor(along * 1.25);
     if (front && z > 0.62 && z < 1.02 && bk !== 3 && Math.abs(fc) > 0.2 && fract(along * 1.25) > 0.22 && fract(along * 1.25) < 0.78) { // banners: what's on
       const col = [RED, BLUE, MAG, GREEN, RED, BLUE, MAG, GREEN][bk & 7], word = ['T.REX', 'GEMS', 'ART', 'EGYPT'][bk & 3];
@@ -88,9 +90,9 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   // the upper storey: stone in courses, tall arched windows, dark at night (or lit, if someone's in there who shouldn't be)
   const fu = fract(along * 1.5), fz = fract(z * 2);
-  if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.9) return set(i, fz > 0.8 ? '^' : ':', C(day > 0.5 ? CYAN : GRAY, L * 0.5));
+  if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.9) { BG[i] = fz > 0.8 ? C(STONE, 2.4 + L * .3) : C(day > 0.5 ? CYAN : GRAY, 1 + L * .12 + (fz > .6 ? .5 : 0)); return set(i, ' ', 0); } // tall arched windows, their heads in stone
   void sh;
-  return set(i, fract(z * 9) < 0.12 ? '_' : ' ', C(WHITE, L * 0.6));
+  BG[i] = C(STONE, 1.8 + L * .3 - (fract(z * 9) < 0.12 ? .6 : 0)); return set(i, ' ', 0); // stone in courses
 }
 
 // ---- inside: the walls of each room
