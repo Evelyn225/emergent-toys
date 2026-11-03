@@ -448,23 +448,24 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
   if (composedLandmarkFacade(i,z,h,side,sty,fog,wc,mx,my)) return;
   const L = fog * amb * (side ? 10 : 15);
   if (sty === 5) { // tower wrapped in giant video screens, with a scrolling news ticker
-    if (z < 0.5 || z > h - 0.3) { BG[i] = bgAt(GRAY, day * 2 * fog); return set(i, '=', C(GRAY, L)); }
+    if (z < 0.5 || z > h - 0.3) { BG[i] = C(GRAY, 1.4 + L * .3 - (fract(z * 6) < .1 ? .6 : 0)); return set(i, ' ', 0); } // the plinth and the crown, in steel panels
     if (z > 1.1 && z < 1.5) { // ticker: one cell per letter, scrolling left
       const TK = TICKER + liveTicker(), q = (u + T * 1.2) / 0.3, p = mod(Math.floor(q), TK.length); // (the news, and the market)
       BG[i] = C(GRAY, 1);
       return set(i, (uStep >= 0.3 || oneCell((fract(q) - 0.5) * 0.3, uStep)) && oneCell(z - 1.3, d / projY) ? TK[p] : ' ', C(YEL, 15));
     }
     const k = (Math.floor(T / 7) + (side ? 1 : 0)) & 3, v = noise(u * 0.5 + T * 0.4, z * 0.7 - T * 0.25, 111 + k);
-    BG[i] = C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight
-    return set(i, v > 0.7 ? '*' : ' ', C(WHITE, 15));
+    BG[i] = v > 0.7 ? C(WHITE, 14) : C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight, their highlights white
+    return set(i, ' ', 0);
   }
   // 6: construction: a steel skeleton with open floors, the unlit interior in shadow behind the frame
   BG[i] = bgAt(GRAY, (0.6 + day * 1.4) * fog);
   const fl = fract(z * 3), fu = fract(u * 2);
-  if (fl < 0.1) return set(i, '=', C(ORANGE, L));
-  if (fu < 0.08) return set(i, '|', C(ORANGE, L));
-  if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) return set(i, '/', C(ORANGE, L * 0.7));
-  set(i, fl < 0.16 ? '_' : fract(u * 2 + 0.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.35)); // the slab soffit and the next row of columns, deeper in
+  set(i, ' ', 0);
+  if (fl < 0.1) { BG[i] = C(ORANGE, 1.6 + L * .32 + (fl > .07 ? .6 : 0)); return; } // the floor beams, primed steel, lit along their tops
+  if (fu < 0.08) { BG[i] = C(ORANGE, 1.4 + L * .3 + (fu < .04 ? .4 : -.2)); return; } // the columns, lit on one side
+  if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) { BG[i] = C(ORANGE, 1.2 + L * .22); return; } // a cross brace
+  BG[i] = fl < 0.16 ? C(GRAY, 1 + L * .1) : fract(u * 2 + 0.5) < 0.05 ? C(ORANGE, .9 + L * .12) : bgAt(GRAY, (0.6 + day * 1.4) * fog); // the slab soffit and the next row of columns, deeper in
 }
 
 // the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends

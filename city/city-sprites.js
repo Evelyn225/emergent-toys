@@ -1144,21 +1144,21 @@ function drawLighthouse(lx, ly, flare) {
   drawBox({ x: lx, y: ly, c: 1, s: 0, hl: Math.max(minR, 0.24), hw: Math.max(minR, 0.24), r1: Math.max(minR, 0.24 - LH_TOWER * 0.035), z0: 0, z1: LH_TOWER }, (i, t, L) => {
     const ang = Math.atan2(HIT.v, HIT.u), light = frustumLit(), w = HIT.w;
     if (HIT.face !== 3) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; }
-    if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = C(GRAY, 1); return set(i, w > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door (facing -y)
-    if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; } // slit windows
+    if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = w > 0.19 ? C(WHITE, 4 + L * .3) : C(BRICK, 1.2 + L * .15 - (Math.abs(ang + Math.PI / 2) < .015 ? .5 : 0)); return set(i, ' ', 0), true; } // the door (facing -y), under its white lintel
+    if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = lit > .3 ? C(WARM, 4 + lit * 6) : C(GRAY, 1); return set(i, ' ', 0), true; } // slit windows, lit on the stair after dark
     BG[i] = Math.floor(w / LH_BAND) & 1 ? C(RED, (2 + L * 0.5) * light) : C(WHITE, (5 + L * 0.6) * light); // the bands, painted on
     return set(i, ' ', 0), true;
   }, rayFrustum);
-  drawBox(boxAt(lx, ly, 1, 0, 0.3, 0.3, LH_TOWER, 2.27), (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '=', C(WHITE, L)), true; }, rayCopperDrum); // the gallery
+  drawBox(boxAt(lx, ly, 1, 0, 0.3, 0.3, LH_TOWER, 2.27), (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3 + (HIT.face === 5 ? .6 : HIT.w > 2.25 ? .3 : -.4)); return set(i, ' ', 0), true; }, rayCopperDrum); // the gallery, its deck lit, its edge in shadow under
   drawBox(boxAt(lx, ly, 1, 0, 0.29, 0.29, 2.27, 2.34), (i, t, L) => { // its railing: posts and a top rail, the lantern room showing between
-    if (HIT.w > 2.32 || HIT.face === 5) return set(i, '-', C(WHITE, L * 0.9)), true;
-    return fract(Math.atan2(HIT.v, HIT.u) * 8 / Math.PI) < 0.3 ? (set(i, '|', C(WHITE, L * 0.9)), true) : false;
+    if (HIT.w > 2.32 || HIT.face === 5) { BG[i] = C(WHITE, 5 + L * .4); return set(i, ' ', 0), true; } // the top rail
+    return fract(Math.atan2(HIT.v, HIT.u) * 8 / Math.PI) < 0.3 ? (BG[i] = C(WHITE, 4 + L * .3), set(i, ' ', 0), true) : false; // the posts, the lantern room between
   }, rayCopperDrum);
   drawBox(boxAt(lx, ly, 1, 0, Math.max(minR, 0.15), Math.max(minR, 0.15), 2.27, 2.62), (i, t, L) => { // the lantern room
     const across = HIT.u * -vyn + HIT.v * vxn; // (from the axis, as you see it)
-    if (lit && Math.abs(across) < 0.075 && Math.abs(HIT.w - LH_H) < 0.07) { BG[i] = C(YEL, 8 + flare * 7); return set(i, '@', C(WHITE, 15)), true; }
+    if (lit && Math.abs(across) < 0.075 && Math.abs(HIT.w - LH_H) < 0.07) { BG[i] = Math.abs(across) < .03 ? C(WHITE, 15) : C(YEL, 8 + flare * 7); return set(i, ' ', 0), true; } // the lamp: white-hot at its heart
     if (HIT.face === 5) { BG[i] = C(RED, 2); return set(i, ' ', 0), true; }
-    BG[i] = C(CYAN, 1 + lit * 3); return set(i, fract(Math.atan2(HIT.v, HIT.u) * 7 / Math.PI) < 0.15 ? '|' : ' ', C(GRAY, L * 0.8)), true;
+    BG[i] = fract(Math.atan2(HIT.v, HIT.u) * 7 / Math.PI) < 0.15 ? C(GRAY, 2 + L * .3) : C(CYAN, 1 + lit * 3 + (HIT.w > 2.5 ? .6 : 0)); return set(i, ' ', 0), true; // the glazing in its astragals
   }, rayCopperDrum);
   drawBox(boxAt(lx, ly, 1, 0, Math.max(minR, 0.17), Math.max(minR, 0.17), 2.62, 2.79), (i, t, L) => { BG[i] = C(RED, 2 + L * 0.35); return set(i, ' ', 0), true; }, rayCone); // the dome
   rod(lx, ly, 2.78, lx, ly, 2.88, 0.008); // the vent and lightning rod
