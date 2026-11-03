@@ -102,3 +102,56 @@ function warehouseInside(i, u, z, sh, open, L, sk, fd) {
   sceneOverride = SHOP_SCENES.storage;
   try { shopWindowBehind(i, u, z, w0 + .15, w0 + 1.1, .0, .3, sh, open, L, sk + Math.floor(u * .8)); } finally { sceneOverride = null; }
 }
+
+// ---- the roofs (pass 25): sheds and works under sawtooth north lights, cold stores with their refrigeration plant,
+// mills with ventilators. Each roof cell of an industrial building gets its own, so a building's teeth run on unbroken
+// across its cells. Teeth: ridges along x, the steep glazed face to the north (-y), the long slope of sheet to the south.
+const SAWTOOTH = { teeth: 3, h: .11 };
+// a tooth as half-spaces (n.p <= d, box-local x/y, absolute z): 0 the floor, 1-2 the ends, 3 the glazed face, 4 the slope
+function sawtoothPlanes(h, P, H) {
+  return [[0, 0, -1, -h], [1, 0, 0, .5], [-1, 0, 0, .5], [0, -1, 0, P / 2], [0, H / P, 1, h + H - P / 2 * H / P]];
+}
+let INDUSTRIAL_ROOFS_B = null;
+function industrialRoofs() {
+  if (!INDUSTRIAL_ROOFS_B) { // (built once the city is: which roof cells, what kind)
+    const items = [];
+    for (let k = 0; k < N * N; k++) {
+      if (STY[k] !== 8 || SHOP[k]?.architecture || !map[k]) continue;
+      const sk = sk0(SEED[k]), kind = industrialKind(sk), x = k % N, y = (k / N) | 0;
+      const saw = kind === 'works' || kind === 'shed' && (sk & 2);
+      if (saw || kind === 'cold' && hash(x, y, 1701) < .45 || kind === 'mill' && hash(x, y, 1702) < .35) items.push({ x: x + .5, y: y + .5, h: map[k], kind, saw, sk });
+    }
+    INDUSTRIAL_ROOFS_B = bucketed(items);
+  }
+  const P = 1 / SAWTOOTH.teeth, H = SAWTOOTH.h, lit = Math.max(night, overcast * .6) > .3;
+  forNear(INDUSTRIAL_ROOFS_B, r => {
+    const [vx, vy] = R(r.x, r.y), d = Math.hypot(vx, vy);
+    if (d > vis || !inView(vx, vy, .8)) return;
+    if (r.saw) for (let t = 0; t < SAWTOOTH.teeth; t++) {
+      const cy = vy - .5 + (t + .5) * P, planes = sawtoothPlanes(r.h, P, H);
+      drawBox({ x: vx, y: cy, c: 1, s: 0, hl: .5, hw: P / 2, z0: r.h, z1: r.h + H, planeData: roofPlaneData(planes) }, (i, tt, L) => {
+        const f = HIT.face, fp = tt / projY;
+        set(i, ' ', 0);
+        if (f === 3) { // the north lights: glazing in steel bars, the sky in it, the works lit up behind it after dark
+          const bar = Math.max(facadeLine(.03 - Math.abs(fract(HIT.u / .06) - .5) * .06, .004, fp), facadeLine(Math.abs(HIT.w - r.h - H * .5), .004, fp));
+          BG[i] = bar > .5 ? C(GRAY, 1.6 + L * .2) : lit && hash(r.x, t, 1703) > .3 ? C(WARM, 5 + night * 4) : C(CYAN, 1.4 + day * 1.6 + (HIT.w - r.h > H * .5 ? .5 : 0) - bar);
+          return true;
+        }
+        if (f === 4) { BG[i] = C(r.sk & 1 ? ORANGE : GRAY, 1.6 + L * .32 + roadBands(HIT.u, .02, .3, fp) * .4 - (r.sk & 1 ? .3 : 0)); paintSettledSnow(i, r.x + HIT.u, r.y + HIT.v, L * .6, .7, 0, HIT.w); return true; } // the slope of corrugated sheet, lit by the sky
+        BG[i] = C(GRAY, (1.3 + L * .25) * shadeFace(f === 0 ? 6 : 1)); return true; // its ends
+      }, rayMansard);
+    }
+    else if (r.kind === 'cold') { // a refrigeration unit: a louvred grey box, two fans on top
+      const ux = vx + (hash(r.x, r.y, 1704) - .5) * .4, uy = vy + (hash(r.x, r.y, 1705) - .5) * .4;
+      drawBox(boxAt(ux, uy, 1, 0, .12, .06, r.h, r.h + .06), (i, tt, L) => {
+        set(i, ' ', 0);
+        if (HIT.face === 5) { const fan = Math.min(Math.hypot(HIT.u - .06, HIT.v), Math.hypot(HIT.u + .06, HIT.v)); BG[i] = fan < .045 ? C(GRAY, fan < .012 ? 3 : .8 + (fract(Math.atan2(HIT.v, HIT.u - Math.sign(HIT.u) * .06) / 1.05 + T * 3) < .5 ? .6 : 0)) : C(GRAY, 2.6 + L * .3); return true; } // the fans turning
+        BG[i] = C(GRAY, (1.8 + L * .3) * shadeFace(HIT.face) - roadBands(HIT.w, .008, .4, tt / projY) * .6); return true; // louvred sides
+      });
+    } else { // a mill's roof ventilator: a drum on a short neck, a cap over it
+      const ux = vx + (hash(r.x, r.y, 1706) - .5) * .5, uy = vy + (hash(r.x, r.y, 1707) - .5) * .5;
+      drawBox({ x: ux, y: uy, c: 1, s: 0, hl: .035, hw: .035, r1: .035, z0: r.h, z1: r.h + .07 }, (i, tt, L) => { BG[i] = C(GRAY, (1.4 + L * .3) * frustumLit() + (HIT.face === 5 ? .4 : 0) - (fract((HIT.w - r.h) * 60) < .2 ? .4 : 0)); return set(i, ' ', 0), true; }, rayFrustum); // the turbine's vanes
+      drawBox({ x: ux, y: uy, c: 1, s: 0, hl: .045, hw: .045, r1: .02, z0: r.h + .07, z1: r.h + .09 }, (i, tt, L) => { BG[i] = C(GRAY, (1.8 + L * .3) * frustumLit()); return set(i, ' ', 0), true; }, rayFrustum); // its cap
+    }
+  });
+}
