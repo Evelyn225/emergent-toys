@@ -19,7 +19,7 @@ function bodegaWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.9) { BG[i] = C(GRAY, 1.6 + L * 0.2); return set(i, ' ', 0), true; }
   BG[i] = C(YEL, 4.5 + L * 0.15); return set(i, ' ', 0), true;
 }
-ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..#', '#.SS.SS..#', '#........#', '#........#', '#........#', '####DD####'],
+ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#........#', '#.SS..SS.#', '#........#', '#........#', '#........#', '####DD####'], // (one row of two short shelf runs down the middle, room all round them: a bodega is cramped, not blocked)
   light: 1.0, floor: 'lino', ceil: 'strip', sign: false, glyphs: '%#o=]', wall: bodegaWall, keeper: [8.4, 6.4],
   props: r => [SHOP_COUNTER(7.55, 6.4, 1.0, 0.28, 1.05, 0, 1, BRICK), PLEXI_SCREEN(7.3, 6.4, 1.0, 1.05, 0.9, 0, 1), // the counter, the plexiglass
     { ...standing(8.4, 6.4, r.neon), face: [-1, 0] }, shopCat(7.6, 7.05, 1.05),
