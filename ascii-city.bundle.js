@@ -13847,6 +13847,59 @@ function warehouseInside(i, u, z, sh, open, L, sk, fd) {
   sceneOverride = SHOP_SCENES.storage;
   try { shopWindowBehind(i, u, z, w0 + .15, w0 + 1.1, .0, .3, sh, open, L, sk + Math.floor(u * .8)); } finally { sceneOverride = null; }
 }
+
+// ---- the roofs (pass 25): sheds and works under sawtooth north lights, cold stores with their refrigeration plant,
+// mills with ventilators. Each roof cell of an industrial building gets its own, so a building's teeth run on unbroken
+// across its cells. Teeth: ridges along x, the steep glazed face to the north (-y), the long slope of sheet to the south.
+const SAWTOOTH = { teeth: 3, h: .11 };
+// a tooth as half-spaces (n.p <= d, box-local x/y, absolute z): 0 the floor, 1-2 the ends, 3 the glazed face, 4 the slope
+function sawtoothPlanes(h, P, H) {
+  return [[0, 0, -1, -h], [1, 0, 0, .5], [-1, 0, 0, .5], [0, -1, 0, P / 2], [0, H / P, 1, h + H - P / 2 * H / P]];
+}
+let INDUSTRIAL_ROOFS_B = null;
+function industrialRoofs() {
+  if (!INDUSTRIAL_ROOFS_B) { // (built once the city is: which roof cells, what kind)
+    const items = [];
+    for (let k = 0; k < N * N; k++) {
+      if (STY[k] !== 8 || SHOP[k]?.architecture || !map[k]) continue;
+      const sk = sk0(SEED[k]), kind = industrialKind(sk), x = k % N, y = (k / N) | 0;
+      const saw = kind === 'works' || kind === 'shed' && (sk & 2);
+      if (saw || kind === 'cold' && hash(x, y, 1701) < .45 || kind === 'mill' && hash(x, y, 1702) < .35) items.push({ x: x + .5, y: y + .5, h: map[k], kind, saw, sk });
+    }
+    INDUSTRIAL_ROOFS_B = bucketed(items);
+  }
+  const P = 1 / SAWTOOTH.teeth, H = SAWTOOTH.h, lit = Math.max(night, overcast * .6) > .3;
+  forNear(INDUSTRIAL_ROOFS_B, r => {
+    const [vx, vy] = R(r.x, r.y), d = Math.hypot(vx, vy);
+    if (d > vis || !inView(vx, vy, .8)) return;
+    if (r.saw) for (let t = 0; t < SAWTOOTH.teeth; t++) {
+      const cy = vy - .5 + (t + .5) * P, planes = sawtoothPlanes(r.h, P, H);
+      drawBox({ x: vx, y: cy, c: 1, s: 0, hl: .5, hw: P / 2, z0: r.h, z1: r.h + H, planeData: roofPlaneData(planes) }, (i, tt, L) => {
+        const f = HIT.face, fp = tt / projY;
+        set(i, ' ', 0);
+        if (f === 3) { // the north lights: glazing in steel bars, the sky in it, the works lit up behind it after dark
+          const bar = Math.max(facadeLine(.03 - Math.abs(fract(HIT.u / .06) - .5) * .06, .004, fp), facadeLine(Math.abs(HIT.w - r.h - H * .5), .004, fp));
+          BG[i] = bar > .5 ? C(GRAY, 1.6 + L * .2) : lit && hash(r.x, t, 1703) > .3 ? C(WARM, 5 + night * 4) : C(CYAN, 1.4 + day * 1.6 + (HIT.w - r.h > H * .5 ? .5 : 0) - bar);
+          return true;
+        }
+        if (f === 4) { BG[i] = C(r.sk & 1 ? ORANGE : GRAY, 1.6 + L * .32 + roadBands(HIT.u, .02, .3, fp) * .4 - (r.sk & 1 ? .3 : 0)); paintSettledSnow(i, r.x + HIT.u, r.y + HIT.v, L * .6, .7, 0, HIT.w); return true; } // the slope of corrugated sheet, lit by the sky
+        BG[i] = C(GRAY, (1.3 + L * .25) * shadeFace(f === 0 ? 6 : 1)); return true; // its ends
+      }, rayMansard);
+    }
+    else if (r.kind === 'cold') { // a refrigeration unit: a louvred grey box, two fans on top
+      const ux = vx + (hash(r.x, r.y, 1704) - .5) * .4, uy = vy + (hash(r.x, r.y, 1705) - .5) * .4;
+      drawBox(boxAt(ux, uy, 1, 0, .12, .06, r.h, r.h + .06), (i, tt, L) => {
+        set(i, ' ', 0);
+        if (HIT.face === 5) { const fan = Math.min(Math.hypot(HIT.u - .06, HIT.v), Math.hypot(HIT.u + .06, HIT.v)); BG[i] = fan < .045 ? C(GRAY, fan < .012 ? 3 : .8 + (fract(Math.atan2(HIT.v, HIT.u - Math.sign(HIT.u) * .06) / 1.05 + T * 3) < .5 ? .6 : 0)) : C(GRAY, 2.6 + L * .3); return true; } // the fans turning
+        BG[i] = C(GRAY, (1.8 + L * .3) * shadeFace(HIT.face) - roadBands(HIT.w, .008, .4, tt / projY) * .6); return true; // louvred sides
+      });
+    } else { // a mill's roof ventilator: a drum on a short neck, a cap over it
+      const ux = vx + (hash(r.x, r.y, 1706) - .5) * .5, uy = vy + (hash(r.x, r.y, 1707) - .5) * .5;
+      drawBox({ x: ux, y: uy, c: 1, s: 0, hl: .035, hw: .035, r1: .035, z0: r.h, z1: r.h + .07 }, (i, tt, L) => { BG[i] = C(GRAY, (1.4 + L * .3) * frustumLit() + (HIT.face === 5 ? .4 : 0) - (fract((HIT.w - r.h) * 60) < .2 ? .4 : 0)); return set(i, ' ', 0), true; }, rayFrustum); // the turbine's vanes
+      drawBox({ x: ux, y: uy, c: 1, s: 0, hl: .045, hw: .045, r1: .02, z0: r.h + .07, z1: r.h + .09 }, (i, tt, L) => { BG[i] = C(GRAY, (1.8 + L * .3) * frustumLit()); return set(i, ' ', 0), true; }, rayFrustum); // its cap
+    }
+  });
+}
 // Roller shutters: a shop shut for the night (or for good) pulls a slatted steel curtain down over its windows and
 // door. It runs in guide rails set 8 cm back in the reveal, from the housing box it rolls up into at the head of the
 // opening: ribbed slats, each lip catching the light and the crease under it in shadow, a heavier bottom bar with the
@@ -15349,6 +15402,7 @@ function citySprites() {
     k.tro = f; k.hz = Math.min(k.H - 0.6, below + 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3)));
     if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
+  industrialRoofs(); // sawtooth north lights, refrigeration plant, ventilators (industrial-facades.js)
   shopExteriors(); // barber poles, pharmacy crosses, lanterns, café boards, florists' buckets, bar signs (shop-exteriors.js)
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
@@ -15971,11 +16025,8 @@ function drawFishSign(o, vx, vy) {
 // counter-jib slewing round on top, a cab, counterweights, the apex with its ties out to both, and the trolley's
 // cable, hook and a slung load of beams. th: which way the jib points now. (k.tro, k.hz: set in citySprites)
 function craneTruss(b, col, solid) { // solid: too far off for its lattice to read, a beam (as the old crane drew it)
-  if (solid) return drawBox(b, (i, t, L) => { BG[i] = C(col, (0.9 + L * 0.2) * shadeFace(HIT.face)); return set(i, b.kind === 'mast' ? '|' : '=', C(col, L)), true; });
-  drawBox(b, (i, t, L) => {
-    const [ux, uy, uz] = latticeDirection(b, HIT.part, HIT.face);
-    return set(i, courierGlyph(b.x + HIT.u * b.c - HIT.v * b.s, b.y + HIT.u * b.s + HIT.v * b.c, HIT.w, ux, uy, uz), C(col, L)), true;
-  }, rayLattice);
+  if (solid) return drawBox(b, (i, t, L) => { BG[i] = C(col, (0.9 + L * 0.2) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }); // far off: a beam of the crane's yellow
+  drawBox(b, (i, t, L) => { BG[i] = C(col, (1.1 + L * 0.28) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }, rayLattice); // up close: the lattice's members, each lit by its face (the sky between them)
 }
 function drawCrane(k, vx, vy, th) {
   const H = k.H, c = Math.cos(th), s = Math.sin(th), top = H + JH, apex = H + 0.75, at = u => [vx + c * u, vy + s * u], d = Math.hypot(vx, vy);
@@ -15986,21 +16037,22 @@ function drawCrane(k, vx, vy, th) {
   { const [x, y] = at(-CJIB / 2); craneTruss({ x, y, c, s, hl: CJIB / 2, hw: MW, z0: H, z1: top, panel: JH * 1.4, kind: 'truss' }, YEL, farJib); }
   drawBox(boxAt(vx, vy, c, s, MW + 0.02, MW + 0.02, H - 0.05, H), steel); // the slewing ring
   { const [x, y] = at(-CJIB * 0.8); drawBox(boxAt(x, y, c, s, 0.2, MW * 1.1, H - 0.3, H), (i, t, L) => { // the counterweights
-    BG[i] = C(GRAY, (1 + L * 0.25) * shadeFace(HIT.face)); return set(i, fract((HIT.u + 0.2) * 15) < 0.15 ? '|' : '#', C(GRAY, L * 0.7)), true; }); }
+    BG[i] = C(GRAY, (1 + L * 0.25) * shadeFace(HIT.face) - (fract((HIT.u + 0.2) * 15) < 0.12 ? .6 : 0)); return set(i, ' ', 0), true; }); } // concrete blocks, the joints between them
   { const [x, y] = at(MW + 0.09); drawBox(boxAt(x, y, c, s, 0.08, 0.07, H - 0.22, H), (i, t, L) => { // the operator's cab, hung under the jib
-    if (HIT.w > H - 0.13 && HIT.face !== 5 && HIT.face !== 6) { BG[i] = C(CYAN, 1.5 + night * 4); return set(i, ':', C(CYAN, Math.max(L, night * 12))), true; }
+    if (HIT.w > H - 0.13 && HIT.face !== 5 && HIT.face !== 6) { BG[i] = C(night > .3 ? WARM : CYAN, night > .3 ? 4 + night * 4 : 1.5 + day * 1.5 + (HIT.w > H - .05 ? .6 : 0)); return set(i, ' ', 0), true; } // its glass: the sky in it, lit after dark
     return steel(i, t, L); }); }
-  for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) rod(vx + sx * MW, vy + sy * MW, top, vx, vy, apex, 0.008, YEL); // the apex
+  for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) postRod(vx + sx * MW, vy + sy * MW, top, vx, vy, apex, 0.008, YEL); // the apex (its ties and the hook's cable stay wires)
   for (const u of [JIB * 0.7, -CJIB]) { const [x, y] = at(u); rod(vx, vy, apex, x, y, top, 0.003, GRAY, 0.8); } // its ties
   const [tx, ty] = at(JIB * k.tro), hz = k.hz;
   drawBox(boxAt(tx, ty, c, s, 0.05, MW * 0.9, H - 0.05, H), steel); // the trolley
   rod(tx, ty, H - 0.05, tx, ty, hz, 0.003, GRAY, 0.8);
-  drawBox(boxAt(tx, ty, c, s, 0.02, 0.02, hz - 0.08, hz), (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, 'J', C(YEL, L)), true; }); // the hook block
+  drawBox(boxAt(tx, ty, c, s, 0.02, 0.02, hz - 0.08, hz), (i, t, L) => { BG[i] = C(HIT.w < hz - .05 ? YEL : GRAY, (1.4 + L * .3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }); // the hook block, its hook painted yellow
   for (const e of [-1, 1]) { const [ax, ay] = [tx - s * e * 0.04, ty + c * e * 0.04]; rod(tx, ty, hz - 0.08, ax, ay, hz - 0.14, 0.002, GRAY, 0.7); } // the slings
   drawBox(boxAt(tx, ty, c, s, 0.3, 0.05, hz - 0.22, hz - 0.14), (i, t, L) => { // the load: a bundle of steel beams
-    BG[i] = C(ORANGE, (1.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 1 || HIT.face === 2 ? 'I' : '=', C(BRICK, L * 0.8)), true; });
+    const end = HIT.face === 1 || HIT.face === 2, web = end && Math.abs(fract(HIT.v / .025) - .5) < .15; // the beams' ends: an I in each, its web in shadow
+    BG[i] = C(ORANGE, (1.4 + L * 0.3) * shadeFace(HIT.face) - (end && !web && Math.abs(fract((HIT.w - hz) / .04) - .5) < .3 ? .7 : 0)); return set(i, ' ', 0), true; });
   if (night > 0.3 || overcast > 0.5) { // red warning lights on the apex and the jib tip
-    const on = fract(T * 0.7) < 0.5, red = (i, t, L) => { if (on) BG[i] = C(RED, 8); return set(i, '*', C(RED, on ? 15 : 4)), true; }, rr = Math.max(0.03, 0.6 * Math.hypot(vx, vy) / projX);
+    const on = fract(T * 0.7) < 0.5, red = (i, t, L) => { BG[i] = C(RED, on ? 14 : 3); return set(i, ' ', 0), true; }, rr = Math.max(0.03, 0.6 * Math.hypot(vx, vy) / projX);
     dot(vx, vy, apex + 0.02, rr, red); { const [x, y] = at(JIB); dot(x, y, top + 0.02, rr, red); }
   }
 }
@@ -16529,7 +16581,8 @@ function drawStack(s, vx, vy) {
     if (HIT.face === 5) { BG[i] = C(GRAY, 0.5); return set(i, ' ', 0), true; } // the mouth
     const w = HIT.w - s.z, light = frustumLit(), striped = w > H - 0.5;
     BG[i] = striped ? C(fract(w * 4) < 0.5 ? RED : WHITE, (1.6 + L * 0.35) * light) : C(BRICK, (1.2 + L * 0.3) * light);
-    return set(i, striped ? ' ' : fract(w * 6) < 0.15 ? '=' : ' ', C(BRICK, L * 0.7)), true;
+    if (!striped && fract(w * 6) < 0.15) BG[i] = C(GRAY, (1.4 + L * .3) * light + (fract(w * 6) > .1 ? .5 : 0)); // an iron band round it, its top lit
+    return set(i, ' ', 0), true;
   }, rayFrustum);
 }
 // its smoke: curling off downwind as it rises (z from the stack's top)
