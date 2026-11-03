@@ -85,7 +85,7 @@ function belleLampShade(o, i, t, L) {
   if (o.kind === 'globe') {
     const normalZ = (HIT.w - (o.z0 + o.z1) / 2) / ((o.z1 - o.z0) / 2);
     const light = 0.65 + 0.35 * Math.max(0, normalZ);
-    BG[i] = lampsOn > .3 ? C(WARM, 8 + lampsOn * 6 * light) : C(WHITE, 2 + L * 0.35 * light + (normalZ > .65 ? .8 : 0)); // the globe: glowing after dark, its crown catching the sky by day
+    BG[i] = C(WHITE, lampsOn > .3 ? 7 + lampsOn * 7 * light : 2 + L * 0.35 * light + (normalZ > .65 ? .8 : 0)); // the opal globe: glowing white after dark, its crown catching the sky by day
     return set(i, ' ', 0), true;
   }
   const fluted = o.kind === 'pole' || o.kind === 'finial', gilt = !fluted && o.kind !== 'base'; // (the iron's bands and scrolls picked out in gold)
