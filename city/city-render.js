@@ -627,10 +627,11 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; [ch, base, k] = af;
     } else if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
       soft = true; base = BRICK; k = 1.3;
-      const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
-      ch = e > 0.88 ? '|' : fract(wy * 5) < 0.2 ? '=' : '-';
+      const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw, fpF = homeBalconyPavingFootprint(d, eye), LF = L * roadDark();
       const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((worldCoord(wy) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
-      if (pool > 0) { base = WARM; k = 1.3 + pool * 1.6; }
+      // boards across it, each its own tone, a dark gap between; the edge boards under the rails; lamplight pooling on them
+      const gap = coveGroove(wy * 40, 1, .12, fpF * 40), board = hash(Math.floor(wy * 40), 7, 36) - .5;
+      surf = pool > 0 ? [WARM, Math.max(LF * .45, pool * 6) - gap * 1.5] : [BRICK, LF * (e > .88 ? .4 : .55 + board * .22 * clamp(1 - fpF / .03, 0, 1) - gap * .3)];
     } else if (onIsland(wx, wy)) { // the island: rocks round the shore, a gravel path out to the lighthouse, rough grass
       soft = true;
       const e = isleEdge(wx, wy), path = Math.abs(rel(wx - FOOTBRIDGE.x - (rel(wy - FOOTBRIDGE.y1) / (LIGHTHOUSE.y - FOOTBRIDGE.y1)) * (LIGHTHOUSE.x - FOOTBRIDGE.x)));

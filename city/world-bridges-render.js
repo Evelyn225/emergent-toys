@@ -10,16 +10,28 @@ function drawRoadBridges() {
       box.planes=courierSurfacePlanes(o);
       drawBox(box,(i,t,L)=>{
         if(HIT.face===5) {
-          const edge=Math.abs(HIT.u),along=HIT.v+(y0+y1)/2;
+          const edge=Math.abs(HIT.u),along=HIT.v+(y0+y1)/2,fp=t/projY,Ld=L*roadDark(),S=ROAD_SURFACE;
           BG[i]=C(GRAY,1+L*.14);
           if(snowCover>.02){paintSettledSnow(i,b.x+HIT.u,along,L,1,edge<.73?.6:.08,HIT.w);if((BG[i]>>4)===WHITE)return true;}
-          if(edge>.73)return set(i,',',C(WHITE,L*.65)),true;
-          if(edge<.035&&fract(along*.5)<.55)return set(i,'=',C(YEL,L)),true;
-          return set(i,hash(Math.floor(HIT.u*15),Math.floor(along*15),61)>.9?'.':' ',C(GRAY,L*.55)),true;
+          // an expansion joint across the deck every 6 cells: a steel finger plate, lit
+          const joint=roadLine(Math.abs(fract(along/6+.5)-.5)*6,.012,fp);
+          if(edge>.76){ // the walkways: precast slabs, their joints filtered
+            const j=Math.max(coveGroove(along,S.slab,S.joint,fp),coveGroove(edge,S.slab,S.joint,fp));
+            BG[i]=C(GRAY,Ld*(.44-j*.18+joint*.12));return set(i,' ',0),true;
+          }
+          if(edge>.73){BG[i]=C(GRAY,Ld*.62);return set(i,' ',0),true;} // the kerb
+          if(joint>.5){BG[i]=C(GRAY,Ld*.55);return set(i,' ',0),true;}
+          const centre=roadLine(edge,S.centreW,fp)*roadBands(along+S.dash/4,S.dash,.5,fp);
+          BG[i]=centre>.5?C(YEL,Ld*.55):C(GRAY,Ld*(.3+centre*.2+(hash(Math.floor(HIT.u*15),Math.floor(along*15),61)-.5)*.04*clamp(1-fp/.03,0,1)));
+          return set(i,' ',0),true;
         }
-        BG[i]=C(GRAY,.8+L*.18);return set(i,HIT.face===6?'=':'|',C(GRAY,L*.7)),true;
+        // the girders' faces: a lit fascia under the deck edge, stiffeners down the web, the soffit in shadow
+        const fp=t/projY,top=h0+(h1-h0)*clamp((HIT.v+o.hw)/(2*o.hw),0,1)-HIT.w;
+        if(HIT.face===6){BG[i]=C(GRAY,.7+L*.1);return set(i,' ',0),true;}
+        const st=roadLine(Math.abs(fract(HIT.v*4+.5)-.5)/4,.012,fp);
+        BG[i]=C(GRAY,(.8+L*.18)*shadeFace(HIT.face)+(top<.02?.7:st*.5-(top<.035?.4:0)));return set(i,' ',0),true;
       },rayBeveledBay);
-      for(const side of [-1,1])for(const up of [.055,.115])drawRod(vx+side*.97,rel(y0-py),h0+up,vx+side*.97,rel(y1-py),h1+up,.007,(i,t,L)=>{BG[i]=C(GRAY,1+L*.4);set(i,'=',C(WHITE,L*.8));return true;});
+      for(const side of [-1,1])for(const up of [.055,.115])drawRod(vx+side*.97,rel(y0-py),h0+up,vx+side*.97,rel(y1-py),h1+up,.007,(i,t,L)=>{BG[i]=C(GRAY,1+L*.4+(up>.1?.5:0));set(i,' ',0);return true;});
     }
     for(let y=b.y0;y<=b.y1;y+=2)for(const side of [-1,1]) {
       const h=roadBridgeHeight(b,y);
