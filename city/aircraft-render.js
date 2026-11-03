@@ -79,7 +79,7 @@ function drawTube(a_, b_, ra, rb, shade) {
   drawBox({ x: (a_[0] + b_[0]) / 2, y: (a_[1] + b_[1]) / 2, c: 1, s: 0, hl: Math.abs(b_[0] - a_[0]) / 2 + m, hw: Math.abs(b_[1] - a_[1]) / 2 + m,
     z0: Math.min(a_[2], b_[2]) - m, z1: Math.max(a_[2], b_[2]) + m, ax: a_[0], ay: a_[1], az: a_[2], bx: b_[0], by: b_[1], bz: b_[2], ra, rb }, shade, rayTube);
 }
-const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 12); return set(i, '*', C(WHITE, 15)), true; });
+const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 14); return set(i, ' ', 0), true; });
 function drawAircraft() {
   for (const a of aircraft) {
     if (a === pilot && mode === 'air' && !chaseOn || a.sinkT != null && T - a.sinkT > 4) continue; // (you're in it, looking out; or it's under)
@@ -95,7 +95,7 @@ function drawFighters() {
     if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, 1)) continue;
     drawPlaneCraft(f, FIGHTER_T, vx, vy);
     const F = craftFrame(f.yaw, f.pitch, f.roll), o = [vx, vy, f.z + FIGHTER_T.r], d = Math.max(0.5, dx * vx + dy * vy);
-    for (const e of [-1, 1]) { const p = at(o, F, -FIGHTER_T.len / 2 - 0.02, e * 0.035, 0.01); dot(p[0], p[1], p[2], Math.max(0.03, d * 0.6 / projX), (i, t, L) => { BG[i] = C(fract(T * 9) < 0.5 ? ORANGE : YEL, 13); return set(i, '*', C(WHITE, 15)), true; }); } // (afterburners)
+    for (const e of [-1, 1]) { const p = at(o, F, -FIGHTER_T.len / 2 - 0.02, e * 0.035, 0.01); dot(p[0], p[1], p[2], Math.max(0.03, d * 0.6 / projX), (i, t, L) => { BG[i] = C(fract(T * 9) < 0.5 ? ORANGE : YEL, 14); return set(i, ' ', 0), true; }); } // (afterburners)
   }
   for (const r of tracers) {
     const vx = rel(r.x - px), vy = rel(r.y - py), l = 0.04;
@@ -117,8 +117,8 @@ function drawPlaneCraft(a, T_, vx, vy) {
     if (!wreck && s > 0.78 && phi > 0.12 && phi < 0.62 && Math.abs(nr) > 0.25) { BG[i] = C(GRAY, 0.5 + lit * 0.15); return set(i, ' ', 0), true; } // the windscreen
     if (!wreck && phi > -0.32 && phi < -0.05 && s < 0.8) { BG[i] = C(T_.stripe, lit); return set(i, ' ', 0), true; } // the cheat line
     const win = !T_.fighter && !far && !wreck && phi > 0.08 && phi < 0.3 && s > -0.62 && s < 0.7 && fract(along / (R * 0.45)) < 0.42;
-    BG[i] = C(phi < -0.75 ? GRAY : body, phi < -0.75 ? lit * 1.1 : lit);
-    return set(i, win ? (nightLit > 0.3 ? 'o' : '.') : ' ', win ? C(nightLit > 0.3 ? WARM : GRAY, nightLit > 0.3 ? 14 : 3) : 0), true;
+    BG[i] = win ? (nightLit > 0.3 ? C(WARM, 10) : C(GRAY, 1.2)) : C(phi < -0.75 ? GRAY : body, phi < -0.75 ? lit * 1.1 : lit); // the cabin windows: dark by day, lit warm after dark
+    return set(i, ' ', 0), true;
   });
   fus(L2 * 0.6, 0, R, -L2 * 0.35, 0, R); // the barrel
   fus(L2 * 0.6, 0, R, L2 - R * 0.25, -R * 0.22, R * 0.25); // the nose
@@ -144,21 +144,21 @@ function drawPlaneCraft(a, T_, vx, vy) {
     drawTube(p0, p1, r_, r_ * 0.8, (i, t, L) => { BG[i] = HIT.s < 0.02 && Math.abs((HIT.n[0] * F.f[0] + HIT.n[1] * F.f[1] + HIT.n[2] * F.f[2])) > 0.6 ? C(GRAY, 0.4) : C(GRAY, (1.3 + L * 0.3) * faceLit(HIT.n) * burnt); return set(i, ' ', 0), true; });
     craftPanel(o, F, T_.len * 0.03, e * T_.span * 0.2, -T_.r * 0.95, T_.len * 0.04, 0.008, T_.r * 0.2, GRAY, burnt); // (the pylon it hangs from)
   }
-  if (T_.engines === 'tail') for (const e of [-1, 1]) { const p0 = at(o, F, -L2 * 0.45, e * T_.r * 1.6, T_.r * 0.5), p1 = at(o, F, -L2 * 0.8, e * T_.r * 1.6, T_.r * 0.5); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], T_.r * 0.5, GRAY, 1.2); }
+  if (T_.engines === 'tail') for (const e of [-1, 1]) { const p0 = at(o, F, -L2 * 0.45, e * T_.r * 1.6, T_.r * 0.5), p1 = at(o, F, -L2 * 0.8, e * T_.r * 1.6, T_.r * 0.5); postRod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], T_.r * 0.5, GRAY, 1.2); }
   // the Skylark's propeller: the spinner and a blur of a disc
   if (T_.prop) {
     const sp = at(o, F, L2 + 0.01, 0, 0);
     dot(sp[0], sp[1], sp[2], 0.02, (i, t, L) => { BG[i] = C(T_.stripe, 9); return set(i, ' ', 0), true; });
     if (a.v > 0.05 || a.engine) drawOBox(...at(o, F, L2 + 0.015, 0, 0), [F.f, F.r, F.u], [0.004, 0.13, 0.13], (i, t, L) => {
       if (Math.hypot(HIT.v, HIT.w) > 0.13 || hash(i, Math.floor(T * 40), 3) > 0.35) return false;
-      return set(i, ':', C(GRAY, 8)), true;
+      BG[i] = C(GRAY, 3); return set(i, ' ', 0), true; // the prop's blur
     });
   }
   // the wheels, while it's down low
   if (gear) for (const [fa, fb] of [[L2 * 0.7, 0], [-0.05, -T_.span * 0.12], [-0.05, T_.span * 0.12]]) {
     const top = at(o, F, fa, fb, -T_.r * 0.7), foot = [top[0], top[1], Math.max(0.02, a.z + 0.02)];
-    rod(top[0], top[1], top[2], foot[0], foot[1], foot[2], 0.008, GRAY, 1);
-    dot(foot[0], foot[1], foot[2], Math.max(0.018, T_.r * 0.18), (i, t, L) => { BG[i] = C(GRAY, 0.8); return set(i, 'o', C(GRAY, 4)), true; });
+    postRod(top[0], top[1], top[2], foot[0], foot[1], foot[2], 0.008, GRAY, 1);
+    dot(foot[0], foot[1], foot[2], Math.max(0.018, T_.r * 0.18), (i, t, L) => { BG[i] = C(BLACK, 0); return set(i, ' ', 0), true; }); // the tyre
   }
   // the lights: the beacon on top, the strobe on the tail, landing lights when it's low and moving
   if (wreck) return;
@@ -182,7 +182,7 @@ function drawHeliModel(o, F, s, look) {
     const n = HIT.n, ru = HIT.u - o[0], rv = HIT.v - o[1], rw = HIT.w - o[2], along = (ru * F.f[0] + rv * F.f[1] + rw * F.f[2]) / s;
     const nr = n[0] * F.r[0] + n[1] * F.r[1] + n[2] * F.r[2], nu = n[0] * F.u[0] + n[1] * F.u[1] + n[2] * F.u[2], phi = Math.atan2(nu, Math.abs(nr)); // (round the side: 0 level, + up)
     const lit = (2.6 + L * 0.6) * faceLit(n) ** 1.3 * burnt * bright;
-    if (glassy && !wreck && (along > 0.1 && phi > -0.45 || along > -0.02 && phi > 0.2 && phi < 0.9)) { BG[i] = C(CYAN, 1.1 + lit * 0.3); return set(i, fract((along + phi) * 7) < 0.07 ? '/' : ' ', C(WHITE, 10)), true; } // the bubble, the side windows
+    if (glassy && !wreck && (along > 0.1 && phi > -0.45 || along > -0.02 && phi > 0.2 && phi < 0.9)) { BG[i] = C(CYAN, 1.1 + lit * 0.3 + (fract((along + phi) * 7) < 0.07 ? 1.5 : 0)); return set(i, ' ', 0), true; } // the bubble, the side windows, a streak of sky across them
     if (!wreck && phi > -0.42 && phi < -0.12 && along < 0.12) { // the band down each side
       BG[i] = look.checker ? ((Math.floor(along * 28) + (phi > -0.27)) & 1 ? C(YEL, lit * 1.5) : C(BLUE, lit * 1.1)) : C(stripe, lit); return set(i, ' ', 0), true; }
     BG[i] = C(look.belly != null && phi < -0.75 ? look.belly : body, lit); return set(i, ' ', 0), true;
@@ -195,11 +195,11 @@ function drawHeliModel(o, F, s, look) {
   craftPanel(o, F, -0.43 * s, 0, 0.065 * s, 0.025 * s, 0.075 * s, 0.004 * s, body, burnt * bright); // the tailplane
   for (const e of [-1, 1]) { // skids on struts, their toes turned up
     const s0 = P(0.17, e * 0.085, -0.15), s1 = P(-0.15, e * 0.085, -0.15), s2 = P(0.22, e * 0.085, -0.12);
-    rod(s0[0], s0[1], s0[2], s1[0], s1[1], s1[2], 0.008 * s, GRAY, 1.1); rod(s0[0], s0[1], s0[2], s2[0], s2[1], s2[2], 0.008 * s, GRAY, 1.1);
-    for (const f of [-0.09, 0.09]) { const p0 = P(f, e * 0.05, -0.06), p1 = P(f, e * 0.085, -0.15); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.006 * s, GRAY, 1.1); }
+    postRod(s0[0], s0[1], s0[2], s1[0], s1[1], s1[2], 0.008 * s, GRAY, 1.1); postRod(s0[0], s0[1], s0[2], s2[0], s2[1], s2[2], 0.008 * s, GRAY, 1.1);
+    for (const f of [-0.09, 0.09]) { const p0 = P(f, e * 0.05, -0.06), p1 = P(f, e * 0.085, -0.15); postRod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.006 * s, GRAY, 1.1); }
   }
   const m0 = P(0, 0, 0.09), m1 = P(0, 0, 0.125);
-  rod(m0[0], m0[1], m0[2], m1[0], m1[1], m1[2], 0.012 * s, GRAY, 1); // the mast
+  postRod(m0[0], m0[1], m0[2], m1[0], m1[1], m1[2], 0.012 * s, GRAY, 1); // the mast
   if (wreck) return;
   const R = look.rotor * s;
   drawOBox(...P(0, 0, 0.128), [F.f, F.r, F.u], [R, R, 0.004 * s], (i, t, L) => { // the rotor: two blades round and round, a blur between them when it's going
@@ -207,12 +207,12 @@ function drawHeliModel(o, F, s, look) {
     if (r > R) return false;
     const blade = Math.abs(fract(Math.atan2(HIT.v, HIT.u) / Math.PI - ang / Math.PI) - 0.5) > 0.47 - 0.02 * (r < R * 0.2);
     if (!blade && (spin < 0.3 || hash(i, Math.floor(T * 30), 7) > 0.22 * spin)) return false;
-    return set(i, blade ? '=' : '-', C(GRAY, L * (blade ? 0.6 : 0.4))), true;
+    BG[i] = C(GRAY, blade ? 1.4 + L * .2 : 2.4); return set(i, ' ', 0), true; // the blades, or their blur
   });
   const tr = P(-0.5, 0.014, 0.08); // the tail rotor
   drawOBox(tr[0], tr[1], tr[2], [F.r, F.f, F.u], [0.003 * s, 0.07 * s, 0.07 * s], (i, t, L) => {
     if (Math.hypot(HIT.v, HIT.w) > 0.07 * s || spin > 0.3 && hash(i, Math.floor(T * 40), 9) > 0.4) return false;
-    return set(i, ':', C(GRAY, 8)), true;
+    BG[i] = C(GRAY, 3); return set(i, ' ', 0), true; // the tail rotor's blur
   });
   // the lights, never smaller than a character however far off: red and green either side, the red beacon on top
   // blinking, a white strobe on the tail; the police's red and blue flashing under the cabin and the searchlight's lamp
