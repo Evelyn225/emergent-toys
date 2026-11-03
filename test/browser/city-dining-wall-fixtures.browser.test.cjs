@@ -73,7 +73,8 @@ test('roastery plants: pots on brackets clear of the wall, every leaf hanging in
    for(const l of q.leaves)if(l.z>q.pot.top)bad.push('leaf above the pot');
    // each vine grows out of the soil and over the rim; no leaf is inside the pot
    for(const v of q.vines){if(Math.hypot(v.root.u,v.root.v-q.pot.v)>q.pot.inner-.003||Math.abs(v.root.z-q.pot.soil)>.005)bad.push('vine not rooted in the soil');
-    if(Math.hypot(v.rim.u,v.rim.v-q.pot.v)<q.pot.radius+.003||v.rim.z<q.pot.top+.003)bad.push('vine through the rim');}
+    if(Math.hypot(v.rim.u,v.rim.v-q.pot.v)<q.pot.radius+.003||v.rim.z<q.pot.top+.003)bad.push('vine through the rim');
+    if(v.end.v<v.rim.v-1e-6||v.knee.v<v.rim.v-1e-6)bad.push(['vine curls back to the wall',v.end.v,v.rim.v]);} // (it hangs plumb from the rim, under its own weight)
    for(const l of q.leaves)if(l.z+.028>q.z&&Math.hypot(l.u,l.v-q.pot.v)<q.pot.radius)bad.push('leaf inside the pot');
    // nothing else in the room stands where the vines hang
    for(const other of room.props)if(other!==o&&other.box&&!other.walk&&other.box.z1>q.z-1&&inBox(other.box,q.x+q.fx*.12,q.y+q.fy*.12,.1))bad.push(['crowded',other.box.x,other.box.y]);
