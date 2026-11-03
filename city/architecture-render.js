@@ -202,7 +202,7 @@ function architectureDetailShade(o, i, t, L) {
     const out = HIT.u * (o.c * o.nx + o.s * o.ny), top = 0.1 + 0.12 * clamp((0.18 - out - 0.075) / 0.145, 0, 1);
     if (z > top + 0.012) return false;
     if (HIT.face >= 5 || z > top - 0.014 || Math.abs(fract(HIT.u * 32) - 0.5) < 0.17) {
-      BG[i] = C(GRAY, 1); return set(i, z > top - 0.014 ? '-' : '|', C(GRAY, L * 0.8)), true;
+      BG[i] = C(GRAY, (1.2 + L * .15) * (z > top - 0.014 ? 1.25 : 1)); return set(i, ' ', 0), true; // the stoop's iron railing, its handrail lit
     }
     return false;
   }
@@ -220,13 +220,16 @@ function architectureDetailShade(o, i, t, L) {
     }
     const frame = Math.min(0.03, half * 0.3);
     if (fl >= 0 && fl < o.floors && fz > 0.18 && fz < 0.78 && Math.abs(along) < half - frame) {
-      const lit = hash(fl, 4, sk0(o.seed)) > litT - 0.1;
-      BG[i] = C(lit ? WARM : CYAN, lit ? 2 + night * 5 : 1 + day * 1.4);
-      return set(i, Math.abs(along) < 0.01 ? '|' : fz > 0.46 && fz < 0.49 ? '-' : lit ? ' ' : ':', C(WHITE, Math.max(L * 0.7, lit ? night * 12 : 0))), true;
+      const lit = hash(fl, 4, sk0(o.seed)) > litT - 0.1, fpB = t / projY;
+      // a bay window's sash: framed glass, a glazing bar, the sky in it or a lamp behind
+      if (facadeWindow(i, along + half - frame, 2 * (half - frame), (fz - .18) * o.fh, .6 * o.fh, lit, WARM, L, fpB, STONE, sk0(o.seed) + fl)) return true;
     }
   }
   const top = HIT.face === 5;
-  set(i, top || o.kind === 'course' || o.kind === 'cornice' ? '=' : o.kind === 'pier' ? '|' : ' ', C(o.kind === 'step' ? GRAY : STONE, L * 0.9));
+  // stone: tops lit, cornices and courses with a lit upper edge over their shadowed face, piers rounded at their arrises
+  if ((o.kind === 'course' || o.kind === 'cornice') && !top && HIT.face < 5) BG[i] = C(BG[i] >> 4, (BG[i] & 15) * (HIT.w > o.z1 - (o.z1 - o.z0) * .3 ? 1.15 : .9));
+  if (top) BG[i] = C(BG[i] >> 4, (BG[i] & 15) * 1.1);
+  set(i, ' ', 0);
   if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * 0.7,1,0,HIT.w);
   return true;
 }

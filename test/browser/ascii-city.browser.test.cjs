@@ -2122,9 +2122,9 @@ test('snow covers garden beds and roof rims without covering open water or refle
     const at = Array.from(map).findIndex((h, i) => h > 2 && STY[i] === 0);
     const mx = at % N, my = Math.floor(at / N);
     roofTop(0, mx + 0.5, my + 0.5, map[at], 1);
-    const roof = BG[0] >> 4;
+    const roof = BG[0] >> 4, roofBg = BG[0];
     roofTop(0, mx + 0.01, my + 0.5, map[at], 1);
-    const rim = CH[0];
+    const rim = BG[0] !== roofBg; // (the parapet's coping still shows through, as its own tone)
     BG[0] = C(BLUE, 2); FL[0] = 2;
     paintSettledSnow(0, bx, by, 6);
     return { bare, snowy, water, roof, rim, matte: FL[0] };
@@ -2133,7 +2133,7 @@ test('snow covers garden beds and roof rims without covering open water or refle
   assert.strictEqual(result.snowy[0], 4, 'full snow cover is white');
   assert.strictEqual(result.water[1], 3, 'open water keeps its water surface');
   assert.strictEqual(result.roof, 4, 'the roof receives snow too');
-  assert.strictEqual(result.rim, '#', 'snow preserves the parapet outline');
+  assert.ok(result.rim, 'snow preserves the parapet outline');
   assert.strictEqual(result.matte, 1, 'snow-covered puddles stop reflecting');
 }));
 
