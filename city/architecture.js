@@ -130,7 +130,7 @@ function downtownDetails(b) {
 const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painted on the wall behind it)
 // Is a board too small on screen to draw (under a row tall, so it can fall between rows), its lettering painted on the wall
 // instead? Otherwise a board between two rows would leave no name at all. g: its sign spec; d: distance.
-const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
+const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS * lodScale() - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
 function architectureSignSpec(b, f, sh) {
   const width = f.end - f.start, n = sh.word.length;
   const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .39, cmax: .09, margin: .3, band: .1, edge: .01, style: 'board' }

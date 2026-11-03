@@ -241,7 +241,7 @@ function drawArchitecture() {
     if (map[o.ownerCell] !== o.ownerHeight) return;
     // Massing stays in the height map; small trim is culled before it becomes an unreadable speck.
     const vx = rel(o.x - px), vy = rel(o.y - py), distance = Math.hypot(vx, vy);
-    if (distance > vis + 1 || distance > (o.detailDistance || (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9))) return;
+    if (distance > vis + 1 || distance > (o.detailDistance || (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9)) * lodScale()) return; // (the Detail distance setting carries them further)
     // Reject boxes outside the view before projecting their corners or copying their shape data.
     const along = dx * o.c + dy * o.s, across = -dx * o.s + dy * o.c;
     const far = dx * vx + dy * vy + Math.abs(along) * o.hl + Math.abs(across) * o.hw;

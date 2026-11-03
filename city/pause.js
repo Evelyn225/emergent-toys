@@ -68,6 +68,7 @@ function buildPause() {
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
+      ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -103,7 +104,7 @@ function buildPause() {
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
-      s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : Math.round(v * 100) + '%';
+      s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : k === 'lod' ? (+v).toFixed(1) + 'x' : Math.round(v * 100) + '%';
     }
     for (const b of el.querySelectorAll('[data-bar]')) {
       const inp = el.querySelector(`[data-set="${b.dataset.bar}"]`), lo = +inp.min, hi = +inp.max;
