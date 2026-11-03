@@ -10,7 +10,7 @@ async function fixture(run){const p=await browser.newPage(),errors=[];p.on('page
 const SHOPS=[['store','STORE','grocery'],['books','BOOKS','books'],['grocer','GROCER','grocery'],['hardware','HARDWARE','hardware'],['pharmacy','PHARMACY','pharmacy'],
  ['video','VIDEO','video'],['liquor','LIQUOR','wine'],['gas','GAS','grocery'],['bodega','BODEGA','grocery'],['drugstore','DRUGSTORE','pharmacy'],['toys','TOYS','toys']];
 
-test('every shelf island is a built gondola on its old footprint, with no painted block left in the grid',()=>fixture(async p=>{
+test('every shelf island is a built gondola on its old cells, 60 cm deep at most, with no painted block left in the grid',()=>fixture(async p=>{
  const r=await p.evaluate(SHOPS=>{
   const out=[],bad=[];
   for(const [kind,word,stock] of SHOPS){
@@ -21,9 +21,13 @@ test('every shelf island is a built gondola on its old footprint, with no painte
    // the blocks tile exactly the old cells, and each gondola's box is its block
    if(blocks.reduce((a,b)=>a+(b.x1-b.x0)*(b.y1-b.y0),0)!==cells)bad.push([kind,'blocks miss cells']);
    for(const o of g){const b=o.gondola.block,x=o.box;
-    if(Math.abs(x.x-(b.x0+b.x1)/2)>1e-9||Math.abs(x.y-(b.y0+b.y1)/2)>1e-9||Math.abs(x.hl-(b.x1-b.x0)/2)>1e-9||Math.abs(x.hw-(b.y1-b.y0)/2)>1e-9)bad.push([kind,'footprint',b]);
+    // centred on its block, its full length along it, no more than 60 cm deep across it (the aisles either side stay open), inside its cells
+    const along=o.gondola.alongX,bl=(along?b.x1-b.x0:b.y1-b.y0)/2,bw=(along?b.y1-b.y0:b.x1-b.x0)/2,hl=along?x.hl:x.hw,hw=along?x.hw:x.hl;
+    if(Math.abs(x.x-(b.x0+b.x1)/2)>1e-9||Math.abs(x.y-(b.y0+b.y1)/2)>1e-9||Math.abs(hl-bl)>.02||hw>.3+1e-9||hw>bw)bad.push([kind,'footprint',b,hl,hw]);
     if(o.gondola.facings<40)bad.push([kind,'thin stock',o.gondola.facings]);
    }
+   // (the corner store and bodega: the aisle between the two rows of islands is a real aisle, 1.2 m or more clear)
+   if(kind==='store'){const ys=[...new Set(g.map(o=>o.box.y))].sort((p,q)=>p-q);for(let k=1;k<ys.length;k++){const A=g.find(o=>o.box.y===ys[k-1]),B=g.find(o=>o.box.y===ys[k]),gap=ys[k]-ys[k-1]-A.box.hw-B.box.hw;if(gap<1.2)bad.push([kind,'aisle',+gap.toFixed(2)]);}}
   }
   return{out,bad};
  },SHOPS);

@@ -3,7 +3,7 @@
 // them becomes floor with a gondola standing on it: a plinth, a pegboard
 // spine, shelves on both long faces, end caps, and stock as solid facings
 // sized and coloured for the shop. The collision footprint is the old block's.
-const GONDOLA={height:1.75,plinth:.12,levels:[.15,.55,.95,1.35],board:.025,spine:.02,upright:.03,inset:.04};
+const GONDOLA={half:.3,height:1.75,plinth:.12,levels:[.15,.55,.95,1.35],board:.025,spine:.02,upright:.03,inset:.04};
 // What a shop stocks, as facings: [width, height fraction of the shelf gap, depth fraction, colours]
 const GONDOLA_STOCK={
   grocery:{widths:[.07,.09,.12,.2],cols:[RED,YEL,BLUE,GREEN,ORANGE,WHITE,MAG,CYAN],label:true},
@@ -139,7 +139,7 @@ function gondolaGoods(facings,kind,c,s,vOf) {
 }
 function SHOP_GONDOLA(b,kind,seed) {
   const G=GONDOLA,S=GONDOLA_STOCK[kind],alongX=b.x1-b.x0>=b.y1-b.y0;
-  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,len=(alongX?b.x1-b.x0:b.y1-b.y0)-.02,half=(alongX?b.y1-b.y0:b.x1-b.x0)/2-.01;
+  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,len=(alongX?b.x1-b.x0:b.y1-b.y0)-.02,half=Math.min(G.half,(alongX?b.y1-b.y0:b.x1-b.x0)/2-.01); // (a real double-sided gondola is about 60 cm deep, centred in its cells: the aisles either side stay walkable)
   const c=alongX?1:0,s=alongX?0:1,depth=half-G.spine/2-G.inset;
   const facings=gondolaFacings(len,depth,kind,seed);
   const flat=shade=>gondolaFlat(c,s,shade);
@@ -157,7 +157,7 @@ function SHOP_GONDOLA(b,kind,seed) {
     drawBox(boxAt(px,py_,c,s,len/2-G.upright,G.spine/2,G.levels[0],G.height),peg);
     drawBox(boxAt(px,py_,c,s,len/2-G.upright,half,G.height-.03,G.height),steel); // the top cap
     drawBox(boxAt(px,py_,c,s,len/2-G.upright,half-.03,0,G.plinth),plinth);
-  }),box:boxAt(cx,cy,1,0,(b.x1-b.x0)/2,(b.y1-b.y0)/2,0,G.height),radius:Math.hypot(len,half*2)/2+.1,
+  }),box:boxAt(cx,cy,1,0,alongX?len/2:half,alongX?half:len/2,0,G.height),radius:Math.hypot(len,half*2)/2+.1,
     gondola:{block:b,kind,len,half,depth,alongX,facings:facings.length}};
 }
 // Wall shelving against a wall face, shelves fitted bay by bay between
