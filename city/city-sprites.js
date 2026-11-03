@@ -325,13 +325,11 @@ function rayCopperDrum(ox, oy, oz, rx, ry, rz, b) {
 function drawCopperDome(vx, vy, base, radius, height, supportBase = base) {
   const drum = height * .18, capHeight = height - drum;
   const ring = (r, z0, z1, stone) => drawBox(boxAt(vx, vy, 1, 0, r, r, z0, z1), (i, t, L) => {
-    const angle = Math.atan2(HIT.v, HIT.u), flute = Math.abs(Math.sin(angle * 12)) < .13;
-    const color = stone ? STONE : GREEN;
-    let ch = ' ';
-    if (HIT.face >= 5) ch = '=';
-    else if (flute) ch = '|';
-    BG[i] = C(color, 1.5 + L * .28);
-    set(i, ch, C(stone ? STONE : YEL, L * .75));
+    const angle = Math.atan2(HIT.v, HIT.u), flute = Math.sin(angle * 12);
+    // round: lit toward the sun, fluted (each flute a shallow groove, shaded on one side), the top lit
+    const side = .75 + .35 * Math.cos(angle - 2.3);
+    BG[i] = C(stone ? STONE : GREEN, HIT.face >= 5 ? 2 + L * .32 : (1.2 + L * .26) * side + (Math.abs(flute) < .13 ? (flute > 0 ? .6 : -.6) : 0));
+    set(i, ' ', 0);
     return true;
   }, rayCopperDrum);
   // On a sloping mansard the pedestal extends down into the roof, keeping the crown supported at every edge.
@@ -346,14 +344,14 @@ function drawCopperDome(vx, vy, base, radius, height, supportBase = base) {
     const length = Math.hypot(nx, ny, nz), angle = Math.atan2(HIT.v, HIT.u);
     const light = .55 + .45 * Math.max(0, (-nx * .55 + ny * .35 + nz * .76) / length);
     const patina = .5 + .5 * Math.sin(angle * 3 + z / capHeight * 2);
-    const rib = Math.abs(fract(angle * 6 / Math.PI) - .5) < .016;
-    BG[i] = C(GREEN, 1.2 + L * light * (.25 + patina * .025));
-    set(i, rib ? '|' : ' ', C(GREEN, L * light * .6));
+    const rib = roadLine(Math.abs(fract(angle * 6 / Math.PI) - .5) * Math.PI / 6 * radius, .01, t / projY); // the ribs, standing proud and lit
+    BG[i] = C(GREEN, 1.2 + L * light * (.25 + patina * .025) + rib * .8);
+    set(i, ' ', 0);
     if (nz / length > .35) paintSettledSnow(i, vx + px + HIT.u, vy + py + HIT.v, L * .6, nz / length, 0, HIT.w);
     return true;
   }, rayCopperCap);
   drawBox(boxAt(vx, vy, 1, 0, radius * .022, radius * .022, base + height - .008, base + height + .07), (i, t, L) => {
-    BG[i] = C(GRAY, 1); set(i, HIT.face === 5 ? '+' : '|', C(YEL, L * .85)); return true;
+    BG[i] = C(YEL, HIT.face === 5 ? 3 + L * .4 : (1.5 + L * .3) * shadeFace(HIT.face)); set(i, ' ', 0); return true; // the gilded finial
   });
 }
 
