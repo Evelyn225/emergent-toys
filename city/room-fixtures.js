@@ -53,6 +53,14 @@ const roomLightsOn = (r = room) => {
   const home = homeRecord(r);
   return home ? !(r.def.lamps || []).length || (r.def.lamps || []).some((_, k) => home.lights?.['fixed' + k] !== false) : !r.lightsOff;
 };
+// Whether the room's ceiling lamps are lit, asked per pixel by the ceilings, so it's worked out once a frame: off, the
+// tubes, bulbs and lenses go dark (the user's ask: a switch should make the lights black, not leave them white).
+let CEIL_LIT_T = NaN, CEIL_LIT_R = null, CEIL_LIT = true;
+function ceilLit() {
+  if (CEIL_LIT_T !== T || CEIL_LIT_R !== room) { CEIL_LIT_T = T; CEIL_LIT_R = room; CEIL_LIT = !room || roomLightsOn(room); }
+  return CEIL_LIT;
+}
+const CEIL_OFF_LAMP = 0.7; // (an unlit tube or bulb: near black glass)
 function roomSwitch(r = room) {
   if (r.lightSwitch !== undefined) return r.lightSwitch;
   const at = r.kind === 'train' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
@@ -69,6 +77,7 @@ function roomSwitch(r = room) {
 }
 // apply the switch: a shop's own lights; at home, every fixed lamp at once
 function setRoomLights(on, r = room) {
+  CEIL_LIT_T = NaN; // (the ceilings ask again)
   const home = homeRecord(r);
   if (home) {
     home.lights ||= {};

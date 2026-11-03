@@ -7,7 +7,7 @@ const RESTAURANT_CORD_PARTS=new Map();
 function drawRestaurantLampParts(vx,vy,parts) {
   for(const [part,shade]of parts)drawBox({...part.box,x:vx,y:vy},shade,coveRayLathe);
 }
-function restaurantLampBulbShade(i,t,L) {BG[i]=C(WARM,13+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+function restaurantLampBulbShade(i,t,L) {BG[i]=ceilLit()?C(WARM,13+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz)):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;}
 function restaurantLampSocketShade(i,t,L) {return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);}
 function restaurantCord(vx,vy,z,ceiling) {
   const key=z+':'+ceiling;let parts=RESTAURANT_CORD_PARTS.get(key);

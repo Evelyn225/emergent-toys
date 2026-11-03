@@ -18702,6 +18702,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return sharedDarkCeil(i);
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
+  if (strip && !ceilLit()) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
@@ -18925,7 +18926,7 @@ Object.assign(ROOM_CEILS, {
   tin: (i, r, x, wx, wy) => { // pressed tin: a square motif on a grid, a lamp every 2m
     const fp = homeBalconyPavingFootprint(((room.def.height || 3) - eye) * projY / (hor - r - 0.5), (room.def.height || 3) - eye);
     set(i, ' ', 0);
-    if (!prepareInteriorHanging() && ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) { BG[i] = C(WARM, 14); return; }
+    if (!prepareInteriorHanging() && ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) { BG[i] = ceilLit() ? C(WARM, 14) : C(GRAY, CEIL_OFF_LAMP); return; }
     const u = fract(wx / 0.6) - 0.5, v = fract(wy / 0.6) - 0.5;
     BG[i] = C(STONE, 2.4 - 1 * Math.max(coveGroove(wx, 0.6, 0.015, fp), coveGroove(wy, 0.6, 0.015, fp)) + (fp < 0.05 && Math.abs(Math.abs(u) + Math.abs(v) - 0.28) < 0.05 ? 0.8 : 0));
   },
@@ -18933,7 +18934,7 @@ Object.assign(ROOM_CEILS, {
     set(i, ' ', 0);
     if (prepareInteriorHanging()) { BG[i] = C(GRAY, .7); return; }
     const k = ceilAt('spots', CEIL_SPOTS, wx, wy);
-    BG[i] = k === 1 ? C(WHITE, 14) : k === 2 ? C(GRAY, 2.4) : C(GRAY, .5);
+    BG[i] = k === 1 ? ceilLit() ? C(WHITE, 14) : C(GRAY, CEIL_OFF_LAMP) : k === 2 ? C(GRAY, 2.4) : C(GRAY, .5);
   },
 });
 
@@ -38749,7 +38750,7 @@ function sharedGlassDoor(i,u,z,L) {
   set(i,' ',0);
   BG[i]=z>2.3||fract(u)<.08?C(GRAY,1.4+L*.2):C(day>.3?CYAN:WARM,2+day*4);
 }
-function sharedPendantCeil(i,on){BG[i]=on?C(WARM,14):C(BRICK,2);set(i,' ',0);}
+function sharedPendantCeil(i,on){BG[i]=on?ceilLit()?C(WARM,14):C(GRAY,CEIL_OFF_LAMP):C(BRICK,2);set(i,' ',0);}
 // Coloured spots sweeping over a dark ceiling: they're big enough to read, and
 // their hue changes as a whole so nothing flickers cell by cell.
 function sharedDiscoCeil(i,wx,wy) {
@@ -43282,7 +43283,7 @@ const RESTAURANT_CORD_PARTS=new Map();
 function drawRestaurantLampParts(vx,vy,parts) {
   for(const [part,shade]of parts)drawBox({...part.box,x:vx,y:vy},shade,coveRayLathe);
 }
-function restaurantLampBulbShade(i,t,L) {BG[i]=C(WARM,13+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+function restaurantLampBulbShade(i,t,L) {BG[i]=ceilLit()?C(WARM,13+1.5*coveLight(HIT.nx,HIT.ny,HIT.nz)):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;}
 function restaurantLampSocketShade(i,t,L) {return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);}
 function restaurantCord(vx,vy,z,ceiling) {
   const key=z+':'+ceiling;let parts=RESTAURANT_CORD_PARTS.get(key);
@@ -44313,7 +44314,7 @@ function ceilingBattenPrism(half,width,z0,z1,bevel) {
 function CEILING_BATTEN(x,y,length,ceiling) {
   const n=Math.max(1,Math.ceil(length/1.8)),pitch=length/n,half=Math.min(1.4,pitch-.12)/2,parts=[];
   const metal=(i,t,L)=>{BG[i]=C(WHITE,2.3+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const glass=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12);set(i,' ',0);return true;};
+  const glass=(i,t,L)=>{BG[i]=ceilLit()?C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;};
   const clip=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const add=(u,a,b,z0,z1,bevel,shade)=>parts.push({box:{...ceilingBattenPrism(a,b,z0,z1,bevel),y:u},shade});
   for(let k=0;k<n;k++){const u=-length/2+pitch*(k+.5);
@@ -44342,7 +44343,7 @@ const INTERIOR_HANGING_ROOMS=new Set([...INTERIOR_BATTEN_ROOMS,'skate']);
 function CEILING_TRACK(x,y,length,ceiling,spots) {
   const parts=[],half=length/2;
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.16*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7&&!room?.lightsOff?12:3.5);set(i,' ',0);return true;};
+  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7&&ceilLit()?12:CEIL_OFF_LAMP);set(i,' ',0);return true;};
   parts.push({role:'track',box:{...ceilingBattenPrism(half,.04,ceiling-.045,ceiling,.004),c:1,s:0},shade:dark,ray:homeRayWorktop});
   for(const sx of spots){
     const add=(p,shade)=>parts.push({...p,box:{...p.box,x:sx-x},shade,ray:coveRayLathe});
@@ -45788,6 +45789,7 @@ function refreshFurnishedRoom() {
 }
 
 function updateHomeLights() {
+  CEIL_LIT_T = NaN; // (the ceiling lamps follow the switches)
   if(mode!=='room'||!homeRecord(room))return;
   const home=homeRecord(room),lights=(room.def.lamps||[]).map((p,k)=>home.lights?.['fixed'+k]!==false);
   for(const p of homeFurnishings(home).parts)if(p.id==='f_lamp')lights.push(p.on);
@@ -46086,6 +46088,14 @@ const roomLightsOn = (r = room) => {
   const home = homeRecord(r);
   return home ? !(r.def.lamps || []).length || (r.def.lamps || []).some((_, k) => home.lights?.['fixed' + k] !== false) : !r.lightsOff;
 };
+// Whether the room's ceiling lamps are lit, asked per pixel by the ceilings, so it's worked out once a frame: off, the
+// tubes, bulbs and lenses go dark (the user's ask: a switch should make the lights black, not leave them white).
+let CEIL_LIT_T = NaN, CEIL_LIT_R = null, CEIL_LIT = true;
+function ceilLit() {
+  if (CEIL_LIT_T !== T || CEIL_LIT_R !== room) { CEIL_LIT_T = T; CEIL_LIT_R = room; CEIL_LIT = !room || roomLightsOn(room); }
+  return CEIL_LIT;
+}
+const CEIL_OFF_LAMP = 0.7; // (an unlit tube or bulb: near black glass)
 function roomSwitch(r = room) {
   if (r.lightSwitch !== undefined) return r.lightSwitch;
   const at = r.kind === 'train' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
@@ -46102,6 +46112,7 @@ function roomSwitch(r = room) {
 }
 // apply the switch: a shop's own lights; at home, every fixed lamp at once
 function setRoomLights(on, r = room) {
+  CEIL_LIT_T = NaN; // (the ceilings ask again)
   const home = homeRecord(r);
   if (home) {
     home.lights ||= {};

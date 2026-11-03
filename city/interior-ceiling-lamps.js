@@ -4,7 +4,7 @@ const INTERIOR_HANGING_ROOMS=new Set([...INTERIOR_BATTEN_ROOMS,'skate']);
 function CEILING_TRACK(x,y,length,ceiling,spots) {
   const parts=[],half=length/2;
   const dark=(i,t,L)=>{BG[i]=C(GRAY,.8+L*.16*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7&&!room?.lightsOff?12:3.5);set(i,' ',0);return true;};
+  const lens=(i,t,L)=>{BG[i]=C(WHITE,HIT.nz<-.7&&ceilLit()?12:CEIL_OFF_LAMP);set(i,' ',0);return true;};
   parts.push({role:'track',box:{...ceilingBattenPrism(half,.04,ceiling-.045,ceiling,.004),c:1,s:0},shade:dark,ray:homeRayWorktop});
   for(const sx of spots){
     const add=(p,shade)=>parts.push({...p,box:{...p.box,x:sx-x},shade,ray:coveRayLathe});
