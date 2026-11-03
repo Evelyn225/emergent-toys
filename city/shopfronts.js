@@ -16,7 +16,7 @@ const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
     lots.get(sh).push(k);
   }
   for (const [sh, cells] of lots) {
-    if (sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT) continue; // (flats have no shop name; a shop closed for good shows FOR LEASE)
+    if (sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT) continue; // (flats have no shop name; a shop closed for good has lost its sign)
     const refX = cells[0] % N, refY = Math.floor(cells[0] / N), xs = cells.map(k => refX + rel(k % N - refX)), ys = cells.map(k => refY + rel(Math.floor(k / N) - refY));
     const sty = STY[cells[0]], b = { x0: Math.min(...xs), y0: Math.min(...ys), x: (Math.min(...xs) + Math.max(...xs) + 1) / 2, y: (Math.min(...ys) + Math.max(...ys) + 1) / 2,
       sh, region: districtAt(refX, refY), material: 0, seed: SEED[cells[0]] };

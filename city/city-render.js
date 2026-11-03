@@ -187,7 +187,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (g && archFasciaPainted(g, d) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
       C(sh.neon, open ? Math.max(L, night * 15 * Math.max(fog, 0.5)) : L * 0.5), C(GRAY, 1))) return;
     const fpG = Math.max(uStep, d / projY); // (a cell's footprint on the wall, for filtering the ground floor's detail)
-    if (z > 0.32 && sf) { set(i, ' ', 0); shopWall(i, u, z, sty, L, fpG, sk); return; } // the wall beside the board
+    if (z > 0.32 && (sf || sh.kind === SHOP_SHUT)) { set(i, ' ', 0); shopWall(i, u, z, sty, L, fpG, sk); return; } // the wall beside the board (or where a shut-down shop's sign came down)
     if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
@@ -247,7 +247,6 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     const fs = fract(u * 2);
     if (fs < 0.08) { set(i, ' ', 0); shopWall(i, u, z, sty, L, fpG, sk); return; } // the piers between the bays, in the building's own wall
-    if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
     const face = shopfrontFace(side, mx, my, h);
     if (face) { // the shop's door, in the bay under its board (shopfronts.js)
       const sg = Math.sign(u * wc) || 1, bay = Math.round((sg * (face.start + face.end) / 2 - 0.27) * 2); // (the bay nearest its middle)
@@ -294,7 +293,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return brickFace(i, u, zz, BRICK, L, fpU, sk);
   }
   if (sty === 10) { // chinatown shophouse: balconies, red lanterns under the eaves, a tall vertical sign
-    const fu = fract(u * 1.25), w = sh.word, vs = Math.abs(fu - 0.5) < 0.06 && zz < 1.2 && sh.kind !== SHOP_APTS;
+    const fu = fract(u * 1.25), w = sh.word, vs = Math.abs(fu - 0.5) < 0.06 && zz < 1.2 && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT;
     if (vs) { // vertical sign: the shop's name top to bottom, one cell per letter
       BG[i] = C(sh.neon, open ? 2 : 1);
       const q = (1.15 - zz) / 0.11, p = Math.floor(q);

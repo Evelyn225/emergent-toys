@@ -3267,7 +3267,7 @@ function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
   if (ground[0]) ground[0].front = true;
   return [...faces.values()];
 }
-const architectureSignedFace = (f, sh) => f.front || f.street && sh.kind !== SHOP_APTS;
+const architectureSignedFace = (f, sh) => sh.kind !== SHOP_SHUT && (f.front || f.street && sh.kind !== SHOP_APTS); // (a shop shut down for good has lost its sign)
 function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}) {
   const ownerCell = idx(Math.floor((f.side ? along : f.line) - f.nx * 0.1), Math.floor((f.side ? f.line : along) - f.ny * 0.1));
   const o = { x: (f.side ? along : f.line) + f.nx * depth, y: (f.side ? f.line : along) + f.ny * depth,
@@ -3762,7 +3762,7 @@ const SHOPFRONT_STYLES = { 2: 'painted', 8: 'board', 15: 'box' };
     lots.get(sh).push(k);
   }
   for (const [sh, cells] of lots) {
-    if (sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT) continue; // (flats have no shop name; a shop closed for good shows FOR LEASE)
+    if (sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT) continue; // (flats have no shop name; a shop closed for good has lost its sign)
     const refX = cells[0] % N, refY = Math.floor(cells[0] / N), xs = cells.map(k => refX + rel(k % N - refX)), ys = cells.map(k => refY + rel(Math.floor(k / N) - refY));
     const sty = STY[cells[0]], b = { x0: Math.min(...xs), y0: Math.min(...ys), x: (Math.min(...xs) + Math.max(...xs) + 1) / 2, y: (Math.min(...ys) + Math.max(...ys) + 1) / 2,
       sh, region: districtAt(refX, refY), material: 0, seed: SEED[cells[0]] };
@@ -12497,7 +12497,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (g && archFasciaPainted(g, d) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (sf.start + g.width / 2), g.zc, g.cwid, g.band,
       C(sh.neon, open ? Math.max(L, night * 15 * Math.max(fog, 0.5)) : L * 0.5), C(GRAY, 1))) return;
     const fpG = Math.max(uStep, d / projY); // (a cell's footprint on the wall, for filtering the ground floor's detail)
-    if (z > 0.32 && sf) { set(i, ' ', 0); shopWall(i, u, z, sty, L, fpG, sk); return; } // the wall beside the board
+    if (z > 0.32 && (sf || sh.kind === SHOP_SHUT)) { set(i, ' ', 0); shopWall(i, u, z, sty, L, fpG, sk); return; } // the wall beside the board (or where a shut-down shop's sign came down)
     if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
@@ -12557,7 +12557,6 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     const fs = fract(u * 2);
     if (fs < 0.08) { set(i, ' ', 0); shopWall(i, u, z, sty, L, fpG, sk); return; } // the piers between the bays, in the building's own wall
-    if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
     const face = shopfrontFace(side, mx, my, h);
     if (face) { // the shop's door, in the bay under its board (shopfronts.js)
       const sg = Math.sign(u * wc) || 1, bay = Math.round((sg * (face.start + face.end) / 2 - 0.27) * 2); // (the bay nearest its middle)
@@ -12604,7 +12603,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return brickFace(i, u, zz, BRICK, L, fpU, sk);
   }
   if (sty === 10) { // chinatown shophouse: balconies, red lanterns under the eaves, a tall vertical sign
-    const fu = fract(u * 1.25), w = sh.word, vs = Math.abs(fu - 0.5) < 0.06 && zz < 1.2 && sh.kind !== SHOP_APTS;
+    const fu = fract(u * 1.25), w = sh.word, vs = Math.abs(fu - 0.5) < 0.06 && zz < 1.2 && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT;
     if (vs) { // vertical sign: the shop's name top to bottom, one cell per letter
       BG[i] = C(sh.neon, open ? 2 : 1);
       const q = (1.15 - zz) / 0.11, p = Math.floor(q);
@@ -14616,12 +14615,6 @@ function doorGlass(i, du, z, open, L, trim, fp = 0) {
 function architectureShutter(i, z, sh, L, d, a, a0, a1, z0, z1) {
   return !openAt(sh, tod) && shopShutter(i, a, z, a0, a1, z0, z1, sh, L, d);
 }
-function architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L) {
-  if (!f.front || sh.kind !== SHOP_SHUT) return false;
-  const width = f.end - f.start, center = (Math.sign(u * wc) || 1) * (f.start + width / 2);
-  return wallText(i, u, uStep, z, d, 'FOR LEASE', center, 0.17, Math.min(0.05, (width - 0.2) / 9), 0.05,
-    C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)));
-}
 function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   const base = BROWNSTONE_MATERIALS[b.material], sk = sk0(b.seed), unit = clamp(Math.floor(along / f.spacing), 0, f.units - 1);
   const center = (unit + 0.5) * f.spacing, local = along - center, corner = Math.min(along, f.end - f.start - along);
@@ -14637,7 +14630,6 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     const g = architectureSignSpec(b, f, sh);
     if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
       g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
-    if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     if (f.front && sh.kind === SHOP_APTS) {
       const door = local + f.spacing * 0.24, half = f.spacing * 0.125;
       const top = 0.35 - (door / half) ** 2 * 0.018;
@@ -14691,7 +14683,6 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     const g = architectureSignSpec(b, f, sh);
     if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
       g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
-    if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
     if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY, d)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
@@ -14833,7 +14824,6 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   const g = architectureSignSpec(b, f, sh);
   if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
     g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
-  if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
   if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim, d)) return; // (the shop's door, to the pavement)
   const fp = Math.max(uStep, d / projY);
@@ -15098,7 +15088,6 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2))) return true;
   }
   if (z < .43) {
-    if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
     const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
       if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L,d,door,-doorHalf - .012,doorHalf + .012,0,.27)) return true;
@@ -26159,12 +26148,11 @@ function promptText() {
   if (nearLighthouse()) return 'E: go into the lighthouse';
   if (churchDoor()) return cathOpen() ? 'E: go into the cathedral' : 'The cathedral: locked for the night (opens at 7)';
   { const td = terminalDoor(px, py); if (td >= 0) return td ? 'E: in to the gates' : 'E: into the terminal'; }
-  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) { // (a shop shut for good is just a shuttered wall)
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return '';
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
-    if (sh.kind === SHOP_SHUT) return `${sh.word}: closed down for good (FOR LEASE)`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (homeAt(sh)) return 'E: enter your apartment';
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
@@ -26791,11 +26779,10 @@ function interact() {
   if (cd) return enterCathedral(cd);
   const td = terminalDoor(px, py);
   if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
-  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return say('The door is around the front.',2);
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
-    if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
     if (home) {

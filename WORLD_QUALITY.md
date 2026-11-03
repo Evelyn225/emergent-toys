@@ -70,6 +70,7 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 30. [ ] Soundscape throughout: location-specific ambience, distance, occlusion, indoor transitions, machines, music and activity feedback.
 31. [ ] Presentation and controls: inventory/shop previews, map, placement controls, interaction prompts, touch accessibility and scaling.
 32. [ ] Final integration tour: all districts, all interiors, every island and vehicle; saves, interactions, seasonal scenes and measured city/coast/interior performance.
+33. [ ] Abandoned shopfronts: shops shut down for good are now anonymous shutters (no sign, no FOR LEASE, no tooltip, not enterable). Give them decayed, aged and abandoned styles (rusted or dented shutters, boarded windows, peeling paint, sun-faded ghost lettering, weeds at the step, flyers and dumped junk) and make them hotspots for graffiti.
 
 ## Checkpoint
 

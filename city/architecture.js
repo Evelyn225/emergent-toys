@@ -65,7 +65,7 @@ function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
   if (ground[0]) ground[0].front = true;
   return [...faces.values()];
 }
-const architectureSignedFace = (f, sh) => f.front || f.street && sh.kind !== SHOP_APTS;
+const architectureSignedFace = (f, sh) => sh.kind !== SHOP_SHUT && (f.front || f.street && sh.kind !== SHOP_APTS); // (a shop shut down for good has lost its sign)
 function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}) {
   const ownerCell = idx(Math.floor((f.side ? along : f.line) - f.nx * 0.1), Math.floor((f.side ? f.line : along) - f.ny * 0.1));
   const o = { x: (f.side ? along : f.line) + f.nx * depth, y: (f.side ? f.line : along) + f.ny * depth,
