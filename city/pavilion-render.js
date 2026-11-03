@@ -16,7 +16,6 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2))) return true;
   }
   if (z < .43) {
-    if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
     const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
       if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L,d,door,-doorHalf - .012,doorHalf + .012,0,.27)) return true;

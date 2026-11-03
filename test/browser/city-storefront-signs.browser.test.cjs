@@ -24,7 +24,8 @@ test('corner shops label every street frontage without labeling upper setbacks o
       for(const b of buildings)for(const f of b.faces) {
         if(f.low&&architectureSignedFace(f,b.sh))errors.push('upper setback');
         if(!f.front&&b.sh.kind===SHOP_APTS&&architectureSignedFace(f,b.sh))errors.push('apartment side');
-        if(b.sh.kind===SHOP_APTS||f.low||f.front)continue;
+        if(b.sh.kind===SHOP_SHUT&&architectureSignedFace(f,b.sh))errors.push('shut shop signed');
+        if(b.sh.kind===SHOP_APTS||b.sh.kind===SHOP_SHUT||f.low||f.front)continue; // (a shop shut for good has no sign at all)
         const road=Array.from({length:f.end-f.start},(_,k)=>{
           const along=f.start+k+.5;
           return ROAD[idx(Math.floor((f.side?along:f.line)+f.nx*.1),Math.floor((f.side?f.line:along)+f.ny*.1))];

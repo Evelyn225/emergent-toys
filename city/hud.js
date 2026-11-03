@@ -242,12 +242,11 @@ function promptText() {
   if (nearLighthouse()) return 'E: go into the lighthouse';
   if (churchDoor()) return cathOpen() ? 'E: go into the cathedral' : 'The cathedral: locked for the night (opens at 7)';
   { const td = terminalDoor(px, py); if (td >= 0) return td ? 'E: in to the gates' : 'E: into the terminal'; }
-  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) { // (a shop shut for good is just a shuttered wall)
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return '';
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
-    if (sh.kind === SHOP_SHUT) return `${sh.word}: closed down for good (FOR LEASE)`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (homeAt(sh)) return 'E: enter your apartment';
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';

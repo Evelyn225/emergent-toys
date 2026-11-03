@@ -50,12 +50,6 @@ function doorGlass(i, du, z, open, L, trim, fp = 0) {
 function architectureShutter(i, z, sh, L, d, a, a0, a1, z0, z1) {
   return !openAt(sh, tod) && shopShutter(i, a, z, a0, a1, z0, z1, sh, L, d);
 }
-function architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L) {
-  if (!f.front || sh.kind !== SHOP_SHUT) return false;
-  const width = f.end - f.start, center = (Math.sign(u * wc) || 1) * (f.start + width / 2);
-  return wallText(i, u, uStep, z, d, 'FOR LEASE', center, 0.17, Math.min(0.05, (width - 0.2) / 9), 0.05,
-    C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)));
-}
 function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   const base = BROWNSTONE_MATERIALS[b.material], sk = sk0(b.seed), unit = clamp(Math.floor(along / f.spacing), 0, f.units - 1);
   const center = (unit + 0.5) * f.spacing, local = along - center, corner = Math.min(along, f.end - f.start - along);
@@ -71,7 +65,6 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     const g = architectureSignSpec(b, f, sh);
     if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
       g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
-    if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     if (f.front && sh.kind === SHOP_APTS) {
       const door = local + f.spacing * 0.24, half = f.spacing * 0.125;
       const top = 0.35 - (door / half) ** 2 * 0.018;
@@ -125,7 +118,6 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     const g = architectureSignSpec(b, f, sh);
     if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
       g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
-    if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
     if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY, d)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {

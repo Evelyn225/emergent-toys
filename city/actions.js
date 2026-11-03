@@ -339,11 +339,10 @@ function interact() {
   if (cd) return enterCathedral(cd);
   const td = terminalDoor(px, py);
   if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
-  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return say('The door is around the front.',2);
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
-    if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
     if (home) {

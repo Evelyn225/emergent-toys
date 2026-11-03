@@ -2252,12 +2252,14 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   assert.strictEqual(await page.evaluate(() => game && game.g.id), 'garden');
 }));
 
-test('shut-down shops say so; each district paints its own walls', () => withPage(async page => {
+test('shut-down shops are anonymous shutters; each district paints its own walls', () => withPage(async page => {
   await page.evaluate(() => { tod = 13; weather = 'clear'; mode = 'walk'; for (const p of people) p.hidden = true; cars.length = 0; flocks.length = 0; }); // (nobody passing to talk to, no car to take: just the shop)
   const shut = await page.evaluate(() => { for (let k = 0; k < N * N; k++) { const sh = SHOP[k], x = k % N, y = k / N | 0; if (sh && sh.kind === SHOP_SHUT && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)]) return [x, y]; } });
   await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.25; a = -Math.PI / 2; pitch = 0; }, shut);
   await page.waitForTimeout(150);
-  assert.match(await page.evaluate(() => promptText()), /closed down for good/);
+  const shutPrompt = await page.evaluate(([x, y]) => ({ text: promptText(), word: SHOP[idx(x, y)].word, signed: ARCH_DETAILS.some(o => o.kind === 'fascia' && SHOP[o.ownerCell]?.kind === SHOP_SHUT) }), shut);
+  assert.equal(shutPrompt.text.includes(shutPrompt.word) || /closed down|LEASE/.test(shutPrompt.text), false, 'a shop shut for good is just a shuttered wall: no name, no tooltip');
+  assert.equal(shutPrompt.signed, false, 'and no fascia board with its old name');
   const themes = await page.evaluate(() => [MURAL_THEMES.chinatown.art.includes('dragon'), MURAL_THEMES.industrial.chance > MURAL_THEMES.downtown.chance * 4]);
   assert.deepStrictEqual(themes, [true, true]);
 }));
