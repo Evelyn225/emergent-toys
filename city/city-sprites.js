@@ -391,7 +391,8 @@ function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
 // a lamp up close is turned and built (drawLamp3D, street-lamps.js); further off the billboard (lampCell) looks the
 // same and costs far less. STEEL: plain steel parts shared by the signals, the el and the bridges.
 const LAMP_3D = 5;
-const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
+// plain steel as colour: its faces lit by the sun's side, its top catching the sky (ch: the part, kept for its callers)
+const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, Math.max(.7, (0.9 + L * 0.3) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0))); return set(i, ' ', 0), true; };
 const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
 // ---- signals and roof clutter as real 3D parts. Poles, masts, legs and wires are rods (rayRod, courier-ui.js): round
 // up close and never thinner than a character far off, so they hold the skyline at any distance. a, b camera-relative.
@@ -1196,8 +1197,11 @@ function islandSprites() {
 // shore end with the island's name across it
 const FB_SIGN = 'LIGHTHOUSE';
 function drawFootbridge() {
-  const rail = (i, t, L) => HIT.w > 0.088 || HIT.face === 5 ? (set(i, '=', C(GRAY, L * 1.1)), true)
-                          : fract(HIT.u * 5) < 0.2 ? (set(i, '|', C(GRAY, L * 0.9)), true) : false;
+  const rail = (i, t, L) => { // a lit top rail, posts below it (filtered: far off they close up into a parapet), see-through between
+    if (HIT.w > 0.088 || HIT.face === 5) { BG[i] = C(GRAY, 1.6 + L * .32 + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; }
+    if (roadBands(HIT.u + .02, .2, .2, t / projY) < .5) return false;
+    BG[i] = C(GRAY, (1.1 + L * .26) * shadeFace(HIT.face)); return set(i, ' ', 0), true;
+  };
   for (let y = FOOTBRIDGE.y0; y < FOOTBRIDGE.y1; y += 2) {
     const len = Math.min(2, FOOTBRIDGE.y1 - y), [vx, vy] = R(FOOTBRIDGE.x, y + len / 2);
     if (Math.hypot(vx, vy) > vis + 1) continue;
@@ -1205,11 +1209,11 @@ function drawFootbridge() {
   }
   const [gx, gy] = R(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.15), hw = FOOTBRIDGE.hw + 0.02;
   if (Math.hypot(gx, gy) > vis) return;
-  const iron = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.1); return set(i, '|', C(GRAY, L)), true; };
+  const iron = (i, t, L) => { BG[i] = C(GRAY, (1 + L * 0.2) * shadeFace(HIT.face)); return set(i, ' ', 0), true; };
   for (const s of [-1, 1]) drawBox(boxAt(gx + s * hw, gy, 1, 0, 0.012, 0.012, 0, 0.36), iron);
   drawBox(boxAt(gx, gy, 1, 0, hw + 0.012, 0.008, 0.3, 0.355), (i, t, L) => { // the sign, readable from both ends
     BG[i] = C(GRAY, 2 + night * 2);
-    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
+    if (HIT.face !== 3 && HIT.face !== 4) { BG[i] = C(GRAY, 2.5 + night * 2 + L * .2); return set(i, ' ', 0), true; }
     const n = FB_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.012) + 1) / 2 * n - 1;
     return set(i, signLine(FB_SIGN, q, (0.35 - HIT.w) / 0.045, i, 0.3275, midDepth(gx, gy), t, 2 * (hw + 0.012) / n, 0.045, farDepth(gx, gy, hw), ...faceDir(1, 0)) || ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
   });
@@ -1365,7 +1369,7 @@ function bridgeSprites() {
     if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1 || !inView(vx, vy, 0.6)) return;
     if (b.kind === 'hanger') return rod(vx, vy, b.z, vx, vy, b.z + b.h, 0.008, GRAY, 0.7);
     if (b.z2 != null) rod(vx, vy, b.z, vx, vy + 0.5, b.z2, 0.025, GRAY, 0.9); // the main cable, on to the next point
-    if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 6); return set(i, '*', C(WARM, 15)), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
+    if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 13); return set(i, ' ', 0), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
   });
 }
 // a bridge tower: two steel legs either side of the deck, banded where the sections join, three crossbeams, and a red
@@ -1373,16 +1377,17 @@ function bridgeSprites() {
 const TOWER_LEG = 0.95;
 function drawBridgeTower(vx, vy) {
   const lw = Math.max(0.1, 0.55 * Math.hypot(vx, vy) / projX), top = TOWER_H + 0.4;
-  const steel = (i, t, L) => {
-    BG[i] = C(GRAY, (1.3 + L * 0.3) * shadeFace(HIT.face));
-    return set(i, HIT.face >= 5 ? '#' : fract(HIT.w * 3) < 0.1 ? '=' : '|', C(GRAY, L * 1.1)), true;
+  const steel = (i, t, L) => { // riveted plate: a lit band where each section's splice plate stands proud, a shadow under it
+    const sp = fract(HIT.w * 3), band = roadLine(Math.abs(sp - .05) / 3, .033, t / projY);
+    BG[i] = C(GRAY, (1.3 + L * 0.3) * shadeFace(HIT.face) + (HIT.face >= 5 ? .6 : band * .7 - (sp > .1 && sp < .14 ? .5 : 0)));
+    return set(i, ' ', 0), true;
   };
   for (const e of [-1, 1]) drawBox(boxAt(vx + e * TOWER_LEG, vy, 1, 0, lw, lw * 1.2, 0, top), steel);
   for (const z of [1.2, 4, TOWER_H]) drawBox(boxAt(vx, vy, 1, 0, TOWER_LEG, lw * 0.9, z - 0.12, z + 0.12), (i, t, L) => {
-    BG[i] = C(GRAY, (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, z === TOWER_H ? '#' : '=', C(GRAY, L)), true;
+    BG[i] = C(GRAY, (1.2 + L * 0.3) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : HIT.w > z + .09 ? .4 : 0)); return set(i, ' ', 0), true; // a crossbeam, its top flange lit
   });
   if (night > 0.3) for (const e of [-1, 1]) dot(vx + e * TOWER_LEG, vy, top + 0.06, Math.max(0.05, lw * 0.8), (i, t, L) => {
-    const on = fract(T * 0.7) < 0.5; if (on) BG[i] = C(RED, 8); return set(i, '*', C(RED, on ? 15 : 4)), true;
+    const on = fract(T * 0.7) < 0.5; BG[i] = C(RED, on ? 14 : 3); return set(i, ' ', 0), true;
   });
 }
 
