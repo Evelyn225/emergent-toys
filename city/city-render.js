@@ -680,16 +680,23 @@ function floorBaseCell(i, r, x, rx, ry) {
       const coast = worldReady ? coastalGround(wx,wy) : null;
       const toWater = coast ? coast.depth : south ? shoreS(wx) - worldCoord(wy) : worldCoord(wy) - shoreN(wx);
       const beach = coast ? coast.beach : hash(bx & (NB - 1), south ? 1 : 2, 47) < 0.35;
-      if (toWater < 0.2 && !beach) { ch = '#'; k = 1.4; } // the sea wall
+      const fpG = homeBalconyPavingFootprint(d, eye), fineG = clamp(1 - fpG / .02, 0, 1), LG = L * roadDark();
+      if (toWater < 0.2 && !beach) surf = [STONE, LG * (toWater < .03 ? .7 : .55) - coveGroove(wx + wy, .12, .006, fpG) * LG * .1]; // the sea wall's coping, its blocks
       else if (beach && toWater < 1.6) { // sand, and surf where it meets the water
-        const surf = toWater < 0.25; ch = surf ? '~' : (r * 7 + x * 3) % 5 ? '.' : ':'; base = surf ? WHITE : YEL; k = surf ? 1.2 : 0.8;
-      } else if (fract(wx * 1.5) < 0.08 || fract(wy * 1.5) < 0.08) { ch = '+'; base = WARM; k = 0.9; } // promenade flagstones
-      else ch = (r + x) % 3 ? ' ' : '.';
-    } else if (kind === 'construction') { // churned-up dirt with tyre tracks
-      soft = true; base = BRICK; k = 1.1;
-      ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
-    } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
-      ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+        const wave = toWater < 0.25; ch = wave ? '~' : ' '; base = wave ? WHITE : YEL; k = wave ? 1.2 : 0.8;
+        if (!wave) surf = [YEL, LG * (.42 + (hash(Math.floor(wx * 80), Math.floor(wy * 80), 47) - .5) * .12 * fineG + Math.sin(wx * 9 + wy * 4) * .03 * fineG)]; // dry sand, rippled
+      } else { // the promenade: big flagstones, each its own tone, joints filtered
+        const j = Math.max(coveGroove(wx, 1 / 1.5, .012, fpG), coveGroove(wy, 1 / 1.5, .012, fpG));
+        surf = [WARM, LG * (.36 + (hash(Math.floor(wx * 1.5), Math.floor(wy * 1.5), 48) - .5) * .06 - j * .1)];
+      }
+    } else if (kind === 'construction') { // churned-up dirt with tyre ruts
+      soft = true; const fpG = homeBalconyPavingFootprint(d, eye), LG = L * roadDark();
+      const rut = coveGroove(lx * 3 + ly * 0.4, 1, .12, fpG * 3), clod = (noise(wx * 14, wy * 14, 97) - .5) * clamp(1 - fpG / .02, 0, 1);
+      surf = [BRICK, LG * (.34 - rut * .1 + clod * .08)];
+    } else if (kind === 'yard') { // cracked concrete, oil stains, painted bay lines
+      const fpG = homeBalconyPavingFootprint(d, eye), LG = L * roadDark(), line = coveGroove(lx, 1 / 1.5, .03, fpG);
+      const stain = noise(wx * 3, wy * 3, 98) > .7 ? .1 : 0, crack = clamp(1 - fpG / .01, 0, 1) * (Math.abs(noise(wx * 6, wy * 6, 99) - .5) < .015 ? .08 : 0);
+      surf = line > .5 ? [YEL, LG * .45] : [GRAY, LG * (.36 - stain - crack)];
     } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
       soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
