@@ -17,6 +17,7 @@ function refreshFurnishedRoom() {
 }
 
 function updateHomeLights() {
+  CEIL_LIT_T = NaN; // (the ceiling lamps follow the switches)
   if(mode!=='room'||!homeRecord(room))return;
   const home=homeRecord(room),lights=(room.def.lamps||[]).map((p,k)=>home.lights?.['fixed'+k]!==false);
   for(const p of homeFurnishings(home).parts)if(p.id==='f_lamp')lights.push(p.on);

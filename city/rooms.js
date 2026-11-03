@@ -1222,6 +1222,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return sharedDarkCeil(i);
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
+  if (strip && !ceilLit()) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {

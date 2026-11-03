@@ -182,7 +182,7 @@ Object.assign(ROOM_CEILS, {
   tin: (i, r, x, wx, wy) => { // pressed tin: a square motif on a grid, a lamp every 2m
     const fp = homeBalconyPavingFootprint(((room.def.height || 3) - eye) * projY / (hor - r - 0.5), (room.def.height || 3) - eye);
     set(i, ' ', 0);
-    if (!prepareInteriorHanging() && ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) { BG[i] = C(WARM, 14); return; }
+    if (!prepareInteriorHanging() && ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) { BG[i] = ceilLit() ? C(WARM, 14) : C(GRAY, CEIL_OFF_LAMP); return; }
     const u = fract(wx / 0.6) - 0.5, v = fract(wy / 0.6) - 0.5;
     BG[i] = C(STONE, 2.4 - 1 * Math.max(coveGroove(wx, 0.6, 0.015, fp), coveGroove(wy, 0.6, 0.015, fp)) + (fp < 0.05 && Math.abs(Math.abs(u) + Math.abs(v) - 0.28) < 0.05 ? 0.8 : 0));
   },
@@ -190,7 +190,7 @@ Object.assign(ROOM_CEILS, {
     set(i, ' ', 0);
     if (prepareInteriorHanging()) { BG[i] = C(GRAY, .7); return; }
     const k = ceilAt('spots', CEIL_SPOTS, wx, wy);
-    BG[i] = k === 1 ? C(WHITE, 14) : k === 2 ? C(GRAY, 2.4) : C(GRAY, .5);
+    BG[i] = k === 1 ? ceilLit() ? C(WHITE, 14) : C(GRAY, CEIL_OFF_LAMP) : k === 2 ? C(GRAY, 2.4) : C(GRAY, .5);
   },
 });
 

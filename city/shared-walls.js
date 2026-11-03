@@ -16,7 +16,7 @@ function sharedGlassDoor(i,u,z,L) {
   set(i,' ',0);
   BG[i]=z>2.3||fract(u)<.08?C(GRAY,1.4+L*.2):C(day>.3?CYAN:WARM,2+day*4);
 }
-function sharedPendantCeil(i,on){BG[i]=on?C(WARM,14):C(BRICK,2);set(i,' ',0);}
+function sharedPendantCeil(i,on){BG[i]=on?ceilLit()?C(WARM,14):C(GRAY,CEIL_OFF_LAMP):C(BRICK,2);set(i,' ',0);}
 // Coloured spots sweeping over a dark ceiling: they're big enough to read, and
 // their hue changes as a whole so nothing flickers cell by cell.
 function sharedDiscoCeil(i,wx,wy) {
