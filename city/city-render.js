@@ -676,7 +676,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
     } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
-      ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
+      { const fpP = homeBalconyPavingFootprint(d, eye), LP = L * roadDark(), gap = coveGroove(wy * 6, 1, .12, fpP * 6), board = hash(mx, Math.floor(wy * 6), 33) - .5; // boards across it, each its own age, the gaps filtered
+        surf = [BRICK, LP * (.5 + board * .2 * clamp(1 - fpP / .03, 0, 1) - gap * .3)]; }
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
       const shore=seaShoreBand(wx,wy);
       if(shore?.beach) {
