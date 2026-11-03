@@ -179,7 +179,7 @@ const POLE_WIRE_VIS = 10;
 function drawPoleSpans() {
   forNear(poleSpansB, sp => {
     const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
-    if (d > Math.min(vis, POLE_WIRE_VIS) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
+    if (d > Math.min(vis, POLE_WIRE_VIS * lodScale()) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
     const n = d < 3 ? 12 : d < 6 ? 6 : 3;
     poleSpanModel(sp,n).draw(ax,ay,0);
   });

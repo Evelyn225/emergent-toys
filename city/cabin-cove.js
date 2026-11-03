@@ -13,6 +13,7 @@ function coveDetail(t,size=1) {
   return 1-smooth(clamp((t/projX/size-.012)/.065,0,1));
 }
 function coveGroove(u,period,width,footprint) {
+  footprint/=lodScale(); // (Detail distance: the grooves keep their lines further off)
   if(footprint>period*.5)return width/period;
   const f=fract(u/period),distance=Math.min(f,1-f)*period,filter=Math.max(width*.3,footprint);
   return (1-smooth(clamp((distance-width*.5)/filter+.5,0,1)))*Math.min(1,width/filter);

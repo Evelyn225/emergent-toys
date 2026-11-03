@@ -2,7 +2,7 @@
 // goods standing on it at their own depth (so they slide against the back as you walk past), and the lit shop beyond.
 // Shared by every facade family's shop windows up close (SHOP_WINDOW.near); further off they stay flat glass.
 // u0..u1: the pane in the wall's u; z0..z1: its glass.
-const SHOP_WINDOW = { near: 3.5, dep: .07, plinth: .035, goods: .45, spacing: .085 };
+const SHOP_WINDOW = { get near() { return 3.5 * lodScale(); }, dep: .07, plinth: .035, goods: .45, spacing: .085 };
 const SHOP_DISPLAYS = { // what a shop puts in its window: [shape, height, half width]
   food: ['loaf', .03, .028], clothes: ['mannequin', .17, .022], books: ['stack', .05, .026], screens: ['screen', .06, .03],
   bottles: ['bottle', .07, .01], flowers: ['bunch', .08, .024], goods: ['box', .05, .025],

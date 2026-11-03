@@ -296,7 +296,9 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true, tripVisuals: 1 };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1 };
+// how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
+const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
@@ -3332,7 +3334,7 @@ function downtownDetails(b) {
 const ARCH_FASCIA_VIS = 12; // (past this a fascia is just its lettering, painted on the wall behind it)
 // Is a board too small on screen to draw (under a row tall, so it can fall between rows), its lettering painted on the wall
 // instead? Otherwise a board between two rows would leave no name at all. g: its sign spec; d: distance.
-const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
+const archFasciaPainted = (g, d) => d > ARCH_FASCIA_VIS * lodScale() - 1.5 || (g.band + g.edge * 2) * projY / d < 1;
 function architectureSignSpec(b, f, sh) {
   const width = f.end - f.start, n = sh.word.length;
   const g = b.profile || b.region === 'midtown' && b.sty !== 14 ? { zc: .39, cmax: .09, margin: .3, band: .1, edge: .01, style: 'board' }
@@ -13485,7 +13487,7 @@ function plazaSurface(wx, wy, lx, ly, d, L) {
 // goods standing on it at their own depth (so they slide against the back as you walk past), and the lit shop beyond.
 // Shared by every facade family's shop windows up close (SHOP_WINDOW.near); further off they stay flat glass.
 // u0..u1: the pane in the wall's u; z0..z1: its glass.
-const SHOP_WINDOW = { near: 3.5, dep: .07, plinth: .035, goods: .45, spacing: .085 };
+const SHOP_WINDOW = { get near() { return 3.5 * lodScale(); }, dep: .07, plinth: .035, goods: .45, spacing: .085 };
 const SHOP_DISPLAYS = { // what a shop puts in its window: [shape, height, half width]
   food: ['loaf', .03, .028], clothes: ['mannequin', .17, .022], books: ['stack', .05, .026], screens: ['screen', .06, .03],
   bottles: ['bottle', .07, .01], flowers: ['bunch', .08, .024], goods: ['box', .05, .025],
@@ -14806,7 +14808,7 @@ function drawArchitecture() {
     if (map[o.ownerCell] !== o.ownerHeight) return;
     // Massing stays in the height map; small trim is culled before it becomes an unreadable speck.
     const vx = rel(o.x - px), vy = rel(o.y - py), distance = Math.hypot(vx, vy);
-    if (distance > vis + 1 || distance > (o.detailDistance || (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9))) return;
+    if (distance > vis + 1 || distance > (o.detailDistance || (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9)) * lodScale()) return; // (the Detail distance setting carries them further)
     // Reject boxes outside the view before projecting their corners or copying their shape data.
     const along = dx * o.c + dy * o.s, across = -dx * o.s + dy * o.c;
     const far = dx * vx + dy * vy + Math.abs(along) * o.hl + Math.abs(across) * o.hw;
@@ -17087,7 +17089,7 @@ const POLE_WIRE_VIS = 10;
 function drawPoleSpans() {
   forNear(poleSpansB, sp => {
     const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
-    if (d > Math.min(vis, POLE_WIRE_VIS) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
+    if (d > Math.min(vis, POLE_WIRE_VIS * lodScale()) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
     const n = d < 3 ? 12 : d < 6 ? 6 : 3;
     poleSpanModel(sp,n).draw(ax,ay,0);
   });
@@ -29290,6 +29292,7 @@ function buildPause() {
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
+      ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -29325,7 +29328,7 @@ function buildPause() {
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
-      s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : Math.round(v * 100) + '%';
+      s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : k === 'lod' ? (+v).toFixed(1) + 'x' : Math.round(v * 100) + '%';
     }
     for (const b of el.querySelectorAll('[data-bar]')) {
       const inp = el.querySelector(`[data-set="${b.dataset.bar}"]`), lo = +inp.min, hi = +inp.max;
@@ -38823,6 +38826,7 @@ function coveDetail(t,size=1) {
   return 1-smooth(clamp((t/projX/size-.012)/.065,0,1));
 }
 function coveGroove(u,period,width,footprint) {
+  footprint/=lodScale(); // (Detail distance: the grooves keep their lines further off)
   if(footprint>period*.5)return width/period;
   const f=fract(u/period),distance=Math.min(f,1-f)*period,filter=Math.max(width*.3,footprint);
   return (1-smooth(clamp((distance-width*.5)/filter+.5,0,1)))*Math.min(1,width/filter);
