@@ -55,7 +55,7 @@ const roomLightsOn = (r = room) => {
 };
 function roomSwitch(r = room) {
   if (r.lightSwitch !== undefined) return r.lightSwitch;
-  const at = r.kind === 'train' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
+  const at = r.kind === 'train' || r.kind === 'backrooms' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
   if (!at) return r.lightSwitch = null;
   const c = -at.ny, s = at.nx, plate = (i, t, L) => { BG[i] = C(WHITE, 3.4 + L * .25); set(i, ' ', 0); return true; };
   const rocker = (i, t, L) => { BG[i] = C(GRAY, 2 + L * .3); set(i, ' ', 0); return true; };

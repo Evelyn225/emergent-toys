@@ -23162,16 +23162,16 @@ const SEAM_HW = 0.055, SEAM_H = 0.215; // (a door's half width and its height, i
 const seamSide = () => BACKROOMS_SEAM && rel(BACKROOMS_SEAM.x - px) > 0 && rel(BACKROOMS_SEAM.x - px) < 1.2;
 // the wall cell lookHit is on is the seam's, seen from the lane (no shop to go into from this side)
 const seamWall = h => seamSide() && worldCoord(h.mx) === BACKROOMS_SEAM.x && worldCoord(h.my) === BACKROOMS_SEAM.cy;
-// the seam's face from the lane: blank, grimy concrete on the ground floor (no shopfront this side), the doorframe's
-// outline cut into it, a hairline darker than the wall. True if it drew this cell.
+// the seam's face from the lane: the building's own blank wall on the ground floor (no shopfront this side), the
+// doorframe's outline cut into it, a hairline darker than the wall. True if it drew this cell.
 function backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc) {
   const S = BACKROOMS_SEAM;
   if (!S || side || worldCoord(mx) !== S.x || worldCoord(my) !== S.cy || z >= 0.4 || !seamSide()) return false;
-  const e = rel(wc - S.y), dz = d / projY, L = fog * amb * 15, wall = day * 2.6 * (0.45 + 0.55 * fog);
+  const k = idx(S.x, S.cy), e = rel(wc - S.y), dz = d / projY, L = fog * amb * 15, fp = Math.max(uStep, dz);
   const edge = Math.abs(Math.abs(e) - SEAM_HW) < Math.max(uStep * 0.55, 0.002) && z < SEAM_H || Math.abs(z - SEAM_H) < Math.max(dz * 0.55, 0.002) && Math.abs(e) < SEAM_HW;
-  if (edge) { BG[i] = bgAt(GRAY, wall * 0.55, d); return set(i, Math.abs(z - SEAM_H) < dz * 0.55 ? '-' : '|', C(GRAY, L * 0.25)), true; }
-  const g = hash(Math.floor(wc * 40), Math.floor(z * 40), 153);
-  BG[i] = bgAt(GRAY, wall * (0.85 + noise(wc * 6, z * 6, 154) * 0.25), d); return set(i, z > 0.38 ? '=' : g > 0.93 ? '.' : g > 0.9 ? ',' : ' ', C(GRAY, L * 0.4)), true;
+  set(i, ' ', 0); shopWall(i, wc, z, STY[k], L, fp, sk0(SEED[k])); // the building's own wall, brick like the rest of it (no grey patch)
+  if (edge) BG[i] = C(BG[i] >> 4, (BG[i] & 15) * 0.5); // the doorframe's outline: a hairline crack, darker than the wall
+  return true;
 }
 // walking into it from the lane (a step's look ahead at x, y)
 const backroomsSeamAt = (x, y) => { const S = BACKROOMS_SEAM; return !!S && Math.floor(worldCoord(x)) === S.x && Math.floor(worldCoord(y)) === S.cy && Math.abs(rel(y - S.y)) < SEAM_HW && rel(x - S.x) < 0.12; };
@@ -46088,7 +46088,7 @@ const roomLightsOn = (r = room) => {
 };
 function roomSwitch(r = room) {
   if (r.lightSwitch !== undefined) return r.lightSwitch;
-  const at = r.kind === 'train' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
+  const at = r.kind === 'train' || r.kind === 'backrooms' || homeRecord(r) && !(r.def.lamps || []).length ? null : roomSwitchSpot(r);
   if (!at) return r.lightSwitch = null;
   const c = -at.ny, s = at.nx, plate = (i, t, L) => { BG[i] = C(WHITE, 3.4 + L * .25); set(i, ' ', 0); return true; };
   const rocker = (i, t, L) => { BG[i] = C(GRAY, 2 + L * .3); set(i, ' ', 0); return true; };
