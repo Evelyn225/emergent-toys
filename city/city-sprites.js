@@ -502,33 +502,35 @@ const EL_COL = 0.022, EL_PANEL = 0.07;
 function drawElPillar(p) {
   const [vx, vy] = R(p.x, p.y), d = Math.hypot(vx, vy);
   if (d > vis + 1) return;
-  if (d > 9) return rod(vx, vy, 0, vx, vy, EL_BOT, EL_COL, GRAY, 0.9);
+  if (d > 9) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
   drawBox(boxAt(vx, vy, 1, 0, 0.04, 0.04, 0, 0.025), (i, t, L) => {
-    BG[i] = C(STONE, (1.2 + L * 0.25) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? ' ' : '_', C(STONE, L * 0.6)), true;
+    BG[i] = C(STONE, (1.2 + L * 0.25) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; // the footing
   });
   drawBox(boxAt(vx, vy, 1, 0, EL_COL, EL_COL, 0.025, EL_BOT - 0.035), (i, t, L) => {
     const f = HIT.face, side = f < 3 ? HIT.v : HIT.u, q = (HIT.w - 0.025) / EL_PANEL, n = Math.floor(q), k = q - n;
     const tol = Math.max(0.003, 0.5 * t / projX);
     BG[i] = C(GRAY, (0.7 + L * 0.18) * shadeFace(f));
     if (f >= 5) return set(i, ' ', 0), true;
-    if (Math.abs(side) > EL_COL - tol * 1.2) return set(i, '|', C(GRAY, L)), true; // the flanges
-    if (k * EL_PANEL < Math.max(0.003, 0.5 * t / projY)) return set(i, '-', C(GRAY, L * 0.85)), true; // a batten each panel
+    set(i, ' ', 0);
+    if (Math.abs(side) > EL_COL - tol * 1.2) { BG[i] = C(GRAY, (1.3 + L * .3) * shadeFace(f)); return true; } // the flanges, lit
+    if (k * EL_PANEL < Math.max(0.003, 0.5 * t / projY)) { BG[i] = C(GRAY, (1.1 + L * .26) * shadeFace(f)); return true; } // a batten each panel
     const sg = n & 1 ? -1 : 1, target = sg * EL_COL * (2 * k - 1);
-    if (Math.abs(side - target) > tol * 1.6) return set(i, ' ', 0), true;
-    const run = 2 * EL_COL * sg; // the brace's direction, so its glyph leans the way it does on screen
-    return set(i, courierGlyph(vx + HIT.u, vy + HIT.v, HIT.w, f < 3 ? 0 : run, f < 3 ? run : 0, EL_PANEL), C(GRAY, L * 0.85)), true;
+    if (Math.abs(side - target) < tol * 1.6) BG[i] = C(GRAY, (1.1 + L * .26) * shadeFace(f)); // the lattice brace across the web
+    return true;
   });
   drawBox(boxAt(vx, vy, 1, 0, 0.05, 0.034, EL_BOT - 0.035, EL_BOT), (i, t, L) => {
-    BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face < 5 ? '=' : ' ', C(GRAY, L * 0.7)), true;
+    BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(HIT.face) + (HIT.face < 5 && HIT.w > EL_BOT - .01 ? .5 : 0)); return set(i, ' ', 0), true; // the cap
   });
 }
 // The stairs up to the el (laid out in elevated.js): two straight flights along the curb side of the sidewalk with a
 // landing halfway, a landing at the top that runs out onto the platform, posts down to the street, a rail each side,
 // a turnstile at the foot, and the green EL sign at the top facing the street. Flights are inclined slabs (planes).
+// the el's steel posts and (far off) its flights: rods in colour, lit by the sky (its handrails stay rod()s)
+const elSteelRod = (ax, ay, az, bx, by, bz, r) => drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => { BG[i] = C(GRAY, Math.max(.8, 1 + L * .3)); return set(i, ' ', 0), true; });
 const elStairShade = (i, t, L) => {
   if (HIT.face >= 7) { // the treads: open steel, the street showing between them
-    if (fract(HIT.u * 55) < 0.25) return false;
-    BG[i] = C(GRAY, 1.3 + L * 0.25); return set(i, '=', C(WHITE, L * 0.7)), true;
+    if (fract(HIT.u * 55) < 0.25 && t / projY < .01) return false; // (far off the gaps close up)
+    BG[i] = C(GRAY, 1.3 + L * 0.25 + (fract(HIT.u * 55) > .85 ? .6 : 0)); return set(i, ' ', 0), true; // each tread's nosing lit
   }
   BG[i] = C(GRAY, (1.1 + L * 0.25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the stringers
 };
@@ -540,7 +542,7 @@ function drawElStairs(st) {
   const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
   for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
     const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
-    if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); rod(ax, ay, za, bx, by, zb, 0.03); continue; }
+    if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); elSteelRod(ax, ay, za, bx, by, zb, 0.03); continue; }
     drawBox({ x, y, c, s, hl: run, hw, z0: za - 0.015, z1: zb + 0.015,
       planes: [[1, 0, 0, run, 1], [-1, 0, 0, run, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4], [-slope, 0, 1, mid, 7], [slope, 0, -1, -mid + 0.02, 8]] },
       elStairShade, rayBeveledBay);
@@ -551,7 +553,7 @@ function drawElStairs(st) {
   landing(ELS.u3, ELS.u4, ELS.v0, ELS.top, H);
   // the posts: under the landings and halfway along each flight
   for (const [u, z] of ELS_POSTS)
-    for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); rod(x, y, 0, x, y, z - 0.015, 0.008); }
+    for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); elSteelRod(x, y, 0, x, y, z - 0.015, 0.008); }
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
   for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
@@ -1420,24 +1422,28 @@ function drawElCar(vx, vy, cab) {
     const f = HIT.face, u = HIT.u, w = HIT.w - z0, k = shadeFace(f);
     BG[i] = C(GRAY, (2 + L * 0.5) * k);
     if (f === 6) return set(i, ' ', 0), true;
-    if (w < 0.04) { BG[i] = C(GRAY, 1); return set(i, '=', C(GRAY, L * 0.4)), true; } // the underframe
-    if (f === 5) return set(i, Math.abs(u) < 0.25 ? '#' : fract(u * 6) < 0.1 ? '|' : ' ', C(GRAY, L * 0.8)), true; // roof, ribs, the AC unit
+    const fp = t / projY;
+    if (w < 0.04) { BG[i] = C(GRAY, 1 + (w > .034 ? .6 : 0)); return set(i, ' ', 0), true; } // the underframe, the sole bar's lip lit
+    if (f === 5) { BG[i] = Math.abs(u) < 0.25 ? C(GRAY, 2.6 + L * .3 - roadBands(u, .02, .3, fp) * .8) : C(GRAY, (2 + L * 0.5) + roadLine(Math.abs(fract(u * 6 + .5) - .5) / 6, .016, fp) * .7); return set(i, ' ', 0), true; } // the roof's ribs; the AC unit's grille
     if (f === 1 || f === 2) { // the ends: a cab with windscreen and lamps, or the gangway to the next car
       const end = (f === 1 ? 1 : -1) === cab, v = Math.abs(HIT.v);
       if (end && w > 0.17 && w < 0.27 && v < EL_HW * 0.85) { BG[i] = C(CYAN, 1 + L * 0.15); return set(i, ' ', 0), true; }
-      if (end && w > 0.07 && w < 0.11 && v > EL_HW * 0.55) return set(i, 'O', C(f === 1 ? WHITE : RED, 15)), true;
-      if (!end && v < 0.06 && w < 0.27) { BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.5)), true; }
-      return set(i, w > 0.12 && w < 0.14 ? '=' : ' ', C(RED, L)), true;
+      if (end && w > 0.07 && w < 0.11 && v > EL_HW * 0.55) { BG[i] = C(f === 1 ? WHITE : RED, lit > .3 ? 15 : 8); return set(i, ' ', 0), true; } // the head and tail lamps
+      if (!end && v < 0.06 && w < 0.27) { BG[i] = C(GRAY, v < .05 ? .7 : 2); return set(i, ' ', 0), true; } // the gangway's bellows
+      if (w > 0.12 && w < 0.14) BG[i] = C(RED, Math.max(5, L * .9)); // the stripe round the front
+      return set(i, ' ', 0), true;
     }
     // the sides
     const door = [-0.45, 0.45].some(d => Math.abs(u - d * EL_HL) < 0.09);
-    if (door && w > 0.05 && w < 0.29) { BG[i] = C(GRAY, (3 + L * 0.5) * k); return set(i, Math.abs(fract((u + 1) * 11) - 0.5) < 0.1 ? '|' : w > 0.18 && w < 0.26 ? '#' : ' ', w > 0.18 ? C(WARM, Math.max(L * 0.5, lit * 13)) : C(GRAY, L * 0.6)), true; }
-    if (w > 0.12 && w < 0.14) return set(i, '=', C(RED, Math.max(L, 6))), true; // the stripe
+    if (door && w > 0.05 && w < 0.29) { // the doors: a seam down the middle, a window in each leaf lit from inside after dark
+      const seam = Math.abs(fract((u + 1) * 11) - 0.5) < 0.1, glass = w > 0.18 && w < 0.26;
+      BG[i] = seam ? C(GRAY, (1.8 + L * .3) * k) : glass ? (lit > .3 ? C(WARM, 3 + lit * 6) : C(CYAN, 1 + L * .15 + (w > .23 ? .6 : 0))) : C(GRAY, (3 + L * 0.5) * k); return set(i, ' ', 0), true; }
+    if (w > 0.12 && w < 0.14) { BG[i] = C(RED, Math.max(5, L * .9) + (w > .135 ? .6 : 0)); return set(i, ' ', 0), true; } // the stripe, lit along its top
     if (w > 0.17 && w < 0.27 && Math.abs(u) < EL_HL - 0.06) { // the windows
-      const pane = fract(u * 4) < 0.12;
-      if (pane) return set(i, '|', C(GRAY, L)), true;
-      BG[i] = lit > 0.3 ? C(WARM, 3 + lit * 6) : C(CYAN, 1 + L * 0.15);
-      return set(i, lit > 0.3 && hash(Math.floor(u * 4 + vx), 1, 9) > 0.6 ? 'o' : ' ', C(SKIN, 8)), true; // the odd passenger
+      if (fract(u * 4) < 0.12) { BG[i] = C(GRAY, (2.4 + L * .5) * k); return set(i, ' ', 0), true; } // the pillars between them
+      const rider = lit > 0.3 && hash(Math.floor(u * 4 + vx), 1, 9) > 0.6 && Math.abs(fract(u * 4) - .56) < .14 && w < .24; // the odd passenger, a head and shoulders against the light
+      BG[i] = rider ? C(SKIN, 4 + lit * 2) : lit > 0.3 ? C(WARM, 3 + lit * 6) : C(CYAN, 1 + L * 0.15 + (w > .23 ? .6 + day * .5 : 0));
+      return set(i, ' ', 0), true;
     }
     return set(i, ' ', 0), true;
   });

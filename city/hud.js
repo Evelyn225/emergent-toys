@@ -45,10 +45,10 @@ function elFrame() {
   const floor=EL_TOP+.02,ceiling=floor+.285,hl=EL_HL-.008,hw=EL_HW-.006;
   const paint=(i,ch,col,bg)=>{FOGS[i]=FOGB[i]=0;BG[i]=bg;set(i,ch,col);return true;};
   const box=(u,v,l,w,z0,z1,shade)=>drawBox(boxAt(vx+u,vy+v,1,0,l,w,floor+z0,floor+z1),shade);
-  box(0,0,hl,hw,-.008,0,(i,t,L)=>paint(i,fract(HIT.u*55)<.05?'.':' ',C(GRAY,5),C(GRAY,2)));
+  box(0,0,hl,hw,-.008,0,(i,t,L)=>paint(i,' ',0,C(GRAY,2-roadBands(HIT.u,1/55,.12,t/projY)*.8+(Math.abs(HIT.v)<.03?.5:0)))); // ribbed rubber, the aisle worn paler
   box(0,0,hl,hw,.285,.3,(i,t,L)=>{
-    const light=Math.abs(Math.abs(HIT.v)-.055)<.009;
-    return paint(i,light?'=':fract(HIT.u*12)<.02?'|':' ',C(WHITE,light?15:7),C(light?WARM:WHITE,light?10:4));
+    const light=Math.abs(Math.abs(HIT.v)-.055)<.009,rib=roadBands(HIT.u,1/12,.04,t/projY);
+    return paint(i,' ',0,light?C(WARM,Math.abs(Math.abs(HIT.v)-.055)<.005?12:9):C(WHITE,4-rib*.8)); // the light strips (a diffuser, brightest down its middle); the ceiling's panels
   });
   for(const side of [-1,1]) {
     box(0,side*hw,hl,.004,0,.285,(i,t,L)=>{
@@ -57,15 +57,16 @@ function elFrame() {
       if(door!==undefined) {
         if(Math.abs(u-door)<.068&&z>.16&&z<.25)return false;
         const seam=Math.abs(u-door)<.004,edge=Math.abs(u-door)>.096;
-        return paint(i,seam?'|':edge?'|':z<.018?'=':' ',C(edge?YEL:GRAY,10),C(GRAY,3.5));
+        return paint(i,' ',0,edge?C(YEL,7):seam?C(GRAY,2):z<.018?C(GRAY,5.5):C(GRAY,3.5+(z>.25?.4:0))); // the doors: yellow-edged, their seam, the threshold plate
       }
       if(window&&z>.1&&z<.25)return false;
       const frame=window&&(Math.abs(z-.1)<.006||Math.abs(z-.25)<.006);
       const rib=fract((u+1)*28)<.04,trim=z<.012||Math.abs(z-.095)<.004;
-      return paint(i,frame||trim?'=':rib?'|':z>.26&&fract(u*25)<.1?'|':' ',C(GRAY,8),C(z>.25?WARM:WHITE,z>.25?4:3.5));
+      const card=z>.26&&fract(u*25)<.1;
+      return paint(i,' ',0,frame?C(GRAY,5):trim?C(GRAY,2.6):z>.25?C(card?BRICK:WARM,card?2.5:4+(z>.275?.5:0)):C(WHITE,3.5-(rib?.6:0)+(z>.2?.3:0))); // window frames; the trim; ad cards along the top; the wall's panels
     });
     for(const x of [-.69,0,.69]) {
-      const seat=(i,t,L)=>paint(i,HIT.face===5&&fract((HIT.u+.2)*30)<.08?'|':HIT.face===5?'_':' ',C(BLUE,12),C(BLUE,HIT.face===5?6:4));
+      const seat=(i,t,L)=>paint(i,' ',0,C(BLUE,HIT.face===5?6-roadBands(HIT.u+.2,1/30,.08,t/projY)*1.5:4*shadeFace(HIT.face))); // moquette, the seat's divisions sewn in
       box(x,side*(hw-.028),.19,.025,.025,.045,seat);
       box(x,side*(hw-.005),.19,.005,.045,.095,seat);
     }
@@ -79,7 +80,7 @@ function elFrame() {
   for(const side of [-1,1]) {
     box(side*hl,0,.004,hw,0,.285,(i,t,L)=>{
       const v=HIT.v,z=HIT.w-floor,door=Math.abs(v)<.045;
-      return paint(i,door&&Math.abs(v)<.003?'|':door&&(Math.abs(z-.12)<.005||Math.abs(z-.24)<.005)?'=':' ',C(GRAY,10),C(door&&z>.12&&z<.24?GRAY:WHITE,door?2:4));
+      return paint(i,' ',0,door&&Math.abs(v)<.003?C(GRAY,4):door&&(Math.abs(z-.12)<.005||Math.abs(z-.24)<.005)?C(GRAY,5):C(door&&z>.12&&z<.24?GRAY:WHITE,door?2:4)); // the end door: its glass, frame and seam
     });
     rod(vx+side*.45*EL_HL,vy,floor,vx+side*.45*EL_HL,vy,ceiling-.015,.0035,GRAY,1.8);
   }
