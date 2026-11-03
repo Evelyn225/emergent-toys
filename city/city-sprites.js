@@ -187,6 +187,7 @@ function citySprites() {
     if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
   industrialRoofs(); // sawtooth north lights, refrigeration plant, ventilators (industrial-facades.js)
+  shopExteriors(); // barber poles, pharmacy crosses, lanterns, café boards, florists' buckets, bar signs (shop-exteriors.js)
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
     if (Math.abs(vx) < vis && Math.abs(vy) < vis && inView(vx, vy, 1.6)) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
