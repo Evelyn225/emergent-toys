@@ -16,6 +16,8 @@ const SHOP_SCENES = {
   bank:     { floor: 'stone', wall: [STONE, 2.6], tables: 'none',  back: 'bank',     lamps: 'pendant', counter: [STONE, 3.4] },
   gym:      { floor: 'mat',   wall: [GRAY, 2.4],  tables: 'none',  back: 'gym',      lamps: 'tube' },
   market:   { floor: 'tile',  wall: [WHITE, 2.2], tables: 'none',  back: 'market',   lamps: 'tube', front: 'crates' },
+  garage:   { floor: 'stone', wall: [GRAY, 1.8],  tables: 'lift',  back: 'tools',    lamps: 'tube' },
+  storage:  { floor: 'stone', wall: [GRAY, 1.2],  tables: 'none',  back: 'racking',  lamps: 'tube' },
 };
 const SHOP_SCENE_FOR = {
   SUSHI: 'sushi', 'DIM SUM': 'noodle', RAMEN: 'noodle', NOODLES: 'noodle', PHO: 'noodle', THAI: 'noodle', DUMPLINGS: 'noodle', IZAKAYA: 'noodle',
@@ -23,8 +25,10 @@ const SHOP_SCENE_FOR = {
   DINER: 'diner', BURGERS: 'diner', CHICKEN: 'diner', KEBAB: 'diner', CAFE: 'cafe', COFFEE: 'cafe', KISSATEN: 'cafe', JUICE: 'cafe',
   BAR: 'bar', KARAOKE: 'bar', MAHJONG: 'bar', LAUNDRY: 'laundry', BARBER: 'barber', BANK: 'bank', EXCHANGE: 'bank', GYM: 'gym',
   GROCERY: 'market', MARKET: 'market', FRUIT: 'market', BODEGA: 'market',
+  'AUTO REPAIR': 'garage', TIRES: 'garage', WELDING: 'garage', CARS: 'garage', STORAGE: 'storage',
 };
-const shopSceneFor = sh => SHOP_SCENES[SHOP_SCENE_FOR[sh.word]] || null;
+let sceneOverride = null; // (an open warehouse door with no shop room of its own: its racking, industrial-facades.js)
+const shopSceneFor = sh => SHOP_SCENES[SHOP_SCENE_FOR[sh.word]] || sceneOverride;
 const SCENE = { dep: .34, tableQ: .09, table2Q: .19, counterQ: .24, spacing: .13 };
 const SHIRTS = [RED, BLUE, GREEN, WHITE, YEL, MAG, CYAN, GRAY, ORANGE];
 
@@ -112,6 +116,20 @@ function sceneBack(st, bu, h, seed, glow, lit, L) {
       if (h > .1 && h < .22) return C(CYAN, 2 + glow + (fract(bu * 3) < .05 ? -1 : 0)); // the mirrors
       return wall;
     }
+    case 'tools': { // a red tool chest, pegboard of tools, tyres racked high
+      if (h < .1 && Math.abs(fu) < .3) return C(RED, 3 + glow * .5 - (fract(h * 40) < .15 ? .8 : 0) + (fu < 0 ? .4 : 0)); // the tool chest's drawers
+      if (h > .12 && h < .2 && Math.abs(fu) < .4) return hash(Math.floor(bu * 60), Math.floor(h * 60), seed + 1640) > .7 ? C(GRAY, 4 + glow) : C(WARM, 2 + glow * .4); // a pegboard, tools hung on it
+      if (h > .21 && h < .27) { const t = Math.hypot(fract(bu * 18) - .5, (h - .24) * 18) ; if (t < .45) return t > .22 ? C(BLACK, 0) : C(GRAY, 2); } // tyres on the rack
+      return wall;
+    }
+    case 'racking': { // pallet racking: orange uprights, blue beams, wrapped loads, a forklift's mast
+      const up = fract(bu / .27) < .04, beam = fract(h / .1) < .08;
+      if (up) return C(ORANGE, 3 + glow * .5);
+      if (beam) return C(BLUE, 2.5 + glow * .4);
+      const load = hash(Math.floor(bu / .09), Math.floor(h / .1), seed + 1641);
+      if (load > .35 && fract(h / .1) < .8) return C(load > .7 ? WARM : load > .5 ? WHITE : BRICK, 1.8 + glow * .5 + (fract(h / .1) > .7 ? .5 : 0)); // pallets of boxes, shrink-wrapped
+      return C(GRAY, .6 + glow * .1);
+    }
     case 'market': { // shelves of goods to the ceiling, a fridge glowing at the end
       const sz2 = h * 40, shelf = fract(sz2) < .12, item = hash(Math.floor(bu * 90), Math.floor(sz2), seed + 1614);
       if (hash(seed, Math.floor(bu / .3), 1615) > .7) return C(CYAN, 2.5 + glow + (shelf ? 1 : 0)); // a drinks fridge
@@ -141,6 +159,13 @@ function sceneTables(st, pu, h, q, seed, glow, lit, L, open) {
       if (st.tables !== 'booth' && h < .09 && Math.abs(Math.abs(du) - tw - .016) < .003 && h > .045) return C(WARM, 1.6 + glow * .3); // a chair's back
       return -1;
     }
+    case 'lift': // a car up on the two-post lift, a mechanic under it
+      if (layer) return -1;
+      if (Math.abs(Math.abs(du) - .055) < .005 && h < .2) return C(YEL, 4 + glow); // the lift's posts
+      if (h > .12 && h < .17 && Math.abs(du) < .05) { const wheel = h < .135 && Math.abs(Math.abs(du) - .033) < .01; return wheel ? C(BLACK, 0) : C(SHIRTS[(hash(seed, k, 1642) * SHIRTS.length) | 0], 3 + glow * .6 + (h > .16 ? .8 : 0)); } // the car, its wheels hanging
+      if (h > .1 && h < .12 && Math.abs(du) < .045) return C(GRAY, 1.2); // its underside
+      { const c = sceneDiner(du + .02, h - .03, seed, k + 90, false, L, glow); if (c >= 0 && h > .06) return (c >> 4) === SKIN ? c : C(BLUE, 2.4 + glow * .4); } // a mechanic in overalls, looking up
+      return -1;
     case 'fold': // a folding table, a basket of laundry on it
       if (layer) return -1;
       if (h > .07 && h < .075 && Math.abs(du) < .05) return C(WHITE, 3 + glow);

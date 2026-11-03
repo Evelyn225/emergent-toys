@@ -62,6 +62,7 @@
     "city/road-surface.js",
     "city/shop-windows.js",
     "city/shop-scenes.js",
+    "city/industrial-facades.js",
     "city/shop-shutters.js",
     "city/shopfront-kit.js",
     "city/graffiti.js",
