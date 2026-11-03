@@ -12763,23 +12763,24 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
   if (composedLandmarkFacade(i,z,h,side,sty,fog,wc,mx,my)) return;
   const L = fog * amb * (side ? 10 : 15);
   if (sty === 5) { // tower wrapped in giant video screens, with a scrolling news ticker
-    if (z < 0.5 || z > h - 0.3) { BG[i] = bgAt(GRAY, day * 2 * fog); return set(i, '=', C(GRAY, L)); }
+    if (z < 0.5 || z > h - 0.3) { BG[i] = C(GRAY, 1.4 + L * .3 - (fract(z * 6) < .1 ? .6 : 0)); return set(i, ' ', 0); } // the plinth and the crown, in steel panels
     if (z > 1.1 && z < 1.5) { // ticker: one cell per letter, scrolling left
       const TK = TICKER + liveTicker(), q = (u + T * 1.2) / 0.3, p = mod(Math.floor(q), TK.length); // (the news, and the market)
       BG[i] = C(GRAY, 1);
       return set(i, (uStep >= 0.3 || oneCell((fract(q) - 0.5) * 0.3, uStep)) && oneCell(z - 1.3, d / projY) ? TK[p] : ' ', C(YEL, 15));
     }
     const k = (Math.floor(T / 7) + (side ? 1 : 0)) & 3, v = noise(u * 0.5 + T * 0.4, z * 0.7 - T * 0.25, 111 + k);
-    BG[i] = C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight
-    return set(i, v > 0.7 ? '*' : ' ', C(WHITE, 15));
+    BG[i] = v > 0.7 ? C(WHITE, 14) : C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight, their highlights white
+    return set(i, ' ', 0);
   }
   // 6: construction: a steel skeleton with open floors, the unlit interior in shadow behind the frame
   BG[i] = bgAt(GRAY, (0.6 + day * 1.4) * fog);
   const fl = fract(z * 3), fu = fract(u * 2);
-  if (fl < 0.1) return set(i, '=', C(ORANGE, L));
-  if (fu < 0.08) return set(i, '|', C(ORANGE, L));
-  if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) return set(i, '/', C(ORANGE, L * 0.7));
-  set(i, fl < 0.16 ? '_' : fract(u * 2 + 0.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.35)); // the slab soffit and the next row of columns, deeper in
+  set(i, ' ', 0);
+  if (fl < 0.1) { BG[i] = C(ORANGE, 1.6 + L * .32 + (fl > .07 ? .6 : 0)); return; } // the floor beams, primed steel, lit along their tops
+  if (fu < 0.08) { BG[i] = C(ORANGE, 1.4 + L * .3 + (fu < .04 ? .4 : -.2)); return; } // the columns, lit on one side
+  if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) { BG[i] = C(ORANGE, 1.2 + L * .22); return; } // a cross brace
+  BG[i] = fl < 0.16 ? C(GRAY, 1 + L * .1) : fract(u * 2 + 0.5) < 0.05 ? C(ORANGE, .9 + L * .12) : bgAt(GRAY, (0.6 + day * 1.4) * fog); // the slab soffit and the next row of columns, deeper in
 }
 
 // the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends
@@ -14967,19 +14968,20 @@ function residentialDetailShade(o, i, t, L) {
 }
 function landmarkStone(i, x, z, base, L, faceLight = 1) {
   const row = Math.floor(z * 6), joint = fract(x * 3 + (row & 1) * .5), grain = hash(Math.floor(x * 18),Math.floor(z * 24),702);
-  BG[i] = C(base,1.8 + L * faceLight * .3 + grain * .55);
-  set(i, fract(z * 6) < .045 ? '_' : joint < .025 ? '|' : grain > .99 ? '.' : ' ', C(base,L * .6));
+  BG[i] = C(base,1.8 + L * faceLight * .3 + grain * .55 - (fract(z * 6) < .045 || joint < .025 ? .7 : 0)); // ashlar: each block its own tone, the joints in shadow
+  set(i, ' ', 0);
 }
 function landmarkGlass(i, du, z, half, bottom, top, L, stained = true) {
   const ad = Math.abs(du), peak = top - half * 1.4 * Math.min(1,ad / half) ** .7;
   if (ad > half + .035 || z < bottom - .025 || z > peak + .035) return false;
   if (ad > half || z < bottom || z > peak) {
-    set(i, ad > half ? '|' : '^', C(STONE,L * 1.1)); return true;
+    BG[i] = C(STONE, 2.2 + L * .33 + (z > peak ? .5 : 0)); set(i, ' ', 0); return true; // the stone surround, the arch's head lit
   }
   const pane = Math.floor((du + half) / half * 3), band = Math.floor((z - bottom) * 7), glass = stained ? GLASS[mod(pane + band,GLASS.length)] : CYAN;
   BG[i] = C(glass,1.2 + day * 2 + night * 2);
   const lead = Math.abs(du) < .012 || fract((du + half) / half * 3) < .055 || fract((z - bottom) * 7) < .045;
-  set(i, lead ? '+' : ' ', C(lead ? GRAY : glass,lead ? L * .65 : Math.max(3,L * .75)));
+  if (lead) BG[i] = C(GRAY, .8 + L * .1); // the leading and the mullion, dark against the glass
+  set(i, ' ', 0);
   return true;
 }
 function cathedralExterior(i, z, h, side, wc, mx, my, L, b) {
@@ -14988,8 +14990,8 @@ function cathedralExterior(i, z, h, side, wc, mx, my, L, b) {
   const tower = my - b.y === 3 && (mx - b.x === 3 || mx - b.x === 6);
   if (tower) {
     const center = side ? mx - b.x + .5 : 3.5, du = local - center;
-    if (Math.abs(du) > .39) return set(i, fract(z * 9) < .1 ? '=' : '|', C(STONE,L));
-    if (Math.abs(z - .38) < .03 || Math.abs(z - (h - 1.5)) < .04) return set(i,'=',C(STONE,L));
+    if (Math.abs(du) > .39) { BG[i] = C(STONE, (2 + L * .3) * (du > 0 ? .85 : 1.1) - (fract(z * 9) < .1 ? .5 : 0)); return set(i, ' ', 0); } // the buttresses, lit on one side, stepped
+    if (Math.abs(z - .38) < .03 || Math.abs(z - (h - 1.5)) < .04) { BG[i] = C(STONE, 2.4 + L * .33 + (z > .38 || z > h - 1.5 ? .5 : 0)); return set(i, ' ', 0); } // string courses
     if (landmarkGlass(i,du,z,.13,.85,2.5,L)) return;
     if (landmarkGlass(i,du - .18,z,.065,h - 1.35,h - .28,L,false) || landmarkGlass(i,du + .18,z,.065,h - 1.35,h - .28,L,false)) return;
     return;
@@ -14999,15 +15001,15 @@ function cathedralExterior(i, z, h, side, wc, mx, my, L, b) {
     const du = local - 5, rr = Math.hypot(du,z - 1.8);
     if (rr < .56) {
       const angle = Math.atan2(du,z - 1.8), spoke = Math.abs(Math.sin(angle * 6)) < .1 && rr > .095;
-      if (rr > .49 || spoke) return set(i,'+',C(STONE,L * 1.15));
-      BG[i] = C(GLASS[mod(Math.floor((angle + Math.PI) * 6 / Math.PI) + Math.floor(rr * 7),8)],2 + day * 3);
-      return set(i,rr < .1 ? '*' : ' ',C(YEL,Math.max(4,L)));
+      if (rr > .49 || spoke) { BG[i] = C(STONE, 2.4 + L * .33); return set(i, ' ', 0); } // the rose window's tracery
+      BG[i] = rr < .1 ? C(YEL, 5 + day * 3 + night * 2) : C(GLASS[mod(Math.floor((angle + Math.PI) * 6 / Math.PI) + Math.floor(rr * 7),8)],2 + day * 3);
+      return set(i, ' ', 0);
     }
     const ad = Math.abs(du), top = .64 - Math.min(1,ad / .21) ** .7 * .23;
     if (ad < .24 && z < top + .035) {
-      if (ad > .21 || z > top) return set(i,'#',C(STONE,L));
-      BG[i] = C(BRICK,1 + night * 2);
-      return set(i,ad < .008 ? '|' : fract(du * 40) < .12 ? '|' : ' ',C(YEL,L * .65));
+      if (ad > .21 || z > top) { BG[i] = C(STONE, 1.6 + L * .25 - (ad > .225 ? 0 : .5)); return set(i, ' ', 0); } // the portal's stepped arch, its inner orders in shadow
+      BG[i] = C(BRICK, 1 + night * 2 + L * .1 - (ad < .008 || fract(du * 40) < .12 ? .5 : 0)); // the oak doors, their planks and the meeting stiles
+      return set(i, ' ', 0);
     }
   }
   // A complete lancet occupies each structural bay; margins at the corners stay stone.
@@ -15016,7 +15018,7 @@ function cathedralExterior(i, z, h, side, wc, mx, my, L, b) {
     const center = Math.floor(local) + .5;
     if (landmarkGlass(i,local - center,z,side ? .18 : .2,.52,Math.min(h - .22,2.7),L)) return;
   }
-  if (Math.abs(z - .28) < .025 || z > h - .08) set(i,'=',C(STONE,L));
+  if (Math.abs(z - .28) < .025 || z > h - .08) BG[i] = C(STONE, 2.3 + L * .33 + (z > h - .03 || z > .28 && z < .31 ? .6 : 0)); // the plinth course and the parapet, lit on top
 }
 function composedLandmarkFacade(i, z, h, side, sty, fog, wc, mx, my) {
   const b = LANDMARK_BY_BLOCK.get(bi(Math.floor(mx / 8),Math.floor(my / 8)));
@@ -15033,11 +15035,12 @@ function landmarkClockFace(i, z, o, L) {
   const dz = z - (o.z0 + .68), radius = Math.min(o.hl,o.hw) * .73;
   const rr = Math.hypot(du,dz);
   if (rr > radius) return false;
-  if (rr > radius - .045) { set(i,'O',C(YEL,L * 1.1)); return true; }
+  if (rr > radius - .045) { BG[i] = C(YEL, 3 + L * .3 + (dz > 0 ? .6 : 0)); set(i, ' ', 0); return true; } // the gilt bezel
   const angle = Math.atan2(du,dz), hand = (direction,length) => rr < length && Math.abs(mod(angle - direction + Math.PI,Math.PI * 2) - Math.PI) * Math.max(rr,.06) < .023;
   BG[i] = C(WHITE,Math.max(7 + day * 3,night * 11));
-  if (hand(mod(tod,12) / 12 * Math.PI * 2,radius * .52) || hand(fract(tod) * Math.PI * 2,radius * .82)) set(i,'#',C(GRAY,1));
-  else set(i,Math.abs(rr - radius * .83) < .025 && Math.abs(Math.sin(angle * 6)) < .22 ? '+' : ' ',C(GRAY,2));
+  if (hand(mod(tod,12) / 12 * Math.PI * 2,radius * .52) || hand(fract(tod) * Math.PI * 2,radius * .82)) BG[i] = C(BLACK, 0); // the hands
+  else if (Math.abs(rr - radius * .83) < .025 && Math.abs(Math.sin(angle * 6)) < .22) BG[i] = C(GRAY, 2); // the hour marks
+  set(i, ' ', 0);
   return true;
 }
 function landmarkSolidShade(o, i, t, L) {
@@ -15046,8 +15049,8 @@ function landmarkSolidShade(o, i, t, L) {
   const endWall = roof && (o.form === 'gable' && (face === 2 || face === 3) || o.form === 'crossgable' && (face === 0 || face === 1));
   if (roof && !endWall) {
     const base = p.roof, seam = fract((face < 8 ? HIT.v : HIT.u) * 9) < .055;
-    BG[i] = C(base,1.3 + L * (inclined ? .28 : .35));
-    set(i,seam ? '/' : fract(z * 14) < .045 ? '-' : ' ',C(base,L * .85));
+    BG[i] = C(base,1.3 + L * (inclined ? .28 : .35) + (seam ? .6 : 0) - (fract(z * 14) < .045 ? .4 : 0)); // the roof's seams catching the light, its courses of slate in shadow
+    set(i, ' ', 0);
     paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,.55,0,HIT.w);
     return true;
   }
@@ -15055,15 +15058,15 @@ function landmarkSolidShade(o, i, t, L) {
   if (o.kind === 'clock' && face < 5 && landmarkClockFace(i,z,o,L)) return true;
   if (o.kind === 'shaft' && face < 5) {
     for (const bottom of [1.6,p.shaft * .57]) if (landmarkGlass(i,u,z,.11,bottom,bottom + .85,L,false)) return true;
-    if (Math.abs(u) > (face <= 2 ? o.hw : o.hl) - .11) set(i,'|',C(STONE,L));
+    if (Math.abs(u) > (face <= 2 ? o.hw : o.hl) - .11) BG[i] = C(STONE, 2.3 + L * .33 * shadeFace(face)); // the corner piers, proud of the wall
   } else if (o.kind === 'lantern' && face < 5) {
-    if (Math.abs(u) < .25 && z > o.z0 + .12 && z < o.z1 - .08) { BG[i] = C(CYAN,2 + day * 2); set(i,'|',C(YEL,L)); }
-  } else if (o.kind === 'bell' || o.kind === 'finial') { BG[i] = C(YEL,2 + L * .25); set(i,o.kind === 'bell' ? '#' : '|',C(YEL,L)); }
+    if (Math.abs(u) < .25 && z > o.z0 + .12 && z < o.z1 - .08) { BG[i] = Math.abs(fract(u * 8) - .5) < .1 ? C(STONE, 2.2 + L * .3) : night > .3 ? C(YEL, 6 + night * 5) : C(CYAN, 2 + day * 2); set(i, ' ', 0); } // the lantern's openings, lit after dark
+  } else if (o.kind === 'bell' || o.kind === 'finial') { BG[i] = C(YEL,(2.4 + L * .3) * shadeFace(face) + (face === 5 ? .6 : 0)); set(i, ' ', 0); } // bronze and gilt
   else if (o.kind === 'balustrade') {
-    if (z > o.z1 - .016 || Math.abs(fract(u * 24) - .5) < .16) set(i,z > o.z1 - .016 ? '=' : '|',C(STONE,L));
+    if (z > o.z1 - .016 || Math.abs(fract(u * 24) - .5) < .16) BG[i] = C(STONE, 2.2 + L * .33 + (z > o.z1 - .016 ? .6 : (fract(u * 24) < .5 ? .3 : -.3))); // the rail lit on top; balusters, round
     else return false;
-  } else if (o.kind === 'course' || o.kind === 'portal') set(i,o.kind === 'portal' && o.planes ? '^' : '=',C(STONE,L * 1.1));
-  else if (o.kind === 'pier') set(i,'|',C(STONE,L));
+  } else if (o.kind === 'course' || o.kind === 'portal') BG[i] = C(STONE, 2.3 + L * .35 * shadeFace(face) + (face === 5 ? .6 : 0)); // a string course or the portal's hood, lit on top
+  else if (o.kind === 'pier') BG[i] = C(STONE, 2.1 + L * .32 * shadeFace(face));
   if ((!o.planes && face === 5) || o.planes && face === 4) paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,1,0,HIT.w);
   return true;
 }
@@ -16376,21 +16379,21 @@ function drawLighthouse(lx, ly, flare) {
   drawBox({ x: lx, y: ly, c: 1, s: 0, hl: Math.max(minR, 0.24), hw: Math.max(minR, 0.24), r1: Math.max(minR, 0.24 - LH_TOWER * 0.035), z0: 0, z1: LH_TOWER }, (i, t, L) => {
     const ang = Math.atan2(HIT.v, HIT.u), light = frustumLit(), w = HIT.w;
     if (HIT.face !== 3) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; }
-    if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = C(GRAY, 1); return set(i, w > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door (facing -y)
-    if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; } // slit windows
+    if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = w > 0.19 ? C(WHITE, 4 + L * .3) : C(BRICK, 1.2 + L * .15 - (Math.abs(ang + Math.PI / 2) < .015 ? .5 : 0)); return set(i, ' ', 0), true; } // the door (facing -y), under its white lintel
+    if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = lit > .3 ? C(WARM, 4 + lit * 6) : C(GRAY, 1); return set(i, ' ', 0), true; } // slit windows, lit on the stair after dark
     BG[i] = Math.floor(w / LH_BAND) & 1 ? C(RED, (2 + L * 0.5) * light) : C(WHITE, (5 + L * 0.6) * light); // the bands, painted on
     return set(i, ' ', 0), true;
   }, rayFrustum);
-  drawBox(boxAt(lx, ly, 1, 0, 0.3, 0.3, LH_TOWER, 2.27), (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '=', C(WHITE, L)), true; }, rayCopperDrum); // the gallery
+  drawBox(boxAt(lx, ly, 1, 0, 0.3, 0.3, LH_TOWER, 2.27), (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3 + (HIT.face === 5 ? .6 : HIT.w > 2.25 ? .3 : -.4)); return set(i, ' ', 0), true; }, rayCopperDrum); // the gallery, its deck lit, its edge in shadow under
   drawBox(boxAt(lx, ly, 1, 0, 0.29, 0.29, 2.27, 2.34), (i, t, L) => { // its railing: posts and a top rail, the lantern room showing between
-    if (HIT.w > 2.32 || HIT.face === 5) return set(i, '-', C(WHITE, L * 0.9)), true;
-    return fract(Math.atan2(HIT.v, HIT.u) * 8 / Math.PI) < 0.3 ? (set(i, '|', C(WHITE, L * 0.9)), true) : false;
+    if (HIT.w > 2.32 || HIT.face === 5) { BG[i] = C(WHITE, 5 + L * .4); return set(i, ' ', 0), true; } // the top rail
+    return fract(Math.atan2(HIT.v, HIT.u) * 8 / Math.PI) < 0.3 ? (BG[i] = C(WHITE, 4 + L * .3), set(i, ' ', 0), true) : false; // the posts, the lantern room between
   }, rayCopperDrum);
   drawBox(boxAt(lx, ly, 1, 0, Math.max(minR, 0.15), Math.max(minR, 0.15), 2.27, 2.62), (i, t, L) => { // the lantern room
     const across = HIT.u * -vyn + HIT.v * vxn; // (from the axis, as you see it)
-    if (lit && Math.abs(across) < 0.075 && Math.abs(HIT.w - LH_H) < 0.07) { BG[i] = C(YEL, 8 + flare * 7); return set(i, '@', C(WHITE, 15)), true; }
+    if (lit && Math.abs(across) < 0.075 && Math.abs(HIT.w - LH_H) < 0.07) { BG[i] = Math.abs(across) < .03 ? C(WHITE, 15) : C(YEL, 8 + flare * 7); return set(i, ' ', 0), true; } // the lamp: white-hot at its heart
     if (HIT.face === 5) { BG[i] = C(RED, 2); return set(i, ' ', 0), true; }
-    BG[i] = C(CYAN, 1 + lit * 3); return set(i, fract(Math.atan2(HIT.v, HIT.u) * 7 / Math.PI) < 0.15 ? '|' : ' ', C(GRAY, L * 0.8)), true;
+    BG[i] = fract(Math.atan2(HIT.v, HIT.u) * 7 / Math.PI) < 0.15 ? C(GRAY, 2 + L * .3) : C(CYAN, 1 + lit * 3 + (HIT.w > 2.5 ? .6 : 0)); return set(i, ' ', 0), true; // the glazing in its astragals
   }, rayCopperDrum);
   drawBox(boxAt(lx, ly, 1, 0, Math.max(minR, 0.17), Math.max(minR, 0.17), 2.62, 2.79), (i, t, L) => { BG[i] = C(RED, 2 + L * 0.35); return set(i, ' ', 0), true; }, rayCone); // the dome
   rod(lx, ly, 2.78, lx, ly, 2.88, 0.008); // the vent and lightning rod
