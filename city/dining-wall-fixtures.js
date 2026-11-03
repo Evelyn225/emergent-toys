@@ -70,7 +70,7 @@ function KISSATEN_CLOCK(x,y,z,fx,fy) {
 }
 
 // A trailing plant: a terracotta pot on a wall bracket, vines of leaves
-// falling down the wall in front of it.
+// hanging straight down in front of it.
 function trailingVines(seed) {
   return [-1,0,1].map(k=>({off:k*.07+(hash(seed,k,1601)-.5)*.03,len:.45+hash(seed,k,1603)*.35,sway:hash(seed,k,1605)*6}));
 }
@@ -82,16 +82,15 @@ function TRAILING_PLANT(x,y,z,fx,fy,seed=x*5+y) {
   };
   const leaf=k=>(i,t,L)=>{BG[i]=C(GREEN,1.8+(k%3)*.4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   const leaves=[];
-  // Each vine grows out of the soil, over the pot's front rim, hangs straight
-  // down in front of the pot until it's past its base, then falls back toward
-  // the wall; its leaves hang along it.
-  const reach=d=>Math.max(.03,potV+.09-d*.25);
+  // Each vine grows out of the soil, over the pot's front rim and hangs
+  // straight down under its own weight (a little sway, never curling back in to
+  // the wall); its leaves hang along it.
   for(const [n,q]of vines.entries()){
     const d=Math.hypot(q.off,.09);
     q.root={u:q.off*.5,v:potV+.03,z:z+.105}; // in the soil
     q.rim={u:q.off/d*.097,v:potV+.09/d*.097,z:z+.125}; // just over the rim
     q.knee={u:q.rim.u,v:q.rim.v+.01,z:z-.04}; // past the pot's base
-    q.end={u:q.off,v:reach(q.len),z:q.rim.z-.03-q.len};
+    q.end={u:q.off+(hash(seed,n,1607)-.5)*.02,v:q.rim.v+.012,z:q.rim.z-.03-q.len}; // plumb from the rim, drifting a touch out
     const along=lz=>{const [a,b]=lz>=q.knee.z?[q.rim,q.knee]:[q.knee,q.end],f=(a.z-lz)/(a.z-b.z);return [a.u+(b.u-a.u)*f,a.v+(b.v-a.v)*f];};
     for(let k=1;k*.06<q.len;k++){
       const lz=q.rim.z-.03-k*.06,[u,v]=along(lz),side=Math.sin(k*1.3+q.sway)*.025;
