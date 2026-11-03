@@ -11,58 +11,59 @@ const runwayNumber = (num, along, across) => { // is (along, across) on a painte
   const row = 4 - Math.floor(along / 0.25);
   return (DIGIT5[num[k]] >> (14 - row * 3 - col) & 1) === 1;
 };
-function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell; or null, having painted it itself (a light)
-  const X = worldCoord(wx), Y = worldCoord(wy), lit = lampsOn > 0.2, blink = (light, col, ch = '*') => { set(i, ch, C(col, 15)); BG[i] = C(col, 3 + light * 4); FOGS[i] = 0; return null; };
-  if (airportEdge(wx, wy) < 0.5) return [hash(Math.floor(wx * 9), Math.floor(wy * 9), 341) > 0.45 ? '%' : 'o', GRAY, 1.2]; // rocks
+function airportFloor(i, r, x, wx, wy, L, d) { // [base, level] for the floor cell's colour; or null, having painted it itself (a light)
+  const X = worldCoord(wx), Y = worldCoord(wy), lit = lampsOn > 0.2, fp = homeBalconyPavingFootprint(d, eye), LP = L * roadDark(), fine = clamp(1 - fp / .02, 0, 1);
+  const blink = (light, col) => { set(i, ' ', 0); BG[i] = C(col, 8 + light * 7); FOGS[i] = 0; return null; };
+  const paint = (cov, col, under) => cov > .5 ? [col, LP * (col === YEL ? .62 : .78)] : under; // (a painted line where it covers the cell: filtered, so far off it thins away rather than flickering)
+  const tarmac = (shade = 0) => [GRAY, LP * (.3 + shade + (hash(Math.floor(wx * 30), Math.floor(wy * 30), 342) - .5) * .04 * fine)];
+  if (airportEdge(wx, wy) < 0.5) { const h = noise(wx * 6, wy * 6, 341); return [GRAY, LP * (.36 + (h - .5) * .5)]; } // rocks round the shore, rounded by their light
   if (onRunway(wx, wy)) {
     const u = X - RUNWAY.x0, v = Y - RUNWAY.y, len = RUNWAY.x1 - RUNWAY.x0;
     if (lit && Math.abs(v) > 1.38 && fract(u / 3) < 0.07) return blink(lampsOn, u < 0.5 ? GREEN : u > len - 0.5 ? RED : WHITE); // edge lights
-    if (lit && (u < 0.12 || u > len - 0.12)) return blink(lampsOn, u < 0.12 ? GREEN : RED, 'o'); // the threshold bars
-    if (Math.abs(v) > 1.36) return ['=', WHITE, 1.2]; // edge lines
-    if ((u < 1.8 || u > len - 1.8) && Math.abs(v) < 1.2 && fract(v * 2.5) < 0.55) return ['#', WHITE, 1.3]; // piano keys
-    if (runwayNumber('09', u - 2.2, v) || runwayNumber('27', len - 2.2 - u, -v)) return ['#', WHITE, 1.3];
-    if ((Math.abs(u - 6) < 0.7 || Math.abs(u - (len - 6)) < 0.7) && Math.abs(Math.abs(v) - 0.7) < 0.2) return ['=', WHITE, 1.2]; // touchdown bars
-    if (Math.abs(v) < 0.06 && fract(u / 1.6) < 0.55) return ['-', WHITE, 1.2]; // centre line
-    return [hash(Math.floor(wx * 7), Math.floor(wy * 7), 342) > 0.8 ? '.' : ' ', GRAY, 0.55];
+    if (lit && (u < 0.12 || u > len - 0.12)) return blink(lampsOn, u < 0.12 ? GREEN : RED); // the threshold bars
+    if (Math.abs(v) > 1.36) return [WHITE, LP * .72]; // the edge lines
+    if ((u < 1.8 || u > len - 1.8) && Math.abs(v) < 1.2) return paint(roadBands(v + .2, .4, .55, fp), WHITE, tarmac()); // piano keys
+    if (runwayNumber('09', u - 2.2, v) || runwayNumber('27', len - 2.2 - u, -v)) return [WHITE, LP * .78];
+    if ((Math.abs(u - 6) < 0.7 || Math.abs(u - (len - 6)) < 0.7) && Math.abs(Math.abs(v) - 0.7) < 0.2) return [WHITE, LP * .74]; // touchdown bars
+    const tyres = Math.abs(v) < .5 && (u < 9 || u > len - 9) ? noise(u * .8, v * 6, 343) * .1 : 0; // rubber laid down where they land
+    return paint(roadLine(Math.abs(v), .1, fp) * roadBands(u, 1.6, .55, fp), WHITE, tarmac(-tyres)); // the centre line
   }
   const taxiA = Math.abs(Y - TAXIWAY.y) < TAXIWAY.hw && X > TAXIWAY.x0 - TAXIWAY.hw && X < TAXIWAY.x1 + TAXIWAY.hw;
   const link = [TAXIWAY.x0, TAXIWAY.x1].find(tx => Math.abs(X - tx) < TAXIWAY.hw && Y > TAXIWAY.y && Y < RUNWAY.y);
   if (taxiA || link != null) {
     const v = taxiA ? Y - TAXIWAY.y : X - link;
     if (lit && Math.abs(v) > TAXIWAY.hw - 0.06 && fract((taxiA ? X : Y) / 2) < 0.1) return blink(lampsOn, BLUE);
-    if (Math.abs(v) < 0.05) return ['-', YEL, 1.4];
-    return [' ', GRAY, 0.6];
+    return paint(roadLine(Math.abs(v), .08, fp), YEL, tarmac(.02)); // the taxiway's yellow centre line
   }
-  for (const h of HELIPADS) { // a ring and an H
-    const du = X - h.x, dv = Y - h.y, d = Math.hypot(du, dv);
-    if (d > h.r) continue;
-    if (lit && d > h.r - 0.08 && fract(Math.atan2(dv, du) / TAU * 12) < 0.12) return blink(lampsOn, GREEN);
-    if (Math.abs(d - h.r * 0.8) < 0.06 || Math.abs(du) < 0.35 && Math.abs(dv) < 0.45 && (Math.abs(du) > 0.24 || Math.abs(dv) < 0.06)) return ['#', WHITE, 1.3];
-    return [' ', GREEN, 0.5];
+  for (const h of HELIPADS) { // a white ring and an H on green
+    const du = X - h.x, dv = Y - h.y, dd = Math.hypot(du, dv);
+    if (dd > h.r) continue;
+    if (lit && dd > h.r - 0.08 && fract(Math.atan2(dv, du) / TAU * 12) < 0.12) return blink(lampsOn, GREEN);
+    if (Math.abs(dd - h.r * 0.8) < 0.06 || Math.abs(du) < 0.35 && Math.abs(dv) < 0.45 && (Math.abs(du) > 0.24 || Math.abs(dv) < 0.06)) return [WHITE, LP * .78];
+    return [GREEN, LP * .4];
   }
-  if (Y > APRON.y0 && Y < APRON.y1 && X > APRON.x0 && X < APRON.x1) { // concrete, its joints, and a yellow line in to each stand
-    if (STANDS_X.some(sx => Math.abs(X - sx) < 0.05) || AIRPORT_BLDG.some(h => h.kind === 'hangar' && Math.abs(X - h.x) < 0.012)) return ['|', YEL, 1.3]; // (and out of each hangar)
-    if (fract(X / 1.5) < 0.04 || fract(Y / 1.5) < 0.04) return ['+', GRAY, 0.8];
-    return [(r + x) % 4 ? ' ' : '.', GRAY, 0.9];
+  if (Y > APRON.y0 && Y < APRON.y1 && X > APRON.x0 && X < APRON.x1) { // concrete slabs, their joints filtered, and a yellow line in to each stand
+    if (STANDS_X.some(sx => Math.abs(X - sx) < 0.05) || AIRPORT_BLDG.some(h => h.kind === 'hangar' && Math.abs(X - h.x) < 0.012)) return [YEL, LP * .62]; // (and out of each hangar)
+    const j = Math.max(coveGroove(X, 1.5, .03, fp), coveGroove(Y, 1.5, .03, fp)), oil = noise(wx * 2, wy * 2, 344) > .7 ? .06 : 0;
+    return [GRAY, LP * (.44 - j * .15 - oil)];
   }
   const bld = airportBldgAt(wx, wy);
   if (bld) { // a hangar's floor: in its shade, a yellow line down the middle out to the apron
-    if (bld.kind === 'hangar' && Math.abs(X - bld.x) < 0.012) return ['|', YEL, 1];
-    return [(r + x) % 3 ? ' ' : '.', GRAY, 0.6];
+    if (bld.kind === 'hangar' && Math.abs(X - bld.x) < 0.012) return [YEL, LP * .45];
+    return [GRAY, LP * .3];
   }
   if (Y < AIRPORT.y0 + 1.6) { // the landside road, from the causeway along the front
-    if (Math.abs(Y - (AIRPORT.y0 + 0.85)) < 0.04 && fract(X * 2) < 0.5) return ['=', YEL, 1.4];
-    return [(r + x) & 1 ? '.' : ' ', GRAY, 0.75];
+    return paint(roadLine(Math.abs(Y - (AIRPORT.y0 + 0.85)), .06, fp) * roadBands(X, .5, .5, fp), YEL, tarmac());
   }
-  return [(r * 3 + x) % 4 ? '"' : ',', GREEN, 1.1]; // grass
+  return lawnSurface(wx, wy, fine, LP, -.02); // grass, mown
 }
 // the causeway: a road out over the water, railings each side, lamps along it
-function causewayFloor(r, x, wx, wy) {
-  const horizontal = worldReady&&wx<CAUSEWAY.x-CAUSEWAY.hw&&Math.abs(wy-AIRPORT.y0-1)<CAUSEWAY.hw;
+function causewayFloor(wx, wy, L, d) {
+  const horizontal = worldReady&&wx<CAUSEWAY.x-CAUSEWAY.hw&&Math.abs(wy-AIRPORT.y0-1)<CAUSEWAY.hw, fp = homeBalconyPavingFootprint(d, eye), LP = L * roadDark();
   const e = Math.abs(horizontal?wy-AIRPORT.y0-1:rel(wx - CAUSEWAY.x)) / CAUSEWAY.hw;
-  if (e > 0.9) return ['|', GRAY, 1.5];
-  if (e < 0.04 && fract(wy * 2) < 0.5) return ['=', YEL, 1.4];
-  return [(r + x) & 1 ? '.' : ' ', GRAY, 0.8];
+  if (e > 0.9) return [GRAY, LP * .6]; // the kerb and the railings' foot
+  const c = roadLine(e * CAUSEWAY.hw, .06, fp) * roadBands(horizontal ? wx : wy, 1, .5, fp);
+  return c > .5 ? [YEL, LP * .55] : [GRAY, LP * .3];
 }
 // ---- the buildings
 // a hangar (world.js has its shape), for drawBox: the nearest of its arched roof (outside, face 5, or its underside, 7),
@@ -100,16 +101,17 @@ function drawAirport() {
     if (inView(vx, vy, TOWER.cab + 0.1)) {
       drawBox(boxAt(vx, vy, 1, 0, TOWER.r, TOWER.r, 0, TOWER.h), (i, t, L) => {
         BG[i] = C(STONE, (1.6 + L * 0.3) * drumLit(TOWER.r));
-        return set(i, fract(HIT.w * 2.2) < 0.12 && Math.abs(Math.atan2(HIT.v, HIT.u)) < 0.6 ? '=' : ' ', C(CYAN, 6 + lit * 6)), true;
+        if (fract(HIT.w * 2.2) < 0.12 && Math.abs(Math.atan2(HIT.v, HIT.u)) < 0.6) BG[i] = C(CYAN, 2 + lit * 6); // the stair windows up the shaft, lit after dark
+        return set(i, ' ', 0), true;
       }, rayCopperDrum);
       drawBox(boxAt(vx, vy, 1, 0, TOWER.cab, TOWER.cab, TOWER.h, TOWER.h + 0.52), (i, t, L) => {
         if (HIT.face > 4) { BG[i] = C(GRAY, 2 + L * 0.3); return set(i, ' ', 0), true; }
         const mull = fract(Math.atan2(HIT.v, HIT.u) / TAU * 10) < 0.1 || HIT.w > TOWER.h + 0.46;
-        BG[i] = mull ? C(GRAY, 2 + L * 0.3) : C(CYAN, 1.5 + lit * 3 + L * 0.15); return set(i, mull ? '|' : lit > 0.3 && hash(i, 3, 5) > 0.9 ? '.' : ' ', C(WARM, 12)), true;
+        BG[i] = mull ? C(GRAY, 2 + L * 0.3) : C(lit > 0.3 ? WARM : CYAN, lit > 0.3 ? 3 + lit * 4 : 1.5 + L * 0.15 + (HIT.w > TOWER.h + .35 ? .6 : 0)); return set(i, ' ', 0), true; // the cab's raked glazing, its mullions
       }, rayCopperDrum);
       drawBox(boxAt(vx, vy, 1, 0, TOWER.cab + 0.06, TOWER.cab + 0.06, TOWER.h + 0.52, TOWER.h + 0.6), (i, t, L) => { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, ' ', 0), true; }, rayCopperDrum);
       rod(vx, vy, TOWER.h + 0.6, vx, vy, TOWER.h + 1.1, 0.012, GRAY, 1.2);
-      if (fract(T * 0.8) < 0.5) dot(vx, vy, TOWER.h + 1.12, 0.03, (i, t, L) => { BG[i] = C(RED, 13); return set(i, '*', C(WHITE, 15)), true; });
+      if (fract(T * 0.8) < 0.5) dot(vx, vy, TOWER.h + 1.12, 0.03, (i, t, L) => { BG[i] = C(RED, 14); return set(i, ' ', 0), true; });
     }
   }
   { // the windsock, at the east end: a pole, and the sock streaming off downwind in orange and white
@@ -138,7 +140,7 @@ function drawTerminal(b, vx, vy, lit) {
   const NAME = 'GLYPHPORT INTERNATIONAL', band = b.h - 0.22;
   drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f), long = f === 3 || f === 4, along = long ? u : v, half = long ? b.hl : b.hw;
-    if (f >= 5) { BG[i] = C(GRAY, 2 + L * 0.25); return set(i, hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85 ? '#' : ' ', C(GRAY, 6)), true; } // the roof, plant on it
+    if (f >= 5) { const plant = hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85; BG[i] = C(GRAY, 2 + L * 0.25 + (plant ? (fract(u * 3) > .5 ? .8 : -.4) : 0)); return set(i, ' ', 0), true; } // the roof, plant boxes on it lit on one side
     if (w > band) { // the band along the top: the name on the long sides, GLYPHPORT on the ends
       BG[i] = C(BLUE, (1.5 + L * 0.2) * k);
       const word = long ? NAME : 'GLYPHPORT', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
@@ -160,21 +162,24 @@ function drawTerminal(b, vx, vy, lit) {
         if (w < 0.37) { // glass doors in a steel frame, the hall lit up behind
           if (Math.abs(du) > hw - 0.02 || w > 0.35) { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, ' ', 0), true; }
           BG[i] = lit > 0.35 ? C(WARM, 2 + lit * 4) : C(CYAN, 1.4 + day * 2.4); // (lit up inside after dark)
-          return set(i, Math.abs(fract(du / 0.3) - 0.5) > 0.47 ? '|' : w < 0.03 ? '=' : ' ', C(GRAY, 8)), true;
+          if (Math.abs(fract(du / 0.3) - 0.5) > 0.47 || w < 0.03) BG[i] = C(GRAY, 2.6 + L * .3); // the doors' frames and their track
+          return set(i, ' ', 0), true;
         }
       }
     }
     // the piers (every 12.5m, and at the corners), the plinth, the upper floor's edge across the glass, mullions: the rest
     // is glass
     if (half - Math.abs(along) < 0.06 || terminalBay(along) < 0.1 || w < 0.04 || Math.abs(w - 0.6) < 0.025) { BG[i] = C(STONE, (1.8 + L * 0.3) * k); return set(i, ' ', 0), true; }
-    if (fract(along * 4) < 0.045) { BG[i] = C(GRAY, (2.2 + L * 0.3) * k); return set(i, '|', C(GRAY, 6)), true; }
+    if (fract(along * 4) < 0.045) { BG[i] = C(GRAY, (2.2 + L * 0.3) * k); return set(i, ' ', 0), true; } // a mullion
     if (lit > 0.35) { // lit from within: the ceiling's lights along the top, the hall's glow under them
       const top = band - w < 0.08;
       BG[i] = C(top ? WHITE : WARM, top ? 6 + lit * 4 : 1.6 + lit * 3);
-      return set(i, !top && hash(Math.floor(along * 9), Math.floor(w * 7), 341) > 0.9 ? '.' : ' ', C(WARM, 9)), true;
+      if (!top && hash(Math.floor(along * 9), Math.floor(w * 7), 341) > 0.9) BG[i] = C(WARM, 4 + lit * 4); // a figure or a lamp inside
+      return set(i, ' ', 0), true;
     }
     BG[i] = C(CYAN, (1.2 + day * 2.4) * k); // the sky in it, a streak of reflection here and there
-    return set(i, fract((along + w) * 2.3) < 0.04 ? '/' : ' ', C(WHITE, 6 + L * 0.3)), true;
+    if (fract((along + w) * 2.3) < 0.04) BG[i] = C(CYAN, (1.2 + day * 2.4) * k + 1.2 + day); // a streak of reflection
+    return set(i, ' ', 0), true;
   });
   // the canopy out over the main doors, on two posts
   const d0 = TERMINAL_DOORS[0], cy = vy - b.hw - 0.3;
@@ -229,25 +234,25 @@ function drawHangar(b, vx, vy, lit) {
       const rib = fract(u / 0.6) < 0.07, lamp = Math.abs(Math.abs(v) - 0.95) < 0.11 && Math.abs(fract(u / 0.6) - 0.5) < 0.1;
       if (lamp) return BG[i] = C(WHITE, 9 + lit * 4), set(i, ' ', 0), true;
       if (Math.abs(v) < 0.28 && !rib) return BG[i] = C(CYAN, 1 + day * 3), set(i, ' ', 0), true;
-      return BG[i] = C(GRAY, rib ? 3.2 : 2.2 + L * 0.1), set(i, rib ? '=' : ' ', C(GRAY, 7)), true;
+      return BG[i] = C(GRAY, rib ? 3.2 : 2.2 + L * 0.1), set(i, ' ', 0), true;
     }
     const edge = hangarDoor(b, v, w - 0.04) || hangarDoor(b, v - 0.04 * Math.sign(v), w); // (just round the opening)
     if (f === 1 || f === 8) { // the front: clad, its number up top, striped where the doors run
       if (edge && w > 0.02) return hazard(i, v, w, f === 1 ? 1 : 0.6);
       if (f === 1 && numeral(v, w)) return BG[i] = C(YEL, 8 + lit * 3), set(i, ' ', 0), true;
       const k = f === 1 ? 2.4 + L * 0.35 : 2.2;
-      return BG[i] = C(GRAY, k), set(i, fract(v * 2) < 0.06 ? '|' : ' ', C(GRAY, f === 1 ? 7 : 4)), true;
+      return BG[i] = C(GRAY, k - (fract(v * 2) < 0.06 ? .6 : 0)), set(i, ' ', 0), true; // cladding, its seams
     }
     if (f === 2) { // the back, outside: cladding and a small door
-      if (Math.abs(v) < 0.09 && w < 0.22) return BG[i] = C(GRAY, 1.2), set(i, Math.abs(v) > 0.07 || w > 0.2 ? '|' : ' ', C(GRAY, 6)), true;
-      return BG[i] = C(GRAY, 2.1 + L * 0.3), set(i, fract(v * 2) < 0.06 ? '|' : ' ', C(GRAY, 6)), true;
+      if (Math.abs(v) < 0.09 && w < 0.22) return BG[i] = Math.abs(v) > 0.07 || w > 0.2 ? C(GRAY, 2.6 + L * .3) : C(GRAY, 1.2), set(i, ' ', 0), true; // a door in its frame
+      return BG[i] = C(GRAY, 2.1 + L * 0.3 - (fract(v * 2) < 0.06 ? .6 : 0)), set(i, ' ', 0), true;
     }
     // the back, inside: a workbench along it, the tool board over it, the cladding's rails above
-    if (w < 0.09 && Math.abs(v) < 1.6) return BG[i] = C(BRICK, w > 0.075 ? 3 : 1.6), set(i, w > 0.075 ? '=' : ' ', C(BRICK, 6)), true;
+    if (w < 0.09 && Math.abs(v) < 1.6) return BG[i] = C(BRICK, w > 0.075 ? 3 + (w > .085 ? .6 : 0) : 1.6), set(i, ' ', 0), true; // the workbench, its top lit
     if (w > 0.13 && w < 0.32 && Math.abs(v) < 1.3) {
       const tool = hash(Math.floor(v * 14), Math.floor(w * 12), 87 + num);
-      return BG[i] = C(GRAY, 2.6), set(i, tool > 0.82 ? '/' : tool > 0.7 ? '|' : tool > 0.62 ? 'o' : ' ', C(tool > 0.78 ? RED : WHITE, 8)), true;
+      return BG[i] = tool > 0.62 ? C(tool > 0.78 ? RED : GRAY, tool > 0.78 ? 4 : 5) : C(GRAY, 2.6), set(i, ' ', 0), true; // tools hung on the board
     }
-    return BG[i] = C(GRAY, 2.3), set(i, fract(w / 0.35) < 0.08 ? '-' : ' ', C(GRAY, 6)), true;
+    return BG[i] = C(GRAY, 2.3 - (fract(w / 0.35) < 0.08 ? .6 : 0)), set(i, ' ', 0), true; // the cladding's rails
   }, (ox, oy, oz, rx, ry, rz) => rayHangar(ox, oy, oz, rx, ry, rz, { x: vx, y: vy, hl: b.hl, hw: b.hw, r, z0, bld: b }));
 }
