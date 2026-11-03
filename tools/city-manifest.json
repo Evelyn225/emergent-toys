@@ -20,6 +20,7 @@
     "city/landmarks.js",
     "city/pavilions.js",
     "city/shopfronts.js",
+    "city/shop-exteriors.js",
     "city/traffic.js",
     "city/gas.js",
     "city/damage.js",

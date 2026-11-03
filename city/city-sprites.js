@@ -186,6 +186,7 @@ function citySprites() {
     k.tro = f; k.hz = Math.min(k.H - 0.6, below + 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3)));
     if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
+  shopExteriors(); // barber poles, pharmacy crosses, lanterns, café boards, florists' buckets, bar signs (shop-exteriors.js)
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
     if (Math.abs(vx) < vis && Math.abs(vy) < vis && inView(vx, vy, 1.6)) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
