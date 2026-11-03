@@ -30,7 +30,7 @@ test('behind a shop window up close: the plinth, the goods standing on it in fro
  assert.deepEqual(r,[]);
 }));
 
-test('every shop family shows its displays up close and flat glass further off; neon shops, flats and warehouses keep their fronts',()=>fixture(async p=>{
+test('every shop family shows its displays up close and flat glass further off; neon shops, flats and warehouses of goods keep their fronts',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   const bad=[],seen={};
   const fams={midtown:s=>s.architecture&&!s.architecture.profile&&s.architecture.region==='midtown'&&s.architecture.sty!==14,downtown:s=>s.architecture&&!s.architecture.profile&&(s.architecture.region==='downtown'||s.architecture.sty===14),
@@ -40,12 +40,12 @@ test('every shop family shows its displays up close and flat glass further off; 
    let ok=false;
    for(const o of cands.slice(0,12)){const sh=SHOP[o.ownerCell];if(!openAt(sh,14))continue;
     const count=d=>{px=o.x+o.nx*d;py=o.y+o.ny*d;a=Math.atan2(-o.ny,-o.nx);pitch=-.15;tod=14;env(0);let n=0;const w0=shopWindow;shopWindow=(...z)=>{if(z[7]===sh)n++;return w0(...z);};try{render(0);}finally{shopWindow=w0;}return n;};
-    const near=count(.3),far=count(4.5); // (45 m)
+    const near=count(.3),far=count(shopSceneFor(sh)?6:4.5); // (45 m; a restaurant's room, out to 56 m)
     if(far)bad.push([fam,'displays drawn from further off',far]);
     if(near>20){ok=true;break;}}
    if(!ok)bad.push([fam,'no shop window display up close']);}
   // the fronts that keep their glow or their doors
-  const keep=ARCH_DETAILS.filter(o=>o.kind==='fascia'&&(SHOP[o.ownerCell].kind===SHOP_NEON||STY[o.ownerCell]===8)).slice(0,6);
+  const keep=ARCH_DETAILS.filter(o=>o.kind==='fascia'&&(SHOP[o.ownerCell].kind===SHOP_NEON||STY[o.ownerCell]===8)&&!shopSceneFor(SHOP[o.ownerCell])).slice(0,6); // (restaurants and bars show their rooms even there: shop-scenes.js)
   for(const o of keep){const sh=SHOP[o.ownerCell];px=o.x+o.nx*.3;py=o.y+o.ny*.3;a=Math.atan2(-o.ny,-o.nx);pitch=-.15;tod=14;env(0);let n=0;const w0=shopWindow;shopWindow=(...z)=>{if(z[7]===sh)n++;return w0(...z);};try{render(0);}finally{shopWindow=w0;}
    if(n)bad.push([sh.kind===SHOP_NEON?'a neon shop':'a warehouse','with a display',sh.word]);}
   return bad;

@@ -211,6 +211,12 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const fd = fract(u * 0.8);
       if (fd > 0.12 && fd < 0.88 && z < 0.3) {
         if (!open) { const w0 = Math.floor(u * 0.8) / 0.8; return void shopShutter(i, u, z, w0 + 0.15, w0 + 1.1, 0, 0.3, sh, L, d, glassSlopes(u, z)[0]); }
+        if (shopSceneFor(sh) && z < .265) { // a restaurant or bar in a converted warehouse: the door rolled up, glazed in, the room behind
+          const w0 = Math.floor(u * 0.8) / 0.8;
+          if (z < .03) { set(i, ' ', 0); BG[i] = C(GRAY, 1.4 + L * .2); return; } // the threshold kerb
+          if (d < SHOP_WINDOW.near * 1.6) return void shopWindow(i, u, z, w0 + 0.15, w0 + 1.1, 0.03, 0.265, sh, open, L, sk + Math.floor(u * 0.8));
+          set(i, ' ', 0); BG[i] = C(WARM, 1.6 + L * .15 + Math.max(night, overcast * .6) * 3); return; // (far off: the glass warm with its light)
+        }
         BG[i] = C(ORANGE, 1.4 + L * .2 - coveGroove(z, 1 / 40, .008, fpG) * .9); return set(i, ' ', 0); // a roll-up door, open, its slats filtered
       }
       BG[i] = C(GRAY, 1.6 + L * .25); return set(i, ' ', 0); // the piers between the doors
@@ -244,8 +250,8 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const crate = Math.floor(u * 20), rim = z > .06 || coveGroove(u, .05, .004, fpG) > .5;
       BG[i] = rim ? C(BRICK, 1.5 + L * .15) : C(ITEM_COL[hash(crate, 2, sk) * 4 | 0], 2 + L * .3); return set(i, ' ', 0);
     }
-    const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
-    if (on && d < SHOP_WINDOW.near && z > .07 && z < .25 && sh.kind !== SHOP_NEON && sh.kind !== SHOP_APTS && sty !== 8) // up close, the display behind the glass (shop-windows.js)
+    const on = hash(Math.floor(u * 2), 3, sk) > 0.25, scene = !!shopSceneFor(sh);
+    if ((on || scene) && d < SHOP_WINDOW.near * (scene ? 1.6 : 1) && z > .07 && z < .25 && (sh.kind !== SHOP_NEON || scene) && sh.kind !== SHOP_APTS && (sty !== 8 || scene)) // up close, the display behind the glass (shop-windows.js), or a restaurant's room (shop-scenes.js)
       if (shopWindow(i, u, z, Math.floor(u * 2) / 2 + 0.06, Math.floor(u * 2) / 2 + 0.48, 0.07, 0.25, sh, open, L, sk + Math.floor(u * 2))) return;
     // the shopfront itself: this shop's style of joinery, glass, sill and stallriser (shopfront-kit.js)
     return shopfrontBay(i, (fs - 0.08) * 0.5, 0.46, z, 0, 0.32, sh, L, fpG, on && (night > 0.3 || overcast > 0.6), d);

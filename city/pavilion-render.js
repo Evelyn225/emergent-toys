@@ -33,6 +33,11 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       set(i,' ',0);
       const mullion = Math.max(facadeLine(Math.abs(local - width * .12), .028, fpM), facadeLine(Math.abs(local + width * .35), .028, fpM));
       if (z < .075) { BG[i] = C(p.trim, 1.6 + L * .25); return true; } // the stallriser
+      if (shopSceneFor(sh)) { // a restaurant, café, bar...: its room behind the glass, between the mullions
+        if (mullion > .5) { BG[i] = C(p.trim, 1.5 + L * .25); return true; }
+        const sg = Math.sign(u * wc) || 1, ua = u + sg * (.15 - width / 2 - local), ub = u + sg * (width / 2 - .15 - local);
+        shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .075, .32, sh, open, L, sk); return true;
+      }
       const shelf = Math.max(facadeLine(Math.abs(z - .14), .014, fpM), facadeLine(Math.abs(z - .23), .014, fpM));
       if (mullion > .5 || shelf > .5) { BG[i] = C(p.trim, 1.5 + L * .25); return true; }
       // the window: goods on its shelves up close (each a block of its own colour), glass tinted by the shop's light far off
