@@ -18,7 +18,12 @@ const roadDark = () => .4 + .6 * day;
 function roadSurface(wx, wy, road, lx, ly, bx, by, d, L) {
   const S = ROAD_SURFACE, fp = homeBalconyPavingFootprint(d, eye);
   L *= roadDark(); // (darker at night, so the lamps' pools show)
-  const asphalt = (shade = 0) => [GRAY, L * (.3 + shade)];
+  // repairs: now and then a newer, darker patch cut into the lane, or a utility trench filled across it; their edges
+  // show up close, the patch settles toward the road's own tone far off
+  const pu = Math.floor(wx / .4), pv = Math.floor(wy / .4), ph = hash(pu, pv, 1901), fineP = clamp(1 - fp / .03, 0, 1);
+  const pfx = fract(wx / .4), pfy = fract(wy / .4), inPatch = ph > .82 && pfx > .2 && pfx < .2 + .3 * hash(pu, pv, 1902) + .2 && pfy > .3 && pfy < .55;
+  const trench = ph < .06 && Math.abs(fract(wx / .4 + wy / .4 * .02) - .5) < .025;
+  const asphalt = (shade = 0) => [GRAY, L * (.3 + shade - (inPatch || trench ? .045 * (.4 + .6 * fineP) : 0))];
   const pavement = () => { // slabs in a running bond, joints filtered
     const j = Math.max(coveGroove(wx, S.slab, S.joint, fp), coveGroove(wy + (Math.floor(wx / S.slab) & 1) * S.slab / 2, S.slab, S.joint, fp));
     return [GRAY, L * (.44 - j * .18)];

@@ -12892,16 +12892,23 @@ function floorBaseCell(i, r, x, rx, ry) {
       const coast = worldReady ? coastalGround(wx,wy) : null;
       const toWater = coast ? coast.depth : south ? shoreS(wx) - worldCoord(wy) : worldCoord(wy) - shoreN(wx);
       const beach = coast ? coast.beach : hash(bx & (NB - 1), south ? 1 : 2, 47) < 0.35;
-      if (toWater < 0.2 && !beach) { ch = '#'; k = 1.4; } // the sea wall
+      const fpG = homeBalconyPavingFootprint(d, eye), fineG = clamp(1 - fpG / .02, 0, 1), LG = L * roadDark();
+      if (toWater < 0.2 && !beach) surf = [STONE, LG * (toWater < .03 ? .7 : .55) - coveGroove(wx + wy, .12, .006, fpG) * LG * .1]; // the sea wall's coping, its blocks
       else if (beach && toWater < 1.6) { // sand, and surf where it meets the water
-        const surf = toWater < 0.25; ch = surf ? '~' : (r * 7 + x * 3) % 5 ? '.' : ':'; base = surf ? WHITE : YEL; k = surf ? 1.2 : 0.8;
-      } else if (fract(wx * 1.5) < 0.08 || fract(wy * 1.5) < 0.08) { ch = '+'; base = WARM; k = 0.9; } // promenade flagstones
-      else ch = (r + x) % 3 ? ' ' : '.';
-    } else if (kind === 'construction') { // churned-up dirt with tyre tracks
-      soft = true; base = BRICK; k = 1.1;
-      ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
-    } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
-      ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+        const wave = toWater < 0.25; ch = wave ? '~' : ' '; base = wave ? WHITE : YEL; k = wave ? 1.2 : 0.8;
+        if (!wave) surf = [YEL, LG * (.42 + (hash(Math.floor(wx * 80), Math.floor(wy * 80), 47) - .5) * .12 * fineG + Math.sin(wx * 9 + wy * 4) * .03 * fineG)]; // dry sand, rippled
+      } else { // the promenade: big flagstones, each its own tone, joints filtered
+        const j = Math.max(coveGroove(wx, 1 / 1.5, .012, fpG), coveGroove(wy, 1 / 1.5, .012, fpG));
+        surf = [WARM, LG * (.36 + (hash(Math.floor(wx * 1.5), Math.floor(wy * 1.5), 48) - .5) * .06 - j * .1)];
+      }
+    } else if (kind === 'construction') { // churned-up dirt with tyre ruts
+      soft = true; const fpG = homeBalconyPavingFootprint(d, eye), LG = L * roadDark();
+      const rut = coveGroove(lx * 3 + ly * 0.4, 1, .12, fpG * 3), clod = (noise(wx * 14, wy * 14, 97) - .5) * clamp(1 - fpG / .02, 0, 1);
+      surf = [BRICK, LG * (.34 - rut * .1 + clod * .08)];
+    } else if (kind === 'yard') { // cracked concrete, oil stains, painted bay lines
+      const fpG = homeBalconyPavingFootprint(d, eye), LG = L * roadDark(), line = coveGroove(lx, 1 / 1.5, .03, fpG);
+      const stain = noise(wx * 3, wy * 3, 98) > .7 ? .1 : 0, crack = clamp(1 - fpG / .01, 0, 1) * (Math.abs(noise(wx * 6, wy * 6, 99) - .5) < .015 ? .08 : 0);
+      surf = line > .5 ? [YEL, LG * .45] : [GRAY, LG * (.36 - stain - crack)];
     } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
       soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
@@ -13297,7 +13304,12 @@ const roadDark = () => .4 + .6 * day;
 function roadSurface(wx, wy, road, lx, ly, bx, by, d, L) {
   const S = ROAD_SURFACE, fp = homeBalconyPavingFootprint(d, eye);
   L *= roadDark(); // (darker at night, so the lamps' pools show)
-  const asphalt = (shade = 0) => [GRAY, L * (.3 + shade)];
+  // repairs: now and then a newer, darker patch cut into the lane, or a utility trench filled across it; their edges
+  // show up close, the patch settles toward the road's own tone far off
+  const pu = Math.floor(wx / .4), pv = Math.floor(wy / .4), ph = hash(pu, pv, 1901), fineP = clamp(1 - fp / .03, 0, 1);
+  const pfx = fract(wx / .4), pfy = fract(wy / .4), inPatch = ph > .82 && pfx > .2 && pfx < .2 + .3 * hash(pu, pv, 1902) + .2 && pfy > .3 && pfy < .55;
+  const trench = ph < .06 && Math.abs(fract(wx / .4 + wy / .4 * .02) - .5) < .025;
+  const asphalt = (shade = 0) => [GRAY, L * (.3 + shade - (inPatch || trench ? .045 * (.4 + .6 * fineP) : 0))];
   const pavement = () => { // slabs in a running bond, joints filtered
     const j = Math.max(coveGroove(wx, S.slab, S.joint, fp), coveGroove(wy + (Math.floor(wx / S.slab) & 1) * S.slab / 2, S.slab, S.joint, fp));
     return [GRAY, L * (.44 - j * .18)];
@@ -15744,32 +15756,34 @@ const SOLID_SHADE = {
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;
-    if (w > 0.18 || f === 5) { BG[i] = C(fract(u * 4) < 0.5 ? ORANGE : WHITE, 3 + L * 0.3); return set(i, '=', C(GRAY, L * 0.4)), true; }
-    if (Math.abs(fract(u * 2.2) - 0.5) > 0.42 || f === 1 || f === 2) return set(i, '|', C(GRAY, L)), true; // posts
-    if (w < 0.03) return set(i, '_', C(ORANGE, L * 0.7)), true; // a kick board
+    if (w > 0.18 || f === 5) { BG[i] = C(fract(u * 4) < 0.5 ? ORANGE : WHITE, (3 + L * 0.3) * (w > .195 || f === 5 ? 1.1 : .92)); return set(i, ' ', 0), true; } // the striped top rail, its upper edge lit
+    if (Math.abs(fract(u * 2.2) - 0.5) > 0.42 || f === 1 || f === 2) { BG[i] = C(GRAY, (1.6 + L * .25) * shadeFace(f)); return set(i, ' ', 0), true; } // posts
+    if (w < 0.03) { BG[i] = C(ORANGE, 1.8 + L * .22); return set(i, ' ', 0), true; } // a kick board
     return false;
   },
   // a portapotty: blue ribbed plastic, a white roof, the door on its west end with a vent up top, a handle and the
   // little VACANT / OCCUPIED slot (red while you're in one... which you can't see from in there, but still)
   potty: o => (i, t, L) => {
     const f = HIT.face, w = HIT.w, k = shadeFace(f);
-    if (f === 5 || w > 0.22) { BG[i] = C(WHITE, (2.5 + L * 0.3) * k); return set(i, f === 5 ? ' ' : '_', C(GRAY, L * 0.6)), true; } // the roof
+    if (f === 5 || w > 0.22) { BG[i] = C(WHITE, (2.5 + L * 0.3) * k * (f !== 5 && w < .228 ? .85 : 1)); return set(i, ' ', 0), true; } // the roof, its lip in shadow
     BG[i] = C(BLUE, (1.6 + L * 0.35) * k);
     if (f === 2) { // the door
       const v = HIT.v;
-      if (Math.abs(v) > 0.05) return set(i, '|', C(BLUE, L)), true; // the frame
-      if (w > 0.19) return set(i, '=', C(GRAY, L * 0.8)), true; // the vent
+      if (Math.abs(v) > 0.05) { BG[i] = C(BLUE, (1.6 + L * .35) * k * 1.1); return set(i, ' ', 0), true; } // the frame
+      if (w > 0.19) { BG[i] = C(GRAY, 1.6 + L * .2 - (fract(w * 120) < .4 ? .5 : 0)); return set(i, ' ', 0), true; } // the vent's louvres
       if (w > 0.13 && w < 0.145 && v > 0.01 && v < 0.04) { BG[i] = C(GREEN, 4); return set(i, ' ', 0), true; } // VACANT
-      if (Math.abs(w - 0.11) < 0.008 && v > 0.025) return set(i, 'o', C(WHITE, L)), true; // the handle
-      return set(i, fract(w * 60) < 0.12 ? '-' : ' ', C(BLUE, L * 0.8)), true;
+      if (Math.abs(w - 0.11) < 0.008 && v > 0.025) { BG[i] = C(WHITE, 4 + L * .3); return set(i, ' ', 0), true; } // the handle
+      BG[i] = C(BLUE, (1.6 + L * 0.35) * k - (fract(w * 60) < .12 ? .4 : 0)); return set(i, ' ', 0), true; // the door's moulded panels
     }
-    return set(i, fract(HIT.u * 70 + HIT.v * 70) < 0.2 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
+    BG[i] = C(BLUE, (1.6 + L * 0.35) * k * (fract(HIT.u * 70 + HIT.v * 70) < 0.2 ? .85 : 1.05)); return set(i, ' ', 0), true; // ribs, in light and shade
   },
   // chain-link: a top rail and posts, the mesh a lattice of x's you can see through
   chain: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u;
-    if (w > 0.185 || HIT.face === 5) return set(i, '-', C(GRAY, L)), true;
-    if (Math.abs(fract(u * 0.8) - 0.5) > 0.47) return set(i, '|', C(GRAY, L * 1.1)), true;
+    if (w > 0.185 || HIT.face === 5) { BG[i] = C(GRAY, (1.8 + L * .25) * (w > .195 ? 1.15 : 1)); return set(i, ' ', 0), true; } // the top rail
+    if (Math.abs(fract(u * 0.8) - 0.5) > 0.47) { BG[i] = C(GRAY, 1.7 + L * .25); return set(i, ' ', 0), true; } // posts
+    // the mesh: its diamonds are a few centimetres, finer than a cell from anywhere you can stand, so it stays the x of
+    // a see-through lattice rather than a solid colour that would either fill the fence in or vanish
     return fract(u * 14 + w * 14) < 0.22 || fract(u * 14 - w * 14) < 0.22 ? (set(i, 'x', C(GRAY, L * 0.7)), true) : false;
   },
   // a 40ft container: corrugated sides, doors with locking bars on the ends, a colour per box
