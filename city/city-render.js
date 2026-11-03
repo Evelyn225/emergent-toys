@@ -528,11 +528,30 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
   set(i, ch, col);
 }
 
+// ---- park and garden ground (pass 18), shared by the park blocks and the Botanical Gardens (gardens.js). Each
+// returns [base, level] for the cell's background; fineP (parkFine) fades the up-close detail out with distance
+const parkFine = d => clamp(1 - homeBalconyPavingFootprint(d, eye) / .015, 0, 1);
+const grassSeason = () => { const sn = seasonIdx(); return sn === 0 ? .04 : sn === 3 ? -.06 : 0; };
+// grass: mown in long stripes, a slow lift and fall across the lawn, blades only up close
+function lawnSurface(wx, wy, fineP, LP, lift = 0) {
+  const col = seasonIdx() === 2 && noise(wx * .6, wy * .6, 939) > .55 ? YEL : GREEN;
+  const stripe = Math.floor(wy / .35) & 1 ? .07 : -.05, swell = (noise(wx * .5, wy * .5, 941) - .5) * .2, blade = fineP > .2 ? (hash(Math.floor(wx * 120), Math.floor(wy * 40), 942) - .5) * .06 * fineP : 0;
+  return [col, LP * (.44 + lift + grassSeason() + stripe + swell + blade)];
+}
+// a path: compacted gravel, worn darker down its middle, the grass giving way at its edges (e: 0 middle, 1 edge)
+function gravelSurface(wx, wy, e, fineP, LP) {
+  return e > .85 ? [GREEN, LP * (.36 + grassSeason())] : [STONE, LP * (.34 - (1 - e) * .05 + (hash(Math.floor(wx * 70), Math.floor(wy * 70), 940) - .5) * .05 * fineP)];
+}
+// reeds: tall blades lit and shaded, the odd cattail's brown head
+function reedSurface(wx, wy, fineP, LP) {
+  const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935);
+  return h > .88 && fineP > .2 ? [BRICK, LP * .4] : [GREEN, LP * (.42 + grassSeason() + (h > .5 ? .06 : -.05) * fineP)];
+}
 // a park pond, sd in from its edge (below 0): shallow and green-brown at the margin, deepening to a dark middle, slow
 // ripples with the sky in them (reflect()), raindrops ringing it in the wet; lily pads in patches near the edge, round,
 // the odd one flowering. Frozen in winter
-function pondCell(i, r, x, wx, wy, sd, L) {
-  if (seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
+function pondCell(i, r, x, wx, wy, sd, L, freeze = true) {
+  if (freeze && seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
     const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
     BG[i] = C(cr ? WHITE : CYAN, cr ? 3 + day * 4 : 1.4 + day * 3.5 + (noise(wx * 1.5, wy * 1.5, 96) - .5) * .8); return set(i, ' ', 0); // the cracks white in the ice
   }
@@ -617,9 +636,9 @@ function floorBaseCell(i, r, x, rx, ry) {
     const kind = blockKind(bx, by);
     if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
     if (kind === 'gardens' && inGardens(wx, wy)) {
-      const gf = gardenFloor(i, r, x, wx, wy, L);
+      const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
-      [ch, base, k] = gf; soft = true;
+      surf = gf; soft = true;
     } else if (onCauseway(wx, wy)) { // the road out to the airport
       soft = true; [ch, base, k] = causewayFloor(r, x, wx, wy);
     } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
@@ -697,19 +716,11 @@ function floorBaseCell(i, r, x, rx, ry) {
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       const sd = pondSD(lx, ly, pbx, pby); // (how far out of the pond: below 0, how far in)
       if (sd < 0) return pondCell(i, r, x, wx, wy, sd, L);
-      const fpP = homeBalconyPavingFootprint(d, eye), fineP = clamp(1 - fpP / .015, 0, 1), LP = L * roadDark(), sn = seasonIdx();
-      const grassCol = sn === 2 ? (noise(wx * .6, wy * .6, 939) > .55 ? YEL : GREEN) : GREEN, grassLift = sn === 0 ? .04 : sn === 3 ? -.06 : 0;
+      const fineP = parkFine(d), LP = L * roadDark();
       if (sd < 0.025) surf = [BRICK, LP * (.26 + (hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) - .5) * .06 * fineP)]; // a thin muddy edge
-      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { // reeds in clumps, the odd cattail: tall blades lit and shaded, brown heads
-        const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935);
-        surf = h > .88 && fineP > .2 ? [BRICK, LP * .4] : [GREEN, LP * (.42 + grassLift + (h > .5 ? .06 : -.05) * fineP)];
-      } else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { // the path: compacted gravel, worn darker down its middle, its edges where the grass gives way
-        const e = Math.min(Math.abs(lx - 5), Math.abs(ly - 5)) / .2;
-        surf = e > .85 ? [GREEN, LP * (.36 + grassLift)] : [WARM, LP * (.36 - (1 - e) * .05 + (hash(Math.floor(wx * 70), Math.floor(wy * 70), 940) - .5) * .05 * fineP)];
-      } else { // grass: mown in long stripes, a slow lift and fall across the lawn, blades only up close
-        const stripe = Math.floor(wy / .35) & 1 ? .07 : -.05, swell = (noise(wx * .5, wy * .5, 941) - .5) * .2, blade = fineP > .2 ? (hash(Math.floor(wx * 120), Math.floor(wy * 40), 942) - .5) * .06 * fineP : 0;
-        surf = [grassCol, LP * (.44 + grassLift + stripe + swell + blade)];
-      }
+      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) surf = reedSurface(wx, wy, fineP, LP); // reeds in clumps
+      else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) surf = gravelSurface(wx, wy, Math.min(Math.abs(lx - 5), Math.abs(ly - 5)) / .2, fineP, LP);
+      else surf = lawnSurface(wx, wy, fineP, LP);
     } else surf = plazaSurface(wx, wy, lx, ly, d, L); // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;

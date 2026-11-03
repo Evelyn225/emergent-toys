@@ -27,3 +27,30 @@ test('parks: lawns, paths, reeds, ponds and trees in colour, lit and shaded, day
   assert.deepEqual(r.bad,[]);assert.deepEqual(errors,[]);
  }finally{await p.close();}
 });
+test('Botanical Gardens: lawns, beds, gravel, lake, jetty, pens, picnic blanket, railings and glasshouses in colour',async()=>{
+ const p=await browser.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ try{
+  await p.addInitScript(()=>{requestAnimationFrame=()=>0;});
+  await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
+  const r=await p.evaluate(()=>{
+   paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;T=26;tod=14;env(0);render(0);
+   const bad=[],views=[[3,3,.6],[11,7,0],[8,10,4.2],[15,4,2.5],[5,11,-.8],[18,10,3.6],[1.5,1,2.4]];
+   // every kind of ground is there to be seen
+   const kinds=new Set();for(let gx=0;gx<GARDEN.w;gx+=.05)for(let gy=0;gy<GARDEN.h;gy+=.05)kinds.add(gardenSurface(gx,gy).kind);
+   for(const k of ['lawn','gravel','bed','lake','reeds','jetty','bear','tortoise'])if(!kinds.has(k))bad.push(['no '+k]);
+   for(const td of [14,22]){tod=td;env(0);let g=0,n=0,gg=0,gn=0;
+    for(const [gx,gy,ang] of views){px=GARDEN.x0+gx;py=GARDEN.y0+gy;a=ang;pitch=-.12;render(0);
+     for(let i=0;i<cols*rows;i++){n++;if(CH[i]!==' '&&CH[i]!=='')g++;}
+     for(let rr=Math.ceil(hor)+2;rr<rows;rr++)for(let c=0;c<cols;c++){const i=rr*cols+c;if(FL[i]===0)continue;gn++;if(CH[i]!==' '&&CH[i]!=='')gg++;}}
+    if(gg/gn>.012)bad.push([td,'gardens ground glyph share',+(100*gg/gn).toFixed(1)]);
+    if(g/n>.04)bad.push([td,'gardens views glyph share',+(100*g/n).toFixed(1)]);}
+   // sat on the grass: a gingham blanket in front of you, three tones, no characters
+   tod=14;env(0);px=GARDEN.x0+3;py=GARDEN.y0+3;a=.6;pitch=-.9;body.seat={grass:true,x:px,y:py,fx:Math.cos(a),fy:Math.sin(a)};render(0);
+   const tones=new Set();let bc=0;for(let i=0;i<cols*rows;i++)if((BG[i]>>4)===RED||(BG[i]>>4)===WHITE&&FL[i]!==0){tones.add(BG[i]);if(CH[i]!==' ')bc++;}
+   body.seat=null;
+   if(tones.size<3||bc)bad.push(['picnic blanket',tones.size,bc]);
+   return {bad};
+  });
+  assert.deepEqual(r.bad,[]);assert.deepEqual(errors,[]);
+ }finally{await p.close();}
+});

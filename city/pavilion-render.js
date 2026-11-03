@@ -71,16 +71,19 @@ function pavilionGlassShade(o, i, t, L) {
   const ny = roof ? o.planes[HIT.face][1] : HIT.face <= 2 ? 0 : 1;
   const wall = roof ? !o.planes[HIT.face][2] : HIT.face < 5;
   const along = Math.abs(nx) > Math.abs(ny) ? v : u;
-  const bar = Math.abs(fract((along + (Math.abs(nx) > Math.abs(ny) ? o.hw : o.hl)) * 3) - .5) < .035 ||
-    (wall ? fract(z * 5) < .055 : fract((Math.abs(nx) > Math.abs(ny) ? u : v) * 5) < .065);
-  if (bar) {
-    BG[i] = C(WHITE,2 + L * .22);
-    set(i,wall ? '|' : Math.abs(nx) > Math.abs(ny) ? '/' : '-',C(WHITE,L));
+  // glazing bars as colour, filtered by the cell's footprint so they thin to a tint far off rather than flicker
+  const fp = t / projY, mu = Math.abs(fract((along + (Math.abs(nx) > Math.abs(ny) ? o.hw : o.hl)) * 3) - .5) / 3;
+  const tq = wall ? fract(z * 5) / 5 : fract((Math.abs(nx) > Math.abs(ny) ? u : v) * 5) / 5;
+  const bar = Math.max(roadLine(mu, .0233, fp), roadLine(tq - (wall ? .0055 : .0065), wall ? .011 : .013, fp));
+  if (bar > .5) {
+    BG[i] = C(WHITE,2 + L * .22 + (wall && tq > .006 ? -.5 : 0)); // the bars, a transom's underside in shadow
+    set(i,' ',0);
   } else {
     // Stable foliage beneath the glazing, sky reflection above it. World coordinates prevent sliding textures.
     const leaf = noise((o.x + u) * 3,(o.y + v) * 3 + z * .6,879) > .56 && z < 1.7;
-    BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 : 1 + day * 2.2);
-    set(i,leaf ? '%' : fract((u + v) * 9) < .035 ? '/' : ' ',C(leaf ? GREEN : WHITE,L * (leaf ? .75 : .35)));
+    const lv = leaf ? noise((o.x + u) * 9,(o.y + v) * 9 + z * 2,880) : 0, streak = !leaf && fract((u + v) * 9) < .08;
+    BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 + (lv > .5 ? .7 : 0) : 1 + day * 2.2 + (streak ? .8 + day : 0) + bar * .6); // leaves in clumps; the sky sliding across the panes
+    set(i,' ',0);
   }
   if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35,0,HIT.w);
   return true;
@@ -88,7 +91,7 @@ function pavilionGlassShade(o, i, t, L) {
 function pavilionDetailShade(o, i, t, L) {
   if (o.gh) {
     if (o.kind === 'glazing' || o.kind === 'clerestory') return pavilionGlassShade(o,i,t,L);
-    BG[i] = C(GREEN,2 + L * .3); set(i,o.kind === 'crest' ? '^' : '|',C(WHITE,L)); return true;
+    BG[i] = C(o.kind === 'crest' ? WHITE : GREEN,(2 + L * .3) * shadeFace(HIT.face)); set(i,' ',0); return true; // posts green, the cresting white
   }
   const p = o.b.profile, z = HIT.w, face = HIT.face, top = o.planes ? o.planes[face][2] > 0 : face === 5;
   const base = o.kind === 'tiles' ? p.roof : o.kind === 'balcony' ? STONE : p.trim;
