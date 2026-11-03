@@ -254,7 +254,7 @@ function gardenSprites() {
     const k = clamp(1 - (c.lands - T) / (0.35 + Math.hypot(c.gx - c.fx, c.gy - c.fy) * 0.4), 0, 1);
     const gx = c.fx + (c.gx - c.fx) * k, gy = c.fy + (c.gy - c.fy) * k, z = k < 1 ? 0.12 * (1 - k) + 0.25 * k * (1 - k) : 0.004;
     const [vx, vy] = V(gx, gy);
-    dot(vx, vy, z, 0.007, (i, t, L) => (BG[i] = C(YEL, 2 + L * 0.2), set(i, '.', C(WARM, L * 1.4)), true));
+    dot(vx, vy, z, 0.007, (i, t, L) => (BG[i] = C(YEL, 3 + L * 0.25), set(i, ' ', 0), true)); // a crumb of bread
   }
   const tp = GARDEN_PENS.find(p => p.kind === 'tortoise'), bp = GARDEN_PENS.find(p => p.kind === 'bear');
   const tortoiseAt = (t, tt) => [tp.gx0 + 0.5 + (tp.gx1 - tp.gx0 - 1) * (0.5 + 0.45 * Math.sin(tt * 0.015 + t.ph)), tp.gy0 + 0.6 + (tp.gy1 - tp.gy0 - 1.2) * (0.5 + 0.45 * Math.cos(tt * 0.011 + t.ph * 1.7))];
@@ -273,7 +273,7 @@ function gardenSprites() {
   for (const [ggx, ggy, o] of GARDEN_GATES) {
     const [x, y] = gw(ggx, ggy), vx = rel(x - px), vy = rel(y - py), along = o === 'h';
     if (Math.hypot(vx, vy) > vis) continue;
-    const iron = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.1); return set(i, '|', C(GRAY, L * 1.2)), true; };
+    const iron = (i, t, L) => { BG[i] = C(GRAY, (1 + L * 0.22) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; };
     for (const s of [-0.62, 0.62]) drawBox(boxAt(vx + (along ? s : 0), vy + (along ? 0 : s), 1, 0, 0.025, 0.025, 0, 0.26), iron);
     const shut = !gardensOpen(tod);
     for (const s of [-1, 1]) { // the two leaves: across the way, or swung back against the railings
@@ -282,7 +282,7 @@ function gardenSprites() {
     }
     if (ggy === 0) drawBox(boxAt(vx, vy, 1, 0, 0.66, 0.01, 0.24, 0.3), (i, t, L) => { // BOTANICAL GARDENS in iron letters over the north gate
       BG[i] = C(GREEN, 1 + L * 0.1);
-      if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
+      if (HIT.face !== 3 && HIT.face !== 4) { BG[i] = C(GRAY, (1 + L * .2) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
       const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1;
       return set(i, signLine(word, q, (0.295 - HIT.w) / 0.05, i, 0.27, midDepth(vx, vy), t, 1.32 / n, 0.05, farDepth(vx, vy, 0.66), ...faceDir(1, 0)) || ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
     });
@@ -320,7 +320,7 @@ function drawPicnicBlanket(vx, vy, col) {
 function drawPicnicBasket(vx, vy, fx, fy) {
   const hl = 0.022, hw = 0.015, top = 0.022;
   drawBox(boxAt(vx, vy, fx, fy, hl, hw, 0, top), (i, t, L) => {
-    if (HIT.face === 5) { BG[i] = C(WARM, 2 + L * 0.3); return set(i, '=', C(BRICK, L)), true; } // the lid
+    if (HIT.face === 5) { BG[i] = C(WARM, 2 + L * 0.3 - (fract(HIT.u * 60) < .2 ? .6 : 0)); return set(i, ' ', 0), true; } // the lid, its slats
     const cloth = HIT.w > top - 0.006;
     BG[i] = cloth ? C((Math.floor(HIT.u * 120) + Math.floor(HIT.v * 120)) & 1 ? RED : WHITE, 2.5 + L * 0.3) : C(WARM, (1.6 + L * 0.3) * shadeFace(HIT.face));
     return set(i, cloth ? ' ' : fract(HIT.w * 160) < 0.5 ? '%' : '#', C(BRICK, L * 0.9)), true;
@@ -333,21 +333,21 @@ function drawPicnicBasket(vx, vy, fx, fy) {
 }
 // a swan pedalo, heading (hx, hy): a white hull, wings raised along its sides, a long neck curving up from the bow to
 // the head with its orange beak, and a tail flicked up at the stern
-const SWAN_WHITE = (i, t, L) => { BG[i] = C(WHITE, (6 + L * 0.45) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '~' : ' ', C(GRAY, L * 0.6)), true; };
+const SWAN_WHITE = (i, t, L) => { BG[i] = C(WHITE, (6 + L * 0.45) * shadeFace(HIT.face)); return set(i, ' ', 0), true; };
 function drawSwanBoat(vx, vy, hx, hy) {
   const d = Math.hypot(vx, vy);
   if (d > vis) return;
   const at = (u, v = 0) => [vx + hx * u - hy * v, vy + hy * u + hx * v];
   drawBox(boxAt(vx, vy, hx, hy, 0.06, 0.035, 0, 0.03), (i, t, L) => {
     if (HIT.face === 5) { BG[i] = C(GRAY, 1.2 + L * 0.2); return set(i, ' ', 0), true; } // the seat well
-    if (HIT.w < 0.008) { BG[i] = C(BLUE, 1.5 + L * 0.2); return set(i, '~', C(CYAN, L * 0.7)), true; } // the waterline
+    if (HIT.w < 0.008) { BG[i] = C(noise(HIT.u * 80 + T, 1, 853) > .55 ? CYAN : BLUE, 1.5 + L * 0.2); return set(i, ' ', 0), true; } // the waterline, lapping
     return SWAN_WHITE(i, t, L);
   });
   for (const e of [-1, 1]) { // the wings, raised up each side and sweeping back
     const [x, y] = at(-0.012, e * 0.036);
     drawBox(boxAt(x, y, hx, hy, 0.042, 0.005, 0.025, 0.06), (i, t, L) => {
       if (HIT.w > 0.03 + 0.03 * (0.5 - HIT.u / 0.084) * 2 && HIT.u > -0.02) return false; // (lower toward the front)
-      BG[i] = C(WHITE, (6.5 + L * 0.45) * shadeFace(HIT.face)); return set(i, fract(HIT.u * 60) < 0.3 ? ')' : ' ', C(GRAY, L * 0.6)), true;
+      BG[i] = C(WHITE, (6.5 + L * 0.45) * shadeFace(HIT.face) - (fract(HIT.u * 60) < 0.3 ? 1.2 : 0)); return set(i, ' ', 0), true; // the feathers, layered back
     });
   }
   const neck = [[0.05, 0.028], [0.062, 0.06], [0.066, 0.088], [0.058, 0.108], [0.064, 0.12]];
@@ -355,7 +355,7 @@ function drawSwanBoat(vx, vy, hx, hy) {
     const [ax, ay] = at(neck[k - 1][0]), [bx, by] = at(neck[k][0]);
     tube(ax, ay, neck[k - 1][1], bx, by, neck[k][1], 0.008 - k * 0.0008, WHITE, 6, 0.6);
   }
-  { const [x, y] = at(0.07); dot(x, y, 0.122, 0.011, (i, t, L) => { BG[i] = C(WHITE, 6.5 + L * 0.45); return set(i, d < 3 ? ' ' : 'o', C(GRAY, L)), true; }); } // the head
+  { const [x, y] = at(0.07); dot(x, y, 0.122, 0.011, (i, t, L) => { BG[i] = C(WHITE, 6.5 + L * 0.45); return set(i, ' ', 0), true; }); } // the head
   { const [ax, ay] = at(0.078), [bx, by] = at(0.096); tube(ax, ay, 0.12, bx, by, 0.116, 0.004, ORANGE, 3, 0.8); } // the beak
   { const [ax, ay] = at(-0.058), [bx, by] = at(-0.074); tube(ax, ay, 0.026, bx, by, 0.05, 0.007, WHITE, 6, 0.6); } // the tail
 }
@@ -573,7 +573,7 @@ const AV_W = 14, AV_H = 12;
 let seedT = -99;
 function aviaryWall(i, su, uStep, z, d, mx, my, L) {
   const u = Math.abs(su), m = (Math.floor(u * 25) + Math.floor(z * 25)) & 1;
-  if (fract(u / 2) < 0.03 || fract(z / 1.75) < 0.03) return set(i, '|', C(GRAY, L)), true;
+  if (fract(u / 2) < 0.03 || fract(z / 1.75) < 0.03) { BG[i] = C(GRAY, 1.5 + L * .2); return set(i, ' ', 0), true; } // the mesh's frame
   const leaf = noise(u * 1.3, z * 1.3, 851) > 0.48 - 0.3 * (1 - z / 7);
   BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : C(BLUE, 1);
   return set(i, m ? 'x' : ' ', C(GRAY, L * 0.45)), true;
@@ -645,8 +645,8 @@ function aviaryProps(r) {
   return p;
 }
 function aviaryFloor(i, f, wx, wy) {
-  if (Math.hypot((wx - 7) / 2, (wy - 6) / 1.2) < 1) { BG[i] = C(BLUE, 1 + f * 2); FL[i] = 3; return set(i, noise(wx * 3 + T * 0.3, wy * 3, 852) > 0.6 ? '~' : ' ', C(CYAN, 5 + f * 6)); } // the pond
-  if (Math.abs(wx - 7) < 0.5 && wy > 7.2) return set(i, ':', C(WARM, 4 + f * 6)); // the path in
+  if (Math.hypot((wx - 7) / 2, (wy - 6) / 1.2) < 1) { BG[i] = C(BLUE, 1 + f * 2 + (noise(wx * 3 + T * 0.3, wy * 3, 852) > 0.6 ? .8 : 0)); FL[i] = 3; return set(i, ' ', 0); } // the pond, ripples catching the light
+  if (Math.abs(wx - 7) < 0.5 && wy > 7.2) { BG[i] = C(STONE, 2 + f * 3); return set(i, ' ', 0); } // the path in
   BG[i] = C(GREEN, f * 1.1); return set(i, (Math.floor(wx * 6) + Math.floor(wy * 6)) % 3 ? '"' : ',', C(GREEN, 4 + f * 5));
 }
 function conservatoryProps(r) {

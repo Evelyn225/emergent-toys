@@ -683,8 +683,8 @@ const BIKE = { r: 0.032, hub: 0.055 };
 // a tube that always fills its cells (rod() only backs one once it's wider than a character): thin parts stay solid
 function tube(ax, ay, az, bx, by, bz, r, col, bg, k = 1) {
   drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
-    BG[i] = C(col, bg + L * 0.2);
-    return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(WHITE, L * k)), true;
+    BG[i] = C(col, bg + L * 0.2 * (1 + k * .5)); // (solid colour: never a line of characters)
+    return set(i, ' ', 0), true;
   });
 }
 function drawBike(o, vx, vy) {
