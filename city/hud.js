@@ -410,15 +410,14 @@ function hud() {
   }
   // the combo clock, under the trick: how long is left to land the next one (skate.js)
   const left_ = skatingNow() ? comboLeft() : null;
-  if (left_ !== null) {
-    const w = Math.min(240, cv.width * .4), x = cv.width / 2 - w / 2, y = msgY + Math.max(1, msg.length) * (FS + 4) + 2;
-    g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, y - 3, w + 6, 10);
-    g.fillStyle = left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44'; g.fillRect(x, y, w * left_, 4);
+  if (left_ !== null) { // as text, like the rest of the HUD: [##########------]
+    const n = 20, row = (str, yy, col) => { const w = g.measureText(str).width, x = cv.width / 2 - w / 2; g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 6, yy - 3, w + 12, FS + 6); g.fillStyle = col; g.fillText(str, x, yy); };
+    const y = msgY + Math.max(1, msg.length) * (FS + 4) + 2, full = Math.round(left_ * n);
+    row('[' + '#'.repeat(full) + '-'.repeat(n - full) + ']', y, left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44');
     if (SK.grind) { // the balance: a mark that wanders off the middle; A and D bring it back
-      const b = clamp(SK.grind.bal, -1, 1), yb = y + 12;
-      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 3, yb - 3, w + 6, 12);
-      g.fillStyle = '#555'; g.fillRect(x, yb + 2, w, 2); g.fillStyle = '#8f8'; g.fillRect(x + w / 2 - 1, yb, 2, 6);
-      g.fillStyle = Math.abs(b) > .7 ? '#f44' : '#fff'; g.fillRect(x + w / 2 + b * w / 2 - 3, yb - 1, 6, 8);
+      const b = clamp(SK.grind.bal, -1, 1), m = Math.round((b + 1) / 2 * (n - 1)), bar = [...'-'.repeat(n)];
+      bar[(n - 1) >> 1] = '|'; bar[m] = 'o';
+      row('[' + bar.join('') + ']', y + FS + 6, Math.abs(b) > .7 ? '#f44' : '#fff');
     }
   }
 }
