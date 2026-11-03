@@ -144,9 +144,9 @@ function gardenSurface(gx, gy) {
   for (const p of cell.pens) if (gx > p.gx0 && gx < p.gx1 && gy > p.gy0 && gy < p.gy1) { out.kind = p.kind; return out; }
   for (const s of cell.paths) {
     const t = clamp(((gx - s.ax) * s.vx + (gy - s.ay) * s.vy) * s.inv, 0, 1), x = gx - s.ax - s.vx * t, y = gy - s.ay - s.vy * t;
-    if (x * x + y * y < 0.0625) { out.kind = 'gravel'; return out; }
+    if (x * x + y * y < 0.0625) { out.kind = 'gravel'; out.edge = Math.sqrt(x * x + y * y) / .25; return out; }
   }
-  for (const { b: [x, y, rx, ry], k } of cell.beds) if (((gx - x) / rx) ** 2 + ((gy - y) / ry) ** 2 < 1) { out.kind = 'bed'; out.bed = k; return out; }
+  for (const { b: [x, y, rx, ry], k } of cell.beds) { const q = ((gx - x) / rx) ** 2 + ((gy - y) / ry) ** 2; if (q < 1) { out.kind = 'bed'; out.bed = k; out.edge = Math.sqrt(q); return out; } }
   return out;
 }
 for (let k = 0; k < 280; k++) {
