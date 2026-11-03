@@ -33,6 +33,7 @@ function shopWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
   return true;
 }
 function shopWindowBehind(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
+  if (shopSceneWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed)) return; // a restaurant, café, bar, market...: its room (shop-scenes.js)
   const w = SHOP_WINDOW, base = z0 + w.plinth, [su, sz] = glassSlopes(u, z), lit = open && (night > .3 || overcast > .6);
   set(i, ' ', 0);
   if (z < base) { BG[i] = C(sh.neon, .8 + L * .05 + (base - z < .004 ? .6 : 0)); return; } // the plinth's front, in its own shadow behind the glass, its lip catching the light

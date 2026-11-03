@@ -61,6 +61,7 @@
     "city/street-drains.js",
     "city/road-surface.js",
     "city/shop-windows.js",
+    "city/shop-scenes.js",
     "city/shop-shutters.js",
     "city/shopfront-kit.js",
     "city/graffiti.js",

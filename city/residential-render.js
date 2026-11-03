@@ -12,7 +12,7 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   if (sh.kind !== SHOP_APTS && sh.kind !== SHOP_NEON && along > .14 && along < width - .14 && z < .325) { // a shop's front: its own style (shopfront-kit.js)
     const w0 = .14 + Math.floor((along - .14) / .48) * .48, w1 = Math.min(w0 + .48, width - .14);
     if (architectureShutter(i, z, sh, L, d, along, w0, w1, .045, .31)) return;
-    if (d < SHOP_WINDOW.near && z > .07 && z < .27) { // up close, the display behind the glass (shop-windows.js)
+    if (d < SHOP_WINDOW.near * (shopSceneFor(sh) ? 1.6 : 1) && z > .07 && z < .27) { // up close, the display behind the glass (shop-windows.js), or a restaurant's room
       const sg = Math.sign(u * wc) || 1, ua = sg * (f.start + w0 + .03), ub = sg * (f.start + w1 - .03);
       if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .07, .27, sh, open, L, sk0(b.seed) + Math.floor(w0 * 9))) return;
     }
@@ -34,7 +34,7 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
     const w0 = .14 + Math.floor((along - .14) / .48) * .48;
     if (architectureShutter(i, z, sh, L, d, along, w0, Math.min(w0 + .48, width - .14), .045, .31)) return;
     const mullion = Math.abs(fract((along - .14) / .48) - .5) > .47;
-    if (!mullion && d < SHOP_WINDOW.near && sh.kind !== SHOP_NEON) { // up close, the display behind the glass (shop-windows.js)
+    if (!mullion && d < SHOP_WINDOW.near * (shopSceneFor(sh) ? 1.6 : 1) && (sh.kind !== SHOP_NEON || shopSceneFor(sh))) { // up close, the display behind the glass (shop-windows.js), or a restaurant's room (shop-scenes.js)
       const a0 = .14 + Math.floor((along - .14) / .48) * .48, a1 = Math.min(a0 + .48, width - .14), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + a0), ub = sg * (f.start + a1);
       if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .045, .31, sh, open, L, sk0(b.seed) + Math.floor(a0 * 9))) return;
     }

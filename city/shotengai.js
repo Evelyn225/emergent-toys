@@ -21,6 +21,7 @@ function shotengaiFront(i, u, z, sh, sk, open, L, glowL, fp = 0) {
     BG[i] = mark ? C(WHITE, 5 + L * .3) : C(NOREN[sk & 3], 2 + L * 0.15); return;
   }
   if (z < 0.24 && fs > 0.22 && fs < 0.78) { BG[i] = C(WARM, 2 + glowL * 0.15); return; } // the warm doorway
+  if (shopSceneFor(sh) && fs > 0.22 && fs < 0.78 && z > .06) { const c0 = Math.floor(u * 2) / 2; shopWindow(i, u, z, c0 + .11, c0 + .39, .06, .24, sh, open, L, sk); return; } // a restaurant or bar: its room behind the glass under the noren
   // display windows: plastic food, capsule toys, magazines, whatever they sell, on glass shelves
   if (coveGroove(z, 1 / 16, .012, fp) > .5) { BG[i] = C(GRAY, 1.5 + L * .2); return; }
   const fine = clamp(1 - fp / .05, 0, 1), item = hash(Math.floor(u * 20), Math.floor(z * 16), sk + 1);
