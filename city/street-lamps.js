@@ -23,7 +23,7 @@ function buildStreetLampModel(ax,ay,top){
     const[ax,ay,az]=A,[bx,by,bz]=B,box={...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r};
     const p=add(role,box,lampMetal,coveRayCapsule,'tube');p.fallback=fallback;
     p.lineBox={...box,hl:box.hl+.01,hw:box.hw+.01,z0:box.z0-.01,z1:box.z1+.01};
-    p.lineShade=(i,t,L)=>{if(r*2*projX/t>1.5)BG[i]=C(GRAY,.8+L*.25*1.1);set(i,courierGlyph(HIT.u,HIT.v,HIT.w,bx-ax,by-ay,bz-az),C(GRAY,L*1.1));return true;};
+    p.lineShade=(i,t,L)=>{BG[i]=C(GRAY,Math.max(.9,1+L*.3));set(i,' ',0);return true;}; // (thinner than a cell: a solid line of steel, never thinner than one)
   };
   lathe('base',0,0,0,LAMP_BASE,lampMetal);
   lathe('pole',0,0,.062,[[0,0],[0,.0105],[top-.062,.0078],[top-.062,0]],lampSteel);

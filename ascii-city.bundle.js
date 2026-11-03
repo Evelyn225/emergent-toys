@@ -14050,15 +14050,12 @@ function belleLampShade(o, i, t, L) {
   if (o.kind === 'globe') {
     const normalZ = (HIT.w - (o.z0 + o.z1) / 2) / ((o.z1 - o.z0) / 2);
     const light = 0.65 + 0.35 * Math.max(0, normalZ);
-    BG[i] = C(WHITE, 2 + L * 0.35 * light + lampsOn * 6);
-    return set(i, normalZ > 0.65 ? '.' : ':', C(WARM, Math.max(L * light, lampsOn * 15))), true;
+    BG[i] = lampsOn > .3 ? C(WARM, 8 + lampsOn * 6 * light) : C(WHITE, 2 + L * 0.35 * light + (normalZ > .65 ? .8 : 0)); // the globe: glowing after dark, its crown catching the sky by day
+    return set(i, ' ', 0), true;
   }
-  const fluted = o.kind === 'pole' || o.kind === 'finial';
-  let ch = '=';
-  if (fluted) ch = '|';
-  else if (o.kind === 'base') ch = '#';
-  BG[i] = C(GRAY, (1 + L * 0.18) * shadeFace(HIT.face));
-  return set(i, HIT.face === 5 ? '.' : ch, C(fluted ? GRAY : YEL, L * 0.85)), true;
+  const fluted = o.kind === 'pole' || o.kind === 'finial', gilt = !fluted && o.kind !== 'base'; // (the iron's bands and scrolls picked out in gold)
+  BG[i] = C(gilt ? YEL : GRAY, (gilt ? 1.6 + L * .25 : 1 + L * 0.18) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0));
+  return set(i, ' ', 0), true;
 }
 // Paired globes and ornamental ironwork remain solid and correctly foreshortened at every viewing distance.
 function drawBelleLamp(vx, vy, ax, ay) {
@@ -15088,31 +15085,26 @@ function drawCopperDome(vx, vy, base, radius, height, supportBase = base) {
 // Drawn from measurements, so the curve stays one character thick at any distance; s squashes the neck sideways
 // when the arm points toward or away from you, so it turns smoothly as you walk round it.
 function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
-  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (top - 0.09);
-  // the lantern: a cap, a glass body glowing after dark, a finial underneath
+  const lit = lampsOn > 0.3, steel = lv => (BG[i] = C(GRAY, Math.max(.9, lv)), set(i, ' ', 0), true), sl = 1 + L * .3, hx = 2 * NECK * s, lu = u - hx, lz = z - (top - 0.09);
+  // the lantern: a cap, a glass body glowing after dark, a finial underneath (all colour: far off the lamp is a billboard)
   if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < top - 0.03 && z > top - 0.14) {
-    if (z > top - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
-    if (z < top - 0.125) return set(i, 'v', steel), true;
-    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
-    return set(i, lit ? '#' : ':', lit ? C(WARM, 15) : C(GRAY, L * 0.7)), true;
+    if (z > top - 0.055) return steel(sl + (z > top - .045 ? .6 : 0));
+    if (z < top - 0.125) return steel(sl);
+    BG[i] = lit ? C(WARM, 7 + lampsOn * 7) : C(CYAN, 1 + L * .12); return set(i, ' ', 0), true;
   }
-  if (z <= top && z > top - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
+  if (z <= top && z > top - 0.03 && onLine(lu, du, 0, 0)) return steel(sl); // the drop
   const halo = Math.hypot(lu / 0.075, lz / 0.065);
   if (lit && halo < 1) { BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, " ", 0), true; } // a soft glow round it
   // the pole: a flared base, a collar, a finial on top
   if (z < top + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
-    if (z < 0.06) return set(i, z < 0.025 ? '#' : 'A', steel), true;
-    return set(i, Math.abs(z - 0.42) < Math.max(0.012, dz / 2) ? '=' : '|', steel), true;
+    if (z < 0.06) return steel(sl * .9 + (z > .05 ? .5 : 0));
+    return steel(sl + (Math.abs(z - 0.42) < Math.max(0.012, dz / 2) ? .6 : 0));
   }
   // the swan neck: the upper half of an ellipse from the pole top out to the lantern
   const w = NECK * Math.abs(s);
   if (w > du * 0.3 && z > top - dz) {
     const ex = (u - NECK * s) / w, ez = (z - top) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
-    if (Math.abs(rho - 1) < tol && ez > -tol) {
-      const ang = Math.atan2(ez, ex), tu = -w * Math.sin(ang) / du, tz = NECK * Math.cos(ang) / dz; // tangent, in cells
-      const sl = Math.abs(tz) / (Math.abs(tu) + 1e-9);
-      return set(i, sl > 2.5 ? '|' : sl < 0.4 ? '-' : tu * tz > 0 ? '/' : '\\', steel), true; // rising to the right: '/'
-    }
+    if (Math.abs(rho - 1) < tol && ez > -tol) return steel(sl + (ez > .5 ? .4 : 0));
   }
   return false;
 }
@@ -15357,14 +15349,16 @@ function drawCart(v) {
 }
 
 // a garden lamp: a post on a little plinth, a cap, and a glass globe that glows after dark
+// a post or pole as a solid steel rod (lamp posts and the like: never a line of characters)
+const postRod = (ax, ay, az, bx, by, bz, r, col = GRAY) => drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => { BG[i] = C(col, Math.max(.9, 1 + L * .3)); return set(i, ' ', 0), true; });
 function drawParkLamp(vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.3, lit = lampsOn > 0.3;
   if (d > vis) return;
   if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
-  rod(vx, vy, 0, vx, vy, top, 0.006);
+  postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.024, 0.022, (i, t, L) => {
     BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(WHITE, 1.5 + L * 0.2);
-    return set(i, lit ? ' ' : 'o', C(GRAY, L * 0.7)), true;
+    return set(i, ' ', 0), true;
   });
   drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, top + 0.046, top + 0.056), STEEL.cap);
   if (lit) drawShape(vx, vy, top - 0.04, 0.07, 0.13, (i, u, z) => {
@@ -15380,7 +15374,7 @@ function drawFairPost(o, vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.36, col = FAIR_BULBS[(Math.floor(T * 2) + Math.round(o.y)) & 3];
   if (d > vis) return;
   if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
-  rod(vx, vy, 0, vx, vy, top, 0.006);
+  postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.016, 0.016, (i, t, L) => {
     BG[i] = C(col, 2 + night * 9 + L * 0.15);
     return set(i, night > 0.3 ? ' ' : 'o', C(WHITE, Math.max(L, 6))), true;
@@ -16747,7 +16741,7 @@ function buildStreetLampModel(ax,ay,top){
     const[ax,ay,az]=A,[bx,by,bz]=B,box={...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r};
     const p=add(role,box,lampMetal,coveRayCapsule,'tube');p.fallback=fallback;
     p.lineBox={...box,hl:box.hl+.01,hw:box.hw+.01,z0:box.z0-.01,z1:box.z1+.01};
-    p.lineShade=(i,t,L)=>{if(r*2*projX/t>1.5)BG[i]=C(GRAY,.8+L*.25*1.1);set(i,courierGlyph(HIT.u,HIT.v,HIT.w,bx-ax,by-ay,bz-az),C(GRAY,L*1.1));return true;};
+    p.lineShade=(i,t,L)=>{BG[i]=C(GRAY,Math.max(.9,1+L*.3));set(i,' ',0);return true;}; // (thinner than a cell: a solid line of steel, never thinner than one)
   };
   lathe('base',0,0,0,LAMP_BASE,lampMetal);
   lathe('pole',0,0,.062,[[0,0],[0,.0105],[top-.062,.0078],[top-.062,0]],lampSteel);
@@ -46288,7 +46282,7 @@ for (const bld of ARCH_BUILDINGS) for (const f of bld.faces || []) {
 const FACADE_PIPE_MODELS=new WeakMap();
 const facadePipeWater=(i,u,z,du,dz)=>{
   if(Math.abs(u)>.006+du||fract(z*40-T*6)>.5)return false;
-  BG[i]=C(CYAN,3);return set(i,z<.004?'~':'|',C(WHITE,9)),true;
+  BG[i]=C(z<.004?WHITE:CYAN,z<.004?6:4);return set(i,' ',0),true; // the water off the shoe, a splash where it lands
 };
 function buildFacadePipeModel(p){
   const parts=[],k=PIPE,at=(a,v)=>[p.c*a+p.ax*(v-k.off),p.s*a+p.ay*(v-k.off)];
@@ -46298,7 +46292,7 @@ function buildFacadePipeModel(p){
     const [ax,ay,az]=A,[bx,by,bz]=B,box={...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r};
     const q=add(role,box,col===GRAY?paint:(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,col),coveRayCapsule,near);q.tube=true;
     q.lineBox={...box,hl:box.hl+.01,hw:box.hw+.01,z0:box.z0-.01,z1:box.z1+.01};
-    q.lineShade=(i,t,L)=>{if(r*2*projX/t>1.5)BG[i]=C(col,.8+L*.25*1.1);return set(i,courierGlyph(HIT.u,HIT.v,HIT.w,bx-ax,by-ay,bz-az),C(col,L*1.1)),true;};return q;
+    q.lineShade=(i,t,L)=>{BG[i]=C(col,Math.max(.9,1+L*.3));return set(i,' ',0),true;};return q; // (thinner than a cell: a solid line of pipe)
   };
   for(let n=1;n<p.pts.length;n++){
     const a=p.pts[n-1],b=p.pts[n];tube('pipe',[...at(0,a.out),a.z],[...at(0,b.out),b.z],k.r,GRAY,false);

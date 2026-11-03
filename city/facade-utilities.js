@@ -57,7 +57,7 @@ for (const bld of ARCH_BUILDINGS) for (const f of bld.faces || []) {
 const FACADE_PIPE_MODELS=new WeakMap();
 const facadePipeWater=(i,u,z,du,dz)=>{
   if(Math.abs(u)>.006+du||fract(z*40-T*6)>.5)return false;
-  BG[i]=C(CYAN,3);return set(i,z<.004?'~':'|',C(WHITE,9)),true;
+  BG[i]=C(z<.004?WHITE:CYAN,z<.004?6:4);return set(i,' ',0),true; // the water off the shoe, a splash where it lands
 };
 function buildFacadePipeModel(p){
   const parts=[],k=PIPE,at=(a,v)=>[p.c*a+p.ax*(v-k.off),p.s*a+p.ay*(v-k.off)];
@@ -67,7 +67,7 @@ function buildFacadePipeModel(p){
     const [ax,ay,az]=A,[bx,by,bz]=B,box={...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r};
     const q=add(role,box,col===GRAY?paint:(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,col),coveRayCapsule,near);q.tube=true;
     q.lineBox={...box,hl:box.hl+.01,hw:box.hw+.01,z0:box.z0-.01,z1:box.z1+.01};
-    q.lineShade=(i,t,L)=>{if(r*2*projX/t>1.5)BG[i]=C(col,.8+L*.25*1.1);return set(i,courierGlyph(HIT.u,HIT.v,HIT.w,bx-ax,by-ay,bz-az),C(col,L*1.1)),true;};return q;
+    q.lineShade=(i,t,L)=>{BG[i]=C(col,Math.max(.9,1+L*.3));return set(i,' ',0),true;};return q; // (thinner than a cell: a solid line of pipe)
   };
   for(let n=1;n<p.pts.length;n++){
     const a=p.pts[n-1],b=p.pts[n];tube('pipe',[...at(0,a.out),a.z],[...at(0,b.out),b.z],k.r,GRAY,false);
