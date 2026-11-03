@@ -76,12 +76,12 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
       const ch=worldText(word,HIT.v,HIT.w,t,i,vx-hx*hl,vy-hy*hl,z+top*.5,-hy,hx,2*hw/(word.length+2),Math.min(.025,top*.4));
       return set(i, ch, C(hullCol === WHITE || hullCol === YEL ? BLUE : WHITE, Math.max(L, 9))), true;
     }
-    if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35); return set(i, deck === BRICK && fract(HIT.u * 40) < 0.2 ? '=' : ' ', C(BRICK, L * 0.6)), true; }
+    if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35 - (deck === BRICK ? roadBands(HIT.u, .025, .15, t / projY) * .6 : 0)); return set(i, ' ', 0), true; } // the deck (teak in planks, the seams filtered)
     BG[i] = C(hullCol, (1.4 + L * 0.45) * (f <= 2 ? 0.75 : shadeFace(f)) * (w < top * 0.4 ? 0.7 : 1)); // (darker low down, where she curves under)
-    if (w < 0.01) { BG[i] = C(b.kind === 'ferry' ? BLUE : GRAY, 1 + L * 0.15); return set(i, moving && hash(Math.floor(HIT.u * 60 - T * 9), 1, 1501) > 0.5 ? '~' : '_', C(WHITE, L * 0.8)), true; }
-    if (w > top - 0.007) return set(i, '=', C(hullCol === WHITE ? GRAY : WHITE, L)), true;
-    if (b.kind === 'tug' && w > 0.015 && w < 0.03 && Math.abs(fract(HIT.u * 9) - 0.5) < 0.18) { BG[i] = C(GRAY, 1); return set(i, 'O', C(GRAY, L * 0.6)), true; } // tyres for fenders
-    if ((b.kind === 'cruiser' || b.kind === 'speedboat') && Math.abs(w - top * 0.55) < 0.005) return set(i, '-', C(hullCol === BLUE ? WHITE : BLUE, L)), true; // a go-faster stripe
+    if (w < 0.01) { BG[i] = moving && hash(Math.floor(HIT.u * 60 - T * 9), 1, 1501) > 0.5 ? C(WHITE, 5 + L * .3) : C(b.kind === 'ferry' ? BLUE : GRAY, 1 + L * 0.15); return set(i, ' ', 0), true; } // the boot-top, the water breaking white along it underway
+    if (w > top - 0.007) { BG[i] = C(hullCol === WHITE ? GRAY : WHITE, 2.4 + L * .35 + (w > top - .003 ? .6 : 0)); return set(i, ' ', 0), true; } // the rubbing strake along the gunwale, lit on top
+    if (b.kind === 'tug' && w > 0.015 && w < 0.03) { const fu = fract(HIT.u * 9) - 0.5, dr = Math.hypot(fu / 9, w - .0225); if (dr < .0085) { BG[i] = C(dr < .004 ? GRAY : BLACK, dr < .004 ? 1.2 : 0); return set(i, ' ', 0), true; } } // old tyres for fenders, round, a hole in each
+    if ((b.kind === 'cruiser' || b.kind === 'speedboat') && Math.abs(w - top * 0.55) < 0.005) { BG[i] = C(hullCol === BLUE ? WHITE : BLUE, 3 + L * .35); return set(i, ' ', 0), true; } // a go-faster stripe
     return set(i, ' ', 0), true;
   };
   // the hull, in slices so it curves: a transom at the stern (her name on it), the body, then the bow narrowing to a
@@ -96,37 +96,38 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
   const glass = (frame) => (i, t, L) => { // windows: dark by day with a glint, lit up warm after dark
     const f = HIT.face;
     if (f === 5 || f === 6) { BG[i] = C(WHITE, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
-    if (frame(f)) { BG[i] = C(WHITE, (1.5 + L * 0.4) * shadeFace(f)); return set(i, '|', C(GRAY, L * 0.6)), true; }
-    BG[i] = lit > 0.3 ? C(WARM, 2 + lit * 5) : C(CYAN, 1 + L * 0.12);
-    return set(i, lit > 0.3 ? ' ' : hash(Math.floor(HIT.u * 30), Math.floor(HIT.w * 40), 1503) > 0.92 ? '/' : ' ', C(WHITE, 12)), true;
+    if (frame(f)) { BG[i] = C(WHITE, (1.5 + L * 0.4) * shadeFace(f) - .4); return set(i, ' ', 0), true; } // its frame
+    BG[i] = lit > 0.3 ? C(WARM, 2 + lit * 5) : C(CYAN, 1 + L * 0.12 + (hash(Math.floor(HIT.u * 30), Math.floor(HIT.w * 40), 1503) > 0.85 ? 1.5 : 0)); // a glint of sky
+    return set(i, ' ', 0), true;
   };
   const cabin = (wy0, wy1, ports) => (i, t, L) => { // white sides, a band of windows (or round portholes)
     const f = HIT.face, w = HIT.w - z;
     BG[i] = C(WHITE, (1.5 + L * 0.42) * shadeFace(f));
-    if (f === 5) return set(i, fract(HIT.u * 20) < 0.1 ? '-' : ' ', C(GRAY, L * 0.5)), true;
+    if (f === 5) { BG[i] = C(WHITE, 1.5 + L * .42 - roadBands(HIT.u, .05, .1, t / projY) * .5); return set(i, ' ', 0), true; } // the cabin top, its seams
     if (w > wy0 && w < wy1 && f !== 6) {
-      if (ports) return Math.abs(fract(HIT.u * ports + (f <= 2 ? HIT.v * ports : 0)) - 0.5) < 0.2 ? (set(i, 'o', C(lit > 0.3 ? YEL : CYAN, Math.max(L, lit * 15))), true) : (set(i, ' ', 0), true);
-      BG[i] = lit > 0.3 ? C(WARM, 2 + lit * 5) : C(CYAN, 1 + L * 0.12);
-      return set(i, Math.abs(fract(HIT.u * 12) - 0.5) < 0.06 ? '|' : ' ', C(WHITE, L * 0.7)), true;
+      if (ports) { const pu = fract(HIT.u * ports + (f <= 2 ? HIT.v * ports : 0)) - 0.5, pw = (w - (wy0 + wy1) / 2) / (wy1 - wy0), pr = Math.hypot(pu, pw); if (pr < .3) BG[i] = pr > .22 ? C(GRAY, 3 + L * .3) : lit > 0.3 ? C(YEL, 6 + lit * 6) : C(CYAN, 1.2 + L * .15 + (pw > 0 ? .6 : 0)); return set(i, ' ', 0), true; } // round portholes in brass rings
+      BG[i] = Math.abs(fract(HIT.u * 12) - 0.5) < 0.06 ? C(WHITE, (1.5 + L * .4) * shadeFace(f) - .4) : lit > 0.3 ? C(WARM, 2 + lit * 5) : C(CYAN, 1 + L * 0.12 + (w > (wy0 + wy1) / 2 ? .5 : 0)); // the window band, its mullions
+      return set(i, ' ', 0), true;
     }
     return set(i, ' ', 0), true;
   };
-  const solidCol = (col, top) => (i, t, L) => { BG[i] = C(col, (1.3 + L * 0.4) * shadeFace(HIT.face)); return set(i, top && HIT.w - z > top ? '=' : ' ', C(GRAY, L * 0.3)), true; };
+  const solidCol = (col, top) => (i, t, L) => { BG[i] = C(col, (1.3 + L * 0.4) * shadeFace(HIT.face) + (top && HIT.w - z > top ? .6 : 0)); return set(i, ' ', 0), true; }; // (top: its cowling's lid, lit)
   if (b.kind === 'speedboat') {
     part(hl * 0.12, 0.012, hw * 0.85, fb, fb + 0.035, glass(f => f <= 2 ? false : true)); // the windscreen
-    part(-hl * 0.25, hl * 0.25, hw * 0.65, fb, fb + 0.018, (i, t, L) => { BG[i] = C(hullCol === RED ? WHITE : RED, (1.4 + L * 0.4) * shadeFace(HIT.face)); return set(i, HIT.face === 5 && fract(HIT.u * 25) < 0.2 ? '-' : ' ', C(WHITE, L * 0.5)), true; }); // the seats
+    part(-hl * 0.25, hl * 0.25, hw * 0.65, fb, fb + 0.018, (i, t, L) => { BG[i] = C(hullCol === RED ? WHITE : RED, (1.4 + L * 0.4) * shadeFace(HIT.face)); if (HIT.face === 5 && fract(HIT.u * 25) < 0.2) BG[i] = C(WHITE, 3 + L * .3); return set(i, ' ', 0), true; }); // the seats, their piping
     part(-hl - 0.012, 0.014, 0.025, 0.005, fb + 0.035, solidCol(GRAY, fb + 0.025)); // the outboard
   } else if (b.kind === 'sail' || b.kind === 'sailboat') {
     const mastU = hl * 0.18, mastTop = fb + 0.95;
     part(-hl * 0.05, hl * 0.32, hw * 0.65, fb, fb + 0.04, cabin(fb + 0.012, fb + 0.03, 10));
-    part(mastU, 0.006, 0.006, fb + 0.04, mastTop, (i, t, L) => (HIT.w - z > mastTop - 0.02 && lit > 0.3 ? set(i, '*', C(WHITE, 15)) : set(i, '|', C(GRAY, L * 1.1)), true)); // the mast, a white light on top at night
+    part(mastU, 0.006, 0.006, fb + 0.04, mastTop, (i, t, L) => (BG[i] = HIT.w - z > mastTop - 0.02 && lit > 0.3 ? C(WHITE, 15) : C(GRAY, (1.6 + L * .35) * shadeFace(HIT.face)), set(i, ' ', 0), true)); // the mast, a white light on top at night
     const sail = (u0, u1, z0, z1, aft) => { // a triangle: the mainsail tapers back from the mast, the jib forward to the bow
       const half = (u1 - u0) / 2;
       part((u0 + u1) / 2, half, 0.004, z0, z1, (i, t, L) => { // (HIT.u is from the box's middle)
         const h = (HIT.w - z - z0) / (z1 - z0), q = aft ? (half - HIT.u) / (2 * half) : (HIT.u + half) / (2 * half);
         if (q > 1 - h) return false; // outside the triangle: see-through
         BG[i] = C(WHITE, (2 + L * 0.5) * (HIT.face === 3 ? 1 : 0.85));
-        return set(i, Math.abs(fract(h * 7) - 0.5) < 0.06 ? '-' : ' ', C(GRAY, L * 0.5)), true;
+        if (Math.abs(fract(h * 7) - 0.5) < 0.06) BG[i] = C(WHITE, (1.6 + L * 0.4) * (HIT.face === 3 ? 1 : 0.85)); // the panel seams across the sail
+        return set(i, ' ', 0), true;
       });
     };
     sail(mastU - hl * 0.85, mastU - 0.008, fb + 0.07, mastTop - 0.04, true);
@@ -148,7 +149,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
   if (lit > 0.3) { // navigation lights: red to port, green to starboard
     for (const [s, col] of [[-1, RED], [1, GREEN]]) {
       const lx = vx + hx * hl * 0.45 - hy * hw * s, ly = vy + hy * hl * 0.45 + hx * hw * s;
-      dot(lx, ly, fb + z + 0.012, 0.01, i => { BG[i] = C(col, 8); return set(i, 'o', C(col, 15)), true; });
+      dot(lx, ly, fb + z + 0.012, 0.01, i => { BG[i] = C(col, 14); return set(i, ' ', 0), true; });
     }
   }
 }
@@ -216,21 +217,21 @@ function marinaSprites() {
 // down the jetty
 SOLID_SHADE.marina = o => (i, t, L) => {
   const f = HIT.face, w = HIT.w, u = HIT.u, glow = Math.max(night, overcast * 0.6);
-  if (f === 5) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, fract(u * 10) < 0.15 ? '|' : ' ', C(BLUE, L * 0.5)), true; }
+  if (f === 5) { BG[i] = C(BLUE, 1.5 + L * 0.3 + (fract(u * 10) < 0.15 ? .6 : 0)); return set(i, ' ', 0), true; } // the roof's standing seams
   BG[i] = C(WHITE, (1.4 + L * 0.4) * shadeFace(f));
-  if (w > 0.27) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, '=', C(WHITE, L * 0.5)), true; } // the eaves
+  if (w > 0.27) { BG[i] = C(BLUE, 1.5 + L * 0.3 - (w < .275 ? .6 : 0)); return set(i, ' ', 0), true; } // the eaves, their shadow under them
   if (f === 4 && w > 0.2) { // MARINA over the door
     BG[i] = C(BLUE, 2 + glow * 5);
     return set(i, signLine('MARINA', (1 - u / o.hl) / 2 * 8 - 1, (0.265 - w) / 0.06, i, 0.235, midDepth(rel(o.x - px), rel(o.y - py)), t, 2 * o.hl / 8, 0.06, farDepth(rel(o.x - px), rel(o.y - py), o.hl), -o.c, -o.s) || ' ', C(WHITE, 15)), true;
   }
-  if (f === 4 && Math.abs(u) < 0.07 && w < 0.19) { BG[i] = C(BLUE, 1 + L * 0.1); return set(i, Math.abs(u) > 0.06 ? '|' : w > 0.18 ? '-' : ' ', C(WHITE, L)), true; } // the door
+  if (f === 4 && Math.abs(u) < 0.07 && w < 0.19) { BG[i] = Math.abs(u) > 0.06 || w > 0.18 ? C(WHITE, 2.4 + L * .35) : C(BLUE, 1 + L * 0.1 + (Math.abs(u) < .002 ? -.4 : 0)); return set(i, ' ', 0), true; } // the door in its white frame
   if ((f === 3 || f === 4) && Math.abs(Math.abs(u) - 0.3) < 0.08 && Math.abs(w - 0.13) < 0.045) { // windows
-    BG[i] = glow > 0.3 ? C(WARM, 2 + glow * 5) : C(CYAN, 1 + L * 0.12);
-    return set(i, Math.abs(Math.abs(u) - 0.3) < 0.006 ? '|' : ' ', C(WHITE, L)), true;
+    BG[i] = Math.abs(Math.abs(u) - 0.3) < 0.006 ? C(WHITE, 2.4 + L * .35) : glow > 0.3 ? C(WARM, 2 + glow * 5) : C(CYAN, 1 + L * 0.12 + (w > .14 ? .5 : 0)); // the glass, its glazing bar
+    return set(i, ' ', 0), true;
   }
-  return set(i, fract(w * 30) < 0.18 ? '-' : ' ', C(GRAY, L * 0.5)), true; // the clapboard
+  BG[i] = C(WHITE, (1.4 + L * 0.4) * shadeFace(f) - (fract(w * 30) < 0.18 ? .6 : 0)); return set(i, ' ', 0), true; // the clapboard, each board's lap in shadow
 };
-SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 5 ? 'o' : '|', C(GRAY, L)), true; };
+SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, (1 + L * 0.25) * shadeFace(HIT.face) + (HIT.face === 5 ? .7 : 0)); return set(i, ' ', 0), true; }; // cast iron, its cap catching the light
 // where the camera goes out on the water: behind and above the boat (easing round), or at the helm
 function seaCam(dt, chase) {
   const b = sea, k = BOAT_KINDS[b.kind];
