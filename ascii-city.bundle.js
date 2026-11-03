@@ -13652,7 +13652,7 @@ function shopSceneWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
 //   works    a concrete-framed works: columns and floor beams, every bay filled with a steel window, odd panes open
 // Open shops keep their roll-up doors rolled away (a restaurant's room, a garage's lift, a store's racking behind them:
 // shop-scenes.js); shut ones show their shutters. Everything is colour. u along the wall, z up it, both in city units.
-const INDUSTRIAL_KINDS = ['shed', 'mill', 'cold', 'works', 'shed', 'mill'];
+const INDUSTRIAL_KINDS = ['shed', 'shed', 'shed', 'shed', 'shed', 'shed'];
 const INDUSTRIAL_NAMES = {
   shed: ['EAGLE FREIGHT', 'PIER 9 STORAGE', 'HARBOR SUPPLY', 'BAYSIDE HAULAGE', 'GULL LINE CARGO'],
   mill: ['UNION MILLS', 'NORTHERN WOOLEN CO', 'HALE & SONS', 'ACME BISCUIT CO', 'STAR CORDAGE'],
@@ -13663,11 +13663,11 @@ const industrialKind = sk => INDUSTRIAL_KINDS[sk % INDUSTRIAL_KINDS.length];
 const industrialName = (kind, sk) => { const n = INDUSTRIAL_NAMES[kind]; return n[(sk >> 3) % n.length]; };
 // steel-framed multi-pane glass: its muntins filtered, the sky in it by day, warm after dark when lit; some panes open
 function industrialGlass(i, a, z, pw, ph, lit, L, fp, seed) {
-  const mu = Math.max(facadeLine(Math.abs(fract(a / pw) - .5) * pw - pw / 2 + .002, .004, fp), facadeLine(Math.abs(fract(z / ph) - .5) * ph - ph / 2 + .002, .004, fp));
+  const mu = Math.max(facadeLine(pw / 2 - Math.abs(fract(a / pw) - .5) * pw, .007, fp), facadeLine(ph / 2 - Math.abs(fract(z / ph) - .5) * ph, .007, fp)); // (distance to the nearest glazing bar)
   if (mu > .5) { BG[i] = C(GRAY, 1.2 + L * .2); return; }
   const pane = hash(Math.floor(a / pw), Math.floor(z / ph), seed);
   if (pane > .975) { BG[i] = C(GRAY, 1); return; } // a pane hinged open, the dark behind it
-  BG[i] = lit ? C(WARM, 3 + night * 3 + pane * .8) : C(CYAN, 1 + day * 1.2 + L * .08 + (pane > .8 ? .5 : 0) + (z / ph % 1 > .7 ? .3 : 0)); // (the odd pane a different age of glass; the sky in each pane's top)
+  BG[i] = lit ? C(WARM, 3 + night * 3 + pane * .8 - mu * 2) : C(CYAN, 1 + day * 1.2 + L * .08 + (pane > .8 ? .5 : 0) + (z / ph % 1 > .7 ? .3 : 0) - mu * 2); // (the odd pane a different age of glass; the sky in each pane's top; bars thinner than a cell darken it)
 }
 // a painted name across the wall; true if this cell is a letter (wallText draws it)
 function industrialSign(i, u, uStep, z, d, word, wc, zc, band, fg, bg) {
@@ -13699,13 +13699,13 @@ function industrialWall(i, u, uStep, z, h, d, wc, sh, sk, L, open) {
       if (zf < top && zf > (ground ? 0 : .04)) { const brace = Math.abs((fu - .28) / .44 - (zf / top)) < .05 || Math.abs(fu - .5) < .008; BG[i] = C(GREEN, (1.6 + L * .25) * (brace ? 1.25 : 1) - (fract(fu * 30) < .15 ? .3 : 0)); return true; }
     }
     // tall arched windows: segmental heads of brick, stone sills, steel-framed glass
-    const zf = ground ? z - .06 : (z - .4) % (1 / 3) - .05, wh = ground ? .26 : .22, half = .15, du = (fu - .5) * .5, arch = wh - half * .35 + Math.sqrt(Math.max(0, half * half - du * du)) * .35;
-    if (!mid && Math.abs(du) < half * .5 && zf > 0 && zf < arch) {
-      if (zf > arch - .012) { BG[i] = C(BRICK, 1.2 + L * .18); return true; } // the arch's soldier course
-      if (sh && shopSceneFor(sh) && ground && open && d < SHOP_WINDOW.near * 1.6) { const c0 = Math.floor(u * 2) / 2; return shopWindow(i, u, z, c0 + .175, c0 + .325, .06, .06 + arch - .012, sh, open, L, sk + bay), true; }
-      industrialGlass(i, du, zf, .025, .03, lit(bay + Math.floor(z * 3) * 17), L, fp, sk + bay); return true;
+    const zf = ground ? z - .06 : (z - .4) % (1 / 3) - .05, wh = ground ? .22 : .18, half = .085, du = (fu - .5) * .5, arch = wh + Math.sqrt(Math.max(0, (half * .9) ** 2 - du * du)) * .7; // (a round head over the tall window)
+    if (!mid && Math.abs(du) < half * .9 && zf > 0 && zf < arch) {
+      if (zf > arch - .016) { BG[i] = C(BRICK, 1 + L * .14 + (zf > arch - .006 ? .5 : 0)); return true; } // the arch's ring of headers, in shadow under the lit top
+      if (sh && shopSceneFor(sh) && ground && open && d < SHOP_WINDOW.near * 1.6) { const c0 = Math.floor(u * 2) / 2; return shopWindow(i, u, z, c0 + .25 - half * .45, c0 + .25 + half * .45, .06, .06 + wh, sh, open, L, sk + bay), true; }
+      industrialGlass(i, du, zf, .038, .042, lit(bay + Math.floor(z * 3) * 17), L, fp, sk + bay); return true;
     }
-    if (!mid && Math.abs(du) < half * .58 && zf > -.012 && zf <= 0) { BG[i] = C(STONE, 2.2 + L * .3 + (zf > -.004 ? .6 : 0)); return true; } // the sill
+    if (!mid && Math.abs(du) < half * 1.05 && zf > -.014 && zf <= 0) { BG[i] = C(STONE, 2.2 + L * .3 + (zf > -.004 ? .6 : 0)); return true; } // the sill
     brickFace(i, u, z, BRICK, L * .9, fp, sk); return true;
   }
   if (kind === 'cold') {
