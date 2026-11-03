@@ -281,7 +281,7 @@ test('combos need you moving: a trick landed standing still scores alone, stoppi
   SK.score=0;land(.5,'kickflip');land(.5,'heelflip');SK.v=.05;SK.lastT=T;stepSkate(0);out.stopped={combo:!!SK.combo,score:SK.score};
   SK.score=0;land(.5,'kickflip');land(.05,'heelflip');out.standAfter={combo:!!SK.combo,score:SK.score};
   // the bar is drawn under the trick
-  land(.5,'kickflip');say('KICKFLIP!  100',2);const fill=g.fillRect,bars=[];g.fillRect=function(x,y,w,h){if(h===4)bars.push(w);return fill.apply(this,arguments);};try{hud();}finally{g.fillRect=fill;}out.drawn=bars.length;
+  land(.5,'kickflip');say('KICKFLIP!  100',2);const ft=g.fillText,bars=[];g.fillText=function(t,...z){if(/^\[[#-]+\]$/.test(t))bars.push(t);return ft.call(this,t,...z);};try{hud();}finally{g.fillText=ft;}out.drawn=bars.length;out.barText=bars[0]; // (the bar as text: [####----])
   fx.skating=false;return out;
  });
  assert.ok(r.standing.score>0&&!r.standing.combo,'standing: scored, no combo '+JSON.stringify(r.standing));
