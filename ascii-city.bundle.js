@@ -13083,7 +13083,16 @@ function floorBaseCell(i, r, x, rx, ry) {
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
-    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (surf) BG[i] = C(gl > .35 ? WARM : surf[0], Math.max(surf[1], gl * 5)); else if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
+    if (gl > 0) {
+      col = C(WARM, Math.max(L * k, gl * 13)); LAMPL[i] = gl * 13;
+      if (surf) { // a lamp's pool: light over the ground, not a disc painted on it. Its texture stays (the level is added to, not
+        // replaced), the warm comes in through an ordered dither (thick under the lamp, thinning out to nothing at
+        // its edge, so it falls off instead of ending in a ring), and where it dies away a few warm glints of '.' and ',' (those anchored to the ground)
+        const th = BAYER[(r & 3) * 4 + (x & 3)], warm = th < gl * 1.15 - .08; // (ordered on the screen: an even fine pattern near and far)
+        BG[i] = C(warm ? WARM : surf[0], Math.min(15, surf[1] * (warm ? .8 : 1) + gl * (warm ? 6 : 3.5)));
+        if (gl > .06 && gl < .4 && th > .82 + gl * .3 && hash(Math.floor(wx * 34), Math.floor(wy * 34), 771) > .45) { ch = th > .92 ? ',' : '.'; col = C(WARM, 5 + gl * 12); }
+      } else if (ch === ' ') ch = '.';
+    }
   }
   { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
   if (gunLit()) { const mf = muzzleGlow(wx, wy); if (mf > 0.02) { col = C(mf > 0.4 ? WHITE : YEL, Math.max(L * k, 5 + mf * 10)); BG[i] = C(ORANGE, 1 + mf * 6); if (ch === ' ') ch = '.'; } } // a shot's flash (gun-ui.js)
