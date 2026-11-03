@@ -172,6 +172,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   if (sty === 24) return belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL);
+  if (sty === 8 && !(z < .4 && z > .28 && shopfrontFace(side, mx, my, h)?.fascia) && industrialFacade(i, u, uStep, z, h, d, side, mx, my, wc, sh, sk, L, glowL, open)) return; // the docks and yards: shed, mill, cold store or works (industrial-facades.js)
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
@@ -217,7 +218,9 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
           if (d < SHOP_WINDOW.near * 1.6) return void shopWindow(i, u, z, w0 + 0.15, w0 + 1.1, 0.03, 0.265, sh, open, L, sk + Math.floor(u * 0.8));
           set(i, ' ', 0); BG[i] = C(WARM, 1.6 + L * .15 + Math.max(night, overcast * .6) * 3); return; // (far off: the glass warm with its light)
         }
-        BG[i] = C(ORANGE, 1.4 + L * .2 - coveGroove(z, 1 / 40, .008, fpG) * .9); return set(i, ' ', 0); // a roll-up door, open, its slats filtered
+        if (z > .27) { set(i, ' ', 0); BG[i] = C(ORANGE, 1.4 + L * .2 - coveGroove(z, 1 / 40, .008, fpG) * .9); return; } // the roll-up door, rolled up into its head
+        if (d < SHOP_WINDOW.near * 1.6) return void warehouseInside(i, u, z, sh, open, L, sk, fd); // the door up: the racking inside (industrial-facades.js)
+        set(i, ' ', 0); BG[i] = C(GRAY, .8 + L * .08 + Math.max(night, overcast * .6) * 1.5); return; // (far off: the dark of the shed, its lights after dark)
       }
       BG[i] = C(GRAY, 1.6 + L * .25); return set(i, ' ', 0); // the piers between the doors
     }
