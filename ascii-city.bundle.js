@@ -29594,6 +29594,7 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
+  if (BACKROOMS_SEAM) land.push(['Backrooms entrance', () => devAt(BACKROOMS_SEAM.x - 0.4, BACKROOMS_SEAM.y, 0)]); // (in the lane, facing the seam: walk forward to go through)
   if(FERRY_STOPS.length) {
     land.push(['Island ferry terminal',()=>devAt(...FERRY_STOPS[0].land,Math.PI/2)]);
     land.push(['Island ferry (aboard)',()=>{
