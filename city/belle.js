@@ -85,15 +85,12 @@ function belleLampShade(o, i, t, L) {
   if (o.kind === 'globe') {
     const normalZ = (HIT.w - (o.z0 + o.z1) / 2) / ((o.z1 - o.z0) / 2);
     const light = 0.65 + 0.35 * Math.max(0, normalZ);
-    BG[i] = C(WHITE, 2 + L * 0.35 * light + lampsOn * 6);
-    return set(i, normalZ > 0.65 ? '.' : ':', C(WARM, Math.max(L * light, lampsOn * 15))), true;
+    BG[i] = C(WHITE, lampsOn > .3 ? 7 + lampsOn * 7 * light : 2 + L * 0.35 * light + (normalZ > .65 ? .8 : 0)); // the opal globe: glowing white after dark, its crown catching the sky by day
+    return set(i, ' ', 0), true;
   }
-  const fluted = o.kind === 'pole' || o.kind === 'finial';
-  let ch = '=';
-  if (fluted) ch = '|';
-  else if (o.kind === 'base') ch = '#';
-  BG[i] = C(GRAY, (1 + L * 0.18) * shadeFace(HIT.face));
-  return set(i, HIT.face === 5 ? '.' : ch, C(fluted ? GRAY : YEL, L * 0.85)), true;
+  const fluted = o.kind === 'pole' || o.kind === 'finial', gilt = !fluted && o.kind !== 'base'; // (the iron's bands and scrolls picked out in gold)
+  BG[i] = C(gilt ? YEL : GRAY, (gilt ? 1.6 + L * .25 : 1 + L * 0.18) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0));
+  return set(i, ' ', 0), true;
 }
 // Paired globes and ornamental ironwork remain solid and correctly foreshortened at every viewing distance.
 function drawBelleLamp(vx, vy, ax, ay) {
