@@ -12847,7 +12847,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
-    if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
+    if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L, d); // a gas station's forecourt (gas-render.js)
     if (kind === 'gardens' && inGardens(wx, wy)) {
       const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
@@ -19529,13 +19529,14 @@ Object.assign(SOLID_SHADE, {
     const f = HIT.face, st = o.st, lit = gasLights();
     if (f === 6) {
       const du = Math.min(...[-0.7, 0, 0.7].map(c => Math.abs(HIT.u - c))), dv = Math.min(...GAS.lanes.map(l => Math.abs(HIT.v - l + 0.95)));
-      if (du < 0.11 && dv < 0.06) { BG[i] = C(WHITE, 6 + lit * 9); return set(i, du > 0.095 || dv > 0.048 ? '+' : ' ', C(GRAY, 9)), true; }
-      BG[i] = C(WHITE, 1.4 + L * 0.15 + lit * 2.5);
-      return set(i, fract(HIT.u * 5) < 0.06 || fract(HIT.v * 5) < 0.06 ? '+' : ' ', C(GRAY, 4 + L * 0.3)), true;
+      if (du < 0.11 && dv < 0.06) { BG[i] = du > 0.095 || dv > 0.048 ? C(GRAY, 2 + L * .2) : C(WHITE, 6 + lit * 9); return set(i, ' ', 0), true; } // a light panel in its housing
+      const fp = t / projY, j = Math.max(coveGroove(HIT.u, .2, .012, fp), coveGroove(HIT.v, .2, .012, fp)); // the soffit's panels, their joints filtered
+      BG[i] = C(WHITE, 1.4 + L * 0.15 + lit * 2.5 - j * .8);
+      return set(i, ' ', 0), true;
     }
-    if (f === 5) { BG[i] = C(GRAY, 1.6 + L * 0.3); return set(i, fract(HIT.u * 3) < 0.04 ? '=' : ' ', C(GRAY, L * 0.5)), true; }
+    if (f === 5) { BG[i] = C(GRAY, 1.6 + L * 0.3 + roadLine(Math.abs(fract(HIT.u * 3 + .5) - .5) / 3, .012, t / projY) * .7); return set(i, ' ', 0), true; } // the roof deck's seams
     const w = HIT.w;
-    if (w > 0.495 || w < 0.445) { BG[i] = C(WHITE, (2.6 + L * 0.3 + lit * 2) * shadeFace(f)); return set(i, w < 0.445 && w > 0.437 ? '_' : ' ', C(GRAY, 6)), true; }
+    if (w > 0.495 || w < 0.445) { BG[i] = C(WHITE, (2.6 + L * 0.3 + lit * 2) * shadeFace(f) - (w < 0.445 && w > 0.437 ? 1 : 0) + (w > .505 ? .6 : 0)); return set(i, ' ', 0), true; } // the fascia: lit along its top, a drip edge in shadow
     BG[i] = C(st.col, 2.6 + L * 0.25 + lit * 3);
     if (f !== 3) { // (not on the side over the shop)
       const ch = gasFaceText(o, st.brand, i, t, ...R(o.x, o.y), 0.47, 0.045, 0.07);
@@ -19545,7 +19546,7 @@ Object.assign(SOLID_SHADE, {
   },
   // an island: a kerb painted in yellow and black hazard stripes, concrete on top
   gasisle: () => (i, t, L) => {
-    if (HIT.face === 5) { BG[i] = C(GRAY, 1.6 + L * 0.25); return set(i, '.', C(GRAY, L * 0.6)), true; }
+    if (HIT.face === 5) { BG[i] = C(GRAY, 1.8 + L * 0.27); return set(i, ' ', 0), true; }
     const s = fract((HIT.face <= 2 ? HIT.v : HIT.u) * 12 + HIT.w * 12) < 0.5;
     BG[i] = C(s ? YEL : GRAY, s ? 2.5 + L * 0.3 : 0.6); return set(i, ' ', 0), true;
   },
@@ -19555,8 +19556,8 @@ Object.assign(SOLID_SHADE, {
   gaspump: o => (i, t, L) => {
     const f = HIT.face, w = HIT.w, st = o.st, k = shadeFace(f);
     if (f === 5) { BG[i] = C(st.col, 2.5 + L * 0.3); return set(i, ' ', 0), true; }
-    if (w > 0.17) { BG[i] = C(st.col, (2.4 + L * 0.3) * k); return set(i, w > 0.193 ? '_' : ' ', C(WHITE, 10)), true; } // the lit header
-    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, (1.8 + L * 0.3) * k); return set(i, fract(w * 30) < 0.2 ? '-' : ' ', C(GRAY, L * 0.5)), true; }
+    if (w > 0.17) { BG[i] = C(st.col, (2.4 + L * 0.3) * k + (w > .193 ? 1.2 : 0)); return set(i, ' ', 0), true; } // the lit header, its top edge glowing
+    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, (1.8 + L * 0.3) * k - roadBands(w, 1 / 30, .2, t / projY) * .8); return set(i, ' ', 0), true; } // louvres down the sides
     const l = o.isle + (f === 3 ? 1 : 0), c = GAS_FILLING[st.k] && GAS_FILLING[st.k][l], busy = c && GAS_FILL[l][0] === o.isle;
     const q = (f === 3 ? HIT.u : -HIT.u) / o.hl; // -1..1 across the face, left to right as you look at it
     if (w > 0.115 && Math.abs(q) < 0.8) { // the display
@@ -19568,16 +19569,18 @@ Object.assign(SOLID_SHADE, {
     }
     if (w > 0.075 && w < 0.1 && Math.abs(q) < 0.6) { // the grade buttons
       const b = Math.floor((q + 0.6) / 0.4); BG[i] = C([YEL, GREEN, BLUE][b] ?? GRAY, 3 + L * 0.2);
-      return set(i, fract((q + 0.6) / 0.4) < 0.2 ? '|' : ' ', C(GRAY, 4)), true;
+      if (fract((q + 0.6) / 0.4) < 0.2) BG[i] = C(GRAY, 1.2); // (between the buttons)
+      return set(i, ' ', 0), true;
     }
     if (q > 0.62 && w > 0.04 && w < 0.115) { // the holster, and the nozzle in it unless it's out filling a car
-      BG[i] = C(GRAY, 1.2);
-      return set(i, busy ? ' ' : w > 0.09 ? 'J' : '|', C(busy ? GRAY : BLUE, 12)), true;
+      const nz = !busy && (w > 0.09 ? Math.abs(q - .8) < .12 : Math.abs(q - .74) < .05); // the nozzle: its grip, and the spout down into the holster
+      BG[i] = nz ? C(BLUE, 6 + L * .3 + (w > .1 ? .8 : 0)) : C(GRAY, 1.2);
+      return set(i, ' ', 0), true;
     }
-    BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2.2 + L * 0.3) * k);
-    return set(i, w < 0.03 ? '#' : ' ', C(st.col, L)), true;
+    BG[i] = w < 0.03 ? C(st.col, (2 + L * .3) * k) : C(f === 3 || f === 4 ? WHITE : GRAY, (2.2 + L * 0.3) * k); // the kick plate in the brand's colour
+    return set(i, ' ', 0), true;
   },
-  gaspost: () => (i, t, L) => { BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, '|', C(GRAY, L * 0.7)), true; },
+  gaspost: () => (i, t, L) => { BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; },
   // the price sign: the brand at the top, the three grades below in lit red digits, both faces
   gassign: o => (i, t, L) => {
     const f = HIT.face, w = HIT.w, st = o.st, lit = Math.max(gasLights(), 0.35);
@@ -19590,7 +19593,7 @@ Object.assign(SOLID_SHADE, {
     }
     BG[i] = C(GRAY, 0.6 + lit * 0.6);
     const row = Math.floor((0.565 - w) / 0.075), p = gasPrices(st)[row];
-    if (!p || Math.abs(HIT.u) > o.hl - 0.012 || w < 0.34) return set(i, w < 0.345 ? '=' : '|', C(WHITE, L)), true; // the frame
+    if (!p || Math.abs(HIT.u) > o.hl - 0.012 || w < 0.34) { BG[i] = C(WHITE, 2.4 + L * .3); return set(i, ' ', 0), true; } // the frame
     const ch = gasFaceText(o, p, i, t, vx, vy, 0.53 - row * 0.075, 0.045, 0.036);
     return set(i, ch && ch !== ' ' ? ch : ' ', C(ch && ch >= 'A' ? WHITE : RED, 15)), true;
   },
@@ -19598,7 +19601,7 @@ Object.assign(SOLID_SHADE, {
   gasice: o => (i, t, L) => {
     const f = HIT.face;
     BG[i] = C(WHITE, (2.6 + L * 0.3) * shadeFace(f));
-    if (f === 5) return set(i, '-', C(CYAN, 8)), true;
+    if (f === 5) { BG[i] = C(hash(Math.floor(HIT.u * 60), Math.floor(HIT.v * 60), 874) > .6 ? WHITE : CYAN, 4 + L * .3); return set(i, ' ', 0), true; } // frost on the lid
     if (f === 4) { const ch = gasFaceText(o, 'ICE', i, t, ...R(o.x, o.y), 0.05, 0.05, 0.06); if (ch && ch !== ' ') return set(i, ch, C(BLUE, 14)), true; }
     return set(i, ' ', 0), true;
   },
@@ -19606,18 +19609,16 @@ Object.assign(SOLID_SHADE, {
 
 // the forecourt: concrete slabs, oil where the cars stand, yellow hatching in front of the shop door; shaded under the
 // canopy by day, lit up white under it after dark
-function gasFloor(i, r, x, wx, wy, f, L) {
-  const st = gasStationAt(wx, wy), lx = rel(wx - st.x0), ly = rel(wy - st.y0);
+function gasFloor(i, r, x, wx, wy, f, L, d) {
+  const st = gasStationAt(wx, wy), lx = rel(wx - st.x0), ly = rel(wy - st.y0), fp = homeBalconyPavingFootprint(d, eye);
   const out = Math.hypot(Math.max(0, 0.45 - lx, lx - 2.55), Math.max(0, 0.07 - ly, ly - 1.83)), under = out === 0;
-  const lit = gasLights() * clamp(1 - out / 0.45, 0, 1);
-  let ch = (r + x) & 1 ? '.' : ' ', col = GRAY, k = 1;
-  if (fract(lx * 2) < 0.025 || fract(ly * 2) < 0.025) ch = '+'; // the joints between slabs
-  else if (GAS.lanes.some(l => Math.abs(ly - l) < 0.07) && Math.abs(lx - GAS.slotX) < 0.16 && noise(wx * 7, wy * 7, 87) > 0.52) { ch = '%'; k = 0.55; } // oil
-  if (ly > 1.86 && Math.abs(lx - 1.5) < 0.3) { ch = fract((lx + ly) * 7) < 0.45 ? '/' : ' '; col = YEL; k = 1.3; }
-  const glowL = lit * 12;
-  set(i, ch, C(col === GRAY && glowL > L ? WHITE : col, Math.max(L * k * (under ? 0.7 : 1), glowL * k)));
-  BG[i] = glowL > 2 ? C(WHITE, 1 + lit * 2.4) : bgAt(GRAY, day * 2.2 * f * (under ? 0.5 : 1));
-  LAMPL[i] = glowL;
+  const lit = gasLights() * clamp(1 - out / 0.45, 0, 1), base = Math.max(L * roadDark() * .44 * (under ? .7 : 1), lit * 6.5);
+  // concrete slabs, their joints filtered; oil where the cars stand; yellow hatching in front of the door; white under the canopy after dark
+  const j = Math.max(coveGroove(lx, .5, .012, fp), coveGroove(ly, .5, .012, fp));
+  let bg = C(lit > .3 ? WHITE : GRAY, base * (1 - j * .3) + (hash(Math.floor(wx * 40), Math.floor(wy * 40), 88) - .5) * .4 * clamp(1 - fp / .02, 0, 1));
+  if (GAS.lanes.some(l => Math.abs(ly - l) < 0.07) && Math.abs(lx - GAS.slotX) < 0.16 && noise(wx * 7, wy * 7, 87) > 0.52) bg = C(GRAY, base * .55); // oil
+  if (ly > 1.86 && Math.abs(lx - 1.5) < 0.3 && roadBands(lx + ly, 1 / 7, .45, fp) > .5) bg = C(YEL, Math.max(3, base * 1.1));
+  set(i, ' ', 0); BG[i] = bg; LAMPL[i] = lit * 12;
 }
 
 // the shop: a low box along the back of the forecourt. Its front (facing the pumps): glass between steel columns,
@@ -19628,7 +19629,8 @@ function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const front = side && rel(py - my) < 0, s = Math.abs(u - wc) < 1e-6 ? 1 : -1; // (u is wc, or -wc)
   const a = front ? worldCoord(wc - st.x0) : worldCoord(wc - st.y0 - 2); // along the face, from its west / north end
   BG[i] = bgAt(front ? WHITE : BRICK, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
-  if (z > h - 0.025) return set(i, '=', C(GRAY, L));
+  const fp = uStep;
+  if (z > h - 0.025) { BG[i] = C(GRAY, 1.6 + L * .3 + (z > h - .01 ? .7 : 0)); return set(i, ' ', 0); } // the coping
   if (z > 0.29) { // the fascia
     BG[i] = C(st.col, 2 + L * 0.2 + night * 3);
     if (front && wallText(i, u, uStep, z, d, 'FOOD MART', s * (wc - a + 1.5), 0.335, 0.07, 0.06, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
@@ -19636,26 +19638,29 @@ function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, ' ', 0);
   }
   if (!front) { // the side: brick, a door, a poster for the car wash
-    if (Math.abs(a - 0.5) < 0.1 && z < 0.24) { BG[i] = C(CYAN, 1.5 + night * 2); return set(i, Math.abs(a - 0.5) > 0.085 ? '|' : z > 0.22 ? '=' : ':', C(WHITE, glow)); }
-    if (Math.abs(a - 0.8) < 0.09 && z > 0.1 && z < 0.24) { BG[i] = C(BLUE, 2.5); if (wallText(i, u, uStep, z, d, 'CAR WASH', s * (wc - a + 0.8), 0.19, 0.02, 0.03, C(WHITE, 14), C(BLUE, 2.5))) return; return set(i, z < 0.15 && fract(a * 40) < 0.5 ? '~' : ' ', C(CYAN, 12)); }
-    return set(i, fract(a * 12 + (Math.floor(z * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+    if (Math.abs(a - 0.5) < 0.1 && z < 0.24) { BG[i] = Math.abs(a - 0.5) > 0.085 || z > 0.22 ? C(GRAY, 2.4 + L * .25) : C(CYAN, 1.5 + night * 2 + (z > .17 ? .6 : 0)); return set(i, ' ', 0); } // the side door: its frame, glass with the sky in its top
+    if (Math.abs(a - 0.8) < 0.09 && z > 0.1 && z < 0.24) { BG[i] = C(BLUE, 2.5); if (wallText(i, u, uStep, z, d, 'CAR WASH', s * (wc - a + 0.8), 0.19, 0.02, 0.03, C(WHITE, 14), C(BLUE, 2.5))) return; if (z < 0.15) BG[i] = C(fract(a * 40 + z * 30) < 0.5 ? CYAN : BLUE, 4); return set(i, ' ', 0); } // (bubbles under the lettering)
+    brickFace(i, a, z, BRICK, L * .6, fp, st.k); return set(i, ' ', 0);
   }
-  if (a < 0.08 || a > 2.92 || Math.abs(a - 1.2) < 0.03 || Math.abs(a - 1.8) < 0.03) return set(i, '|', C(GRAY, L * 1.2)); // the columns
-  if (z < 0.035) return set(i, '_', C(GRAY, L)); // the kerb along its foot
+  if (a < 0.08 || a > 2.92 || Math.abs(a - 1.2) < 0.03 || Math.abs(a - 1.8) < 0.03) { const e = a < .08 ? a / .08 : a > 2.92 ? (3 - a) / .08 : 1 - Math.min(Math.abs(a - 1.2), Math.abs(a - 1.8)) / .03; BG[i] = C(GRAY, 1.8 + L * .3 + (e > .5 ? .6 : -.3)); return set(i, ' ', 0); } // the steel columns, round: lit down their middles
+  if (z < 0.035) { BG[i] = C(GRAY, 1.6 + L * .25 + (z > .028 ? .6 : 0)); return set(i, ' ', 0); } // the kerb along its foot
   if (Math.abs(a - 1.5) < 0.27) { // the sliding doors: glass, a seam down the middle, OPEN 24 HRS on them
     BG[i] = C(CYAN, 1.5 + night * 2.5);
-    if (z > 0.25) return set(i, '=', C(GRAY, L));
+    if (z > 0.25) { BG[i] = C(GRAY, 1.8 + L * .3); return set(i, ' ', 0); } // the door head
     if (wallText(i, u, uStep, z, d, 'OPEN 24H', s * (wc - a + 1.5), 0.2, 0.03, 0.035, C(RED, 15), C(CYAN, 1.5 + night * 2.5))) return;
-    return set(i, Math.abs(a - 1.5) < 0.006 ? '|' : ' ', C(GRAY, 8));
+    if (Math.abs(a - 1.5) < 0.006) BG[i] = C(GRAY, 2.4 + L * .25); else if (z > .19) BG[i] = C(CYAN, 2 + night * 2.5 + day * .6); // the meeting stiles; the sky in the glass's top
+    return set(i, ' ', 0);
   }
-  if (z > 0.265) return set(i, '-', C(GRAY, L)); // the frame over the glass
+  if (z > 0.265) { BG[i] = C(GRAY, 1.8 + L * .3); return set(i, ' ', 0); } // the frame over the glass
   // the windows: shelves of snacks lit up behind them, posters stuck to the glass
   BG[i] = C(WARM, 1.2 + night * 2.5);
   const pane = Math.floor(a / 0.6), poster = hash(pane, st.k, 871) > 0.5 && fract(a / 0.6) > 0.25 && fract(a / 0.6) < 0.7 && z > 0.13 && z < 0.23;
-  if (poster) { const col = [RED, YEL, BLUE, GREEN][hash(pane, st.k, 872) * 4 | 0]; BG[i] = C(col, 3); return set(i, fract(z * 40) < 0.3 ? '=' : ' ', C(WHITE, 12)); }
-  if (fract(z / 0.06) < 0.18) return set(i, '_', C(GRAY, glow * 0.7)); // the shelves
+  if (poster) { const col = [RED, YEL, BLUE, GREEN][hash(pane, st.k, 872) * 4 | 0]; BG[i] = fract(z * 40) < 0.3 ? C(WHITE, 8) : C(col, 4); return set(i, ' ', 0); } // a poster: bold lines of print on a colour
+  const sh = fract(z / 0.06);
+  if (sh < 0.18) { BG[i] = C(GRAY, 2 + night * 2 + (sh > .12 ? .8 : 0)); return set(i, ' ', 0); } // the shelves, their lips lit
   const g = hash(Math.floor(a * 30), Math.floor(z / 0.06), st.k + 873);
-  return set(i, g < 0.3 ? ' ' : 'o#=@%'[g * 50 % 5 | 0], C(ITEM_COL[g * 97 % 8 | 0], glow * 0.8));
+  if (g >= 0.3) BG[i] = C(ITEM_COL[g * 97 % 8 | 0], 2.5 + night * 3 + (sh > .7 ? .8 : 0)); // goods on them, lit along their tops
+  return set(i, ' ', 0);
 }
 
 // before the solids: who's filling up where (for the pumps' displays), and the drivers out at the pumps, the hose from

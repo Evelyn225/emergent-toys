@@ -634,7 +634,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
-    if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
+    if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L, d); // a gas station's forecourt (gas-render.js)
     if (kind === 'gardens' && inGardens(wx, wy)) {
       const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
