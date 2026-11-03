@@ -792,27 +792,30 @@ function beamOnWater(wx, wy) { // how brightly the beam lights the sea at (wx, w
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
 // platforms at stations) seen from up there. ly = across the deck, 0..2*EL_HALF
 function slabFace(i, wx, wy, below, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = worldCoord(wy) - EL_Y0, W = EL_HALF * 2;
-  if (below) {
-    BG[i] = C(GRAY, 1);
-    if (Math.abs(ly - W / 2) < 0.06 || ly < 0.07 || ly > W - 0.07) return set(i, '=', C(GRAY, L * 0.9)); // girders
-    return set(i, fract(wx * 2) < 0.25 ? '#' : ' ', C(BRICK, L * 0.6)); // cross ties
+  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = worldCoord(wy) - EL_Y0, W = EL_HALF * 2, fp = homeBalconyPavingFootprint(d, eye);
+  set(i, ' ', 0);
+  if (below) { // girders along it, lit along their flanges; cross ties between them in shadow
+    const g = Math.min(Math.abs(ly - W / 2), ly, W - ly);
+    if (g < 0.07) { BG[i] = C(GRAY, .9 + L * .14 + (g > .05 ? .5 : 0)); return; }
+    BG[i] = C(roadBands(wx, .5, .25, fp) > .5 ? BRICK : GRAY, roadBands(wx, .5, .25, fp) > .5 ? .9 + L * .08 : .7); return;
   }
-  BG[i] = bgAt(GRAY, day * 2);
-  if (elStationAt(wx) && (ly < 0.17 || ly > W - 0.17)) { // platforms, with a yellow edge
+  const Ld = L * roadDark();
+  if (elStationAt(wx) && (ly < 0.17 || ly > W - 0.17)) { // platforms: concrete, a yellow tactile edge, a kerb at the back
     const edge = Math.abs(ly - 0.15) < 0.025 || Math.abs(ly - (W - 0.15)) < 0.025;
-    return set(i, ly < 0.03 || ly > W - 0.03 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
+    BG[i] = ly < 0.03 || ly > W - 0.03 ? C(GRAY, Ld * .62) : edge ? C(YEL, Math.max(3, Ld * .6)) : C(GRAY, Ld * (.44 - Math.max(coveGroove(wx, .1, .004, fp), coveGroove(ly, .1, .004, fp)) * .15));
+    return;
   }
-  if (ly < 0.04 || ly > W - 0.04) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
-  for (const t of EL_TRACK) if (Math.abs(Math.abs(worldCoord(wy) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
-  set(i, fract(wx * 4) < 0.35 ? '-' : ' ', C(BRICK, L * 0.8)); // sleepers
+  if (ly < 0.04 || ly > W - 0.04) { BG[i] = C(GRAY, Ld * .55); return; } // the edge
+  for (const t of EL_TRACK) { const r = Math.abs(Math.abs(worldCoord(wy) - t) - 0.1); if (r < 0.025) { BG[i] = C(GRAY, Ld * (.5 + (r < .01 ? .25 : 0))); return; } } // the rails, their heads polished
+  BG[i] = roadBands(wx, .25, .35, fp) > .5 ? C(BRICK, Ld * .36) : C(GRAY, Ld * .22); // sleepers on ballast
 }
-// the deck's side, seen from the street: a riveted steel girder
+// the deck's side, seen from the street: a riveted steel girder, its lattice and rivets in light and shade
 function slabEdge(i, u, z, d, side) {
-  const L = Math.max(0, 1 - d / vis) * amb * (side ? 10 : 13);
-  BG[i] = bgAt(GRAY, day * 2);
-  if (z > EL_TOP - 0.025 || z < EL_BOT + 0.02) return set(i, '=', C(GRAY, L));
-  set(i, Math.abs(fract(u * 3 + (z - EL_BOT) * 12) - 0.5) < 0.12 ? 'X' : fract(u * 6) < 0.15 ? 'o' : ' ', C(GRAY, L * 0.8));
+  const L = Math.max(0, 1 - d / vis) * amb * (side ? 10 : 13), fp = d / projY;
+  set(i, ' ', 0);
+  if (z > EL_TOP - 0.025 || z < EL_BOT + 0.02) { BG[i] = C(GRAY, 1.2 + L * .22 + (z > EL_TOP - .012 ? .6 : 0)); return; } // the chords, the top lit
+  const lat = roadLine(Math.abs(fract(u * 3 + (z - EL_BOT) * 12) - 0.5) / 3, .03, fp), rivet = roadLine(fract(u * 6) / 6, .02, fp) * .5;
+  BG[i] = C(GRAY, .9 + L * .16 + lat * .7 + rivet * .4);
 }
 // sunrise and sunset: one ramp of the colours the sky goes through from the horizon up, looking toward the sun (gold,
 // orange, red, a dusky pink, then blue going dark); looking away from it the sky starts further along (pink over blue)
