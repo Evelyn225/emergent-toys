@@ -206,9 +206,11 @@ test('the backrooms: a doorframe seam down an industrial back lane; walk into it
       const s = BACKROOMS_SEAM, out = { seam: !!s };
       out.lane = [districtAt(s.x - 1, s.y), map[idx(s.x - 1, s.cy)], map[idx(s.x, s.cy)] > 0];
       px = s.x - 0.3; py = s.y; a = 0; render(0); out.prompt = promptText(); // (nothing to give it away)
+      out.wall = [BG[(rows >> 1) * cols + (cols >> 1)] >> 4, STY[idx(s.x, s.cy)] === 8 || STY[idx(s.x, s.cy)] === 2 ? BRICK : -1]; // (the building's own brick, not a grey patch)
       px = s.x - 0.3; py = s.y + 0.25; for (let k = 0; k < 30; k++) move(0.03, 0); out.beside = [mode, room && room.kind]; // (a step to one side: just wall)
       px = s.x - 0.3; py = s.y; for (let k = 0; k < 30 && mode === 'walk'; k++) move(0.03, 0);
       out.inside = [mode, room && room.kind, room && room.W, room && room.H, free(px, py)];
+      out.lightSwitch = roomSwitch(room); // (the lights hum on forever)
       // the whole place, flooded from where you come in on a 10cm grid: every room you could stand in, you can get to
       const S = 10, W = room.W * S, H = room.H * S, seen = new Uint8Array(W * H), q = [[Math.round(px * S), Math.round(py * S)]];
       let door = false, reached = 0, open = 0;
@@ -233,6 +235,8 @@ test('the backrooms: a doorframe seam down an industrial back lane; walk into it
     assert.equal(r.prompt, '', 'looking at it tells you nothing');
     assert.deepEqual(r.beside, ['walk', null], 'beside it, the wall is just a wall');
     assert.deepEqual(r.inside, ['room', 'backrooms', 73, 73, true], 'through it: the backrooms, on clear floor');
+    assert.equal(r.lightSwitch, null, 'no light switch in the backrooms');
+    if (r.wall[1] >= 0) assert.equal(r.wall[0], r.wall[1], 'the seam wall is the building\'s own brick');
     assert.ok(r.flood.open > 3000, `a big place (${r.flood.open} m2 of floor)`);
     assert.equal(r.flood.cut, 0, 'no room in it you can not get to');
     assert.ok(r.flood.door, 'and the way back is reachable');
