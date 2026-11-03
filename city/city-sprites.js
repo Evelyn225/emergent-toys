@@ -1069,32 +1069,34 @@ const SOLID_SHADE = {
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;
-    if (w > 0.18 || f === 5) { BG[i] = C(fract(u * 4) < 0.5 ? ORANGE : WHITE, 3 + L * 0.3); return set(i, '=', C(GRAY, L * 0.4)), true; }
-    if (Math.abs(fract(u * 2.2) - 0.5) > 0.42 || f === 1 || f === 2) return set(i, '|', C(GRAY, L)), true; // posts
-    if (w < 0.03) return set(i, '_', C(ORANGE, L * 0.7)), true; // a kick board
+    if (w > 0.18 || f === 5) { BG[i] = C(fract(u * 4) < 0.5 ? ORANGE : WHITE, (3 + L * 0.3) * (w > .195 || f === 5 ? 1.1 : .92)); return set(i, ' ', 0), true; } // the striped top rail, its upper edge lit
+    if (Math.abs(fract(u * 2.2) - 0.5) > 0.42 || f === 1 || f === 2) { BG[i] = C(GRAY, (1.6 + L * .25) * shadeFace(f)); return set(i, ' ', 0), true; } // posts
+    if (w < 0.03) { BG[i] = C(ORANGE, 1.8 + L * .22); return set(i, ' ', 0), true; } // a kick board
     return false;
   },
   // a portapotty: blue ribbed plastic, a white roof, the door on its west end with a vent up top, a handle and the
   // little VACANT / OCCUPIED slot (red while you're in one... which you can't see from in there, but still)
   potty: o => (i, t, L) => {
     const f = HIT.face, w = HIT.w, k = shadeFace(f);
-    if (f === 5 || w > 0.22) { BG[i] = C(WHITE, (2.5 + L * 0.3) * k); return set(i, f === 5 ? ' ' : '_', C(GRAY, L * 0.6)), true; } // the roof
+    if (f === 5 || w > 0.22) { BG[i] = C(WHITE, (2.5 + L * 0.3) * k * (f !== 5 && w < .228 ? .85 : 1)); return set(i, ' ', 0), true; } // the roof, its lip in shadow
     BG[i] = C(BLUE, (1.6 + L * 0.35) * k);
     if (f === 2) { // the door
       const v = HIT.v;
-      if (Math.abs(v) > 0.05) return set(i, '|', C(BLUE, L)), true; // the frame
-      if (w > 0.19) return set(i, '=', C(GRAY, L * 0.8)), true; // the vent
+      if (Math.abs(v) > 0.05) { BG[i] = C(BLUE, (1.6 + L * .35) * k * 1.1); return set(i, ' ', 0), true; } // the frame
+      if (w > 0.19) { BG[i] = C(GRAY, 1.6 + L * .2 - (fract(w * 120) < .4 ? .5 : 0)); return set(i, ' ', 0), true; } // the vent's louvres
       if (w > 0.13 && w < 0.145 && v > 0.01 && v < 0.04) { BG[i] = C(GREEN, 4); return set(i, ' ', 0), true; } // VACANT
-      if (Math.abs(w - 0.11) < 0.008 && v > 0.025) return set(i, 'o', C(WHITE, L)), true; // the handle
-      return set(i, fract(w * 60) < 0.12 ? '-' : ' ', C(BLUE, L * 0.8)), true;
+      if (Math.abs(w - 0.11) < 0.008 && v > 0.025) { BG[i] = C(WHITE, 4 + L * .3); return set(i, ' ', 0), true; } // the handle
+      BG[i] = C(BLUE, (1.6 + L * 0.35) * k - (fract(w * 60) < .12 ? .4 : 0)); return set(i, ' ', 0), true; // the door's moulded panels
     }
-    return set(i, fract(HIT.u * 70 + HIT.v * 70) < 0.2 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
+    BG[i] = C(BLUE, (1.6 + L * 0.35) * k * (fract(HIT.u * 70 + HIT.v * 70) < 0.2 ? .85 : 1.05)); return set(i, ' ', 0), true; // ribs, in light and shade
   },
   // chain-link: a top rail and posts, the mesh a lattice of x's you can see through
   chain: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u;
-    if (w > 0.185 || HIT.face === 5) return set(i, '-', C(GRAY, L)), true;
-    if (Math.abs(fract(u * 0.8) - 0.5) > 0.47) return set(i, '|', C(GRAY, L * 1.1)), true;
+    if (w > 0.185 || HIT.face === 5) { BG[i] = C(GRAY, (1.8 + L * .25) * (w > .195 ? 1.15 : 1)); return set(i, ' ', 0), true; } // the top rail
+    if (Math.abs(fract(u * 0.8) - 0.5) > 0.47) { BG[i] = C(GRAY, 1.7 + L * .25); return set(i, ' ', 0), true; } // posts
+    // the mesh: its diamonds are a few centimetres, finer than a cell from anywhere you can stand, so it stays the x of
+    // a see-through lattice rather than a solid colour that would either fill the fence in or vanish
     return fract(u * 14 + w * 14) < 0.22 || fract(u * 14 - w * 14) < 0.22 ? (set(i, 'x', C(GRAY, L * 0.7)), true) : false;
   },
   // a 40ft container: corrugated sides, doors with locking bars on the ends, a colour per box
