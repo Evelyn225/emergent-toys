@@ -456,10 +456,10 @@ test('new clock dials render on the solid chambers and show the game time on all
         // Compare the complete dial region: noon and quarter past cannot have identical hands.
         const cells=[];
         for(let row=(rows>>1)-3;row<=(rows>>1)+3;row++)for(let col=(cols>>1)-3;col<=(cols>>1)+3;col++)cells.push(row*cols+col);
-        const before=cells.map(i=>CH[i]).join('');tod=12.25;env(0);render(0);
+        const before=cells.map(i=>BG[i]).join(',');tod=12.25;env(0);render(0); // (the hands are dark cells on the white dial)
         const handColumn=(cols>>1)+Math.round(Math.min(o.hl,o.hw)*.73*.55*projX/.65);
-        const clockwise=[-1,0,1].some(row=>CH[((rows>>1)+row)*cols+handColumn]==='#');
-        results.push({name:b.profile.name,depth,white:BG[center]>>4===WHITE,changes:before!==cells.map(i=>CH[i]).join(''),clockwise});
+        const clockwise=[-1,0,1].some(row=>BG[((rows>>1)+row)*cols+handColumn]>>4===BLACK);
+        results.push({name:b.profile.name,depth,white:BG[center]>>4===WHITE,changes:before!==cells.map(i=>BG[i]).join(','),clockwise});
       }
     }
     return results;
