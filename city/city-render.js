@@ -534,7 +534,7 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
 function pondCell(i, r, x, wx, wy, sd, L) {
   if (seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
     const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
-    BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+    BG[i] = C(cr ? WHITE : CYAN, cr ? 3 + day * 4 : 1.4 + day * 3.5 + (noise(wx * 1.5, wy * 1.5, 96) - .5) * .8); return set(i, ' ', 0); // the cracks white in the ice
   }
   const depth = clamp(-sd / 0.55, 0, 1), lamp = lampsOn * glow(wx, wy) * 2;
   if (sd > -0.45 && sd < -0.03 && noise(wx * 1.6, wy * 1.6, 932) > 0.52) { // a patch of lily pads
@@ -543,8 +543,8 @@ function pondCell(i, r, x, wx, wy, sd, L) {
       const cx = (gx + 0.25 + 0.5 * hash(gx, gy, 936)) * 0.13, cy = (gy + 0.25 + 0.5 * hash(gx, gy, 937)) * 0.13, d = Math.hypot(wx - cx, wy - cy), rad = 0.035 + 0.02 * h;
       if (d < rad && Math.atan2(wy - cy, wx - cx) + Math.PI > 0.5) { // (the notch cut out of each pad)
         const flower = h > 0.88 && d < 0.014;
-        BG[i] = C(GREEN, 1.1 + day * 2 + lamp * 0.5); FL[i] = 0;
-        return set(i, flower ? '*' : d > rad * 0.7 ? 'o' : ' ', C(flower ? (h > 0.94 ? WHITE : MAG) : GREEN, flower ? Math.max(L * 1.6, 8) : L * 1.2));
+        BG[i] = flower ? C(h > 0.94 ? WHITE : MAG, Math.max(5, 3 + day * 4)) : C(GREEN, (1.1 + day * 2 + lamp * 0.5) * (d > rad * .7 ? .85 : 1.08)); FL[i] = 0; // a pad, its rim darker; a flower on the odd one
+        return set(i, ' ', 0);
       }
     }
   }
@@ -554,8 +554,9 @@ function pondCell(i, r, x, wx, wy, sd, L) {
   const shallow = depth < 0.07, deep = depth > 0.55;
   BG[i] = shallow ? C(GREEN, 1 + day * 1.4 + lamp) : C(BLUE, (deep ? 0.8 + day * 2 : 1 + day * 2.6) + lamp);
   FL[i] = 4; // (still water: reflect() mirrors what's round it, in one tint)
-  return set(i, drop ? 'o' : shallow ? (hash(Math.floor(wx * 24), Math.floor(wy * 24), 938) > 0.6 ? '.' : ' ') : n > 0.68 ? '~' : n > 0.6 ? '-' : ' ',
-    drop ? C(WHITE, 6 + day * 6) : C(shallow ? GREEN : CYAN, 4 + day * 5));
+  if (drop) BG[i] = C(WHITE, 4 + day * 5); // a raindrop's ring
+  else if (!shallow && n > 0.6) BG[i] = C(BG[i] >> 4, (BG[i] & 15) + (n > .68 ? 1.2 : .6)); // a ripple catching the light
+  return set(i, ' ', 0);
 }
 function floorCell(i, r, x, rx, ry) {
   floorBaseCell(i, r, x, rx, ry);
@@ -696,10 +697,19 @@ function floorBaseCell(i, r, x, rx, ry) {
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       const sd = pondSD(lx, ly, pbx, pby); // (how far out of the pond: below 0, how far in)
       if (sd < 0) return pondCell(i, r, x, wx, wy, sd, L);
-      else if (sd < 0.025) { ch = hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) > 0.7 ? '.' : ' '; base = BRICK; k = 0.6; } // a thin muddy edge
-      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
-      else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
-      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
+      const fpP = homeBalconyPavingFootprint(d, eye), fineP = clamp(1 - fpP / .015, 0, 1), LP = L * roadDark(), sn = seasonIdx();
+      const grassCol = sn === 2 ? (noise(wx * .6, wy * .6, 939) > .55 ? YEL : GREEN) : GREEN, grassLift = sn === 0 ? .04 : sn === 3 ? -.06 : 0;
+      if (sd < 0.025) surf = [BRICK, LP * (.26 + (hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) - .5) * .06 * fineP)]; // a thin muddy edge
+      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { // reeds in clumps, the odd cattail: tall blades lit and shaded, brown heads
+        const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935);
+        surf = h > .88 && fineP > .2 ? [BRICK, LP * .4] : [GREEN, LP * (.42 + grassLift + (h > .5 ? .06 : -.05) * fineP)];
+      } else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { // the path: compacted gravel, worn darker down its middle, its edges where the grass gives way
+        const e = Math.min(Math.abs(lx - 5), Math.abs(ly - 5)) / .2;
+        surf = e > .85 ? [GREEN, LP * (.36 + grassLift)] : [WARM, LP * (.36 - (1 - e) * .05 + (hash(Math.floor(wx * 70), Math.floor(wy * 70), 940) - .5) * .05 * fineP)];
+      } else { // grass: mown in long stripes, a slow lift and fall across the lawn, blades only up close
+        const stripe = Math.floor(wy / .35) & 1 ? .07 : -.05, swell = (noise(wx * .5, wy * .5, 941) - .5) * .2, blade = fineP > .2 ? (hash(Math.floor(wx * 120), Math.floor(wy * 40), 942) - .5) * .06 * fineP : 0;
+        surf = [grassCol, LP * (.44 + grassLift + stripe + swell + blade)];
+      }
     } else surf = plazaSurface(wx, wy, lx, ly, d, L); // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;

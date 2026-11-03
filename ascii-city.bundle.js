@@ -12747,7 +12747,7 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
 function pondCell(i, r, x, wx, wy, sd, L) {
   if (seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
     const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
-    BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+    BG[i] = C(cr ? WHITE : CYAN, cr ? 3 + day * 4 : 1.4 + day * 3.5 + (noise(wx * 1.5, wy * 1.5, 96) - .5) * .8); return set(i, ' ', 0); // the cracks white in the ice
   }
   const depth = clamp(-sd / 0.55, 0, 1), lamp = lampsOn * glow(wx, wy) * 2;
   if (sd > -0.45 && sd < -0.03 && noise(wx * 1.6, wy * 1.6, 932) > 0.52) { // a patch of lily pads
@@ -12756,8 +12756,8 @@ function pondCell(i, r, x, wx, wy, sd, L) {
       const cx = (gx + 0.25 + 0.5 * hash(gx, gy, 936)) * 0.13, cy = (gy + 0.25 + 0.5 * hash(gx, gy, 937)) * 0.13, d = Math.hypot(wx - cx, wy - cy), rad = 0.035 + 0.02 * h;
       if (d < rad && Math.atan2(wy - cy, wx - cx) + Math.PI > 0.5) { // (the notch cut out of each pad)
         const flower = h > 0.88 && d < 0.014;
-        BG[i] = C(GREEN, 1.1 + day * 2 + lamp * 0.5); FL[i] = 0;
-        return set(i, flower ? '*' : d > rad * 0.7 ? 'o' : ' ', C(flower ? (h > 0.94 ? WHITE : MAG) : GREEN, flower ? Math.max(L * 1.6, 8) : L * 1.2));
+        BG[i] = flower ? C(h > 0.94 ? WHITE : MAG, Math.max(5, 3 + day * 4)) : C(GREEN, (1.1 + day * 2 + lamp * 0.5) * (d > rad * .7 ? .85 : 1.08)); FL[i] = 0; // a pad, its rim darker; a flower on the odd one
+        return set(i, ' ', 0);
       }
     }
   }
@@ -12767,8 +12767,9 @@ function pondCell(i, r, x, wx, wy, sd, L) {
   const shallow = depth < 0.07, deep = depth > 0.55;
   BG[i] = shallow ? C(GREEN, 1 + day * 1.4 + lamp) : C(BLUE, (deep ? 0.8 + day * 2 : 1 + day * 2.6) + lamp);
   FL[i] = 4; // (still water: reflect() mirrors what's round it, in one tint)
-  return set(i, drop ? 'o' : shallow ? (hash(Math.floor(wx * 24), Math.floor(wy * 24), 938) > 0.6 ? '.' : ' ') : n > 0.68 ? '~' : n > 0.6 ? '-' : ' ',
-    drop ? C(WHITE, 6 + day * 6) : C(shallow ? GREEN : CYAN, 4 + day * 5));
+  if (drop) BG[i] = C(WHITE, 4 + day * 5); // a raindrop's ring
+  else if (!shallow && n > 0.6) BG[i] = C(BG[i] >> 4, (BG[i] & 15) + (n > .68 ? 1.2 : .6)); // a ripple catching the light
+  return set(i, ' ', 0);
 }
 function floorCell(i, r, x, rx, ry) {
   floorBaseCell(i, r, x, rx, ry);
@@ -12909,10 +12910,19 @@ function floorBaseCell(i, r, x, rx, ry) {
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       const sd = pondSD(lx, ly, pbx, pby); // (how far out of the pond: below 0, how far in)
       if (sd < 0) return pondCell(i, r, x, wx, wy, sd, L);
-      else if (sd < 0.025) { ch = hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) > 0.7 ? '.' : ' '; base = BRICK; k = 0.6; } // a thin muddy edge
-      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
-      else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
-      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
+      const fpP = homeBalconyPavingFootprint(d, eye), fineP = clamp(1 - fpP / .015, 0, 1), LP = L * roadDark(), sn = seasonIdx();
+      const grassCol = sn === 2 ? (noise(wx * .6, wy * .6, 939) > .55 ? YEL : GREEN) : GREEN, grassLift = sn === 0 ? .04 : sn === 3 ? -.06 : 0;
+      if (sd < 0.025) surf = [BRICK, LP * (.26 + (hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) - .5) * .06 * fineP)]; // a thin muddy edge
+      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { // reeds in clumps, the odd cattail: tall blades lit and shaded, brown heads
+        const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935);
+        surf = h > .88 && fineP > .2 ? [BRICK, LP * .4] : [GREEN, LP * (.42 + grassLift + (h > .5 ? .06 : -.05) * fineP)];
+      } else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { // the path: compacted gravel, worn darker down its middle, its edges where the grass gives way
+        const e = Math.min(Math.abs(lx - 5), Math.abs(ly - 5)) / .2;
+        surf = e > .85 ? [GREEN, LP * (.36 + grassLift)] : [WARM, LP * (.36 - (1 - e) * .05 + (hash(Math.floor(wx * 70), Math.floor(wy * 70), 940) - .5) * .05 * fineP)];
+      } else { // grass: mown in long stripes, a slow lift and fall across the lawn, blades only up close
+        const stripe = Math.floor(wy / .35) & 1 ? .07 : -.05, swell = (noise(wx * .5, wy * .5, 941) - .5) * .2, blade = fineP > .2 ? (hash(Math.floor(wx * 120), Math.floor(wy * 40), 942) - .5) * .06 * fineP : 0;
+        surf = [grassCol, LP * (.44 + grassLift + stripe + swell + blade)];
+      }
     } else surf = plazaSurface(wx, wy, lx, ly, d, L); // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
@@ -14751,8 +14761,10 @@ function treeCell(i, u, z, du, dz, L, t) {
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
-      if (k === 'birch') { BG[i] = C(WHITE, 2 + L * 0.35); return set(i, hash(Math.floor(z * 60), 1, 813) > 0.75 ? '-' : ' ', C(GRAY, 3)), true; }
-      BG[i] = C(BRICK, 0.8 + L * 0.18); return set(i, au < trunkW * 0.4 ? '|' : ' ', C(BRICK, L * 0.6)), true;
+      const side = u / (trunkW + .001); // across the trunk, -1..1: lit on its sunward side, rounded
+      if (k === 'birch') { const mark = du < .01 && hash(Math.floor(z * 60), 1, 813) > 0.75; BG[i] = mark ? C(GRAY, 1.2) : C(WHITE, (2 + L * 0.35) * (1.05 - side * .2)); return set(i, ' ', 0), true; } // a birch's white, its black marks up close
+      const furrow = du < .01 ? (hash(Math.floor(u * 400), Math.floor(z * 60), 817) - .5) * .4 : 0;
+      BG[i] = C(BRICK, (0.9 + L * 0.2) * (1.05 - side * .25) + furrow); return set(i, ' ', 0), true; // bark, furrowed up close
     }
     return false;
   }
@@ -14761,10 +14773,16 @@ function treeCell(i, u, z, du, dz, L, t) {
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
   const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
   const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
-  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, '^', C(WHITE, 15)), true; } // snow on the pine's boughs
-  BG[i] = C(base, Math.max(0.6, (0.9 + L * 0.22) * lit * bg));
-  const ch = k === 'pine' ? (n > 0.6 ? '^' : n > 0.3 ? 'A' : ' ') : n > 0.72 ? '@' : n > 0.45 ? '%' : n > 0.25 ? '&' : ' ';
-  return set(i, ch, fall ? C(fall, L * (0.9 + n * 0.5) * lit) : base === MAG ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
+  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; } // snow on the pine's boughs
+  // leaf clusters: each a rounded clump lit on its upper side and shaded under, the clumps themselves lighter toward
+  // the sun; up close you see them, far off the canopy settles to its lit-and-shaded mass
+  const fineT = clamp(1 - Math.max(du, dz) / .035, 0, 1), cs = k === 'pine' ? 0 : 1;
+  let clump = 0;
+  if (k === 'pine') { const tier = fract((z - .12) / .15); clump = (tier > .75 ? -.35 : tier < .3 ? .2 : 0); } // each tier's bough lit above, its underside in shadow
+  else { const cu = u * 16 + t.seed * 7, cz2 = z * 16, fu = fract(cu) - .5, fz = fract(cz2) - .5, r2 = fu * fu + fz * fz; clump = (.12 - r2) * 1.6 + fz * .5; } // a clump's dome, lit from above
+  const blossom = base === MAG && n > 0.8 ? WHITE : base;
+  BG[i] = C(blossom, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12)));
+  return set(i, ' ', 0), true;
 }
 
 function winterTreeCell(i, u, z, du, dz, L, t) {
@@ -14780,8 +14798,8 @@ function winterTreeCell(i, u, z, du, dz, L, t) {
   }
   if (slope === null) return false;
   const snow = snowCover > 0.2 && z > height * 0.55 && Math.abs(slope) < 1.8 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
-  const ch = snow ? '-' : Math.abs(slope) > 1.8 ? '|' : Math.abs(slope) < 0.28 ? '-' : slope > 0 ? '/' : '\\';
-  return set(i, ch, C(snow ? WHITE : t.kind === 'birch' ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
+  BG[i] = snow ? C(WHITE, 4 + L * .3) : C(t.kind === 'birch' ? WHITE : BRICK, t.kind === 'birch' ? 2.2 + L * .3 : 1.1 + L * .2); // bare branches, snow along the level ones
+  return set(i, ' ', 0), true;
 }
 
 // a person's look, kept until the season changes their clothes; their pose from their walk phase (still: standing)

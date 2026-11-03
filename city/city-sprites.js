@@ -68,8 +68,10 @@ function treeCell(i, u, z, du, dz, L, t) {
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
-      if (k === 'birch') { BG[i] = C(WHITE, 2 + L * 0.35); return set(i, hash(Math.floor(z * 60), 1, 813) > 0.75 ? '-' : ' ', C(GRAY, 3)), true; }
-      BG[i] = C(BRICK, 0.8 + L * 0.18); return set(i, au < trunkW * 0.4 ? '|' : ' ', C(BRICK, L * 0.6)), true;
+      const side = u / (trunkW + .001); // across the trunk, -1..1: lit on its sunward side, rounded
+      if (k === 'birch') { const mark = du < .01 && hash(Math.floor(z * 60), 1, 813) > 0.75; BG[i] = mark ? C(GRAY, 1.2) : C(WHITE, (2 + L * 0.35) * (1.05 - side * .2)); return set(i, ' ', 0), true; } // a birch's white, its black marks up close
+      const furrow = du < .01 ? (hash(Math.floor(u * 400), Math.floor(z * 60), 817) - .5) * .4 : 0;
+      BG[i] = C(BRICK, (0.9 + L * 0.2) * (1.05 - side * .25) + furrow); return set(i, ' ', 0), true; // bark, furrowed up close
     }
     return false;
   }
@@ -78,10 +80,16 @@ function treeCell(i, u, z, du, dz, L, t) {
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
   const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
   const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
-  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, '^', C(WHITE, 15)), true; } // snow on the pine's boughs
-  BG[i] = C(base, Math.max(0.6, (0.9 + L * 0.22) * lit * bg));
-  const ch = k === 'pine' ? (n > 0.6 ? '^' : n > 0.3 ? 'A' : ' ') : n > 0.72 ? '@' : n > 0.45 ? '%' : n > 0.25 ? '&' : ' ';
-  return set(i, ch, fall ? C(fall, L * (0.9 + n * 0.5) * lit) : base === MAG ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
+  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; } // snow on the pine's boughs
+  // leaf clusters: each a rounded clump lit on its upper side and shaded under, the clumps themselves lighter toward
+  // the sun; up close you see them, far off the canopy settles to its lit-and-shaded mass
+  const fineT = clamp(1 - Math.max(du, dz) / .035, 0, 1), cs = k === 'pine' ? 0 : 1;
+  let clump = 0;
+  if (k === 'pine') { const tier = fract((z - .12) / .15); clump = (tier > .75 ? -.35 : tier < .3 ? .2 : 0); } // each tier's bough lit above, its underside in shadow
+  else { const cu = u * 16 + t.seed * 7, cz2 = z * 16, fu = fract(cu) - .5, fz = fract(cz2) - .5, r2 = fu * fu + fz * fz; clump = (.12 - r2) * 1.6 + fz * .5; } // a clump's dome, lit from above
+  const blossom = base === MAG && n > 0.8 ? WHITE : base;
+  BG[i] = C(blossom, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12)));
+  return set(i, ' ', 0), true;
 }
 
 function winterTreeCell(i, u, z, du, dz, L, t) {
@@ -97,8 +105,8 @@ function winterTreeCell(i, u, z, du, dz, L, t) {
   }
   if (slope === null) return false;
   const snow = snowCover > 0.2 && z > height * 0.55 && Math.abs(slope) < 1.8 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
-  const ch = snow ? '-' : Math.abs(slope) > 1.8 ? '|' : Math.abs(slope) < 0.28 ? '-' : slope > 0 ? '/' : '\\';
-  return set(i, ch, C(snow ? WHITE : t.kind === 'birch' ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
+  BG[i] = snow ? C(WHITE, 4 + L * .3) : C(t.kind === 'birch' ? WHITE : BRICK, t.kind === 'birch' ? 2.2 + L * .3 : 1.1 + L * .2); // bare branches, snow along the level ones
+  return set(i, ' ', 0), true;
 }
 
 // a person's look, kept until the season changes their clothes; their pose from their walk phase (still: standing)
