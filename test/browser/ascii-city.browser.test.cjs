@@ -1363,9 +1363,9 @@ test('indexed winter branches preserve their silhouettes, crossings and snow fro
       }
       if(slope===null)return null;
       const snowy=z>height*.55&&Math.abs(slope)<1.8&&hash(Math.floor(u*90+t.seed*99),Math.floor(z*90),816)>.68;
-      const ch=snowy?'-':Math.abs(slope)>1.8?'|':Math.abs(slope)<.28?'-':slope>0?'/':'\\';
-      const col=C(snowy?WHITE:t.kind==='birch'?WHITE:BRICK,snowy?12:clamp(6+10*.45,6,13));
-      return [ch,col];
+      // (drawn in colour: no character, the bark's or the snow's own background)
+      const bg=snowy?C(WHITE,4+10*.3):C(t.kind==='birch'?WHITE:BRICK,t.kind==='birch'?2.2+10*.3:1.1+10*.2);
+      return [' ',bg];
     };
     let tested=0,errors=0;
     for(const kind of Object.keys(TREE_WINTER_BRANCHES))for(const seed of [.05,.8])for(const du of [.003,.059,.12]) {
@@ -1373,7 +1373,7 @@ test('indexed winter branches preserve their silhouettes, crossings and snow fro
       for(let row=0;row<=WINTER_BRANCH_ROWS;row++)for(const offset of [-1e-8,0,1e-8])for(let col=0;col<90;col++){
         const u=-half-.03+(half*2+.06)*(col+.5)/90,z=row*height/WINTER_BRANCH_ROWS+offset;
         const expected=reference(u,z,du,du*.6,t),drawn=winterTreeCell(0,u,z,du,du*.6,10,t);
-        if(drawn!==!!expected||expected&&(CH[0]!==expected[0]||COL[0]!==expected[1]))errors++;
+        if(drawn!==!!expected||expected&&(CH[0]!==expected[0]||BG[0]!==expected[1]))errors++;
         tested++;
       }
     }
