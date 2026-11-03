@@ -1039,22 +1039,23 @@ const SOLID_SHADE = {
     const f = HIT.face, w = HIT.w, glow = Math.max(night, overcast * 0.6), stripe = c => C(fract(HIT.u * 7) < 0.5 ? o.awning : WHITE, c);
     if (f === 5) { BG[i] = stripe(3 + L * 0.3); return set(i, ' ', 0), true; }
     const front = (f === 3 || f === 4) && Math.sign(HIT.v) === o.fs;
-    if (!front) { BG[i] = stripe((1.5 + L * 0.3) * shadeFace(f)); return set(i, w > 0.3 ? '~' : ' ', C(WHITE, L * 0.5)), true; }
+    if (!front) { BG[i] = stripe((1.5 + L * 0.3) * shadeFace(f) + (w > 0.3 ? .4 : 0)); return set(i, ' ', 0), true; } // striped canvas, the valance's scallops lit
     const q = (HIT.u * o.fs / o.hl + 1) / 2;
     if (w > 0.25) { // the sign
       BG[i] = C(o.awning, 3 + glow * 6);
       const n = o.word.length + 2, ch = signLine(o.word, q * n - 1, (0.33 - w) / 0.07, i, 0.295, midDepth(rel(o.x - px), rel(o.y - py)), t, 2 * o.hl / n, 0.07, farDepth(rel(o.x - px), rel(o.y - py), o.hl), o.fs * o.c, o.fs * o.s);
       if (ch !== null && (ch !== ' ' || Math.abs(w - 0.295) < 0.035)) return set(i, ch, C(WHITE, 15)), true;
-      return set(i, glow > 0.3 && Math.abs(w - 0.295) > 0.035 && fract(q * 14 - T * 2) < 0.3 ? '*' : ' ', C(YEL, 15)), true; // bulbs chasing round it
+      if (glow > 0.3 && Math.abs(w - 0.295) > 0.035 && fract(q * 14 - T * 2) < 0.3) BG[i] = C(YEL, 15); // bulbs chasing round it
+      return set(i, ' ', 0), true;
     }
     if (w > 0.11) { // the opening: what's on offer, in the dark behind the counter
       BG[i] = C(GRAY, 1 + glow * 2);
       const row = Math.floor((w - 0.11) / 0.045), col = Math.floor(q * 9);
       const ch = o.game === 'ringtoss' ? (row === 0 ? 'i' : ' ') : o.game === 'strength' ? (col === 4 ? '|' : ' ') : o.game === 'ducks' ? (row === 1 ? ' (o>'[mod(Math.floor(q * 28 - T * 3), 4)] : row === 0 ? '~' : ' ') : o.game === 'darts' ? (row >= 1 && row <= 2 ? (Math.floor(q * 18) + row) % 2 ? 'O' : ' ' : row === 0 ? (Math.floor(q * 18) % 2 ? '|' : ' ') : ' ') : o.stock ? (row === 0 ? 'o' : ' ') : row < 3 && (col + row) & 1 ? '@' : ' ';
-      return set(i, ch, C(o.game === 'ringtoss' ? GREEN : o.game === 'ducks' ? (row === 0 ? CYAN : mod(Math.floor(q * 28 - T * 3), 4) === 3 ? ORANGE : YEL) : o.game === 'darts' ? (row === 0 ? GRAY : DART_COLS[(Math.floor(q * 18) + row * 3) % DART_COLS.length]) : o.stock ? ORANGE : ITEM_COL[(col + row * 3) & 7], Math.max(L, glow * 12))), true;
+      { const cc = C(o.game === 'ringtoss' ? GREEN : o.game === 'ducks' ? (row === 0 ? CYAN : mod(Math.floor(q * 28 - T * 3), 4) === 3 ? ORANGE : YEL) : o.game === 'darts' ? (row === 0 ? GRAY : DART_COLS[(Math.floor(q * 18) + row * 3) % DART_COLS.length]) : o.stock ? ORANGE : ITEM_COL[(col + row * 3) & 7], Math.max(L, glow * 12)); if (ch !== ' ') BG[i] = C(cc >> 4, Math.max(6, cc & 15)); return set(i, ' ', 0), true; } // the prizes, the ducks, the darts' boards: their shapes in colour
     }
     BG[i] = C(o.awning, 1.5 + L * 0.25); // the counter
-    return set(i, w > 0.095 ? '=' : fract(q * 10) < 0.5 ? '|' : ' ', C(WHITE, L * 0.8)), true;
+    BG[i] = C(o.awning, 1.5 + L * 0.25 + (w > 0.095 ? .8 : fract(q * 10) < 0.5 ? -.4 : 0)); return set(i, ' ', 0), true; // the counter's top lit, its boards
   },
   // the night market's stalls (props.js): by day a blue tarp's roped down over everything
   stall: o => (i, t, L) => { // the counter: planks along the front, the goods laid out on top
@@ -1502,13 +1503,14 @@ const WHEEL_GAP = 0.12; // half the gap between its two rims
 function carouselInside(cx, cy) {
   const rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6, r = CAROUSEL.r;
   drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), 0.065, 0.065, 0.04, 0.33), (i, t, L) => { // the drum
-    BG[i] = C(CYAN, 1 + (lit ? 3 : 1)); return set(i, fract(HIT.w * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 6))), true;
+    BG[i] = fract(HIT.w * 30 + T) < 0.2 ? C(WHITE, lit ? 13 : 7) : C(CYAN, 1 + (lit ? 3 : 1) + (fract(HIT.w * 30 + T) < .4 ? .6 : 0)); return set(i, ' ', 0), true; // mirrors, lights running up them
   });
   drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), r, r, 0.33, 0.36), (i, t, L) => { // the canopy, from underneath: stripes out from the middle
     const ang = Math.atan2(HIT.v, HIT.u), d = Math.hypot(HIT.u, HIT.v);
     if (d > r) return false;
     BG[i] = C(Math.floor(ang / (TAU / 16)) & 1 ? RED : WHITE, 2.5 + L * 0.25);
-    return set(i, d > r - 0.04 ? (lit && fract(ang * 6 + T) < 0.4 ? '*' : 'v') : ' ', C(YEL, lit ? 15 : L)), true;
+    if (d > r - 0.04) BG[i] = lit && fract(ang * 6 + T) < 0.4 ? C(YEL, 14) : C(YEL, 3 + L * .3); // the rim, its bulbs
+    return set(i, ' ', 0), true;
   });
   const me_ = Math.atan2(rel(py - CAROUSEL.y), rel(px - CAROUSEL.x));
   for (let j = 0; j < 8; j++) {
@@ -1532,13 +1534,13 @@ function drawCarousel(cx, cy) {
   const rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6, r = CAROUSEL.r, minR = 0.55 * Math.hypot(cx, cy) / projX;
   const turnAng = () => Math.atan2(HIT.v, HIT.u) - rot; // (round the carousel, turning with it)
   drawBox(boxAt(cx, cy, 1, 0, r, r, 0, 0.04), (i, t, L) => { // the turntable: boards, a gilt edge
-    if (HIT.face === 5) { BG[i] = C(BRICK, 2 + L * 0.3); return set(i, fract(turnAng() * 16 / TAU) < 0.1 ? '|' : '=', C(BRICK, L * 0.8)), true; }
-    BG[i] = C(YEL, 2.5 + L * 0.3); return set(i, '=', C(BRICK, L)), true;
+    if (HIT.face === 5) { BG[i] = C(BRICK, 2 + L * 0.3 - (fract(turnAng() * 16 / TAU) < 0.1 ? .6 : 0)); return set(i, ' ', 0), true; } // the boards, radiating
+    BG[i] = C(YEL, 2.5 + L * 0.3 + (HIT.w > .03 ? .6 : 0)); return set(i, ' ', 0), true; // the gilt edge
   }, rayCopperDrum);
   drawBox(boxAt(cx, cy, 1, 0, 0.1, 0.1, 0.04, 0.34), (i, t, L) => { // the drum: mirrors and lights, up to the canopy
     const a = turnAng(), panel = fract(a * 8 / TAU);
-    BG[i] = panel < 0.08 ? C(YEL, 4) : C(CYAN, 1 + (lit ? 3 : 1));
-    return set(i, panel < 0.08 ? '|' : fract(HIT.w * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 6))), true;
+    BG[i] = panel < 0.08 ? C(YEL, 4 + L * .2) : fract(HIT.w * 30 + T) < 0.2 ? C(WHITE, lit ? 13 : 7) : C(CYAN, 1 + (lit ? 3 : 1) + (fract(HIT.w * 30 + T) < .4 ? .6 : 0)); // gilt frames, mirrors, lights running up them
+    return set(i, ' ', 0), true;
   }, rayCopperDrum);
   for (let j = 0; j < 8; j++) drawCarouselHorse(cx, cy, rot + j * TAU / 8, j);
   const R2 = Math.max(minR, r + 0.03);
@@ -1548,7 +1550,8 @@ function drawCarousel(cx, cy) {
     if (HIT.face === 6) { BG[i] = C(RED, 1.5); return set(i, ' ', 0), true; }
     const bulb = Math.abs(sc - 0.5) < 0.18 && HIT.w < 0.32, on = lit && fract(a * 24 / TAU / 2 - T) < 0.5;
     BG[i] = bulb && lit ? C(YEL, on ? 12 : 6) : C(YEL, 2.5 + L * 0.35);
-    return set(i, bulb ? (lit ? '*' : 'o') : 'v', bulb && lit ? C(WHITE, 15) : C(RED, L)), true;
+    if (bulb && !lit) BG[i] = C(WHITE, 4 + L * .3); // (a bulb, unlit)
+    return set(i, ' ', 0), true;
   }, rayCopperDrum);
   drawBox(boxAt(cx, cy, 1, 0, R2, R2, 0.34, 0.5), (i, t, L) => { // the canopy: stripes coming to a point
     if (HIT.face === 6) { BG[i] = C(Math.floor(turnAng() / (TAU / 16)) & 1 ? RED : WHITE, 2 + L * 0.2); return set(i, ' ', 0), true; }
@@ -1561,7 +1564,7 @@ function drawCarousel(cx, cy) {
     BG[i] = C(RED, 4 + L * 0.3); return set(i, ' ', 0), true;
   });
 }
-const solidHorse = col => (i, t, L) => { BG[i] = C(col, (1.4 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '~' : ' ', C(YEL, L)), true; };
+const solidHorse = col => (i, t, L) => { BG[i] = C(col, (1.4 + L * 0.35) * shadeFace(HIT.face) + (HIT.face === 5 ? .6 : 0)); return set(i, ' ', 0), true; }; // painted wood, its back catching the light
 // the Ferris wheel, in 3D: two rims (rings of steel, an inner ring each) turning on a hub barrel, spokes out to the
 // rims, a cross-bar between the rims at each car's pivot with the car hanging off it, an A-frame of legs each side
 // splayed out to the deck and braced, a plank platform at the bottom, and bulbs round both rims that chase after dark.
@@ -1575,7 +1578,8 @@ function drawWheel(wx, wy) {
     if (near((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2)) return;
     drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
       if (solid || r * 2 * projX / t > 1.5) BG[i] = C(col, solid ? (lit ? 1.6 : 2.4 + L * 0.4) : 1.2 + L * 0.3);
-      return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(col, Math.max(L, glow))), true;
+      if (!(solid || r * 2 * projX / t > 1.5)) BG[i] = C(col, glow > 0 ? Math.min(12, glow) : 1.2 + L * .3); // (thinner than a cell: a solid line of steel all the same)
+      return set(i, ' ', 0), true;
     });
   };
   const white = steel(WHITE, lit ? 9 : 0), grey = steel(GRAY, 0), rim = steel(WHITE, lit ? 9 : 0, true);
@@ -1594,8 +1598,8 @@ function drawWheel(wx, wy) {
       const ang = th + (k + 0.5) * TAU / WHEEL_BULBS, [x, z] = P(ang, Rr + 0.04), chase = fract(k / 4 - T * 1.5) < 0.5, col = [YEL, MAG, CYAN, RED][k & 3]; // (lit, every one; the chase runs brighter through them)
       if (near(x, y, z)) continue;
       dot(x, y, z, Math.max(0.025, 0.6 * Math.hypot(x, y) / Math.min(projX, projY)), (i, t, L) => { // (wider than the rim far off, so they show)
-        if (!lit) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, 'o', C(GRAY, L)), true; }
-        BG[i] = C(col, chase ? 12 : 6); return set(i, '*', C(WHITE, chase ? 15 : 10)), true;
+        if (!lit) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; }
+        BG[i] = chase ? C(WHITE, 15) : C(col, 9); return set(i, ' ', 0), true; // lit, the chase running white-hot through them
       });
     }
     for (const e of [-1, 1]) { // the A-frame: hub down to the deck, splayed out from the rim
@@ -1605,10 +1609,10 @@ function drawWheel(wx, wy) {
     { const by = y + sd * (0.04 + 0.26 * 0.45); grey(wx - 0.95 * 0.45, by, hub * 0.55, wx + 0.95 * 0.45, by, hub * 0.55, 0.025); } // its brace, partway down
   }
   // the hub barrel and the axle
-  drawRod(wx, wy - WHEEL_GAP - 0.05, hub, wx, wy + WHEEL_GAP + 0.05, hub, 0.13, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.3); return set(i, '@', C(WHITE, Math.max(L, lit ? 10 : 0))), true; });
+  drawRod(wx, wy - WHEEL_GAP - 0.05, hub, wx, wy + WHEEL_GAP + 0.05, hub, 0.13, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.3 + (lit ? 1 : 0)); return set(i, ' ', 0), true; }); // the hub barrel
   grey(wx, wy - WHEEL_GAP - 0.1, hub, wx, wy + WHEEL_GAP + 0.1, hub, 0.035);
   // the platform at the bottom, where you board
-  drawBox(boxAt(wx, wy - 0.15, 1, 0, 0.6, 0.4, 0, 0.04), (i, t, L) => { BG[i] = C(BRICK, (1.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 18) < 0.12 ? '|' : '=') : '_', C(BRICK, L * 0.8)), true; });
+  drawBox(boxAt(wx, wy - 0.15, 1, 0, 0.6, 0.4, 0, 0.04), (i, t, L) => { BG[i] = C(BRICK, (1.4 + L * 0.3) * shadeFace(HIT.face)); if (HIT.face === 5 && fract(HIT.u * 18) < 0.12) BG[i] = C(BRICK, (1.4 + L * 0.3) - .6); return set(i, ' ', 0), true; }); // planks
   // the cars: a cross-bar between the rims at each pivot, the car hanging plumb beneath it
   for (let k = 0; k < WHEEL.n; k++) {
     const ph = wheelAngle(k, T), gx = wx + Rr * Math.cos(ph), gz = hub + Rr * Math.sin(ph), col = WHEEL_COLS[k % 6];
@@ -1616,12 +1620,12 @@ function drawWheel(wx, wy) {
     if (riding && fairRide.k === k) continue; // (you're in this one)
     grey(gx, wy, gz, gx, wy, gz - 0.05, 0.008); // its hanger
     drawBox(boxAt(gx, wy, 1, 0, 0.115, WHEEL_GAP - 0.01, gz - 0.075, gz - 0.05), (i, t, L) => { // the roof, overhanging
-      BG[i] = C(col, (2 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '^' : '_', C(WHITE, L * 0.7)), true; });
+      BG[i] = C(col, (2 + L * 0.35) * shadeFace(HIT.face) + (HIT.face === 5 ? .6 : 0)); return set(i, ' ', 0), true; }); // its roof, lit on top
     drawBox(boxAt(gx, wy, 1, 0, 0.1, WHEEL_GAP - 0.03, gz - 0.24, gz - 0.075), (i, t, L) => { // the car: windows round the middle, a solid floor
       const w = (gz - 0.075 - HIT.w) / 0.165, f = HIT.face;
       BG[i] = C(col, (1.6 + L * 0.35) * shadeFace(f));
-      if (f === 6 || w > 0.85) return set(i, '=', C(col, L)), true;
-      if (w > 0.12 && w < 0.6) { BG[i] = lit ? C(WARM, 3 + night * 5) : C(CYAN, 1.5 + L * 0.2); return set(i, Math.abs(fract((f <= 2 ? HIT.v : HIT.u) * 12) - 0.5) < 0.1 ? '|' : ' ', C(col, L)), true; }
+      if (f === 6 || w > 0.85) { BG[i] = C(col, (1.2 + L * .3) * shadeFace(f)); return set(i, ' ', 0), true; } // its floor
+      if (w > 0.12 && w < 0.6) { BG[i] = Math.abs(fract((f <= 2 ? HIT.v : HIT.u) * 12) - 0.5) < 0.1 ? C(col, (1.6 + L * .35) * shadeFace(f)) : lit ? C(WARM, 3 + night * 5) : C(CYAN, 1.5 + L * 0.2 + (w < .25 ? .5 : 0)); return set(i, ' ', 0), true; } // windows between pillars
       return set(i, ' ', 0), true;
     });
   }
@@ -1636,15 +1640,16 @@ function fairSprites() {
   // the arch over the way in, its name in bulbs
   const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
   if (Math.hypot(gx, gy) > vis) return;
-  const post = (i, t, L) => { BG[i] = C(RED, 2 + L * 0.2); return set(i, '|', C(WHITE, L)), true; };
+  const post = (i, t, L) => { BG[i] = C(RED, (2 + L * 0.3) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; };
   for (const sd of [-1, 1]) drawBox(boxAt(gx + sd * hw, gy, 1, 0, 0.03, 0.03, 0, 0.5), post);
   drawBox(boxAt(gx, gy, 1, 0, hw + 0.03, 0.01, 0.42, 0.52), (i, t, L) => {
     const glow = Math.max(night, overcast * 0.6);
     BG[i] = C(RED, 2 + glow * 4);
-    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(YEL, L)), true;
+    if (HIT.face !== 3 && HIT.face !== 4) { BG[i] = C(YEL, 2.4 + L * .3); return set(i, ' ', 0), true; } // the gilt edge
     const n = FAIR_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.03) + 1) / 2 * n - 1;
     const ch = signLine(FAIR_SIGN, q, (0.51 - HIT.w) / 0.08, i, 0.47, midDepth(gx, gy), t, 2 * (hw + 0.03) / n, 0.08, farDepth(gx, gy, hw), ...faceDir(1, 0));
     if (ch !== null && (ch !== ' ' || Math.abs(HIT.w - 0.47) < 0.03)) return set(i, ch, C(YEL, 15)), true;
-    return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
+    if (glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25) BG[i] = C(WHITE, 15); // (bulbs above and below the letters, chasing)
+    return set(i, ' ', 0), true;
   });
 }
