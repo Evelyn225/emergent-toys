@@ -18998,9 +18998,12 @@ function hardwareWall(i, u, uStep, z, d, mx, my, L) {
   set(i, ' ', 0);
   const footprint = Math.max(uStep, d / projY);
   if (mx >= 13) { // garden walls keep their trellis, including the back wall
-    if (footprint > 0.05) { BG[i] = C(GREEN, 1.5 + L * 0.1); return true; } // (it settles to a green wall further off)
-    const lattice = Math.abs(fract((u + z) * 2) - 0.5) < 0.06 || Math.abs(fract((u - z) * 2) - 0.5) < 0.06, leaf = noise(u * 3, z * 3, 61) > 0.62 && z < 2.4;
-    BG[i] = leaf ? C(GREEN, 2.4 + L * 0.1) : lattice ? C(WARM, 2.4 + L * 0.1) : C(STONE, 1.4); return true;
+    // it settles to a green wall further off. Walking up to it, the trellis's slats grow in from nothing and its leaves
+    // brighten out of the green, over the gaps shaded green too, so the wall never flips from green to grey
+    const near = 1 - clamp((footprint - 0.03) / 0.04, 0, 1);
+    if (near <= 0) { BG[i] = C(GREEN, 1.5 + L * 0.1); return true; }
+    const slat = 0.06 * near, lattice = Math.abs(fract((u + z) * 2) - 0.5) < slat || Math.abs(fract((u - z) * 2) - 0.5) < slat, leaf = noise(u * 3, z * 3, 61) > 0.62 && z < 2.4;
+    BG[i] = leaf ? C(GREEN, 1.5 + (0.9 + L * 0.1) * near) : lattice ? C(WARM, 2.4 + L * 0.1) : C(GREEN, 1.5 - 0.4 * near + L * 0.06); return true;
   }
   if (backWall(my) && z < 2.1) { // paint: shelves of cans, each with its colour on the label
     if (fract(z / 0.42) < 0.1) { BG[i] = C(GRAY, 2.2 + L * 0.2); return true; }
