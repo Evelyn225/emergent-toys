@@ -10,29 +10,28 @@ function casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const chase = Math.floor(T * 8);
   if (along < 0.05 || along > len - 0.05 || z > h - 0.06) { // bulbs round the edge of the face, chasing
     const k = Math.floor((along + z) * 12);
-    BG[i] = C(BRICK, 1);
-    return set(i, 'o', (k + chase) % 3 === 0 ? C(YEL, 15) : C(ORANGE, Math.max(L, glow * 7)));
+    BG[i] = (k + chase) % 3 === 0 ? C(YEL, 15) : C(ORANGE, Math.max(L * .5, glow * 6)); // bulbs round the edge, chasing
+    return set(i, ' ', 0);
   }
   if (front && z < 0.42) { // the entrance: gold columns, glass doors, the red carpet running up to them
     const mid = Math.abs(along - len / 2);
-    if (mid < 1.2 && z < 0.32) { if (Math.abs(fract(along * 4) - 0.5) < 0.06) return set(i, '|', C(YEL, 14)); BG[i] = C(YEL, 2 + glow * 3); return set(i, ':', C(WHITE, 9)); }
-    if (z > 0.32) return set(i, '=', C(YEL, Math.max(L, 12)));
-    if (Math.abs(fract(along) - 0.5) < 0.08) { BG[i] = C(YEL, 2); return set(i, '#', C(YEL, Math.max(L, 12))); } // a column
-    BG[i] = C(GRAY, 0.6); return set(i, fract(along * 6) < 0.1 ? '|' : ' ', C(MAG, Math.max(L * 0.6, glow * 6)));
+    if (mid < 1.2 && z < 0.32) { BG[i] = Math.abs(fract(along * 4) - 0.5) < 0.06 ? C(YEL, 9 + glow * 3) : C(YEL, 3 + glow * 3 + (z > .25 ? .8 : 0)); return set(i, ' ', 0); } // the glass doors in gold frames, lit gold inside
+    if (z > 0.32) { BG[i] = C(YEL, Math.max(6, L * .6) + (z > .38 ? 1 : 0)); return set(i, ' ', 0); } // the gilded canopy
+    if (Math.abs(fract(along) - 0.5) < 0.08) { BG[i] = C(YEL, 4 + glow * 3 + (fract(along) < .5 ? 1.2 : -.5)); return set(i, ' ', 0); } // a gold column, round: lit down one side
+    BG[i] = C(fract(along * 6) < 0.1 ? MAG : GRAY, fract(along * 6) < 0.1 ? Math.max(L * .3, glow * 5) : 0.6); return set(i, ' ', 0); // dark glass, neon tubes down it
   }
   if (front && z > 0.5 && z < 1.05) { // CASINO, in big block letters, each one lit in a different colour, the colours chasing
     const word = 'CASINO', q = (u - sgn * (a0 + len / 2)) / (len * 0.9 / word.length) + word.length / 2, k = Math.floor(q), gy = Math.floor((1.05 - z) / 0.55 * 5);
     if (k >= 0 && k < word.length && gy >= 0 && gy < 5) {
       const on = glyphOn(word[k], Math.floor(fract(q) * 4), gy), col = NEON[(k + chase) & 3];
-      BG[i] = on ? C(col, 5) : C(GRAY, 0.5);
-      return set(i, on ? '#' : ' ', C(col, 15));
+      BG[i] = on ? C(col, 12 + glow * 3) : C(GRAY, 0.5); // the letters, solid light
+      return set(i, ' ', 0);
     }
   }
   // the rest: black glass with gold mullions, lit from inside at night
-  if (Math.abs(fract(along * 2) - 0.5) < 0.04) return set(i, '|', C(YEL, Math.max(L * 0.8, glow * 9)));
-  if (Math.abs(fract(z * 5) - 0.5) < 0.04) return set(i, '-', C(YEL, Math.max(L * 0.6, glow * 7)));
-  BG[i] = C(MAG, 0.6 + glow * 1.5);
-  return set(i, hash(Math.floor(along * 6), Math.floor(z * 10), 1401) > 0.9 ? '.' : ' ', C(YEL, 12));
+  if (Math.abs(fract(along * 2) - 0.5) < 0.04 || Math.abs(fract(z * 5) - 0.5) < 0.04) { BG[i] = C(YEL, Math.max(2.4 + L * .3, glow * 6)); return set(i, ' ', 0); } // gold mullions and transoms
+  BG[i] = hash(Math.floor(along * 6), Math.floor(z * 10), 1401) > 0.9 ? C(YEL, 6 + glow * 5) : C(MAG, 0.6 + glow * 1.5 + (fract(z * 5) > .7 ? .4 : 0)); // black glass, a chandelier's glint here and there
+  return set(i, ' ', 0);
 }
 
 // ---- inside
