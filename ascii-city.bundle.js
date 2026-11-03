@@ -2680,9 +2680,9 @@ function gardenSurface(gx, gy) {
   for (const p of cell.pens) if (gx > p.gx0 && gx < p.gx1 && gy > p.gy0 && gy < p.gy1) { out.kind = p.kind; return out; }
   for (const s of cell.paths) {
     const t = clamp(((gx - s.ax) * s.vx + (gy - s.ay) * s.vy) * s.inv, 0, 1), x = gx - s.ax - s.vx * t, y = gy - s.ay - s.vy * t;
-    if (x * x + y * y < 0.0625) { out.kind = 'gravel'; return out; }
+    if (x * x + y * y < 0.0625) { out.kind = 'gravel'; out.edge = Math.sqrt(x * x + y * y) / .25; return out; }
   }
-  for (const { b: [x, y, rx, ry], k } of cell.beds) if (((gx - x) / rx) ** 2 + ((gy - y) / ry) ** 2 < 1) { out.kind = 'bed'; out.bed = k; return out; }
+  for (const { b: [x, y, rx, ry], k } of cell.beds) { const q = ((gx - x) / rx) ** 2 + ((gy - y) / ry) ** 2; if (q < 1) { out.kind = 'bed'; out.bed = k; out.edge = Math.sqrt(q); return out; } }
   return out;
 }
 for (let k = 0; k < 280; k++) {
@@ -12741,13 +12741,32 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
   set(i, ch, col);
 }
 
+// ---- park and garden ground (pass 18), shared by the park blocks and the Botanical Gardens (gardens.js). Each
+// returns [base, level] for the cell's background; fineP (parkFine) fades the up-close detail out with distance
+const parkFine = d => clamp(1 - homeBalconyPavingFootprint(d, eye) / .015, 0, 1);
+const grassSeason = () => { const sn = seasonIdx(); return sn === 0 ? .04 : sn === 3 ? -.06 : 0; };
+// grass: mown in long stripes, a slow lift and fall across the lawn, blades only up close
+function lawnSurface(wx, wy, fineP, LP, lift = 0) {
+  const col = seasonIdx() === 2 && noise(wx * .6, wy * .6, 939) > .55 ? YEL : GREEN;
+  const stripe = Math.floor(wy / .35) & 1 ? .07 : -.05, swell = (noise(wx * .5, wy * .5, 941) - .5) * .2, blade = fineP > .2 ? (hash(Math.floor(wx * 120), Math.floor(wy * 40), 942) - .5) * .06 * fineP : 0;
+  return [col, LP * (.44 + lift + grassSeason() + stripe + swell + blade)];
+}
+// a path: compacted gravel, worn darker down its middle, the grass giving way at its edges (e: 0 middle, 1 edge)
+function gravelSurface(wx, wy, e, fineP, LP) {
+  return e > .85 ? [GREEN, LP * (.36 + grassSeason())] : [STONE, LP * (.34 - (1 - e) * .05 + (hash(Math.floor(wx * 70), Math.floor(wy * 70), 940) - .5) * .05 * fineP)];
+}
+// reeds: tall blades lit and shaded, the odd cattail's brown head
+function reedSurface(wx, wy, fineP, LP) {
+  const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935);
+  return h > .88 && fineP > .2 ? [BRICK, LP * .4] : [GREEN, LP * (.42 + grassSeason() + (h > .5 ? .06 : -.05) * fineP)];
+}
 // a park pond, sd in from its edge (below 0): shallow and green-brown at the margin, deepening to a dark middle, slow
 // ripples with the sky in them (reflect()), raindrops ringing it in the wet; lily pads in patches near the edge, round,
 // the odd one flowering. Frozen in winter
-function pondCell(i, r, x, wx, wy, sd, L) {
-  if (seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
+function pondCell(i, r, x, wx, wy, sd, L, freeze = true) {
+  if (freeze && seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
     const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
-    BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+    BG[i] = C(cr ? WHITE : CYAN, cr ? 3 + day * 4 : 1.4 + day * 3.5 + (noise(wx * 1.5, wy * 1.5, 96) - .5) * .8); return set(i, ' ', 0); // the cracks white in the ice
   }
   const depth = clamp(-sd / 0.55, 0, 1), lamp = lampsOn * glow(wx, wy) * 2;
   if (sd > -0.45 && sd < -0.03 && noise(wx * 1.6, wy * 1.6, 932) > 0.52) { // a patch of lily pads
@@ -12756,8 +12775,8 @@ function pondCell(i, r, x, wx, wy, sd, L) {
       const cx = (gx + 0.25 + 0.5 * hash(gx, gy, 936)) * 0.13, cy = (gy + 0.25 + 0.5 * hash(gx, gy, 937)) * 0.13, d = Math.hypot(wx - cx, wy - cy), rad = 0.035 + 0.02 * h;
       if (d < rad && Math.atan2(wy - cy, wx - cx) + Math.PI > 0.5) { // (the notch cut out of each pad)
         const flower = h > 0.88 && d < 0.014;
-        BG[i] = C(GREEN, 1.1 + day * 2 + lamp * 0.5); FL[i] = 0;
-        return set(i, flower ? '*' : d > rad * 0.7 ? 'o' : ' ', C(flower ? (h > 0.94 ? WHITE : MAG) : GREEN, flower ? Math.max(L * 1.6, 8) : L * 1.2));
+        BG[i] = flower ? C(h > 0.94 ? WHITE : MAG, Math.max(5, 3 + day * 4)) : C(GREEN, (1.1 + day * 2 + lamp * 0.5) * (d > rad * .7 ? .85 : 1.08)); FL[i] = 0; // a pad, its rim darker; a flower on the odd one
+        return set(i, ' ', 0);
       }
     }
   }
@@ -12767,8 +12786,9 @@ function pondCell(i, r, x, wx, wy, sd, L) {
   const shallow = depth < 0.07, deep = depth > 0.55;
   BG[i] = shallow ? C(GREEN, 1 + day * 1.4 + lamp) : C(BLUE, (deep ? 0.8 + day * 2 : 1 + day * 2.6) + lamp);
   FL[i] = 4; // (still water: reflect() mirrors what's round it, in one tint)
-  return set(i, drop ? 'o' : shallow ? (hash(Math.floor(wx * 24), Math.floor(wy * 24), 938) > 0.6 ? '.' : ' ') : n > 0.68 ? '~' : n > 0.6 ? '-' : ' ',
-    drop ? C(WHITE, 6 + day * 6) : C(shallow ? GREEN : CYAN, 4 + day * 5));
+  if (drop) BG[i] = C(WHITE, 4 + day * 5); // a raindrop's ring
+  else if (!shallow && n > 0.6) BG[i] = C(BG[i] >> 4, (BG[i] & 15) + (n > .68 ? 1.2 : .6)); // a ripple catching the light
+  return set(i, ' ', 0);
 }
 function floorCell(i, r, x, rx, ry) {
   floorBaseCell(i, r, x, rx, ry);
@@ -12829,9 +12849,9 @@ function floorBaseCell(i, r, x, rx, ry) {
     const kind = blockKind(bx, by);
     if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
     if (kind === 'gardens' && inGardens(wx, wy)) {
-      const gf = gardenFloor(i, r, x, wx, wy, L);
+      const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
-      [ch, base, k] = gf; soft = true;
+      surf = gf; soft = true;
     } else if (onCauseway(wx, wy)) { // the road out to the airport
       soft = true; [ch, base, k] = causewayFloor(r, x, wx, wy);
     } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
@@ -12917,10 +12937,11 @@ function floorBaseCell(i, r, x, rx, ry) {
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       const sd = pondSD(lx, ly, pbx, pby); // (how far out of the pond: below 0, how far in)
       if (sd < 0) return pondCell(i, r, x, wx, wy, sd, L);
-      else if (sd < 0.025) { ch = hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) > 0.7 ? '.' : ' '; base = BRICK; k = 0.6; } // a thin muddy edge
-      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
-      else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
-      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
+      const fineP = parkFine(d), LP = L * roadDark();
+      if (sd < 0.025) surf = [BRICK, LP * (.26 + (hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) - .5) * .06 * fineP)]; // a thin muddy edge
+      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) surf = reedSurface(wx, wy, fineP, LP); // reeds in clumps
+      else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) surf = gravelSurface(wx, wy, Math.min(Math.abs(lx - 5), Math.abs(ly - 5)) / .2, fineP, LP);
+      else surf = lawnSurface(wx, wy, fineP, LP);
     } else surf = plazaSurface(wx, wy, lx, ly, d, L); // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
@@ -14623,16 +14644,19 @@ function pavilionGlassShade(o, i, t, L) {
   const ny = roof ? o.planes[HIT.face][1] : HIT.face <= 2 ? 0 : 1;
   const wall = roof ? !o.planes[HIT.face][2] : HIT.face < 5;
   const along = Math.abs(nx) > Math.abs(ny) ? v : u;
-  const bar = Math.abs(fract((along + (Math.abs(nx) > Math.abs(ny) ? o.hw : o.hl)) * 3) - .5) < .035 ||
-    (wall ? fract(z * 5) < .055 : fract((Math.abs(nx) > Math.abs(ny) ? u : v) * 5) < .065);
-  if (bar) {
-    BG[i] = C(WHITE,2 + L * .22);
-    set(i,wall ? '|' : Math.abs(nx) > Math.abs(ny) ? '/' : '-',C(WHITE,L));
+  // glazing bars as colour, filtered by the cell's footprint so they thin to a tint far off rather than flicker
+  const fp = t / projY, mu = Math.abs(fract((along + (Math.abs(nx) > Math.abs(ny) ? o.hw : o.hl)) * 3) - .5) / 3;
+  const tq = wall ? fract(z * 5) / 5 : fract((Math.abs(nx) > Math.abs(ny) ? u : v) * 5) / 5;
+  const bar = Math.max(roadLine(mu, .0233, fp), roadLine(tq - (wall ? .0055 : .0065), wall ? .011 : .013, fp));
+  if (bar > .5) {
+    BG[i] = C(WHITE,2 + L * .22 + (wall && tq > .006 ? -.5 : 0)); // the bars, a transom's underside in shadow
+    set(i,' ',0);
   } else {
     // Stable foliage beneath the glazing, sky reflection above it. World coordinates prevent sliding textures.
     const leaf = noise((o.x + u) * 3,(o.y + v) * 3 + z * .6,879) > .56 && z < 1.7;
-    BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 : 1 + day * 2.2);
-    set(i,leaf ? '%' : fract((u + v) * 9) < .035 ? '/' : ' ',C(leaf ? GREEN : WHITE,L * (leaf ? .75 : .35)));
+    const lv = leaf ? noise((o.x + u) * 9,(o.y + v) * 9 + z * 2,880) : 0, streak = !leaf && fract((u + v) * 9) < .08;
+    BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 + (lv > .5 ? .7 : 0) : 1 + day * 2.2 + (streak ? .8 + day : 0) + bar * .6); // leaves in clumps; the sky sliding across the panes
+    set(i,' ',0);
   }
   if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35,0,HIT.w);
   return true;
@@ -14640,7 +14664,7 @@ function pavilionGlassShade(o, i, t, L) {
 function pavilionDetailShade(o, i, t, L) {
   if (o.gh) {
     if (o.kind === 'glazing' || o.kind === 'clerestory') return pavilionGlassShade(o,i,t,L);
-    BG[i] = C(GREEN,2 + L * .3); set(i,o.kind === 'crest' ? '^' : '|',C(WHITE,L)); return true;
+    BG[i] = C(o.kind === 'crest' ? WHITE : GREEN,(2 + L * .3) * shadeFace(HIT.face)); set(i,' ',0); return true; // posts green, the cresting white
   }
   const p = o.b.profile, z = HIT.w, face = HIT.face, top = o.planes ? o.planes[face][2] > 0 : face === 5;
   const base = o.kind === 'tiles' ? p.roof : o.kind === 'balcony' ? STONE : p.trim;
@@ -14764,8 +14788,10 @@ function treeCell(i, u, z, du, dz, L, t) {
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
-      if (k === 'birch') { BG[i] = C(WHITE, 2 + L * 0.35); return set(i, hash(Math.floor(z * 60), 1, 813) > 0.75 ? '-' : ' ', C(GRAY, 3)), true; }
-      BG[i] = C(BRICK, 0.8 + L * 0.18); return set(i, au < trunkW * 0.4 ? '|' : ' ', C(BRICK, L * 0.6)), true;
+      const side = u / (trunkW + .001); // across the trunk, -1..1: lit on its sunward side, rounded
+      if (k === 'birch') { const mark = du < .01 && hash(Math.floor(z * 60), 1, 813) > 0.75; BG[i] = mark ? C(GRAY, 1.2) : C(WHITE, (2 + L * 0.35) * (1.05 - side * .2)); return set(i, ' ', 0), true; } // a birch's white, its black marks up close
+      const furrow = du < .01 ? (hash(Math.floor(u * 400), Math.floor(z * 60), 817) - .5) * .4 : 0;
+      BG[i] = C(BRICK, (0.9 + L * 0.2) * (1.05 - side * .25) + furrow); return set(i, ' ', 0), true; // bark, furrowed up close
     }
     return false;
   }
@@ -14774,10 +14800,16 @@ function treeCell(i, u, z, du, dz, L, t) {
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
   const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
   const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
-  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, '^', C(WHITE, 15)), true; } // snow on the pine's boughs
-  BG[i] = C(base, Math.max(0.6, (0.9 + L * 0.22) * lit * bg));
-  const ch = k === 'pine' ? (n > 0.6 ? '^' : n > 0.3 ? 'A' : ' ') : n > 0.72 ? '@' : n > 0.45 ? '%' : n > 0.25 ? '&' : ' ';
-  return set(i, ch, fall ? C(fall, L * (0.9 + n * 0.5) * lit) : base === MAG ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
+  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; } // snow on the pine's boughs
+  // leaf clusters: each a rounded clump lit on its upper side and shaded under, the clumps themselves lighter toward
+  // the sun; up close you see them, far off the canopy settles to its lit-and-shaded mass
+  const fineT = clamp(1 - Math.max(du, dz) / .035, 0, 1), cs = k === 'pine' ? 0 : 1;
+  let clump = 0;
+  if (k === 'pine') { const tier = fract((z - .12) / .15); clump = (tier > .75 ? -.35 : tier < .3 ? .2 : 0); } // each tier's bough lit above, its underside in shadow
+  else { const cu = u * 16 + t.seed * 7, cz2 = z * 16, fu = fract(cu) - .5, fz = fract(cz2) - .5, r2 = fu * fu + fz * fz; clump = (.12 - r2) * 1.6 + fz * .5; } // a clump's dome, lit from above
+  const blossom = base === MAG && n > 0.8 ? WHITE : base;
+  BG[i] = C(blossom, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12)));
+  return set(i, ' ', 0), true;
 }
 
 function winterTreeCell(i, u, z, du, dz, L, t) {
@@ -14793,8 +14825,8 @@ function winterTreeCell(i, u, z, du, dz, L, t) {
   }
   if (slope === null) return false;
   const snow = snowCover > 0.2 && z > height * 0.55 && Math.abs(slope) < 1.8 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
-  const ch = snow ? '-' : Math.abs(slope) > 1.8 ? '|' : Math.abs(slope) < 0.28 ? '-' : slope > 0 ? '/' : '\\';
-  return set(i, ch, C(snow ? WHITE : t.kind === 'birch' ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
+  BG[i] = snow ? C(WHITE, 4 + L * .3) : C(t.kind === 'birch' ? WHITE : BRICK, t.kind === 'birch' ? 2.2 + L * .3 : 1.1 + L * .2); // bare branches, snow along the level ones
+  return set(i, ' ', 0), true;
 }
 
 // a person's look, kept until the season changes their clothes; their pose from their walk phase (still: standing)
@@ -22684,37 +22716,39 @@ const picnicLocal = (wx, wy) => { // where (wx, wy) is on the blanket: [along, a
   const dx = rel(wx - s.x), dy = rel(wy - s.y), along = dx * s.fx + dy * s.fy - PICNIC_AHEAD, across = -dx * s.fy + dy * s.fx;
   return Math.abs(along) < PICNIC_LONG && Math.abs(across) < PICNIC_HALF ? [along, across] : null;
 };
-function gardenFloor(i, r, x, wx, wy, L) { // true if it painted the cell itself; else [ch, base, k]
-  const pic = picnicLocal(wx, wy);
-  if (pic) {
+// the ground (pass 18): colour, no characters. True if it painted the cell itself, else [base, level] for its background
+function gardenFloor(i, r, x, wx, wy, L, d) {
+  const fineP = parkFine(d), LP = L * roadDark(), pic = picnicLocal(wx, wy);
+  if (pic) { // red and white gingham: deep red where two red bands cross, lighter where one does, white between; a white fringe
     const [al, ac] = pic, edge = Math.min(PICNIC_LONG - Math.abs(al), PICNIC_HALF - Math.abs(ac));
-    if (edge < 0.006) return set(i, (r + x) & 1 ? '|' : '\'', C(WHITE, L * 1.3)), true; // the fringe
-    const red = (Math.floor((al + PICNIC_LONG) / 0.04) + Math.floor((ac + PICNIC_HALF) / 0.04)) & 1, stripe = Math.abs(fract((al + PICNIC_LONG) / 0.04) - 0.5) < 0.12 || Math.abs(fract((ac + PICNIC_HALF) / 0.04) - 0.5) < 0.12;
-    BG[i] = red ? C(RED, 2 + L * 0.35) : C(WHITE, 2 + L * 0.3);
-    return set(i, stripe ? '+' : red ? '#' : ':', red ? C(RED, L * 1.4) : C(WHITE, L * 1.2)), true;
+    if (edge < 0.006) return [WHITE, LP * (.62 - ((r + x) & 1) * .1)];
+    const n = (Math.floor((al + PICNIC_LONG) / 0.02) & 1) + (Math.floor((ac + PICNIC_HALF) / 0.02) & 1);
+    return n === 2 ? [RED, LP * .42] : n === 1 ? [RED, LP * .62] : [WHITE, LP * .72];
   }
   const [gx, gy] = gardenLocal(wx, wy), surface = gardenSurface(gx, gy), e = surface.edge;
-  if (surface.kind === 'jetty') return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
-  if (surface.kind === 'lake') { // the lake: ripples, lily pads near the edge, the sky in it
-    const n = noise(wx * 3 + T * 0.2, wy * 3 - T * 0.1, 811), lily = e < 0.7 && hash(Math.floor(wx * 8), Math.floor(wy * 8), 812) > 0.88;
-    set(i, lily ? 'o' : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
-    BG[i] = C(BLUE, 1 + day * 2.5); FL[i] = 3;
-    return true;
+  if (surface.kind === 'jetty') { // boards across it, a dark gap between each, a rail along each side
+    if (Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8) return [BRICK, LP * .62];
+    const pl = Math.floor(gx * 6), gap = coveGroove(gx * 6, 1, .08, homeBalconyPavingFootprint(d, eye) * 6);
+    return [BRICK, LP * (.5 + (hash(pl, 3, 816) - .5) * .08 - gap * .2)];
   }
-  if (surface.kind === 'reeds') return [(r + x) % 3 ? '|' : ',', GREEN, 0.9];
-  if (surface.kind === 'bear' || surface.kind === 'tortoise') {
-    if (surface.kind === 'tortoise') return [(r * 5 + x) % 4 ? '.' : ':', YEL, 0.9];
+  if (surface.kind === 'lake') { pondCell(i, r, x, wx, wy, -e, L, false); if (FL[i] === 4) FL[i] = 3; return true; } // the lake: never freezes, the ducks and boats on it
+  if (surface.kind === 'reeds') return reedSurface(wx, wy, fineP, LP);
+  if (surface.kind === 'tortoise') return [YEL, LP * (.36 + (noise(wx * 5, wy * 5, 817) - .5) * .12 + (hash(Math.floor(wx * 40), Math.floor(wy * 40), 818) - .5) * .06 * fineP)]; // dry sandy earth
+  if (surface.kind === 'bear') { // boulders, rounded by their light; bare earth round them; rough grass
     const h = noise(wx * 4, wy * 4, 813);
-    return h > 0.62 ? ['%', GRAY, 1.2] : h > 0.55 ? [':', BRICK, 1] : [(r * 3 + x) % 5 ? '"' : ',', GREEN, 0.85];
+    if (h > 0.62) return [GRAY, LP * (.42 + (h - .62) * 1.4 - (noise(wx * 4 + .06, wy * 4 + .06, 813) - h) * 3)];
+    if (h > 0.55) return [BRICK, LP * .32];
+    return lawnSurface(wx, wy, fineP, LP, -.06);
   }
-  if (surface.kind === 'gravel') return [(r * 7 + x * 3) % 5 ? ':' : '.', WARM, 1.1];
-  const bed = surface.bed;
-  if (surface.kind === 'bed') { // a flower bed: blooms in three colours, set out in rows
-    const pal = BED_PAL[(bed + mod(dayNum, 7)) % BED_PAL.length], h = hash(Math.floor(wx * 14), Math.floor(wy * 14), 814 + bed);
-    if (h > 0.35) { set(i, h > 0.8 ? '@' : '*', C(pal[h * 3 | 0], L * 1.7)); BG[i] = C(BRICK, 1 + day); return true; }
-    return [',', GREEN, 0.9];
+  if (surface.kind === 'gravel') return gravelSurface(wx, wy, e, fineP, LP);
+  if (surface.kind === 'bed') { // a flower bed: dark soil at its rim, then rows of plants, blooms in three colours on them
+    if (e > .93) return [BRICK, LP * .26];
+    const pal = BED_PAL[(surface.bed + mod(dayNum, 7)) % BED_PAL.length], row = fract(gy * 7), h = hash(Math.floor(wx * 14), Math.floor(wy * 14), 814 + surface.bed);
+    if (row < .22) return [BRICK, LP * (.28 + .06 * (1 - fineP))]; // the soil between the rows (it fades into the planting far off)
+    if (h > 0.4) return [pal[(h - .4) / .6 * 3 | 0], LP * (.66 + (row - .6) * .2)];
+    return [GREEN, LP * (.34 + row * .12)];
   }
-  return [(r * 3 + x) % 4 ? '"' : ',', GREEN, 1.35]; // the lawns, greener than the park's
+  return lawnSurface(wx, wy, fineP, LP, .04); // the lawns, greener than the park's
 }
 
 // ---- the glass houses from outside (STY 18 conservatory: iron and glass, palms pressing against it; 19 aviary: mesh)
@@ -22723,17 +22757,18 @@ function glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty) {
   const [dgx, dgy] = gh.door, dx = GARDEN.x0 + dgx, dy = GARDEN.y0 + dgy, sgn = Math.sign(u * wc) || 1;
   const onDoorFace = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - dy)) < 0.01;
   if (onDoorFace && Math.abs(rel(wc - dx)) < 0.13 && z < 0.27) { // the doors
-    if (Math.abs(rel(wc - dx)) > 0.12 || z > 0.26 || Math.abs(rel(wc - dx)) < 0.005) return set(i, '|', C(WHITE, L));
-    BG[i] = C(sty === 18 ? GREEN : CYAN, 1 + glow * 2); return set(i, ':', C(WHITE, L * 0.5));
+    const dd = Math.abs(rel(wc - dx));
+    if (dd > 0.12 || z > 0.26 || dd < 0.005) { BG[i] = C(WHITE, 2 + L * .3 - (dd < .005 ? .6 : 0)); return set(i, ' ', 0); } // the frame, the meeting stiles darker
+    BG[i] = C(sty === 18 ? GREEN : CYAN, 1 + glow * 2 + (z > .2 ? .5 : 0)); return set(i, ' ', 0); // the glass doors, the sky catching their tops
   }
   if (onDoorFace && Math.abs(z - 0.32) < 0.035 && wallText(i, u, uStep, z, d, gh.word, sgn * dx, 0.32, 0.045, 0.05, C(sty === 18 ? GREEN : CYAN, Math.max(L * 1.2, glow * 15)), C(WHITE, 2))) return;
-  if (z < 0.055) { BG[i] = C(STONE, 2 + L * 0.25); return set(i, '=', C(STONE, L)); }
-  if (z > h - 0.025) return set(i, '=', C(sty === 18 ? WHITE : GREEN, L)); // eave; the ridge is real roof geometry
+  if (z < 0.055) { BG[i] = C(STONE, 2 + L * 0.25 + (z > .045 ? .8 : 0)); return set(i, ' ', 0); } // the stone plinth, its coping lit
+  if (z > h - 0.025) { BG[i] = C(sty === 18 ? WHITE : GREEN, 1.5 + L * .3 - (z < h - .015 ? .7 : 0)); return set(i, ' ', 0); } // eave, its underside in shadow; the ridge is real roof geometry
   const start = side ? GARDEN.x0 + gh.gx0 : GARDEN.y0 + gh.gy0, width = side ? gh.gx1 - gh.gx0 + 1 : gh.gy1 - gh.gy0 + 1;
   const along = rel(wc - start), corner = Math.min(along, width - along), bays = width * (sty === 18 ? 3 : 2);
   if (corner < 0.028 || fract(along / width * bays) < 0.045 || fract((z - 0.055) * 5) < 0.045) {
-    BG[i] = C(sty === 18 ? WHITE : GREEN, 1 + L * 0.16);
-    return set(i, fract((z - 0.055) * 5) < 0.045 ? '-' : '|', C(sty === 18 ? WHITE : GREEN, L));
+    BG[i] = C(sty === 18 ? WHITE : GREEN, 1 + L * 0.2 + (fract((z - 0.055) * 5) < 0.02 ? .6 : 0)); // glazing bars, the transoms' tops catching the light
+    return set(i, ' ', 0);
   }
   return glassDepth(i, u, z, h, gh, side, L, glow, sty === 19);
 }
@@ -22756,30 +22791,34 @@ function glassDepth(i, u, z, h, gh, side, L, glow, aviary) {
     if (aviary && hash(slot, k, seed + 3) > 0.4 && (Math.hypot(bu, bz * 2) < 0.008 || Math.abs(bu) < 0.022 && Math.abs(bz - beat * Math.abs(bu) * 0.6) < 0.006)) {
       BG[i] = C(BIRD_COL[slot & 7], 11 * fade); return set(i, ' ', 0);
     }
-    if (crown || fern) { BG[i] = C(GREEN, (1.5 + glow * 2) * fade); return set(i, noise(lu * 40, lz * 40, seed + 4) > 0.5 ? '%' : aviary ? '@' : '"', C(GREEN, Math.max(L, glow * 10) * fade)); }
-    if (trunk) return set(i, '|', C(BRICK, Math.max(L, glow * 8) * fade));
+    if (crown || fern) { const lv = noise(lu * 40, lz * 40, seed + 4); BG[i] = C(GREEN, (1.5 + glow * 2 + (lv > .5 ? .8 : 0) + (lz > tall ? .5 : 0)) * fade); return set(i, ' ', 0); } // leaves in clumps, lit on top
+    if (trunk) { BG[i] = C(BRICK, (1.5 + glow * 1.5 + (lu > c ? -.4 : .3)) * fade); return set(i, ' ', 0); }
   }
   const sky = day > 0.3 ? C(CYAN, 1.5 + day * 2) : dusk > 0.3 ? C(ORANGE, 2) : C(BLUE, 1 + glow);
-  if (b.s === 'floor') { BG[i] = C(aviary ? GREEN : BRICK, 1 + glow * 1.5); return set(i, (Math.floor(b.u * 30) + Math.floor(b.q * 30)) % 4 ? ' ' : ',', C(GREEN, L * 0.6)); }
-  if (b.s === 'ceil') { BG[i] = sky; return set(i, fract(b.u * 2) < 0.06 || fract(b.q * 2) < 0.06 ? '=' : ' ', C(WHITE, L * 0.6)); }
-  BG[i] = sky; // the far glass, the sky through it
-  return set(i, fract(b.u * 2) < 0.04 || fract(b.z * 2) < 0.04 ? (aviary ? '+' : '|') : ' ', C(aviary ? GRAY : WHITE, L * 0.5));
+  if (b.s === 'floor') { BG[i] = C(aviary ? GREEN : BRICK, 1 + glow * 1.5 + (b.q > dep * .6 ? -.3 : 0)); return set(i, ' ', 0); }
+  if (b.s === 'ceil') { BG[i] = fract(b.u * 2) < 0.06 || fract(b.q * 2) < 0.06 ? C(WHITE, 1.5 + day * 2) : sky; return set(i, ' ', 0); }
+  BG[i] = fract(b.u * 2) < 0.04 || fract(b.z * 2) < 0.04 ? C(aviary ? GRAY : WHITE, 1.2 + day * 1.5) : sky; // the far glass, the sky through it
+  return set(i, ' ', 0);
 }
 
 // ---- solids: the railings (black iron, spear-topped), the gardeners' shed
 SOLID_SHADE.railing = o => (i, t, L) => {
-  const w = HIT.w, u = HIT.u;
-  if (HIT.face === 5 || w > o.z1 - 0.02) return set(i, '^', C(GRAY, L * 1.2)), true;
-  if (Math.abs(w - o.z1 * 0.85) < 0.008 || w < 0.01) return set(i, '=', C(GRAY, L)), true;
-  return Math.abs(fract(u * 12) - 0.5) < 0.15 ? (set(i, '|', C(GRAY, L)), true) : false; // see-through between the bars
+  const w = HIT.w, u = HIT.u, fp = t / projY, iron = lv => (BG[i] = C(GRAY, Math.max(.6, lv)), set(i, ' ', 0), true);
+  if (HIT.face === 5 || w > o.z1 - 0.02) { // the spear heads: tapering to their points, lit on top
+    const sp = Math.abs(fract(u * 12) - 0.5) / 12, top = (o.z1 - w) / .02;
+    return roadLine(sp, .025 * top, fp) > .5 || fp > .02 ? iron(.8 + L * .35 + (1 - top) * .8) : false;
+  }
+  if (roadLine(Math.abs(w - o.z1 * 0.85), .016, fp) > .5 || w < 0.01) return iron(.8 + L * .28 + (w > o.z1 * .85 ? .6 : 0)); // the rails, lit along their tops
+  const bu = Math.abs(fract(u * 12) - 0.5) / 12;
+  return roadLine(bu, .025, fp) > .5 || fp > .03 ? iron(.7 + L * .22 + (fract(u * 12) < .5 ? .5 : 0)) : false; // the bars, round: lit on one side; see-through between them
 };
 SOLID_SHADE.shed = () => (i, t, L) => {
   const f = HIT.face, w = HIT.w;
   BG[i] = C(f === 5 ? GREEN : BRICK, (1.5 + L * 0.3) * shadeFace(f));
-  if (f === 5) return set(i, '=', C(GREEN, L)), true;
-  if (f === 3 && Math.abs(HIT.u) < 0.08 && w < 0.2) { BG[i] = C(BRICK, 1); return set(i, w > 0.19 ? '-' : Math.abs(HIT.u) > 0.07 ? '|' : ' ', C(GRAY, L)), true; } // the door
-  if (f === 3 && Math.abs(HIT.u - 0.22) < 0.06 && Math.abs(w - 0.15) < 0.04) return set(i, '#', C(YEL, Math.max(L, night * 12))), true; // the window
-  return set(i, fract(HIT.u * 20 + HIT.v * 20) < 0.15 ? '|' : ' ', C(BRICK, L * 0.7)), true; // boards
+  if (f === 5) { BG[i] = C(GREEN, (1.5 + L * 0.3) - coveGroove(HIT.u * 20, 1, .1, t / projY * 20) * .5); return set(i, ' ', 0), true; } // a felt roof in strips
+  if (f === 3 && Math.abs(HIT.u) < 0.08 && w < 0.2) { BG[i] = w > 0.19 || Math.abs(HIT.u) > 0.07 ? C(GRAY, 1.5 + L * .25) : C(BRICK, 1 + L * .12 + (Math.abs(HIT.u) < .005 ? -.4 : 0)); return set(i, ' ', 0), true; } // the door in its frame
+  if (f === 3 && Math.abs(HIT.u - 0.22) < 0.06 && Math.abs(w - 0.15) < 0.04) { const fr = Math.abs(HIT.u - 0.22) > .052 || Math.abs(w - .15) > .032; BG[i] = fr ? C(WHITE, 2 + L * .3) : night > .3 ? C(YEL, 4 + night * 8) : C(CYAN, 1.5 + day * 2 + (w > .16 ? .6 : 0)); return set(i, ' ', 0), true; } // the window: lit at night, the sky in it by day
+  BG[i] = C(BRICK, (BG[i] & 15) - coveGroove(HIT.u * 20 + HIT.v * 20, 1, .12, t / projY * 20) * .7); return set(i, ' ', 0), true; // boards, the gaps between them filtered
 };
 
 // ---- animals, ducks and boats
