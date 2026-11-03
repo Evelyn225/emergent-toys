@@ -855,24 +855,25 @@ function drawAmbulance(m, vx, vy, hx, hy) {
   const hl = 0.25, hw = 0.1, MH = 0.165, CH = 0.11, mhl = hl * 0.68, mo = -hl + mhl, chl = hl - mhl, co = hl - chl;
   const lightsOn = night > 0.4 || overcast > 0.5, braking = m.brake || m.v < 0.05;
   const white = (f, L) => C(WHITE, (2.5 + L * 0.7) * shadeFace(f));
-  const sill = (i, w, L) => { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; };
-  const wheel = (i, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; };
+  const sill = (i, w, L) => { BG[i] = C(GRAY, 1 + (w > .017 ? .5 : 0)); return set(i, ' ', 0), true; };
+  // a round wheel about its centre (u along the side): tyre, rim, hub
+  const wheel = (i, L, du, w) => { const dr = Math.hypot(du, w - .03); BG[i] = dr < .012 ? C(GRAY, 5 + L * .3) : dr < .022 ? C(GRAY, 2.5 + L * .25 + (w > .03 ? .6 : 0)) : C(BLACK, 0); return set(i, ' ', 0), true; };
   vehicleDrawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     BG[i] = white(f, L);
     if (f === 6) return set(i, ' ', 0), true;
-    if (f === 5) return set(i, Math.abs(u) < 0.045 && Math.abs(v) < 0.012 || Math.abs(v) < 0.045 && Math.abs(u) < 0.012 ? '#' : ' ', C(RED, 13)), true;
+    if (f === 5) { if (Math.abs(u) < 0.045 && Math.abs(v) < 0.012 || Math.abs(v) < 0.045 && Math.abs(u) < 0.012) BG[i] = C(RED, 9 + L * .2); return set(i, ' ', 0), true; } // the red cross on the roof
     if (f === 1) return set(i, ' ', 0), true; // (above the cab)
     if (f === 2) { // the back: two doors, windows up top, chevrons along the bottom, tail lights
       if (w < 0.022) return sill(i, w, L);
-      if (Math.abs(v) < 0.006) return set(i, '|', C(GRAY, L * 0.6)), true;
+      if (Math.abs(v) < 0.006) { BG[i] = C(WHITE, (1.6 + L * .45) * shadeFace(f)); return set(i, ' ', 0), true; } // where the doors meet
       if (w > 0.11 && w < 0.145 && Math.abs(v) > 0.02 && Math.abs(v) < 0.075) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; }
-      if (w < 0.05 && Math.abs(v) > hw * 0.75) return set(i, ']', C(RED, braking ? 15 : 8)), true;
+      if (w < 0.05 && Math.abs(v) > hw * 0.75) { BG[i] = C(RED, braking ? 15 : 6 + L * .15); return set(i, ' ', 0), true; }
       if (w < 0.06) { const c = fract((v * (v > 0 ? 1 : -1) + w) * 18) < 0.5; BG[i] = C(c ? RED : YEL, c ? 9 : 12); return set(i, ' ', 0), true; }
       return set(i, ' ', 0), true;
     }
     // the sides
-    if (w < 0.035 && Math.abs(u + mhl * 0.55) < 0.04) return wheel(i, L);
+    if (w < 0.047 && Math.hypot(u + mhl * 0.55, w - .03) < .036) return wheel(i, L, u + mhl * 0.55, w);
     if (w < 0.022) return sill(i, w, L);
     if (w > 0.062 && w < 0.078) { BG[i] = C(RED, 9 + L * 0.2); return set(i, ' ', 0), true; } // the stripe
     const su = u - mhl * 0.1, sw = w - 0.118; // the star of life
@@ -886,25 +887,26 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     if (f === 6 || f === 2) return set(i, ' ', 0), true;
     if (f === 5) return set(i, ' ', 0), true;
     if (f === 1) { // the windscreen, headlights, a grille
-      if (w > 0.07 && Math.abs(v) < hw * 0.82) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, w > 0.1 ? '-' : ' ', C(GRAY, 5)), true; }
-      if (w < 0.05 && Math.abs(v) > hw * 0.55) return set(i, 'O', C(WHITE, lightsOn ? 15 : 10)), true;
-      if (w < 0.045) return set(i, '=', C(GRAY, L * 0.5)), true;
+      if (w > 0.07 && Math.abs(v) < hw * 0.82) { BG[i] = C(CYAN, 2 + L * 0.15 + (w > .095 ? .6 + day * .6 : 0)); return set(i, ' ', 0), true; } // the windscreen, the sky in its top
+      if (w < 0.05 && w > .02 && Math.abs(v) > hw * 0.55) { BG[i] = lightsOn ? C(WHITE, 15) : C(WHITE, 6 + L * .2); return set(i, ' ', 0), true; }
+      if (w < 0.045) { BG[i] = C(GRAY, 1 + roadBands(w, .008, .5, t / projY) * .8); return set(i, ' ', 0), true; } // the grille
       return set(i, ' ', 0), true;
     }
-    if (w < 0.035 && Math.abs(u) < 0.04) return wheel(i, L);
+    if (w < 0.047 && Math.hypot(u, w - .03) < .036) return wheel(i, L, u, w);
     if (w < 0.022) return sill(i, w, L);
     if (w > 0.062 && w < 0.078) { BG[i] = C(RED, 9 + L * 0.2); return set(i, ' ', 0), true; }
     if (w > 0.072 && u > -chl * 0.6 && u < chl * 0.75) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // the door window
-    return set(i, Math.abs(u + chl * 0.65) < 0.004 ? '|' : ' ', C(GRAY, L * 0.5)), true;
+    if (Math.abs(u + chl * 0.65) < 0.004) BG[i] = C(WHITE, (1.6 + L * .45) * shadeFace(f)); // the door's shut line
+    return set(i, ' ', 0), true;
   });
   const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
   vehicleDrawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = !m.wrecked && lightsOn_(m) && strobe() === side;
-    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
+    BG[i] = on ? C(WHITE, 15) : C(side, 3 + (HIT.face === 5 ? .8 : 0)); return set(i, ' ', 0), true;
   });
   for (const s of [-1, 1]) vehicleDrawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
     const on = lightsOn_(m) && strobe() === (s > 0 ? RED : BLUE);
-    BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
+    BG[i] = on ? C(WHITE, 15) : C(RED, 4); return set(i, ' ', 0), true;
   });
 }
 // a car on fire (damage.js): flames out of the bonnet, licking up the windscreen, higher as it goes on
@@ -968,44 +970,65 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
   vehicleDrawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
     BG[i] = C(body, (1.5 + L * 0.45) * k * burnt);
-    if (wreck) return set(i, hash(Math.floor(u * 30), Math.floor(w * 50), m.id) < 0.3 ? '%' : f === 5 ? '.' : ' ', C(GRAY, 2 + L * 0.2)), true; // (scorched)
-    if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { BG[i] = C(body, (0.8 + L * 0.3) * k); return set(i, hash(i, m.id, 3) < 0.5 ? '%' : '~', C(GRAY, 4 + L * 0.3)), true; }
-    if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
-    if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
-    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking || alarmFlash ? 15 : 8)), true;
-    if (f === 6) return set(i, ' ', 0), true;
-    const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;
-    if (wheel) { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; }
-    if (w < 0.022) { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; }
-    if (m.kind === 'amb' && w > 0.06 && w < 0.13) { // the ambulance's side: windows up front, a red stripe and cross
-      if (u > hl * 0.55 && w > 0.09) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; }
-      if (Math.abs(w - 0.08) < 0.008) return set(i, '=', C(RED, 13)), true;
-      if (Math.abs(u) < 0.03 && w > 0.095) return set(i, '+', C(RED, 14)), true;
+    const fp = t / projY, paint = lv => (BG[i] = C(body, Math.max(.6, lv * burnt)), set(i, ' ', 0), true), lvB = (1.5 + L * 0.45) * k;
+    if (wreck) { const sc = hash(Math.floor(u * 30), Math.floor(w * 50), m.id); BG[i] = C(sc < .3 ? BLACK : GRAY, sc < .3 ? 0 : 1 + L * .12 + sc * .8); return set(i, ' ', 0), true; } // scorched, the paint blistered off in patches
+    if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { const sh = hash(i, m.id, 3); BG[i] = sh < .5 ? C(body, (0.8 + L * 0.3) * k) : C(GRAY, 3 + L * .3); return set(i, ' ', 0), true; } // a dent in shadow, or a scrape to bare metal
+    if (f === 5) { // the roof or bonnet: lit by the sky, a crease down each side
+      if (m.kind === 'amb' && Math.max(Math.abs(u), Math.abs(v)) < 0.05 && Math.min(Math.abs(u), Math.abs(v)) < .017) { BG[i] = C(RED, 9 + L * .2); return set(i, ' ', 0), true; }
+      return paint(lvB + .6 - roadLine(hw * .8 - Math.abs(v), .006, fp) * .5);
     }
-    if (m.kind === 'fire' && w > 0.05) return set(i, Math.abs(fract(u * 12) - 0.5) < 0.12 ? '|' : '=', C(GRAY, L * 0.7)), true; // lockers
-    return set(i, Math.abs(w - 0.05) < 0.006 ? '-' : ' ', C(body, L * 0.6)), true;
+    if (f === 1) { // the front: headlamps, a grille, the bumper lit along its top
+      const lamp = w < 0.05 && w > .02 && Math.abs(v) > hw * 0.55 && Math.abs(v) < hw * .92;
+      if (lamp) { const on = fobBlinking ? fobHeadlight : true, lit = on && (fobBlinking || lightsOn); BG[i] = lit ? C(WHITE, 15) : C(on ? WHITE : GRAY, on ? 6 + L * .2 : 1.5); return set(i, ' ', 0), true; }
+      if (w < 0.02) return paint(w > .016 ? lvB + .6 : lvB * .7); // the bumper
+      if (w < 0.045 && Math.abs(v) < hw * .5) { BG[i] = C(GRAY, 1 + roadBands(w, .008, .5, fp) * .8); return set(i, ' ', 0), true; } // the grille's slats
+      return paint(lvB);
+    }
+    if (f === 2) { // the back: tail lights (bright when braking), the boot lid's shut line
+      if (w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 && Math.abs(v) < hw * .95) { BG[i] = C(RED, braking || alarmFlash ? 15 : 6 + L * .15); return set(i, ' ', 0), true; }
+      if (w < 0.02) return paint(w > .016 ? lvB + .6 : lvB * .7);
+      return paint(lvB - roadLine(Math.abs(w - .062), .004, fp) * .6);
+    }
+    if (f === 6) return set(i, ' ', 0), true;
+    // the sides: round wheels (tyre, rim, hub) in arches, a dark sill, a creased beltline, door shut lines
+    for (const wc of [hl * 0.62, -hl * 0.62]) {
+      const dr = Math.hypot(u - wc, (w - .03) * 1.0);
+      if (dr < .036) { BG[i] = dr < .012 ? C(GRAY, 5 + L * .3) : dr < .022 ? C(GRAY, 2.5 + L * .25 + (w > .03 ? .6 : 0)) : C(BLACK, 0); return set(i, ' ', 0), true; }
+      if (dr < .042 && w > .03) return paint(lvB * .45); // the arch's shadow
+    }
+    if (w < 0.022) { BG[i] = C(GRAY, 1 + (w > .017 ? .5 : 0)); return set(i, ' ', 0), true; }
+    if (m.kind === 'amb' && w > 0.06 && w < 0.13) { // the ambulance's side: windows up front, a red stripe and cross
+      if (u > hl * 0.55 && w > 0.09) { BG[i] = C(CYAN, 2 + L * 0.15 + (w > .11 ? .6 : 0)); return set(i, ' ', 0), true; }
+      if (Math.abs(w - 0.08) < 0.008) { BG[i] = C(RED, 9 + L * .2); return set(i, ' ', 0), true; }
+      if (Math.abs(u) < 0.03 && w > 0.095 && w < .125 && (Math.abs(u) < .01 || Math.abs(w - .11) < .01)) { BG[i] = C(RED, 10 + L * .2); return set(i, ' ', 0), true; }
+    }
+    if (m.kind === 'fire' && w > 0.05) { BG[i] = C(GRAY, 1.6 + L * .3 * k + (Math.abs(fract(u * 12) - 0.5) < 0.06 ? -.8 : roadBands(w, .01, .5, fp) * .4)); return set(i, ' ', 0), true; } // roller-shutter lockers
+    const belt = Math.abs(w - 0.05), seam = cab ? Math.min(Math.abs(u - (cof + chl)), Math.abs(u - cof), Math.abs(u - (cof - chl))) : 1;
+    return paint(lvB + (w > .05 && belt < .004 ? .7 : 0) - (w < .05 && belt < .005 ? .6 : 0) - roadLine(seam, .003, fp) * .7 - (w < .035 ? .3 : 0));
   });
-  // cabin: glass all round, pillars at the corners, a roof
+  // cabin: glass all round with the sky in it, pillars at the corners, a roof
   if (cab) vehicleDrawBox(boxAt(vx + hx * cof, vy + hy * cof, hx, hy, chl, hw * 0.9, top, cab), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
-    if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f)); return set(i, ' ', 0), true; }
+    if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f) + (f === 5 ? .6 : 0)); return set(i, ' ', 0), true; }
     const edge = f <= 2 ? Math.abs(v) > hw * 0.8 : Math.abs(u - cof) > chl * 0.85;
-    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8 * burnt); return set(i, '|', C(body, L * 0.5)), true; }
-    if (wreck) { BG[i] = C(GRAY, 0.6); return set(i, hash(i, m.id, 5) < 0.2 ? '\\' : ' ', C(GRAY, 3)), true; } // (the windows gone)
-    BG[i] = C(CYAN, 1 + L * 0.12);
-    if (dmg >= DMG_SMOKE && hash(Math.floor(u * 40 + v * 13), Math.floor(w * 60), m.id + 9) < 0.18) return set(i, hash(i, 7, m.id) < 0.5 ? '/' : '*', C(WHITE, 9 + L * 0.2)), true; // cracked
+    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8 * burnt); return set(i, ' ', 0), true; }
+    if (wreck) { BG[i] = C(BLACK, 0); return set(i, ' ', 0), true; } // (the windows gone)
+    const sky = (w - top) / (cab - top); // the sky reflected, brighter toward the top of the glass
+    BG[i] = C(CYAN, 1 + L * 0.12 + sky * (.6 + day * .8));
+    if (dmg >= DMG_SMOKE && hash(Math.floor(u * 40 + v * 13), Math.floor(w * 60), m.id + 9) < 0.18) BG[i] = C(WHITE, 6 + L * 0.2); // cracked
     return set(i, ' ', 0), true;
   });
   const roof = cab || top; // what sits on the roof
   if (m.kind === 'taxi') vehicleDrawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
-    BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
+    BG[i] = C(YEL, (lightsOn ? 13 : 9) * (HIT.face === 5 ? 1 : shadeFace(HIT.face))); return set(i, ' ', 0), true;
   });
   if (m.ev || m.patrol) vehicleDrawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = !wreck && lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
-    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
+    BG[i] = on ? C(WHITE, 15) : C(side, 3 + (HIT.face === 5 ? .8 : 0)); return set(i, ' ', 0), true;
   });
   if (m.kind === 'fire') vehicleDrawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
-    BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
+    const rung = roadBands(HIT.u + .5 / 30, 1 / 30, .3, t / projY), rail = Math.abs(HIT.v) > .025;
+    BG[i] = rail || rung > .5 ? C(WHITE, 3 + L * .35) : C(GRAY, 1 + L * 0.2); return set(i, ' ', 0), true; // the ladder: rails and rungs
   });
 }
 
