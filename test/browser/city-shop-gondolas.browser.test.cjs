@@ -7,7 +7,7 @@ async function fixture(run){const p=await browser.newPage(),errors=[];p.on('page
  await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;env(0);render(0);});
  await run(p);assert.deepEqual(errors,[]);
 }finally{await p.close();}}
-const SHOPS=[['store','STORE','grocery'],['books','BOOKS','books'],['grocer','GROCER','grocery'],['hardware','HARDWARE','hardware'],['pharmacy','PHARMACY','pharmacy'],
+const SHOPS=[['store','STORE','grocery'],['bodega','BODEGA','grocery'],['books','BOOKS','books'],['grocer','GROCER','grocery'],['hardware','HARDWARE','hardware'],['pharmacy','PHARMACY','pharmacy'],
  ['video','VIDEO','video'],['liquor','LIQUOR','wine'],['gas','GAS','grocery'],['bodega','BODEGA','grocery'],['drugstore','DRUGSTORE','pharmacy'],['toys','TOYS','toys']];
 
 test('every shelf island is a built gondola on its old cells, 60 cm deep at most, with no painted block left in the grid',()=>fixture(async p=>{
@@ -27,7 +27,9 @@ test('every shelf island is a built gondola on its old cells, 60 cm deep at most
     if(o.gondola.facings<40)bad.push([kind,'thin stock',o.gondola.facings]);
    }
    // (the corner store and bodega: the aisle between the two rows of islands is a real aisle, 1.2 m or more clear)
-   if(kind==='store'){const ys=[...new Set(g.map(o=>o.box.y))].sort((p,q)=>p-q);for(let k=1;k<ys.length;k++){const A=g.find(o=>o.box.y===ys[k-1]),B=g.find(o=>o.box.y===ys[k]),gap=ys[k]-ys[k-1]-A.box.hw-B.box.hw;if(gap<1.2)bad.push([kind,'aisle',+gap.toFixed(2)]);}}
+   // (the bodega: one row of short runs down the middle, a clear way between them and round them)
+   if(kind==='bodega'){const xs=g.map(o=>o.box.x).sort((p,q)=>p-q);if(g.length!==2||new Set(g.map(o=>o.box.y)).size!==1||xs[1]-xs[0]-g[0].box.hl-g[1].box.hl<1.5)bad.push([kind,'layout',g.map(o=>[o.box.x,o.box.y,o.box.hl,o.box.hw])]);}
+   if(kind==='store'||kind==='bodega'){const ys=[...new Set(g.map(o=>o.box.y))].sort((p,q)=>p-q);for(let k=1;k<ys.length;k++){const A=g.find(o=>o.box.y===ys[k-1]),B=g.find(o=>o.box.y===ys[k]),gap=ys[k]-ys[k-1]-A.box.hw-B.box.hw;if(gap<1.2)bad.push([kind,'aisle',+gap.toFixed(2)]);}}
   }
   return{out,bad};
  },SHOPS);
