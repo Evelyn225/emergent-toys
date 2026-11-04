@@ -3232,6 +3232,19 @@ function residentialSideRail(b, f, along, depth, z, height, kind) {
   const rail = architectureDetail(b, f, along, depth, .01, depth, z, z + height, kind, { profile: b.profile });
   rail.c = f.side ? 0 : 1; rail.s = f.side ? 1 : 0; rail.hl = depth; rail.hw = .008;
 }
+// Containers and planting share their support height; window boxes have two wall brackets.
+function residentialPlanting(b, f, along, depth, half, z, windowBox = false) {
+  const extra = { profile: b.profile, detailDistance: 9, windowBox };
+  const hw = windowBox ? .027 : .038, height = windowBox ? .04 : .07;
+  architectureDetail(b, f, along, depth, half, hw, z, z + height, 'planter', extra);
+  if (windowBox) for (const side of [-1, 1])
+    architectureDetail(b, f, along + side * half * .65, depth / 2, .006, depth / 2 + hw, z - .016, z + .006, 'planter-bracket', extra);
+  for (let k = 0; k < 3; k++) {
+    const offset = (k - 1) * half * .6, rise = .045 + hash(k, along, Math.floor(b.seed * 65536)) * .025;
+    architectureDetail(b, f, along + offset, depth, half * .55, hw * 1.2,
+      z + height - .008, z + height + rise, 'leaves', extra);
+  }
+}
 function modernApartmentDetails(b, f) {
   if (!f.front && f.end - f.start < 1.7) return;
   const r = f.residential, p = b.profile;
@@ -3249,8 +3262,7 @@ function modernApartmentDetails(b, f) {
       architectureDetail(b, f, along, depth * 2, half, .008, z, z + height, 'balcony-rail', extra);
       for (const sign of [-1, 1]) residentialSideRail(b, f, along + sign * half, depth, z, height, 'balcony-rail');
       if ((fl + first) % 3 === 1) {
-        architectureDetail(b, f, along - half * .65, depth, .045, .038, z, z + .07, 'planter', { profile: p });
-        architectureDetail(b, f, along - half * .65, depth, .052, .044, z + .07, z + .15, 'leaves', { profile: p });
+        residentialPlanting(b, f, along - half * .65, depth, .045, z);
       }
     }
   }
@@ -3286,7 +3298,17 @@ function residentialDetails(b) {
     const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
     architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
     if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
-    if (b.sty === 16) modernApartmentDetails(b, f); else tenementEscapeDetails(b, f);
+    if (b.sty === 16) modernApartmentDetails(b, f); else {
+      tenementEscapeDetails(b, f);
+      const r = f.residential, escapeUnit = Math.max(0, r.units - 2);
+      for (let fl = 0; fl < r.floors; fl++) for (let unit = 0; unit < r.units; unit++) {
+        if (f.front && !f.low && unit === escapeUnit || (unit + fl) % 3 !== 0) continue;
+        const z = r.base + fl * r.fh + r.fh * .2 - .035;
+        if (z < f.low + .03) continue;
+        const along = f.start + r.margin + (unit + .5) * r.spacing + r.spacing * .23;
+        residentialPlanting(b, f, along, .031, Math.min(.11, r.spacing * .14), z, true);
+      }
+    }
   }
 }
 // Deliberate building compositions for the city's housing and business districts. Ground footprints and shop identities stay
@@ -14912,7 +14934,7 @@ function drawArchitecture() {
     if (far < 0.02 || edge > far * tf) return;
     if (o.z0 > eye && (o.z0 - eye) * projY > (hor + 1) * far ||
       o.z1 < eye && (eye - o.z1) * projY > (rows + 1 - hor) * far) return;
-    drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.planes ? rayBeveledBay : rayBox);
+    drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.kind === 'leaves' ? homeRayEllipsoid : o.planes ? rayBeveledBay : rayBox);
   });
 }
 // Windows have complete bays, corner margins and a fitted top floor; geometry carries the balconies and escapes.
@@ -15035,9 +15057,27 @@ function residentialDetailShade(o, i, t, L) {
     if (HIT.face >= 7 && fract((HIT.u + o.hl) * 55) < .28) return false;
     BG[i] = C(GRAY, (1.1 + L * .16) * (HIT.face >= 7 ? 1.2 : 1)); set(i, ' ', 0); return true; // the stair's treads lit, its stringers in shadow
   }
+  if (o.kind === 'planter' || o.kind === 'planter-bracket') {
+    const top = HIT.face === 5, fp = t / projY;
+    const rim = top && (Math.abs(HIT.u) > o.hl - .007 || Math.abs(HIT.v) > o.hw - .007);
+    const lip = !top && z > o.z1 - .009;
+    const base = o.kind === 'planter-bracket' ? GRAY : top && !rim ? BRICK : o.windowBox ? GREEN : BRICK;
+    const soil = top && !rim && o.kind === 'planter';
+    BG[i] = C(base, soil ? .7 + L * .08 : (1.5 + L * .3) * shadeFace(HIT.face) + (rim || lip ? 1 : 0)
+      - (!top && o.kind === 'planter' ? coveGroove(HIT.u, .035, .003, fp) * .7 : 0));
+    set(i, ' ', 0);
+    if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7, 1, 0, z);
+    return true;
+  }
   if (o.kind === 'leaves') {
-    if (Math.abs(HIT.u / o.hl) + Math.abs((z - (o.z0 + o.z1) / 2) / (o.z1 - o.z0)) > 1.15) return false;
-    BG[i] = C(GREEN, 1.3 + L * .2 + (hash(Math.floor(HIT.u * 400), Math.floor(z * 400), 1820) - .5) * .9 * clamp(1 - t / projY / .01, 0, 1)); set(i, ' ', 0); return true; // leaves, each its own tone up close
+    const sn = seasonIdx(), h = (z - o.z0) / (o.z1 - o.z0), u = HIT.u / o.hl;
+    const base = sn === 2 ? ORANGE : GREEN;
+    const fine = clamp(1 - t / projY / .015, 0, 1);
+    const clump = leafClump(u * 2 + o.seed * 7, h * 3) * fine;
+    BG[i] = C(base, (1.2 + L * .23) * (.7 + h * .65 - u * .12 + clump) * (sn === 3 ? .7 : 1));
+    set(i, ' ', 0);
+    if (HIT.nz > .5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7, HIT.nz, 0, z);
+    return true;
   }
   if (o.kind === 'service-spine' && HIT.face < 5) {
     const fl = Math.floor((z - .48) / o.fh), floor0 = .48 + fl * o.fh;

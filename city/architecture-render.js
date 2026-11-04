@@ -249,6 +249,6 @@ function drawArchitecture() {
     if (far < 0.02 || edge > far * tf) return;
     if (o.z0 > eye && (o.z0 - eye) * projY > (hor + 1) * far ||
       o.z1 < eye && (eye - o.z1) * projY > (rows + 1 - hor) * far) return;
-    drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.planes ? rayBeveledBay : rayBox);
+    drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.kind === 'leaves' ? homeRayEllipsoid : o.planes ? rayBeveledBay : rayBox);
   });
 }

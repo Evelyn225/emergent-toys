@@ -38,6 +38,19 @@ function residentialSideRail(b, f, along, depth, z, height, kind) {
   const rail = architectureDetail(b, f, along, depth, .01, depth, z, z + height, kind, { profile: b.profile });
   rail.c = f.side ? 0 : 1; rail.s = f.side ? 1 : 0; rail.hl = depth; rail.hw = .008;
 }
+// Containers and planting share their support height; window boxes have two wall brackets.
+function residentialPlanting(b, f, along, depth, half, z, windowBox = false) {
+  const extra = { profile: b.profile, detailDistance: 9, windowBox };
+  const hw = windowBox ? .027 : .038, height = windowBox ? .04 : .07;
+  architectureDetail(b, f, along, depth, half, hw, z, z + height, 'planter', extra);
+  if (windowBox) for (const side of [-1, 1])
+    architectureDetail(b, f, along + side * half * .65, depth / 2, .006, depth / 2 + hw, z - .016, z + .006, 'planter-bracket', extra);
+  for (let k = 0; k < 3; k++) {
+    const offset = (k - 1) * half * .6, rise = .045 + hash(k, along, Math.floor(b.seed * 65536)) * .025;
+    architectureDetail(b, f, along + offset, depth, half * .55, hw * 1.2,
+      z + height - .008, z + height + rise, 'leaves', extra);
+  }
+}
 function modernApartmentDetails(b, f) {
   if (!f.front && f.end - f.start < 1.7) return;
   const r = f.residential, p = b.profile;
@@ -55,8 +68,7 @@ function modernApartmentDetails(b, f) {
       architectureDetail(b, f, along, depth * 2, half, .008, z, z + height, 'balcony-rail', extra);
       for (const sign of [-1, 1]) residentialSideRail(b, f, along + sign * half, depth, z, height, 'balcony-rail');
       if ((fl + first) % 3 === 1) {
-        architectureDetail(b, f, along - half * .65, depth, .045, .038, z, z + .07, 'planter', { profile: p });
-        architectureDetail(b, f, along - half * .65, depth, .052, .044, z + .07, z + .15, 'leaves', { profile: p });
+        residentialPlanting(b, f, along - half * .65, depth, .045, z);
       }
     }
   }
@@ -92,6 +104,16 @@ function residentialDetails(b) {
     const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
     architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
     if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
-    if (b.sty === 16) modernApartmentDetails(b, f); else tenementEscapeDetails(b, f);
+    if (b.sty === 16) modernApartmentDetails(b, f); else {
+      tenementEscapeDetails(b, f);
+      const r = f.residential, escapeUnit = Math.max(0, r.units - 2);
+      for (let fl = 0; fl < r.floors; fl++) for (let unit = 0; unit < r.units; unit++) {
+        if (f.front && !f.low && unit === escapeUnit || (unit + fl) % 3 !== 0) continue;
+        const z = r.base + fl * r.fh + r.fh * .2 - .035;
+        if (z < f.low + .03) continue;
+        const along = f.start + r.margin + (unit + .5) * r.spacing + r.spacing * .23;
+        residentialPlanting(b, f, along, .031, Math.min(.11, r.spacing * .14), z, true);
+      }
+    }
   }
 }
