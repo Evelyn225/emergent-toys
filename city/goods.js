@@ -358,7 +358,7 @@ function useHeld(near) {
       fx.vape = 0.001; return ['', 'drag'];
     case 'skateboard':
       if (near.indoors || mode !== 'walk' && mode !== 'roof') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
-      fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
+      if(typeof skateDismount==='function')skateDismount(); fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
       if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));
@@ -499,6 +499,7 @@ function pickUpDropped(d) {
   return [true, `You pick up the ${itemName(it)}.`];
 }
 function stepGoods(dt) {
+  if (!fx.skating && typeof SK !== 'undefined' && (SK.transition || SK.grind || SK.manual)) skateDismount();
   if (fx.skating && (mode !== 'walk' && mode !== 'roof' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);

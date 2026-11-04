@@ -8,6 +8,7 @@ let grindsB = [];
 // built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
 function buildSkatepark() {
   GRINDS.length = SKATE_FEATURES.length = 0;
+  if (typeof SK_BOWL_STAIRS !== 'undefined') SK_BOWL_STAIRS.length=0;
   if (typeof SK_TRANSITIONS !== 'undefined') SK_TRANSITIONS.length = 0;
   if (typeof skateSurfaceReset === 'function') skateSurfaceReset();
   const park = parks.find(([bx, by]) => bx === 13 && by === 34);

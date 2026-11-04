@@ -47,9 +47,9 @@ function rayProfile(ox, oy, oz, rx, ry, rz, b) {
   return nearest;
 }
 SOLID_SHADE.skateprofile = o => (i, t, L) => {
-  if (HIT.face === 9) { BG[i] = SK_STEEL(L, true); return set(i, 'o', C(WHITE, L * .5)), true; }
+  if (HIT.face === 9) { BG[i] = SK_STEEL(L, true); return set(i, ' ', 0), true; }
   const curved = HIT.face === 7, light = curved ? .45 + .55 * Math.max(0, HIT.nz) : .5;
-  const seam = curved && coveGroove(HIT.v, .12, .001, t / projX);
-  BG[i] = C(GRAY, (3.5 + L * .32) * light * (seam ? .75 : 1));
+  const seam = !o.bowl && curved ? coveGroove(HIT.v, .3, .001, t / projX) : 0;
+  BG[i] = C(GRAY, (3.5 + L * .32) * light * (1 - seam * .18));
   return set(i, ' ', 0), true;
 };

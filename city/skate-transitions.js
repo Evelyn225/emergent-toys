@@ -43,8 +43,8 @@ function skateTransitionAt(x, y, zHint = 0) {
 }
 function addSkateTransition(x, y, options = {}, yaw = 0) {
   const profile = skateProfile(options), o = { x, y, c: Math.cos(yaw), s: Math.sin(yaw),
-    hl: profile.tip + profile.deck, hw: profile.width / 2, z0: terrainHeight(x, y),
-    z1: terrainHeight(x, y) + profile.height + .003, kind: 'skateprofile', ramp: 'profile', profile,
+    hl: profile.tip + profile.deck, hw: profile.width / 2, z0: terrainHeight(x, y) + .0002,
+    z1: terrainHeight(x, y) + .0002 + profile.height + .003, kind: 'skateprofile', ramp: 'profile', profile,
     low: true, ray: typeof rayProfile === 'function' ? rayProfile : null };
   SK_TRANSITIONS.push(o); SKATE_FEATURES.push(o); solids.push(o);
   for (const side of [-1, 1]) {

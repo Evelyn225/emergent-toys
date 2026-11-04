@@ -13,7 +13,8 @@ const run = [
 const near = (got, want) => assert.ok(Math.abs(got - want) < 1e-8, `${got} != ${want}`);
 
 test('three pushes, carve left, ollie: recorded riding and tuned pop curves', () => {
-  const t = skateSim(run);
+  const calibration={physics:{pushBurst:.06,pushCap:.6}};
+  const t = skateSim(run,calibration);
   // Phase 1 intentionally replaces continuous 9 m/s pushing with .6 m/s
   // bursts tapering toward a 6 m/s cap, and lower rolling resistance. These
   // checkpoints preserve that deliberate change; e823d73 has the legacy curve.
@@ -35,7 +36,7 @@ test('three pushes, carve left, ollie: recorded riding and tuned pop curves', ()
   assert.equal(t[210].trick, 'ollie');
   assert.equal(t.at(-1).bail, 0);
   assert.equal(t.at(-1).score, 88);
-  assert.deepEqual(t, skateSim(run), 'fresh simulation state on every run');
+  assert.deepEqual(t, skateSim(run,calibration), 'fresh simulation state on every run');
 });
 
 test('flat coasting only loses speed; foot braking stops sooner', () => {
@@ -96,9 +97,9 @@ test('hills accelerate from rest, downhill runs exceed the push cap, hard slides
 });
 
 test('push bursts taper below the push cap and cannot accelerate a downhill run', () => {
-  const fast = skateSim([{ frames: 42, keys: { KeyW: 1 } }], { speed: .9 });
-  const coast = skateSim([{ frames: 42 }], { speed: .9 });
+  const fast = skateSim([{ frames: 42, keys: { KeyW: 1 } }], { speed: 1.1 });
+  const coast = skateSim([{ frames: 42 }], { speed: 1.1 });
   assert.deepEqual(fast, coast);
   const push = skateSim([{ frames: 3600, keys: { KeyW: 1 } }]);
-  assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= .6);
+  assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= .9);
 });
