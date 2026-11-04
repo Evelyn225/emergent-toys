@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, physics = {}, transition = null, position = [0, 0] } = {}) {
+function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, physics = {}, transition = null, bowl = null, position = [0, 0] } = {}) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .05) throw new RangeError('dt must be in (0, .05] seconds');
   for (const frame of script) {
     if (!Number.isInteger(frame.frames ?? 1) || (frame.frames ?? 1) < 1) throw new RangeError('frames must be a positive integer');
@@ -21,7 +21,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), mod=(v,m)=>((v%m)+m)%m;
     const rel=v=>v, worldCoord=v=>v;
     const outdoorGroundHeight=(x,y)=>{
-      for(const o of SKATE_FEATURES)if(o.profile&&Math.abs(x-o.x)<=o.hl&&Math.abs(y-o.y)<=o.hw)return skateProfileHeight(o,x-o.x);
+      for(const o of SKATE_FEATURES)if(o.profile&&Math.abs(x-o.x)<=o.hl&&Math.abs(y-o.y)<=o.hw)return skateProfileHeight(o,o.bowl?Math.hypot(x-o.x,y-o.y):x-o.x);
       return ground(x,y);
     }, fallHurt=()=>0;
     const grindsB=[[]], bi=()=>0;
@@ -29,11 +29,11 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     function say(text) { msgText=text; }
     function move(x,y) { px+=x; py+=y; }
   `, ctx);
-  for (const file of ['moves.js', 'skate-paths.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate-transitions.js', 'skate.js']) {
+  for (const file of ['moves.js', 'skate-paths.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate-transitions.js', 'skate-bowl.js', 'skate.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
-  Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics, transition, position });
-  vm.runInContext('Object.assign(SK_PHYS,physics); if(transition)addSkateTransition(0,0,transition); [px,py]=position; a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
+  Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics, transition, bowl, position });
+  vm.runInContext('Object.assign(SK_PHYS,physics); if(transition)addSkateTransition(0,0,transition); if(bowl)addSkateBowl(0,0,bowl); [px,py]=position; a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
   const trajectory = [];
   const snapshot = () => JSON.parse(vm.runInContext(`JSON.stringify({
     t:T-100, x:px, y:py, z:body.z, worldZ:SKB.p[2], contact:SKB.contact, velocity:SKB.v, vz:body.vz, speed:SK.v, yaw:a,

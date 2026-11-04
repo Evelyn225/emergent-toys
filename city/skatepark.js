@@ -48,7 +48,11 @@ function buildSkatepark() {
     for (const side of [-1, 1]) { const ex = box.x - box.s * side * box.hw, ey = box.y + box.c * side * box.hw, d = box.hl - box.run;
       GRINDS.push({ ax: ex - box.c * d, ay: ey - box.s * d, bx: ex + box.c * d, by: ey + box.s * d, z: box.z1, material: 'metal', kind: 'skateledge', feature: box }); }
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
-    if (typeof addSkateTransition === 'function') addSkateTransition(ox + 6.0, oy + 7.4);
+    if (typeof addSkateTransition === 'function') {
+      addSkateTransition(ox + 4.85, oy + 7.5);
+      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
+    }
+    if (typeof addSkateBowl === 'function') addSkateBowl(ox + 6.3, oy + 4.7);
   }
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
@@ -64,7 +68,8 @@ function skateparkGround(x, y) {
   let top = 0;
   for (const o of SKATE_FEATURES) {
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
-    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1);
+    if (o.bowl && Math.hypot(qx, qy) > o.hl) continue;
+    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, o.bowl ? Math.hypot(qx, qy) : u) : o.ramp ? rampHeight(o, u) : o.z1);
   }
   return top;
 }

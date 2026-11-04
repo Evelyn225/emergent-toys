@@ -17,6 +17,7 @@ function addGrindPath(points, meta = {}) {
       }
   }
   if (!path.segments.length) return null;
+  path.closed = points.length > 2 && Math.hypot(...points[0].map((v, i) => v - points.at(-1)[i])) < 1e-7;
   GRIND_PATHS.push(path); return path;
 }
 function grindPathAt(path, distance) {
@@ -41,7 +42,7 @@ function buildGrindPaths() {
   GRIND_PATHS.length = 0; grindPathBuckets.clear();
   for (const g of GRINDS) {
     const height = terrainHeight(g.x, g.y) + g.z;
-    addGrindPath([[g.ax, g.ay, height], [g.bx, g.by, height]], { ...g, legacy: g });
+    addGrindPath(g.points || [[g.ax, g.ay, height], [g.bx, g.by, height]], { ...g, legacy: g });
   }
   // Kerbstones already drawn by road-surface.js: retain their real surface
   // height, including hills and bridges, and stop before each crossing.
@@ -122,6 +123,7 @@ function stepPathGrind(dt) {
   G.balV *= Math.exp(-dt * .8); G.bal += G.balV * dt;
   if (Math.abs(G.bal) > 1) return skateBail('BAIL! You lost your balance.');
   G.distance += G.dir * G.speed * dt;
+  if (G.path.closed) G.distance = mod(G.distance, G.path.length);
   const next = grindPathAt(G.path, G.distance);
   px = worldCoord(next.p[0]); py = worldCoord(next.p[1]); G.top = next.p[2]; G.t = G.distance / G.path.length;
   SK.dir = Math.atan2(next.tangent[1], next.tangent[0]) + (G.dir < 0 ? Math.PI : 0); a = SK.dir + G.boardOff;

@@ -3133,7 +3133,11 @@ function buildSkatepark() {
     for (const side of [-1, 1]) { const ex = box.x - box.s * side * box.hw, ey = box.y + box.c * side * box.hw, d = box.hl - box.run;
       GRINDS.push({ ax: ex - box.c * d, ay: ey - box.s * d, bx: ex + box.c * d, by: ey + box.s * d, z: box.z1, material: 'metal', kind: 'skateledge', feature: box }); }
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
-    if (typeof addSkateTransition === 'function') addSkateTransition(ox + 6.0, oy + 7.4);
+    if (typeof addSkateTransition === 'function') {
+      addSkateTransition(ox + 4.85, oy + 7.5);
+      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
+    }
+    if (typeof addSkateBowl === 'function') addSkateBowl(ox + 6.3, oy + 4.7);
   }
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
@@ -3149,7 +3153,8 @@ function skateparkGround(x, y) {
   let top = 0;
   for (const o of SKATE_FEATURES) {
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
-    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1);
+    if (o.bowl && Math.hypot(qx, qy) > o.hl) continue;
+    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, o.bowl ? Math.hypot(qx, qy) : u) : o.ramp ? rampHeight(o, u) : o.z1);
   }
   return top;
 }
@@ -15513,7 +15518,7 @@ function citySprites() {
   islandSprites();
   fairSprites();
   gasSprites(); // (the drivers at the pumps: gas-render.js)
-  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
+  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile, bowl: o.bowl } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
   drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
@@ -17073,6 +17078,50 @@ SOLID_SHADE.skateprofile = o => (i, t, L) => {
   BG[i] = C(GRAY, (3.5 + L * .32) * light * (seam ? .75 : 1));
   return set(i, ' ', 0), true;
 };
+// A swept polyline is a series of conical frusta, planes and cylinders. Test
+// all of them, including the 6 cm coping ring, keeping the nearest valid root.
+function rayBowlProfile(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, z = oz - b.z0, p = b.profile;
+  const Axy = rx * rx + ry * ry, Bxy = 2 * (x * rx + y * ry), Cxy = x * x + y * y;
+  let nearest = Infinity, face = 0, normal = [0, 0, 1];
+  const roots = (a, bb, c) => {
+    if (Math.abs(a) < 1e-12) return Math.abs(bb) < 1e-12 ? [] : [-c / bb];
+    const disc = bb * bb - 4 * a * c;
+    if (disc < 0) return [];
+    const d = Math.sqrt(disc); return [(-bb - d) / (2 * a), (-bb + d) / (2 * a)];
+  };
+  const segment = (ra, za, rb, zb, f) => {
+    const vertical = Math.abs(rb - ra) < 1e-10, k = vertical ? 0 : (zb - za) / (rb - ra), intercept = za - k * ra;
+    const candidates = vertical ? roots(Axy, Bxy, Cxy - ra * ra) : Math.abs(k) < 1e-12
+      ? Math.abs(rz) < 1e-12 ? [] : [(za - z) / rz]
+      : roots(rz * rz - k * k * Axy, 2 * rz * (z - intercept) - k * k * Bxy, (z - intercept) ** 2 - k * k * Cxy);
+    for (const t of candidates) {
+      if (t <= .01 || t >= nearest) continue;
+      const xx = x + rx * t, yy = y + ry * t, zz = z + rz * t, radius = Math.hypot(xx, yy);
+      if (vertical ? zz < Math.min(za, zb) - 1e-8 || zz > Math.max(za, zb) + 1e-8
+        : radius < Math.min(ra, rb) - 1e-8 || radius > Math.max(ra, rb) + 1e-8 || Math.abs(zz - k * radius - intercept) > 1e-7) continue;
+      nearest = t; face = f;
+      const scale = vertical ? 1 : Math.hypot(k, 1), rr = radius || 1;
+      normal = vertical ? [-(xx / rr), -(yy / rr), 0] : [-xx / rr * k / scale, -yy / rr * k / scale, 1 / scale];
+    }
+  };
+  const points = p.radialPoints;
+  for (let i = 1; i < points.length; i++) segment(...points[i - 1], ...points[i], 7);
+  segment(p.tip + p.deck, 0, p.tip + p.deck, p.height, 1);
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2, bb = (i + 1) / 8 * Math.PI * 2;
+    segment(p.tip + .003 * Math.cos(a), p.height + .003 * Math.sin(a), p.tip + .003 * Math.cos(bb), p.height + .003 * Math.sin(bb), 9);
+  }
+  if (!Number.isFinite(nearest)) return -1;
+  const xx = x + rx * nearest, yy = y + ry * nearest, radius = Math.hypot(xx, yy);
+  HIT.face = face; HIT.u = radius; HIT.v = Math.atan2(yy, xx) * radius; HIT.w = oz + rz * nearest;
+  if (face === 7 && radius < p.tip) {
+    const at = skateProfilePoint(p, skateProfileU(p, radius));
+    normal = [-xx / (radius || 1) * at.tz, -yy / (radius || 1) * at.tz, at.tx];
+  }
+  [HIT.nx, HIT.ny, HIT.nz] = normal;
+  return nearest;
+}
 // Fixed kerb parts prepare once per object/detail level. Camera translation
 // and the fixture's terrain height are applied when drawing.
 const KERB_K=.1,KERB_NEAR=2.5;
@@ -35751,6 +35800,7 @@ function addGrindPath(points, meta = {}) {
       }
   }
   if (!path.segments.length) return null;
+  path.closed = points.length > 2 && Math.hypot(...points[0].map((v, i) => v - points.at(-1)[i])) < 1e-7;
   GRIND_PATHS.push(path); return path;
 }
 function grindPathAt(path, distance) {
@@ -35775,7 +35825,7 @@ function buildGrindPaths() {
   GRIND_PATHS.length = 0; grindPathBuckets.clear();
   for (const g of GRINDS) {
     const height = terrainHeight(g.x, g.y) + g.z;
-    addGrindPath([[g.ax, g.ay, height], [g.bx, g.by, height]], { ...g, legacy: g });
+    addGrindPath(g.points || [[g.ax, g.ay, height], [g.bx, g.by, height]], { ...g, legacy: g });
   }
   // Kerbstones already drawn by road-surface.js: retain their real surface
   // height, including hills and bridges, and stop before each crossing.
@@ -35856,6 +35906,7 @@ function stepPathGrind(dt) {
   G.balV *= Math.exp(-dt * .8); G.bal += G.balV * dt;
   if (Math.abs(G.bal) > 1) return skateBail('BAIL! You lost your balance.');
   G.distance += G.dir * G.speed * dt;
+  if (G.path.closed) G.distance = mod(G.distance, G.path.length);
   const next = grindPathAt(G.path, G.distance);
   px = worldCoord(next.p[0]); py = worldCoord(next.p[1]); G.top = next.p[2]; G.t = G.distance / G.path.length;
   SK.dir = Math.atan2(next.tangent[1], next.tangent[0]) + (G.dir < 0 ? Math.PI : 0); a = SK.dir + G.boardOff;
@@ -35999,12 +36050,12 @@ function skateSurface(x, y, zHint) {
       }
     }
     for (const o of skateSurfaceCells.get(Math.floor(x) + ',' + Math.floor(y)) || []) {
-      const qx = rel(x - o.x), qy = rel(y - o.y), u = qx * o.c + qy * o.s;
+      const qx = rel(x - o.x), qy = rel(y - o.y), u = o.bowl ? Math.hypot(qx,qy) : qx * o.c + qy * o.s;
       if (Math.abs(u) > o.hl || Math.abs(-qx * o.s + qy * o.c) > o.hw) continue;
       const top = o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1;
       if (Math.abs(top - h) > .001) continue; // a higher city surface owns contact
       ref = o; kind = o.ramp || o.kind; material = o.material || 'concrete';
-      if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-o.c * at.tz, -o.s * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
+      if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-(o.bowl ? qx / (u || 1) : o.c) * at.tz, -(o.bowl ? qy / (u || 1) : o.s) * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
       const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? o.z1 / (2 * o.hl)
         : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * o.z1 / o.run;
       gx = slope * o.c; gy = slope * o.s;
@@ -36189,6 +36240,7 @@ function skateProfileHeight(o, x) {
 }
 function skateTransitionAt(x, y, zHint = 0) {
   for (const o of SK_TRANSITIONS) {
+    if (o.bowl) { const hit = skateBowlHit(o, x, y, zHint); if (hit) return hit; continue; }
     const qx = rel(x - o.x), qy = rel(y - o.y), xlocal = qx * o.c + qy * o.s, axis = -qx * o.s + qy * o.c;
     if (Math.abs(axis) > o.hw || Math.abs(xlocal) > o.profile.tip + .002) continue;
     const u = skateProfileU(o.profile, xlocal, zHint - o.z0), at = skateProfilePoint(o.profile, u);
@@ -36210,13 +36262,15 @@ function addSkateTransition(x, y, options = {}, yaw = 0) {
   return o;
 }
 function enterSkateTransition(hit) {
+  if (hit.o.bowl) return enterSkateBowl(hit);
   const { o, u, axis, at } = hit, tangent = [o.c * at.tx, o.s * at.tx, at.tz];
-  const vertical = skateAir() ? body.vz / 10 : SKB.v[2];
+  const vertical = skateAir() ? body.vz / 10 : -(Math.cos(SK.dir) * SK.v * hit.n[0] + Math.sin(SK.dir) * SK.v * hit.n[1]) / Math.max(.05, hit.n[2]);
   SK.transition = { o, u, axis, vs: Math.cos(SK.dir) * SK.v * tangent[0] + Math.sin(SK.dir) * SK.v * tangent[1] + vertical * tangent[2],
     va: -Math.cos(SK.dir) * SK.v * o.s + Math.sin(SK.dir) * SK.v * o.c };
   skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateTransitionPlace(C) {
+  if (C.o.bowl) return skateBowlPlace(C);
   const { o } = C, at = skateProfilePoint(o.profile, C.u);
   px = worldCoord(o.x + o.c * at.x - o.s * C.axis); py = worldCoord(o.y + o.s * at.x + o.c * C.axis);
   const z = o.z0 + at.z;
@@ -36235,13 +36289,14 @@ function skateTransitionRelease(C, coping = false) {
   const v = SKB.v.slice(), at = skateProfilePoint(C.o.profile, C.u);
   // The coping rounds the last few degrees of the mini's truncated quarter
   // into a vertical takeoff. Preserve energy and axis motion for the return.
-  if (coping) { v[0] = -C.o.s * C.va; v[1] = C.o.c * C.va; v[2] = Math.abs(C.vs); }
+  if (coping) { v[0] = -(C.o.bowl ? Math.sin(C.axis) : C.o.s) * C.va; v[1] = (C.o.bowl ? Math.cos(C.axis) : C.o.c) * C.va; v[2] = Math.abs(C.vs); }
   SK.transition = null; SK.leftTransition = C.o; SK.leftTransitionT = T;
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
 }
 function stepSkateTransition(dt, push, brake, steer) {
+  if (mode !== 'walk') { SK.transition = null; return false; }
   let C = SK.transition;
   if (!C) {
     let hit = skateTransitionAt(px, py, skateGround(px, py) + body.z / 10);
@@ -36255,6 +36310,7 @@ function stepSkateTransition(dt, push, brake, steer) {
     }
     if (!hit) return false;
     const surface = hit.o.z0 + hit.at.z, feet = skateGround(px, py) + body.z / 10;
+    if (!skateAir() && feet > surface + .01 && !drop) return false;
     if (skateAir()) {
       if (body.vz > 0 || feet - surface > .025 || feet < surface - .015) return false;
       if (SK.leftTransition === hit.o && T - SK.leftTransitionT < .12) return false;
@@ -36267,6 +36323,7 @@ function stepSkateTransition(dt, push, brake, steer) {
     enterSkateTransition(hit); C = SK.transition;
     if (drop) C.vs = -Math.sign(C.u) * .1;
   }
+  if (C.o.bowl) return stepSkateBowl(C, dt, push, brake, steer);
   const at = skateProfilePoint(C.o.profile, C.u), p = C.o.profile;
   const direction = Math.sign(C.vs) || -Math.sign(C.u) || 1;
   C.vs += (-.98 * at.tz - (brake ? .25 : SK_PHYS.concrete * .98) * direction) * dt;
@@ -36313,6 +36370,80 @@ function skateTransitionPop(trick, gesture) {
   body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
   SK.charge = -1; SK.spin = 0; SK.popT = T;
   if (actx) sfxUse('ollie');
+}
+// Sweep the quarter profile around a circular floor. Tangential speed and
+// radial arc speed form a tangent-plane velocity; angular momentum carries a
+// carve around a corner without dropping the skater back to a heightfield.
+function addSkateBowl(x, y, options = {}) {
+  const o = addSkateTransition(x, y, { flat: .5, ...options });
+  o.bowl = true; o.hw = o.hl; o.ray = typeof rayBowlProfile === 'function' ? rayBowlProfile : null;
+  o.profile.radialPoints = [[0, 0], ...o.profile.points.filter(v => v[0] >= o.profile.flat / 2 - 1e-9)];
+  GRINDS.splice(-2, 2);
+  const points = Array.from({ length: 33 }, (_, i) => {
+    const angle = i / 32 * Math.PI * 2;
+    return [x + Math.cos(angle) * o.profile.tip, y + Math.sin(angle) * o.profile.tip, o.z0 + o.profile.height + .003];
+  });
+  GRINDS.push({ points, ax: points[0][0], ay: points[0][1], bx: points.at(-1)[0], by: points.at(-1)[1],
+    z: o.profile.height + .003, kind: 'coping', material: 'metal', feature: o });
+  return o;
+}
+function skateBowlHit(o, x, y, zHint) {
+  const dx = rel(x - o.x), dy = rel(y - o.y), radius = Math.hypot(dx, dy), p = o.profile;
+  if (radius > p.tip + .002 || radius < p.flat / 2 - .005) return null;
+  const axis = Math.atan2(dy, dx), u = skateProfileU(p, radius, zHint - o.z0), at = skateProfilePoint(p, u);
+  return { o, u, axis, at, n: [-Math.cos(axis) * at.tz, -Math.sin(axis) * at.tz, at.tx] };
+}
+function enterSkateBowl(hit) {
+  const { o, axis, u, at } = hit, vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
+  const vertical = skateAir() ? body.vz / 10 : -(vx * hit.n[0] + vy * hit.n[1]) / Math.max(.05, hit.n[2]);
+  SK.transition = { o, u, axis, vs: (vx * Math.cos(axis) + vy * Math.sin(axis)) * at.tx + vertical * at.tz,
+    va: -vx * Math.sin(axis) + vy * Math.cos(axis), yawOff: Math.cos(a - SK.dir) < 0 ? Math.PI : 0 };
+  skateManualEnd(); body.trick = null; body.vz = 0;
+}
+function skateBowlPlace(C) {
+  const p = skateProfilePoint(C.o.profile, C.u), c = Math.cos(C.axis), s = Math.sin(C.axis);
+  px = worldCoord(C.o.x + c * p.x); py = worldCoord(C.o.y + s * p.x);
+  const z = C.o.z0 + p.z;
+  SKB.v = [c * p.tx * C.vs - s * C.va, s * p.tx * C.vs + c * C.va, p.tz * C.vs];
+  SK.v = Math.hypot(SKB.v[0], SKB.v[1]);
+  if (SK.v > 1e-7) SK.dir = Math.atan2(SKB.v[1], SKB.v[0]);
+  a = SK.dir + C.yawOff;
+  SKB.yaw = a; SKB.riderYaw = a; SKB.pitch = Math.atan2(SKB.v[2] * (C.yawOff ? -1 : 1), SK.v || 1e-9);
+  const normal = [-c * p.tz, -s * p.tz, p.tx], axes = skateBoardAxes(a, SKB.pitch, 0);
+  const right = [-Math.sin(a), Math.cos(a), 0];
+  const dot = (x, y) => x.reduce((v, n, i) => v + n * y[i], 0);
+  SKB.roll = Math.atan2(dot(normal, right), dot(normal, axes.up));
+  SKB.p = [px, py, z]; SKB.contact = 'transition'; SKB.fakie = !!C.yawOff;
+  SKB.surf = { h: z, n: normal, kind: 'transition', material: 'concrete', ref: C.o };
+  body.z = Math.max(.001, (z - skateGround(px, py)) * 10); body.vz = 0;
+  body.ground = skateGround(px, py); body.groundMode = mode;
+}
+function stepSkateBowl(C, dt, push, brake, steer) {
+  const p = C.o.profile, at = skateProfilePoint(p, C.u), radius = Math.max(.03, at.x);
+  // Project centripetal acceleration into the radial profile; preserve angular
+  // momentum when the radius changes. The gravity term pulls a slow carve down.
+  C.vs += (C.va * C.va * at.tx / radius - .98 * at.tz) * dt;
+  const speed = Math.hypot(C.vs, C.va), loss = (brake ? .25 : .98 * SK_PHYS.concrete) * dt;
+  const keep = speed ? Math.max(0, speed - loss) / speed : 0;
+  C.vs *= keep; C.va *= keep;
+  const turn = steer * 1.5 * dt, c = Math.cos(turn), s = Math.sin(turn), radial = C.vs * c - C.va * s;
+  C.va = C.vs * s + C.va * c; C.vs = radial;
+  if (push) { C.vs += Math.sign(C.vs || 1) * .06 * Math.sin(at.theta * 2) * dt; }
+  const momentum = radius * C.va;
+  C.u += C.vs * dt;
+  const next = skateProfilePoint(p, clamp(C.u, 0, p.limit));
+  C.va = momentum / Math.max(.03, next.x);
+  C.axis += C.va / Math.max(.03, next.x) * dt;
+  const coping = C.u > p.limit;
+  C.u = Math.min(p.limit, C.u);
+  skateBowlPlace(C);
+  if (coping) skateTransitionRelease(C, true);
+  else if (C.u < p.flat / 2 - .006) {
+    // Across the flat, ordinary Cartesian integration avoids the polar
+    // coordinate singularity at the centre of the bowl.
+    SK.transition = null; body.z = body.vz = 0; SKB.contact = 'ground';
+  }
+  return true;
 }
 // ===== the skateboard, played the way the old skateboarding games played it: you see your skater from behind, the
 // camera trailing a little above. W kicks (small bursts taper to the push cap;

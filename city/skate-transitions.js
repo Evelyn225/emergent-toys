@@ -33,6 +33,7 @@ function skateProfileHeight(o, x) {
 }
 function skateTransitionAt(x, y, zHint = 0) {
   for (const o of SK_TRANSITIONS) {
+    if (o.bowl) { const hit = skateBowlHit(o, x, y, zHint); if (hit) return hit; continue; }
     const qx = rel(x - o.x), qy = rel(y - o.y), xlocal = qx * o.c + qy * o.s, axis = -qx * o.s + qy * o.c;
     if (Math.abs(axis) > o.hw || Math.abs(xlocal) > o.profile.tip + .002) continue;
     const u = skateProfileU(o.profile, xlocal, zHint - o.z0), at = skateProfilePoint(o.profile, u);
@@ -54,13 +55,15 @@ function addSkateTransition(x, y, options = {}, yaw = 0) {
   return o;
 }
 function enterSkateTransition(hit) {
+  if (hit.o.bowl) return enterSkateBowl(hit);
   const { o, u, axis, at } = hit, tangent = [o.c * at.tx, o.s * at.tx, at.tz];
-  const vertical = skateAir() ? body.vz / 10 : SKB.v[2];
+  const vertical = skateAir() ? body.vz / 10 : -(Math.cos(SK.dir) * SK.v * hit.n[0] + Math.sin(SK.dir) * SK.v * hit.n[1]) / Math.max(.05, hit.n[2]);
   SK.transition = { o, u, axis, vs: Math.cos(SK.dir) * SK.v * tangent[0] + Math.sin(SK.dir) * SK.v * tangent[1] + vertical * tangent[2],
     va: -Math.cos(SK.dir) * SK.v * o.s + Math.sin(SK.dir) * SK.v * o.c };
   skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateTransitionPlace(C) {
+  if (C.o.bowl) return skateBowlPlace(C);
   const { o } = C, at = skateProfilePoint(o.profile, C.u);
   px = worldCoord(o.x + o.c * at.x - o.s * C.axis); py = worldCoord(o.y + o.s * at.x + o.c * C.axis);
   const z = o.z0 + at.z;
@@ -79,13 +82,14 @@ function skateTransitionRelease(C, coping = false) {
   const v = SKB.v.slice(), at = skateProfilePoint(C.o.profile, C.u);
   // The coping rounds the last few degrees of the mini's truncated quarter
   // into a vertical takeoff. Preserve energy and axis motion for the return.
-  if (coping) { v[0] = -C.o.s * C.va; v[1] = C.o.c * C.va; v[2] = Math.abs(C.vs); }
+  if (coping) { v[0] = -(C.o.bowl ? Math.sin(C.axis) : C.o.s) * C.va; v[1] = (C.o.bowl ? Math.cos(C.axis) : C.o.c) * C.va; v[2] = Math.abs(C.vs); }
   SK.transition = null; SK.leftTransition = C.o; SK.leftTransitionT = T;
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
 }
 function stepSkateTransition(dt, push, brake, steer) {
+  if (mode !== 'walk') { SK.transition = null; return false; }
   let C = SK.transition;
   if (!C) {
     let hit = skateTransitionAt(px, py, skateGround(px, py) + body.z / 10);
@@ -99,6 +103,7 @@ function stepSkateTransition(dt, push, brake, steer) {
     }
     if (!hit) return false;
     const surface = hit.o.z0 + hit.at.z, feet = skateGround(px, py) + body.z / 10;
+    if (!skateAir() && feet > surface + .01 && !drop) return false;
     if (skateAir()) {
       if (body.vz > 0 || feet - surface > .025 || feet < surface - .015) return false;
       if (SK.leftTransition === hit.o && T - SK.leftTransitionT < .12) return false;
@@ -111,6 +116,7 @@ function stepSkateTransition(dt, push, brake, steer) {
     enterSkateTransition(hit); C = SK.transition;
     if (drop) C.vs = -Math.sign(C.u) * .1;
   }
+  if (C.o.bowl) return stepSkateBowl(C, dt, push, brake, steer);
   const at = skateProfilePoint(C.o.profile, C.u), p = C.o.profile;
   const direction = Math.sign(C.vs) || -Math.sign(C.u) || 1;
   C.vs += (-.98 * at.tz - (brake ? .25 : SK_PHYS.concrete * .98) * direction) * dt;

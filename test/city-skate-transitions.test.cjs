@@ -40,3 +40,20 @@ test('a coping air returns to the same ramp; drop-in and rock to fakie work',()=
   {transition:{},position:[tip-.001,0],speed:.02});
  assert.ok(fifty.at(-1).comboNames.includes('50-50 STALL'));
 });
+
+test('a bowl carve stays on the wall while crossing every quadrant',()=>{
+ const t=skateSim([{frames:360}],{bowl:{},position:[.37,0],yaw:Math.PI/2,speed:.5});
+ assert.ok(t.slice(1).every(p=>p.contact==='transition'&&p.bail<=0));
+ const quadrants=new Set(t.slice(1).map(p=>`${Math.sign(p.x)},${Math.sign(p.y)}`));
+ assert.equal(quadrants.size,4);
+ assert.ok(t.slice(1).every(p=>Math.hypot(p.x,p.y)>.3&&p.worldZ>.015));
+});
+
+test('vert air reaches about 1.5 m above the 3.6 m coping and re-enters',()=>{
+ const t=skateSim([{frames:1440}],{dt:1/240,transition:{radius:.3,height:.36,extension:.06},speed:1});
+ const peak=Math.max(...t.map(p=>p.worldZ));
+ assert.ok(peak-.36>.135&&peak-.36<.165,`${(peak-.36)*10} metres`);
+ const firstAir=t.findIndex(p=>p.contact==='air');
+ assert.ok(firstAir>0&&t.slice(firstAir+1).some(p=>p.contact==='transition'));
+ assert.ok(t.every(p=>p.bail<=0));
+});

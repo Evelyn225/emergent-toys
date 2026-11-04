@@ -25,12 +25,12 @@ function skateSurface(x, y, zHint) {
       }
     }
     for (const o of skateSurfaceCells.get(Math.floor(x) + ',' + Math.floor(y)) || []) {
-      const qx = rel(x - o.x), qy = rel(y - o.y), u = qx * o.c + qy * o.s;
+      const qx = rel(x - o.x), qy = rel(y - o.y), u = o.bowl ? Math.hypot(qx,qy) : qx * o.c + qy * o.s;
       if (Math.abs(u) > o.hl || Math.abs(-qx * o.s + qy * o.c) > o.hw) continue;
       const top = o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1;
       if (Math.abs(top - h) > .001) continue; // a higher city surface owns contact
       ref = o; kind = o.ramp || o.kind; material = o.material || 'concrete';
-      if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-o.c * at.tz, -o.s * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
+      if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-(o.bowl ? qx / (u || 1) : o.c) * at.tz, -(o.bowl ? qy / (u || 1) : o.s) * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
       const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? o.z1 / (2 * o.hl)
         : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * o.z1 / o.run;
       gx = slope * o.c; gy = slope * o.s;
