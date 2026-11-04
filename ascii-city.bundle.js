@@ -2975,6 +2975,12 @@ function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are 
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
     if (o.z0 > 0 || o.low && feet >= o.z1 - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
+    if (o.ramp) { // (you roll up a ramp: only a kicker's tall back stops you, coming at it from behind or low down its side)
+      if (o.ramp !== 'kicker' || feet >= o.z1 * .7) continue;
+      const u = qx * o.c + qy * o.s;
+      if (u > o.hl - .02 && u < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
+      continue;
+    }
     if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
   }
   return false;
@@ -3087,7 +3093,7 @@ let grindsB = [];
 function buildSkatepark() {
   GRINDS.length = SKATE_FEATURES.length = 0;
   const park = parks.find(([bx, by]) => bx === 13 && by === 34);
-  SKATEPARK = park ? { bx: 13, by: 34, x0: 5.5, y0: 5.45, x1: 7.85, y1: 7.85 } : null;
+  SKATEPARK = park ? { bx: 13, by: 34, x0: 2.4, y0: 2.3, x1: 7.85, y1: 7.85 } : null; // (most of the park block: the benches round it stay, to grind)
   if (SKATEPARK) {
     for (let k = trees.length - 1; k >= 0; k--) if (inSkatepark(trees[k].x, trees[k].y, .3)) trees.splice(k, 1); // (the concrete's clear)
     const ox = SKATEPARK.bx * 8, oy = SKATEPARK.by * 8;
@@ -3108,6 +3114,22 @@ function buildSkatepark() {
     }
     const pad = add(7.1, 5.9, false, .25, .15, .02, 'manualpad'); // a 5 x 3 m manual pad, 20 cm
     edge(pad, -1, 'stone'); edge(pad, 1, 'stone');
+    // the long lines, for long grinds: a 20 m flat bar, a 16 m ledge, a 16 m low bar, a 14 m curb
+    edge(add(4.0, 2.75, true, 1.0, .004, .035, 'skaterail'), 0, 'metal');
+    { const o = add(3.6, 4.2, false, .8, .03, .045, 'skateledge'); edge(o, -1, 'metal'); edge(o, 1, 'metal'); }
+    edge(add(2.9, 6.7, false, .8, .004, .03, 'skaterail'), 0, 'metal');
+    { const o = add(4.3, 6.3, true, .7, .025, .025, 'skateledge'); edge(o, -1, 'metal'); edge(o, 1, 'metal'); }
+    // ramps (ground you roll up and over, not solids you bump: skateRamps): a funbox, 12 m long, its 6 m deck coped
+    // along both sides to grind; and a kicker that throws you off its lip
+    const ramp = (x, y, alongX, hl, hw, z1, kind, run) => {
+      const o = { x: ox + x, y: oy + y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0: 0, z1, kind: 'skateramp', ramp: kind, run, low: true, ray: typeof rayRamp === 'function' ? rayRamp : null };
+      solids.push(o); SKATE_FEATURES.push(o);
+      return o;
+    };
+    const box = ramp(4.6, 4.3, true, .6, .2, .05, 'funbox', .3);
+    for (const side of [-1, 1]) { const ex = box.x - box.s * side * box.hw, ey = box.y + box.c * side * box.hw, d = box.hl - box.run;
+      GRINDS.push({ ax: ex - box.c * d, ay: ey - box.s * d, bx: ex + box.c * d, by: ey + box.s * d, z: box.z1, material: 'metal', kind: 'skateledge', feature: box }); }
+    ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
   }
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
@@ -3121,10 +3143,27 @@ function skateparkGround(x, y) {
   if (!inSkatepark(x, y, .1)) return 0;
   let top = 0;
   for (const o of SKATE_FEATURES) {
-    const qx = x - o.x, qy = y - o.y;
-    if (Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.z1);
+    const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
+    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.ramp ? rampHeight(o, u) : o.z1);
   }
   return top;
+}
+// a ramp's surface at u along it: a kicker rises the whole way to its lip (+u); a funbox goes up, along its deck, and down
+function rampHeight(o, u) {
+  if (o.ramp === 'kicker') return o.z1 * clamp((u + o.hl) / (2 * o.hl), 0, 1);
+  return o.z1 * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
+}
+const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
+// rolling on a ramp (skate.js, after each step on the board): up a slope costs speed, down one gives it back; and off a
+// kicker's lip, moving forward, you're thrown up and out
+function skateRampStep(x0, y0, dt) {
+  if (!SKATEPARK || skateAir() || !inSkatepark(px, py, .2)) return;
+  const g0 = skateparkGround(x0, y0), g1 = skateparkGround(px, py), from = skateRampAt(x0, y0);
+  if (from?.ramp === 'kicker' && g0 > from.z1 * .8 && g1 < g0 - .01) {
+    const along = Math.cos(SK.dir) * from.c + Math.sin(SK.dir) * from.s;
+    if (along > .3) { body.z = (g0 - g1) * 10; body.vz = Math.max(1.2, SK.v * 10 * (from.z1 / (2 * from.hl)) * along * 1.3); return; } // (metres, m/s)
+  }
+  if (g0 !== g1 && (from || skateRampAt(px, py))) SK.v = Math.sqrt(Math.max(0, SK.v * SK.v - 2 * .98 * (g1 - g0))); // (g, in cells/s/s)
 }
 // Authored apartment and walk-up families. Balconies and escapes use the same exposed faces as the windows.
 const RESIDENTIAL_PROFILES = {
@@ -15479,7 +15518,7 @@ function citySprites() {
   islandSprites();
   fairSprites();
   gasSprites(); // (the drivers at the pumps: gas-render.js)
-  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
+  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
   drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
@@ -16950,6 +16989,33 @@ SOLID_SHADE.manualpad = o => (i, t, L) => {
   if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
   const joint = top ? coveGroove(HIT.u, o.hl, .004, t / projX) : 0;
   BG[i] = C(GRAY, (top ? 4.4 : 3) * shadeFace(f) * (1 - joint * .5) + L * .25); return set(i, ' ', 0), true;
+};
+// a ramp, ray-cast as the convex solid it is: the box's sides and floor, cut by its slopes (a kicker: one rising to the
+// lip at +u; a funbox: up, a flat deck, down). Faces 7 and 8: the slopes up and down
+function rayRamp(ox, oy, oz, rx, ry, rz, b) {
+  const qx = ox - b.x, qy = oy - b.y, lu = qx * b.c + qy * b.s, lv = -qx * b.s + qy * b.c, du = rx * b.c + ry * b.s, dv = -rx * b.s + ry * b.c;
+  let tmin = -Infinity, tmax = Infinity, face = 0;
+  const cut = (nu, nv, nz, d, f) => { // keep n.p <= d
+    const den = nu * du + nv * dv + nz * rz, dist = d - (nu * lu + nv * lv + nz * oz);
+    if (Math.abs(den) < 1e-12) return dist >= 0;
+    const t = dist / den;
+    if (den < 0) { if (t > tmin) { tmin = t; face = f; } } else if (t < tmax) tmax = t;
+    return tmin <= tmax;
+  };
+  const kick = b.ramp === 'kicker', k = kick ? b.z1 / (2 * b.hl) : b.z1 / b.run;
+  if (!cut(1, 0, 0, b.hl, 1) || !cut(-1, 0, 0, b.hl, 2) || !cut(0, 1, 0, b.hw, 3) || !cut(0, -1, 0, b.hw, 4) || !cut(0, 0, -1, -b.z0, 6) || !cut(0, 0, 1, b.z1, 5)) return -1;
+  if (!cut(-k, 0, 1, k * b.hl, 7)) return -1; // z <= k (u + hl)
+  if (!kick && !cut(k, 0, 1, k * b.hl, 8)) return -1; // z <= k (hl - u)
+  if (tmin < 0.01) return -1;
+  HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
+  return tmin;
+}
+// ramps: smooth grey concrete, the slopes catching the light, steel coping along a funbox's deck edges and a kicker's lip
+SOLID_SHADE.skateramp = o => (i, t, L) => {
+  const f = HIT.face, slope = f === 7 || f === 8, top = f === 5 || slope, h = rampHeight(o, HIT.u);
+  const coping = top && (o.ramp === 'kicker' ? HIT.u > o.hl - .01 : f === 5 && o.hw - Math.abs(HIT.v) < .006) || !top && Math.abs(HIT.w - h) < .004 && (f === 3 || f === 4) && (o.ramp !== 'kicker' || HIT.u > o.hl - .01);
+  if (coping) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
+  BG[i] = C(GRAY, (slope ? (f === 7 ? 4.6 : 3.6) : top ? 4.3 : 2.8 * shadeFace(f)) + L * .25); return set(i, ' ', 0), true;
 };
 // the park's concrete (floorBaseCell): smooth, pale, saw-cut every 3 m, a few dark scuffs and wax marks
 function skateparkFloor(wx, wy, r, x, d) {
@@ -35673,6 +35739,7 @@ function stepSkate(dt) {
   move(Math.cos(SK.dir) * want, Math.sin(SK.dir) * want);
   const mx = rel(px - x0), my = rel(py - y0), got = Math.hypot(mx, my);
   if (dt > 0) { body.mx = mx / dt; body.my = my / dt; }
+  if (typeof skateRampStep === 'function') skateRampStep(x0, y0, dt); // (ramps: skatepark.js)
   if (want > 1e-6 && got < want * 0.98) { // something in the way: scrape along it, or stop dead
     const lost = SK.v * (1 - got / want);
     SK.v *= got / want;

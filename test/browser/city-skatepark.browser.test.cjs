@@ -24,6 +24,7 @@ test('the skatepark: real ledges, bars and a pad on concrete in a park, every be
   for(const o of SKATE_FEATURES){
    if(!inSkatepark(o.x,o.y))bad.push(['outside',o.kind]);
    if(!solidsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].includes(o))bad.push(['not collidable',o.kind]);
+   if(o.ramp)continue; // (a ramp you roll up, not a block you bump: its own test)
    if(Math.abs(skateparkGround(o.x,o.y)-o.z1)>1e-9)bad.push(['no top to ride',o.kind]);
    // walking you bump into it; with your feet above its top you clear it
    if(!solidAt(o.x,o.y,.03,0))bad.push(['walk through',o.kind]);if(solidAt(o.x,o.y,.03,o.z1+.001))bad.push(['cannot clear',o.kind]);
@@ -89,4 +90,21 @@ test('flip tricks land going uphill (and down): the flip times itself to the slo
   return out;
  });
  for(const s of r)assert.ok(s.rise>0&&!s.bail&&/KICKFLIP/.test(s.msg),JSON.stringify(r));
+}));
+
+test('the skatepark\'s ramps: a funbox you roll over (its deck edges grind) and a kicker that throws you off its lip',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const k=SKATE_FEATURES.find(o=>o.ramp==='kicker'),fb=SKATE_FEATURES.find(o=>o.ramp==='funbox');if(!k||!fb)return{missing:true};
+  const run=(sx,sy,dir,v,frames)=>{px=sx;py=sy;a=dir;body.z=body.vz=0;body.trick=null;fx.skating=true;mode='walk';SK.lastT=T;SK.v=v;SK.dir=dir;SK.grind=null;SK.bail=0;
+   let peak=0,top=0;for(let f=0;f<frames;f++){T+=1/60;stepSkate(1/60);stepBody(1/60);peak=Math.max(peak,body.z);top=Math.max(top,skateparkGround(px,py));}
+   return{peak,top,end:px-sx};};
+  const kick=run(k.x-k.hl-.4,k.y,0,.75,90),fun=run(fb.x-fb.hl-.4,fb.y,0,.75,160);
+  const deck=GRINDS.filter(g=>g.feature===fb).length,long=Math.max(...GRINDS.filter(g=>g.kind!=='bench').map(g=>Math.hypot(g.bx-g.ax,g.by-g.ay)));
+  const size=[(SKATEPARK.x1-SKATEPARK.x0)*10,(SKATEPARK.y1-SKATEPARK.y0)*10];
+  return{kick,fun,deck,long,size};});
+ assert.ok(!r.missing,'a kicker and a funbox');
+ assert.ok(r.kick.peak>.4,'off the kicker you are airborne '+JSON.stringify(r.kick));
+ assert.ok(r.fun.top>.04&&r.fun.peak<.05&&r.fun.end>1.1,'over the funbox and down the far side, without a launch '+JSON.stringify(r.fun));
+ assert.equal(r.deck,2,'both deck edges grind');assert.ok(r.long>=1.9,'a 20 m line to grind');
+ assert.ok(r.size[0]>=50&&r.size[1]>=50,'a park about 50 m across '+r.size);
 }));
