@@ -79,7 +79,8 @@ function buildPause() {
       <div class="keys">
         <b>A / D · left stick</b><span>carve, lean on a grind, spin in the air</span>
         <b>W · gamepad A</b><span>push; Shift+W or gamepad X: mongo</span>
-        <b>S · gamepad B</b><span>foot brake; add a direction to powerslide</span>
+        <b>hold S · left stick down</b><span>brake to a stop, then roll backwards fakie; release to coast</span>
+        <b>S + A/D · gamepad B</b><span>brake with a direction to powerslide; gamepad B alone brakes to a stop</span>
         <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter scoop for a 360 shuvit or flip. Load forward for nollies. Flick again in the air for a late flip.</span>
         <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie.</span>
         <b>Q / E · triggers</b><span>hold in the air to grab; mouse or right stick picks nose, tail or side. Release before landing.</span>

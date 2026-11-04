@@ -96,3 +96,13 @@ test('a small step is not treated as a steep riding bank',()=>{
  assert.ok(run.every(p=>!p.bail));
  for(const p of run.slice(1))assert.ok(p.board.up[2]>.98,JSON.stringify(p));
 });
+
+
+test('short downhill ollies do not require catching a board that never flipped',()=>{
+ for(const bowl of [{},{radius:.22,height:.16,deck:.055,pool:{rx:.22,ry:.48}}]){
+  const r=bowl.pool ? .22+.22*Math.sin(.8):.25+.18*Math.sin(.8);
+  const run=skateSim([{frames:1},{frames:1,keys:{Space:1}},{frames:120}],{bowl,position:[r,0],yaw:Math.PI,speed:.6});
+  assert.ok(run.some(p=>p.contact==='air'));
+  assert.ok(run.every(p=>!p.bail));
+ }
+});

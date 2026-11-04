@@ -415,6 +415,7 @@ const extrasB = bucketed(extras), solidsB = bucketed(solids);
 function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
     if (o.walkStep) continue;
+    if(o.bowl){if(skateBowlOuterWall(o,x,y,pad,feet))return true;continue;}
     if (o.z0 > 0 && !o.spot || o.low && feet >= o.z1 - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (o.ramp) { // (you roll up a ramp: only a kicker's tall back stops you, coming at it from behind or low down its side)

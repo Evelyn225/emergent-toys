@@ -19,6 +19,28 @@ function addSkateBowl(x, y, options = {}) {
   if(!options.deferAccess&&typeof parks!=='undefined')addBowlAccess(o);
   return o;
 }
+// The raised deck has a solid outside face. Its rideable inner profile is
+// handled separately; treating the whole bounding box as solid blocks the bowl.
+function skateBowlLocalRadius(o,x,y){
+  const qx=rel(x-o.x),qy=rel(y-o.y),r=Math.hypot(qx,qy);
+  return o.pool?r-skatePoolFloor(o,Math.atan2(qy,qx))+o.profile.flat/2:r;
+}
+function skateBowlOuterWall(o,x,y,pad,feet){
+  if(feet>=o.z0+o.profile.height-.025)return false;
+  if(Math.abs(rel(x-o.x))>o.hl+pad||Math.abs(rel(y-o.y))>o.hw+pad)return false;
+  const local=skateBowlLocalRadius(o,x,y),outside=o.profile.tip+o.profile.deck;
+  return local>=outside-pad-.005&&local<=outside+pad;
+}
+function skateBowlEntryBlocked(x,y,feet){
+  // Sweep entry as well as testing the thin wall, so a long frame cannot
+  // tunnel across it and let the ground sampler lift you onto the deck.
+  for(const o of SK_TRANSITIONS)if(o.bowl&&feet<o.z0+o.profile.height-.025){
+    if(Math.abs(rel(x-o.x))>o.hl+.01||Math.abs(rel(y-o.y))>o.hw+.01)continue;
+    const outside=o.profile.tip+o.profile.deck;
+    if(skateBowlLocalRadius(o,px,py)>outside&&skateBowlLocalRadius(o,x,y)<=outside)return true;
+  }
+  return false;
+}
 function skateBowlHit(o, x, y, zHint) {
   if(o.pool){const h=skatePoolSample(o,x,y);return h&&h.local>=o.profile.flat/2-.005&&h.local<=o.profile.tip+.002?{...h,n:h.frame.n}:null;}
   const dx = rel(x - o.x), dy = rel(y - o.y), radius = Math.hypot(dx, dy), p = o.profile;

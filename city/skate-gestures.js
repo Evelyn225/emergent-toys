@@ -52,11 +52,11 @@ function createSkateGesture() {
 }
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
-const SK_INPUT = { steer: 0, push: false, mongo: false, brake: false, grabL: 0, grabR: 0,
+const SK_INPUT = { steer: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
 function skateInputReset() {
-  Object.assign(SK_INPUT, { steer: 0, push: false, mongo: false, brake: false, grabL: 0, grabR: 0,
+  Object.assign(SK_INPUT, { steer: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
 }
@@ -92,7 +92,8 @@ function skatePollInput(dt) {
   try { pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
   const pad = Array.from(pads).find(p => p?.connected && (p.mapping === 'standard' || !p.mapping));
   const button = i => pad?.buttons[i]?.value || (pad?.buttons[i]?.pressed ? 1 : 0);
-  SK_INPUT.steer = pad ? skateStick(pad.axes[0], pad.axes[1])[0] : 0;
+  const left=pad?skateStick(pad.axes[0],pad.axes[1]):[0,0];
+  SK_INPUT.steer=left[0];SK_INPUT.back=left[1]>.35;
   SK_INPUT.push = button(0) > .5 || button(2) > .5; SK_INPUT.mongo = button(2) > .5;
   SK_INPUT.brake = button(1) > .5; SK_INPUT.grabL = button(6); SK_INPUT.grabR = button(7);
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3]) : [0, 0];

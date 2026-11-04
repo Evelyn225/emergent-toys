@@ -164,3 +164,31 @@ Validation: 43 Node tests; nine targeted browser cases for grinds, banked pops,
 ramps, landing and rendering; three final browser cases for camera, bowl access,
 and coping/stair corners. Isolated mutations removing the bank reset, launch
 coping protection or landing-frame preparation each fail their regressions.
+
+## Brake-to-fakie and raised-bowl access
+
+Holding S, or pulling the gamepad left stick down, first brakes to a stop and
+then builds a gentle backwards roll (4.5 m/s cap). Board heading and stance stay
+unchanged, so this is fakie rather than rotating the rider. Releasing back
+coasts; W pushes forward again. Gamepad B still brakes to a stop, and steering
+while braking retains powerslides. The pause controls and skating help explain
+the new action.
+
+The shared `jump` action now checks grind/transition contact before treating
+positive height above the heightfield as airborne. This repairs touch/simple
+mouse jumps inside a bowl. Re-entry checks wait until within six centimetres
+of the profile, rather than snapping a downhill hop back from 25 cm away.
+Plain ollies are already caught; only tricks with board rotation need the
+flip/shuv catch window. Short downhill pops therefore do not automatically bail.
+
+Raised bowls now have solid outer deck walls with a swept entry check, so a
+long frame cannot skip the wall and let heightfield ground lift the rider onto
+the deck. Feet must already be within a normal 25 cm step of deck height to
+enter there; the existing access stairs and deck drop-ins continue to work.
+The curved inner riding surface remains separate from the outside collision.
+
+Validation includes braking/reversing/coasting at several headings, gamepad
+back versus brake, returning to forward travel, jumps up/across/down both real
+pools through Space and the shared action, outside-wall approaches including a
+long displacement, and stair/deck access. Existing grind, powerslide, ramp,
+gesture and camera-related simulation checks are retained.
