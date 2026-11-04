@@ -26,7 +26,7 @@ test('skate camera lags a carve, holds heading through a spin and widens FOV onl
    return{lag,held:yawHeld,base,seen,after:FOV,back:SK.camBack,flags:{paused,mode,skating:fx.skating,third,held,game:!!game,sleep:!!sleep}};
   });
   assert.ok(r.lag>.2&&r.lag<1.2);assert.ok(r.held<.08,JSON.stringify(r));
-  assert.ok(r.seen>r.base,JSON.stringify(r));assert.equal(r.after,r.base);assert.ok(r.back>0&&r.back<=.27);
+  assert.ok(r.seen>r.base,JSON.stringify(r));assert.equal(r.after,r.base);assert.ok(r.back>0&&r.back<=.56);
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });

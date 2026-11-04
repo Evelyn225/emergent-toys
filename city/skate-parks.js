@@ -24,8 +24,8 @@ function buildExtraSkateparks() {
     if(type==='bowl'){
       const bowl=addSkateBowl(x,y,{flat:1.1,radius:.4,height:.35,deck:.1});
       bowl.spot=bowl.spotPark=true;
-      SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-.03,y,line:{x,y},
-        description:'A dedicated bowl park: almost 21 metres across, an 11-metre floor and 3.5-metre walls, with continuous steel coping. Face inward on the deck and push to drop in; pump and carve around the walls.'});
+      SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-bowl.profile.height*2-.08,y,line:{x,y},
+        description:'A dedicated bowl park: almost 21 metres across, an 11-metre floor and 3.5-metre walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
     }else{
       const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:.55});
       mini.spot=mini.spotPark=true;

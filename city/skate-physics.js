@@ -2,7 +2,7 @@
 // skateBoardSync is the only conversion boundary for that height.
 const SKB = { p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, roll: 0,
   riderYaw: 0, contact: 'ground', surf: null, stance: 1, fakie: false };
-const SK_PHYS = { gravity: .98, pushCap: .6, pushBurst: .06, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
+const SK_PHYS = { gravity: .98, pushCap: 1, pushBurst: .2, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
 const skateSurfaceCells = new Map();
 let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }

@@ -1,3 +1,4 @@
+const SK_BOWL_STAIRS=[];
 // Sweep the quarter profile around a circular floor. Tangential speed and
 // radial arc speed form a tangent-plane velocity; angular momentum carries a
 // carve around a corner without dropping the skater back to a heightfield.
@@ -5,7 +6,7 @@ function addSkateBowl(x, y, options = {}) {
   const o = addSkateTransition(x, y, { flat: .5, ...options });
   // A 2 mm concrete skin keeps the flat bottom above the street floor's
   // coplanar depth, so the park/path paint cannot punch through it.
-  o.z0 += .0002; o.z1 += .0002;
+  // The shared transition constructor supplies the concrete skin.
   o.bowl = true; o.hw = o.hl; o.ray = typeof rayBowlProfile === 'function' ? rayBowlProfile : null;
   o.profile.radialPoints = [[0, 0], ...o.profile.points.filter(v => v[0] >= o.profile.flat / 2 - 1e-9)];
   GRINDS.splice(-2, 2);
@@ -15,6 +16,7 @@ function addSkateBowl(x, y, options = {}) {
   });
   GRINDS.push({ points, ax: points[0][0], ay: points[0][1], bx: points.at(-1)[0], by: points.at(-1)[1],
     z: o.profile.height + .003, kind: 'coping', material: 'metal', feature: o });
+  if(typeof parks!=='undefined')addBowlAccess(o);
   return o;
 }
 function skateBowlHit(o, x, y, zHint) {
@@ -74,4 +76,25 @@ function stepSkateBowl(C, dt, push, brake, steer) {
     SK.transition = null; body.z = body.vz = 0; SKB.contact = 'ground';
   }
   return true;
+}
+
+// A walkable approach from the path to the raised deck, with ordinary 18 cm
+// risers. These are real depth-tested steps, not a teleport onto the coping.
+function addBowlAccess(o){
+  const rise=o.profile.height,count=Math.ceil(rise/.018),run=rise*2,width=.14;
+  const start=o.x-o.hl-run,base=o.z0,steps=[];
+  for(let i=0;i<count;i++){
+    const step={x:start+(i+.5)*run/count,y:o.y,c:1,s:0,hl:run/count/2+.00001,hw:width/2,
+      z0:base,z1:base+rise*(i+1)/count,kind:'skateledge',material:'concrete',low:true,walkStep:true};
+    steps.push(step);solids.push(step);
+  }
+  SK_BOWL_STAIRS.push({bowl:o,steps,start,end:o.x-o.hl,y:o.y,base,rise,width});
+  // Keep vegetation clear of the access corridor as well as the bowl itself.
+  for(let i=trees.length-1;i>=0;i--)if(trees[i].x>start-.1&&trees[i].x<o.x-o.hl+.1&&Math.abs(trees[i].y-o.y)<width/2+.1)trees.splice(i,1);
+}
+function skateBowlAccessHeight(x,y){
+  for(const a of SK_BOWL_STAIRS)if(x>=a.start&&x<=a.end&&Math.abs(y-a.y)<=a.width/2){
+    const i=Math.min(a.steps.length-1,Math.floor((x-a.start)/(a.end-a.start)*a.steps.length));return a.steps[i].z1;
+  }
+  return 0;
 }

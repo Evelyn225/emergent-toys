@@ -1,7 +1,7 @@
 // Board rotation and catch live independently of the rider's yaw. Radians and
 // cell velocities; the legacy body still integrates vertical metres this release.
 function skateTrick(name, flip, turn, air, nollie = false) {
-  return { name, flip, turn, air, t: 0, nollie, duration: flip || turn ? (Math.abs(turn) >= 1 ? .42 : .32) : .08,
+  return { name, flip, turn, air, t: 0, nollie, duration: flip || turn ? (Math.abs(turn) >= 1 ? .46 : .38) : .08,
     pitch: SKB.pitch, caughtAt: null, grab: null, grabTime: 0, grabPoints: 0 };
 }
 function skateBoardAxes(yaw, pitch, roll) {

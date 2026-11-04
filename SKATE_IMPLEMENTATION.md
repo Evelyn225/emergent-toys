@@ -79,3 +79,23 @@ map; their concrete occupies clear corners away from ponds, benches and paths.
 Bowl deck drop-in now handles every approach direction. Browser checks cover
 all four drop-in directions, map entries, clearance and matching ground/rays;
 the existing spot/transition and focused Node checks also pass.
+
+## Playability fixes after hands-on feedback
+
+The initial large-bowl renderer was too expensive and its dense seam pattern
+made the surface noisy. Cached scalar face data, allocation-free ray tests,
+column clipping and simpler shading reduce the measured bowl-visible frame
+medians from 44.1/48.5 ms to 16.0/15.2 ms in the same fixed view.
+
+Board toggling now clears transition/grind/manual state immediately; remounting
+away from a bowl cannot restore its old coordinates. The chase distance is now
+5.5 m, with bowl wall clearance and a rider-focused look target. Stronger pushes
+build to a useful cruising pace (10 m/s push cap). A skate-specific tucked-leg
+pose keeps the rider's feet over the board during flips, with more readable
+flip timing. Concrete skins avoid ground-depth overlap at ramp feet.
+
+Bowls remain raised because the base terrain renderer does not support a clean
+negative-height cutout. Real walkable stairs connect the path to each bowl deck;
+the big bowl map destination now leads to the foot of those stairs. Regression
+checks cover stairs, board toggles/remounting, ordinary pushing and camera
+framing, alongside the existing bowl, ramp, flip and grind tests.

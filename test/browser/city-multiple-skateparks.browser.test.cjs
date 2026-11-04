@@ -11,6 +11,28 @@ test('distinct skateparks include a large rideable bowl with drop-ins around its
    const bad=[],big=SK_TRANSITIONS.find(o=>o.bowl&&o.spotPark),flow=SK_TRANSITIONS.find(o=>o.spotPark&&!o.bowl);
    if(!big||!flow)return{bad:['missing parks']};
    const directory=mapDirectory();
+   const stairs=SK_BOWL_STAIRS.find(s=>s.bowl===big);
+   if(!stairs)bad.push('missing access stairs');
+   else for(let i=0;i<stairs.steps.length;i++){
+     const step=stairs.steps[i];
+     if(Math.abs(walkGround(step.x,step.y)-step.z1)>.00001||solidAt(step.x,step.y,.02,step.z1-.02))bad.push('stairs not walkable');
+   }
+   // Toggle the real held board while constrained, walk away, and remount.
+   px=big.x+big.profile.flat/2+.1;py=big.y;a=SK.dir=Math.PI/2;SK.v=.3;SK.lastT=T;
+   body.z=body.vz=0;stepSkate(1/60);
+   if(SK.transition?.o!==big)bad.push('setup did not enter bowl');
+   useHeld({indoors:false});
+   if(SK.transition||SK.grind||SK.manual)bad.push('dismount retained constraint');
+   px=big.x+1.4;py=big.y;body.z=body.vz=0;body.mx=body.my=0;
+   const remountX=px;useHeld({indoors:false});T+=1/60;stepSkate(1/60);
+   if(Math.abs(px-remountX)>.02||SK.transition)bad.push('remount teleported into bowl');
+   // Normal pushing must build useful speed, not just pass a force-unit test.
+   px=SKATEPARK.bx*8+4;py=SKATEPARK.by*8+3.3;a=SK.dir=0;SK.v=0;SK.lastT=T;
+   K.KeyW=1;for(let i=0;i<240;i++){T+=1/60;stepSkate(1/60);stepBody(1/60);}K.KeyW=0;
+   if(SK.v<.4)bad.push(['pushing too slow',SK.v]);
+   SK.camYaw=SK.camZ=null;skateCam(1/60);
+   if(SK.camBack<.45)bad.push(['camera too close',SK.camBack]);
+
    for(const id of ['skatepark','skatepark-big-bowl','skatepark-flow-yard'])if(!directory.some(p=>p.id===id))bad.push(['not mapped',id]);
    if(big.hl*20<20||big.profile.height*10<3)bad.push('bowl too small');
    if(Math.hypot(big.x-flow.x,big.y-flow.y)<8)bad.push('parks not separate');
