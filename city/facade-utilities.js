@@ -55,9 +55,22 @@ for (const bld of ARCH_BUILDINGS) for (const f of bld.faces || []) {
 // Prepared only when a pipe is first seen; city placements and route data stay
 // immutable. Tube rays restore camera-relative coordinates for thin glyphs.
 const FACADE_PIPE_MODELS=new WeakMap();
+// The rain off a downpipe's shoe (its mouth .012 up): one thin unbroken stream, wobbling a little, glints running down it,
+// and a splash where it lands that spreads and flickers. (It used to be a little block cut into on-off bands.)
 const facadePipeWater=(i,u,z,du,dz)=>{
-  if(Math.abs(u)>.006+du||fract(z*40-T*6)>.5)return false;
-  BG[i]=C(z<.004?WHITE:CYAN,z<.004?6:4);return set(i,' ',0),true; // the water off the shoe, a splash where it lands
+  const mouth=.012,splashH=.003;
+  if(z<splashH){ // the splash: a low fan of spray round where it lands, wider at the ground
+    const half=.0025+.005*(1-z/splashH)**2; // (a low dome of spray, flaring at the ground)
+    if(Math.abs(u)>half+du*.5)return false;
+    const spray=hash(Math.floor(u*700),Math.floor(z*900)+Math.floor(T*14)*7,1520);
+    if(Math.abs(u)>.003&&spray<.45)return false; // (ragged, with gaps between the drops)
+    BG[i]=spray>.8?C(WHITE,7+rain*3):C(CYAN,3.5+rain*1.5);return set(i,' ',0),true;
+  }
+  if(z>mouth)return false;
+  const wob=Math.sin(z*260+T*18)*.0005,half=Math.max(.0028,du*.45);
+  if(Math.abs(u-wob)>half)return false;
+  const glint=fract(z*55+T*4.5)<.18;
+  BG[i]=glint?C(WHITE,6+rain*2):C(CYAN,3+rain*1.2+(1-z/mouth)*.6);return set(i,' ',0),true;
 };
 function buildFacadePipeModel(p){
   const parts=[],k=PIPE,at=(a,v)=>[p.c*a+p.ax*(v-k.off),p.s*a+p.ay*(v-k.off)];
@@ -99,7 +112,7 @@ function buildFacadePipeModel(p){
   return {parts,draw(x,y,near){
     for(const q of parts){
       if(q.near&&!near)continue;
-      if(q.role==='water'){if(rain>.2)drawShape(x+q.x,y+q.y,0,.02,.02,facadePipeWater);continue;}
+      if(q.role==='water'){if(rain>.2)drawShape(x+q.x,y+q.y,0,.013,.013,facadePipeWater);continue;}
       const line=q.tube&&q.box.r*2*projX/Math.max(.02,dx*(x+q.box.x)+dy*(y+q.box.y))<1.5,B=line?q.lineBox:q.box;
       drawBox({...B,x:x+B.x,y:y+B.y},line?q.lineShade:q.shade,x||y?(line?q.lineMoved:q.moved):(line?rayRod:q.ray));
     }

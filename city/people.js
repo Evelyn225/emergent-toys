@@ -107,17 +107,25 @@ const DOG_COLS = [BRICK, WARM, GRAY, WHITE, ORANGE, YEL];
 // wandering. And it trots after them: where it should be eases along, so it doesn't jump sides at every corner)
 const walkingDog = p => p.role === 'dogwalker' && !p.hidden && tod >= 7 && tod < 20;
 function dogOf(p) {
-  const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
-  const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
+  // (its own seed: it used to be picked from p.ph, the walker's step phase, so the dog changed breed with every step)
+  const ds = p.dogSeed ??= Math.random() * 9;
+  const mx = p.last[0], my = p.last[1], side = (ds * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + ds) > 0.7;
+  const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + ds) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + ds) * 0.012;
   const tx = worldCoord(p.x - mx * back - my * off), ty = worldCoord(p.y - my * back + mx * off);
   let d = p.dog;
   if (!d || Math.hypot(rel(tx - d.x), rel(ty - d.y)) > 0.6) d = p.dog = { x: tx, y: ty, mx, my, t: T }; // (first sight of it, or the walker jumped: right there)
-  const k = 1 - Math.exp(-Math.max(0, Math.min(0.25, T - d.t)) * 5); d.t = T;
+  const dt = Math.max(0, Math.min(0.25, T - d.t)), k = 1 - Math.exp(-dt * 5); d.t = T;
   const ox = d.x, oy = d.y;
   d.x = worldCoord(d.x + rel(tx - d.x) * k); d.y = worldCoord(d.y + rel(ty - d.y) * k);
   const vx = rel(d.x - ox), vy = rel(d.y - oy), v = Math.hypot(vx, vy);
-  if (v > 1e-4) { d.mx += (vx / v - d.mx) * Math.min(1, k * 2); d.my += (vy / v - d.my) * Math.min(1, k * 2); } // faces the way it's going
-  return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
+  // faces the way it's going, but only when it's actually going somewhere (a walk, not the lead's little sway or a sniff),
+  // and turning gradually: it used to follow every shuffle, flicking between views of itself every frame
+  if (dt > 0 && v / dt > 0.12 && !sniff) {
+    const turn = Math.min(1, dt * 4 * Math.min(1, v / dt / 0.3));
+    d.mx += (vx / v - d.mx) * turn; d.my += (vy / v - d.my) * turn;
+    const n = Math.hypot(d.mx, d.my) || 1; d.mx /= n; d.my /= n;
+  }
+  return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(ds * 13 | 0) % DOG_COLS.length], small: (ds * 5 | 0) % 3 === 0 };
 }
 const nearWalkedDog = () => mode === 'walk' && people.find(p => walkingDog(p) && (() => { const d = dogOf(p); return Math.hypot(rel(d.x - px), rel(d.y - py)) < 0.15; })());
 
@@ -302,7 +310,7 @@ function respawnPerson(p) {
   for (const k of ['down', 'dead', 'flee', 'gawk', 'help', 'talk', 'dog', 'knew', 'follow', 'hailing']) delete p[k];
   p.home = pickHome();
   p.work = nearestDoor(p.home.x + (Math.random() - 0.5) * 24, p.home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
-  p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9;
+  p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9; p.dogSeed = null; p.dog = null; p.look = null; p.seed = null; // (somebody new)
   p.x = p.home.x; p.y = p.home.y; p.path = [];
   settle(p);
 }
