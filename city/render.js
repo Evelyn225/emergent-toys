@@ -40,7 +40,8 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
 // hw = half width. fn(i, u, z, du, dz, L): u across (0 = centre, + right), z = height, du/dz = one cell's size there;
 // it paints the cell and returns true, or false to leave it see-through.
 // behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
-function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
+// depthOffset supplies a seated sprite's surface depth relative to its hip plane.
+function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = null) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, du = 1 / sc, dz = depth / projY;
@@ -51,14 +52,18 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      const behind = depth >= ZB[i];
-      if (behind && (!behindGlyphs || depth >= ZBG[i])) continue;
+      // Reject a wholly occluded body before requesting a depth-bearing sprite.
+      if (depthOffset && depth - hw * 2 >= ZB[i] && (!behindGlyphs || depth - hw * 2 >= ZBG[i])) continue;
+      const u = (c + 0.5 - cx) * du;
+      const surfaceDepth = depth + (depthOffset ? depthOffset(u, z, du, dz) : 0);
+      const behind = surfaceDepth >= ZB[i];
+      if (behind && (!behindGlyphs || surfaceDepth >= ZBG[i])) continue;
       const foreground = behind ? CH[i] : null, foregroundCol = behind ? COL[i] : 0;
       const bg = BG[i]; BG[i] = BG_UNSET;
-      const drew = fn(i, (c + 0.5 - cx) * du, z, du, dz, L);
-      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = depth; // (a background it paints is its own, for the fog)
+      const drew = fn(i, u, z, du, dz, L);
+      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = surfaceDepth; // (a background it paints is its own, for the fog)
       if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
-      else if (drew) { ZB[i] = depth; FL[i] = 0; }
+      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; }
     }
   }
 }
@@ -229,8 +234,9 @@ function render(dt,sceneOnly=false,mask=null) {
       for (let r = top; r < bot; r++) {
         const i = r * cols + x;
         if (holes && ZB[i] >= 0) continue;
-        W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
-        ZB[i] = d; FL[i] = 0;
+        const surfaceDepth = W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
+        // A canopy can replace a farther wall sample: keep the surface's forward ray depth.
+        ZB[i] = typeof surfaceDepth === 'number' && surfaceDepth > 0 ? surfaceDepth : d; FL[i] = 0;
       }
       clip = Math.min(clip, top);
     }

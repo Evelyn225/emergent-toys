@@ -292,8 +292,8 @@ const figRaster = (body, view, S = 1) => figRasterAt(body, view / FIG_VIEWS * Ma
 function figRasterAt(body, th, near, S = 1, ownerOut = null) {
   const W = FIG_W * S, H = FIG_H * S;
   // a fine sprite casts only round the head finer (where there's a face to see); the rest is the ordinary sprite, scaled
-  let base = null, baseOwner = null;
-  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); base = figRasterAt(body, th, null, 1, baseOwner); }
+  let base = null, baseOwner = null, baseNear = null;
+  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); baseNear = near && new Float32Array(FIG_W * FIG_H); base = figRasterAt(body, th, baseNear, 1, baseOwner); }
   const [f0, f1] = body.face || [0, 0], headMask = base && new Uint8Array(FIG_W * FIG_H); // (the head's pixels, and a pixel round them)
   if (base) for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
     const o = baseOwner[r * FIG_W + c];
@@ -334,7 +334,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     }
     if (base && who < 0 && baseOwner[bi_] >= 0 && (baseOwner[bi_] < f0 || baseOwner[bi_] >= f1)) { role = base[bi_]; who = baseOwner[bi_]; }
     spr[r * W + c] = role; owner[r * W + c] = who;
-    if (near) near[r * W + c] = 60 - best;
+    if (near) near[r * W + c] = base && who === baseOwner[bi_] && !Number.isFinite(best) ? baseNear[bi_] : 60 - best;
   };
   if (!base) { for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) cast(r, c, -1); }
   else for (let br = 0; br < FIG_H; br++) for (let bc = 0; bc < FIG_W; bc++) { // the ordinary sprite's pixels in blocks, the head's cast again finer
@@ -342,7 +342,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     if (headMask[bi_]) { for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) cast(br * S + j, bc * S + i, bi_); continue; }
     const v = base[bi_], ow = baseOwner[bi_];
     if (!v && ow < 0) continue;
-    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); }
+    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); if (near) near.fill(baseNear[bi_], row, row + S); }
   }
   if (ownerOut) ownerOut.set(owner);
   FIG_FINE = false;
@@ -379,7 +379,11 @@ function figSprite(look, view, key, S = 1) {
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
-  cache.set(id, s = figRaster(body, view, S));
+  // Seated limbs project in front of their chair. Keep their actual surface depth,
+  // rather than clipping the whole person at the billboard through their hips.
+  const near = /^sit/.test(key) ? new Float32Array(FIG_W * FIG_H * S * S) : null;
+  cache.set(id, s = near ? figRasterAt(body, view / FIG_VIEWS * Math.PI * 2, near, S) : figRaster(body, view, S));
+  if (near) s.near = near;
   if (figCache.size > 8000) for (const old of [...figCache.keys()].slice(0, 1000)) figCache.delete(old); // the least recently used go
   if (figFineCache.size > 300) for (const old of [...figFineCache.keys()].slice(0, 60)) figFineCache.delete(old);
   return s;
@@ -517,14 +521,23 @@ const FIG_FINE_AT = 2, FIG_FINE_MAX = 4;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   const unit = h / FIG_TALL, floor = opts?.light || 0, sparkle = look.sparkle;
   let spr;
-  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
-    // Request a sprite only when a screen cell passes the bounds and depth checks. Invisible figures never cast
-    // sprites or use the frame's fine-detail allowance; this also covers people hidden behind buildings.
+  const sprite = dz => {
     if (!spr) {
       const rowsPer = unit / dz;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
       spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
     }
+    return spr;
+  };
+  const seatedDepth = /^sit/.test(pose) ? (u, z, du, dz) => {
+    const s = sprite(dz), S = s.S || 1, W = FIG_W * S, H = FIG_H * S;
+    const c = Math.floor((u / unit + FIG_W / 2) * S), r = H - 1 - Math.floor(z / unit * S);
+    if (c < 0 || c >= W || r < 0 || r >= H || !s[r * W + c] || !s.near) return 0;
+    return -s.near[r * W + c] * unit * (dx * rx + dy * ry) / Math.max(.001, Math.hypot(rx, ry));
+  } : null;
+  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+    // Standing sprites remain lazy; seated sprites are also requested by the surface-depth sampler.
+    sprite(dz);
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
     const lit = Math.max(floor, L), k = clamp(0.32 + lit / 15 * 0.78, 0.32, 1);
@@ -538,7 +551,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  }, true); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
+  }, true, seatedDepth); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
