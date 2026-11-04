@@ -158,6 +158,23 @@ const free = (x, y) => {
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
+// Blocked by an edge that isn't square to the grid (a curving shoreline, a round planter): feel round you for which way the
+// edge faces and slide along it with what's left of the step, instead of sticking or juddering one axis at a time.
+function slideAlong(fx, fy, n, m) {
+  let nx = 0, ny = 0;
+  for (let k = 0; k < 16; k++) { const t = k * Math.PI / 8, c = Math.cos(t), s = Math.sin(t); if (!free(px + c * (m + n + .01), py + s * (m + n + .01))) { nx -= c; ny -= s; } }
+  const nl = Math.hypot(nx, ny);
+  if (nl < 1e-6) return false;
+  nx /= nl; ny /= nl;
+  const into = fx * nx + fy * ny;
+  if (into >= 0) return false; // (moving away from it already)
+  const tx = fx - into * nx, ty = fy - into * ny, tl = Math.hypot(tx, ty);
+  if (tl < n * .05) return false; // (walking straight into it: stay put)
+  const sx = tx, sy = ty; // (what's left of the step, along the edge)
+  // (keeping a little off it, and clear of what's ahead)
+  for (const f of [1, .5, .25]) if (free(px + sx * f - nx * m * .4, py + sy * f - ny * m * .4) && free(px + sx * f + Math.sign(sx) * m * .5, py + sy * f + Math.sign(sy) * m * .5)) { px += sx * f; py += sy * f; return true; }
+  return false;
+}
 function move(fx, fy) {
   const oldStair=mode==='walk'?elStairAt(px,py):null;
   const m = mode === 'room' ? 0.25 : 0.05;
@@ -166,8 +183,13 @@ function move(fx, fy) {
   if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
   if (mode === 'walk' && n > 0 && backroomsSeamAt(px + fx / n * 0.1, py + fy / n * 0.1)) return enterBackrooms(); // (backrooms.js)
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
+  const x0 = px, y0 = py;
   if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
+  if (!stuck && n > 1e-6 && Math.hypot(px - x0, py - y0) < n * .95) { // (a curved edge, the coast's: slide along it, if that gets you further)
+    const ax = px, ay = py; px = x0; py = y0;
+    if (!slideAlong(fx, fy, n, m) || Math.hypot(px - x0, py - y0) < Math.hypot(ax - x0, ay - y0)) { px = ax; py = ay; }
+  }
   if(mode==='walk') {
     const stair=elStairAt(px,py);
     if(!stair) {
