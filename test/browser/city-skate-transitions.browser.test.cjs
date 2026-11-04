@@ -25,10 +25,10 @@ test('mini ramp renders its true profile and coping; an air re-enters the real p
    }
    const tube=rayProfile(o.x+p.tip,o.y,1,0,0,-1,o),coping=HIT.face;
    const bowl=SK_TRANSITIONS.find(o=>o.bowl),vert=SK_TRANSITIONS.find(o=>o.profile.extension);
-   for(let j=0;j<8;j++)for(const radius of [.1,.3,.38,.41]){
-    const angle=j/8*Math.PI*2,x=bowl.x+Math.cos(angle)*radius,y=bowl.y+Math.sin(angle)*radius;
-    const t=rayBowlProfile(x,y,1,0,0,-1,bowl),want=skateProfileHeight(bowl,radius);
-    if(t<0||Math.abs(1-t-want)>.0008)bad.push(['bowl',radius,angle,t,want]);
+   for(let j=0;j<8;j++)for(const fraction of [0,.3,.6,.9]){
+    const angle=j/8*Math.PI*2,f=skatePoolFrame(bowl,bowl.profile.flat/2+bowl.profile.curve*fraction,angle);
+    const sample=skatePoolSample(bowl,bowl.x+f.x,bowl.y+f.y);
+    if(!sample||Math.abs(walkGround(bowl.x+f.x,bowl.y+f.y)-bowl.z0-f.z)>1e-6)bad.push(['pool',fraction,angle]);
    }
    const wall=rayProfile(vert.x,vert.y,vert.z0+.33,1,0,0,vert),wallNormal=HIT.nz;
    px=o.x;py=o.y;a=0;SK.v=.65;SK.dir=0;SK.lastT=T;SK.grind=SK.transition=null;SK.bail=0;body.z=body.vz=0;body.trick=null;

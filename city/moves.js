@@ -248,8 +248,8 @@ const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
 let boardZ = new Float32Array(1 << 14); // (grows to fit the screen)
 function drawBoard3D() {
   const tr = body.trick, p = tr ? clamp(tr.t / (tr.duration ?? tr.air), 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the flip
-  const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
-  const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
+  const roll = SKB.roll, yaw = SKB.yaw - a;
+  const nose = SKB.pitch; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
   const cy = (eye - (mode === 'roof' ? roofH : walkGround(px, py))) * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob;
   const cz = 2.0; // Slightly ahead of the feet, visible with a shallower downward glance.

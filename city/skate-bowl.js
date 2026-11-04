@@ -16,16 +16,18 @@ function addSkateBowl(x, y, options = {}) {
   });
   GRINDS.push({ points, ax: points[0][0], ay: points[0][1], bx: points.at(-1)[0], by: points.at(-1)[1],
     z: o.profile.height + .003, kind: 'coping', material: 'metal', feature: o });
-  if(typeof parks!=='undefined')addBowlAccess(o);
+  if(!options.deferAccess&&typeof parks!=='undefined')addBowlAccess(o);
   return o;
 }
 function skateBowlHit(o, x, y, zHint) {
+  if(o.pool){const h=skatePoolSample(o,x,y);return h&&h.local>=o.profile.flat/2-.005&&h.local<=o.profile.tip+.002?{...h,n:h.frame.n}:null;}
   const dx = rel(x - o.x), dy = rel(y - o.y), radius = Math.hypot(dx, dy), p = o.profile;
   if (radius > p.tip + .002 || radius < p.flat / 2 - .005) return null;
   const axis = Math.atan2(dy, dx), u = skateProfileU(p, radius, zHint - o.z0), at = skateProfilePoint(p, u);
   return { o, u, axis, at, n: [-Math.cos(axis) * at.tz, -Math.sin(axis) * at.tz, at.tx] };
 }
 function enterSkateBowl(hit) {
+  if(hit.o.pool)return enterSkatePool(hit);
   const { o, axis, u, at } = hit, vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
   const vertical = skateAir() ? body.vz / 10 : -(vx * hit.n[0] + vy * hit.n[1]) / Math.max(.05, hit.n[2]);
   SK.transition = { o, u, axis, vs: (vx * Math.cos(axis) + vy * Math.sin(axis)) * at.tx + vertical * at.tz,
@@ -33,6 +35,7 @@ function enterSkateBowl(hit) {
   skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateBowlPlace(C) {
+  if(C.o.pool)return skatePoolPlace(C);
   const p = skateProfilePoint(C.o.profile, C.u), c = Math.cos(C.axis), s = Math.sin(C.axis);
   px = worldCoord(C.o.x + c * p.x); py = worldCoord(C.o.y + s * p.x);
   const z = C.o.z0 + p.z;
@@ -51,6 +54,7 @@ function skateBowlPlace(C) {
   body.ground = skateGround(px, py); body.groundMode = mode;
 }
 function stepSkateBowl(C, dt, push, brake, steer) {
+  if(C.o.pool)return stepSkatePool(C,dt,push,brake,steer);
   const p = C.o.profile, at = skateProfilePoint(p, C.u), radius = Math.max(.03, at.x);
   // Project centripetal acceleration into the radial profile; preserve angular
   // momentum when the radius changes. The gravity term pulls a slow carve down.
@@ -82,13 +86,14 @@ function stepSkateBowl(C, dt, push, brake, steer) {
 // risers. These are real depth-tested steps, not a teleport onto the coping.
 function addBowlAccess(o){
   const rise=o.profile.height,count=Math.ceil(rise/.018),run=rise*2,width=.14;
-  const start=o.x-o.hl-run,base=o.z0,steps=[];
+  const west=o.pool?skatePoolFrame(o,o.profile.limit,Math.PI).x-o.profile.deck:-o.hl;
+  const start=o.x+west-run,base=o.z0,steps=[];
   for(let i=0;i<count;i++){
     const step={x:start+(i+.5)*run/count,y:o.y,c:1,s:0,hl:run/count/2+.00001,hw:width/2,
       z0:base,z1:base+rise*(i+1)/count,kind:'skateledge',material:'concrete',low:true,walkStep:true};
     steps.push(step);solids.push(step);
   }
-  SK_BOWL_STAIRS.push({bowl:o,steps,start,end:o.x-o.hl,y:o.y,base,rise,width});
+  SK_BOWL_STAIRS.push({bowl:o,steps,start,end:o.x+west,y:o.y,base,rise,width});
   // Keep vegetation clear of the access corridor as well as the bowl itself.
   for(let i=trees.length-1;i>=0;i--)if(trees[i].x>start-.1&&trees[i].x<o.x-o.hl+.1&&Math.abs(trees[i].y-o.y)<width/2+.1)trees.splice(i,1);
 }

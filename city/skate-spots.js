@@ -68,6 +68,7 @@ function skateSpotGround(x, y) {
   let h = 0;
   for (const o of SKATE_SPOT_FEATURES) if (Math.abs(rel(x - o.x)) <= o.hl && Math.abs(rel(y - o.y)) <= o.hw) h = Math.max(h, o.z1);
   for(const o of SK_TRANSITIONS)if(o.spotPark){
+    if(o.pool){const q=skatePoolSample(o,x,y);if(q)h=Math.max(h,q.h);continue;}
     const dx=rel(x-o.x),dy=rel(y-o.y),u=o.bowl?Math.hypot(dx,dy):dx*o.c+dy*o.s;
     if(Math.abs(u)<=o.hl&&Math.abs(-dx*o.s+dy*o.c)<=o.hw)h=Math.max(h,skateProfileHeight(o,u));
   }

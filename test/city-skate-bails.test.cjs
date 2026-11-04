@@ -4,7 +4,7 @@ test('bails carry rider and board momentum, bounce the board, and allow quick re
  const ctx=vm.createContext({});
  vm.runInContext(`
  let px=0,py=0,a=0,T=100;const body={z:0,vz:0},K={},SK_INPUT={push:false};
- const SK={v:.6,dir:0,bail:1.2},SKB={v:[.6,.1,0]};
+ const SK={v:.6,dir:0,bail:2.4},SKB={v:[.6,.1,0]};
  const skateGround=()=>0,skateAir=()=>false,worldCoord=x=>x,rel=x=>x;
  function move(x,y){px+=x;py+=y;}function skateBoardSync(){}
  `,ctx);
@@ -16,6 +16,8 @@ test('bails carry rider and board momentum, bounce the board, and allow quick re
  assert.ok(ev('minZ>=.008'));
  assert.ok(ev('SK.bailData.spin<5'));
  ev('const before=px;K.KeyW=1;T+=1/60;stepSkateBail(1/60);');
+ assert.ok(ev('SK.bail>0'), 'holding push must not skip the visible ground hold');
+ ev('for(let i=0;i<62;i++){T+=1/60;stepSkateBail(1/60);}');
  assert.equal(ev('SK.bail'),0);assert.equal(ev('SK.bailAt'),null);
  assert.ok(ev('px>=before'), 'getting up keeps the tumble endpoint');
 });

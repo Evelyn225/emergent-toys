@@ -65,3 +65,16 @@ test('excess tail pressure scrapes and slows; excess nose pressure bails',()=>{
  assert.ok(tail.every(p=>p.bail<=0));assert.ok(tail.at(-1).speed<.3);
  assert.ok(nose.some(p=>p.bail>0));
 });
+
+
+test('shuvits and completed flips retain the takeoff bank plane',()=>{
+ const frame=vm.runInContext('skateTrickAxes',ctx);
+ for(const pitch of [0,.4,1])for(const roll of [-1,.7])for(const turn of [0,Math.PI,Math.PI*2]){
+  const up=axes(.3,pitch,roll).up;
+  for(const flip of [0,Math.PI*2]){
+   const next=frame(.3,pitch,roll,flip,turn);
+   assert.ok(Math.hypot(...up.map((v,i)=>v-next.up[i]))<1e-9);
+   assert.ok(Math.abs(next.axis.reduce((s,v,i)=>s+v*next.up[i],0))<1e-9);
+  }
+ }
+});

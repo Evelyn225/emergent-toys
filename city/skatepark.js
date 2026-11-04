@@ -53,7 +53,7 @@ function buildSkatepark() {
       addSkateTransition(ox + 4.85, oy + 7.5);
       addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
     }
-    if (typeof addSkateBowl === 'function') addSkateBowl(ox + 6.3, oy + 4.7);
+    if (typeof addSkatePool === 'function') addSkatePool(ox + 6.3, oy + 4.7, {radius:.22,height:.16,deck:.055}, {rx:.22,ry:.48});
   }
   if (typeof buildSkateSpots === 'function') buildSkateSpots();
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
@@ -70,6 +70,7 @@ function skateparkGround(x, y) {
   if (!inSkatepark(x, y, .1)) return typeof skateSpotGround === 'function' ? skateSpotGround(x, y) : 0;
   let top = 0;
   for (const o of SKATE_FEATURES) {
+    if(o.pool){const h=skatePoolSample(o,x,y);if(h)top=Math.max(top,h.h);continue;}
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
     if (o.bowl && Math.hypot(qx, qy) > o.hl) continue;
     if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, o.bowl ? Math.hypot(qx, qy) : u) : o.ramp ? rampHeight(o, u) : o.z1);
