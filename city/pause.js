@@ -75,6 +75,14 @@ function buildPause() {
       <h2>mouse</h2>
       ${slider('sensitivity', 'Sensitivity', 0.25, 3, 0.05)}
       ${toggle('invertY', 'Invert Y')}
+      <h2>skateboard controls</h2>
+      <div class="keys">
+        <b>A / D · left stick</b><span>carve, lean on a grind, spin in the air</span>
+        <b>W · gamepad A</b><span>push; Shift+W or gamepad X: mongo</span>
+        <b>S · gamepad B</b><span>foot brake; add a direction to powerslide</span>
+        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter scoop for a 360 shuvit or flip. Load forward for nollies. Flick again in the air for a late flip.</span>
+        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie.</span>
+      </div>
       <h2>controls</h2>
       <div class="keys">
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, W pushes, A/D carve, Space (held, let go) ollies, arrows or a right-click flick do flip tricks, A/D in the air spin</span>
@@ -147,6 +155,7 @@ function resetStartOver() {
   if (button) { delete button.dataset.sure; button.textContent = 'Start over'; }
 }
 function openPause() {
+  releaseHeldMouse();
   if (paused) return;
   pauseEl = pauseEl || buildPause();
   resetStartOver();

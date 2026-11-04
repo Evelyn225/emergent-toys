@@ -60,8 +60,8 @@ function skateGroundVelocity(dt, push, brake, steer) {
   vy += SK_PHYS.gravity * n[2] * n[1] * dt;
   let speed = Math.hypot(vx, vy);
   SK.kicking = false;
-  SK.mongo = !!(K.ShiftLeft || K.ShiftRight);
-  if (push && SK.charge < 0 && speed < SK_PHYS.pushCap) {
+  SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
+  if (push && SK.charge < 0 && !skateGestureLoaded() && speed < SK_PHYS.pushCap) {
     const before = SK.kick; SK.kick += dt / .7; SK.kicking = true;
     if (before < .15 && SK.kick >= .15) {
       const burst = SK_PHYS.pushBurst * Math.max(0, 1 - speed / SK_PHYS.pushCap);

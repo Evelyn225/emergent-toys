@@ -19,7 +19,7 @@ const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_S
 function hopFaster(swirl) { const h0 = body.hop || 1; body.hop = hopUp(h0, swirl); body.mx = (body.mx || 0) * body.hop / h0; body.my = (body.my || 0) * body.hop / h0; }
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
-const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
+const TRICKS = { '360S': ['360 shuvit', 0, 1], A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && (mode === 'walk' || mode === 'roof'); // (on the street, or across the rooftops)

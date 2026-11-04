@@ -104,7 +104,7 @@ onmousemove = e => {
 function moveMouseBy(mx, my) {
   if (paused) return;
   if (mode === 'air' && !freecam) { const s = settings.sensitivity; airMouse[0] = clamp(airMouse[0] + mx * 0.012 * s, -1, 1); airMouse[1] = clamp(airMouse[1] + my * 0.012 * s * (settings.invertY ? -1 : 1), -1, 1); return; } // (the stick)
-  if (flick && !freecam) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  if (flick && !freecam) { flick.x += mx; flick.y += my; skateMouseMove(mx, my); return; }
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
@@ -127,17 +127,17 @@ addEventListener('mousedown', e => {
   }
   if (e.button === 2) {
     if (canAimGun()) gun.aimHeld = true;
-    else if (skatingNow() && !body.z) flick = { x: 0, y: 0 };
+    else if (skatingNow()) { flick = { x: 0, y: 0 }; skateMouseBegin(); }
   }
 });
 addEventListener('mouseup', e => {
   if (e.button === 0) K.MouseUse = 0;
   if (e.button === 2) {
     gun.aimHeld = false;
-    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); }
+    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) { const played = skateMouseEnd(); if (!played && !skateAir()) jump(flickTrick(f.x, f.y)); } }
   }
 });
-function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; }
+function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; flick = null; skateInputReset(); }
 addEventListener('blur', releaseHeldMouse);
 document.addEventListener('pointerlockchange', () => { if (!mouseCaptured()) releaseHeldMouse(); });
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });

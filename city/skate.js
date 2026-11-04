@@ -27,7 +27,7 @@ function arrowTrick() {
   if (K.ArrowUp) return l ? 'WA' : r ? 'WD' : '';
   return (l ? 'A' : r ? 'D' : '') + (K.ArrowDown ? 'S' : '');
 }
-const SK_POINTS = { ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, '360 flip': 300, 'varial heelflip': 250, hardflip: 250, 'inward heelflip': 250 };
+const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, '360 flip': 300, 'varial heelflip': 250, hardflip: 250, 'inward heelflip': 250 };
 
 // every frame on the board, in place of walking
 function stepSkate(dt) {
@@ -36,16 +36,20 @@ function stepSkate(dt) {
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
+  skatePollInput(dt);
   if (SK.bail > 0) { // picking yourself up
     SK.bail -= dt; SK.v = 0; body.mx = body.my = 0;
     if (SK.bail <= 0) { SK.bailAt = null; a = SK.dir; }
     skateBoardSync(); return;
   }
   if (SK.grind) { stepGrind(dt); skateBoardSync(); return; }
-  const air = skateAir(), f = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  const air = skateAir(), f = (K.KeyW || SK_INPUT.push ? 1 : 0) - (K.KeyS || SK_INPUT.brake ? 1 : 0), s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
   SK.steer = s; SK.kicking = false;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
-  if (air) { a += s * SK_SPIN * dt; SK.spin += s * SK_SPIN * dt; } // spinning: the way you're going stays put
+  if (air) {
+    const rate = s * SK_SPIN + (SK.preWind || 0) * 2 * Math.max(0, 1 - (T - SK.popT) / .5);
+    a += rate * dt; SK.spin += rate * dt; // winding before the pop adds a short initial impulse
+  }
   else skateGroundVelocity(dt, f > 0, f < 0, s);
   // arrows tapped in the air: a flip trick, once the rest of the chord's had a moment to come down
   if (SK.trickKeyT >= 0 && T - SK.trickKeyT > 0.07) {
@@ -75,13 +79,14 @@ function skateSpace(down) {
   if (down) { if (SK.charge < 0) SK.charge = T; return; }
   if (SK.charge >= 0) skatePop();
 }
-function skatePop(trick) {
-  if (SK.grind) return grindPop(trick); // (the touch Ollie button, or a flick, on a rail)
+function skatePop(trick, gesture) {
+  if (SK.grind) return grindPop(trick, gesture); // (the touch Ollie button, or a flick, on a rail)
   if (SK.bail > 0 || skateAir()) return;
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   SK.charge = -1; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
-  body.vz = POP_V * (1 + 0.35 * load);
-  body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) };
+  SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  body.vz = POP_V * (gesture ? gesture.strength : 1 + 0.35 * load);
+  body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz), nollie: !!gesture?.nollie };
   if (actx) sfxUse('ollie');
 }
 // how long you'll be in the air from a pop at vz (m/s), given the slope ahead: uphill the ground comes up to meet you
@@ -111,7 +116,7 @@ function skateLand() {
   SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
+  const label = (SKB.fakie ? 'FAKIE ' : '') + (tr?.nollie ? 'NOLLIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
   const pts = Math.round(((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
   if (standing) { // the one trick, scored by itself: a combo needs you moving
     if (SK.combo) bankCombo();
@@ -166,7 +171,7 @@ function stepGrind(dt) {
   const G = SK.grind, g = G.g, metal = g.material === 'metal', held = T - G.t0;
   SK.v = Math.max(0, SK.v - (metal ? .16 : .26) * dt); // (steel slides; stone and timber bite)
   // the wobble: it drifts, and grows the further off you are and the longer you're on; A and D lean you back
-  const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  const s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
   G.balV += ((Math.random() - .5) * (1.6 + held * .5) + G.bal * 1.4 - s * 3.2) * dt; G.balV *= 1 - dt * .8;
   G.bal += G.balV * dt;
   if (Math.abs(G.bal) > 1) { SK.grind = null; body.z = Math.max(body.z, .01); return skateBail('BAIL! You lost your balance.'); }
@@ -187,10 +192,10 @@ function endGrind() { // into the combo; off you go, and down
   body.z = Math.max(body.z, .02); body.vz = 0;
   say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
 }
-function grindPop(trick) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
+function grindPop(trick, gesture) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
   const key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   endGrind(); SK.offGrind = false;
-  body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) }; SK.popT = T;
+  body.vz = POP_V * (gesture?.strength ?? 1); body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz), nollie: !!gesture?.nollie }; SK.popT = T;
   if (actx) sfxUse('ollie');
 }
 function bankCombo() {
@@ -344,7 +349,7 @@ function drawSkater() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = skateView.a + (tr ? e * tr.turn * Math.PI * 2 : 0), nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0;
   drawSkateBoard(vx, vy, z, yaw + (SK.slide || 0) * Math.PI / 2, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
   const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
-  const pose = air || SK.charge >= 0 ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
+  const pose = air || SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
   const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
   drawSkaterFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose);
 }

@@ -29406,6 +29406,14 @@ function buildPause() {
       <h2>mouse</h2>
       ${slider('sensitivity', 'Sensitivity', 0.25, 3, 0.05)}
       ${toggle('invertY', 'Invert Y')}
+      <h2>skateboard controls</h2>
+      <div class="keys">
+        <b>A / D · left stick</b><span>carve, lean on a grind, spin in the air</span>
+        <b>W · gamepad A</b><span>push; Shift+W or gamepad X: mongo</span>
+        <b>S · gamepad B</b><span>foot brake; add a direction to powerslide</span>
+        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter scoop for a 360 shuvit or flip. Load forward for nollies. Flick again in the air for a late flip.</span>
+        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie.</span>
+      </div>
       <h2>controls</h2>
       <div class="keys">
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, W pushes, A/D carve, Space (held, let go) ollies, arrows or a right-click flick do flip tricks, A/D in the air spin</span>
@@ -29478,6 +29486,7 @@ function resetStartOver() {
   if (button) { delete button.dataset.sure; button.textContent = 'Start over'; }
 }
 function openPause() {
+  releaseHeldMouse();
   if (paused) return;
   pauseEl = pauseEl || buildPause();
   resetStartOver();
@@ -35330,7 +35339,7 @@ const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_S
 function hopFaster(swirl) { const h0 = body.hop || 1; body.hop = hopUp(h0, swirl); body.mx = (body.mx || 0) * body.hop / h0; body.my = (body.my || 0) * body.hop / h0; }
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
-const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
+const TRICKS = { '360S': ['360 shuvit', 0, 1], A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && (mode === 'walk' || mode === 'roof'); // (on the street, or across the rooftops)
@@ -35662,6 +35671,112 @@ function drawSeatedLegs() {
     set(i, ' ', 0); FOGS[i] = FOGB[i] = 0;
   }
 }
+// The recognizer is platform independent: normalized x/right, y/tail samples,
+// timestamped in seconds. Mouse and gamepad share the same state machine.
+function skateStick(x = 0, y = 0, dead = .15) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return [0, 0];
+  const r = Math.hypot(x, y);
+  if (r <= dead) return [0, 0];
+  const scale = Math.min(1, (r - dead) / (1 - dead)) / r;
+  return [x * scale, y * scale];
+}
+function createSkateGesture() {
+  let samples = [], load = null, armed = true, lastTime = -Infinity;
+  const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; };
+  function sample(x, y, t) {
+    if (![x, y, t].every(Number.isFinite)) return null;
+    if (t < lastTime) reset();
+    lastTime = t;
+    samples.push({ x, y, t });
+    samples = samples.filter(p => t - p.t <= .4).slice(-128);
+    const radius = Math.hypot(x, y);
+    if (!armed) { if (radius < .25) armed = true; return null; }
+    if (!load) {
+      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0 };
+      return null;
+    }
+    if (radius > .45) {
+      for (const p of samples) if (t - p.t <= .12 && t > p.t)
+        load.fastest = Math.max(load.fastest, Math.hypot(x - p.x, y - p.y) / .12);
+    }
+    if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
+    load.left = true;
+    if (t - load.t > .18) { load = null; return null; }
+    if (radius > .45) {
+      const angle = Math.atan2(y, x), delta = Math.atan2(Math.sin(angle - load.angle), Math.cos(angle - load.angle));
+      // A straight flick crosses the centre and jumps angle by pi. Only a
+      // series of small angular steps is a scoop, never that single jump.
+      if (Math.abs(delta) < 1.2) load.arc += delta;
+      load.angle = angle;
+    }
+    const arc = Math.abs(load.arc), curled = arc > 1.3;
+    const forward = y * load.side < -.6;
+    const released = radius < .25;
+    if ((!curled && forward) || (curled && released && arc > 2.3)) {
+      const key = arc > 4.2 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+      const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
+      load = null; armed = false; return result;
+    }
+    // Passing through centre is part of a straight flick; retain the load
+    // until the 180 ms deadline instead of cancelling at that midpoint.
+    return null;
+  }
+  return { sample, reset, get loaded() { return !!load; }, get samples() { return samples.slice(); } };
+}
+const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
+
+const SK_INPUT = { steer: 0, push: false, mongo: false, brake: false, grabL: 0, grabR: 0,
+  right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
+  padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
+function skateInputReset() {
+  Object.assign(SK_INPUT, { steer: 0, push: false, mongo: false, brake: false, grabL: 0, grabR: 0,
+    right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
+  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
+}
+function skateGesturePlay(gesture) {
+  if (!gesture || SK.bail > 0) return false;
+  if (skateAir()) {
+    const [name, flip, turn] = TRICKS[gesture.key] || ['ollie', 0, 0];
+    if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < body.trick.air * .8) return false;
+    body.trick = { name: 'late ' + name, flip, turn, t: 0, air: .32, nollie: gesture.nollie };
+  } else skatePop(gesture.key, gesture);
+  return true;
+}
+function skateMouseBegin() {
+  SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
+  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();
+}
+function skateMouseMove(x, y) {
+  const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
+  SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
+  SK_INPUT.mouseT = T;
+  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+}
+function skateMouseEnd() {
+  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(0, 0, T))) SK_INPUT.fired = true;
+  SK_INPUT.mouseHeld = false; SK_INPUT.mouse = [0, 0];
+  return SK_INPUT.fired;
+}
+function skatePollInput(dt) {
+  if (typeof paused !== 'undefined' && paused || typeof document !== 'undefined' && document.hidden) { skateInputReset(); return; }
+  // Exactly one Gamepad API read per simulation frame. No synthetic key presses,
+  // so disconnecting a pad cannot leave the keyboard stuck down.
+  let pads = [];
+  try { pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
+  const pad = Array.from(pads).find(p => p?.connected && (p.mapping === 'standard' || !p.mapping));
+  const button = i => pad?.buttons[i]?.value || (pad?.buttons[i]?.pressed ? 1 : 0);
+  SK_INPUT.steer = pad ? skateStick(pad.axes[0], pad.axes[1])[0] : 0;
+  SK_INPUT.push = button(0) > .5 || button(2) > .5; SK_INPUT.mongo = button(2) > .5;
+  SK_INPUT.brake = button(1) > .5; SK_INPUT.grabL = button(6); SK_INPUT.grabR = button(7);
+  SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3]) : [0, 0];
+  if (!pad) SK_INPUT.padGesture.reset();
+  else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
+  if (SK_INPUT.mouseHeld) {
+    const relax = Math.exp(-dt / .15);
+    if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map(v => v * relax);
+    if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+  }
+}
 // Skating uses cells and seconds throughout. The legacy body height is metres;
 // skateBoardSync is the only conversion boundary for that height.
 const SKB = { p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, roll: 0,
@@ -35724,8 +35839,8 @@ function skateGroundVelocity(dt, push, brake, steer) {
   vy += SK_PHYS.gravity * n[2] * n[1] * dt;
   let speed = Math.hypot(vx, vy);
   SK.kicking = false;
-  SK.mongo = !!(K.ShiftLeft || K.ShiftRight);
-  if (push && SK.charge < 0 && speed < SK_PHYS.pushCap) {
+  SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
+  if (push && SK.charge < 0 && !skateGestureLoaded() && speed < SK_PHYS.pushCap) {
     const before = SK.kick; SK.kick += dt / .7; SK.kicking = true;
     if (before < .15 && SK.kick >= .15) {
       const burst = SK_PHYS.pushBurst * Math.max(0, 1 - speed / SK_PHYS.pushCap);
@@ -35798,7 +35913,7 @@ function arrowTrick() {
   if (K.ArrowUp) return l ? 'WA' : r ? 'WD' : '';
   return (l ? 'A' : r ? 'D' : '') + (K.ArrowDown ? 'S' : '');
 }
-const SK_POINTS = { ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, '360 flip': 300, 'varial heelflip': 250, hardflip: 250, 'inward heelflip': 250 };
+const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, '360 flip': 300, 'varial heelflip': 250, hardflip: 250, 'inward heelflip': 250 };
 
 // every frame on the board, in place of walking
 function stepSkate(dt) {
@@ -35807,16 +35922,20 @@ function stepSkate(dt) {
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
+  skatePollInput(dt);
   if (SK.bail > 0) { // picking yourself up
     SK.bail -= dt; SK.v = 0; body.mx = body.my = 0;
     if (SK.bail <= 0) { SK.bailAt = null; a = SK.dir; }
     skateBoardSync(); return;
   }
   if (SK.grind) { stepGrind(dt); skateBoardSync(); return; }
-  const air = skateAir(), f = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  const air = skateAir(), f = (K.KeyW || SK_INPUT.push ? 1 : 0) - (K.KeyS || SK_INPUT.brake ? 1 : 0), s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
   SK.steer = s; SK.kicking = false;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
-  if (air) { a += s * SK_SPIN * dt; SK.spin += s * SK_SPIN * dt; } // spinning: the way you're going stays put
+  if (air) {
+    const rate = s * SK_SPIN + (SK.preWind || 0) * 2 * Math.max(0, 1 - (T - SK.popT) / .5);
+    a += rate * dt; SK.spin += rate * dt; // winding before the pop adds a short initial impulse
+  }
   else skateGroundVelocity(dt, f > 0, f < 0, s);
   // arrows tapped in the air: a flip trick, once the rest of the chord's had a moment to come down
   if (SK.trickKeyT >= 0 && T - SK.trickKeyT > 0.07) {
@@ -35846,13 +35965,14 @@ function skateSpace(down) {
   if (down) { if (SK.charge < 0) SK.charge = T; return; }
   if (SK.charge >= 0) skatePop();
 }
-function skatePop(trick) {
-  if (SK.grind) return grindPop(trick); // (the touch Ollie button, or a flick, on a rail)
+function skatePop(trick, gesture) {
+  if (SK.grind) return grindPop(trick, gesture); // (the touch Ollie button, or a flick, on a rail)
   if (SK.bail > 0 || skateAir()) return;
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   SK.charge = -1; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
-  body.vz = POP_V * (1 + 0.35 * load);
-  body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) };
+  SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  body.vz = POP_V * (gesture ? gesture.strength : 1 + 0.35 * load);
+  body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz), nollie: !!gesture?.nollie };
   if (actx) sfxUse('ollie');
 }
 // how long you'll be in the air from a pop at vz (m/s), given the slope ahead: uphill the ground comes up to meet you
@@ -35882,7 +36002,7 @@ function skateLand() {
   SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
+  const label = (SKB.fakie ? 'FAKIE ' : '') + (tr?.nollie ? 'NOLLIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
   const pts = Math.round(((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
   if (standing) { // the one trick, scored by itself: a combo needs you moving
     if (SK.combo) bankCombo();
@@ -35937,7 +36057,7 @@ function stepGrind(dt) {
   const G = SK.grind, g = G.g, metal = g.material === 'metal', held = T - G.t0;
   SK.v = Math.max(0, SK.v - (metal ? .16 : .26) * dt); // (steel slides; stone and timber bite)
   // the wobble: it drifts, and grows the further off you are and the longer you're on; A and D lean you back
-  const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  const s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
   G.balV += ((Math.random() - .5) * (1.6 + held * .5) + G.bal * 1.4 - s * 3.2) * dt; G.balV *= 1 - dt * .8;
   G.bal += G.balV * dt;
   if (Math.abs(G.bal) > 1) { SK.grind = null; body.z = Math.max(body.z, .01); return skateBail('BAIL! You lost your balance.'); }
@@ -35958,10 +36078,10 @@ function endGrind() { // into the combo; off you go, and down
   body.z = Math.max(body.z, .02); body.vz = 0;
   say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
 }
-function grindPop(trick) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
+function grindPop(trick, gesture) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
   const key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   endGrind(); SK.offGrind = false;
-  body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz) }; SK.popT = T;
+  body.vz = POP_V * (gesture?.strength ?? 1); body.trick = { name, flip, turn, t: 0, air: skateAirTime(body.vz), nollie: !!gesture?.nollie }; SK.popT = T;
   if (actx) sfxUse('ollie');
 }
 function bankCombo() {
@@ -36115,7 +36235,7 @@ function drawSkater() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = skateView.a + (tr ? e * tr.turn * Math.PI * 2 : 0), nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0;
   drawSkateBoard(vx, vy, z, yaw + (SK.slide || 0) * Math.PI / 2, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
   const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
-  const pose = air || SK.charge >= 0 ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
+  const pose = air || SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
   const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
   drawSkaterFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose);
 }
@@ -48452,7 +48572,7 @@ onmousemove = e => {
 function moveMouseBy(mx, my) {
   if (paused) return;
   if (mode === 'air' && !freecam) { const s = settings.sensitivity; airMouse[0] = clamp(airMouse[0] + mx * 0.012 * s, -1, 1); airMouse[1] = clamp(airMouse[1] + my * 0.012 * s * (settings.invertY ? -1 : 1), -1, 1); return; } // (the stick)
-  if (flick && !freecam) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  if (flick && !freecam) { flick.x += mx; flick.y += my; skateMouseMove(mx, my); return; }
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
@@ -48475,17 +48595,17 @@ addEventListener('mousedown', e => {
   }
   if (e.button === 2) {
     if (canAimGun()) gun.aimHeld = true;
-    else if (skatingNow() && !body.z) flick = { x: 0, y: 0 };
+    else if (skatingNow()) { flick = { x: 0, y: 0 }; skateMouseBegin(); }
   }
 });
 addEventListener('mouseup', e => {
   if (e.button === 0) K.MouseUse = 0;
   if (e.button === 2) {
     gun.aimHeld = false;
-    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); }
+    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) { const played = skateMouseEnd(); if (!played && !skateAir()) jump(flickTrick(f.x, f.y)); } }
   }
 });
-function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; }
+function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; flick = null; skateInputReset(); }
 addEventListener('blur', releaseHeldMouse);
 document.addEventListener('pointerlockchange', () => { if (!mouseCaptured()) releaseHeldMouse(); });
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });

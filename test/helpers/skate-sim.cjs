@@ -10,11 +10,9 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
   if (!Number.isFinite(dt) || dt <= 0 || dt > .05) throw new RangeError('dt must be in (0, .05] seconds');
   for (const frame of script) {
     if (!Number.isInteger(frame.frames ?? 1) || (frame.frames ?? 1) < 1) throw new RangeError('frames must be a positive integer');
-    // Analog input has no production adapter until Phase 2. Never silently turn
-    // unsupported stick samples into passing keyboard tests.
-    if (frame.sticks) throw new Error('Stick input requires the Phase 2 production adapter');
   }
-  const ctx = vm.createContext({ ground });
+  let pad = null;
+  const ctx = vm.createContext({ ground, navigator: { getGamepads: () => pad ? [pad] : [] } });
   vm.runInContext(`
     let T=100, px=0, py=0, a=0, mode='walk', roofH=0, third=false, pitch=0, sleep=false;
     const K={}, body={z:0,vz:0,crouch:0,seat:null,trick:null}, fx={skating:true,caffeine:0};
@@ -27,7 +25,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     function say(text) { msgText=text; }
     function move(x,y) { px+=x; py+=y; }
   `, ctx);
-  for (const file of ['moves.js', 'skate-physics.js', 'skate.js']) {
+  for (const file of ['moves.js', 'skate-gestures.js', 'skate-physics.js', 'skate.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
   Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics });
@@ -42,6 +40,11 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
   let space = false;
   for (const frame of script) {
     ctx.keys = frame.keys ?? {};
+    pad = frame.sticks || frame.buttons ? {
+      connected: true, mapping: 'standard',
+      axes: [...(frame.sticks?.left || [0, 0]), ...(frame.sticks?.right || [0, 0])],
+      buttons: Array.from({ length: 8 }, (_, i) => ({ value: Number(!!frame.buttons?.[['push', 'brake', 'mongo'][i]]) }))
+    } : null;
     for (let i = 0; i < (frame.frames ?? 1); i++) {
       ctx.spaceChanged = !!ctx.keys.Space !== space;
       space = !!ctx.keys.Space;

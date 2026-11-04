@@ -58,10 +58,10 @@ test('Space release pops once, arrow mode kickflips, and landing banks when stop
   assert.ok(t.at(-1).score >= 100);
 });
 
-test('invalid timestep, frame counts and unsupported analog input fail explicitly', () => {
+test('invalid timestep and frame counts fail explicitly', () => {
   for (const dt of [0, -1, NaN, Infinity, .1]) assert.throws(() => skateSim([], { dt }), /dt/);
   assert.throws(() => skateSim([{ frames: 1.5 }]), /frames/);
-  assert.throws(() => skateSim([{ sticks: { right: [0, 1] } }]), /Phase 2/);
+
 });
 
 test('hill gravity stalls at the energy-predicted height and rolls back fakie', () => {
