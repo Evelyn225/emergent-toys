@@ -78,3 +78,21 @@ test('shuvits and completed flips retain the takeoff bank plane',()=>{
   }
  }
 });
+
+test('bowl pops retain their takeoff frame, then catch for the bank or flat deck',()=>{
+ for(const pool of [false,true])for(const yaw of [0,Math.PI/2]){
+  const bowl=pool?{radius:.4,height:.32,pool:{rx:.5,ry:.81,curve:.22}}:{};
+  const r=pool ? .5*(1+.22*.65)+.4*Math.sin(.8):.25+.18*Math.sin(.8);
+  const run=skateSim([{frames:1},{frames:1,keys:{Space:1}},{frames:240}],{bowl,position:[r,0],yaw,speed:.65});
+  const launch=run.findIndex(p=>p.contact==='air');assert.ok(launch>0);
+  const up=run[launch-1].board.up;
+  assert.ok(Math.hypot(...up.map((v,i)=>v-run[launch].board.up[i]))<.36);
+  assert.ok(run.every(p=>!p.bail),`${pool}/${yaw}`);
+  assert.ok(run.slice(launch+1).some(p=>p.contact==='ground'||p.contact==='transition'));
+ }
+});
+test('a small step is not treated as a steep riding bank',()=>{
+ const run=skateSim([{frames:100}],{position:[-.3,0],speed:.5,ground:x=>x>0?.02:0});
+ assert.ok(run.every(p=>!p.bail));
+ for(const p of run.slice(1))assert.ok(p.board.up[2]>.98,JSON.stringify(p));
+});

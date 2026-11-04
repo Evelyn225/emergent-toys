@@ -8,8 +8,12 @@ let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }
 function skateSurface(x, y, zHint) {
   const h = skateGround(x, y), e = .02;
-  let gx = (skateGround(worldCoord(x + e), y) - skateGround(worldCoord(x - e), y)) / (2 * e);
-  let gy = (skateGround(x, worldCoord(y + e)) - skateGround(x, worldCoord(y - e))) / (2 * e);
+  const xp=skateGround(worldCoord(x+e),y),xm=skateGround(worldCoord(x-e),y);
+  const yp=skateGround(x,worldCoord(y+e)),ym=skateGround(x,worldCoord(y-e));
+  // A kerb/ledge is a step, not a steep bank across the finite-difference
+  // sample. Continuous park ramps provide their own exact normals below.
+  let gx=Math.abs(xp+xm-2*h)>.004?0:(xp-xm)/(2*e);
+  let gy=Math.abs(yp+ym-2*h)>.004?0:(yp-ym)/(2*e);
   let ref = null, kind = mode === 'roof' ? 'roof' : 'street', material = mode === 'roof' ? 'concrete' : typeof ROAD !== 'undefined' && !ROAD[idx(Math.floor(x),Math.floor(y))] ? 'grass' : 'asphalt';
   if (mode !== 'roof' && typeof SKATE_FEATURES !== 'undefined') {
     if (skateSurfaceCount !== SKATE_FEATURES.length) {
@@ -38,6 +42,10 @@ function skateSurface(x, y, zHint) {
     }
     if (!ref && typeof inSkatepark === 'function' && (inSkatepark(x, y) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(x,y))) material = 'concrete';
   }
+  // Generic terrain has no vertical rideable faces. A stair corner can put
+  // the two samples on different decks and otherwise imply a huge launch
+  // speed. Real steep transitions have already returned analytic normals.
+  if(!ref&&Math.hypot(gx,gy)>1){gx=0;gy=0;}
   const len = Math.hypot(gx, gy, 1);
   return { h, n: [-gx / len, -gy / len, 1 / len], kind, material, ref };
 }
@@ -106,6 +114,7 @@ function skateSurfaceExit(x0, y0, dt) {
   if (skateAir() || !SKB.surf || SK.v < .01) return;
   const expected = SKB.surf.h + SKB.v[2] * dt, ground = skateGround(px, py);
   if (expected - ground > .008) {
+    skateAirBegin(SKB.surf.ref);
     body.z = Math.max(.001, (expected - ground) * 10);
     body.vz = SKB.v[2] * 10;
     body.ground = ground; body.groundMode = mode;

@@ -75,6 +75,7 @@ function buildGrindPaths() {
 }
 function skatePathCatch() {
   const feet = skateGround(px, py) + body.z / 10, air = skateAir();
+  if(SK.transition||air&&body.vz>0)return;
   let best = null;
   for (let by = -1; by <= 1; by++) for (let bx = -1; bx <= 1; bx++)
     for (const seg of grindPathBuckets.get((Math.floor(px / 8) + bx) + ',' + (Math.floor(py / 8) + by)) || []) {
@@ -83,11 +84,12 @@ function skatePathCatch() {
       // Kerbs need an intentional hop; simply carving down a street must not
       // stick the skater to its painted-height pavement edge.
       if (!air && (path.kind === 'kerb' || path.kind === 'bench')) continue;
+      if(path.kind==='coping'&&air&&SK.airSource===path.feature)continue;
       const q = grindPathNearest(seg, px, py);
-      if (q.gap > .08 || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
+      if (q.gap > (path.kind==='coping' ? .025 : .08) || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
       const hl = Math.hypot(seg.d[0], seg.d[1]);
       const along = (Math.cos(SK.dir) * seg.d[0] + Math.sin(SK.dir) * seg.d[1]) / hl;
-      if (Math.abs(along) < .5 || !hl) continue;
+      if (Math.abs(along) < (path.kind==='coping'?Math.cos(Math.PI/7):.5) || !hl) continue;
       if (!best || q.gap < best.q.gap) best = { seg, path, q, dir: Math.sign(along) };
     }
   if (best) startPathGrind(best.path, best.q.distance, best.dir);
@@ -106,6 +108,9 @@ function startPathGrind(path, distance, dir) {
     name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, scrapeT: 0, boardOff: a - angle - (dir < 0 ? Math.PI : 0) };
   px = at.p[0]; py = at.p[1]; SK.dir = angle + (dir < 0 ? Math.PI : 0);
   SK.v = SK.grind.speed; body.trick = null; body.vz = 0; SK.spin = 0;
+  SK.transition=null;SK.manual=null;SK.airPose=null;SK.airSource=null;SK.airNormal=[0,0,1];
+  SKB.roll=0;SKB.pitch=Math.atan2(at.tangent[2]*dir,Math.hypot(at.tangent[0],at.tangent[1]));
+  SKB.yaw=a;SKB.surf={h:at.p[2],n:[0,0,1],kind:'grind',material:path.material,ref:path};
   body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
   if (actx) sfxSkate('scrape', .9); say(name.toUpperCase() + '!', 1);
 }
@@ -128,6 +133,7 @@ function stepPathGrind(dt) {
   px = worldCoord(next.p[0]); py = worldCoord(next.p[1]); G.top = next.p[2]; G.t = G.distance / G.path.length;
   SK.dir = Math.atan2(next.tangent[1], next.tangent[0]) + (G.dir < 0 ? Math.PI : 0); a = SK.dir + G.boardOff;
   SKB.pitch = Math.atan2(next.tangent[2] * G.dir, Math.hypot(next.tangent[0], next.tangent[1]));
+  SKB.roll=clamp(G.bal,-1,1)*.08;SKB.yaw=a;
   body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
   G.exitVelocity = next.tangent.map(v => v * G.speed * G.dir);
   if (G.distance < 0 || G.distance > G.path.length || G.speed < .05) return endGrind();
