@@ -64,8 +64,8 @@ function skateGesturePlay(gesture) {
   if (!gesture || SK.bail > 0) return false;
   if (skateAir()) {
     const [name, flip, turn] = TRICKS[gesture.key] || ['ollie', 0, 0];
-    if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < body.trick.air * .8) return false;
-    body.trick = { name: 'late ' + name, flip, turn, t: 0, air: .32, nollie: gesture.nollie };
+    if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < (body.trick.duration ?? body.trick.air)) return false;
+    body.trick = skateTrick('late ' + name, flip, turn, .32, gesture.nollie);
   } else skatePop(gesture.key, gesture);
   return true;
 }

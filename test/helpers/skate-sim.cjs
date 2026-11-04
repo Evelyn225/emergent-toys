@@ -25,7 +25,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     function say(text) { msgText=text; }
     function move(x,y) { px+=x; py+=y; }
   `, ctx);
-  for (const file of ['moves.js', 'skate-gestures.js', 'skate-physics.js', 'skate.js']) {
+  for (const file of ['moves.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
   Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics });
@@ -34,7 +34,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
   const snapshot = () => JSON.parse(vm.runInContext(`JSON.stringify({
     t:T-100, x:px, y:py, z:body.z, vz:body.vz, speed:SK.v, yaw:a,
     heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
-    trick:body.trick?.name??null, fakie:SKB.fakie, vx:SKB.v[0], vy:SKB.v[1], score:SK.score, combo:SK.combo?.pts??0
+    trick:body.trick?.name??null, manual:!!SK.manual, fakie:SKB.fakie, vx:SKB.v[0], vy:SKB.v[1], score:SK.score, combo:SK.combo?.pts??0, comboNames:SK.combo?.names??[]
   })`, ctx));
   trajectory.push(snapshot());
   let space = false;
@@ -43,7 +43,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     pad = frame.sticks || frame.buttons ? {
       connected: true, mapping: 'standard',
       axes: [...(frame.sticks?.left || [0, 0]), ...(frame.sticks?.right || [0, 0])],
-      buttons: Array.from({ length: 8 }, (_, i) => ({ value: Number(!!frame.buttons?.[['push', 'brake', 'mongo'][i]]) }))
+      buttons: Array.from({ length: 8 }, (_, i) => ({ value: Number(!!frame.buttons?.[(['push', 'brake', 'mongo'][i] || {6:'grabL',7:'grabR'}[i])]) }))
     } : null;
     for (let i = 0; i < (frame.frames ?? 1); i++) {
       ctx.spaceChanged = !!ctx.keys.Space !== space;

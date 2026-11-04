@@ -154,6 +154,7 @@
     "city/seated-legs.js",
     "city/skate-gestures.js",
     "city/skate-physics.js",
+    "city/skate-air.js",
     "city/skate.js",
     "city/islands-content.js",
     "city/islands-render.js",

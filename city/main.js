@@ -40,6 +40,7 @@ onkeydown = e => {
   if(mode==='ferry'&&e.code==='KeyC'){ferrySeatToggle();return;}
   if(mode==='ferry'&&e.code==='Space'){ferryWaitNextPort();return;}
   if (chute && (e.code === 'Space' || e.code === 'KeyE')) return pullCord(); // (in the air, out of an aircraft)
+  if (skatingNow() && skateAir() && (e.code === 'KeyQ' || e.code === 'KeyE')) return;
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';

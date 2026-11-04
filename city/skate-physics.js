@@ -41,9 +41,10 @@ function skateSurface(x, y, zHint) {
 }
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
-  SKB.riderYaw = a; SKB.yaw = a; SKB.stance = SK.stance;
-  SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : skateAir() ? 'air' : 'ground';
-  if (SKB.contact !== 'ground') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
+  SKB.riderYaw = a; SKB.stance = SK.stance;
+  if (!skateAir()) SKB.yaw = a;
+  SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : skateAir() ? 'air' : SK.manual ? 'manual' : 'ground';
+  if (SKB.contact !== 'ground' && SKB.contact !== 'manual') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
 }
 function skateGroundVelocity(dt, push, brake, steer) {
   const surf = SKB.surf = skateSurface(px, py), n = surf.n;
@@ -77,6 +78,9 @@ function skateGroundVelocity(dt, push, brake, steer) {
   vy = vx * s + vy * c; vx = tx;
   const sliding = brake && Math.abs(steer) > .1 && speed > .12;
   SK.slide = sliding ? steer : 0;
+  if (sliding && SK.combo && !SK.reverted && T - (SK.landedAt ?? -9) < .25) {
+    SK.combo.names.push('REVERT'); SK.combo.pts += 75; SK.combo.t = T; SK.reverted = true;
+  }
   if (brake && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
     SK.dragT = .12; if (actx) sfxSkate('drag', Math.min(1, speed / SK_TOP));
   }

@@ -82,6 +82,8 @@ function buildPause() {
         <b>S · gamepad B</b><span>foot brake; add a direction to powerslide</span>
         <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter scoop for a 360 shuvit or flip. Load forward for nollies. Flick again in the air for a late flip.</span>
         <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie.</span>
+        <b>Q / E · triggers</b><span>hold in the air to grab; mouse or right stick picks nose, tail or side. Release before landing.</span>
+        <b>gentle right stick / mouse</b><span>hold back for a manual or forward for a nose manual; keep the balance mark centred. Manuals link combos across flat ground.</span>
       </div>
       <h2>controls</h2>
       <div class="keys">

@@ -103,10 +103,11 @@ function stepBody(dt) {
   if (wasAir) { // (uphill the ground can come up past you between frames: you still land, rather than being stranded mid-trick)
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
+    if (skatingNow()) skateAirPose(dt);
     const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
-      const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
+      const fell = body.peak, tricked = !!body.trick; body.impactV = Math.abs(body.vz); body.z = body.vz = body.peak = 0;
       if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
       body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
@@ -246,7 +247,7 @@ const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
 const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
 let boardZ = new Float32Array(1 << 14); // (grows to fit the screen)
 function drawBoard3D() {
-  const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the air
+  const tr = body.trick, p = tr ? clamp(tr.t / (tr.duration ?? tr.air), 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the flip
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
