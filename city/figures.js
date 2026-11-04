@@ -355,7 +355,18 @@ function figSprite(look, view, key, S = 1) {
   const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
   let s = cache.get(id);
   if (s) { cache.delete(id); cache.set(id, s); return s; } // (most recently used last)
-  if (S > 1) { if (figFineT !== T) { figFineT = T; figFineN = 0; } if (++figFineN > FIG_FINE_PER_FRAME) return figSprite(look, view, key, 1); }
+  if (S > 1) {
+    if (figFineT !== T) { figFineT = T; figFineN = 0; }
+    if (++figFineN > FIG_FINE_PER_FRAME) { // over this frame's allowance: a fine one at a size near this, if there is one, rather than
+      // dropping to the coarse sprite (which can look like somebody else: they flickered between the two as they walked)
+      for (let k = 1; k < FIG_FINE_MAX; k++) for (const T2 of [S - k, S + k]) {
+        if (T2 < 2 || T2 > FIG_FINE_MAX) continue;
+        const near = figFineCache.get(look.shape + '|' + key + '|' + view + '|' + T2);
+        if (near) return near;
+      }
+      return figSprite(look, view, key, 1);
+    }
+  }
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
@@ -432,10 +443,14 @@ const figProp = (x, y, fig, o) => ({ fig, x, y, z: 0, h: 1.75, pose: 'stand', fa
 const isRoomPerson = s => !!s.fig && !s.dead && !s.hidden && s.chat !== false; // someone you could talk to
 // where something drawn as a figure is heading, from how it's moved since it was last drawn
 function figMotion(o) {
+  const sx = rel(o.x - (o._lx ?? o.x)), sy = rel(o.y - (o._ly ?? o.y)), step = Math.hypot(sx, sy); o._lx = o.x; o._ly = o.y;
+  o._moving = step > 1e-5 && step < 0.5;
+  // the heading comes from a real step, gathered up over frames if need be, not a sub-centimetre nudge that flicks them
+  // round to another view and back
   const ex = rel(o.x - (o._mx ?? o.x)), ey = rel(o.y - (o._my ?? o.y)), d = Math.hypot(ex, ey);
-  o._moving = d > 1e-5 && d < 0.5;
-  if (o._moving) { o._fx = ex / d; o._fy = ey / d; o._dist = (o._dist || 0) + d; }
-  o._mx = o.x; o._my = o.y;
+  if (d >= 0.5) { o._mx = o.x; o._my = o.y; }
+  else if (d > 0.004) { o._fx = ex / d; o._fy = ey / d; o._mx = o.x; o._my = o.y; }
+  if (o._moving) o._dist = (o._dist || 0) + step;
   return o;
 }
 function drawFigProp(s, rx, ry) {
@@ -450,10 +465,16 @@ function drawFigProp(s, rx, ry) {
 
 // ---- drawing one. (rx, ry) from you, standing on z0, h tall (standing height, world units), facing (fx, fy) - or
 // at you, if both are 0. pose: a figPose key. opts.light: least brightness (0-15) whatever the light.
-function figView(rx, ry, fx, fy) {
+function figView(rx, ry, fx, fy, hold) {
   if (!fx && !fy) return 0;
   const d = Math.hypot(rx, ry) || 1, vx = -rx / d, vy = -ry / d, bx = vx * -fy + vy * fx, by = vx * fx + vy * fy;
-  return mod(Math.round(Math.atan2(bx, by) / (Math.PI * 2) * FIG_VIEWS), FIG_VIEWS);
+  const at = Math.atan2(bx, by) / (Math.PI * 2) * FIG_VIEWS, v = mod(Math.round(at), FIG_VIEWS);
+  if (!hold) return v;
+  // someone (or their dog) right on the line between two views kept flicking between them, and the two can look like
+  // different people: hold the view they had until the angle's well past the line
+  const prev = hold.figView;
+  if (prev != null && prev !== v && Math.abs(mod(at - prev + FIG_VIEWS / 2, FIG_VIEWS) - FIG_VIEWS / 2) < 0.7) return prev;
+  return hold.figView = v;
 }
 const figCount = new Uint16Array(FIG_ROLES);
 function figSample(spr, pu, pz, su, sz) {
@@ -493,7 +514,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     if (!spr) {
       const rowsPer = unit / dz;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy), pose, S);
+      spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
     }
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
@@ -631,7 +652,7 @@ const ANIMAL_BODIES = {
 const DOG_LOOKS = new Map();
 const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1], pupil: [GRAY, 0], tongue: [MAG, 11] })).get(col);
 // a dog (vx, vy) from you, facing (fx, fy); s: how big (1 a mid-sized dog); frame: see ANIMAL_BODIES.dog
-const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0, z = 0) => drawAnimal(vx, vy, z, 0.13 * s, fx, fy, dogLook(col), frame);
+const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0, z = 0, opts) => drawAnimal(vx, vy, z, 0.13 * s, fx, fy, dogLook(col), frame, opts);
 // a dog's eyes: on the front of its head, either side above the muzzle (clear of the ears)
 const dogEyes = (hc, part) => [1, -1].map(sg => ({ p: fAdd(hc, [sg * 1, 1.55, 0.55]), n: [sg * 0.4, 1, 0.2], role: FR.EYE, part }));
 // a dog sitting up: haunches down, front legs straight, head up, tongue out, tail sweeping the floor (wag: -1 / 1)

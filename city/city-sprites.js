@@ -54,17 +54,32 @@ function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
   drawShape(vx, vy, terrainHeight(t.x, t.y), hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
 }
+// leaf clumps scattered over the canopy (nearest of the jittered centres round about, so no grid shows): each a dome lit
+// on its upper side and shaded under, darkening into the gaps between them. Smooth everywhere: the old square grid's
+// lighting jumped at every cell edge and the light came out cut into squares.
+function leafClump(cu, cz) {
+  const gu = Math.floor(cu), gz = Math.floor(cz);
+  let best = 9, rz = 0;
+  for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+    const qu = gu + k, qz = gz + j, ou = qu + .5 + (hash(qu, qz, 818) - .5) * .7, oz = qz + .5 + (hash(qu, qz, 819) - .5) * .7;
+    const d2 = (cu - ou) ** 2 + (cz - oz) ** 2;
+    if (d2 < best) { best = d2; rz = cz - oz; }
+  }
+  const d = Math.sqrt(best), body = clamp(1 - d / .62, 0, 1); // 1 at a clump's middle, 0 out in the gaps
+  return (body * body - .35) * .55 + rz * .55 * body; // the dome, darker between; its top lit, its underside shaded
+}
 function treeCell(i, u, z, du, dz, L, t) {
   const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
   if (bare) return winterTreeCell(i, u, z, du, dz, L, t);
-  let e = -1, cz = 0.4; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height
+  let e = -1, cz = 0.4, depth = 0; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height; depth: summed over the clumps
   if (k === 'pine') { // tiers of boughs, each a triangle, narrowing up the tree
     for (let j = 0; j < 4; j++) {
       const z0 = 0.12 + j * 0.15, top = z0 + 0.24, w = 0.21 - j * 0.04;
       if (z > z0 && z < top) { const half = (top - z) / 0.24 * w; if (au < half) e = Math.max(e, Math.min(1, (half - au) / 0.06, (z - z0) / 0.04)); }
     }
     cz = 0.45;
-  } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { e = Math.max(e, 1 - d); cz = bz; } }
+  } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { depth += 1 - d; if (1 - d > e) { e = 1 - d; cz = bz; } } }
+  if (k === 'pine') depth = e;
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
@@ -76,19 +91,24 @@ function treeCell(i, u, z, du, dz, L, t) {
     return false;
   }
   const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814);
-  if (e < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves (thinner in autumn)
+  // ragged edges: a little sky between the outermost leaves (thinner in autumn). Only at the canopy's real outline: where
+  // two clumps overlap it's deep in the tree, and it used to punch square holes there, the buildings showing through
+  if (depth < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false;
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
   const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
-  const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  // spring: the blossom tree flowers, pink with white petals in small flecks; everything else puts out new leaves, a
+  // brighter green in clumps. (Every tree used to get grey-white patches on a coarse square grid: the squares in the light)
+  const fleck = du < .03 ? hash(Math.floor(u * 140 + t.seed * 71), Math.floor(z * 140), 820) : .5, spring = sn === 0 && k !== 'pine';
+  const base = fall || (k === 'blossom' ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
   if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; } // snow on the pine's boughs
   // leaf clusters: each a rounded clump lit on its upper side and shaded under, the clumps themselves lighter toward
   // the sun; up close you see them, far off the canopy settles to its lit-and-shaded mass
   const fineT = clamp(1 - Math.max(du, dz) / .035, 0, 1), cs = k === 'pine' ? 0 : 1;
   let clump = 0;
   if (k === 'pine') { const tier = fract((z - .12) / .15); clump = (tier > .75 ? -.35 : tier < .3 ? .2 : 0); } // each tier's bough lit above, its underside in shadow
-  else { const cu = u * 16 + t.seed * 7, cz2 = z * 16, fu = fract(cu) - .5, fz = fract(cz2) - .5, r2 = fu * fu + fz * fz; clump = (.12 - r2) * 1.6 + fz * .5; } // a clump's dome, lit from above
-  const blossom = base === MAG && n > 0.8 ? WHITE : base;
-  BG[i] = C(blossom, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12)));
+  else if (fineT > 0) clump = leafClump(u * 16 + t.seed * 7, z * 16); // a clump's dome, lit from above
+  const petal = base === MAG && fleck > 0.86, fresh = spring && base === GREEN && clump > .05 ? .18 : 0;
+  BG[i] = C(petal ? WHITE : base, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + fresh + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12) + (petal ? 1.5 : 0)));
   return set(i, ' ', 0), true;
 }
 
@@ -237,11 +257,11 @@ function citySprites() {
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
       drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
-    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m), { hold: m });
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       const dogGround = walkGround(d.x, d.y), handGround = walkGround(m.x, m.y);
-      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3, dogGround);
+      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3, dogGround, { hold: m.dog });
       const lz = t => handGround * (1 - t) + dogGround * t + 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
       for (let k = 0; k < 5; k++) { const t0 = k / 5, t1 = (k + 1) / 5; rod(hx + (cx - hx) * t0, hy + (cy - hy) * t0, lz(t0), hx + (cx - hx) * t1, hy + (cy - hy) * t1, lz(t1), 0.0015, RED, 1.1); }
     }
@@ -255,7 +275,7 @@ function citySprites() {
     if (c.down) { drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c);
     if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
-    drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
+    drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'), { hold: c });
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.1); } // things you put down

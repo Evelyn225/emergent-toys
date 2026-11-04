@@ -1039,7 +1039,18 @@ function figSprite(look, view, key, S = 1) {
   const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
   let s = cache.get(id);
   if (s) { cache.delete(id); cache.set(id, s); return s; } // (most recently used last)
-  if (S > 1) { if (figFineT !== T) { figFineT = T; figFineN = 0; } if (++figFineN > FIG_FINE_PER_FRAME) return figSprite(look, view, key, 1); }
+  if (S > 1) {
+    if (figFineT !== T) { figFineT = T; figFineN = 0; }
+    if (++figFineN > FIG_FINE_PER_FRAME) { // over this frame's allowance: a fine one at a size near this, if there is one, rather than
+      // dropping to the coarse sprite (which can look like somebody else: they flickered between the two as they walked)
+      for (let k = 1; k < FIG_FINE_MAX; k++) for (const T2 of [S - k, S + k]) {
+        if (T2 < 2 || T2 > FIG_FINE_MAX) continue;
+        const near = figFineCache.get(look.shape + '|' + key + '|' + view + '|' + T2);
+        if (near) return near;
+      }
+      return figSprite(look, view, key, 1);
+    }
+  }
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
@@ -1116,10 +1127,14 @@ const figProp = (x, y, fig, o) => ({ fig, x, y, z: 0, h: 1.75, pose: 'stand', fa
 const isRoomPerson = s => !!s.fig && !s.dead && !s.hidden && s.chat !== false; // someone you could talk to
 // where something drawn as a figure is heading, from how it's moved since it was last drawn
 function figMotion(o) {
+  const sx = rel(o.x - (o._lx ?? o.x)), sy = rel(o.y - (o._ly ?? o.y)), step = Math.hypot(sx, sy); o._lx = o.x; o._ly = o.y;
+  o._moving = step > 1e-5 && step < 0.5;
+  // the heading comes from a real step, gathered up over frames if need be, not a sub-centimetre nudge that flicks them
+  // round to another view and back
   const ex = rel(o.x - (o._mx ?? o.x)), ey = rel(o.y - (o._my ?? o.y)), d = Math.hypot(ex, ey);
-  o._moving = d > 1e-5 && d < 0.5;
-  if (o._moving) { o._fx = ex / d; o._fy = ey / d; o._dist = (o._dist || 0) + d; }
-  o._mx = o.x; o._my = o.y;
+  if (d >= 0.5) { o._mx = o.x; o._my = o.y; }
+  else if (d > 0.004) { o._fx = ex / d; o._fy = ey / d; o._mx = o.x; o._my = o.y; }
+  if (o._moving) o._dist = (o._dist || 0) + step;
   return o;
 }
 function drawFigProp(s, rx, ry) {
@@ -1134,10 +1149,16 @@ function drawFigProp(s, rx, ry) {
 
 // ---- drawing one. (rx, ry) from you, standing on z0, h tall (standing height, world units), facing (fx, fy) - or
 // at you, if both are 0. pose: a figPose key. opts.light: least brightness (0-15) whatever the light.
-function figView(rx, ry, fx, fy) {
+function figView(rx, ry, fx, fy, hold) {
   if (!fx && !fy) return 0;
   const d = Math.hypot(rx, ry) || 1, vx = -rx / d, vy = -ry / d, bx = vx * -fy + vy * fx, by = vx * fx + vy * fy;
-  return mod(Math.round(Math.atan2(bx, by) / (Math.PI * 2) * FIG_VIEWS), FIG_VIEWS);
+  const at = Math.atan2(bx, by) / (Math.PI * 2) * FIG_VIEWS, v = mod(Math.round(at), FIG_VIEWS);
+  if (!hold) return v;
+  // someone (or their dog) right on the line between two views kept flicking between them, and the two can look like
+  // different people: hold the view they had until the angle's well past the line
+  const prev = hold.figView;
+  if (prev != null && prev !== v && Math.abs(mod(at - prev + FIG_VIEWS / 2, FIG_VIEWS) - FIG_VIEWS / 2) < 0.7) return prev;
+  return hold.figView = v;
 }
 const figCount = new Uint16Array(FIG_ROLES);
 function figSample(spr, pu, pz, su, sz) {
@@ -1177,7 +1198,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     if (!spr) {
       const rowsPer = unit / dz;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy), pose, S);
+      spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
     }
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
@@ -1315,7 +1336,7 @@ const ANIMAL_BODIES = {
 const DOG_LOOKS = new Map();
 const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1], pupil: [GRAY, 0], tongue: [MAG, 11] })).get(col);
 // a dog (vx, vy) from you, facing (fx, fy); s: how big (1 a mid-sized dog); frame: see ANIMAL_BODIES.dog
-const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0, z = 0) => drawAnimal(vx, vy, z, 0.13 * s, fx, fy, dogLook(col), frame);
+const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0, z = 0, opts) => drawAnimal(vx, vy, z, 0.13 * s, fx, fy, dogLook(col), frame, opts);
 // a dog's eyes: on the front of its head, either side above the muzzle (clear of the ears)
 const dogEyes = (hc, part) => [1, -1].map(sg => ({ p: fAdd(hc, [sg * 1, 1.55, 0.55]), n: [sg * 0.4, 1, 0.2], role: FR.EYE, part }));
 // a dog sitting up: haunches down, front legs straight, head up, tongue out, tail sweeping the floor (wag: -1 / 1)
@@ -5206,17 +5227,25 @@ const DOG_COLS = [BRICK, WARM, GRAY, WHITE, ORANGE, YEL];
 // wandering. And it trots after them: where it should be eases along, so it doesn't jump sides at every corner)
 const walkingDog = p => p.role === 'dogwalker' && !p.hidden && tod >= 7 && tod < 20;
 function dogOf(p) {
-  const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
-  const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
+  // (its own seed: it used to be picked from p.ph, the walker's step phase, so the dog changed breed with every step)
+  const ds = p.dogSeed ??= Math.random() * 9;
+  const mx = p.last[0], my = p.last[1], side = (ds * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + ds) > 0.7;
+  const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + ds) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + ds) * 0.012;
   const tx = worldCoord(p.x - mx * back - my * off), ty = worldCoord(p.y - my * back + mx * off);
   let d = p.dog;
   if (!d || Math.hypot(rel(tx - d.x), rel(ty - d.y)) > 0.6) d = p.dog = { x: tx, y: ty, mx, my, t: T }; // (first sight of it, or the walker jumped: right there)
-  const k = 1 - Math.exp(-Math.max(0, Math.min(0.25, T - d.t)) * 5); d.t = T;
+  const dt = Math.max(0, Math.min(0.25, T - d.t)), k = 1 - Math.exp(-dt * 5); d.t = T;
   const ox = d.x, oy = d.y;
   d.x = worldCoord(d.x + rel(tx - d.x) * k); d.y = worldCoord(d.y + rel(ty - d.y) * k);
   const vx = rel(d.x - ox), vy = rel(d.y - oy), v = Math.hypot(vx, vy);
-  if (v > 1e-4) { d.mx += (vx / v - d.mx) * Math.min(1, k * 2); d.my += (vy / v - d.my) * Math.min(1, k * 2); } // faces the way it's going
-  return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
+  // faces the way it's going, but only when it's actually going somewhere (a walk, not the lead's little sway or a sniff),
+  // and turning gradually: it used to follow every shuffle, flicking between views of itself every frame
+  if (dt > 0 && v / dt > 0.12 && !sniff) {
+    const turn = Math.min(1, dt * 4 * Math.min(1, v / dt / 0.3));
+    d.mx += (vx / v - d.mx) * turn; d.my += (vy / v - d.my) * turn;
+    const n = Math.hypot(d.mx, d.my) || 1; d.mx /= n; d.my /= n;
+  }
+  return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(ds * 13 | 0) % DOG_COLS.length], small: (ds * 5 | 0) % 3 === 0 };
 }
 const nearWalkedDog = () => mode === 'walk' && people.find(p => walkingDog(p) && (() => { const d = dogOf(p); return Math.hypot(rel(d.x - px), rel(d.y - py)) < 0.15; })());
 
@@ -5401,7 +5430,7 @@ function respawnPerson(p) {
   for (const k of ['down', 'dead', 'flee', 'gawk', 'help', 'talk', 'dog', 'knew', 'follow', 'hailing']) delete p[k];
   p.home = pickHome();
   p.work = nearestDoor(p.home.x + (Math.random() - 0.5) * 24, p.home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
-  p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9;
+  p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9; p.dogSeed = null; p.dog = null; p.look = null; p.seed = null; // (somebody new)
   p.x = p.home.x; p.y = p.home.y; p.path = [];
   settle(p);
 }
@@ -9160,7 +9189,7 @@ function drawRoofPolice() {
     const z = policeRoofHeight(c.x, c.y);
     if(c.dead){drawFigure(...R(c.x,c.y),z,.18,-c.down.fx,-c.down.fy,copLook(c),'dead');continue;}
     figMotion(c); const aim = c.aimT > T, [ax, ay] = aimAt(rel(px - c.x), rel(py - c.y)); // (shooting at you: gun.js)
-    drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7 });
+    drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7, hold: c });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
@@ -9169,7 +9198,7 @@ function drawRoomPolice() {
     if(c.dead){drawFigure(c.x-px,c.y-py,0,1.8,-c.down.fx,-c.down.fy,copLook(c),'dead');continue;}
     figMotion(c);
     const aim = c.aimT > T, [ax, ay] = aimAt(px - c.x, py - c.y); // (shooting at you: gun.js)
-    drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
+    drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9, hold: c });
     if (c.sees && fract(T * 3) < 0.55) drawArt(c.x - px, c.y - py, 1.65, 0.1, 0.12, ['!'], () => C(RED, 15));
   }
 }
@@ -15279,17 +15308,32 @@ function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
   drawShape(vx, vy, terrainHeight(t.x, t.y), hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
 }
+// leaf clumps scattered over the canopy (nearest of the jittered centres round about, so no grid shows): each a dome lit
+// on its upper side and shaded under, darkening into the gaps between them. Smooth everywhere: the old square grid's
+// lighting jumped at every cell edge and the light came out cut into squares.
+function leafClump(cu, cz) {
+  const gu = Math.floor(cu), gz = Math.floor(cz);
+  let best = 9, rz = 0;
+  for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+    const qu = gu + k, qz = gz + j, ou = qu + .5 + (hash(qu, qz, 818) - .5) * .7, oz = qz + .5 + (hash(qu, qz, 819) - .5) * .7;
+    const d2 = (cu - ou) ** 2 + (cz - oz) ** 2;
+    if (d2 < best) { best = d2; rz = cz - oz; }
+  }
+  const d = Math.sqrt(best), body = clamp(1 - d / .62, 0, 1); // 1 at a clump's middle, 0 out in the gaps
+  return (body * body - .35) * .55 + rz * .55 * body; // the dome, darker between; its top lit, its underside shaded
+}
 function treeCell(i, u, z, du, dz, L, t) {
   const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
   if (bare) return winterTreeCell(i, u, z, du, dz, L, t);
-  let e = -1, cz = 0.4; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height
+  let e = -1, cz = 0.4, depth = 0; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height; depth: summed over the clumps
   if (k === 'pine') { // tiers of boughs, each a triangle, narrowing up the tree
     for (let j = 0; j < 4; j++) {
       const z0 = 0.12 + j * 0.15, top = z0 + 0.24, w = 0.21 - j * 0.04;
       if (z > z0 && z < top) { const half = (top - z) / 0.24 * w; if (au < half) e = Math.max(e, Math.min(1, (half - au) / 0.06, (z - z0) / 0.04)); }
     }
     cz = 0.45;
-  } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { e = Math.max(e, 1 - d); cz = bz; } }
+  } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { depth += 1 - d; if (1 - d > e) { e = 1 - d; cz = bz; } } }
+  if (k === 'pine') depth = e;
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
@@ -15301,19 +15345,24 @@ function treeCell(i, u, z, du, dz, L, t) {
     return false;
   }
   const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814);
-  if (e < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves (thinner in autumn)
+  // ragged edges: a little sky between the outermost leaves (thinner in autumn). Only at the canopy's real outline: where
+  // two clumps overlap it's deep in the tree, and it used to punch square holes there, the buildings showing through
+  if (depth < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false;
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
   const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
-  const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  // spring: the blossom tree flowers, pink with white petals in small flecks; everything else puts out new leaves, a
+  // brighter green in clumps. (Every tree used to get grey-white patches on a coarse square grid: the squares in the light)
+  const fleck = du < .03 ? hash(Math.floor(u * 140 + t.seed * 71), Math.floor(z * 140), 820) : .5, spring = sn === 0 && k !== 'pine';
+  const base = fall || (k === 'blossom' ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
   if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; } // snow on the pine's boughs
   // leaf clusters: each a rounded clump lit on its upper side and shaded under, the clumps themselves lighter toward
   // the sun; up close you see them, far off the canopy settles to its lit-and-shaded mass
   const fineT = clamp(1 - Math.max(du, dz) / .035, 0, 1), cs = k === 'pine' ? 0 : 1;
   let clump = 0;
   if (k === 'pine') { const tier = fract((z - .12) / .15); clump = (tier > .75 ? -.35 : tier < .3 ? .2 : 0); } // each tier's bough lit above, its underside in shadow
-  else { const cu = u * 16 + t.seed * 7, cz2 = z * 16, fu = fract(cu) - .5, fz = fract(cz2) - .5, r2 = fu * fu + fz * fz; clump = (.12 - r2) * 1.6 + fz * .5; } // a clump's dome, lit from above
-  const blossom = base === MAG && n > 0.8 ? WHITE : base;
-  BG[i] = C(blossom, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12)));
+  else if (fineT > 0) clump = leafClump(u * 16 + t.seed * 7, z * 16); // a clump's dome, lit from above
+  const petal = base === MAG && fleck > 0.86, fresh = spring && base === GREEN && clump > .05 ? .18 : 0;
+  BG[i] = C(petal ? WHITE : base, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + fresh + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12) + (petal ? 1.5 : 0)));
   return set(i, ' ', 0), true;
 }
 
@@ -15462,11 +15511,11 @@ function citySprites() {
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
       drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
-    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m), { hold: m });
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       const dogGround = walkGround(d.x, d.y), handGround = walkGround(m.x, m.y);
-      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3, dogGround);
+      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3, dogGround, { hold: m.dog });
       const lz = t => handGround * (1 - t) + dogGround * t + 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
       for (let k = 0; k < 5; k++) { const t0 = k / 5, t1 = (k + 1) / 5; rod(hx + (cx - hx) * t0, hy + (cy - hy) * t0, lz(t0), hx + (cx - hx) * t1, hy + (cy - hy) * t1, lz(t1), 0.0015, RED, 1.1); }
     }
@@ -15480,7 +15529,7 @@ function citySprites() {
     if (c.down) { drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c);
     if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
-    drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
+    drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'), { hold: c });
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.1); } // things you put down
@@ -46904,9 +46953,22 @@ for (const bld of ARCH_BUILDINGS) for (const f of bld.faces || []) {
 // Prepared only when a pipe is first seen; city placements and route data stay
 // immutable. Tube rays restore camera-relative coordinates for thin glyphs.
 const FACADE_PIPE_MODELS=new WeakMap();
+// The rain off a downpipe's shoe (its mouth .012 up): one thin unbroken stream, wobbling a little, glints running down it,
+// and a splash where it lands that spreads and flickers. (It used to be a little block cut into on-off bands.)
 const facadePipeWater=(i,u,z,du,dz)=>{
-  if(Math.abs(u)>.006+du||fract(z*40-T*6)>.5)return false;
-  BG[i]=C(z<.004?WHITE:CYAN,z<.004?6:4);return set(i,' ',0),true; // the water off the shoe, a splash where it lands
+  const mouth=.012,splashH=.003;
+  if(z<splashH){ // the splash: a low fan of spray round where it lands, wider at the ground
+    const half=.0025+.005*(1-z/splashH)**2; // (a low dome of spray, flaring at the ground)
+    if(Math.abs(u)>half+du*.5)return false;
+    const spray=hash(Math.floor(u*700),Math.floor(z*900)+Math.floor(T*14)*7,1520);
+    if(Math.abs(u)>.003&&spray<.45)return false; // (ragged, with gaps between the drops)
+    BG[i]=spray>.8?C(WHITE,7+rain*3):C(CYAN,3.5+rain*1.5);return set(i,' ',0),true;
+  }
+  if(z>mouth)return false;
+  const wob=Math.sin(z*260+T*18)*.0005,half=Math.max(.0028,du*.45);
+  if(Math.abs(u-wob)>half)return false;
+  const glint=fract(z*55+T*4.5)<.18;
+  BG[i]=glint?C(WHITE,6+rain*2):C(CYAN,3+rain*1.2+(1-z/mouth)*.6);return set(i,' ',0),true;
 };
 function buildFacadePipeModel(p){
   const parts=[],k=PIPE,at=(a,v)=>[p.c*a+p.ax*(v-k.off),p.s*a+p.ay*(v-k.off)];
@@ -46948,7 +47010,7 @@ function buildFacadePipeModel(p){
   return {parts,draw(x,y,near){
     for(const q of parts){
       if(q.near&&!near)continue;
-      if(q.role==='water'){if(rain>.2)drawShape(x+q.x,y+q.y,0,.02,.02,facadePipeWater);continue;}
+      if(q.role==='water'){if(rain>.2)drawShape(x+q.x,y+q.y,0,.013,.013,facadePipeWater);continue;}
       const line=q.tube&&q.box.r*2*projX/Math.max(.02,dx*(x+q.box.x)+dy*(y+q.box.y))<1.5,B=line?q.lineBox:q.box;
       drawBox({...B,x:x+B.x,y:y+B.y},line?q.lineShade:q.shade,x||y?(line?q.lineMoved:q.moved):(line?rayRod:q.ray));
     }

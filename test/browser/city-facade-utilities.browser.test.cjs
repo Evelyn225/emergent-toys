@@ -99,7 +99,7 @@ test('native facade rendering shows wall meters on every facing and runoff only 
    const p=samples[0];window.utilityTarget=p;drawBox=draw;px=p.x+p.ax*.10+p.c*.01;py=p.y+p.ay*.10+p.s*.01;a=Math.atan2(p.y-py,p.x-px);freecam={z:.03};pitch=0;render(0);pitch=-.02/Math.hypot(.10,.01)*projY/rows;
    for(const wet of [false,true]){
     let calls=0;rain=wet?.8:0;drawShape=(x,y,z,w,h,fn,...rest)=>{
-     const water=active&&w===.02&&h===.02;if(water)calls++;
+     const water=active&&w===.013&&h===.013;if(water)calls++; /* (the downpipe stream: facade-utilities.js) */
      return shape(x,y,z,w,h,water?(i,...args)=>{const hit=fn(i,...args);if(hit)BG[i]=C(MAG,15);return hit;}:fn,...rest);
     };render(0);const pixels=Array.from(BG).filter(c=>c===C(MAG,15)).length;
     if(wet?calls===0||pixels===0:calls!==0||pixels!==0)bad.push(['native rain mismatch',wet,calls,pixels]);checked++;
