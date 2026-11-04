@@ -967,8 +967,8 @@ const figRaster = (body, view, S = 1) => figRasterAt(body, view / FIG_VIEWS * Ma
 function figRasterAt(body, th, near, S = 1, ownerOut = null) {
   const W = FIG_W * S, H = FIG_H * S;
   // a fine sprite casts only round the head finer (where there's a face to see); the rest is the ordinary sprite, scaled
-  let base = null, baseOwner = null;
-  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); base = figRasterAt(body, th, null, 1, baseOwner); }
+  let base = null, baseOwner = null, baseNear = null;
+  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); baseNear = near && new Float32Array(FIG_W * FIG_H); base = figRasterAt(body, th, baseNear, 1, baseOwner); }
   const [f0, f1] = body.face || [0, 0], headMask = base && new Uint8Array(FIG_W * FIG_H); // (the head's pixels, and a pixel round them)
   if (base) for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
     const o = baseOwner[r * FIG_W + c];
@@ -1009,7 +1009,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     }
     if (base && who < 0 && baseOwner[bi_] >= 0 && (baseOwner[bi_] < f0 || baseOwner[bi_] >= f1)) { role = base[bi_]; who = baseOwner[bi_]; }
     spr[r * W + c] = role; owner[r * W + c] = who;
-    if (near) near[r * W + c] = 60 - best;
+    if (near) near[r * W + c] = base && who === baseOwner[bi_] && !Number.isFinite(best) ? baseNear[bi_] : 60 - best;
   };
   if (!base) { for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) cast(r, c, -1); }
   else for (let br = 0; br < FIG_H; br++) for (let bc = 0; bc < FIG_W; bc++) { // the ordinary sprite's pixels in blocks, the head's cast again finer
@@ -1017,7 +1017,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     if (headMask[bi_]) { for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) cast(br * S + j, bc * S + i, bi_); continue; }
     const v = base[bi_], ow = baseOwner[bi_];
     if (!v && ow < 0) continue;
-    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); }
+    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); if (near) near.fill(baseNear[bi_], row, row + S); }
   }
   if (ownerOut) ownerOut.set(owner);
   FIG_FINE = false;
@@ -1054,7 +1054,11 @@ function figSprite(look, view, key, S = 1) {
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
-  cache.set(id, s = figRaster(body, view, S));
+  // Seated limbs project in front of their chair. Keep their actual surface depth,
+  // rather than clipping the whole person at the billboard through their hips.
+  const near = /^sit/.test(key) ? new Float32Array(FIG_W * FIG_H * S * S) : null;
+  cache.set(id, s = near ? figRasterAt(body, view / FIG_VIEWS * Math.PI * 2, near, S) : figRaster(body, view, S));
+  if (near) s.near = near;
   if (figCache.size > 8000) for (const old of [...figCache.keys()].slice(0, 1000)) figCache.delete(old); // the least recently used go
   if (figFineCache.size > 300) for (const old of [...figFineCache.keys()].slice(0, 60)) figFineCache.delete(old);
   return s;
@@ -1192,14 +1196,23 @@ const FIG_FINE_AT = 2, FIG_FINE_MAX = 4;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   const unit = h / FIG_TALL, floor = opts?.light || 0, sparkle = look.sparkle;
   let spr;
-  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
-    // Request a sprite only when a screen cell passes the bounds and depth checks. Invisible figures never cast
-    // sprites or use the frame's fine-detail allowance; this also covers people hidden behind buildings.
+  const sprite = dz => {
     if (!spr) {
       const rowsPer = unit / dz;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
       spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
     }
+    return spr;
+  };
+  const seatedDepth = /^sit/.test(pose) ? (u, z, du, dz) => {
+    const s = sprite(dz), S = s.S || 1, W = FIG_W * S, H = FIG_H * S;
+    const c = Math.floor((u / unit + FIG_W / 2) * S), r = H - 1 - Math.floor(z / unit * S);
+    if (c < 0 || c >= W || r < 0 || r >= H || !s[r * W + c] || !s.near) return 0;
+    return -s.near[r * W + c] * unit * (dx * rx + dy * ry) / Math.max(.001, Math.hypot(rx, ry));
+  } : null;
+  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+    // Standing sprites remain lazy; seated sprites are also requested by the surface-depth sampler.
+    sprite(dz);
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
     const lit = Math.max(floor, L), k = clamp(0.32 + lit / 15 * 0.78, 0.32, 1);
@@ -1213,7 +1226,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  }, true); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
+  }, true, seatedDepth); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
@@ -12535,7 +12548,7 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
-  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]);
+  if (ah) { arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]); return ah[2]; }
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   if (windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc)) return;
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
@@ -22413,7 +22426,7 @@ function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, Math.hypot(hx - px, hy - py, ARCADE_Z - eye)] : null;
+  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, dx * rel(hx - px) + dy * rel(hy - py)] : null;
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {
@@ -25607,7 +25620,8 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
 // hw = half width. fn(i, u, z, du, dz, L): u across (0 = centre, + right), z = height, du/dz = one cell's size there;
 // it paints the cell and returns true, or false to leave it see-through.
 // behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
-function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
+// depthOffset supplies a seated sprite's surface depth relative to its hip plane.
+function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = null) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, du = 1 / sc, dz = depth / projY;
@@ -25618,14 +25632,18 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      const behind = depth >= ZB[i];
-      if (behind && (!behindGlyphs || depth >= ZBG[i])) continue;
+      // Reject a wholly occluded body before requesting a depth-bearing sprite.
+      if (depthOffset && depth - hw * 2 >= ZB[i] && (!behindGlyphs || depth - hw * 2 >= ZBG[i])) continue;
+      const u = (c + 0.5 - cx) * du;
+      const surfaceDepth = depth + (depthOffset ? depthOffset(u, z, du, dz) : 0);
+      const behind = surfaceDepth >= ZB[i];
+      if (behind && (!behindGlyphs || surfaceDepth >= ZBG[i])) continue;
       const foreground = behind ? CH[i] : null, foregroundCol = behind ? COL[i] : 0;
       const bg = BG[i]; BG[i] = BG_UNSET;
-      const drew = fn(i, (c + 0.5 - cx) * du, z, du, dz, L);
-      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = depth; // (a background it paints is its own, for the fog)
+      const drew = fn(i, u, z, du, dz, L);
+      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = surfaceDepth; // (a background it paints is its own, for the fog)
       if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
-      else if (drew) { ZB[i] = depth; FL[i] = 0; }
+      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; }
     }
   }
 }
@@ -25796,8 +25814,9 @@ function render(dt,sceneOnly=false,mask=null) {
       for (let r = top; r < bot; r++) {
         const i = r * cols + x;
         if (holes && ZB[i] >= 0) continue;
-        W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
-        ZB[i] = d; FL[i] = 0;
+        const surfaceDepth = W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
+        // A canopy can replace a farther wall sample: keep the surface's forward ray depth.
+        ZB[i] = typeof surfaceDepth === 'number' && surfaceDepth > 0 ? surfaceDepth : d; FL[i] = 0;
       }
       clip = Math.min(clip, top);
     }

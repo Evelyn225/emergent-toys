@@ -155,7 +155,7 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
-  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]);
+  if (ah) { arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]); return ah[2]; }
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   if (windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc)) return;
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
