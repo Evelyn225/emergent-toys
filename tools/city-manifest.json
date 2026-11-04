@@ -154,6 +154,7 @@
     "city/contacts-ui.js",
     "city/moves.js",
     "city/seated-legs.js",
+    "city/skate-parks.js",
     "city/skate-spots.js",
     "city/skate-paths.js",
     "city/skate-gestures.js",

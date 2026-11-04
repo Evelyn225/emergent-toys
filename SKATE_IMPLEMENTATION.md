@@ -67,3 +67,14 @@ stopped before a low rail it can clear. Pedestrian collision defaults are kept.
 Automated and visual checks are complete for the covered scenarios. A physical
 gamepad has not been used in this environment, so tactile steering/gesture feel
 and a human playtest sign-off remain to be done before calling tuning final.
+
+## Additional skateparks
+
+`codex/multiple-skateparks` adds two separate public-park sites alongside the
+original mixed park. **Big Bowl Skatepark** has an approximately 21 m outer
+width, an 11 m floor and 3.5 m walls. **Flow Yard Skatepark** has a wide mini
+ramp, low flat bar, six-metre manual pad and ledge. Both are searchable on the
+map; their concrete occupies clear corners away from ponds, benches and paths.
+Bowl deck drop-in now handles every approach direction. Browser checks cover
+all four drop-in directions, map entries, clearance and matching ground/rays;
+the existing spot/transition and focused Node checks also pass.

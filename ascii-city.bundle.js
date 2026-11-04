@@ -35794,6 +35794,45 @@ function drawSeatedLegs() {
     set(i, ' ', 0); FOGS[i] = FOGB[i] = 0;
   }
 }
+// Reserve clear south-east corners of separate public parks, away from the
+// pond, central paths and benches. Trees inside the new concrete are removed.
+function buildExtraSkateparks() {
+  const used = new Set(SKATEPARK ? [SKATEPARK.bx+','+SKATEPARK.by] : []);
+  for (const type of ['bowl', 'flow']) {
+    let site = null;
+    for (const [bx,by] of parks) {
+      if (used.has(bx+','+by)) continue;
+      const x=bx*8+6.65,y=by*8+6.65,half=1.1;
+      if (SKATE_PATCHES.some(p=>Math.abs(p.x-x)<half+p.hl&&Math.abs(p.y-y)<half+p.hw)) continue;
+      if (benches.some(o=>Math.abs(o.x-x)<half+.1&&Math.abs(o.y-y)<half+.1)) continue;
+      if (solids.some(o=>Math.abs(o.x-x)<half+Math.max(o.hl,o.hw)&&Math.abs(o.y-y)<half+Math.max(o.hl,o.hw))) continue;
+      if (ARCH_BLOCKERS.some(o=>Math.abs(o.x-x)<half+Math.max(o.hl,o.hw)&&Math.abs(o.y-y)<half+Math.max(o.hl,o.hw))) continue;
+      if (LANDMARK_SOLIDS.some(o=>Math.abs(o.x-x)<half+Math.max(o.hl||0,o.hw||0)&&Math.abs(o.y-y)<half+Math.max(o.hl||0,o.hw||0))) continue;
+      let wet=false;
+      for(const dx of [-half,0,half])for(const dy of [-half,0,half])if(isWater(x+dx,y+dy)||map[idx(Math.floor(x+dx),Math.floor(y+dy))])wet=true;
+      if(wet)continue;
+      site={x,y,bx,by,half};break;
+    }
+    if(!site)continue;
+    const {x,y,bx,by,half}=site;used.add(bx+','+by);
+    for(let i=trees.length-1;i>=0;i--)if(Math.abs(trees[i].x-x)<half+.1&&Math.abs(trees[i].y-y)<half+.1)trees.splice(i,1);
+    SKATE_PATCHES.push({x,y,hl:half,hw:half});
+    if(type==='bowl'){
+      const bowl=addSkateBowl(x,y,{flat:1.1,radius:.4,height:.35,deck:.1});
+      bowl.spot=bowl.spotPark=true;
+      SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-.03,y,line:{x,y},
+        description:'A dedicated bowl park: almost 21 metres across, an 11-metre floor and 3.5-metre walls, with continuous steel coping. Face inward on the deck and push to drop in; pump and carve around the walls.'});
+    }else{
+      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:.55});
+      mini.spot=mini.spotPark=true;
+      skateSpotBox(x-.8,y+.45,.25,.004,.025,'skaterail','metal');
+      skateSpotBox(x-.05,y+.45,.3,.1,.02,'manualpad','concrete');
+      skateSpotBox(x+.75,y+.45,.25,.035,.035,'skateledge','concrete');
+      SKATE_SPOTS.push({id:'skatepark-flow-yard',name:'Flow Yard Skatepark',x:x-half+.1,y,line:{x,y},
+        description:'A relaxed park with a wide mini ramp, low flat bar, six-metre manual pad and concrete ledge. Build lines across the open concrete, or practise pumping and rock to fakie.'});
+    }
+  }
+}
 // Discoverable street lines use the existing city geometry. The DIY median
 // and a small park plaza add a few low obstacles without blocking traffic.
 const SKATE_SPOTS = [], SKATE_SPOT_FEATURES = [], SKATE_PATCHES = [];
@@ -35843,6 +35882,7 @@ function buildSkateSpots() {
     SKATE_SPOTS.push({ id: 'skate-plaza', name: 'Concrete plaza · ledge line', x:x-.45, y, line:{x,y},
       description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
   }
+  buildExtraSkateparks();
   const stairs = EL_STATIONS.find(s => s.stairs?.length)?.stairs[0];
   if (stairs) SKATE_SPOTS.push({ id: 'skate-stairs', name: 'Station stairs · kinked handrails', x: stairs.x, y: stairs.y,
     description: 'Two flights joined by a landing, with continuous kinked handrails. Enter from the platform with a valid train pass, then line up a downhill rail run.' });
@@ -35862,6 +35902,10 @@ function refreshSkateSpotDirectory() {
 function skateSpotGround(x, y) {
   let h = 0;
   for (const o of SKATE_SPOT_FEATURES) if (Math.abs(rel(x - o.x)) <= o.hl && Math.abs(rel(y - o.y)) <= o.hw) h = Math.max(h, o.z1);
+  for(const o of SK_TRANSITIONS)if(o.spotPark){
+    const dx=rel(x-o.x),dy=rel(y-o.y),u=o.bowl?Math.hypot(dx,dy):dx*o.c+dy*o.s;
+    if(Math.abs(u)<=o.hl&&Math.abs(-dx*o.s+dy*o.c)<=o.hw)h=Math.max(h,skateProfileHeight(o,u));
+  }
   return h;
 }
 const inSkateSpotPatch = (x, y) => SKATE_PATCHES.some(p => Math.abs(rel(x - p.x)) <= p.hl && Math.abs(rel(y - p.y)) <= p.hw);
@@ -36387,6 +36431,12 @@ function stepSkateTransition(dt, push, brake, steer) {
     let drop = false;
     if (!hit && push && SK.v < .1 && !skateAir()) for (const o of SK_TRANSITIONS) {
       const dx = rel(px - o.x), dy = rel(py - o.y), x = dx * o.c + dy * o.s, axis = -dx * o.s + dy * o.c;
+      if(o.bowl){
+        const r=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+        if(r<o.profile.tip||r>o.profile.tip+o.profile.deck||Math.cos(a-angle)>-.2)continue;
+        const u=o.profile.limit-.01,at=skateProfilePoint(o.profile,u);
+        hit={o,u,axis:angle,at,n:[-Math.cos(angle)*at.tz,-Math.sin(angle)*at.tz,at.tx]};drop=true;break;
+      }
       if (Math.abs(axis) > o.hw || Math.abs(x) < o.profile.tip || Math.abs(x) > o.profile.tip + o.profile.deck) continue;
       if ((Math.cos(a) * o.c + Math.sin(a) * o.s) * Math.sign(x) > -.2) continue;
       const u = Math.sign(x) * (o.profile.limit - .01), at = skateProfilePoint(o.profile, u);

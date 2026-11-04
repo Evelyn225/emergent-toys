@@ -96,6 +96,12 @@ function stepSkateTransition(dt, push, brake, steer) {
     let drop = false;
     if (!hit && push && SK.v < .1 && !skateAir()) for (const o of SK_TRANSITIONS) {
       const dx = rel(px - o.x), dy = rel(py - o.y), x = dx * o.c + dy * o.s, axis = -dx * o.s + dy * o.c;
+      if(o.bowl){
+        const r=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+        if(r<o.profile.tip||r>o.profile.tip+o.profile.deck||Math.cos(a-angle)>-.2)continue;
+        const u=o.profile.limit-.01,at=skateProfilePoint(o.profile,u);
+        hit={o,u,axis:angle,at,n:[-Math.cos(angle)*at.tz,-Math.sin(angle)*at.tz,at.tx]};drop=true;break;
+      }
       if (Math.abs(axis) > o.hw || Math.abs(x) < o.profile.tip || Math.abs(x) > o.profile.tip + o.profile.deck) continue;
       if ((Math.cos(a) * o.c + Math.sin(a) * o.s) * Math.sign(x) > -.2) continue;
       const u = Math.sign(x) * (o.profile.limit - .01), at = skateProfilePoint(o.profile, u);

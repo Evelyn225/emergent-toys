@@ -47,6 +47,7 @@ function buildSkateSpots() {
     SKATE_SPOTS.push({ id: 'skate-plaza', name: 'Concrete plaza · ledge line', x:x-.45, y, line:{x,y},
       description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
   }
+  buildExtraSkateparks();
   const stairs = EL_STATIONS.find(s => s.stairs?.length)?.stairs[0];
   if (stairs) SKATE_SPOTS.push({ id: 'skate-stairs', name: 'Station stairs · kinked handrails', x: stairs.x, y: stairs.y,
     description: 'Two flights joined by a landing, with continuous kinked handrails. Enter from the platform with a valid train pass, then line up a downhill rail run.' });
@@ -66,6 +67,10 @@ function refreshSkateSpotDirectory() {
 function skateSpotGround(x, y) {
   let h = 0;
   for (const o of SKATE_SPOT_FEATURES) if (Math.abs(rel(x - o.x)) <= o.hl && Math.abs(rel(y - o.y)) <= o.hw) h = Math.max(h, o.z1);
+  for(const o of SK_TRANSITIONS)if(o.spotPark){
+    const dx=rel(x-o.x),dy=rel(y-o.y),u=o.bowl?Math.hypot(dx,dy):dx*o.c+dy*o.s;
+    if(Math.abs(u)<=o.hl&&Math.abs(-dx*o.s+dy*o.c)<=o.hw)h=Math.max(h,skateProfileHeight(o,u));
+  }
   return h;
 }
 const inSkateSpotPatch = (x, y) => SKATE_PATCHES.some(p => Math.abs(rel(x - p.x)) <= p.hl && Math.abs(rel(y - p.y)) <= p.hw);
