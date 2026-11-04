@@ -9,7 +9,7 @@ let grindsB = [];
 function buildSkatepark() {
   GRINDS.length = SKATE_FEATURES.length = 0;
   const park = parks.find(([bx, by]) => bx === 13 && by === 34);
-  SKATEPARK = park ? { bx: 13, by: 34, x0: 5.5, y0: 5.45, x1: 7.85, y1: 7.85 } : null;
+  SKATEPARK = park ? { bx: 13, by: 34, x0: 2.4, y0: 2.3, x1: 7.85, y1: 7.85 } : null; // (most of the park block: the benches round it stay, to grind)
   if (SKATEPARK) {
     for (let k = trees.length - 1; k >= 0; k--) if (inSkatepark(trees[k].x, trees[k].y, .3)) trees.splice(k, 1); // (the concrete's clear)
     const ox = SKATEPARK.bx * 8, oy = SKATEPARK.by * 8;
@@ -30,6 +30,22 @@ function buildSkatepark() {
     }
     const pad = add(7.1, 5.9, false, .25, .15, .02, 'manualpad'); // a 5 x 3 m manual pad, 20 cm
     edge(pad, -1, 'stone'); edge(pad, 1, 'stone');
+    // the long lines, for long grinds: a 20 m flat bar, a 16 m ledge, a 16 m low bar, a 14 m curb
+    edge(add(4.0, 2.75, true, 1.0, .004, .035, 'skaterail'), 0, 'metal');
+    { const o = add(3.6, 4.2, false, .8, .03, .045, 'skateledge'); edge(o, -1, 'metal'); edge(o, 1, 'metal'); }
+    edge(add(2.9, 6.7, false, .8, .004, .03, 'skaterail'), 0, 'metal');
+    { const o = add(4.3, 6.3, true, .7, .025, .025, 'skateledge'); edge(o, -1, 'metal'); edge(o, 1, 'metal'); }
+    // ramps (ground you roll up and over, not solids you bump: skateRamps): a funbox, 12 m long, its 6 m deck coped
+    // along both sides to grind; and a kicker that throws you off its lip
+    const ramp = (x, y, alongX, hl, hw, z1, kind, run) => {
+      const o = { x: ox + x, y: oy + y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0: 0, z1, kind: 'skateramp', ramp: kind, run, low: true, ray: typeof rayRamp === 'function' ? rayRamp : null };
+      solids.push(o); SKATE_FEATURES.push(o);
+      return o;
+    };
+    const box = ramp(4.6, 4.3, true, .6, .2, .05, 'funbox', .3);
+    for (const side of [-1, 1]) { const ex = box.x - box.s * side * box.hw, ey = box.y + box.c * side * box.hw, d = box.hl - box.run;
+      GRINDS.push({ ax: ex - box.c * d, ay: ey - box.s * d, bx: ex + box.c * d, by: ey + box.s * d, z: box.z1, material: 'metal', kind: 'skateledge', feature: box }); }
+    ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
   }
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
@@ -43,8 +59,25 @@ function skateparkGround(x, y) {
   if (!inSkatepark(x, y, .1)) return 0;
   let top = 0;
   for (const o of SKATE_FEATURES) {
-    const qx = x - o.x, qy = y - o.y;
-    if (Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.z1);
+    const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
+    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.ramp ? rampHeight(o, u) : o.z1);
   }
   return top;
+}
+// a ramp's surface at u along it: a kicker rises the whole way to its lip (+u); a funbox goes up, along its deck, and down
+function rampHeight(o, u) {
+  if (o.ramp === 'kicker') return o.z1 * clamp((u + o.hl) / (2 * o.hl), 0, 1);
+  return o.z1 * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
+}
+const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
+// rolling on a ramp (skate.js, after each step on the board): up a slope costs speed, down one gives it back; and off a
+// kicker's lip, moving forward, you're thrown up and out
+function skateRampStep(x0, y0, dt) {
+  if (!SKATEPARK || skateAir() || !inSkatepark(px, py, .2)) return;
+  const g0 = skateparkGround(x0, y0), g1 = skateparkGround(px, py), from = skateRampAt(x0, y0);
+  if (from?.ramp === 'kicker' && g0 > from.z1 * .8 && g1 < g0 - .01) {
+    const along = Math.cos(SK.dir) * from.c + Math.sin(SK.dir) * from.s;
+    if (along > .3) { body.z = (g0 - g1) * 10; body.vz = Math.max(1.2, SK.v * 10 * (from.z1 / (2 * from.hl)) * along * 1.3); return; } // (metres, m/s)
+  }
+  if (g0 !== g1 && (from || skateRampAt(px, py))) SK.v = Math.sqrt(Math.max(0, SK.v * SK.v - 2 * .98 * (g1 - g0))); // (g, in cells/s/s)
 }
