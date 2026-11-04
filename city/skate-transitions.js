@@ -80,6 +80,7 @@ function skateTransitionPlace(C) {
 }
 function skateTransitionRelease(C, coping = false) {
   const v = SKB.v.slice(), at = skateProfilePoint(C.o.profile, C.u);
+  SK.airNormal=SKB.surf.n.slice();
   // The coping rounds the last few degrees of the mini's truncated quarter
   // into a vertical takeoff. Preserve energy and axis motion for the return.
   if (coping) { v[0] = -(C.o.bowl ? Math.sin(C.axis) : C.o.s) * C.va; v[1] = (C.o.bowl ? Math.cos(C.axis) : C.o.c) * C.va; v[2] = Math.abs(C.vs); }
@@ -96,6 +97,12 @@ function stepSkateTransition(dt, push, brake, steer) {
     let drop = false;
     if (!hit && push && SK.v < .1 && !skateAir()) for (const o of SK_TRANSITIONS) {
       const dx = rel(px - o.x), dy = rel(py - o.y), x = dx * o.c + dy * o.s, axis = -dx * o.s + dy * o.c;
+      if(o.pool){
+        const h=skatePoolSample(o,px,py);
+        if(!h||h.local<o.profile.tip||Math.cos(a-h.axis)>-.2)continue;
+        const u=o.profile.limit-.01,frame=skatePoolFrame(o,u,h.axis);
+        hit={o,u,axis:h.axis,at:frame.at,n:frame.n};drop=true;break;
+      }
       if(o.bowl){
         const r=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
         if(r<o.profile.tip||r>o.profile.tip+o.profile.deck||Math.cos(a-angle)>-.2)continue;
@@ -120,7 +127,7 @@ function stepSkateTransition(dt, push, brake, steer) {
       if (quality === 'sloppy') SK.v *= .7;
     }
     enterSkateTransition(hit); C = SK.transition;
-    if (drop) C.vs = -Math.sign(C.u) * .1;
+    if (drop) { C.vs = -Math.sign(C.u) * .1; if(C.o.pool){const f=skatePoolFrame(C.o,C.u,C.axis);C.velocity=f.tu.map(v=>-.1*v);} }
   }
   if (C.o.bowl) return stepSkateBowl(C, dt, push, brake, steer);
   const at = skateProfilePoint(C.o.profile, C.u), p = C.o.profile;
@@ -132,7 +139,7 @@ function stepSkateTransition(dt, push, brake, steer) {
     C.vs += direction * .06 * Math.sin(at.theta * 2) * dt;
     if (at.theta < .2 && Math.abs(C.vs) < SK_PHYS.pushCap) {
       const before = SK.kick; SK.kick += dt / .7;
-      if (before < .15 && SK.kick >= .15) C.vs += direction * .06 * (1 - Math.abs(C.vs) / .6);
+      if (before < .15 && SK.kick >= .15) C.vs += direction * SK_PHYS.pushBurst * (1 - Math.abs(C.vs) / SK_PHYS.pushCap);
       if (SK.kick >= 1) SK.kick -= 1;
       SK.kicking = true;
     }

@@ -97,9 +97,9 @@ test('hills accelerate from rest, downhill runs exceed the push cap, hard slides
 });
 
 test('push bursts taper below the push cap and cannot accelerate a downhill run', () => {
-  const fast = skateSim([{ frames: 42, keys: { KeyW: 1 } }], { speed: 1.1 });
-  const coast = skateSim([{ frames: 42 }], { speed: 1.1 });
+  const fast = skateSim([{ frames: 42, keys: { KeyW: 1 } }], { speed: 1.3 });
+  const coast = skateSim([{ frames: 42 }], { speed: 1.3 });
   assert.deepEqual(fast, coast);
   const push = skateSim([{ frames: 3600, keys: { KeyW: 1 } }]);
-  assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= .9);
+  assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= 1.2);
 });

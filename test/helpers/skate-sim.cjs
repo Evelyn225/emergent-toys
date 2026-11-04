@@ -21,7 +21,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), mod=(v,m)=>((v%m)+m)%m;
     const rel=v=>v, worldCoord=v=>v;
     const outdoorGroundHeight=(x,y)=>{
-      for(const o of SKATE_FEATURES)if(o.profile&&Math.abs(x-o.x)<=o.hl&&Math.abs(y-o.y)<=o.hw)return skateProfileHeight(o,o.bowl?Math.hypot(x-o.x,y-o.y):x-o.x);
+      for(const o of SKATE_FEATURES)if(o.profile&&Math.abs(x-o.x)<=o.hl&&Math.abs(y-o.y)<=o.hw){if(o.pool){const h=skatePoolSample(o,x,y);if(h)return h.h;continue;}return skateProfileHeight(o,o.bowl?Math.hypot(x-o.x,y-o.y):x-o.x);}
       return ground(x,y);
     }, fallHurt=()=>0;
     const grindsB=[[]], bi=()=>0;
@@ -29,15 +29,16 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     function say(text) { msgText=text; }
     function move(x,y) { px+=x; py+=y; }
   `, ctx);
-  for (const file of ['moves.js', 'skate-paths.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate-transitions.js', 'skate-bowl.js', 'skate-bails.js', 'skate.js']) {
+  for (const file of ['moves.js', 'skate-paths.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate-transitions.js', 'skate-bowl.js', 'skate-pool-render.js', 'skate-pool.js', 'skate-bails.js', 'skate.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
   Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics, transition, bowl, position });
-  vm.runInContext('Object.assign(SK_PHYS,physics); if(transition)addSkateTransition(0,0,transition); if(bowl)addSkateBowl(0,0,bowl); [px,py]=position; a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
+  vm.runInContext('Object.assign(SK_PHYS,physics); if(transition)addSkateTransition(0,0,transition); if(bowl){if(bowl.pool)addSkatePool(0,0,bowl,bowl.pool);else addSkateBowl(0,0,bowl);} [px,py]=position; a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
   const trajectory = [];
   const snapshot = () => JSON.parse(vm.runInContext(`JSON.stringify({
     t:T-100, x:px, y:py, z:body.z, worldZ:SKB.p[2], contact:SKB.contact, velocity:SKB.v, vz:body.vz, speed:SK.v, yaw:a,
     heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
+    board:skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll), normal:SKB.surf?.n,
     trick:body.trick?.name??null, manual:!!SK.manual, fakie:SKB.fakie, vx:SKB.v[0], vy:SKB.v[1], score:SK.score, combo:SK.combo?.pts??0, comboNames:SK.combo?.names??[]
   })`, ctx));
   trajectory.push(snapshot());

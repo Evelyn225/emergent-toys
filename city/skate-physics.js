@@ -2,7 +2,7 @@
 // skateBoardSync is the only conversion boundary for that height.
 const SKB = { p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, roll: 0,
   riderYaw: 0, contact: 'ground', surf: null, stance: 1, fakie: false };
-const SK_PHYS = { gravity: .98, pushCap: 1, pushBurst: .2, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
+const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
 const skateSurfaceCells = new Map();
 let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }
@@ -25,6 +25,7 @@ function skateSurface(x, y, zHint) {
       }
     }
     for (const o of skateSurfaceCells.get(Math.floor(x) + ',' + Math.floor(y)) || []) {
+      if(o.pool){const q=skatePoolSample(o,x,y);if(q&&Math.abs(q.h-h)<.001)return {h,n:q.n,kind:'transition',material:'concrete',ref:o};continue;}
       const qx = rel(x - o.x), qy = rel(y - o.y), u = o.bowl ? Math.hypot(qx,qy) : qx * o.c + qy * o.s;
       if (Math.abs(u) > o.hl || Math.abs(-qx * o.s + qy * o.c) > o.hw) continue;
       const top = o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1;

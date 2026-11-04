@@ -1,5 +1,5 @@
 // Short physical aftermath, with independent rider and board momentum. The
-// rider stays where the tumble ends; push lets you get up after the first beat.
+// rider stays where the tumble ends; push lets you get up after the visible tumble and ground hold.
 function skateBailStart() {
   const velocity = SKB.v.slice(), speed = Math.hypot(...velocity);
   SK.bailData = { t0: T, velocity: velocity.map(v => v * .6),
@@ -29,7 +29,7 @@ function stepSkateBail(dt) {
     SK.bailAt = [px, py, SK.dir, a];
   }
   SK.bail = Math.max(0, SK.bail - dt);
-  if (B && T - B.t0 > .25 && (K.KeyW || SK_INPUT.push)) SK.bail = 0;
+  if (B && T - B.t0 > 1.4 && (K.KeyW || SK_INPUT.push)) SK.bail = 0;
   SK.v = 0; body.mx = body.my = 0;
   if (!SK.bail) { SK.bailAt = null; SK.bailData = null; a = SK.dir; }
   skateBoardSync();
@@ -38,6 +38,6 @@ function skateBailDraw() {
   const B = SK.bailData, [x, y, dir, ang] = SK.bailAt, ground = skateGround(x, y);
   if (B) drawSkateBoard(...R(B.board[0], B.board[1]), B.board[2], B.yaw, 0, B.roll);
   const age = B ? T - B.t0 : 0;
-  const pose = 'tumble' + clamp(Math.floor(age / SK_BAIL_T * 8),0,7);
+  const pose = 'tumble' + clamp(age < .35 ? Math.floor(age/.35*3) : SK.bail > .5 ? 3 : 4+Math.floor((.5-SK.bail)/.5*4),0,7);
   drawSkaterFigure(...R(x, y), ground, SB.rider, Math.cos(dir), Math.sin(dir), skaterLook(), pose);
 }

@@ -2,7 +2,7 @@
 // cell velocities; the legacy body still integrates vertical metres this release.
 function skateTrick(name, flip, turn, air, nollie = false) {
   return { name, flip, turn, air, t: 0, nollie, duration: flip || turn ? (Math.abs(turn) >= 1 ? .46 : .38) : .08,
-    pitch: SKB.pitch, caughtAt: null, grab: null, grabTime: 0, grabPoints: 0 };
+    pitch: SKB.pitch, baseRoll: Math.atan2(Math.sin(SKB.roll),Math.cos(SKB.roll)), caughtAt: null, grab: null, grabTime: 0, grabPoints: 0 };
 }
 function skateBoardAxes(yaw, pitch, roll) {
   const c = Math.cos(yaw), s = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
@@ -21,14 +21,24 @@ function skateLandingQuality({ up, axis, velocity, normal, catchLead = Infinity,
   if (angle <= tilt * 1.6 && line <= align * 1.6 && catchLead >= catchWindow * .7 / 1.6) return 'sloppy';
   return 'bail';
 }
+function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
+  const base=skateBoardAxes(yaw,pitch,bank),f=base.axis,u=base.up;
+  const r=[u[1]*f[2]-u[2]*f[1],u[2]*f[0]-u[0]*f[2],u[0]*f[1]-u[1]*f[0]];
+  const c=Math.cos(shuv),s=Math.sin(shuv);
+  const axis=f.map((v,i)=>v*c+r[i]*s),right=r.map((v,i)=>v*c-f[i]*s);
+  return {axis,up:u.map((v,i)=>v*Math.cos(flip)+right[i]*Math.sin(flip))};
+}
 function skateAirPose(dt = 0) {
   const tr = body.trick;
   SKB.riderYaw = a;
   if (!tr) { SKB.yaw = a; return; }
   const duration = tr.duration ?? tr.air, p = clamp(tr.t / duration, 0, 1), e = p * p * (3 - 2 * p);
-  SKB.yaw = a + e * tr.turn * Math.PI * 2;
-  SKB.roll = e * tr.flip * Math.PI * 2;
-  SKB.pitch = (tr.pitch || 0) + Math.sin(Math.min(1, p * 4) * Math.PI) * .35 * (tr.nollie ? -1 : 1);
+  const popPitch=(tr.pitch || 0)+Math.sin(Math.min(1,p*4)*Math.PI)*.35*(tr.nollie?-1:1);
+  const frame=skateTrickAxes(a,popPitch,tr.baseRoll||0,e*tr.flip*Math.PI*2,e*tr.turn*Math.PI*2);
+  SKB.yaw=Math.atan2(frame.axis[1],frame.axis[0]);SKB.pitch=Math.asin(clamp(frame.axis[2],-1,1));
+  const neutral=skateBoardAxes(SKB.yaw,SKB.pitch,0),rightAxis=[-Math.sin(SKB.yaw),Math.cos(SKB.yaw),0];
+  const dot=(x,y)=>x.reduce((v,n,i)=>v+n*y[i],0);
+  SKB.roll=Math.atan2(dot(frame.up,rightAxis),dot(frame.up,neutral.up));
   if (tr.caughtAt == null && tr.t >= duration) tr.caughtAt = duration;
   const left = K.KeyQ || SK_INPUT.grabL > .25, right = K.KeyE || SK_INPUT.grabR > .25;
   if ((left || right) && tr.caughtAt != null) {

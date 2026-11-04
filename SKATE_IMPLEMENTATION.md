@@ -99,3 +99,38 @@ negative-height cutout. Real walkable stairs connect the path to each bowl deck;
 the big bowl map destination now leads to the foot of those stairs. Regression
 checks cover stairs, board toggles/remounting, ordinary pushing and camera
 framing, alongside the existing bowl, ramp, flip and grind tests.
+
+## Pool shapes, stance and ramp pops
+
+The mixed park's practice bowl is now an elongated pool, approximately 15 by
+10 metres. Big Bowl is approximately 29 by 22 metres, with an asymmetric outline
+of broad lobes and tighter pockets instead of a circular wall. Its walls are
+3.2 metres high. Both retain walkable stairs to their raised decks.
+
+The new pools share one analytic surface map between ground height, normals,
+riding constraints, coping and a cached triangle mesh. The constraint carries
+Cartesian momentum through changing curvature and conserves gravity work as the
+rider climbs or descends. Coping airs round into a vertical takeoff; the contact
+normal at the lip remains the bank normal within the small re-entry tolerance,
+avoiding a false flat-deck landing. Near-plane-clipped triangle rasterisation
+replaces per-pixel curved-wall ray scans for these pools.
+
+In a serial ABAB comparison against main a5e00e6 at 177x66, the fixed Big Bowl
+view measured main medians of 16.1/15.1 ms and new medians of 13.9/14.0 ms.
+These are local observations, not a frame-rate guarantee. Geometry checks compare
+normals and mesh vertices against the analytic surface, plus intermediate
+triangle heights within six centimetres. Riding tests cover wall rollback,
+carves through every quadrant and a coping air that re-enters without bailing.
+
+Rider drawing now anchors the authored shoe geometry to the deck, including the
+planted foot while pushing. Board flips and shuvits rotate in the takeoff plane,
+retaining both ramp pitch and bank; the rider keeps the takeoff normal too.
+Push bursts are now 2.8 m/s, tapering toward a 12 m/s cap. A bail lasts 2.4 s,
+with a quick initial tumble, a visible ground hold and recovery; pushing can
+shorten it only after 1.4 s. Mini-ramp pushes use the shared push cap rather than
+the obsolete lower cap, which could previously subtract speed.
+
+Validation: all skating Node tests and bundle freshness; 13 skating browser
+regressions; 11 activity/reported-fix browser regressions; final focused pool,
+transition and rider-pose browser checks. Physical gamepad feel still needs a
+human playtest.
