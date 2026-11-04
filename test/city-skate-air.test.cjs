@@ -58,3 +58,10 @@ test('nose manuals balance, and a powerslide just after landing extends a combo'
  const revert=skateSim([{frames:10,keys:{Space:1}},{frames:landed-10},{keys:{KeyS:1,KeyD:1}}],{speed:.6});
  assert.deepEqual(revert.at(-1).comboNames,['OLLIE','REVERT']);
 });
+
+test('excess tail pressure scrapes and slows; excess nose pressure bails',()=>{
+ const tail=skateSim([{frames:240,sticks:{right:[0,.58]}}],{speed:.6});
+ const nose=skateSim([{frames:240,sticks:{right:[0,-.58]}}],{speed:.6});
+ assert.ok(tail.every(p=>p.bail<=0));assert.ok(tail.at(-1).speed<.3);
+ assert.ok(nose.some(p=>p.bail>0));
+});

@@ -3,7 +3,7 @@
 // ride along on top of (skateparkGround); every edge you can grind is in GRINDS, with the benches' seat fronts all
 // round the city. Cells (1 = 10 m)
 const GRINDS = []; // { ax, ay, bx, by: the edge; z: its top above the ground there; material: 'metal' | 'stone' | 'wood'; kind }
-const SKATE_FEATURES = [];
+const SKATE_FEATURES = []; // park features and the marked street-spot obstacles
 let grindsB = [];
 // built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
 function buildSkatepark() {
@@ -54,6 +54,7 @@ function buildSkatepark() {
     }
     if (typeof addSkateBowl === 'function') addSkateBowl(ox + 6.3, oy + 4.7);
   }
+  if (typeof buildSkateSpots === 'function') buildSkateSpots();
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
     const c = -b.fy, s = b.fx, ex = b.x + b.fx * .02, ey = b.y + b.fy * .02;
@@ -61,10 +62,11 @@ function buildSkatepark() {
   }
   grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
   if (typeof buildGrindPaths === 'function') buildGrindPaths();
+  if (typeof refreshSkateSpotDirectory === 'function') refreshSkateSpotDirectory();
 }
 // the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
 function skateparkGround(x, y) {
-  if (!inSkatepark(x, y, .1)) return 0;
+  if (!inSkatepark(x, y, .1)) return typeof skateSpotGround === 'function' ? skateSpotGround(x, y) : 0;
   let top = 0;
   for (const o of SKATE_FEATURES) {
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;

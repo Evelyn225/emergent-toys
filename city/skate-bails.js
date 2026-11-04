@@ -37,7 +37,7 @@ function stepSkateBail(dt) {
 function skateBailDraw() {
   const B = SK.bailData, [x, y, dir, ang] = SK.bailAt, ground = skateGround(x, y);
   if (B) drawSkateBoard(...R(B.board[0], B.board[1]), B.board[2], B.yaw, 0, B.roll);
-  const age = B ? T - B.t0 : 0, recovering = SK.bail < .3;
-  const pose = recovering ? 'crouch' : age < .3 ? 'down' : 'sprawl';
+  const age = B ? T - B.t0 : 0;
+  const pose = 'tumble' + clamp(Math.floor(age / SK_BAIL_T * 8),0,7);
   drawSkaterFigure(...R(x, y), ground, SB.rider, Math.cos(dir), Math.sin(dir), skaterLook(), pose);
 }

@@ -22,7 +22,7 @@ test('the skatepark: real ledges, bars and a pad on concrete in a park, every be
   const bad=[];if(!SKATEPARK)return ['no skatepark'];
   if(SKATE_FEATURES.length<5)bad.push(['features',SKATE_FEATURES.length]);
   for(const o of SKATE_FEATURES){
-   if(!inSkatepark(o.x,o.y))bad.push(['outside',o.kind]);
+   if(!o.spot&&!inSkatepark(o.x,o.y))bad.push(['outside',o.kind]); // street spots have their own location/traffic checks
    if(!solidsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].includes(o))bad.push(['not collidable',o.kind]);
    if(o.ramp)continue; // (a ramp you roll up, not a block you bump: its own test)
    if(Math.abs(skateparkGround(o.x,o.y)-o.z1)>1e-9)bad.push(['no top to ride',o.kind]);
@@ -86,9 +86,11 @@ test('grinds are named by how the board sits, pop off with a flip into a combo, 
  assert.ok(r.lost,'leaning into the wobble throws you off');
 }));
 
-test('flip tricks land going uphill (and down): the flip times itself to the slope',()=>fixture(async p=>{
+test('loaded flip tricks land going uphill (and down) with time to catch',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
-  // a bridge ramp: find where the road climbs, ride up it and kickflip
+  // A fixed flip duration now needs a full pop on this steep bank: the weak
+  // uncharged hop no longer magically retimes a flip to finish at touchdown.
+  // A bridge ramp: find where the road climbs, ride up it and kickflip
   const b=ROAD_BRIDGES[0],out=[];
   for(const [y0,dir] of [[b.y0+.5,1],[b.y1-.5,-1]]){
    px=b.x;py=y0;a=Math.PI/2*dir;SK.dir=a;SK.v=.8;SK.lastT=T;SK.bail=0;SK.combo=null;body.z=body.vz=0;body.trick=null;tRide(1);

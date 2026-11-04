@@ -17,6 +17,12 @@ test('skate camera lags a carve, holds heading through a spin and widens FOV onl
    body.z=body.vz=0;body.trick=null;SK.v=.8;SK.dir=a;SKB.v=[Math.cos(a)*.8,Math.sin(a)*.8,0];
    SK.lastT=T;const base=FOV,original=render;let seen=base;
    render=()=>{seen=FOV;};try{loop(performance.now()+100);}finally{render=original;}
+   // The bail's moving board and blended authored rider poses use the same
+   // world camera and must render without invalid pose keys or geometry.
+   skateBail('BAIL! Camera smoke check.');
+   for(let i=0;i<12;i++){T+=1/60;stepSkate(1/60);stepBody(1/60);}
+   const saved=[px,py,a],[cx,cy,yaw,z]=skateCam(.1);
+   skateView={x:px,y:py,a,eye:z};px=cx;py=cy;a=yaw;render(.1);[px,py,a]=saved;skateView=null;
    return{lag,held:yawHeld,base,seen,after:FOV,back:SK.camBack,flags:{paused,mode,skating:fx.skating,third,held,game:!!game,sleep:!!sleep}};
   });
   assert.ok(r.lag>.2&&r.lag<1.2);assert.ok(r.held<.08,JSON.stringify(r));

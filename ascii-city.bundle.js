@@ -762,6 +762,13 @@ const FIG_POSES = {
   },
   mongo: f => { const p = FIG_POSES.push(f); return { ...p, legs: [...p.legs].reverse(), arms: [...p.arms].reverse() }; },
   sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
+  tumble: f => {
+    const a=f<3?FIG_POSES.down():FIG_POSES.sprawl(),b=f<3?FIG_POSES.sprawl():FIG_POSES.crouch();
+    const t=f<3?f/3:Math.max(0,(f-4)/3),mix=(x,y)=>x+(y-x)*t;
+    return {seat:mix(a.seat||0,b.seat||0),lean:mix(a.lean,b.lean),
+      legs:a.legs.map((leg,i)=>leg.map((v,j)=>mix(v,b.legs[i][j]))),
+      arms:a.arms.map((arm,i)=>arm.map((v,j)=>mix(v,b.arms[i][j])))};
+  },
   // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
   down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
   // shot (gun.js): flat out and still, one arm flung wide, the other across them, legs crooked
@@ -2974,7 +2981,7 @@ const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    if (o.z0 > 0 || o.low && feet >= o.z1 - .004) continue;
+    if (o.z0 > 0 && !o.spot || o.low && feet >= o.z1 - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (o.ramp) { // (you roll up a ramp: only a kicker's tall back stops you, coming at it from behind or low down its side)
       if (o.ramp !== 'kicker' || feet >= o.z1 * .7) continue;
@@ -3088,7 +3095,7 @@ const roofsB = bucketed(roofs);
 // ride along on top of (skateparkGround); every edge you can grind is in GRINDS, with the benches' seat fronts all
 // round the city. Cells (1 = 10 m)
 const GRINDS = []; // { ax, ay, bx, by: the edge; z: its top above the ground there; material: 'metal' | 'stone' | 'wood'; kind }
-const SKATE_FEATURES = [];
+const SKATE_FEATURES = []; // park features and the marked street-spot obstacles
 let grindsB = [];
 // built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
 function buildSkatepark() {
@@ -3139,6 +3146,7 @@ function buildSkatepark() {
     }
     if (typeof addSkateBowl === 'function') addSkateBowl(ox + 6.3, oy + 4.7);
   }
+  if (typeof buildSkateSpots === 'function') buildSkateSpots();
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
     const c = -b.fy, s = b.fx, ex = b.x + b.fx * .02, ey = b.y + b.fy * .02;
@@ -3146,10 +3154,11 @@ function buildSkatepark() {
   }
   grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
   if (typeof buildGrindPaths === 'function') buildGrindPaths();
+  if (typeof refreshSkateSpotDirectory === 'function') refreshSkateSpotDirectory();
 }
 // the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
 function skateparkGround(x, y) {
-  if (!inSkatepark(x, y, .1)) return 0;
+  if (!inSkatepark(x, y, .1)) return typeof skateSpotGround === 'function' ? skateSpotGround(x, y) : 0;
   let top = 0;
   for (const o of SKATE_FEATURES) {
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
@@ -13112,7 +13121,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       const fpG = homeBalconyPavingFootprint(d, eye), LG = L * roadDark(), line = coveGroove(lx, 1 / 1.5, .03, fpG);
       const stain = noise(wx * 3, wy * 3, 98) > .7 ? .1 : 0, crack = clamp(1 - fpG / .01, 0, 1) * (Math.abs(noise(wx * 6, wy * 6, 99) - .5) < .015 ? .08 : 0);
       surf = line > .5 ? [YEL, LG * .45] : [GRAY, LG * (.36 - stain - crack)];
-    } else if (kind === 'park' && inSkatepark(wx, wy)) { // the skatepark's concrete (skatepark-render.js)
+    } else if (kind === 'park' && (inSkatepark(wx, wy) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(wx,wy))) { // the skatepark's concrete (skatepark-render.js)
       soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
     } else if (kind === 'park') {
       soft = true;
@@ -16981,7 +16990,7 @@ SOLID_SHADE.skateledge = o => (i, t, L) => {
   if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
   const fine = coveDetail(t, .05), fleck = hash(Math.floor((o.x + HIT.u) * 160), Math.floor(HIT.w * 160 + HIT.v * 160), 2101) * fine;
   const scuff = !top && HIT.w < o.z1 * .45 ? .5 : 0;
-  BG[i] = C(STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
+  BG[i] = C(o.material === 'wood' ? BRICK : STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
 };
 // the manual pad: poured concrete, steel angle on its long edges, a joint across the middle
 SOLID_SHADE.manualpad = o => (i, t, L) => {
@@ -29995,7 +30004,8 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
   for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
-  if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, granite ledges and a manual pad on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
+  if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, ledges, a manual pad, mini ramp, bowl and vert ramp on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
+  if(typeof SKATE_SPOTS!=='undefined')for(const spot of SKATE_SPOTS)add({...spot,category:'activities',kind:'sight',status:'Skate spot · free · open all hours'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
     const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
@@ -35784,6 +35794,77 @@ function drawSeatedLegs() {
     set(i, ' ', 0); FOGS[i] = FOGB[i] = 0;
   }
 }
+// Discoverable street lines use the existing city geometry. The DIY median
+// and a small park plaza add a few low obstacles without blocking traffic.
+const SKATE_SPOTS = [], SKATE_SPOT_FEATURES = [], SKATE_PATCHES = [];
+function skateSpotBox(x, y, hl, hw, height, kind, material) {
+  const base = roadGroundHeight(x, y), o = { x, y, c: 1, s: 0, hl, hw, z0: base, z1: base + height, kind, material, low: true, spot: true };
+  SKATE_SPOT_FEATURES.push(o); SKATE_FEATURES.push(o); solids.push(o);
+  for (const side of kind === 'skaterail' ? [0] : [-1, 1]) GRINDS.push({
+    ax: x - hl, ay: y + side * hw, bx: x + hl, by: y + side * hw,
+    z: base - terrainHeight(x, y) + height, kind, material, feature: o
+  });
+  return o;
+}
+function buildSkateSpots() {
+  SKATE_SPOTS.length = SKATE_SPOT_FEATURES.length = SKATE_PATCHES.length = 0;
+  const station = EL_STATIONS.find(s => {
+    const x = s.x - 2, y = EL_Y + 1;
+    return !isWater(x, y) && !map[idx(Math.floor(x), Math.floor(y))] && ROAD[idx(Math.floor(x), Math.floor(y))];
+  });
+  if (station) {
+    const x = station.x - 2, y = EL_Y + 1;
+    skateSpotBox(x, y, .35, .004, .035, 'skaterail', 'metal');
+    skateSpotBox(x + 1, y, .3, .055, .04, 'skateledge', 'wood');
+    SKATE_SPOTS.push({ id: 'skate-diy', name: 'Under the el · DIY line', x:x-.5, y:y+.15, line:{x,y},
+      description: 'A salvaged flat bar and timber ledge in the median, beneath the elevated tracks. A 3.5 m transfer gap links them. Charge a pop and keep your momentum.' });
+  }
+  const clear = (x, y) => !isWater(x, y) && !map[idx(Math.floor(x), Math.floor(y))]
+    && !ARCH_BLOCKERS.some(o=>architectureContains(o,x,y,.1))
+    && !LANDMARK_SOLIDS.some(o=>Math.abs(rel(o.x-x))<Math.max(o.hl||0,o.hw||0)+.2&&Math.abs(rel(o.y-y))<Math.max(o.hl||0,o.hw||0)+.2)
+    && !trees.some(o => Math.abs(rel(o.x - x)) < .65 && Math.abs(rel(o.y - y)) < .6)
+    && !benches.some(o => Math.abs(rel(o.x - x)) < .65 && Math.abs(rel(o.y - y)) < .6)
+    && !solids.some(o => Math.abs(rel(o.x - x)) < .7 && Math.abs(rel(o.y - y)) < .65);
+  let plaza = null;
+  for (const [bx, by] of parks) {
+    if (SKATEPARK && bx === SKATEPARK.bx && by === SKATEPARK.by) continue;
+    for (const [u, v] of [[6.2, 6.2], [6.5, 3], [3, 6.5]]) {
+      const x = bx * 8 + u, y = by * 8 + v;
+      if (clear(x, y)) { plaza = { x, y }; break; }
+    }
+    if (plaza) break;
+  }
+  if (plaza) {
+    const { x, y } = plaza;
+    skateSpotBox(x, y - .2, .3, .035, .04, 'skateledge', 'concrete');
+    skateSpotBox(x, y + .2, .3, .035, .04, 'skateledge', 'concrete');
+    skateSpotBox(x, y, .3, .1, .02, 'manualpad', 'concrete');
+    SKATE_PATCHES.push({ x, y, hl: .55, hw: .5 });
+    SKATE_SPOTS.push({ id: 'skate-plaza', name: 'Concrete plaza · ledge line', x:x-.45, y, line:{x,y},
+      description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
+  }
+  const stairs = EL_STATIONS.find(s => s.stairs?.length)?.stairs[0];
+  if (stairs) SKATE_SPOTS.push({ id: 'skate-stairs', name: 'Station stairs · kinked handrails', x: stairs.x, y: stairs.y,
+    description: 'Two flights joined by a landing, with continuous kinked handrails. Enter from the platform with a valid train pass, then line up a downhill rail run.' });
+}
+function refreshSkateSpotDirectory() {
+  const districts = new Set();
+  for (const p of GRIND_PATHS) {
+    if (p.kind !== 'kerb' || districts.has(p.district)) continue;
+    districts.add(p.district);
+    const at = grindPathAt(p, p.length / 2).p;
+    SKATE_SPOTS.push({ id: `skate-kerb:${p.district}`, name: `${cap(p.district.replace(/[-_]/g, ' '))} · kerb line`, x: at[0], y: at[1],
+      description: 'A long kerbstone line between crossings. Ollie onto its edge to grind, pop out over the street, or use a manual to carry a combo between lines.' });
+    if (districts.size >= 3) break;
+  }
+  if (typeof mapPlaceCache !== 'undefined') mapPlaceCache = null;
+}
+function skateSpotGround(x, y) {
+  let h = 0;
+  for (const o of SKATE_SPOT_FEATURES) if (Math.abs(rel(x - o.x)) <= o.hl && Math.abs(rel(y - o.y)) <= o.hw) h = Math.max(h, o.z1);
+  return h;
+}
+const inSkateSpotPatch = (x, y) => SKATE_PATCHES.some(p => Math.abs(rel(x - p.x)) <= p.hl && Math.abs(rel(y - p.y)) <= p.hw);
 // Grind paths use absolute world heights and 3D arc lengths. Segments are
 // indexed in every block they cross, rather than only at a long rail's midpoint.
 const GRIND_PATHS = [], grindPathBuckets = new Map();
@@ -36063,7 +36144,7 @@ function skateSurface(x, y, zHint) {
         : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * o.z1 / o.run;
       gx = slope * o.c; gy = slope * o.s;
     }
-    if (!ref && typeof inSkatepark === 'function' && inSkatepark(x, y)) material = 'concrete';
+    if (!ref && typeof inSkatepark === 'function' && (inSkatepark(x, y) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(x,y))) material = 'concrete';
   }
   const len = Math.hypot(gx, gy, 1);
   return { h, n: [-gx / len, -gy / len, 1 / len], kind, material, ref };
@@ -36200,7 +36281,7 @@ function skateManualStep(dt) {
   const held = Math.abs(depth) > .18 && Math.abs(depth) < .55 && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
   if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
-  const m = SK.manual, control = (Math.abs(depth) - .35) * 6;
+  const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
   m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - SK.steer * .12 - m.balV * 1.6) * dt;
   m.bal += m.balV * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }
@@ -36490,8 +36571,8 @@ function stepSkateBail(dt) {
 function skateBailDraw() {
   const B = SK.bailData, [x, y, dir, ang] = SK.bailAt, ground = skateGround(x, y);
   if (B) drawSkateBoard(...R(B.board[0], B.board[1]), B.board[2], B.yaw, 0, B.roll);
-  const age = B ? T - B.t0 : 0, recovering = SK.bail < .3;
-  const pose = recovering ? 'crouch' : age < .3 ? 'down' : 'sprawl';
+  const age = B ? T - B.t0 : 0;
+  const pose = 'tumble' + clamp(Math.floor(age / SK_BAIL_T * 8),0,7);
   drawSkaterFigure(...R(x, y), ground, SB.rider, Math.cos(dir), Math.sin(dir), skaterLook(), pose);
 }
 // ===== the skateboard, played the way the old skateboarding games played it: you see your skater from behind, the

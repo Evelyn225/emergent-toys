@@ -10,8 +10,12 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** paused at #344 to conserve weekly usage. Not expected to pick up
-  without the user saying so; if it does, check open PRs first.
+- **Codex:** user resumed work on the skating overhaul on 4 November. Phases
+  0–8 are implemented locally as a commit/branch series, ending at
+  `codex/skate-phase-8`, from `9665098`. See `SKATE_IMPLEMENTATION.md` for scope,
+  validation and remaining physical-gamepad playtest. Not pushed or opened as
+  PRs; no open skate PRs were found during the overlap check. The older general
+  quality checklist work remains paused.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
   the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
