@@ -69,7 +69,7 @@ function stepSkate(dt) {
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
-  if (air && body.vz <= 0) grindCatch();
+  if ((!air && SK.v > .1) || air && body.vz <= 0) grindCatch();
   if (air && body.trick) say(`${body.trick.name.toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
   skateBoardSync();
   if (SK.combo && !air && !SK.manual && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
@@ -146,59 +146,19 @@ const comboLeft = () => SK.combo || SK.grind || SK.manual ? (SK.grind || SK.manu
 // on a ledge). You slide on, slowing, balancing with A and D against a wobble that grows the longer you stay on;
 // lose it and you bail. Space pops you off (arrows: a flip trick off it); run off the end and you drop. The grind
 // scores by how long you held it and joins the combo; while you're on, the combo clock doesn't run
-const GRIND_CATCH = .08, GRIND_POINTS = { '50-50': 100, nosegrind: 150, '5-0': 150, 'crooked grind': 200, boardslide: 175, lipslide: 200 };
+const GRIND_CATCH = .08, GRIND_POINTS = { '50-50': 100, nosegrind: 150, '5-0': 150, 'crooked grind': 200, boardslide: 175, lipslide: 200, smith: 250, feeble: 250, overcrook: 275, noseslide: 200, tailslide: 200 };
 const skateGrinding = () => !!SK.grind;
-function grindCatch() {
-  const feet = skateGround(px, py) + body.z / 10, dirX = Math.cos(SK.dir), dirY = Math.sin(SK.dir);
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const g of grindsB[bi(Math.floor(px / 8) + i, Math.floor(py / 8) + j)]) {
-    if (SK.leftGrind && g.feature === SK.leftGrind.feature && T - SK.leftGrindT < .7) continue; // (not straight back onto the thing you just came off)
-    const ex = g.bx - g.ax, ey = g.by - g.ay, len = Math.hypot(ex, ey), ux = ex / len, uy = ey / len;
-    const qx = rel(px - g.ax), qy = rel(py - g.ay), t = (qx * ux + qy * uy) / len;
-    if (t < .02 || t > .98) continue;
-    if (Math.abs(-qx * uy + qy * ux) > GRIND_CATCH) continue;
-    const top = terrainHeight(g.x, g.y) + g.z;
-    if (feet < top - .012 || feet > top + .035) continue; // (coming down onto it, not under it or well clear)
-    const along = dirX * ux + dirY * uy;
-    if (Math.abs(along) < .5) continue; // (more or less along it: within 60 degrees)
-    return startGrind(g, t, Math.sign(along), top);
-  }
-}
+function grindCatch() { return skatePathCatch(); }
 function startGrind(g, t, dir, top) {
-  const tr = body.trick;
-  if (tr && tr.t < (tr.duration ?? tr.air) && tr.name !== 'ollie') return skateBail('BAIL! Still mid-flip when you hit it.');
-  if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
-  const edgeA = Math.atan2(g.by - g.ay, g.bx - g.ax), off = Math.abs(mod(a - edgeA + Math.PI / 2, Math.PI) - Math.PI / 2); // (board to edge, 0..90 degrees)
-  const name = off > 1.13 ? (g.kind === 'skateledge' || g.kind === 'manualpad' ? 'lipslide' : 'boardslide') : off > .44 ? 'crooked grind' : K.ArrowUp ? 'nosegrind' : K.ArrowDown ? '5-0' : '50-50';
-  SK.grind = { g, t, dir, top, name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, len: Math.hypot(g.bx - g.ax, g.by - g.ay), scrapeT: 0 };
-  SK.dir = Math.atan2(g.by - g.ay, g.bx - g.ax) + (dir < 0 ? Math.PI : 0); SK.v = Math.max(SK.v * .92, .25);
-  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t); // (onto the edge)
-  body.trick = null; body.vz = 0; SK.spin = 0; body.z = Math.max(.001, (top - skateGround(px, py)) * 10);
-  if (actx) sfxSkate('scrape', .9);
-  say(name.toUpperCase() + '!', 1);
+  const path = GRIND_PATHS.find(p => p.legacy === g) || addGrindPath([[g.ax,g.ay,top],[g.bx,g.by,top]], {...g,legacy:g});
+  return startPathGrind(path, t * path.length, dir);
 }
-function stepGrind(dt) {
-  const G = SK.grind, g = G.g, metal = g.material === 'metal', held = T - G.t0;
-  SK.v = Math.max(0, SK.v - (metal ? .16 : .26) * dt); // (steel slides; stone and timber bite)
-  // the wobble: it drifts, and grows the further off you are and the longer you're on; A and D lean you back
-  const s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
-  G.balV += ((Math.random() - .5) * (1.6 + held * .5) + G.bal * 1.4 - s * 3.2) * dt; G.balV *= 1 - dt * .8;
-  G.bal += G.balV * dt;
-  if (Math.abs(G.bal) > 1) { SK.grind = null; body.z = Math.max(body.z, .01); return skateBail('BAIL! You lost your balance.'); }
-  G.t += G.dir * SK.v * dt / G.len;
-  const off = G.t < 0 || G.t > 1;
-  const t = clamp(G.t, 0, 1);
-  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t);
-  body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
-  if (actx && (G.scrapeT -= dt) <= 0) { G.scrapeT = .11; sfxSkate('scrape', metal ? .55 : .35); }
-  const pts = grindPoints(G);
-  if (off || SK.v < SK_STILL) return endGrind(); // (off the end, or stalled: you drop)
-  say(`${G.name.toUpperCase()}  ${pts}`, .5);
-}
+function stepGrind(dt) { return stepPathGrind(dt); }
 const grindPoints = G => Math.round((GRIND_POINTS[G.name] || 100) + (T - G.t0) * 140);
 function endGrind() { // into the combo; off you go, and down
   const G = SK.grind, c = SK.combo ||= { names: [], pts: 0, t: T };
   SK.grind = null; c.names.push(G.name.toUpperCase()); c.pts += grindPoints(G); c.t = T; SK.offGrind = true; SK.leftGrind = G.g; SK.leftGrindT = T;
-  body.z = Math.max(body.z, .02); body.vz = 0;
+  body.z = Math.max(body.z, .02); body.vz = (G.exitVelocity?.[2] || 0) * 10;
   say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
 }
 function grindPop(trick, gesture) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
@@ -213,7 +173,7 @@ function bankCombo() {
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
 function skateBail(msg) {
-  SK.manual = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
+  SK.manual = null; SK.grind = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
   if (actx) playClip('ground-impact', 0.25);
 }

@@ -33,6 +33,8 @@ test('the skatepark: real ledges, bars and a pad on concrete in a park, every be
   const park=GRINDS.filter(g=>g.kind!=='bench'),bench=GRINDS.filter(g=>g.kind==='bench');
   if(park.length<7)bad.push(['park edges',park.length]);
   if(bench.length<benches.filter(b=>!b.shelter).length*.9)bad.push(['bench edges',bench.length,benches.length]);
+  if(new Set(GRIND_PATHS.filter(p=>p.kind==='kerb').map(p=>p.district)).size<3)bad.push('kerbs need at least three districts');
+  if(!GRIND_PATHS.some(p=>p.kind==='handrail'&&p.segments.some(s=>Math.abs(s.d[2])>.01)))bad.push('no sloping handrails');
   if(!mapDirectory().some(p=>p.id==='skatepark'))bad.push('not on the map');
   // the concrete is drawn as concrete
   px=SKATEPARK.bx*8+5.3;py=SKATEPARK.by*8+5.2;a=.75;pitch=-.3;env(0);render(0);
@@ -46,7 +48,13 @@ test('ollie onto a bar going along it and you grind: points while you hold it, o
   const g=GRINDS.find(g=>g.kind==='skaterail');tRun(g);
   const on={grind:!!SK.grind,name:SK.grind?.name};const top=terrainHeight(g.x,g.y)+g.z;
   const feet=skateGround(px,py)+body.z/10;tRide(20);const mid={grind:!!SK.grind,msg:msgText,onEdge:Math.abs(skateGround(px,py)+body.z/10-top)<1e-3};
-  tRide(150);return {on,feet:+(feet-top).toFixed(4),mid,score:SK.score,bail:SK.bail,ground:body.z};
+  // Lower material friction carries a run along the whole 20 m rail. Keep
+  // balance during that longer ride, then allow the combo clock to bank it.
+  for(let i=0;i<360;i++){
+   const lean=SK.grind?Math.sign(SK.grind.bal*2+SK.grind.balV):0;
+   tRide(1,!SK.grind?{KeyS:1}:lean>0?{KeyD:1}:lean<0?{KeyA:1}:{});
+  }
+  return {on,feet:+(feet-top).toFixed(4),mid,score:SK.score,bail:SK.bail,ground:body.z,msg:msgText};
  });
  assert.ok(r.on.grind&&r.on.name==='50-50',JSON.stringify(r.on));
  assert.ok(Math.abs(r.feet)<1e-3,'standing on the bar: '+r.feet);

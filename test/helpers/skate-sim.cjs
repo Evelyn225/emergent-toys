@@ -25,7 +25,7 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, p
     function say(text) { msgText=text; }
     function move(x,y) { px+=x; py+=y; }
   `, ctx);
-  for (const file of ['moves.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate.js']) {
+  for (const file of ['moves.js', 'skate-paths.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
   Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics });

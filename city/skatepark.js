@@ -54,6 +54,7 @@ function buildSkatepark() {
     GRINDS.push({ ax: ex - c * .075, ay: ey - s * .075, bx: ex + c * .075, by: ey + s * .075, z: .045, material: 'wood', kind: 'bench', bench: b, feature: b });
   }
   grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
+  if (typeof buildGrindPaths === 'function') buildGrindPaths();
 }
 // the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
 function skateparkGround(x, y) {

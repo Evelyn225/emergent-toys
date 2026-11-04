@@ -3139,6 +3139,7 @@ function buildSkatepark() {
     GRINDS.push({ ax: ex - c * .075, ay: ey - s * .075, bx: ex + c * .075, by: ey + s * .075, z: .045, material: 'wood', kind: 'bench', bench: b, feature: b });
   }
   grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
+  if (typeof buildGrindPaths === 'function') buildGrindPaths();
 }
 // the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
 function skateparkGround(x, y) {
@@ -35674,6 +35675,140 @@ function drawSeatedLegs() {
     set(i, ' ', 0); FOGS[i] = FOGB[i] = 0;
   }
 }
+// Grind paths use absolute world heights and 3D arc lengths. Segments are
+// indexed in every block they cross, rather than only at a long rail's midpoint.
+const GRIND_PATHS = [], grindPathBuckets = new Map();
+const GRIND_FRICTION = { metal: .02, concrete: .04, stone: .06, wood: .08 };
+function addGrindPath(points, meta = {}) {
+  if (points.length < 2) return null;
+  const path = { ...meta, points, segments: [], length: 0 };
+  for (let i = 1; i < points.length; i++) {
+    const from = points[i - 1], to = points[i], d = to.map((v, j) => v - from[j]), len = Math.hypot(...d);
+    if (len < 1e-7) continue;
+    const seg = { path, from, to, d, len, at: path.length };
+    path.segments.push(seg); path.length += len;
+    for (let bx = Math.floor(Math.min(from[0], to[0]) / 8); bx <= Math.floor(Math.max(from[0], to[0]) / 8); bx++)
+      for (let by = Math.floor(Math.min(from[1], to[1]) / 8); by <= Math.floor(Math.max(from[1], to[1]) / 8); by++) {
+        const key = bx + ',' + by, list = grindPathBuckets.get(key) || [];
+        list.push(seg); grindPathBuckets.set(key, list);
+      }
+  }
+  if (!path.segments.length) return null;
+  GRIND_PATHS.push(path); return path;
+}
+function grindPathAt(path, distance) {
+  const at = clamp(distance, 0, path.length);
+  const seg = path.segments.find(s => at <= s.at + s.len) || path.segments.at(-1);
+  const t = clamp((at - seg.at) / seg.len, 0, 1);
+  return { seg, p: seg.from.map((v, i) => v + seg.d[i] * t), tangent: seg.d.map(v => v / seg.len) };
+}
+function grindPathNearest(seg, x, y) {
+  const [dx, dy] = seg.d, len2 = dx * dx + dy * dy;
+  const t = len2 > 1e-12 ? clamp(((x - seg.from[0]) * dx + (y - seg.from[1]) * dy) / len2, 0, 1) : 0;
+  const p = seg.from.map((v, i) => v + seg.d[i] * t);
+  return { p, distance: seg.at + t * seg.len, gap: Math.hypot(x - p[0], y - p[1]) };
+}
+function grindFamily(angle, kind, x, y, side = 1) {
+  if (angle > 1.13) return Math.abs(y) > .4 ? y < 0 ? 'noseslide' : 'tailslide'
+    : kind === 'skateledge' || kind === 'manualpad' || kind === 'kerb' ? 'lipslide' : 'boardslide';
+  if (angle > .44) return Math.abs(x) > .4 ? x * side < 0 ? 'smith' : 'feeble' : y < -.4 ? 'overcrook' : 'crooked grind';
+  return y < -.4 ? 'nosegrind' : y > .4 ? '5-0' : '50-50';
+}
+function buildGrindPaths() {
+  GRIND_PATHS.length = 0; grindPathBuckets.clear();
+  for (const g of GRINDS) {
+    const height = terrainHeight(g.x, g.y) + g.z;
+    addGrindPath([[g.ax, g.ay, height], [g.bx, g.by, height]], { ...g, legacy: g });
+  }
+  // Kerbstones already drawn by road-surface.js: retain their real surface
+  // height, including hills and bridges, and stop before each crossing.
+  for (const offset of [.3, 1.7]) alongStreets(5, offset, (x, y, ax, ay, bx, by, ori) => {
+    const points = [];
+    for (let u = -2.5; u <= 2.5; u += .5) {
+      const xx = x + (ori === 'h' ? u : 0), yy = y + (ori === 'v' ? u : 0);
+      if (isWater(xx, yy)) return;
+      points.push([xx, yy, roadGroundHeight(xx, yy) + .001]);
+    }
+    addGrindPath(points, { kind: 'kerb', material: 'stone', feature: points, district: districtOf(bx, by) });
+  });
+  for (const o of ARCH_DETAILS) {
+    if (o.kind !== 'rail' && o.kind !== 'planter') continue;
+    if (o.z1 > .3) continue; // balcony planters are not street furniture
+    const point = (u, v, z) => [o.x + o.c * u - o.s * v, o.y + o.s * u + o.c * v, terrainHeight(o.x, o.y) + z];
+    if (o.kind === 'rail') {
+      const points = [-o.hl, 0, o.hl].map(u => point(u, 0, .1 + .12 * clamp((.18 - u * (o.c * o.nx + o.s * o.ny) - .075) / .145, 0, 1)));
+      addGrindPath(points, { kind: 'handrail', material: 'metal', feature: o });
+    } else for (const side of [-1, 1]) addGrindPath([point(-o.hl, side * o.hw, o.z1), point(o.hl, side * o.hw, o.z1)], { kind: 'skateledge', material: 'stone', feature: o });
+  }
+  // Use the very same flight endpoints as drawElStairs; each landing makes a
+  // genuine kink, not two independent rails that drop the skater in between.
+  for (const station of EL_STATIONS) for (const st of station.stairs) for (const v of [ELS.v0, ELS.v1]) {
+    const points = [[ELS.u0, 0], [ELS.u1, EL_TOP / 2], [ELS.u2, EL_TOP / 2], [ELS.u3, EL_TOP]].map(([u, z]) =>
+      [st.ox + st.c * (st.off + u) + st.ax * v, st.oy + st.s * (st.off + u) + st.ay * v, z + .1]);
+    addGrindPath(points, { kind: 'handrail', material: 'metal', feature: points,
+      district: districtOf(Math.floor(station.x / 8), Math.floor(st.oy / 8)) });
+  }
+}
+function skatePathCatch() {
+  const feet = skateGround(px, py) + body.z / 10, air = skateAir();
+  let best = null;
+  for (let by = -1; by <= 1; by++) for (let bx = -1; bx <= 1; bx++)
+    for (const seg of grindPathBuckets.get((Math.floor(px / 8) + bx) + ',' + (Math.floor(py / 8) + by)) || []) {
+      const path = seg.path;
+      if (SK.leftGrind && path.feature === SK.leftGrind.feature && T - SK.leftGrindT < .7) continue;
+      // Kerbs need an intentional hop; simply carving down a street must not
+      // stick the skater to its painted-height pavement edge.
+      if (!air && (path.kind === 'kerb' || path.kind === 'bench')) continue;
+      const q = grindPathNearest(seg, px, py);
+      if (q.gap > .08 || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
+      const hl = Math.hypot(seg.d[0], seg.d[1]);
+      const along = (Math.cos(SK.dir) * seg.d[0] + Math.sin(SK.dir) * seg.d[1]) / hl;
+      if (Math.abs(along) < .5 || !hl) continue;
+      if (!best || q.gap < best.q.gap) best = { seg, path, q, dir: Math.sign(along) };
+    }
+  if (best) startPathGrind(best.path, best.q.distance, best.dir);
+}
+function startPathGrind(path, distance, dir) {
+  const at = grindPathAt(path, distance), tr = body.trick;
+  if (tr && tr.t < (tr.duration ?? tr.air) && tr.name !== 'ollie') return skateBail('BAIL! Still mid-flip when you hit it.');
+  if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
+  const angle = Math.atan2(at.tangent[1], at.tangent[0]);
+  const off = Math.abs(mod(a - angle + Math.PI / 2, Math.PI) - Math.PI / 2);
+  const right = SK_INPUT.right, pressure = K.ArrowUp ? -1 : K.ArrowDown ? 1 : right[1];
+  const name = grindFamily(off, path.kind, right[0], pressure, dir);
+  // Keep g/top/t for the compatibility release and the existing park tests.
+  const g = path.legacy || { ...path, ax: at.seg.from[0], ay: at.seg.from[1], bx: at.seg.to[0], by: at.seg.to[1] };
+  SK.grind = { path, distance, speed: Math.max(SK.v * .92, .25), dir, g, top: at.p[2], t: distance / path.length,
+    name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, scrapeT: 0, boardOff: a - angle - (dir < 0 ? Math.PI : 0) };
+  px = at.p[0]; py = at.p[1]; SK.dir = angle + (dir < 0 ? Math.PI : 0);
+  SK.v = SK.grind.speed; body.trick = null; body.vz = 0; SK.spin = 0;
+  body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
+  if (actx) sfxSkate('scrape', .9); say(name.toUpperCase() + '!', 1);
+}
+function stepPathGrind(dt) {
+  const G = SK.grind, at = grindPathAt(G.path, G.distance), material = G.path.material || 'stone', held = T - G.t0;
+  if (Math.hypot(...SK_INPUT.right) > .3) {
+    const off = Math.abs(mod(G.boardOff + Math.PI / 2, Math.PI) - Math.PI / 2);
+    G.name = grindFamily(off, G.path.kind, ...SK_INPUT.right, G.dir);
+  }
+  G.speed = Math.max(0, G.speed + (-.98 * at.tangent[2] * G.dir - .98 * (GRIND_FRICTION[material] || .06)) * dt);
+  SK.v = G.speed * Math.hypot(at.tangent[0], at.tangent[1]);
+  const steer = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  const unstable = ['smith', 'feeble', 'crooked grind', 'overcrook'].includes(G.name) ? 1.5 : 1;
+  G.balV += ((Math.random() - .5) * (1.6 + held * .5) * unstable + G.bal * 1.4 - steer * 3.2) * dt;
+  G.balV *= Math.exp(-dt * .8); G.bal += G.balV * dt;
+  if (Math.abs(G.bal) > 1) return skateBail('BAIL! You lost your balance.');
+  G.distance += G.dir * G.speed * dt;
+  const next = grindPathAt(G.path, G.distance);
+  px = worldCoord(next.p[0]); py = worldCoord(next.p[1]); G.top = next.p[2]; G.t = G.distance / G.path.length;
+  SK.dir = Math.atan2(next.tangent[1], next.tangent[0]) + (G.dir < 0 ? Math.PI : 0); a = SK.dir + G.boardOff;
+  SKB.pitch = Math.atan2(next.tangent[2] * G.dir, Math.hypot(next.tangent[0], next.tangent[1]));
+  body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
+  G.exitVelocity = next.tangent.map(v => v * G.speed * G.dir);
+  if (G.distance < 0 || G.distance > G.path.length || G.speed < .05) return endGrind();
+  if (actx && (G.scrapeT -= dt) <= 0) { G.scrapeT = .11; sfxSkate('scrape', material === 'metal' ? .55 : .35); }
+  say(`${G.name.toUpperCase()}  ${grindPoints(G)}`, .5);
+}
 // The recognizer is platform independent: normalized x/right, y/tail samples,
 // timestamped in seconds. Mouse and gamepad share the same state machine.
 function skateStick(x = 0, y = 0, dead = .15) {
@@ -36031,7 +36166,7 @@ function stepSkate(dt) {
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
-  if (air && body.vz <= 0) grindCatch();
+  if ((!air && SK.v > .1) || air && body.vz <= 0) grindCatch();
   if (air && body.trick) say(`${body.trick.name.toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
   skateBoardSync();
   if (SK.combo && !air && !SK.manual && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
@@ -36108,59 +36243,19 @@ const comboLeft = () => SK.combo || SK.grind || SK.manual ? (SK.grind || SK.manu
 // on a ledge). You slide on, slowing, balancing with A and D against a wobble that grows the longer you stay on;
 // lose it and you bail. Space pops you off (arrows: a flip trick off it); run off the end and you drop. The grind
 // scores by how long you held it and joins the combo; while you're on, the combo clock doesn't run
-const GRIND_CATCH = .08, GRIND_POINTS = { '50-50': 100, nosegrind: 150, '5-0': 150, 'crooked grind': 200, boardslide: 175, lipslide: 200 };
+const GRIND_CATCH = .08, GRIND_POINTS = { '50-50': 100, nosegrind: 150, '5-0': 150, 'crooked grind': 200, boardslide: 175, lipslide: 200, smith: 250, feeble: 250, overcrook: 275, noseslide: 200, tailslide: 200 };
 const skateGrinding = () => !!SK.grind;
-function grindCatch() {
-  const feet = skateGround(px, py) + body.z / 10, dirX = Math.cos(SK.dir), dirY = Math.sin(SK.dir);
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const g of grindsB[bi(Math.floor(px / 8) + i, Math.floor(py / 8) + j)]) {
-    if (SK.leftGrind && g.feature === SK.leftGrind.feature && T - SK.leftGrindT < .7) continue; // (not straight back onto the thing you just came off)
-    const ex = g.bx - g.ax, ey = g.by - g.ay, len = Math.hypot(ex, ey), ux = ex / len, uy = ey / len;
-    const qx = rel(px - g.ax), qy = rel(py - g.ay), t = (qx * ux + qy * uy) / len;
-    if (t < .02 || t > .98) continue;
-    if (Math.abs(-qx * uy + qy * ux) > GRIND_CATCH) continue;
-    const top = terrainHeight(g.x, g.y) + g.z;
-    if (feet < top - .012 || feet > top + .035) continue; // (coming down onto it, not under it or well clear)
-    const along = dirX * ux + dirY * uy;
-    if (Math.abs(along) < .5) continue; // (more or less along it: within 60 degrees)
-    return startGrind(g, t, Math.sign(along), top);
-  }
-}
+function grindCatch() { return skatePathCatch(); }
 function startGrind(g, t, dir, top) {
-  const tr = body.trick;
-  if (tr && tr.t < (tr.duration ?? tr.air) && tr.name !== 'ollie') return skateBail('BAIL! Still mid-flip when you hit it.');
-  if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
-  const edgeA = Math.atan2(g.by - g.ay, g.bx - g.ax), off = Math.abs(mod(a - edgeA + Math.PI / 2, Math.PI) - Math.PI / 2); // (board to edge, 0..90 degrees)
-  const name = off > 1.13 ? (g.kind === 'skateledge' || g.kind === 'manualpad' ? 'lipslide' : 'boardslide') : off > .44 ? 'crooked grind' : K.ArrowUp ? 'nosegrind' : K.ArrowDown ? '5-0' : '50-50';
-  SK.grind = { g, t, dir, top, name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, len: Math.hypot(g.bx - g.ax, g.by - g.ay), scrapeT: 0 };
-  SK.dir = Math.atan2(g.by - g.ay, g.bx - g.ax) + (dir < 0 ? Math.PI : 0); SK.v = Math.max(SK.v * .92, .25);
-  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t); // (onto the edge)
-  body.trick = null; body.vz = 0; SK.spin = 0; body.z = Math.max(.001, (top - skateGround(px, py)) * 10);
-  if (actx) sfxSkate('scrape', .9);
-  say(name.toUpperCase() + '!', 1);
+  const path = GRIND_PATHS.find(p => p.legacy === g) || addGrindPath([[g.ax,g.ay,top],[g.bx,g.by,top]], {...g,legacy:g});
+  return startPathGrind(path, t * path.length, dir);
 }
-function stepGrind(dt) {
-  const G = SK.grind, g = G.g, metal = g.material === 'metal', held = T - G.t0;
-  SK.v = Math.max(0, SK.v - (metal ? .16 : .26) * dt); // (steel slides; stone and timber bite)
-  // the wobble: it drifts, and grows the further off you are and the longer you're on; A and D lean you back
-  const s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
-  G.balV += ((Math.random() - .5) * (1.6 + held * .5) + G.bal * 1.4 - s * 3.2) * dt; G.balV *= 1 - dt * .8;
-  G.bal += G.balV * dt;
-  if (Math.abs(G.bal) > 1) { SK.grind = null; body.z = Math.max(body.z, .01); return skateBail('BAIL! You lost your balance.'); }
-  G.t += G.dir * SK.v * dt / G.len;
-  const off = G.t < 0 || G.t > 1;
-  const t = clamp(G.t, 0, 1);
-  px = worldCoord(g.ax + (g.bx - g.ax) * t); py = worldCoord(g.ay + (g.by - g.ay) * t);
-  body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
-  if (actx && (G.scrapeT -= dt) <= 0) { G.scrapeT = .11; sfxSkate('scrape', metal ? .55 : .35); }
-  const pts = grindPoints(G);
-  if (off || SK.v < SK_STILL) return endGrind(); // (off the end, or stalled: you drop)
-  say(`${G.name.toUpperCase()}  ${pts}`, .5);
-}
+function stepGrind(dt) { return stepPathGrind(dt); }
 const grindPoints = G => Math.round((GRIND_POINTS[G.name] || 100) + (T - G.t0) * 140);
 function endGrind() { // into the combo; off you go, and down
   const G = SK.grind, c = SK.combo ||= { names: [], pts: 0, t: T };
   SK.grind = null; c.names.push(G.name.toUpperCase()); c.pts += grindPoints(G); c.t = T; SK.offGrind = true; SK.leftGrind = G.g; SK.leftGrindT = T;
-  body.z = Math.max(body.z, .02); body.vz = 0;
+  body.z = Math.max(body.z, .02); body.vz = (G.exitVelocity?.[2] || 0) * 10;
   say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
 }
 function grindPop(trick, gesture) { // Space on the rail: an ollie off it, with whatever flip the arrows (or a flick) ask for
@@ -36175,7 +36270,7 @@ function bankCombo() {
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
 function skateBail(msg) {
-  SK.manual = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
+  SK.manual = null; SK.grind = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
   if (actx) playClip('ground-impact', 0.25);
 }
