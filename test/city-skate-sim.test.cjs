@@ -41,7 +41,7 @@ test('three pushes, carve left, ollie: recorded riding and tuned pop curves', ()
 
 test('flat coasting only loses speed; foot braking stops sooner', () => {
   const coast = skateSim([{ frames: 240 }], { speed: .8 });
-  const brake = skateSim([{ frames: 240, keys: { KeyS: 1 } }], { speed: .8 });
+  const brake = skateSim([{ frames: 240, buttons: { brake: true } }], { speed: .8 });
   for (let i = 1; i < coast.length; i++) assert.ok(coast[i].speed <= coast[i - 1].speed);
   assert.equal(brake.at(-1).speed, 0);
   assert.ok(brake.at(-1).x < coast.at(-1).x / 2);
@@ -102,4 +102,27 @@ test('push bursts taper below the push cap and cannot accelerate a downhill run'
   assert.deepEqual(fast, coast);
   const push = skateSim([{ frames: 3600, keys: { KeyW: 1 } }]);
   assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= 1.2);
+});
+
+
+test('holding back brakes then rolls fakie without rotating the board; releasing coasts',()=>{
+ for(const yaw of [0,Math.PI/2,-1.1]){
+  const run=skateSim([{frames:300,keys:{KeyS:1}},{frames:60}],{speed:.4,yaw});
+  const along=p=>p.vx*Math.cos(yaw)+p.vy*Math.sin(yaw);
+  const reversed=run.findIndex(p=>along(p)<-.001);
+  assert.ok(reversed>1&&reversed<300);
+  assert.ok(run[reversed-1].speed<.015,'must stop before changing direction');
+  assert.ok(run.every(p=>Math.abs(p.yaw-yaw)<1e-8&&p.stance===1&&!p.bail));
+  assert.equal(run.at(-1).fakie,true);
+  assert.ok(along(run.at(-1))<0&&run.at(-1).speed<run[300].speed);
+  assert.ok(run[300].speed>.15&&run[300].speed<.45);
+ }
+});
+test('left stick down rolls backward, button B only brakes, and W resumes forward travel',()=>{
+ const pad=skateSim([{frames:180,sticks:{left:[0,1]}},{frames:30}],{});
+ assert.ok(pad[180].vx<-.1&&pad.at(-1).fakie);
+ const stopped=skateSim([{frames:180,buttons:{brake:true}}],{speed:.3});
+ assert.equal(stopped.at(-1).speed,0);
+ const forward=skateSim([{frames:180,keys:{KeyS:1}},{frames:240,keys:{KeyW:1}}]);
+ assert.ok(forward.at(-1).vx>.2);assert.equal(forward.at(-1).fakie,false);
 });

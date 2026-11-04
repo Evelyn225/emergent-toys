@@ -118,11 +118,11 @@ function stepSkateTransition(dt, push, brake, steer) {
     const surface = hit.o.z0 + hit.at.z, feet = skateGround(px, py) + body.z / 10;
     if (!skateAir() && feet > surface + .01 && !drop) return false;
     if (skateAir()) {
-      if (body.vz > 0 || feet - surface > .025 || feet < surface - .015) return false;
+      if (body.vz > 0 || feet - surface > .006 || feet < surface - .015) return false;
       if (SK.leftTransition === hit.o && T - SK.leftTransitionT < .12) return false;
       skateAirPose();
       const quality = skateLandingQuality({ ...skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll), normal: hit.n,
-        velocity: SKB.v, catchLead: body.trick ? body.trick.t - (body.trick.caughtAt ?? Infinity) : Infinity, grab: !!body.trick?.grab });
+        velocity: SKB.v, catchLead: body.trick&&(body.trick.flip||body.trick.turn) ? body.trick.t - (body.trick.caughtAt ?? Infinity) : Infinity, grab: !!body.trick?.grab });
       if (quality === 'bail') { skateBail('BAIL! Missed the transition.'); return true; }
       if (quality === 'sloppy') SK.v *= .7;
     }

@@ -2,7 +2,7 @@
 // skateBoardSync is the only conversion boundary for that height.
 const SKB = { p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, roll: 0,
   riderYaw: 0, contact: 'ground', surf: null, stance: 1, fakie: false };
-const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
+const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, reverseCap: .45, reverseAccel: .3, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
 const skateSurfaceCells = new Map();
 let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }
@@ -57,7 +57,7 @@ function skateBoardSync() {
   if (SKB.contact === 'grind' && SK.grind.exitVelocity) SKB.v = SK.grind.exitVelocity.slice();
   else if (SKB.contact !== 'ground' && SKB.contact !== 'manual' && SKB.contact !== 'transition') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
 }
-function skateGroundVelocity(dt, push, brake, steer) {
+function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   const surf = SKB.surf = skateSurface(px, py), n = surf.n;
   // External teleports, mounting and the compatibility release may still write
   // SK.v/SK.dir. Import those only when they differ from the last derived state.
@@ -92,14 +92,23 @@ function skateGroundVelocity(dt, push, brake, steer) {
   if (sliding && SK.combo && !SK.reverted && T - (SK.landedAt ?? -9) < .25) {
     SK.combo.names.push('REVERT'); SK.combo.pts += 75; SK.combo.t = T; SK.reverted = true;
   }
-  if (brake && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
+  // Holding back must first finish braking. Once stopped, it becomes a
+  // modest backwards push; the board heading and stance stay unchanged.
+  const reversing=reverse&&!push&&Math.abs(steer)<.1&&(SK.reversing||speed<.015);
+  SK.reversing=reversing;
+  if (brake && !reversing && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
     SK.dragT = .12; if (actx) sfxSkate('drag', Math.min(1, speed / SK_TOP));
   }
   const mu = surf.material === 'concrete' ? SK_PHYS.concrete : surf.material === 'grass' ? .06 : SK_PHYS.asphalt;
-  const loss = ((brake ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
+  const loss = ((brake&&!reversing ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
     + SK_PHYS.drag * speed * speed) * dt + speed * Math.abs(turn) * .025;
   const keep = speed > 0 ? Math.max(0, speed - loss) / speed : 0;
   vx *= keep; vy *= keep;
+  if(reversing){
+    const backward=Math.max(0,-vx*Math.cos(a)-vy*Math.sin(a));
+    const impulse=SK_PHYS.reverseAccel*dt*Math.max(0,1-backward/SK_PHYS.reverseCap);
+    vx-=Math.cos(a)*impulse;vy-=Math.sin(a)*impulse;
+  }
   // Limit extreme downhill runs, never ordinary slope acceleration.
   const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy) || 1)); vx *= cap; vy *= cap;
   const vz = -(vx * n[0] + vy * n[1]) / Math.max(.05, n[2]);
