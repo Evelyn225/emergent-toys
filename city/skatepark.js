@@ -8,6 +8,7 @@ let grindsB = [];
 // built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
 function buildSkatepark() {
   GRINDS.length = SKATE_FEATURES.length = 0;
+  if (typeof skateSurfaceReset === 'function') skateSurfaceReset();
   const park = parks.find(([bx, by]) => bx === 13 && by === 34);
   SKATEPARK = park ? { bx: 13, by: 34, x0: 2.4, y0: 2.3, x1: 7.85, y1: 7.85 } : null; // (most of the park block: the benches round it stay, to grind)
   if (SKATEPARK) {
@@ -70,14 +71,4 @@ function rampHeight(o, u) {
   return o.z1 * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
 }
 const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
-// rolling on a ramp (skate.js, after each step on the board): up a slope costs speed, down one gives it back; and off a
-// kicker's lip, moving forward, you're thrown up and out
-function skateRampStep(x0, y0, dt) {
-  if (!SKATEPARK || skateAir() || !inSkatepark(px, py, .2)) return;
-  const g0 = skateparkGround(x0, y0), g1 = skateparkGround(px, py), from = skateRampAt(x0, y0);
-  if (from?.ramp === 'kicker' && g0 > from.z1 * .8 && g1 < g0 - .01) {
-    const along = Math.cos(SK.dir) * from.c + Math.sin(SK.dir) * from.s;
-    if (along > .3) { body.z = (g0 - g1) * 10; body.vz = Math.max(1.2, SK.v * 10 * (from.z1 / (2 * from.hl)) * along * 1.3); return; } // (metres, m/s)
-  }
-  if (g0 !== g1 && (from || skateRampAt(px, py))) SK.v = Math.sqrt(Math.max(0, SK.v * SK.v - 2 * .98 * (g1 - g0))); // (g, in cells/s/s)
-}
+// Slope acceleration and lip exits now live in skate-physics.js.

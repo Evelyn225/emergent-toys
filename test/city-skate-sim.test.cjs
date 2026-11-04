@@ -12,33 +12,34 @@ const run = [
 ];
 const near = (got, want) => assert.ok(Math.abs(got - want) < 1e-8, `${got} != ${want}`);
 
-test('three pushes, carve left, ollie: recorded legacy speed and position curves', () => {
+test('three pushes, carve left, ollie: recorded Phase 1 speed and position curves', () => {
   const t = skateSim(run);
-  // Captured from the pre-overhaul code at 60 Hz. Changes to these numbers need
-  // an explanation of the intended physics change, rather than regeneration.
+  // Phase 1 intentionally replaces continuous 9 m/s pushing with .6 m/s
+  // bursts tapering toward a 6 m/s cap, and lower rolling resistance. These
+  // checkpoints preserve that deliberate change; e823d73 has the legacy curve.
   const golden = [
-    [42, .481308951672, .223134449097, 0, 0],
-    [54, .466563567242, .317796381274, 0, 0],
-    [96, .871700980575, .841224882892, 0, 0],
-    [150, .871700980575, 1.632821441374, 0, 0],
-    [170, .840751694337, 1.907663180015, -.066139617211, 0],
-    [190, .810314166296, 2.154627888824, -.186903457666, 0],
-    [210, .810314166296, 2.397275845341, -.305556439499, .742222222222],
-    [230, .810314166296, 2.639923801858, -.424209421332, .395555555556],
-    [250, .792293767317, 2.880815314634, -.542003515704, 0]
+    [42, .049343654056, .032712892383, 0, 0],
+    [54, .045797429611, .042197404066, 0, 0],
+    [96, .088824808243, .103115616548, 0, 0],
+    [150, .124110804193, .206578714018, 0, 0],
+    [170, .115722583688, .242427989957, -.015148656855, 0],
+    [190, .109672749311, .269327876577, -.041297633958, 0],
+    [210, .109672749311, .295541275260, -.066779286413, .742222222222],
+    [230, .109672749311, .321754673943, -.092260938869, .395555555556],
+    [250, .106051407113, .347686693298, -.117469066691, 0]
   ];
   for (const [i, speed, x, y, z] of golden) {
     for (const [key, want] of Object.entries({ speed, x, y, z })) near(t[i][key], want);
   }
   assert.equal(t[210].trick, 'ollie');
   assert.equal(t.at(-1).bail, 0);
-  assert.equal(t.at(-1).combo, 98);
+  assert.equal(t.at(-1).score, 98);
   assert.deepEqual(t, skateSim(run), 'fresh simulation state on every run');
 });
 
 test('flat coasting only loses speed; foot braking stops sooner', () => {
-  const coast = skateSim([{ frames: 120 }], { speed: .8 });
-  const brake = skateSim([{ frames: 120, keys: { KeyS: 1 } }], { speed: .8 });
+  const coast = skateSim([{ frames: 240 }], { speed: .8 });
+  const brake = skateSim([{ frames: 240, keys: { KeyS: 1 } }], { speed: .8 });
   for (let i = 1; i < coast.length; i++) assert.ok(coast[i].speed <= coast[i - 1].speed);
   assert.equal(brake.at(-1).speed, 0);
   assert.ok(brake.at(-1).x < coast.at(-1).x / 2);
@@ -47,7 +48,7 @@ test('flat coasting only loses speed; foot braking stops sooner', () => {
 test('Space release pops once, arrow mode kickflips, and landing banks when stopped', () => {
   const t = skateSim([
     { frames: 20, keys: { Space: 1 } },
-    { keys: { ArrowLeft: 1 } }, { frames: 100, keys: { KeyS: 1 } }
+    { keys: { ArrowLeft: 1 } }, { frames: 240, keys: { KeyS: 1 } }
   ], { speed: .7 });
   assert.equal(t[20].z, 0);
   assert.equal(t[21].trick, 'kickflip');
@@ -61,4 +62,42 @@ test('invalid timestep, frame counts and unsupported analog input fail explicitl
   for (const dt of [0, -1, NaN, Infinity, .1]) assert.throws(() => skateSim([], { dt }), /dt/);
   assert.throws(() => skateSim([{ frames: 1.5 }]), /frames/);
   assert.throws(() => skateSim([{ sticks: { right: [0, 1] } }]), /Phase 2/);
+});
+
+test('hill gravity stalls at the energy-predicted height and rolls back fakie', () => {
+  const slope = .2, initial = .35;
+  const t = skateSim([{ frames: 1600 }], {
+    dt: 1 / 240, speed: initial, ground: x => x * slope,
+    physics: { asphalt: 0, drag: 0 }
+  });
+  const peak = Math.max(...t.map(p => p.x * slope));
+  const expected = initial * initial * (1 + slope * slope) / (2 * .98);
+  assert.ok(Math.abs(peak / expected - 1) < .02, `${peak} vs ${expected}`);
+  const initialEnergy = .5 * initial * initial * (1 + slope * slope);
+  // Before the downhill cap, kinetic + potential energy is conserved.
+  for (const p of t.slice(0, 800)) {
+    const energy = .5 * p.speed * p.speed * (1 + slope * slope) + .98 * p.x * slope;
+    assert.ok(Math.abs(energy / initialEnergy - 1) < .02, `energy at ${p.t}: ${energy}`);
+  }
+  assert.ok(t.at(-1).vx < 0);
+  assert.equal(t.at(-1).fakie, true);
+  near(t.at(-1).yaw, 0); // board doesn't turn around when its velocity reverses
+  assert.equal(t.at(-1).stance, 1);
+});
+
+test('hills accelerate from rest, downhill runs exceed the push cap, hard slides scrub speed', () => {
+  const hill = skateSim([{ frames: 300 }], { ground: x => -.2 * x });
+  assert.ok(hill.at(-1).speed > .6);
+  assert.ok(hill.at(-1).x > 0);
+  const brake = skateSim([{ frames: 30, keys: { KeyS: 1 } }], { speed: .8 });
+  const slide = skateSim([{ frames: 30, keys: { KeyS: 1, KeyD: 1 } }], { speed: .8 });
+  assert.ok(slide.at(-1).speed < brake.at(-1).speed - .2);
+});
+
+test('push bursts taper below the push cap and cannot accelerate a downhill run', () => {
+  const fast = skateSim([{ frames: 42, keys: { KeyW: 1 } }], { speed: .9 });
+  const coast = skateSim([{ frames: 42 }], { speed: .9 });
+  assert.deepEqual(fast, coast);
+  const push = skateSim([{ frames: 3600, keys: { KeyW: 1 } }]);
+  assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= .6);
 });

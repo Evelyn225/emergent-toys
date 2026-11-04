@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0 } = {}) {
+function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, physics = {} } = {}) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .05) throw new RangeError('dt must be in (0, .05] seconds');
   for (const frame of script) {
     if (!Number.isInteger(frame.frames ?? 1) || (frame.frames ?? 1) < 1) throw new RangeError('frames must be a positive integer');
@@ -27,16 +27,16 @@ function skateSim(script, { dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0 } 
     function say(text) { msgText=text; }
     function move(x,y) { px+=x; py+=y; }
   `, ctx);
-  for (const file of ['moves.js', 'skate.js']) {
+  for (const file of ['moves.js', 'skate-physics.js', 'skate.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
-  Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt });
-  vm.runInContext('a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
+  Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, physics });
+  vm.runInContext('Object.assign(SK_PHYS,physics); a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
   const trajectory = [];
   const snapshot = () => JSON.parse(vm.runInContext(`JSON.stringify({
     t:T-100, x:px, y:py, z:body.z, vz:body.vz, speed:SK.v, yaw:a,
     heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
-    trick:body.trick?.name??null, score:SK.score, combo:SK.combo?.pts??0
+    trick:body.trick?.name??null, fakie:SKB.fakie, vx:SKB.v[0], vy:SKB.v[1], score:SK.score, combo:SK.combo?.pts??0
   })`, ctx));
   trajectory.push(snapshot());
   let space = false;

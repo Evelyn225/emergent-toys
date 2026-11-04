@@ -98,7 +98,10 @@ test('the skatepark\'s ramps: a funbox you roll over (its deck edges grind) and 
   const run=(sx,sy,dir,v,frames)=>{px=sx;py=sy;a=dir;body.z=body.vz=0;body.trick=null;fx.skating=true;mode='walk';SK.lastT=T;SK.v=v;SK.dir=dir;SK.grind=null;SK.bail=0;
    let peak=0,top=0;for(let f=0;f<frames;f++){T+=1/60;stepSkate(1/60);stepBody(1/60);peak=Math.max(peak,body.z);top=Math.max(top,skateparkGround(px,py));}
    return{peak,top,end:px-sx};};
-  const kick=run(k.x-k.hl-.4,k.y,0,.75,90),fun=run(fb.x-fb.hl-.4,fb.y,0,.75,160);
+  // Start just before the bank. The old .4-cell run-in started on a separate
+  // ledge; Phase 1 correctly makes leaving that ledge airborne instead of
+  // snapping the wheels to the ground, obscuring this funbox-only assertion.
+  const kick=run(k.x-k.hl-.4,k.y,0,.75,90),fun=run(fb.x-fb.hl-.1,fb.y,0,.75,160);
   const deck=GRINDS.filter(g=>g.feature===fb).length,long=Math.max(...GRINDS.filter(g=>g.kind!=='bench').map(g=>Math.hypot(g.bx-g.ax,g.by-g.ay)));
   const size=[(SKATEPARK.x1-SKATEPARK.x0)*10,(SKATEPARK.y1-SKATEPARK.y0)*10];
   return{kick,fun,deck,long,size};});
@@ -107,4 +110,20 @@ test('the skatepark\'s ramps: a funbox you roll over (its deck edges grind) and 
  assert.ok(r.fun.top>.04&&r.fun.peak<.05&&r.fun.end>1.1,'over the funbox and down the far side, without a launch '+JSON.stringify(r.fun));
  assert.equal(r.deck,2,'both deck edges grind');assert.ok(r.long>=1.9,'a 20 m line to grind');
  assert.ok(r.size[0]>=50&&r.size[1]>=50,'a park about 50 m across '+r.size);
+}));
+
+test('a slow bank climb stalls and rolls back fakie; board state and surface normal follow the ramp',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const fb=SKATE_FEATURES.find(o=>o.ramp==='funbox');
+  px=fb.x-fb.hl+.08;py=fb.y;a=0;SK.dir=0;SK.v=.08;SK.lastT=T;
+  SK.bail=0;SK.grind=null;body.z=body.vz=0;body.trick=null;
+  const start=px,s=skateSurface(px,py);let peak=px;
+  for(let i=0;i<60;i++){tRide(1);peak=Math.max(peak,px);}
+  return {start,peak,x:px,yaw:a,fakie:SKB.fakie,vx:SKB.v[0],stance:SK.stance,
+   kind:s.kind,n:s.n,position:SKB.p,legacy:[px,py,skateGround(px,py)+body.z/10],contact:SKB.contact};
+ });
+ assert.equal(r.kind,'funbox');assert.ok(r.n[0]<0&&r.n[2]>.9);
+ assert.ok(r.peak>r.start&&r.x<r.start&&r.vx<0,JSON.stringify(r));
+ assert.equal(r.fakie,true);assert.equal(r.stance,1);assert.ok(Math.abs(r.yaw)<1e-6);
+ assert.deepEqual(r.position,r.legacy);assert.equal(r.contact,'ground');
 }));

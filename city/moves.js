@@ -125,6 +125,7 @@ function stepBody(dt) {
       }
     }
   } else if (T - (body.landedAt ?? -9) > HOP_KEEP) body.hop = Math.max(1, (body.hop || 1) - dt * 2.5); // on the ground: a moment, then the speed bleeds off
+  if (skatingNow()) skateBoardSync();
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
