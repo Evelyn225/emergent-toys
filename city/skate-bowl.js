@@ -3,6 +3,9 @@
 // carve around a corner without dropping the skater back to a heightfield.
 function addSkateBowl(x, y, options = {}) {
   const o = addSkateTransition(x, y, { flat: .5, ...options });
+  // A 2 mm concrete skin keeps the flat bottom above the street floor's
+  // coplanar depth, so the park/path paint cannot punch through it.
+  o.z0 += .0002; o.z1 += .0002;
   o.bowl = true; o.hw = o.hl; o.ray = typeof rayBowlProfile === 'function' ? rayBowlProfile : null;
   o.profile.radialPoints = [[0, 0], ...o.profile.points.filter(v => v[0] >= o.profile.flat / 2 - 1e-9)];
   GRINDS.splice(-2, 2);

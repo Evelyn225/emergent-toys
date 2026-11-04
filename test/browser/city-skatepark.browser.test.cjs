@@ -46,7 +46,7 @@ test('the skatepark: real ledges, bars and a pad on concrete in a park, every be
 test('ollie onto a bar going along it and you grind: points while you hold it, off the end into the combo',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   const g=GRINDS.find(g=>g.kind==='skaterail');tRun(g);
-  const on={grind:!!SK.grind,name:SK.grind?.name};const top=terrainHeight(g.x,g.y)+g.z;
+  const on={grind:!!SK.grind,name:SK.grind?.name,approach:!SK.grind?{v:SK.v,z:body.z,bail:SK.bail,msg:msgText,x:px-g.ax,y:py-g.ay}:null};const top=terrainHeight(g.x,g.y)+g.z;
   const feet=skateGround(px,py)+body.z/10;tRide(20);const mid={grind:!!SK.grind,msg:msgText,onEdge:Math.abs(skateGround(px,py)+body.z/10-top)<1e-3};
   // Lower material friction carries a run along the whole 20 m rail. Keep
   // balance during that longer ride, then allow the combo clock to bank it.
@@ -92,7 +92,7 @@ test('flip tricks land going uphill (and down): the flip times itself to the slo
   const b=ROAD_BRIDGES[0],out=[];
   for(const [y0,dir] of [[b.y0+.5,1],[b.y1-.5,-1]]){
    px=b.x;py=y0;a=Math.PI/2*dir;SK.dir=a;SK.v=.8;SK.lastT=T;SK.bail=0;SK.combo=null;body.z=body.vz=0;body.trick=null;tRide(1);
-   const g0=walkGround(px,py);skatePop('A');for(let k=0;k<120&&(body.z>0||body.vz>0);k++)tRide(1);
+   const g0=walkGround(px,py);SK.charge=T-.6;skatePop('A');for(let k=0;k<120&&(body.z>0||body.vz>0);k++)tRide(1);
    out.push({rise:+(walkGround(px,py)-g0).toFixed(3),bail:SK.bail>0,msg:msgText});
   }
   return out;

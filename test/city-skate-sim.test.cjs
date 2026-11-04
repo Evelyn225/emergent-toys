@@ -12,11 +12,12 @@ const run = [
 ];
 const near = (got, want) => assert.ok(Math.abs(got - want) < 1e-8, `${got} != ${want}`);
 
-test('three pushes, carve left, ollie: recorded Phase 1 speed and position curves', () => {
+test('three pushes, carve left, ollie: recorded riding and tuned pop curves', () => {
   const t = skateSim(run);
   // Phase 1 intentionally replaces continuous 9 m/s pushing with .6 m/s
   // bursts tapering toward a 6 m/s cap, and lower rolling resistance. These
   // checkpoints preserve that deliberate change; e823d73 has the legacy curve.
+  // Phase 7 also tunes normal/strong pop to 2.9/3.4 m/s, shortening the air.
   const golden = [
     [42, .049343654056, .032712892383, 0, 0],
     [54, .045797429611, .042197404066, 0, 0],
@@ -24,16 +25,16 @@ test('three pushes, carve left, ollie: recorded Phase 1 speed and position curve
     [150, .124110804193, .206578714018, 0, 0],
     [170, .115722583688, .242427989957, -.015148656855, 0],
     [190, .109672749311, .269327876577, -.041297633958, 0],
-    [210, .109672749311, .295541275260, -.066779286413, .742222222222],
-    [230, .109672749311, .321754673943, -.092260938869, .395555555556],
-    [250, .106051407113, .347686693298, -.117469066691, 0]
+    [210, .109672749311, .295541275260, -.066779286413, .487592592593],
+    [230, .109068755932, .321743846433, -.092250413608, 0],
+    [250, .103038328256, .347055828042, -.116855812020, 0]
   ];
   for (const [i, speed, x, y, z] of golden) {
     for (const [key, want] of Object.entries({ speed, x, y, z })) near(t[i][key], want);
   }
   assert.equal(t[210].trick, 'ollie');
   assert.equal(t.at(-1).bail, 0);
-  assert.equal(t.at(-1).score, 98);
+  assert.equal(t.at(-1).score, 88);
   assert.deepEqual(t, skateSim(run), 'fresh simulation state on every run');
 });
 

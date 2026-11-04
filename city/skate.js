@@ -11,7 +11,7 @@
 const SK_TOP = 0.6, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
 const SK_STILL = 0.12; // (slower than this, a messy landing is only a hop: nothing to fall off)
 const SK_SLOPPY = 0.45; // (slower than this, coming down sideways is a sloppy landing you ride out, not a bail: half points)
-const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 1.2, SK_BAIL_T = 1.3;
+const SK_CAM_BACK = 0.26, SK_CAM_UP = 0.11, SK_CAM_SIDE = 0.25, SK_COMBO_GAP = 1.2, SK_BAIL_T = 1.2;
 // v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
@@ -37,11 +37,7 @@ function stepSkate(dt) {
   }
   SK.lastT = T;
   skatePollInput(dt);
-  if (SK.bail > 0) { // picking yourself up
-    SK.bail -= dt; SK.v = 0; body.mx = body.my = 0;
-    if (SK.bail <= 0) { SK.bailAt = null; a = SK.dir; }
-    skateBoardSync(); return;
-  }
+  if (SK.bail > 0) return stepSkateBail(dt);
   if (SK.grind) { stepGrind(dt); skateBoardSync(); return; }
   const air = skateAir(), f = (K.KeyW || SK_INPUT.push ? 1 : 0) - (K.KeyS || SK_INPUT.brake ? 1 : 0), s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
   SK.steer = s; SK.kicking = false;
@@ -90,7 +86,7 @@ function skatePop(trick, gesture) {
   skateManualEnd();
   SK.charge = -1; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
   SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
-  body.vz = POP_V * (gesture ? gesture.strength : 1 + 0.35 * load);
+  body.vz = POP_V * (gesture ? gesture.strength : 1 + (3.4 / POP_V - 1) * load);
   body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
   if (actx) sfxUse('ollie');
 }
@@ -175,21 +171,22 @@ function bankCombo() {
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
 function skateBail(msg) {
+  skateBailStart();
   SK.manual = null; SK.grind = null; SK.transition = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
-  if (actx) playClip('ground-impact', 0.25);
+  if (actx) playClip('ground-impact', clamp(SK.bailData.speed * .6, .15, .6));
 }
 
 // ---- the camera: behind you, a little above and round to the side you face, swinging after you (not while you spin).
 // A wall in the way: first it gives up the side, then it comes in closer, and lower, to keep you in the picture.
 // Returns [x, y, yaw, eye]
 // (on a narrow screen, a phone held upright, it comes in closer: the view's as wide as ever, so you'd be a speck)
-const skateCamBack = () => SK_CAM_BACK * (SK.transition ? 1.35 : 1) * clamp(cv.width / cv.height / 1.6, 0.4, 1);
-function skateClear(yaw) { // how far back from you the camera can go that way
+const skateCamBack = () => SK_CAM_BACK * (1 + 1.4 * (SK.camTransition || 0)) * clamp(cv.width / cv.height / 1.6, 0.4, 1);
+function skateClear(yaw, ahead = 0) { // how far back from you the camera can go that way
   const bx = Math.cos(yaw), by = Math.sin(yaw), most = skateCamBack();
   let back = 0;
   for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
-    const x = px - bx * step, y = py - by * step;
+    const x = px + SKB.v[0] * ahead - bx * step, y = py + SKB.v[1] * ahead - by * step;
     if ([-0.03, 0.03].some(ox => [-0.03, 0.03].some(oy => mode === 'roof' ? roofHeightAt(x + ox, y + oy) > roofH + ROOF_STEP // (up top: only something taller than the roof)
       : map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)))) break;
     back = step;
@@ -198,16 +195,26 @@ function skateClear(yaw) { // how far back from you the camera can go that way
 }
 function skateCam(dt) {
   const fresh = SK.camYaw == null, air = skateAir(), ease = k => fresh ? 1 : 1 - Math.exp(-k * dt);
+  SK.camTransition = fresh ? (SK.transition ? 1 : 0) : (SK.camTransition || 0) + ((SK.transition ? 1 : 0) - (SK.camTransition || 0)) * ease(3);
+  if (SK.transition) { SK.camRampH=SK.transition.o.z0+SK.transition.o.profile.height; SK.camRampUp=.12*Math.min(1,Math.abs(SK.transition.u)/SK.transition.o.profile.limit); }
   if (T - SK.lookT > 1) SK.look *= 1 - Math.min(1, dt * 2.5);
   const base = (SK.bail > 0 ? SK.bailAt[2] : air ? SK.dir : a) + SK.look, side = base - SK.stance * SK_CAM_SIDE;
   SK.camSide = (fresh ? 1 : SK.camSide ?? 1) + ((skateClear(side) > skateCamBack() * 0.9 ? 1 : 0) - (SK.camSide ?? 1)) * ease(3);
   const target = base - SK.stance * SK_CAM_SIDE * SK.camSide;
   if (fresh) SK.camYaw = target;
-  SK.camYaw += (mod(target - SK.camYaw + Math.PI, 2 * Math.PI) - Math.PI) * ease(4);
-  const room_ = skateClear(SK.camYaw); // (in at once, back out gently)
+  SK.camYaw += (mod(target - SK.camYaw + Math.PI, 2 * Math.PI) - Math.PI) * ease(5.56);
+  const room_ = Math.min(skateClear(SK.camYaw), skateClear(SK.camYaw, .15)); // (in at once, back out gently)
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
-  const want = skateGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6 + (SK.transition ? .12 * Math.min(1, Math.abs(SK.transition.u) / SK.transition.o.profile.limit) : 0);
+  const want = skateGround(px, py) + (SK.grind ? .09 : SK_CAM_UP) + body.z / 10 * 0.6 + (SK.camRampUp || 0) * SK.camTransition;
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
+  if (T - SK.lookT > 1) {
+    const aheadX = worldCoord(px + Math.cos(SK.dir) * .15), aheadY = worldCoord(py + Math.sin(SK.dir) * .15);
+    const flatTarget = skateGround(aheadX, aheadY) + .08 + body.z / 10 * .35;
+    const rampTarget = Math.max(SKB.p[2]+.08,(SK.camRampH||0)+.02);
+    const targetZ = flatTarget + (rampTarget-flatTarget)*SK.camTransition;
+    const targetPitch = clamp(Math.atan2(targetZ - SK.camZ, SK.camBack + .15), -.6, .2);
+    pitch += (targetPitch - pitch) * ease(5.56);
+  }
   return [worldCoord(px - Math.cos(SK.camYaw) * SK.camBack), worldCoord(py - Math.sin(SK.camYaw) * SK.camBack), SK.camYaw, SK.camZ];
 }
 
@@ -231,7 +238,7 @@ function skaterLook() {
            ink: hours ? TATTOO_INK[tattoos[tattoos.length - 1]] : undefined } });
 }
 function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
-  const F = craftFrame(yaw, nose, roll), o = [vx, vy, z + SB.up + Math.abs(Math.sin(roll)) * SB.hw * 0.9]; // (on its edge mid-flip it stands taller)
+  const F = craftFrame(yaw, nose, roll), normal = SK.transition ? F.u : [0,0,1], o = [vx + normal[0] * SB.up, vy + normal[1] * SB.up, z + normal[2] * SB.up + Math.abs(Math.sin(roll)) * SB.hw * 0.9]; // (on its edge mid-flip it stands taller)
   const deck = (i, t, L) => {
     if (HIT.face === 5) { // black grip tape, the maple showing round its edge (so it reads on dark asphalt)
       if (Math.abs(HIT.v) > SB.hw * 0.7) { BG[i] = C(YEL, 3 + L * 0.45); return set(i, '=', C(BRICK, L)), true; }
@@ -273,17 +280,23 @@ function skaterSprite(look, key, view) {
   return s;
 }
 // as drawFigure: (rx, ry) from the camera, standing on z0, h tall, facing (fx, fy), a figPose key, least brightness
-function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5) {
+function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5, normal = [0,0,1]) {
   const d0 = Math.hypot(rx, ry) || 1, vx = -rx / d0, vy = -ry / d0;
   const view = mod(Math.round(Math.atan2(vx * -fy + vy * fx, vx * fx + vy * fy) / (Math.PI * 2) * SK_VIEWS), SK_VIEWS);
   const { role, near } = skaterSprite(look, key, view), th = view / SK_VIEWS * Math.PI * 2, unit = h / FIG_TALL;
-  // the sprite's two directions in the world: across it (left to right as drawn), and toward the viewer
-  const toW = (bx, by) => [-fy * bx + fx * by, fx * bx + fy * by]; // (body frame: x their right, y ahead)
-  const [ax, ay] = toW(-Math.cos(th), Math.sin(th)), [nx, ny] = toW(Math.sin(th), Math.cos(th));
+  // Project the authored pose onto the contact plane. On vert the rider's
+  // height points out from the wall, rather than standing upright through it.
+  const U = normal, d = fx * U[0] + fy * U[1];
+  const len = Math.hypot(fx-d*U[0],fy-d*U[1],-d*U[2]) || 1;
+  const F = [(fx-d*U[0])/len,(fy-d*U[1])/len,-d*U[2]/len];
+  const right = [U[1]*F[2]-U[2]*F[1],U[2]*F[0]-U[0]*F[2],U[0]*F[1]-U[1]*F[0]];
+  const across = right.map((v,i)=>-Math.cos(th)*v+Math.sin(th)*F[i]);
+  const nearAxis = right.map((v,i)=>Math.sin(th)*v+Math.cos(th)*F[i]);
   for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
     const k = role[r * FIG_W + c];
     if (!k) continue;
-    const u = c - (FIG_W - 1) / 2, n = near[r * FIG_W + c], X = rx + (ax * u + nx * n) * unit, Y = ry + (ay * u + ny * n) * unit, Z = z0 + (FIG_H - r - 0.5) * unit;
+    const u = c - (FIG_W - 1) / 2, n = near[r * FIG_W + c], height = (FIG_H - r - .5) * unit;
+    const X = rx + (across[0] * u + nearAxis[0] * n) * unit + U[0] * height, Y = ry + (across[1] * u + nearAxis[1] * n) * unit + U[1] * height, Z = z0 + (across[2] * u + nearAxis[2] * n) * unit + U[2] * height;
     const depth = dx * X + dy * Y;
     if (depth < 0.05 || depth > vis) continue;
     const col = cols / 2 + (-dy * X + dx * Y) * projX / depth, row = hor - (Z - eye) * projY / depth;
@@ -310,17 +323,13 @@ function drawSkateShadow(vx, vy, g, yaw, up) {
 function drawSkater() {
   if (!skateView) return;
   const tr = body.trick, p = tr ? clamp(tr.t / (tr.duration ?? tr.air), 0, 1) : 0, e = p * p * (3 - 2 * p), look = skaterLook();
-  if (SK.bailAt) { // sprawled where you came off, the board upside down a little way on
-    const [bx, by, dir, ang] = SK.bailAt, g = walkGround(bx, by), [vx, vy] = R(bx, by);
-    drawSkateBoard(...R(bx + Math.cos(dir) * 0.08, by + Math.sin(dir) * 0.08), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
-    return drawSkaterFigure(vx, vy, g, SB.rider, Math.cos(dir), Math.sin(dir), look, 'sprawl');
-  }
+  if (SK.bailAt) return skateBailDraw();
   const { x, y } = skateView, [vx, vy] = R(x, y), g = skateGround(x, y), z = g + body.z / 10;
-  drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
+  if (!SK.transition || SKB.surf.n[2] > .5) drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
   const roll = tr ? SKB.roll : 0, yaw = tr ? SKB.yaw : skateView.a, nose = tr ? SKB.pitch : 0;
   drawSkateBoard(vx, vy, z, yaw + (SK.slide || 0) * Math.PI / 2, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
   const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
   const pose = air || SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
-  const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
-  drawSkaterFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose);
+  const contactNormal = SK.transition ? SKB.surf.n : [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
+  drawSkaterFigure(vx + contactNormal[0] * footOffset, vy + contactNormal[1] * footOffset, z + contactNormal[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, contactNormal);
 }

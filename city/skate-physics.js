@@ -10,7 +10,7 @@ function skateSurface(x, y, zHint) {
   const h = skateGround(x, y), e = .02;
   let gx = (skateGround(worldCoord(x + e), y) - skateGround(worldCoord(x - e), y)) / (2 * e);
   let gy = (skateGround(x, worldCoord(y + e)) - skateGround(x, worldCoord(y - e))) / (2 * e);
-  let ref = null, kind = mode === 'roof' ? 'roof' : 'street', material = 'asphalt';
+  let ref = null, kind = mode === 'roof' ? 'roof' : 'street', material = mode === 'roof' ? 'concrete' : typeof ROAD !== 'undefined' && !ROAD[idx(Math.floor(x),Math.floor(y))] ? 'grass' : 'asphalt';
   if (mode !== 'roof' && typeof SKATE_FEATURES !== 'undefined') {
     if (skateSurfaceCount !== SKATE_FEATURES.length) {
       skateSurfaceCells.clear(); skateSurfaceCount = SKATE_FEATURES.length;
@@ -86,7 +86,7 @@ function skateGroundVelocity(dt, push, brake, steer) {
   if (brake && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
     SK.dragT = .12; if (actx) sfxSkate('drag', Math.min(1, speed / SK_TOP));
   }
-  const mu = surf.material === 'concrete' ? SK_PHYS.concrete : SK_PHYS.asphalt;
+  const mu = surf.material === 'concrete' ? SK_PHYS.concrete : surf.material === 'grass' ? .06 : SK_PHYS.asphalt;
   const loss = ((brake ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
     + SK_PHYS.drag * speed * speed) * dt + speed * Math.abs(turn) * .025;
   const keep = speed > 0 ? Math.max(0, speed - loss) / speed : 0;

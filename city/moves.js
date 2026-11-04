@@ -17,7 +17,7 @@ const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_S
 // one more hop: the multiplier goes up, and so does the speed you carry (a run of hops never touches the ground long
 // enough for walking to pick it up)
 function hopFaster(swirl) { const h0 = body.hop || 1; body.hop = hopUp(h0, swirl); body.mx = (body.mx || 0) * body.hop / h0; body.my = (body.my || 0) * body.hop / h0; }
-const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
+const GRAV = 9.8, JUMP_V = 3.4, POP_V = 2.9, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { '360S': ['360 shuvit', 0, 1], A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
@@ -108,7 +108,7 @@ function stepBody(dt) {
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
       const fell = body.peak, tricked = !!body.trick; body.impactV = Math.abs(body.vz); body.z = body.vz = body.peak = 0;
-      if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
+      if (skatingNow()) { skateLand(); if (actx) { sfxUse('ollie-land'); sfxSkate('land',clamp((body.impactV||0)/4,.2,1)); } } // (clean, or a bail: skate.js)
       body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) hopFaster(body.swirl || 0);

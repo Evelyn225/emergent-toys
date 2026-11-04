@@ -160,6 +160,7 @@
     "city/skate-air.js",
     "city/skate-transitions.js",
     "city/skate-bowl.js",
+    "city/skate-bails.js",
     "city/skate.js",
     "city/islands-content.js",
     "city/islands-render.js",
