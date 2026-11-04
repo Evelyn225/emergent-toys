@@ -358,7 +358,7 @@ function hud() {
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: A/D balance (keep the mark in the middle) | SPACE pop off (hold an arrow: flip trick off it)'
-    : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
+    : settings.help && skatingNow() ? 'W push | S brake, hold: fakie | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
     : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
@@ -413,8 +413,8 @@ function hud() {
     const n = 20, row = (str, yy, col) => { const w = g.measureText(str).width, x = cv.width / 2 - w / 2; g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(x - 6, yy - 3, w + 12, FS + 6); g.fillStyle = col; g.fillText(str, x, yy); };
     const y = msgY + Math.max(1, msg.length) * (FS + 4) + 2, full = Math.round(left_ * n);
     row('[' + '#'.repeat(full) + '-'.repeat(n - full) + ']', y, left_ > .5 ? '#ff4' : left_ > .25 ? '#fa3' : '#f44');
-    if (SK.grind) { // the balance: a mark that wanders off the middle; A and D bring it back
-      const b = clamp(SK.grind.bal, -1, 1), m = Math.round((b + 1) / 2 * (n - 1)), bar = [...'-'.repeat(n)];
+    if (SK.grind || SK.manual) { // the balance: a mark that wanders off the middle; A and D bring it back
+      const b = clamp((SK.grind || SK.manual).bal, -1, 1), m = Math.round((b + 1) / 2 * (n - 1)), bar = [...'-'.repeat(n)];
       bar[(n - 1) >> 1] = '|'; bar[m] = 'o';
       row('[' + bar.join('') + ']', y + FS + 6, Math.abs(b) > .7 ? '#f44' : '#fff');
     }

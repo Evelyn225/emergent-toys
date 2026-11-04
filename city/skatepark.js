@@ -3,11 +3,14 @@
 // ride along on top of (skateparkGround); every edge you can grind is in GRINDS, with the benches' seat fronts all
 // round the city. Cells (1 = 10 m)
 const GRINDS = []; // { ax, ay, bx, by: the edge; z: its top above the ground there; material: 'metal' | 'stone' | 'wood'; kind }
-const SKATE_FEATURES = [];
+const SKATE_FEATURES = []; // park features and the marked street-spot obstacles
 let grindsB = [];
 // built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
 function buildSkatepark() {
   GRINDS.length = SKATE_FEATURES.length = 0;
+  if (typeof SK_BOWL_STAIRS !== 'undefined') SK_BOWL_STAIRS.length=0;
+  if (typeof SK_TRANSITIONS !== 'undefined') SK_TRANSITIONS.length = 0;
+  if (typeof skateSurfaceReset === 'function') skateSurfaceReset();
   const park = parks.find(([bx, by]) => bx === 13 && by === 34);
   SKATEPARK = park ? { bx: 13, by: 34, x0: 2.4, y0: 2.3, x1: 7.85, y1: 7.85 } : null; // (most of the park block: the benches round it stay, to grind)
   if (SKATEPARK) {
@@ -46,21 +49,31 @@ function buildSkatepark() {
     for (const side of [-1, 1]) { const ex = box.x - box.s * side * box.hw, ey = box.y + box.c * side * box.hw, d = box.hl - box.run;
       GRINDS.push({ ax: ex - box.c * d, ay: ey - box.s * d, bx: ex + box.c * d, by: ey + box.s * d, z: box.z1, material: 'metal', kind: 'skateledge', feature: box }); }
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
+    if (typeof addSkateTransition === 'function') {
+      addSkateTransition(ox + 4.85, oy + 7.5);
+      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
+    }
+    if (typeof addSkatePool === 'function') addSkatePool(ox + 6.3, oy + 4.7, {radius:.22,height:.16,deck:.055}, {rx:.22,ry:.48});
   }
+  if (typeof buildSkateSpots === 'function') buildSkateSpots();
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
     const c = -b.fy, s = b.fx, ex = b.x + b.fx * .02, ey = b.y + b.fy * .02;
     GRINDS.push({ ax: ex - c * .075, ay: ey - s * .075, bx: ex + c * .075, by: ey + s * .075, z: .045, material: 'wood', kind: 'bench', bench: b, feature: b });
   }
   grindsB = bucketed(GRINDS.map(g => Object.assign(g, { x: (g.ax + g.bx) / 2, y: (g.ay + g.by) / 2 }))); // (by middle)
+  if (typeof buildGrindPaths === 'function') buildGrindPaths();
+  if (typeof refreshSkateSpotDirectory === 'function') refreshSkateSpotDirectory();
 }
 // the top of whatever park feature you're over (0: none): you ride along it, and drop off its end
 function skateparkGround(x, y) {
-  if (!inSkatepark(x, y, .1)) return 0;
+  if (!inSkatepark(x, y, .1)) return typeof skateSpotGround === 'function' ? skateSpotGround(x, y) : 0;
   let top = 0;
   for (const o of SKATE_FEATURES) {
+    if(o.pool){const h=skatePoolSample(o,x,y);if(h)top=Math.max(top,h.h);continue;}
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
-    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.ramp ? rampHeight(o, u) : o.z1);
+    if (o.bowl && Math.hypot(qx, qy) > o.hl) continue;
+    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, o.bowl ? Math.hypot(qx, qy) : u) : o.ramp ? rampHeight(o, u) : o.z1);
   }
   return top;
 }
@@ -70,14 +83,4 @@ function rampHeight(o, u) {
   return o.z1 * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
 }
 const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
-// rolling on a ramp (skate.js, after each step on the board): up a slope costs speed, down one gives it back; and off a
-// kicker's lip, moving forward, you're thrown up and out
-function skateRampStep(x0, y0, dt) {
-  if (!SKATEPARK || skateAir() || !inSkatepark(px, py, .2)) return;
-  const g0 = skateparkGround(x0, y0), g1 = skateparkGround(px, py), from = skateRampAt(x0, y0);
-  if (from?.ramp === 'kicker' && g0 > from.z1 * .8 && g1 < g0 - .01) {
-    const along = Math.cos(SK.dir) * from.c + Math.sin(SK.dir) * from.s;
-    if (along > .3) { body.z = (g0 - g1) * 10; body.vz = Math.max(1.2, SK.v * 10 * (from.z1 / (2 * from.hl)) * along * 1.3); return; } // (metres, m/s)
-  }
-  if (g0 !== g1 && (from || skateRampAt(px, py))) SK.v = Math.sqrt(Math.max(0, SK.v * SK.v - 2 * .98 * (g1 - g0))); // (g, in cells/s/s)
-}
+// Slope acceleration and lip exits now live in skate-physics.js.

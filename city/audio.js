@@ -177,11 +177,12 @@ function sfxStep(surface, run) {
   if (surface === 'metal') tone(at, 600 + Math.random() * 150, 0.1, g * 0.12, 'sine');
 }
 // the board's own noises (skate.js): a foot pushing off, a foot dragged to brake, the deck scraping along a wall
-function sfxSkate(kind, k = 1) {
+function sfxSkate(kind, k = 1, material = SK.grind?.path?.material || SKB.surf?.material || 'asphalt') {
   const at = actx.currentTime;
   if (kind === 'push') burst(at, 0.09, [filt('lowpass', 700)], 0.08);
   else if (kind === 'drag') burst(at, 0.16, [filt('bandpass', 1600, 0.8)], 0.05 * k);
-  else burst(at, 0.2, [filt('bandpass', 2600, 1.5)], 0.09 * k);
+  else if (kind === 'land') burst(at, .12, [filt('lowpass', 480)], .08 * k);
+  else burst(at, 0.2, [filt('bandpass', ({metal:2600,concrete:1700,stone:1000,wood:650})[material] || 1800, 1.5)], 0.09 * k);
 }
 // the ball (goods.js), heard from where it is: a bounce or a rebound off a wall (k: how hard), a touch, a splash
 function sfxBall(kind, x, y, z, k) {
@@ -383,9 +384,11 @@ function audioTick(dt) {
     serenade ? { bossa: soundDistanceProfile(rel(COURIER_NICO.x - px), rel(COURIER_NICO.y - py), 0, a).pan } : {};
   for (const k in beds) { tickBed(beds[k], mix[k] * LEVEL[k], dt); beds[k].pan.pan.setTargetAtTime(musicPan[k] || 0, now, 0.1); }
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
+  const boardSurface = SKB.surf?.material || 'asphalt';
+  mix.board *= ({concrete:.8,grass:.6,wood:.9,stone:1.15})[boardSurface] || 1;
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
-  if (fx.skating) synth.board.src?.playbackRate.setTargetAtTime(0.75 + 0.3 * Math.min(1.3, SK.v / SK_TOP), now, 0.1); // (the wheels' whirr rising with speed)
+  if (fx.skating) synth.board.src?.playbackRate.setTargetAtTime((0.75 + 0.3 * Math.min(1.3, SK.v / SK_TOP)) * (({concrete:1.08,grass:.75,wood:.85,stone:.92})[boardSurface] || 1), now, 0.1); // (the wheels' whirr rising with speed)
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {

@@ -1190,25 +1190,27 @@ test('the board drives like a vehicle: W kicks you up to speed, you roll on when
     skRide(110, { KeyW: 1 }); const top = SK.v, x0 = px;
     skRide(30); const coast = SK.v, rolled = rel(px - x0);
     const a0 = a; skRide(20, { KeyA: 1 }); const left = a - a0;
-    skRide(20, { KeyS: 1 }); const braked = SK.v;
+    skRide(90, { KeyS: 1 }); const braked = SK.v;
     return { early, top, cruise: SK_TOP, coast, rolled, left, braked };
   });
   assert.ok(r.early > 0 && r.early < 0.4, `the first push is not top speed (${r.early})`);
-  assert.ok(Math.abs(r.top - r.cruise) < 0.03, `kicking gets you to cruising speed (${r.top})`);
-  assert.ok(r.coast > r.top * 0.85 && r.rolled > 0.6, `let go and you keep rolling (${r.coast}, ${r.rolled})`);
+  // Phase 1: fixed .6 m/s bursts taper toward a 6 m/s cap. Four seconds of
+  // pushing no longer reaches the old continuous-thrust 9 m/s cruise.
+  assert.ok(r.top > r.early * 2 && r.top < r.cruise, `successive kicks build speed (${r.top})`);
+  assert.ok(r.coast > r.top * 0.85 && r.rolled > r.top * 0.8, `let go and you keep rolling (${r.coast}, ${r.rolled})`);
   assert.ok(r.left < -0.5, `A carves left (${r.left})`);
   assert.strictEqual(r.braked, 0, 'S drags you to a stop');
 }));
 test('in the air A and D spin you: a 180 rides away switch, a quarter turn is a bail, and tricks back to back are a combo', () => withPage(async page => {
   await page.evaluate(SKATE_SETUP);
   const r = await page.evaluate(() => {
-    skRide(1); skRide(60, { KeyW: 1 });
+    skRide(1); SK.v=.7; SK.dir=a; // isolate landing classification from the slower Phase 1 push build-up
     skatePop(); skRide(13, { KeyD: 1 }); skFly(); skRide(1);
     const half = { msg: msgText, stance: SK.stance, bail: SK.bail };
     skRide(40);
     skatePop(); skRide(6, { KeyD: 1 }); skFly();
     const quarter = { msg: msgText, bail: SK.bail > 0 }; skRide(60);
-    skRide(40, { KeyW: 1 }); const score0 = SK.score;
+    skRide(40, { KeyW: 1 }); SK.v=.6; SK.dir=a; const score0 = SK.score;
     K.ArrowLeft = 1; skatePop(); skFly(); skatePop('D'); skFly();
     const chain = msgText; skRide(40);
     return { half, quarter, chain, banked: SK.score - score0, after: msgText };
