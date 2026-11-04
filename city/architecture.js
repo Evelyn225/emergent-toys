@@ -260,11 +260,11 @@ function architectureGroundHeight(x, y) {
       if (map[o.ownerCell] === o.ownerHeight && architectureContains(o, x, y)) h = Math.max(h, o.z1);
   return h;
 }
-function architectureBlocked(x, y, pad = 0) {
+function architectureBlocked(x, y, pad = 0, feet = -Infinity) {
   if (pad <= 0.03 && !architectureWalkCells[idx(Math.floor(x), Math.floor(y))]) return false;
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++)
     for (const o of architectureBlockersB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)])
-      if (map[o.ownerCell] === o.ownerHeight && o.kind !== 'step' && architectureContains(o, x, y, pad)) return true;
+      if (map[o.ownerCell] === o.ownerHeight && o.kind !== 'step' && !(o.z1 < .3 && feet >= o.z1 - .004) && architectureContains(o, x, y, pad)) return true;
   return false;
 }
 function architectureCarClear(x, y, hx, hy, hl, hw) {

@@ -436,7 +436,7 @@ function quarterPipeShade(i, t, L) {
   BG[i] = C(BRICK, (1.4 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the framed side panels
 }
 const quarterPipe = (x, y, hw) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox({ ...boxAt(vx, vy, 1, 0, QP_LEN / 2, hw, 0, QP_TOP), quarterPipe: true }, quarterPipeShade, quarterPipeRay);
+  drawBox({ ...boxAt(vx, vy, 1, 0, QP_LEN / 2, hw, .001, QP_TOP + .001), quarterPipe: true }, quarterPipeShade, quarterPipeRay);
   rod(vx + QP_LEN / 2, vy - hw, QP_TOP + 0.02, vx + QP_LEN / 2, vy + hw, QP_TOP + 0.02, 0.03, GRAY, 1.6); // the coping
   BXD(vx + QP_LEN / 2 + 0.25, vy, 0.25, hw, 0, QP_TOP, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WARM : BRICK, (1.4 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }); // the deck behind it
 }, [0.85, 1.3, 1]);

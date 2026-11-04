@@ -106,7 +106,7 @@ test('skating: each push lands with a scuff, a dragged foot scrapes, a wall scra
       const clock = s => { const t0 = actx.currentTime; return new Promise(res => { const wait = () => actx.currentTime > t0 + s ? res() : setTimeout(wait, 20); wait(); }); };
       await new Promise(res => { const wait = () => synth.board.src ? res() : setTimeout(wait, 20); wait(); });
       audioTick(1 / 30); await clock(.4); const fast = synth.board.src.playbackRate.value;
-      const v0 = SK.v; SK.v = .15; audioTick(1 / 30); await clock(.4); const slow = synth.board.src.playbackRate.value; SK.v = v0;
+      const v0 = SK.v; SK.v = .025; audioTick(1 / 30); await clock(.4); const slow = synth.board.src.playbackRate.value; SK.v = v0;
       heard.length = 0; ride(20, { KeyS: 1 }); const drags = count('drag');
       // into the wall of the nearest building, at an angle, at speed
       let wall = null;

@@ -13,7 +13,7 @@ SOLID_SHADE.skateledge = o => (i, t, L) => {
   if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
   const fine = coveDetail(t, .05), fleck = hash(Math.floor((o.x + HIT.u) * 160), Math.floor(HIT.w * 160 + HIT.v * 160), 2101) * fine;
   const scuff = !top && HIT.w < o.z1 * .45 ? .5 : 0;
-  BG[i] = C(STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
+  BG[i] = C(o.material === 'wood' ? BRICK : STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
 };
 // the manual pad: poured concrete, steel angle on its long edges, a joint across the middle
 SOLID_SHADE.manualpad = o => (i, t, L) => {
