@@ -27,9 +27,10 @@ function skateSurface(x, y, zHint) {
     for (const o of skateSurfaceCells.get(Math.floor(x) + ',' + Math.floor(y)) || []) {
       const qx = rel(x - o.x), qy = rel(y - o.y), u = qx * o.c + qy * o.s;
       if (Math.abs(u) > o.hl || Math.abs(-qx * o.s + qy * o.c) > o.hw) continue;
-      const top = o.ramp ? rampHeight(o, u) : o.z1;
+      const top = o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1;
       if (Math.abs(top - h) > .001) continue; // a higher city surface owns contact
       ref = o; kind = o.ramp || o.kind; material = o.material || 'concrete';
+      if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-o.c * at.tz, -o.s * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
       const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? o.z1 / (2 * o.hl)
         : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * o.z1 / o.run;
       gx = slope * o.c; gy = slope * o.s;
@@ -43,8 +44,9 @@ function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
   SKB.riderYaw = a; SKB.stance = SK.stance;
   if (!skateAir()) SKB.yaw = a;
-  SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : skateAir() ? 'air' : SK.manual ? 'manual' : 'ground';
-  if (SKB.contact !== 'ground' && SKB.contact !== 'manual') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
+  SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : SK.transition ? 'transition' : skateAir() ? 'air' : SK.manual ? 'manual' : 'ground';
+  if (SKB.contact === 'grind' && SK.grind.exitVelocity) SKB.v = SK.grind.exitVelocity.slice();
+  else if (SKB.contact !== 'ground' && SKB.contact !== 'manual' && SKB.contact !== 'transition') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
 }
 function skateGroundVelocity(dt, push, brake, steer) {
   const surf = SKB.surf = skateSurface(px, py), n = surf.n;

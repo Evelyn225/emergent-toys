@@ -8,6 +8,7 @@ let grindsB = [];
 // built once the city is in its final place (world-bootstrap.js): the park block, its features and every grind edge
 function buildSkatepark() {
   GRINDS.length = SKATE_FEATURES.length = 0;
+  if (typeof SK_TRANSITIONS !== 'undefined') SK_TRANSITIONS.length = 0;
   if (typeof skateSurfaceReset === 'function') skateSurfaceReset();
   const park = parks.find(([bx, by]) => bx === 13 && by === 34);
   SKATEPARK = park ? { bx: 13, by: 34, x0: 2.4, y0: 2.3, x1: 7.85, y1: 7.85 } : null; // (most of the park block: the benches round it stay, to grind)
@@ -47,6 +48,7 @@ function buildSkatepark() {
     for (const side of [-1, 1]) { const ex = box.x - box.s * side * box.hw, ey = box.y + box.c * side * box.hw, d = box.hl - box.run;
       GRINDS.push({ ax: ex - box.c * d, ay: ey - box.s * d, bx: ex + box.c * d, by: ey + box.s * d, z: box.z1, material: 'metal', kind: 'skateledge', feature: box }); }
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
+    if (typeof addSkateTransition === 'function') addSkateTransition(ox + 6.0, oy + 7.4);
   }
   // a bench's seat front: 1.5 m of timber at 45 cm, facing out
   for (const b of benches) {
@@ -62,7 +64,7 @@ function skateparkGround(x, y) {
   let top = 0;
   for (const o of SKATE_FEATURES) {
     const qx = x - o.x, qy = y - o.y, u = qx * o.c + qy * o.s;
-    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.ramp ? rampHeight(o, u) : o.z1);
+    if (Math.abs(u) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw) top = Math.max(top, o.profile ? skateProfileHeight(o, u) : o.ramp ? rampHeight(o, u) : o.z1);
   }
   return top;
 }

@@ -91,7 +91,7 @@ function standUp() { // back where you sat down from (it was walkable)
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
   const ground = mode === 'walk' ? walkGround(px, py) : 0;
-  if (typeof skateGrinding === 'function' && skateGrinding() && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
+  if (typeof skateGrinding === 'function' && (skateGrinding() || SK.transition) && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
   const wasAir = body.z > 0 || body.vz > 0; // (in the air coming into this frame: you land this frame or later, never get skipped)
   if (body.groundMode === mode && wasAir) body.z += ((body.ground || 0) - ground) * 10;
   if (body.vz > 0 && body.z < 0) body.z = 0; // (still going up: rising ground under you can't land you, it lifts you with it)
