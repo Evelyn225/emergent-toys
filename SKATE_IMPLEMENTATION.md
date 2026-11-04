@@ -2,8 +2,9 @@
 
 Implemented locally from the plan supplied on 4 November 2026. Base: `9665098`
 (the enlarged skatepark). Each phase has a local branch and commit checkpoint;
-the final branch is `codex/skate-phase-8`. These changes have not been pushed or
-opened as PRs.
+the phase-series branch is `codex/skate-phase-8`. The phase branches are pushed
+to origin; `codex/multiple-skateparks` includes the complete series and additional
+parks, with an integration PR targeting main.
 
 | Phase | Implementation |
 | --- | --- |
