@@ -29588,6 +29588,7 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
+  if (SKATEPARK) land.push(['Skatepark', () => { const S = SKATEPARK, x = S.bx * 8 + (S.x0 + S.x1) / 2; devAt(x, S.by * 8 + S.y0 + 0.15, Math.PI / 2); }]); // (at the park's edge, looking across it)
   if (BACKROOMS_SEAM) land.push(['Backrooms entrance', () => devAt(BACKROOMS_SEAM.x - 0.4, BACKROOMS_SEAM.y, 0)]); // (in the lane, facing the seam: walk forward to go through)
   if(FERRY_STOPS.length) {
     land.push(['Island ferry terminal',()=>devAt(...FERRY_STOPS[0].land,Math.PI/2)]);
@@ -34823,44 +34824,64 @@ function nearWorkshopBench() {
   return workshopState(home).parts.filter(p => WORKSHOP_PARTS[p.id].halfX && Math.hypot(p.x - px, p.y - py) < 1.9 &&
     (p.x - px) * Math.cos(a) + (p.y - py) * Math.sin(a) > .15).sort((p,q) => Math.hypot(p.x-px,p.y-py)-Math.hypot(q.x-px,q.y-py))[0] || null;
 }
-function openWorkshop() {
+// The workbench menu, in three tabs so it isn't one long list: Workshop (what you've set up and what to do with it),
+// Buy (Mara's supplies and upgrades), How it works. It opens on Workshop once you have anything, on Buy before.
+let workshopTab = null;
+function openWorkshop(tab) {
   const home = workshopHome(); if (!home) return;
   const w = workshopState(home);
   workshopEl ||= panel('workshop');
-  const available = Object.entries(WORKSHOP_PARTS).map(([id, d]) => {
-    const remaining = w.owned[id] - w.parts.filter(p => p.id === id).length;
-    return remaining > 0 ? `<button class="item" data-place="${id}"><span>Place ${d.name}</span><span class="lead"></span><span class="v">${remaining} packed</span></button>` : '';
-  }).join('');
-  const benches = w.parts.filter(p => p.id === 'bench').map((b, n) => {
-    const names = w.parts.filter(p => p.bench === b.key).map(p => WORKSHOP_PARTS[p.id].name).join(', ') || 'empty tabletop';
-    return `<p class="sub">Bench ${n+1}: ${names}</p><button class="item" data-run="${b.key}" ${workshopCanRun(home,b) ? 'disabled' : ''}>Run a 32-second batch</button><button class="item" data-pack="${b.key}">Pack up bench ${n+1} and its equipment</button>`;
-  }).join('');
-  const upgrades=Object.entries(WORKSHOP_UPGRADES).map(([id,u])=>`<button class="item" data-upgrade="${id}" ${w.upgrades[id]||money<u.price?'disabled':''}><span>${cap(u.name)}<br><small>${u.description}</small></span><span class="lead"></span><span class="v">${w.upgrades[id]?'installed':fmt$(u.price)}</span></button>`).join('');
-  const racks=w.parts.filter(p=>p.id==='growrack').map((p,n)=>{
-    let status='empty', action=`<button class="item" data-plant="${p.key}" ${!w.powered||!w.seeds?'disabled':''}>Plant a seed pod</button>`;
-    if (p.crop) {
-      status=p.crop.left===0?'ready to harvest':`${Math.ceil(p.crop.left/(w.upgrades.lamp?1.5:1))}s left${w.powered?'':' (power off)'}${p.crop.tended?' · tended':''}`;
-      action=p.crop.left===0?`<button class="item" data-harvest="${p.key}">Harvest weed</button>`:`<button class="item" data-tend="${p.key}" ${p.crop.left>50||p.crop.tended?'disabled':''}>Tend for premium quality</button>`;
-    }
-    return `<p class="sub">Grow rack ${n+1}: ${status}</p>${action}<button class="item" data-pack="${p.key}" ${p.crop?'disabled':''}>Pack up empty rack ${n+1}</button>`;
-  }).join('');
-  showPanel(workshopEl, `<h1>Apartment workshop</h1><p class="sub">${fmt$(money)} &middot; ${w.supplies} Neon refills &middot; ${w.seeds} seed pods &middot; power ${w.powered ? 'connected' : 'unplugged'}</p>
-    <p class="sub">Make Neon on a workbench or grow weed on a rack. Place furniture in the open area by the entrance and connect power. Carried stock guarantees a buyer; closet stock sometimes attracts one too. Q / left click uses a pack yourself.</p>
-    <h2>Mara's order book</h2>
-    <button class="item" data-call-supplier>Meet Mara outside &middot; supplies and equipment</button>
-    <button class="item" data-kit ${w.owned.bench >= 3 || money < WORKSHOP_KIT_PRICE ? 'disabled' : ''}>Starter crate &middot; 3 pieces + 3 batches<span class="lead"></span><span class="v">${fmt$(WORKSHOP_KIT_PRICE)}</span></button>
-    <button class="item" data-refill ${money < WORKSHOP_REFILL_PRICE ? 'disabled' : ''}>Five refill cartridges<span class="lead"></span><span class="v">${fmt$(WORKSHOP_REFILL_PRICE)}</span></button>
-    <button class="item" data-fan ${money < WORKSHOP_FAN_PRICE || w.owned.fan >= 3 ? 'disabled' : ''}>Cooling fan &middot; wider safe range<span class="lead"></span><span class="v">${fmt$(WORKSHOP_FAN_PRICE)}</span></button>
-    <button class="item" data-rack ${money<WEED_RACK_PRICE||w.owned.growrack>=3?'disabled':''}>Grow rack + 3 seed pods<span class="lead"></span><span class="v">${fmt$(WEED_RACK_PRICE)}</span></button>
-    <button class="item" data-seeds ${money<WEED_SEEDS_PRICE?'disabled':''}>Five seed pods<span class="lead"></span><span class="v">${fmt$(WEED_SEEDS_PRICE)}</span></button>
-    <button class="item" data-power ${!w.parts.some(p=>p.id==='processor'||p.id==='growrack') ? 'disabled' : ''}>${w.powered ? 'Unplug equipment' : 'Connect equipment to power'}</button>
-    <h2>upgrades</h2>${upgrades}
-    ${available ? '<h2>in the crate</h2>' + available : ''}${benches ? '<h2>your benches</h2>' + benches : ''}
-    ${racks?'<h2>your grow racks</h2>'+racks:''}
-    <p class="hint">E / Esc close. Neon: hold SPACE for power, UP vent, DOWN seal. Weed: 75 seconds of powered growth (50 with lamps); tend after sprouting for premium quality. Harvest when ready. Power off pauses growth.</p>`);
+  const hasAny = w.parts.length || Object.keys(WORKSHOP_PARTS).some(id => w.owned[id] > 0);
+  if (tab) workshopTab = tab; else if (workshopEl.style.display !== 'flex' || !workshopTab) workshopTab = hasAny ? 'work' : 'buy';
+  const row = (...buttons) => `<div class="wsrow">${buttons.join('')}</div>`;
+  const btn = (attrs, label, off = false) => `<button class="item" ${attrs} ${off ? 'disabled' : ''}>${label}</button>`;
+  const priced = (attrs, label, price, off, note = '') => `<button class="item" ${attrs} ${off ? 'disabled' : ''}><span>${label}${note ? `<br><small>${note}</small>` : ''}</span><span class="lead"></span><span class="v">${price}</span></button>`;
+  let body = '';
+  if (workshopTab === 'work') {
+    const place = Object.entries(WORKSHOP_PARTS).map(([id, d]) => {
+      const left = w.owned[id] - w.parts.filter(p => p.id === id).length;
+      return left > 0 ? btn(`data-place="${id}"`, `${cap(d.name)}${left > 1 ? ` &times;${left}` : ''}`) : '';
+    }).join('');
+    const powered = w.parts.some(p => p.id === 'processor' || p.id === 'growrack');
+    const stations = [
+      ...w.parts.filter(p => p.id === 'bench').map((b, n) => {
+        const kit = w.parts.filter(p => p.bench === b.key).map(p => WORKSHOP_PARTS[p.id].name).join(', ') || 'empty';
+        const why = workshopCanRun(home, b);
+        return `<div class="wsst"><b>Bench ${n + 1}</b> <small>${kit}${why ? ` &middot; ${why}` : ''}</small>${row(btn(`data-run="${b.key}"`, 'Run a batch', !!why), btn(`data-pack="${b.key}"`, 'Pack up'))}</div>`;
+      }),
+      ...w.parts.filter(p => p.id === 'growrack').map((p, n) => {
+        const c = p.crop, status = !c ? 'empty' : c.left === 0 ? 'ready to harvest' : `${Math.ceil(c.left / (w.upgrades.lamp ? 1.5 : 1))}s left${w.powered ? '' : ' (no power)'}${c.tended ? ' &middot; tended' : ''}`;
+        const act = !c ? btn(`data-plant="${p.key}"`, 'Plant a seed', !w.powered || !w.seeds) : c.left === 0 ? btn(`data-harvest="${p.key}"`, 'Harvest') : btn(`data-tend="${p.key}"`, 'Tend', c.left > 50 || c.tended);
+        return `<div class="wsst"><b>Grow rack ${n + 1}</b> <small>${status}</small>${row(act, btn(`data-pack="${p.key}"`, 'Pack up', !!c))}</div>`;
+      })].join('');
+    body = `${stations || '<p class="sub">Nothing set up yet. Place something from the crate below, or buy a starter crate.</p>'}
+      ${place ? `<h2>to place</h2>${row(place)}` : ''}
+      ${powered ? `<h2>power</h2>${btn('data-power', w.powered ? 'Unplug everything' : 'Plug everything in')}` : ''}`;
+  } else if (workshopTab === 'buy') {
+    const ups = Object.entries(WORKSHOP_UPGRADES).map(([id, u]) => priced(`data-upgrade="${id}"`, cap(u.name), w.upgrades[id] ? 'installed' : fmt$(u.price), w.upgrades[id] || money < u.price, u.description)).join('');
+    body = `<h2>neon</h2>
+      ${priced('data-kit', 'Starter crate', fmt$(WORKSHOP_KIT_PRICE), w.owned.bench >= 3 || money < WORKSHOP_KIT_PRICE, 'A bench, processor and press, plus 3 batches')}
+      ${priced('data-refill', 'Refill cartridges &times;5', fmt$(WORKSHOP_REFILL_PRICE), money < WORKSHOP_REFILL_PRICE)}
+      ${priced('data-fan', 'Cooling fan', fmt$(WORKSHOP_FAN_PRICE), money < WORKSHOP_FAN_PRICE || w.owned.fan >= 3, 'A wider safe range while cooking')}
+      <h2>weed</h2>
+      ${priced('data-rack', 'Grow rack', fmt$(WEED_RACK_PRICE), money < WEED_RACK_PRICE || w.owned.growrack >= 3, 'Comes with 3 seed pods')}
+      ${priced('data-seeds', 'Seed pods &times;5', fmt$(WEED_SEEDS_PRICE), money < WEED_SEEDS_PRICE)}
+      <h2>upgrades</h2>${ups}
+      ${btn('data-call-supplier', 'Meet Mara outside instead')}`;
+  } else {
+    body = `<p class="sub"><b>Neon:</b> place a bench with a processor and a press on it, plug in, and run a batch. Hold SPACE for power, UP to vent, DOWN to seal; keep the heat in the safe band.</p>
+      <p class="sub"><b>Weed:</b> plant a seed pod on a powered rack. It grows in 75 seconds (50 with grow lamps); tend it once it sprouts for premium quality, then harvest. Unplugging pauses it.</p>
+      <p class="sub"><b>Selling:</b> carry packs out and a buyer finds you; stock kept in the closet sometimes draws one too. Q / left click uses a pack yourself.</p>`;
+  }
+  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}">${l}</button>`).join('');
+  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:none;border:0;color:inherit;opacity:.55;font:inherit;cursor:pointer;padding:2px 0}#workshop .tab.on{opacity:1;text-decoration:underline}
+    #workshop .wsst{margin:8px 0 12px}#workshop .wsrow{display:flex;gap:8px;flex-wrap:wrap}#workshop .wsrow .item{width:auto;flex:1 1 auto}</style>
+    <h1>Workshop</h1><p class="sub">${fmt$(money)} &middot; ${w.supplies} refills &middot; ${w.seeds} seed pods &middot; power ${w.powered ? 'on' : 'off'}</p>
+    <div class="tabs">${tabs}</div>${body}<p class="hint">E / Esc close</p>`);
   workshopEl.onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     let result;
+    if (b.dataset.wstab) return openWorkshop(b.dataset.wstab);
     if (b.hasAttribute('data-call-supplier')) return callWorkshopSupplier();
     if (b.hasAttribute('data-kit')) result = orderWorkshopSupply(home,'kit');
     if (b.hasAttribute('data-refill')) result = orderWorkshopSupply(home,'refill');
@@ -34880,7 +34901,8 @@ function openWorkshop() {
       w.parts = w.parts.filter(p=>p.key!==key && p.bench!==key); refreshWorkshopRoom();
     }
     if (result) say(result[1], 5);
-    refreshWorkshopRoom();updateDrugBuyer();saveGame(); openWorkshop();
+    if (result?.[0] && (b.hasAttribute('data-kit') || b.hasAttribute('data-rack') || b.hasAttribute('data-fan'))) workshopTab = 'work'; // (bought something to set up: over to where you place it)
+    refreshWorkshopRoom();updateDrugBuyer();saveGame(); openWorkshop(workshopTab);
   };
 }
 function beginWorkshopPlacement(id) {

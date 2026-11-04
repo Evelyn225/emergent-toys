@@ -28,8 +28,8 @@ async function fixture(fn,mobile=false) {
 
 test('weed can be bought, placed, tended, saved, harvested and sold through the real apartment controls',()=>fixture(async page=>{
   await page.evaluate(()=>openWorkshop());await page.locator('[data-rack]').click();
-  await page.locator('[data-upgrade="lamp"]').click();
-  await page.locator('[data-place="growrack"]').click();
+  await page.locator('[data-wstab="buy"]').click();await page.locator('[data-upgrade="lamp"]').click(); // (buying the rack took you to the Workshop tab to place it)
+  await page.locator('[data-wstab="work"]').click();await page.locator('[data-place="growrack"]').click();
   const valid=await page.evaluate(()=>{px=3.75;py=13;a=-Math.PI/2;return workshopCandidate().ok;});assert.equal(valid,true);
   await page.keyboard.press('KeyQ');await page.keyboard.press('KeyE');
   assert.equal(await page.evaluate(()=>roomOpen(3.75,11.25)),false);
