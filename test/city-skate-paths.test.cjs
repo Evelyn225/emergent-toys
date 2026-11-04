@@ -40,3 +40,18 @@ test('nearest path height interpolates in 3D and families follow board and stick
   ["grindFamily(1.5,'skateledge',0,0)",'lipslide'],["grindFamily(1.5,'handrail',0,1)",'tailslide']
  ])assert.equal(ev(expr),name);
 });
+
+test('a coping grind clears the bowl bank on capture and stays upright',()=>{
+ const {ev}=setup([[0,0,.1],[2,0,.1]]);
+ ev("SKB.roll=1.5;SKB.pitch=.9;SK.transition={o:{bowl:true}};SK.airPose={};SK.airNormal=[1,0,0];startPathGrind(path,0,1);");
+ assert.equal(ev('SKB.roll'),0);assert.equal(ev('SK.transition'),null);
+ assert.deepEqual(Array.from(ev('SK.airNormal')),[0,0,1]);
+ ev('stepPathGrind(1/60);');assert.ok(Math.abs(ev('SKB.roll'))<.1);
+});
+test('a bowl launch cannot be stolen by its coping; rising hops never catch',()=>{
+ const {ev}=setup([[0,0,.1],[2,0,.1]]);
+ ev("SK.grind=null;path.kind='coping';path.feature={bowl:true};SK.airSource=path.feature;body.z=1;body.vz=-1;skatePathCatch();");
+ assert.equal(ev('SK.grind'),null);
+ ev('SK.airSource=null;body.vz=1;skatePathCatch();');assert.equal(ev('SK.grind'),null);
+ ev('body.vz=-1;skatePathCatch();');assert.ok(ev('SK.grind'));
+});

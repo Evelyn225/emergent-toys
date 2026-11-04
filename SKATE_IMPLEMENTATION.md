@@ -134,3 +134,33 @@ Validation: all skating Node tests and bundle freshness; 13 skating browser
 regressions; 11 activity/reported-fix browser regressions; final focused pool,
 transition and rider-pose browser checks. Physical gamepad feel still needs a
 human playtest.
+
+## Coping and air regression follow-up
+
+Coping capture now resets the previous bowl bank, pitch and airborne rider
+normal; grind balance adds only a small roll. A grind's contact state no longer
+counts as airborne merely because its wheels are above the heightfield.
+
+Each new flight captures its own orientation, including rolling off a lip or
+rail. The first 100 ms retain the takeoff frame. Over the next 320 ms the base
+board frame prepares for the predicted landing plane, while flip/shuv rotation,
+catch timing and requested body spins remain separate. Without a requested
+spin, a small yaw correction follows projected travel (including switch).
+This allows a banked pop to return to a wall or land on the flat deck without
+holding the takeoff bank indefinitely.
+
+The coping belonging to the launch transition cannot steal that same flight.
+Other coping catches require a closer, more parallel approach; ascending hops
+cannot catch. Separate deliberate approaches and ordinary rail/ledge grinds
+still work.
+
+Heightfield normal sampling rejects step discontinuities and impossible steep
+faces on generic terrain, while analytic ramps and transitions retain their
+true normals. The real bowl stair corners are sampled in a browser regression
+to ensure ordinary cruising cannot manufacture extreme vertical velocity. The
+reported rare corner launch has not been reproduced exactly.
+
+Validation: 43 Node tests; nine targeted browser cases for grinds, banked pops,
+ramps, landing and rendering; three final browser cases for camera, bowl access,
+and coping/stair corners. Isolated mutations removing the bank reset, launch
+coping protection or landing-frame preparation each fail their regressions.

@@ -36052,6 +36052,7 @@ function buildGrindPaths() {
 }
 function skatePathCatch() {
   const feet = skateGround(px, py) + body.z / 10, air = skateAir();
+  if(SK.transition||air&&body.vz>0)return;
   let best = null;
   for (let by = -1; by <= 1; by++) for (let bx = -1; bx <= 1; bx++)
     for (const seg of grindPathBuckets.get((Math.floor(px / 8) + bx) + ',' + (Math.floor(py / 8) + by)) || []) {
@@ -36060,11 +36061,12 @@ function skatePathCatch() {
       // Kerbs need an intentional hop; simply carving down a street must not
       // stick the skater to its painted-height pavement edge.
       if (!air && (path.kind === 'kerb' || path.kind === 'bench')) continue;
+      if(path.kind==='coping'&&air&&SK.airSource===path.feature)continue;
       const q = grindPathNearest(seg, px, py);
-      if (q.gap > .08 || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
+      if (q.gap > (path.kind==='coping' ? .025 : .08) || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
       const hl = Math.hypot(seg.d[0], seg.d[1]);
       const along = (Math.cos(SK.dir) * seg.d[0] + Math.sin(SK.dir) * seg.d[1]) / hl;
-      if (Math.abs(along) < .5 || !hl) continue;
+      if (Math.abs(along) < (path.kind==='coping'?Math.cos(Math.PI/7):.5) || !hl) continue;
       if (!best || q.gap < best.q.gap) best = { seg, path, q, dir: Math.sign(along) };
     }
   if (best) startPathGrind(best.path, best.q.distance, best.dir);
@@ -36083,6 +36085,9 @@ function startPathGrind(path, distance, dir) {
     name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, scrapeT: 0, boardOff: a - angle - (dir < 0 ? Math.PI : 0) };
   px = at.p[0]; py = at.p[1]; SK.dir = angle + (dir < 0 ? Math.PI : 0);
   SK.v = SK.grind.speed; body.trick = null; body.vz = 0; SK.spin = 0;
+  SK.transition=null;SK.manual=null;SK.airPose=null;SK.airSource=null;SK.airNormal=[0,0,1];
+  SKB.roll=0;SKB.pitch=Math.atan2(at.tangent[2]*dir,Math.hypot(at.tangent[0],at.tangent[1]));
+  SKB.yaw=a;SKB.surf={h:at.p[2],n:[0,0,1],kind:'grind',material:path.material,ref:path};
   body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
   if (actx) sfxSkate('scrape', .9); say(name.toUpperCase() + '!', 1);
 }
@@ -36105,6 +36110,7 @@ function stepPathGrind(dt) {
   px = worldCoord(next.p[0]); py = worldCoord(next.p[1]); G.top = next.p[2]; G.t = G.distance / G.path.length;
   SK.dir = Math.atan2(next.tangent[1], next.tangent[0]) + (G.dir < 0 ? Math.PI : 0); a = SK.dir + G.boardOff;
   SKB.pitch = Math.atan2(next.tangent[2] * G.dir, Math.hypot(next.tangent[0], next.tangent[1]));
+  SKB.roll=clamp(G.bal,-1,1)*.08;SKB.yaw=a;
   body.z = Math.max(.001, (G.top - skateGround(px, py)) * 10); body.vz = 0;
   G.exitVelocity = next.tangent.map(v => v * G.speed * G.dir);
   if (G.distance < 0 || G.distance > G.path.length || G.speed < .05) return endGrind();
@@ -36227,8 +36233,12 @@ let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }
 function skateSurface(x, y, zHint) {
   const h = skateGround(x, y), e = .02;
-  let gx = (skateGround(worldCoord(x + e), y) - skateGround(worldCoord(x - e), y)) / (2 * e);
-  let gy = (skateGround(x, worldCoord(y + e)) - skateGround(x, worldCoord(y - e))) / (2 * e);
+  const xp=skateGround(worldCoord(x+e),y),xm=skateGround(worldCoord(x-e),y);
+  const yp=skateGround(x,worldCoord(y+e)),ym=skateGround(x,worldCoord(y-e));
+  // A kerb/ledge is a step, not a steep bank across the finite-difference
+  // sample. Continuous park ramps provide their own exact normals below.
+  let gx=Math.abs(xp+xm-2*h)>.004?0:(xp-xm)/(2*e);
+  let gy=Math.abs(yp+ym-2*h)>.004?0:(yp-ym)/(2*e);
   let ref = null, kind = mode === 'roof' ? 'roof' : 'street', material = mode === 'roof' ? 'concrete' : typeof ROAD !== 'undefined' && !ROAD[idx(Math.floor(x),Math.floor(y))] ? 'grass' : 'asphalt';
   if (mode !== 'roof' && typeof SKATE_FEATURES !== 'undefined') {
     if (skateSurfaceCount !== SKATE_FEATURES.length) {
@@ -36257,6 +36267,10 @@ function skateSurface(x, y, zHint) {
     }
     if (!ref && typeof inSkatepark === 'function' && (inSkatepark(x, y) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(x,y))) material = 'concrete';
   }
+  // Generic terrain has no vertical rideable faces. A stair corner can put
+  // the two samples on different decks and otherwise imply a huge launch
+  // speed. Real steep transitions have already returned analytic normals.
+  if(!ref&&Math.hypot(gx,gy)>1){gx=0;gy=0;}
   const len = Math.hypot(gx, gy, 1);
   return { h, n: [-gx / len, -gy / len, 1 / len], kind, material, ref };
 }
@@ -36325,6 +36339,7 @@ function skateSurfaceExit(x0, y0, dt) {
   if (skateAir() || !SKB.surf || SK.v < .01) return;
   const expected = SKB.surf.h + SKB.v[2] * dt, ground = skateGround(px, py);
   if (expected - ground > .008) {
+    skateAirBegin(SKB.surf.ref);
     body.z = Math.max(.001, (expected - ground) * 10);
     body.vz = SKB.v[2] * 10;
     body.ground = ground; body.groundMode = mode;
@@ -36361,13 +36376,53 @@ function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
   const axis=f.map((v,i)=>v*c+r[i]*s),right=r.map((v,i)=>v*c-f[i]*s);
   return {axis,up:u.map((v,i)=>v*Math.cos(flip)+right[i]*Math.sin(flip))};
 }
+// Each flight owns its takeoff frame; grinds and old bowl runs cannot leak
+// their orientation into a later kerb hop. Preserve the pop, then prepare for
+// the surface below the predicted touchdown without changing trick rotation.
+function skateAirBegin(source = null) {
+  const up=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).up;
+  SK.airPose={t:T,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
+  SK.airNormal=up.slice();SK.airSource=source;
+}
+function skateAirBase(dt,pitch,roll) {
+  const pose=SK.airPose;
+  if(!pose)return {pitch,roll};
+  const height=Math.max(0,body.z/10),vz=body.vz/10;
+  const flight=clamp((vz+Math.sqrt(vz*vz+2*.98*height))/.98,0,1.2);
+  const x=worldCoord(px+Math.cos(SK.dir)*SK.v*flight),y=worldCoord(py+Math.sin(SK.dir)*SK.v*flight);
+  const surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
+  const target=hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n,ease=1-Math.exp(-14*dt);
+  pose.normal=pose.normal.map((v,i)=>v+(target[i]-v)*ease);
+  const length=Math.hypot(...pose.normal)||1,n=pose.normal.map(v=>v/length);
+  const blend=clamp((T-pose.t-.10)/.32,0,1),smooth=blend*blend*(3-2*blend);
+  // With no requested body spin, catch toward travel in the landing plane.
+  // Choose the nearer forward/switch axis so a vert return does not turn 180.
+  if(Math.abs(SK.spin||0)<.05&&!K.KeyA&&!K.KeyD&&!SK_INPUT.steer){
+    const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
+    const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
+    if(Math.hypot(travel[0],travel[1])>1e-4){
+      const delta=mod(Math.atan2(travel[1],travel[0])-a+Math.PI/2,Math.PI)-Math.PI/2;
+      a+=delta*ease*smooth;
+    }
+  }
+  const wantPitch=Math.atan2(-(n[0]*Math.cos(a)+n[1]*Math.sin(a)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(a,wantPitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
+  const dot=(v,w)=>v.reduce((s,k,i)=>s+k*w[i],0);
+  const wantRoll=Math.atan2(dot(n,right),dot(n,neutral));
+  const angle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from))*smooth;
+  const base={pitch:angle(pitch,wantPitch),roll:angle(roll,wantRoll)};
+  SK.airNormal=skateBoardAxes(a,base.pitch,base.roll).up;
+  return base;
+}
 function skateAirPose(dt = 0) {
   const tr = body.trick;
   SKB.riderYaw = a;
-  if (!tr) { SKB.yaw = a; return; }
+  if (!tr) { const base=skateAirBase(dt,SK.airPose?.pitch??SKB.pitch,SK.airPose?.roll??SKB.roll);SKB.yaw=SKB.riderYaw=a;SKB.pitch=base.pitch;SKB.roll=base.roll;return; }
   const duration = tr.duration ?? tr.air, p = clamp(tr.t / duration, 0, 1), e = p * p * (3 - 2 * p);
-  const popPitch=(tr.pitch || 0)+Math.sin(Math.min(1,p*4)*Math.PI)*.35*(tr.nollie?-1:1);
-  const frame=skateTrickAxes(a,popPitch,tr.baseRoll||0,e*tr.flip*Math.PI*2,e*tr.turn*Math.PI*2);
+  const base=skateAirBase(dt,tr.pitch||0,tr.baseRoll||0);
+  SKB.riderYaw=a;
+  const popPitch=base.pitch+Math.sin(Math.min(1,p*4)*Math.PI)*.35*(tr.nollie?-1:1);
+  const frame=skateTrickAxes(a,popPitch,base.roll,e*tr.flip*Math.PI*2,e*tr.turn*Math.PI*2);
   SKB.yaw=Math.atan2(frame.axis[1],frame.axis[0]);SKB.pitch=Math.asin(clamp(frame.axis[2],-1,1));
   const neutral=skateBoardAxes(SKB.yaw,SKB.pitch,0),rightAxis=[-Math.sin(SKB.yaw),Math.cos(SKB.yaw),0];
   const dot=(x,y)=>x.reduce((v,n,i)=>v+n*y[i],0);
@@ -36492,7 +36547,7 @@ function skateTransitionPlace(C) {
 }
 function skateTransitionRelease(C, coping = false) {
   const v = SKB.v.slice(), at = skateProfilePoint(C.o.profile, C.u);
-  SK.airNormal=SKB.surf.n.slice();
+  skateAirBegin(C.o);
   // The coping rounds the last few degrees of the mini's truncated quarter
   // into a vertical takeoff. Preserve energy and axis motion for the return.
   if (coping) { v[0] = -(C.o.bowl ? Math.sin(C.axis) : C.o.s) * C.va; v[1] = (C.o.bowl ? Math.cos(C.axis) : C.o.c) * C.va; v[2] = Math.abs(C.vs); }
@@ -36852,7 +36907,7 @@ const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false
   trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
-const skateAir = () => !SK.transition && (body.z > 0 || body.vz > 0);
+const skateAir = () => !SK.transition && !SK.grind && (body.z > 0 || body.vz > 0);
 const skateGround = (x, y) => mode === 'roof' ? roofH : walkGround(x, y); // (the street, or the roof you're rolling across)
 // the arrows held down, as a TRICKS key (moves.js)
 function arrowTrick() {
@@ -36864,7 +36919,7 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
-  Object.assign(SK,{transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0});
+  Object.assign(SK,{transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null});
   skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];
 }
 
@@ -36922,7 +36977,7 @@ function skatePop(trick, gesture) {
   if (SK.grind) return grindPop(trick, gesture); // (the touch Ollie button, or a flick, on a rail)
   if (SK.bail > 0 || skateAir()) return;
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
-  SK.airNormal=(SKB.surf?.n||[0,0,1]).slice();
+  skateAirBegin();
   skateManualEnd();
   SK.charge = -1; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
   SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
@@ -36996,6 +37051,7 @@ const grindPoints = G => Math.round((GRIND_POINTS[G.name] || 100) + (T - G.t0) *
 function endGrind() { // into the combo; off you go, and down
   const G = SK.grind, c = SK.combo ||= { names: [], pts: 0, t: T };
   SK.grind = null; c.names.push(G.name.toUpperCase()); c.pts += grindPoints(G); c.t = T; SK.offGrind = true; SK.leftGrind = G.g; SK.leftGrindT = T;
+  skateAirBegin();
   body.z = Math.max(body.z, .02); body.vz = (G.exitVelocity?.[2] || 0) * 10;
   say(`${c.names.join(' + ')}  ${c.pts} x ${c.names.length}`, 2);
 }

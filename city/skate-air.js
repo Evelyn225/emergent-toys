@@ -28,13 +28,53 @@ function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
   const axis=f.map((v,i)=>v*c+r[i]*s),right=r.map((v,i)=>v*c-f[i]*s);
   return {axis,up:u.map((v,i)=>v*Math.cos(flip)+right[i]*Math.sin(flip))};
 }
+// Each flight owns its takeoff frame; grinds and old bowl runs cannot leak
+// their orientation into a later kerb hop. Preserve the pop, then prepare for
+// the surface below the predicted touchdown without changing trick rotation.
+function skateAirBegin(source = null) {
+  const up=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).up;
+  SK.airPose={t:T,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
+  SK.airNormal=up.slice();SK.airSource=source;
+}
+function skateAirBase(dt,pitch,roll) {
+  const pose=SK.airPose;
+  if(!pose)return {pitch,roll};
+  const height=Math.max(0,body.z/10),vz=body.vz/10;
+  const flight=clamp((vz+Math.sqrt(vz*vz+2*.98*height))/.98,0,1.2);
+  const x=worldCoord(px+Math.cos(SK.dir)*SK.v*flight),y=worldCoord(py+Math.sin(SK.dir)*SK.v*flight);
+  const surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
+  const target=hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n,ease=1-Math.exp(-14*dt);
+  pose.normal=pose.normal.map((v,i)=>v+(target[i]-v)*ease);
+  const length=Math.hypot(...pose.normal)||1,n=pose.normal.map(v=>v/length);
+  const blend=clamp((T-pose.t-.10)/.32,0,1),smooth=blend*blend*(3-2*blend);
+  // With no requested body spin, catch toward travel in the landing plane.
+  // Choose the nearer forward/switch axis so a vert return does not turn 180.
+  if(Math.abs(SK.spin||0)<.05&&!K.KeyA&&!K.KeyD&&!SK_INPUT.steer){
+    const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
+    const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
+    if(Math.hypot(travel[0],travel[1])>1e-4){
+      const delta=mod(Math.atan2(travel[1],travel[0])-a+Math.PI/2,Math.PI)-Math.PI/2;
+      a+=delta*ease*smooth;
+    }
+  }
+  const wantPitch=Math.atan2(-(n[0]*Math.cos(a)+n[1]*Math.sin(a)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(a,wantPitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
+  const dot=(v,w)=>v.reduce((s,k,i)=>s+k*w[i],0);
+  const wantRoll=Math.atan2(dot(n,right),dot(n,neutral));
+  const angle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from))*smooth;
+  const base={pitch:angle(pitch,wantPitch),roll:angle(roll,wantRoll)};
+  SK.airNormal=skateBoardAxes(a,base.pitch,base.roll).up;
+  return base;
+}
 function skateAirPose(dt = 0) {
   const tr = body.trick;
   SKB.riderYaw = a;
-  if (!tr) { SKB.yaw = a; return; }
+  if (!tr) { const base=skateAirBase(dt,SK.airPose?.pitch??SKB.pitch,SK.airPose?.roll??SKB.roll);SKB.yaw=SKB.riderYaw=a;SKB.pitch=base.pitch;SKB.roll=base.roll;return; }
   const duration = tr.duration ?? tr.air, p = clamp(tr.t / duration, 0, 1), e = p * p * (3 - 2 * p);
-  const popPitch=(tr.pitch || 0)+Math.sin(Math.min(1,p*4)*Math.PI)*.35*(tr.nollie?-1:1);
-  const frame=skateTrickAxes(a,popPitch,tr.baseRoll||0,e*tr.flip*Math.PI*2,e*tr.turn*Math.PI*2);
+  const base=skateAirBase(dt,tr.pitch||0,tr.baseRoll||0);
+  SKB.riderYaw=a;
+  const popPitch=base.pitch+Math.sin(Math.min(1,p*4)*Math.PI)*.35*(tr.nollie?-1:1);
+  const frame=skateTrickAxes(a,popPitch,base.roll,e*tr.flip*Math.PI*2,e*tr.turn*Math.PI*2);
   SKB.yaw=Math.atan2(frame.axis[1],frame.axis[0]);SKB.pitch=Math.asin(clamp(frame.axis[2],-1,1));
   const neutral=skateBoardAxes(SKB.yaw,SKB.pitch,0),rightAxis=[-Math.sin(SKB.yaw),Math.cos(SKB.yaw),0];
   const dot=(x,y)=>x.reduce((v,n,i)=>v+n*y[i],0);
