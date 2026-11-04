@@ -76,7 +76,15 @@ const FIG_POSES = {
     return { legs: [[p, 0.12, p - 0.25 - 0.4 * Math.max(0, Math.sin(w)), 0.1], [0.3, 0.04, 0.05, 0.04]],
              arms: [[0.5 * p, 0.25, 0.5 * p + 0.4, 0.15], [-0.5 * p, 0.25, -0.5 * p + 0.4, 0.15]], lean: 0.18 };
   },
+  mongo: f => { const p = FIG_POSES.push(f); return { ...p, legs: [...p.legs].reverse(), arms: [...p.arms].reverse() }; },
   sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
+  tumble: f => {
+    const a=f<3?FIG_POSES.down():FIG_POSES.sprawl(),b=f<3?FIG_POSES.sprawl():FIG_POSES.crouch();
+    const t=f<3?f/3:Math.max(0,(f-4)/3),mix=(x,y)=>x+(y-x)*t;
+    return {seat:mix(a.seat||0,b.seat||0),lean:mix(a.lean,b.lean),
+      legs:a.legs.map((leg,i)=>leg.map((v,j)=>mix(v,b.legs[i][j]))),
+      arms:a.arms.map((arm,i)=>arm.map((v,j)=>mix(v,b.arms[i][j])))};
+  },
   // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
   down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
   // shot (gun.js): flat out and still, one arm flung wide, the other across them, legs crooked

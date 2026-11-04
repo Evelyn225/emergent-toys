@@ -17,9 +17,9 @@ const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_S
 // one more hop: the multiplier goes up, and so does the speed you carry (a run of hops never touches the ground long
 // enough for walking to pick it up)
 function hopFaster(swirl) { const h0 = body.hop || 1; body.hop = hopUp(h0, swirl); body.mx = (body.mx || 0) * body.hop / h0; body.my = (body.my || 0) * body.hop / h0; }
-const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
+const GRAV = 9.8, JUMP_V = 3.4, POP_V = 2.9, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
-const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
+const TRICKS = { '360S': ['360 shuvit', 0, 1], A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && (mode === 'walk' || mode === 'roof'); // (on the street, or across the rooftops)
@@ -91,7 +91,7 @@ function standUp() { // back where you sat down from (it was walkable)
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
   const ground = mode === 'walk' ? walkGround(px, py) : 0;
-  if (typeof skateGrinding === 'function' && skateGrinding() && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
+  if (typeof skateGrinding === 'function' && (skateGrinding() || SK.transition) && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
   const wasAir = body.z > 0 || body.vz > 0; // (in the air coming into this frame: you land this frame or later, never get skipped)
   if (body.groundMode === mode && wasAir) body.z += ((body.ground || 0) - ground) * 10;
   if (body.vz > 0 && body.z < 0) body.z = 0; // (still going up: rising ground under you can't land you, it lifts you with it)
@@ -103,11 +103,12 @@ function stepBody(dt) {
   if (wasAir) { // (uphill the ground can come up past you between frames: you still land, rather than being stranded mid-trick)
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
+    if (skatingNow()) skateAirPose(dt);
     const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
-      const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
-      if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
+      const fell = body.peak, tricked = !!body.trick; body.impactV = Math.abs(body.vz); body.z = body.vz = body.peak = 0;
+      if (skatingNow()) { skateLand(); if (actx) { sfxUse('ollie-land'); sfxSkate('land',clamp((body.impactV||0)/4,.2,1)); } } // (clean, or a bail: skate.js)
       body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) hopFaster(body.swirl || 0);
@@ -125,6 +126,7 @@ function stepBody(dt) {
       }
     }
   } else if (T - (body.landedAt ?? -9) > HOP_KEEP) body.hop = Math.max(1, (body.hop || 1) - dt * 2.5); // on the ground: a moment, then the speed bleeds off
+  if (skatingNow()) skateBoardSync();
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
@@ -245,7 +247,7 @@ const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
 const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
 let boardZ = new Float32Array(1 << 14); // (grows to fit the screen)
 function drawBoard3D() {
-  const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the air
+  const tr = body.trick, p = tr ? clamp(tr.t / (tr.duration ?? tr.air), 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the flip
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
