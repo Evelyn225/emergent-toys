@@ -305,6 +305,7 @@
     "city/facade-utilities.js",
     "city/kerb-fixtures.js",
     "city/window-railway-geometry.js",
+    "city/park-planting.js",
     "city/street-scenes-render.js",
     "city/save.js",
     "city/el-life.js",

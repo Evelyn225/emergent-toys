@@ -15632,6 +15632,7 @@ function citySprites() {
   forNear(solidsB, o => { if(o.pool){const [vx,vy]=R(o.x,o.y);if(Math.hypot(vx,vy)<vis+2&&inView(vx,vy,Math.max(o.hl,o.hw)+.1))drawSkatePool(o);return;} const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile, bowl: o.bowl } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
   drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
+  drawParkShrubs();
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
@@ -17398,7 +17399,7 @@ function buildKerbModel(o,near) {
   return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
-function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
+function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['planter','shrub'].includes(o.kind)?buildPlantingModel(o,near):['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
 const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
 // A timber pole (creosoted, tapering, its top chamfered), the crossarm reaching out over the road on a steel brace,
 // a porcelain insulator under each wire, the telephone cable on its bracket, and on some a transformer can on the
@@ -17480,7 +17481,7 @@ function drawPoleSpans() {
   });
 }
 const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
 // stock, the control column (display, keypad, coin and note slots, the coin
@@ -17870,7 +17871,7 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
 // A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
 // either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
 // from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
-const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6, steps: 18 };
 const STATION_H = STATION_STAIRS.rise + 3;
 const STATION_EXIT_H = 0.3, STATION_EXIT_Z = STATION_H - STATION_EXIT_H / 2 - 0.06;
 const ST_TRACK = 12; // the first track row; the platform edge is just before it
@@ -17883,11 +17884,21 @@ const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: S
   return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
 }).join(''));
 // how high the stairs have lifted you at (x, y)
-const stairRise = (x, y) => { const s = room && room.def.stairs; return s && x >= s.x0 && x < s.x1 && y < s.y1 ? s.rise * clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1) : 0; };
+const stairRise = (x, y) => {
+  const s = room && room.def.stairs;
+  if (!s || x < s.x0 || x >= s.x1 || y >= s.y1) return 0;
+  const progress = clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1);
+  return s === STATION_STAIRS ? Math.ceil(progress * s.steps) * s.rise / s.steps : s.rise * progress;
+};
 // the steps themselves, as boxes, each a little higher toward the top; walkable (the stairs lift you, see stairRise)
-const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
-  const dy = (s.y1 - s.y0) / 10, top = (k + 1) * s.rise / 10;
+const stairSteps = s => Array.from({ length: s.steps || 10 }, (_, k) => {
+  const dy = (s.y1 - s.y0) / (s.steps || 10), top = (k + 1) * s.rise / (s.steps || 10);
   return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => { // wall to wall
+    // Station tread materials share the same step tops as the walking height.
+    if(s === STATION_STAIRS){
+      const topFace=HIT.face===5,fp=t/projY,nosing=topFace&&facadeLine(Math.abs(HIT.v-dy/2+.03),.06,fp)>.5;
+      BG[i]=C(nosing?YEL:GRAY,nosing?3.5+L*.4:(1+L*.3)*shadeFace(HIT.face)+(topFace?.7:0));set(i,' ',0);return true;
+    }
     // treads (yellow nosing at the front edge) and risers
     BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
     if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
@@ -18852,24 +18863,24 @@ function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the 
   BG[i] = h > 0.85 ? C(ITEM_COL[h * 100 & 7], 3.5 + L * 0.15) : h > 0.5 ? C(GREEN, 2.2 + L * 0.15) : C(GREEN, 1.2 + L * 0.1); return true;
 }
 function stationWall(i, u, uStep, z, d, mx, my, L) {
+  const fp=Math.max(uStep,d/projY);
+  set(i,' ',0);
   if (mx < 9 || mx > 36) {
-    if (mx === 0 || mx === room.W - 1) { BG[i] = NONE; set(i, Math.abs(z - 1.5) < 0.12 && Math.abs(fract(u) - 0.5) < 0.12 ? 'o' : ' ', C(RED, 14)); return true; }
-    const lamp = Math.abs(fract(u / 5) - 0.5) < 0.04 && Math.abs(z - 2.3) < 0.08;
-    set(i, lamp ? 'o' : Math.abs(z - 1.8) < 0.03 ? '=' : (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', lamp ? C(WARM, 13) : C(GRAY, L * 0.25));
-    BG[i] = C(GRAY, 0); return true;
+    const end=mx===0||mx===room.W-1;
+    const lamp=end?Math.abs(z-1.5)<.12&&Math.abs(fract(u)-.5)<.12:Math.abs(fract(u/5)-.5)<.04&&Math.abs(z-2.3)<.08;
+    const course=coveGroove(z,.3,.012,fp);
+    BG[i]=lamp?C(end?RED:WARM,13):C(GRAY,.7+L*.08-course*.5);return true;
   }
-  const far = my === room.H - 1; // the tunnel wall across the tracks
-  const u0 = Math.floor((u - 2) / 8) * 8 + 6;
-  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
-    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.312, 0.438, C(WHITE, 15), C(GREEN, 4))) return true;
-    set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
+  const far = my === room.H - 1, u0 = Math.floor((u - 2) / 8) * 8 + 6;
+  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) {
+    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, .312, .438, C(WHITE, 15), C(GREEN, 4))) return true;
+    BG[i]=C(GREEN,4);return true;
   }
   if (far) {
-    if (z > 2.25 && z < 2.4 && fract(u / 4) < 0.05) { set(i, 'o', C(WARM, 15)); return true; }
-    set(i, hash(Math.floor(u * 4), Math.floor(z * 4), 7) > 0.85 ? ':' : '.', C(GRAY, L * 0.3)); BG[i] = C(GRAY, 1); return true;
+    const lamp=z>2.25&&z<2.4&&fract(u/4)<.05;
+    BG[i]=lamp?C(WARM,13):C(GRAY,1+L*.08-coveGroove(z,.3,.015,fp)*.5);return true;
   }
-  const grout = fract(u / 0.3) < 0.1 || fract(z / 0.3) < 0.1; // white tiles everywhere else
-  set(i, grout ? '+' : ' ', C(GRAY, L * 0.5)); BG[i] = C(WHITE, 4 * L / 14); return true;
+  BG[i]=C(WHITE,2+L*.25-coursedJoint(u,z,.3,.3,uStep,d)*1.5);return true;
 }
 function trainWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0 && my !== room.H - 1) return false;
@@ -18952,14 +18963,17 @@ function roomFloor(i, r, x, rx, ry) {
     case 'casino': return casinoFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
-    case 'station':
-      if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
-        if (Math.abs(wy - ST_TRACK - 0.3) < 0.05 || Math.abs(wy - ST_TRACK - 1.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
-        if (wy > ST_TRACK + 0.3 && wy < ST_TRACK + 1.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
-        return set(i, (r + x) % 3 ? ' ' : '.', C(GRAY, L * 0.5));
+    case 'station': {
+      const fp=homeBalconyPavingFootprint(d,eye);set(i,' ',0);
+      if(wy>ST_TRACK-.7){
+        const rail=Math.max(facadeLine(Math.abs(wy-ST_TRACK-.3),.1,fp),facadeLine(Math.abs(wy-ST_TRACK-1.5),.1,fp));
+        const sleeper=wy>ST_TRACK+.3&&wy<ST_TRACK+1.5&&coveGroove(wx,.6,.15,fp)>.5;
+        BG[i]=rail>.5?C(GRAY,2+L*.65):sleeper?C(BRICK,1+L*.25):C(GRAY,.8+L*.15);return;
       }
-      if (wy > ST_TRACK - 1) return set(i, '=', C(YEL, L * 2)); // mind the gap
-    // fall through: platform tiles
+      if(wy>ST_TRACK-1){BG[i]=C(YEL,2+L*.5-coveGroove(wx,.15,.025,fp));return;}
+      const grout=Math.max(coveGroove(wx,1,.035,fp),coveGroove(wy,1,.035,fp));
+      BG[i]=C(STONE,1.5+L*.4-grout);return;
+    }
     default: {
       const edge = fract(wx) < 0.06 || fract(wy) < 0.06;
       set(i, edge ? '+' : (Math.floor(wx) + Math.floor(wy)) & 1 ? '.' : ' ', C(edge ? GRAY : WHITE, L));
@@ -48979,6 +48993,7 @@ function kerbProfileRadius(profile,lo,hi) {
 }
 function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
   if(hi<0||lo>o.h)return false;
+  if(o.kind==='planter')return plantingFootprint(o,u,v,pad,lo,hi);
   const k=KERB_K,over=(a,b)=>hi>=a*k&&lo<=b*k;
   const rect=(x,y,a,b)=>Math.hypot(Math.max(0,Math.abs(u-x)-a*k),Math.max(0,Math.abs(v-y)-b*k))<=pad;
   const cap=(ax,ay,bx,by,z,r)=>{
@@ -49038,7 +49053,7 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     if(Math.abs(u)>o.hl+pad||Math.abs(v)>o.hw+pad)continue;
     const lo=z===null?0:z-terrainHeight(o.x,o.y);
     if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
-  }return null;
+  }return parkShrubAt(x,y,pad,z,height);
 }
 // A signal controller cabinet at most junctions: on the kerb beside the first
 // signal pole, half a cell back from the corner, its doors to the pavement.
@@ -49264,6 +49279,91 @@ function railwayColumnCast(i,x,z,du,dz,limit,normal,d) {
   for(const o of cache.static[row])railwayTest(o,x,z,du,dz);
   for(const o of cache.moving[row])railwayTest(o,x,z,du,dz);
   return RAILWAY_HIT;
+}
+// Planting on the finished city: kerb troughs leave the 1.2 m walking line free;
+// park shrubs stay off paths, ponds, trees, benches and the skate areas.
+const PLANTER = { hl:.09, hw:.035, top:.065, wall:.008, soil:.052 };
+const SHRUB_CLUMPS = [
+  {u:-.065,v:0,z:.075,r:.07,h:.07},
+  {u:0,v:0,z:.10,r:.08,h:.085},
+  {u:.065,v:0,z:.078,r:.07,h:.073}
+];
+const PLANTER_PARTS = [
+  {u:0,v:0,hl:PLANTER.hl,hw:PLANTER.hw,z0:0,z1:.01,role:'base'},
+  ...[-1,1].flatMap(side=>[
+    {u:0,v:side*(PLANTER.hw-PLANTER.wall/2),hl:PLANTER.hl,hw:PLANTER.wall/2,z0:.01,z1:PLANTER.top,role:'wall'},
+    {u:side*(PLANTER.hl-PLANTER.wall/2),v:0,hl:PLANTER.wall/2,hw:PLANTER.hw-PLANTER.wall,z0:.01,z1:PLANTER.top,role:'wall'}
+  ]),
+  {u:0,v:0,hl:PLANTER.hl-PLANTER.wall,hw:PLANTER.hw-PLANTER.wall,z0:.01,z1:PLANTER.soil,role:'soil'}
+];
+function plantingFootprint(o,u,v,pad,lo,hi) {
+  if(o.kind==='planter')return hi>=0&&lo<=PLANTER.top&&Math.hypot(Math.max(0,Math.abs(u)-PLANTER.hl),Math.max(0,Math.abs(v)-PLANTER.hw))<=pad;
+  return SHRUB_CLUMPS.some(q=>{
+    const dz=Math.max(lo-q.z,q.z-hi,0)/q.h;
+    return dz<=1&&Math.hypot(u-q.u,v-q.v)<=q.r*Math.sqrt(1-dz*dz)+pad;
+  });
+}
+const PLANTER_CLUMPS=[-.055,0,.055].map((u,k)=>({u,v:0,z:PLANTER.soil+.035+(k===1?.008:0),r:.034,h:.045}));
+function buildPlantingModel(o,near) {
+  const view={z:0},parts=[];
+  const add=(p,leaf=false)=>{
+    const box=boxAt(o.c*p.u-o.s*p.v,o.s*p.u+o.c*p.v,o.c,o.s,leaf?p.r:p.hl,leaf?p.r:p.hw,leaf?p.z-p.h:p.z0,leaf?p.z+p.h:p.z1);
+    const shade=(i,t,L)=>{
+      if(leaf){
+        const height=(HIT.w-view.z-box.z0)/(box.z1-box.z0),fine=near?clamp(1-t/projY/.015,0,1):0;
+        const detail=leafClump(HIT.u/p.r*2+o.seed*7,height*3)*fine;
+        const sn=seasonIdx(),autumn=o.kind==='planter'&&sn===2;
+        BG[i]=C(autumn?ORANGE:GREEN,(1.1+L*.25)*(.65+height*.65+detail)*(sn===3?.8:1));
+      }else{
+        const top=HIT.face===5,soil=p.role==='soil';
+        BG[i]=C(soil?BRICK:o.col,soil?.6+L*.075:(1.6+L*.3)*shadeFace(HIT.face)+(top?.8:0));
+      }
+      set(i,' ',0);
+      const exposure=leaf?HIT.nz:HIT.face===5?1:0;
+      if(exposure>.5){paintSettledSnow(i,o.x+o.c*(p.u+HIT.u)-o.s*(p.v+HIT.v),o.y+o.s*(p.u+HIT.u)+o.c*(p.v+HIT.v),L*.7,exposure,0,HIT.w);set(i,' ',0);}
+      return true;
+    };
+    const ray=leaf?homeRayEllipsoid:rayBox,local={...box};
+    const shiftedRay=(ox,oy,oz,rx,ry,rz,B)=>{
+      const height=B.z0-box.z0;local.x=B.x;local.y=B.y;
+      const t=ray(ox,oy,oz-height,rx,ry,rz,local);if(t>=0)HIT.w+=height;return t;
+    };
+    parts.push({role:leaf?'leaves':p.role,box,shade,ray,shiftedRay});
+  };
+  if(o.kind==='planter')for(const p of PLANTER_PARTS)add(p);
+  for(const p of o.kind==='planter'?PLANTER_CLUMPS:SHRUB_CLUMPS)add(p,true);
+  return {parts,draw(x,y,z){view.z=z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,p.shiftedRay);}};
+}
+const drawStreetPlanter=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z);
+const drawParkShrub=drawStreetPlanter;
+KERB_KINDS.planter={hl:PLANTER.hl,hw:PLANTER.hw,h:.15};
+KERB_DRAW.planter=drawStreetPlanter;
+const parkShrubs=[],parkShrubsB=bucketed([]),parkShrubCells=new Uint8Array(N*N);
+function parkShrubAt(x,y,pad,z=null,height=Infinity){
+  if(pad<=.4&&!parkShrubCells[idx(x,y)])return null;
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of parkShrubsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    const lo=z===null?0:z-terrainHeight(o.x,o.y);
+    if(plantingFootprint(o,rel(x-o.x),rel(y-o.y),pad,lo,lo+height))return o;
+  }return null;
+}
+function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
+for(const edge of [CURB,2-CURB])alongStreets(4.5,edge,(x,y,ax,ay,bx,by)=>{
+  const district=districtAt(x-ax*.5,y-ay*.5);
+  if(!['midtown','brownstones','chinatown'].includes(district)||hash(bx,by,edge<1?1961:1962)>.32)return;
+  if(SKATE_SPOTS.some(p=>p.id.startsWith('skate-kerb:')&&Math.hypot(rel(p.x-x),rel(p.y-y))<4))return;
+  addKerb(x,y,'planter',ax,ay,{col:district==='midtown'?STONE:BRICK});
+});
+// Leave the east/south park edges available for the concurrent street-skate lines.
+for(const [bx,by] of parks)for(const [u,v] of [[2.2,2.2],[2.2,4.2],[4.2,2.2],[4.2,4.2]]){
+  const x=bx*8+u,y=by*8+v,hl=.14,hw=.09,z=terrainHeight(x,y);
+  if(map[idx(x,y)]||ROAD[idx(x,y)]||isWater(x,y)||inPond(u,v,bx,by,.4))continue;
+  if(trees.some(t=>Math.hypot(rel(t.x-x),rel(t.y-y))<.4)||benches.some(b=>Math.hypot(rel(b.x-x),rel(b.y-y))<.5))continue;
+  if(SKATE_PATCHES.some(p=>Math.abs(rel(x-p.x))<p.hl+.3&&Math.abs(rel(y-p.y))<p.hw+.3))continue;
+  if([-1,1].some(s=>Math.abs(terrainHeight(x+s*hl,y)-z)>.002||Math.abs(terrainHeight(x,y+s*hw)-z)>.002))continue;
+  const o={x,y,c:1,s:0,hl,hw,h:.19,kind:'shrub',seed:hash(x,y,1963)};
+  if(streetGeometryCollision({...o,z0:z,z1:z+o.h},true)||streetEntranceCollision({...o,z0:z,z1:z+o.h}))continue;
+  parkShrubs.push(o);parkShrubsB[bi(Math.floor(x/8),Math.floor(y/8))].push(o);
+  for(let ix=Math.floor(x-hl-.4);ix<=Math.floor(x+hl+.4);ix++)for(let iy=Math.floor(y-hw-.4);iy<=Math.floor(y+hw+.4);iy++)parkShrubCells[idx(ix,iy)]=1;
 }
 // The display is raycast in the window's own coordinates, behind its pane.
 // Static miniature pieces are cached; only the three short train cars move.
@@ -50159,7 +50259,8 @@ function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : skatingNow() ? .01 : 0.05;
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
-  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
+  const exitReach = mode === 'room' && room.kind === 'station' ? Math.max(.31,n+.03) : .45; // reach the final subway tread before stepping out
+  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * exitReach), Math.floor(py + fy / n * exitReach)) === 'D') return leaveRoom();
   if (mode === 'walk' && n > 0 && backroomsSeamAt(px + fx / n * 0.1, py + fy / n * 0.1)) return enterBackrooms(); // (backrooms.js)
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   const x0 = px, y0 = py;
