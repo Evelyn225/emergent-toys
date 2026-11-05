@@ -18144,6 +18144,29 @@ function subwayCabinFloor(i,wx,wy,L,fp){
   const seam=coveGroove(wx,2.5,.012,fp),edge=facadeLine(Math.min(Math.abs(wy-1),Math.abs(wy-4)),.07,fp);
   BG[i]=C(GRAY,1.3+L*.28-seam*.6+edge*.7);set(i,' ',0);
 }
+// Wall-mounted stair handrails follow the nosing grade; brackets are solid metal.
+function stationHandrail(side){
+  const S=STATION_STAIRS,x=side<0?S.x0+.12:S.x1-.12,wall=side<0?S.x0:S.x1,y=(S.y0+S.y1)/2;
+  const above=.9+S.rise/S.steps,z=yy=>above+S.rise*clamp((S.y1-yy)/(S.y1-S.y0),0,1);
+  const points=[[S.y1+.3,z(S.y1)],[S.y1,z(S.y1)],[S.y0,z(S.y0)],[S.y0-.3,z(S.y0)]],parts=[];
+  const add=(xx,yy,hl,hw,z0,z1)=>parts.push(boxAt(xx,yy,1,0,hl,hw,z0,z1));
+  for(const yy of [S.y0+.4,S.y0+2,S.y1-2,S.y1-.4]){
+    const h=z(yy),inward=side<0?1:-1;
+    add(wall+inward*.008,yy,.02,.065,h-.18,h-.06);
+    add(wall+inward*.065,yy,.075,.018,h-.09,h-.05);
+    add(x,yy,.018,.018,h-.09,h-.005);
+  }
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=1;k<points.length;k++)rod(vx,vy+points[k-1][0]-y,points[k-1][1],vx,vy+points[k][0]-y,points[k][1],.025,GRAY,1.2);
+    for(const b of parts)drawBox({...b,x:vx+b.x-x,y:vy+b.y-y},CHROME);
+  }),box:boxAt(x,y,1,0,.025,(S.y1-S.y0)/2+.3,above,above+S.rise+.025),radius:(S.y1-S.y0)/2+.4,stationHandrail:{side,points,parts,x,wall}};
+}
+function stationFittings(){
+  const ceiling=STATION_H,lamps=[];
+  for(const x of [11.5,16,21,26,31,35.5])lamps.push(CEILING_BATTEN(x,9.5,4.2,ceiling));
+  lamps.push(CEILING_BATTEN((STATION_STAIRS.x0+STATION_STAIRS.x1)/2,4,4.6,ceiling));
+  return [stationHandrail(-1),stationHandrail(1),...lamps.map(p=>({...p,stationCeiling:true}))];
+}
 // a coil of rope lying flat on the floor, a sailor's coil: one rope spiralling in from its outer end, each turn lying
 // against the last, its loose end trailing off into the room. One surface from one distance function (the spiral and
 // the tail together), traced per cell, so the turns never overlap and it's lit and twisted continuously along its length.
@@ -18416,7 +18439,7 @@ const ROOM_DEFS = {
     } },
   station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > ST_TRACK - 0.8, stairs: STATION_STAIRS, height: STATION_H,
     props: r => {
-      const p = [...stairSteps(STATION_STAIRS)];
+      const p = [...stairSteps(STATION_STAIRS),...stationFittings()];
       for (const x of [15.5, 20.5, 25.5, 30.5]) p.push(BENCHP(x, 7.5, 0, 1)); // against the back wall
       for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 9 + Math.random() * 1.6, shirt()));
       return p;
@@ -19233,6 +19256,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return sharedDarkCeil(i);
   if(room.kind==='train'){BG[i]=C(WHITE,2.5);set(i,' ',0);return;}
+  if(room.kind==='station'){BG[i]=C(GRAY,2.4-coveGroove(wx,2.5,.015,d/projY)*.5);set(i,' ',0);return;}
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   if (strip && !ceilLit()) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
