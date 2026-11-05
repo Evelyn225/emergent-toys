@@ -59,7 +59,9 @@ test('home, hotel, civic, rail and existing paper-lantern ceilings retain their 
   const bad=[];
   for(const kind of ['home','loft','bellehome','hotelroom','hospital','laundry','station','train','noodle','tea','deli','bagelshop','tobacco']){
    enterRoom(kind,{word:kind.toUpperCase(),ret:[100,100,0],lobby:{word:'HOTEL',ret:[100,100,0]},st:0,t0:T-12,opts:[1,2,3],dest:null,track:0},[5,5,0]);render(0);
-   if(room.props.some(o=>o.ceilingBatten))bad.push([kind,'unexpected batten']);
+   const battens=room.props.filter(o=>o.ceilingBatten);
+   if(kind==='station'){if(battens.length!==7||battens.some(o=>!o.stationCeiling))bad.push([kind,'station fittings lost or replaced']);}
+   else if(battens.length)bad.push([kind,'unexpected batten']);
    if(['noodle','tea'].includes(kind)&&!room.props.some(o=>o.paperLantern))bad.push([kind,'paper lantern lost']);
   }return bad;
  });assert.deepEqual(bad,[]);
