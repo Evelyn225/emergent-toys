@@ -167,6 +167,7 @@
     "city/skate-pool.js",
     "city/skate-bails.js",
     "city/skate.js",
+    "city/skate-clock.js",
     "city/islands-content.js",
     "city/islands-render.js",
     "city/island-sights.js",

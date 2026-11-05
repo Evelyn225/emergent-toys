@@ -309,10 +309,10 @@ function drive(dt) {
 let t0 = performance.now();
 function loop(t) {
   controllerTick(clamp((t-t0)/1000,0,.05));
-  if (paused) { t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  if (freecam) { transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
@@ -323,7 +323,7 @@ function loop(t) {
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
-  if (game) { // a cabinet or a shift has the screen; the world carries on behind it
+  if (game) { skateFixedReset(); // a cabinet or a shift has the screen; the world carries on behind it
     stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
     requestAnimationFrame(loop); return;
   }
@@ -331,8 +331,9 @@ function loop(t) {
   if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && handheldMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
   stepBathroomDoors(dt);
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
+  let skateStepped=false;if(!skatingNow()||sleep||chute)skateFixedReset();
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
-  else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
+  else if (!sleep && skatingNow()) skateStepped=skateFixedFrame(dt); // (on the board: skate.js)
   else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1); // sprint 29 km/h (the board: skate.js), cars top out at 79
@@ -361,7 +362,7 @@ function loop(t) {
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') stepElRide(dt);
   else if (mode === 'ferry') stepFerryRide(dt);
-  stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
+  if(!skateStepped){stepBody(dt);stepRoof();}stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
@@ -421,15 +422,21 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw, cz] = skateCam(dt);
-    const baseFOV = FOV; FOV += Math.min(1, Math.hypot(...SKB.v) / 1.4) * 12 * Math.PI / 180;
-    skateView = { x: px, y: py, a, eye: cz }; px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved; skateView = null; FOV = baseFOV;
+    skateFixedRender(camera=>{
+      const saved = [px, py, a], [cx, cy, yaw, cz] = camera||skateCam(dt), baseFOV = FOV;
+      try {
+        FOV += Math.min(1, Math.hypot(...SKB.v) / 1.4) * 12 * Math.PI / 180;
+        skateView = { x: px, y: py, a, eye: cz }; px = cx; py = cy; a = yaw; render(dt);
+      } finally { [px, py, a] = saved; skateView = null; FOV = baseFOV; }
+    });
   } else { // a drink or two and the world sways; more and you're seeing double
+    const draw=()=>{
     camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : skatingNow() ? SK.look : 0; // (and at the wheel, wherever you're looking)
     a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
+    };if(skatingNow())skateFixedRender(draw);else draw();
   }
   audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
   requestAnimationFrame(loop);

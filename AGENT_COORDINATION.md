@@ -10,14 +10,12 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** shared controller support and skate-input tuning are on
-  `codex/skate-controller-feel`, based on main after the skating fixes (#427).
-  Scope: new `controller*` input/UI files, movement hooks in main/boats/flight,
-  skate input, settings/pause, tests and generated bundle. See
-  `CONTROLLER_IMPLEMENTATION.md`. Planting PR #423 is now merged into main; its world
-  quality changes are preserved. Rebuild the bundle from both manifests when
-  integrating. Earlier skate phases and fixes are recorded in
-  `SKATE_IMPLEMENTATION.md`; the general world-quality checklist stays paused.
+- **Codex:** fixed-step skating and coordinated rider/board/camera interpolation
+  are on `codex/skate-fixed-step`, based on main after controller PR #429.
+  Scope: `city/skate-clock.js`, skating input/main-loop hooks, tests, tuning
+  references and generated bundle. See `SKATE_TUNING.md` and
+  `SKATE_IMPLEMENTATION.md`. World-quality changes are preserved; reserved files
+  remain untouched. The general world-quality checklist stays paused.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
   the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is

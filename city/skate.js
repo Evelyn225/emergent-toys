@@ -19,7 +19,7 @@ const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false
   trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
-const skateAir = () => !SK.transition && !SK.grind && (body.z > 0 || body.vz > 0);
+const skateAir = () => SK.renderContact!=null?SK.renderContact==='air':!SK.transition && !SK.grind && (body.z > 0 || body.vz > 0);
 const skateGround = (x, y) => mode === 'roof' ? roofH : walkGround(x, y); // (the street, or the roof you're rolling across)
 // the arrows held down, as a TRICKS key (moves.js)
 function arrowTrick() {
@@ -31,18 +31,19 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
+  if(typeof skateFixedReset==='function')skateFixedReset();
   Object.assign(SK,{transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,reversing:false});
   skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];
 }
 
 // every frame on the board, in place of walking
-function stepSkate(dt) {
+function stepSkate(dt,readInput=true) {
   if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
     Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, transition:null, grind:null, manual:null, leftTransition:null, reversing:false, camTransition:0, camRampUp:0, camRampH:0, look: 0, camYaw: null, camZ: null });
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
-  skatePollInput(dt);
+  if(readInput)skatePollInput(dt);
   if (SK.bail > 0) return stepSkateBail(dt);
   if (SK.grind) { stepGrind(dt); skateBoardSync(); return; }
   const air = skateAir(), f = (K.KeyW || SK_INPUT.push ? 1 : 0) - (K.KeyS || SK_INPUT.brake || SK_INPUT.back ? 1 : 0), s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);

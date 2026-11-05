@@ -202,3 +202,34 @@ short attack/release easing, while right-stick gestures remain unfiltered.
 Human-speed scoops work across 30/60/120 Hz, diagonal steering does not trigger
 backwards braking, and camera/grab input cannot accidentally become a trick.
 The same controller now reaches movement, vehicles, menus and activities.
+
+## Fixed simulation clock and coordinated rendering
+
+Skating now advances at 120 Hz through `city/skate-clock.js`. Input is observed
+once per rendered frame; controller steering response, movement, body contact
+and chase-camera smoothing advance on fixed ticks. Legacy direct simulation
+helpers remain available. Other world modes keep their existing clock and the
+50 ms frame cap remains, bounding catch-up to six skating ticks per frame.
+
+Rider position, board orientation, airborne trick progress and chase camera
+interpolate between the same two snapshots. Board frames use shortest-path
+quaternion interpolation through vertical orientations and angle wraps. Drawing
+uses temporary sampled state and restores authoritative physics in `finally`.
+Pause, dismount, mode changes and teleports reset history. Fractional tick time
+survives mixed short and 50 ms frames. Preferred speed, pop strength and camera
+distance are unchanged; `SKATE_TUNING.md` separates research references from
+playability choices and explains how to calibrate physical values.
+
+Validation: scripted keyboard/controller push, carve and ollie trajectories
+match at 30/60/120/144 Hz; mixed short/hitch frames match elapsed fixed time.
+Board-axis, shared camera phase and renderer-error restoration checks accompany
+a real-loop browser regression covering pause, hitch and teleport behavior.
+Existing controller, camera, park geometry, ramp, grind and rollback browser
+cases pass. Isolated mutations to timestep, camera phase and retained remainder
+each fail the targeted regression.
+
+Local serial ABAB timing against exact main `4ff9292` at 177×66 (1170 px
+viewport), mounted stationary skating with live 60 Hz main-loop ticks: median
+frame times main/branch were 16.9/15.9 ms, then 14.4/12.7 ms over 60 frames per
+run after 20 warm-up frames. This shows no regression in that scene; it is not
+an FPS guarantee. Third-person riding and popped poses were inspected visually.
