@@ -48578,10 +48578,10 @@ function videoSleeves(x,y,c,s,count,first){
 }
 function videoBackroomProps(r){
  const a=videoSleeves(10,1.15,1,0,4,0),b=videoSleeves(10.85,2.65,0,1,2,8);r.videoRentals=[...a.cases,...b.cases];
- const customer={...figProp(9.7,2.8,figLook({shades:true,top:'jacket',bot:'pants',hair:'part',col:{top:[BRICK,4],bot:[GRAY,2],skin:[SKIN,11],hair:[GRAY,1]}}),{face:[1,0],still:true}),videoCustomer:true};
- r.videoCustomer=customer;
+ const customer={...figProp(9.7,2.8,figLook({shades:true,top:'jacket',bot:'pants',hair:'part',col:{top:[BRICK,4],bot:[GRAY,2],skin:[SKIN,11],hair:[GRAY,1]}}),{face:[1,0]}),videoCustomer:true};
+ r.videoCustomer=r.burgled?null:customer;
  const lamp=ROOM_MODEL(10,2.3,(vx,vy)=>{rod(vx,vy,3,vx,vy,2.53,.004,GRAY,1);coveRound(vx,vy,1,0,.065,.065,2.4,2.54,.06,(i,t,L)=>{BG[i]=C(RED,10);set(i,' ',0);return true;});});
- return [...a.parts,...b.parts,customer,lamp];
+ return [...a.parts,...b.parts,...(r.videoCustomer?[customer]:[]),lamp];
 }
 let videoMusicNodes=[],videoMusicRoom=null;
 function stopVideoTapeMusic(){
@@ -48594,7 +48594,7 @@ function videoBackroomTick(){
  if(videoMusicRoom&&(videoMusicRoom!==r||!r.tv||!r.videoTape))stopVideoTapeMusic();
  if(r.kind==='video'){
   const inside=px>=9&&py<4.5,dt=clamp(T-(r.videoTick??T),0,.1);r.videoTick=T;
-  if(inside&&!r.videoSeen){r.videoSeen=true;r.videoExitAt=T+.9;say('The customer freezes. "I’m just… looking for the documentaries."',5);}
+  if(inside&&r.videoCustomer&&!r.videoSeen){r.videoSeen=true;r.videoExitAt=T+.9;say('The customer freezes. "I’m just… looking for the documentaries."',5);}
   if(r.videoSeen&&!inside&&r.videoInside&&!r.videoRemarked){r.videoRemarked=true;say('The clerk gives you a look. "Find what you were looking for?"',4);}
   r.videoInside=inside;
   const p=r.videoCustomer;
