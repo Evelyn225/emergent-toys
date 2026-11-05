@@ -1,5 +1,6 @@
 function drawRoadBridges() {
   if(!worldReady)return;
+  drawAirportBridge();
   for(const b of ROAD_BRIDGES) {
     const vx=rel(b.x-px),vy=rel((b.y0+b.y1)/2-py);
     if(!inView(vx,vy,(b.y1-b.y0)/2+2))continue;
@@ -43,5 +44,36 @@ function drawRoadBridges() {
     for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2])for(const side of [-1,1]) {
       drawBox(boxAt(vx+side*1.25,rel(y-py),1,0,.14,.32,0,b.h-b.thickness),STEEL.cap);
     }
+  }
+}
+
+const airportBridgeMeshes=new Map();
+function drawAirportBridge(){
+  const layout=airportBridgeLayout();if(!layout)return;
+  const S=AIRPORT_BRIDGE;
+  const metal=(i,t,L)=>{BG[i]=C(GRAY,(1.5+L*.28)*shadeFace(HIT.face));set(i,' ',0);return true;};
+  for(const b of layout.sections){
+    if(!inView(b.x-px,b.y-py,Math.hypot(b.hl,b.hw)+1))continue;
+    let mesh=airportBridgeMeshes.get(b);if(!mesh){mesh={...boxAt(b.x,b.y,1,0,b.hl,b.hw,Math.min(b.h0,b.h1)-S.thickness,Math.max(b.h0,b.h1)),planes:courierSurfacePlanes(b),airportBridgeDeck:b.id};airportBridgeMeshes.set(b,mesh);}
+    drawBox({...mesh,x:b.x-px,y:b.y-py},(i,t,L)=>{
+      const fp=t/projY,across=b.axis==='x'?HIT.v:HIT.u,along=(b.axis==='x'?HIT.u+b.x:HIT.v+b.y),edge=Math.abs(across),Ld=L*roadDark();
+      if(HIT.face===5){
+        const turn=b.id==='turn',kerb=edge>.55&&!turn,joint=coveGroove(along,4,.016,fp);
+        const line=!turn&&edge<.53?roadLine(edge,.025,fp)*roadBands(along,1,.5,fp):0;
+        BG[i]=C(line>.5?YEL:GRAY,line>.5?2+Ld*.5:kerb?2+Ld*.45-joint:1.2+Ld*.27-joint*.5);if(snowCover>.02)paintSettledSnow(i,b.x+HIT.u,b.y+HIT.v,L,1,edge<.53?.6:.08,HIT.w);set(i,' ',0);return true;
+      }
+      BG[i]=C(GRAY,HIT.face===6?.6+L*.1:(1.2+L*.25)*shadeFace(HIT.face));set(i,' ',0);return true;
+    },rayBeveledBay);
+  }
+  for(const p of layout.piers){
+    const top=airportBridgeGround(p.x,p.y)-S.thickness;
+    if(!inView(p.x-px,p.y-py,2))continue;
+    drawBox(boxAt(p.x-px,p.y-py,1,0,p.hl,p.hw,-.6,top),metal);
+    drawBox(boxAt(p.x-px,p.y-py,1,0,S.capX,S.capY,top-S.capDepth,top+.015),metal);
+  }
+  for(const r of layout.rails){
+    const length=Math.hypot(r.x1-r.x0,r.y1-r.y0);if(!inView((r.x0+r.x1)/2-px,(r.y0+r.y1)/2-py,length/2+1))continue;
+    for(const up of [.055,S.rail])rod(r.x0-px,r.y0-py,airportBridgeGround(r.x0,r.y0)+up,r.x1-px,r.y1-py,airportBridgeGround(r.x1,r.y1)+up,.006,GRAY,1.2);
+    const n=Math.ceil(length/1.8);for(let k=0;k<=n;k++){const q=k/n,x=r.x0+(r.x1-r.x0)*q,y=r.y0+(r.y1-r.y0)*q,h=airportBridgeGround(x,y);drawBox(boxAt(x-px,y-py,1,0,.012,.012,h,h+S.rail),metal);}
   }
 }

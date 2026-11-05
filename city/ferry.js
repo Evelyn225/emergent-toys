@@ -73,7 +73,7 @@ function ferrySeaClear(x,y,pad=2.65) {
   if(PIERS.some(p=>Math.hypot(Math.max(p[0]-x,0,x-p[2]),Math.max(p[1]-y,0,y-p[3]))<pad))return false;
   const nearRect=(x0,y0,x1,y1)=>Math.hypot(Math.max(x0-x,0,x-x1),Math.max(y0-y,0,y-y1))<pad;
   if(nearRect(FOOTBRIDGE.x-FOOTBRIDGE.hw,FOOTBRIDGE.y0,FOOTBRIDGE.x+FOOTBRIDGE.hw,FOOTBRIDGE.y1)||
-    nearRect(CAUSEWAY.x-CAUSEWAY.hw,CAUSEWAY.y0,CAUSEWAY.x+CAUSEWAY.hw,CAUSEWAY.y1)||roadBridgePierAt(x,y,pad))return false;
+    (!worldReady&&nearRect(CAUSEWAY.x-CAUSEWAY.hw,CAUSEWAY.y0,CAUSEWAY.x+CAUSEWAY.hw,CAUSEWAY.y1))||roadBridgePierAt(x,y,pad))return false;
   for(let k=0;k<13;k++) {
     const angle=k*Math.PI/6,r=k===12?0:pad,qx=x+Math.cos(angle)*r,qy=y+Math.sin(angle)*r;
     if(!seaAt(qx,qy)||roadBridgePierAt(qx,qy)||roadBridgeClearance(qx,qy)<.65)return false;

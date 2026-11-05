@@ -240,21 +240,72 @@ function roadBridgeAt(x,y) {
   return worldReady ? ROAD_BRIDGES.find(b=>Math.abs(x-b.x)<=b.hw&&y>=b.y0&&y<=b.y1) || null : null;
 }
 function roadBridgeHeight(b,y) { return b.h * Math.min(1,(y-b.y0)/b.ramp,(b.y1-y)/b.ramp); }
-function roadGroundHeight(x,y) { const b=roadBridgeAt(x,y);return Math.max(terrainHeight(x,y),b?roadBridgeHeight(b,y):0); }
+function roadGroundHeight(x,y) { const b=roadBridgeAt(x,y);return Math.max(terrainHeight(x,y),b?roadBridgeHeight(b,y):0,airportBridgeGround(x,y)); }
 function roadBridgePierAt(x,y,pad=0) {
-  return worldReady && ROAD_BRIDGES.some(b=>[b.y0+b.ramp+2,b.y1-b.ramp-2].some(py=>[-1,1].some(side=>Math.abs(x-b.x-side*1.25)<.14+pad&&Math.abs(y-py)<.32+pad)));
+  return airportBridgePierAt(x,y,pad)||worldReady && ROAD_BRIDGES.some(b=>[b.y0+b.ramp+2,b.y1-b.ramp-2].some(py=>[-1,1].some(side=>Math.abs(x-b.x-side*1.25)<.14+pad&&Math.abs(y-py)<.32+pad)));
 }
-function roadBridgeClearance(x,y) { const b=roadBridgeAt(x,y);return b?Math.max(0,roadBridgeHeight(b,y)-b.thickness):Infinity; }
+function roadBridgeClearance(x,y) { const ab=airportBridgeAt(x,y);if(ab){const cap=airportBridgeCapAt(x,y);return Math.max(0,cap?cap.bottom:airportBridgeTop(ab,x,y)-AIRPORT_BRIDGE.thickness);}const b=roadBridgeAt(x,y);return b?Math.max(0,roadBridgeHeight(b,y)-b.thickness):Infinity; }
 function roadBridgeRailAt(x,y,z) {
   if(!worldReady)return false;
-  return ROAD_BRIDGES.some(b=>y>=b.y0&&y<=b.y1&&Math.abs(x-b.x)>.94&&Math.abs(x-b.x)<1.02&&z<roadBridgeHeight(b,y)+.115);
+  return airportBridgeRailAt(x,y,z)||ROAD_BRIDGES.some(b=>y>=b.y0&&y<=b.y1&&Math.abs(x-b.x)>.94&&Math.abs(x-b.x)<1.02&&z<roadBridgeHeight(b,y)+.115);
 }
 function roadBridgeBuiltHeight(x,y,z=Infinity) {
+  const airport=airportBridgeBuiltHeight(x,y,z);if(airport!==null)return airport;
   if(roadBridgePierAt(x,y))return ROAD_BRIDGES.find(b=>Math.abs(x-b.x)<2).h-.12;
   const b=roadBridgeAt(x,y);
   if(!b)return 0;
   const top=roadBridgeHeight(b,y);
   return z<top-b.thickness-.01?0:top;
+}
+
+// The airport access is one raised L-shaped bridge, with level turning space.
+// Section boundaries are shared by the deck rays, walking/driving and boat clearance.
+const AIRPORT_BRIDGE={h:1.2,thickness:.12,ramp:14,rail:.115,capX:.64,capY:.3,capDepth:.12};
+let airportBridgeCache=null;
+function airportBridgeLayout(){
+  if(!worldReady)return null;
+  if(airportBridgeCache)return airportBridgeCache;
+  const {x,hw,y0,y1}=CAUSEWAY,S=AIRPORT_BRIDGE,land=AIRPORT.x1-2,turn=x-hw,crest=turn-3.25;
+  const make=(id,x0,y0,x1,y1,h0,h1,axis)=>({id,x:(x0+x1)/2,y:(y0+y1)/2,hl:(x1-x0)/2,hw:(y1-y0)/2,h0,h1,axis,thickness:S.thickness});
+  const sections=[make('airport-ramp',land,y0-hw,crest,y0+hw,0,S.h,'x'),make('airport-span',crest,y0-hw,turn,y0+hw,S.h,S.h,'x'),
+    make('turn',turn,y0-hw,x+hw,y0+hw,S.h,S.h,'y'),make('bay-span',x-hw,y0+hw,x+hw,y1-S.ramp,S.h,S.h,'y'),make('city-ramp',x-hw,y1-S.ramp,x+hw,y1,S.h,0,'y')];
+  const edge=hw-.03,rails=[];
+  const add=(x0,y0,x1,y1)=>rails.push({x0,y0,x1,y1});
+  for(const ey of [y0-edge,y0+edge]){const end=ey<y0?x+edge:x-edge;for(const [a,b]of [[land,crest],[crest,end]])add(a,ey,b,ey);}
+  for(const ex of [x-edge,x+edge]){const start=ex<x?y0+edge:y0-edge;for(const [a,b]of [[start,y0+hw],[y0+hw,y1-S.ramp],[y1-S.ramp,y1]])if(b>a)add(ex,a,ex,b);}
+  // The inner corner starts at the horizontal rail, leaving both road ends open.
+  const piers=[[x,y0+11],[x,y0+23],[x,y1-S.ramp],[crest,y0],[(land+crest)/2,y0]].map(([x,y])=>({x,y,hl:.23,hw:.23}));
+  return airportBridgeCache={sections,rails,piers};
+}
+function airportBridgeAt(x,y){
+  if(!worldReady||x<AIRPORT.x1-2||x>CAUSEWAY.x+CAUSEWAY.hw||y<CAUSEWAY.y0-CAUSEWAY.hw||y>CAUSEWAY.y1)return null;
+  return airportBridgeLayout().sections.find(b=>Math.abs(x-b.x)<=b.hl+1e-9&&Math.abs(y-b.y)<=b.hw+1e-9)||null;
+}
+function airportBridgeTop(b,x,y){const q=b.axis==='x'?(x-b.x+b.hl)/(2*b.hl):(y-b.y+b.hw)/(2*b.hw);return b.h0+(b.h1-b.h0)*clamp(q,0,1);}
+function airportBridgeGround(x,y){const b=airportBridgeAt(x,y);return b?airportBridgeTop(b,x,y):0;}
+function airportBridgePierAt(x,y,pad=0){return !!(worldReady&&airportBridgeLayout().piers.some(p=>Math.abs(x-p.x)<p.hl+pad&&Math.abs(y-p.y)<p.hw+pad));}
+function airportBridgeRailAt(x,y,z){
+  if(!airportBridgeAt(x,y))return false;
+  const h=airportBridgeGround(x,y);if(z<h-.02||z>h+AIRPORT_BRIDGE.rail)return false;
+  return airportBridgeLayout().rails.some(r=>{const dx=r.x1-r.x0,dy=r.y1-r.y0,t=clamp(((x-r.x0)*dx+(y-r.y0)*dy)/(dx*dx+dy*dy),0,1);return Math.hypot(x-r.x0-dx*t,y-r.y0-dy*t)<.025;});
+}
+function airportBridgeCapAt(x,y){
+  if(!airportBridgeAt(x,y))return null;
+  const S=AIRPORT_BRIDGE,p=airportBridgeLayout().piers.find(p=>Math.abs(x-p.x)<S.capX&&Math.abs(y-p.y)<S.capY);
+  if(!p)return null;const top=airportBridgeGround(p.x,p.y)-S.thickness;return {bottom:top-S.capDepth,top:top+.015};
+}
+function airportBridgeBuiltHeight(x,y,z){
+  const b=airportBridgeAt(x,y);if(!b)return null;
+  const top=airportBridgeTop(b,x,y),cap=airportBridgeCapAt(x,y);
+  return airportBridgePierAt(x,y)||z>=top-AIRPORT_BRIDGE.thickness-.01||cap&&z>=cap.bottom-.01?top:0;
+}
+function airportBridgeCarClear(x,y,hx,hy,hl,hw){
+  if(!worldReady||x<AIRPORT.x1-3||x>CAUSEWAY.x+2||y<CAUSEWAY.y0-2||y>CAUSEWAY.y1+1)return true;
+  const ex=Math.abs(hx)*hl+Math.abs(hy)*hw,ey=Math.abs(hy)*hl+Math.abs(hx)*hw;
+  return !airportBridgeLayout().rails.some(r=>{
+    const a=Math.abs(r.x1-r.x0)/2+.012,b=Math.abs(r.y1-r.y0)/2+.012,dx=x-(r.x0+r.x1)/2,dy=y-(r.y0+r.y1)/2;
+    return Math.abs(dx)<ex+a&&Math.abs(dy)<ey+b&&Math.abs(dx*hx+dy*hy)<hl+Math.abs(hx)*a+Math.abs(hy)*b&&Math.abs(-dx*hy+dy*hx)<hw+Math.abs(hy)*a+Math.abs(hx)*b;
+  });
 }
 // Stable desktop releases share the repo with other toys; only accept our tagged Windows installers.
 function desktopVersion(version) {
@@ -4171,6 +4222,7 @@ function resolveCruiserContact(c, o, hit) {
 }
 // The full rotated footprint, including the rear bumper. Separating axes keep even a sideways drift out of walls.
 function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
+  if(!airportBridgeCarClear(x,y,hx,hy,hl,hw))return false;
   const ex = Math.abs(hx) * hl + Math.abs(hy) * hw, ey = Math.abs(hy) * hl + Math.abs(hx) * hw;
   if(worldReady&&ROAD_BRIDGES.some(b=>y+ey>=b.y0&&y-ey<=b.y1&&[-1,1].some(side=>Math.abs(x-b.x-side*.97)<ex+.01)))return false;
   const diagonal = 0.5 * (Math.abs(hx) + Math.abs(hy));
@@ -10183,7 +10235,7 @@ function leaveBoat() {
   } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
 }
 // out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
-const navigable = (x, y) => seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y)) && !roadBridgePierAt(x,y);
+const navigable = (x, y) => seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y) || !!airportBridgeAt(x,y)) && !roadBridgePierAt(x,y);
 function hullPoints(b, x, y, hx, hy) {
   const k = BOAT_KINDS[b.kind];
   return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
@@ -11985,7 +12037,7 @@ function ferrySeaClear(x,y,pad=2.65) {
   if(PIERS.some(p=>Math.hypot(Math.max(p[0]-x,0,x-p[2]),Math.max(p[1]-y,0,y-p[3]))<pad))return false;
   const nearRect=(x0,y0,x1,y1)=>Math.hypot(Math.max(x0-x,0,x-x1),Math.max(y0-y,0,y-y1))<pad;
   if(nearRect(FOOTBRIDGE.x-FOOTBRIDGE.hw,FOOTBRIDGE.y0,FOOTBRIDGE.x+FOOTBRIDGE.hw,FOOTBRIDGE.y1)||
-    nearRect(CAUSEWAY.x-CAUSEWAY.hw,CAUSEWAY.y0,CAUSEWAY.x+CAUSEWAY.hw,CAUSEWAY.y1)||roadBridgePierAt(x,y,pad))return false;
+    (!worldReady&&nearRect(CAUSEWAY.x-CAUSEWAY.hw,CAUSEWAY.y0,CAUSEWAY.x+CAUSEWAY.hw,CAUSEWAY.y1))||roadBridgePierAt(x,y,pad))return false;
   for(let k=0;k<13;k++) {
     const angle=k*Math.PI/6,r=k===12?0:pad,qx=x+Math.cos(angle)*r,qy=y+Math.sin(angle)*r;
     if(!seaAt(qx,qy)||roadBridgePierAt(qx,qy)||roadBridgeClearance(qx,qy)<.65)return false;
@@ -13115,7 +13167,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
-  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
+  const road = worldReady&&(roadBridgeAt(wx,wy)||onCauseway(wx,wy))&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
@@ -13126,7 +13178,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
       surf = gf; soft = true;
-    } else if (onCauseway(wx, wy)) { // the road out to the airport
+    } else if (onCauseway(wx, wy)) { // the bridge carries the road above the water
+      if(worldReady&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
       soft = true; surf = causewayFloor(wx, wy, L, d);
     } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
       const af = airportFloor(i, r, x, wx, wy, L, d);
@@ -25893,6 +25946,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
 }
 function drawRoadBridges() {
   if(!worldReady)return;
+  drawAirportBridge();
   for(const b of ROAD_BRIDGES) {
     const vx=rel(b.x-px),vy=rel((b.y0+b.y1)/2-py);
     if(!inView(vx,vy,(b.y1-b.y0)/2+2))continue;
@@ -25936,6 +25990,37 @@ function drawRoadBridges() {
     for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2])for(const side of [-1,1]) {
       drawBox(boxAt(vx+side*1.25,rel(y-py),1,0,.14,.32,0,b.h-b.thickness),STEEL.cap);
     }
+  }
+}
+
+const airportBridgeMeshes=new Map();
+function drawAirportBridge(){
+  const layout=airportBridgeLayout();if(!layout)return;
+  const S=AIRPORT_BRIDGE;
+  const metal=(i,t,L)=>{BG[i]=C(GRAY,(1.5+L*.28)*shadeFace(HIT.face));set(i,' ',0);return true;};
+  for(const b of layout.sections){
+    if(!inView(b.x-px,b.y-py,Math.hypot(b.hl,b.hw)+1))continue;
+    let mesh=airportBridgeMeshes.get(b);if(!mesh){mesh={...boxAt(b.x,b.y,1,0,b.hl,b.hw,Math.min(b.h0,b.h1)-S.thickness,Math.max(b.h0,b.h1)),planes:courierSurfacePlanes(b),airportBridgeDeck:b.id};airportBridgeMeshes.set(b,mesh);}
+    drawBox({...mesh,x:b.x-px,y:b.y-py},(i,t,L)=>{
+      const fp=t/projY,across=b.axis==='x'?HIT.v:HIT.u,along=(b.axis==='x'?HIT.u+b.x:HIT.v+b.y),edge=Math.abs(across),Ld=L*roadDark();
+      if(HIT.face===5){
+        const turn=b.id==='turn',kerb=edge>.55&&!turn,joint=coveGroove(along,4,.016,fp);
+        const line=!turn&&edge<.53?roadLine(edge,.025,fp)*roadBands(along,1,.5,fp):0;
+        BG[i]=C(line>.5?YEL:GRAY,line>.5?2+Ld*.5:kerb?2+Ld*.45-joint:1.2+Ld*.27-joint*.5);if(snowCover>.02)paintSettledSnow(i,b.x+HIT.u,b.y+HIT.v,L,1,edge<.53?.6:.08,HIT.w);set(i,' ',0);return true;
+      }
+      BG[i]=C(GRAY,HIT.face===6?.6+L*.1:(1.2+L*.25)*shadeFace(HIT.face));set(i,' ',0);return true;
+    },rayBeveledBay);
+  }
+  for(const p of layout.piers){
+    const top=airportBridgeGround(p.x,p.y)-S.thickness;
+    if(!inView(p.x-px,p.y-py,2))continue;
+    drawBox(boxAt(p.x-px,p.y-py,1,0,p.hl,p.hw,-.6,top),metal);
+    drawBox(boxAt(p.x-px,p.y-py,1,0,S.capX,S.capY,top-S.capDepth,top+.015),metal);
+  }
+  for(const r of layout.rails){
+    const length=Math.hypot(r.x1-r.x0,r.y1-r.y0);if(!inView((r.x0+r.x1)/2-px,(r.y0+r.y1)/2-py,length/2+1))continue;
+    for(const up of [.055,S.rail])rod(r.x0-px,r.y0-py,airportBridgeGround(r.x0,r.y0)+up,r.x1-px,r.y1-py,airportBridgeGround(r.x1,r.y1)+up,.006,GRAY,1.2);
+    const n=Math.ceil(length/1.8);for(let k=0;k<=n;k++){const q=k/n,x=r.x0+(r.x1-r.x0)*q,y=r.y0+(r.y1-r.y0)*q,h=airportBridgeGround(x,y);drawBox(boxAt(x-px,y-py,1,0,.012,.012,h,h+S.rail),metal);}
   }
 }
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
@@ -26760,7 +26845,7 @@ function hud() {
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
+  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
@@ -27902,7 +27987,7 @@ function airportFloor(i, r, x, wx, wy, L, d) { // [base, level] for the floor ce
     return [GRAY, LP * .3];
   }
   if (Y < AIRPORT.y0 + 1.6) { // the landside road, from the causeway along the front
-    return paint(roadLine(Math.abs(Y - (AIRPORT.y0 + 0.85)), .06, fp) * roadBands(X, .5, .5, fp), YEL, tarmac());
+    return paint(roadLine(Math.abs(Y - (worldReady ? CAUSEWAY.y0 : AIRPORT.y0 + 0.85)), .06, fp) * roadBands(X, .5, .5, fp), YEL, tarmac());
   }
   return lawnSurface(wx, wy, fine, LP, -.02); // grass, mown
 }
@@ -30111,7 +30196,7 @@ function devPlaces() {
   const out = [];
   const land = [['Casino', () => gotoShop('CASINO')], ['Stock Exchange', () => gotoShop('EXCHANGE')], ['The Velvet Rope', () => gotoShop('VELVET')],
     ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)], ['Bait & tackle hut', () => devAt(FISH_HUT.x + FISH_HUT.hatch, FISH_HUT.y - FISH_HUT.hw - 0.2, Math.PI / 2)],
-    ['Airport', () => devAt(CAUSEWAY.x, AIRPORT.y0 + 1.5, Math.PI / 2)],
+    ['Airport', () => devAt(TERMINAL.x + TERMINAL_DOORS.find(d=>d.land).u, TERMINAL.y - TERMINAL.hw - .3, Math.PI / 2)],
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
