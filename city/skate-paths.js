@@ -1,3 +1,4 @@
+const skateBalanceStick=()=>SK_INPUT.mouseHeld?SK_INPUT.mouse:SK_INPUT.right;
 // Grind paths use absolute world heights and 3D arc lengths. Segments are
 // indexed in every block they cross, rather than only at a long rail's midpoint.
 const GRIND_PATHS = [], grindPathBuckets = new Map();
@@ -84,12 +85,16 @@ function skatePathCatch() {
       // Kerbs need an intentional hop; simply carving down a street must not
       // stick the skater to its painted-height pavement edge.
       if (!air && (path.kind === 'kerb' || path.kind === 'bench')) continue;
-      if(path.kind==='coping'&&air&&SK.airSource===path.feature)continue;
+      if(path.kind==='coping'&&air&&SK.airSource===path.feature&&!SK.airRoute?.out)continue;
       const q = grindPathNearest(seg, px, py);
       if (q.gap > (path.kind==='coping' ? .025 : .08) || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
       const hl = Math.hypot(seg.d[0], seg.d[1]);
       const along = (Math.cos(SK.dir) * seg.d[0] + Math.sin(SK.dir) * seg.d[1]) / hl;
-      if (Math.abs(along) < (path.kind==='coping'?Math.cos(Math.PI/7):.5) || !hl) continue;
+      // A board can be crosswise while its momentum carries it along the tube.
+      // A descending, crosswise coping approach is a deliberate boardslide.
+      const boardAcross=Math.abs(Math.sin(a-Math.atan2(seg.d[1],seg.d[0])))>Math.sin(Math.PI/3);
+      const approach=path.kind==='coping'?(boardAcross ? .35 : Math.cos(Math.PI/7)):.5;
+      if (Math.abs(along) < approach || !hl) continue;
       if (!best || q.gap < best.q.gap) best = { seg, path, q, dir: Math.sign(along) };
     }
   if (best) startPathGrind(best.path, best.q.distance, best.dir);
@@ -100,7 +105,7 @@ function startPathGrind(path, distance, dir) {
   if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
   const angle = Math.atan2(at.tangent[1], at.tangent[0]);
   const off = Math.abs(mod(a - angle + Math.PI / 2, Math.PI) - Math.PI / 2);
-  const right = SK_INPUT.right, pressure = K.ArrowUp ? -1 : K.ArrowDown ? 1 : right[1];
+  const right = skateBalanceStick(), pressure = K.ArrowUp ? -1 : K.ArrowDown ? 1 : right[1];
   const name = grindFamily(off, path.kind, right[0], pressure, dir);
   // Keep g/top/t for the compatibility release and the existing park tests.
   const g = path.legacy || { ...path, ax: at.seg.from[0], ay: at.seg.from[1], bx: at.seg.to[0], by: at.seg.to[1] };
@@ -108,7 +113,7 @@ function startPathGrind(path, distance, dir) {
     name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, scrapeT: 0, boardOff: a - angle - (dir < 0 ? Math.PI : 0) };
   px = at.p[0]; py = at.p[1]; SK.dir = angle + (dir < 0 ? Math.PI : 0);
   SK.v = SK.grind.speed; body.trick = null; body.vz = 0; SK.spin = 0;
-  SK.transition=null;SK.manual=null;SK.airPose=null;SK.airSource=null;SK.airNormal=[0,0,1];
+  SK.transition=null;SK.manual=null;SK.airRoute=null;SK.airPose=null;SK.airSource=null;SK.airNormal=[0,0,1];
   SKB.roll=0;SKB.pitch=Math.atan2(at.tangent[2]*dir,Math.hypot(at.tangent[0],at.tangent[1]));
   SKB.yaw=a;SKB.surf={h:at.p[2],n:[0,0,1],kind:'grind',material:path.material,ref:path};
   body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
@@ -117,16 +122,17 @@ function startPathGrind(path, distance, dir) {
 }
 function stepPathGrind(dt) {
   const G = SK.grind, at = grindPathAt(G.path, G.distance), material = G.path.material || 'stone', held = T - G.t0;
-  if (Math.hypot(...SK_INPUT.right) > .3) {
+  const balanceStick=skateBalanceStick();
+  if (Math.abs(balanceStick[1]) > .3&&Math.abs(balanceStick[1])>Math.abs(balanceStick[0])) {
     const off = Math.abs(mod(G.boardOff + Math.PI / 2, Math.PI) - Math.PI / 2);
-    G.name = grindFamily(off, G.path.kind, ...SK_INPUT.right, G.dir);
+    G.name = grindFamily(off, G.path.kind, 0,balanceStick[1], G.dir);
   }
   G.speed = Math.max(0, G.speed + (-.98 * at.tangent[2] * G.dir - .98 * (GRIND_FRICTION[material] || .06)) * dt);
   SK.v = G.speed * Math.hypot(at.tangent[0], at.tangent[1]);
-  const steer = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  const steer = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer+balanceStick[0], -1, 1);
   const unstable = ['smith', 'feeble', 'crooked grind', 'overcrook'].includes(G.name) ? 1.5 : 1;
-  G.balV += ((Math.random() - .5) * (1.6 + held * .5) * unstable + G.bal * 1.4 - steer * 3.2) * dt;
-  G.balV *= Math.exp(-dt * .8); G.bal += G.balV * dt;
+  G.balV += ((Math.random() - .5) * (1.6 + held * .5) * unstable + G.bal * 1.4 + steer * 6) * dt;
+  G.balV *= Math.exp(-dt * (1.6+Math.abs(steer)*3)); G.bal += (G.balV+steer*.65) * dt;
   if (Math.abs(G.bal) > 1) return skateBail('BAIL! You lost your balance.');
   G.distance += G.dir * G.speed * dt;
   if (G.path.closed) G.distance = mod(G.distance, G.path.length);

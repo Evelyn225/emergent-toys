@@ -50,11 +50,10 @@ function skateBowlHit(o, x, y, zHint) {
 }
 function enterSkateBowl(hit) {
   if(hit.o.pool)return enterSkatePool(hit);
-  const { o, axis, u, at } = hit, vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
-  const vertical = skateAir() ? body.vz / 10 : -(vx * hit.n[0] + vy * hit.n[1]) / Math.max(.05, hit.n[2]);
+  const {o,axis,u,at}=hit,[vx,vy,vertical]=skateContactVelocity(hit.n);
   SK.transition = { o, u, axis, vs: (vx * Math.cos(axis) + vy * Math.sin(axis)) * at.tx + vertical * at.tz,
     va: -vx * Math.sin(axis) + vy * Math.cos(axis), yawOff: Math.cos(a - SK.dir) < 0 ? Math.PI : 0 };
-  skateManualEnd(); body.trick = null; body.vz = 0;
+  SK.airRoute=null;skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateBowlPlace(C) {
   if(C.o.pool)return skatePoolPlace(C);
@@ -64,7 +63,7 @@ function skateBowlPlace(C) {
   SKB.v = [c * p.tx * C.vs - s * C.va, s * p.tx * C.vs + c * C.va, p.tz * C.vs];
   SK.v = Math.hypot(SKB.v[0], SKB.v[1]);
   if (SK.v > 1e-7) SK.dir = Math.atan2(SKB.v[1], SKB.v[0]);
-  a = SK.dir + C.yawOff;
+  C.yawOff=skateFaceTravel()?Math.PI:0;
   SKB.yaw = a; SKB.riderYaw = a; SKB.pitch = Math.atan2(SKB.v[2] * (C.yawOff ? -1 : 1), SK.v || 1e-9);
   const normal = [-c * p.tz, -s * p.tz, p.tx], axes = skateBoardAxes(a, SKB.pitch, 0);
   const right = [-Math.sin(a), Math.cos(a), 0];
@@ -81,7 +80,7 @@ function stepSkateBowl(C, dt, push, brake, steer) {
   // Project centripetal acceleration into the radial profile; preserve angular
   // momentum when the radius changes. The gravity term pulls a slow carve down.
   C.vs += (C.va * C.va * at.tx / radius - .98 * at.tz) * dt;
-  const speed = Math.hypot(C.vs, C.va), loss = (brake ? .25 : .98 * SK_PHYS.concrete) * dt;
+  const speed = Math.hypot(C.vs, C.va), loss = (brake ? SK_PHYS.brake : .98 * SK_PHYS.concrete) * dt;
   const keep = speed ? Math.max(0, speed - loss) / speed : 0;
   C.vs *= keep; C.va *= keep;
   const turn = steer * 1.5 * dt, c = Math.cos(turn), s = Math.sin(turn), radial = C.vs * c - C.va * s;

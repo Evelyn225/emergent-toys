@@ -99,30 +99,58 @@ test('hills accelerate from rest, downhill runs exceed the push cap, hard slides
 test('push bursts taper below the push cap and cannot accelerate a downhill run', () => {
   const fast = skateSim([{ frames: 42, keys: { KeyW: 1 } }], { speed: 1.3 });
   const coast = skateSim([{ frames: 42 }], { speed: 1.3 });
-  assert.deepEqual(fast, coast);
+  // Held-input intent differs, while the physical downhill trajectories match.
+  const motion=run=>run.map(({coasting,pushFakie,...p})=>p);
+  assert.deepEqual(motion(fast), motion(coast));
   const push = skateSim([{ frames: 3600, keys: { KeyW: 1 } }]);
   assert.ok(push.at(-1).speed > .25 && push.at(-1).speed <= 1.2);
 });
 
 
-test('holding back brakes then rolls fakie without rotating the board; releasing coasts',()=>{
+test('holding back stops, pivots once, pushes the opposite way, then coasts on release',()=>{
  for(const yaw of [0,Math.PI/2,-1.1]){
-  const run=skateSim([{frames:300,keys:{KeyS:1}},{frames:60}],{speed:.4,yaw});
-  const along=p=>p.vx*Math.cos(yaw)+p.vy*Math.sin(yaw);
-  const reversed=run.findIndex(p=>along(p)<-.001);
-  assert.ok(reversed>1&&reversed<300);
-  assert.ok(run[reversed-1].speed<.015,'must stop before changing direction');
-  assert.ok(run.every(p=>Math.abs(p.yaw-yaw)<1e-8&&p.stance===1&&!p.bail));
-  assert.equal(run.at(-1).fakie,true);
-  assert.ok(along(run.at(-1))<0&&run.at(-1).speed<run[300].speed);
-  assert.ok(run[300].speed>.15&&run[300].speed<.45);
+  const run=skateSim([{frames:240,keys:{KeyS:1}},{frames:60}],{speed:.8,yaw,fixed:true,dt:1/120});
+  const along=p=>p.vx*Math.cos(yaw)+p.vy*Math.sin(yaw),reversed=run.findIndex(p=>along(p)<-.001),pivot=run.findIndex(p=>p.pivot);
+  assert.ok(pivot>0&&reversed>pivot&&reversed<240);assert.ok(run[pivot].t<1.5,'responsive foot braking');
+  assert.ok(run.slice(pivot,reversed).every(p=>p.speed<.02),'turn only after stopping');
+  assert.ok(run.every(p=>!p.bail&&p.stance===1));
+  assert.ok(Math.abs(run.at(-1).yaw-yaw-Math.PI)<1e-8);assert.equal(run.at(-1).fakie,false);
+  assert.ok(along(run.at(-1))<0&&run.at(-1).speed<run[240].speed);
  }
 });
-test('left stick down rolls backward, button B only brakes, and W resumes forward travel',()=>{
+test('controller back pivots and pushes, button B only stops, W keeps the new direction',()=>{
  const pad=skateSim([{frames:180,sticks:{left:[0,1]}},{frames:30}],{});
- assert.ok(pad[180].vx<-.1&&pad.at(-1).fakie);
- const stopped=skateSim([{frames:180,buttons:{brake:true}}],{speed:.3});
- assert.equal(stopped.at(-1).speed,0);
+ assert.ok(pad[180].vx<-.1&&!pad.at(-1).fakie);near(pad.at(-1).yaw,Math.PI);
+ const stopped=skateSim([{frames:180,buttons:{brake:true}}],{speed:.3});assert.equal(stopped.at(-1).speed,0);near(stopped.at(-1).yaw,0);
  const forward=skateSim([{frames:180,keys:{KeyS:1}},{frames:240,keys:{KeyW:1}}]);
- assert.ok(forward.at(-1).vx>.2);assert.equal(forward.at(-1).fakie,false);
+ assert.ok(forward.at(-1).vx<-.2);assert.equal(forward.at(-1).fakie,false);
+});
+test('separate repeated fakie kicks reinforce natural tail-first travel without turning the board',()=>{
+ for(const yaw of [0,Math.PI/2,-1.1])for(const mongo of [false,true]){
+  const keys={KeyW:1,...mongo?{ShiftLeft:1}:{}};
+  const run=skateSim([{frames:42,keys},{frames:12},{frames:42,keys}],{yaw,fakie:true,speed:.3,fixed:true});
+  const along=p=>p.vx*Math.cos(yaw)+p.vy*Math.sin(yaw);
+  assert.ok(along(run[42])<-.38);assert.ok(along(run.at(-1))<along(run[54])-.08);
+  assert.ok(run.slice(1).every(p=>p.fakie&&Math.abs(p.yaw-yaw)<1e-8&&p.stance===1&&!p.bail));
+ }
+});
+test('a continuously held push updates its direction when a hill reverses momentum',()=>{
+ const run=skateSim([{frames:600,keys:{KeyW:1}}],{speed:.16,ground:x=>x*.35,physics:{pushBurst:.015},fixed:true});
+ assert.ok(run.some(p=>p.kicking&&p.fakie&&p.speed>.03));
+ for(const p of run.filter(p=>p.kicking&&p.speed>.03))assert.ok(Math.cos(p.heading-p.yaw-(p.pushFakie?Math.PI:0))>0,'kick must reinforce live momentum');
+});
+
+test('held push coasts near cruising speed and resumes only after speed falls',()=>{
+ const run=skateSim([{frames:600,keys:{KeyW:1}}],{speed:1.15,fixed:true});
+ assert.ok(!run[1].kicking&&run[1].coasting);
+ const resumed=run.findIndex(p=>p.kicking);assert.ok(resumed>60,'coast before another kick');
+ assert.ok(run[resumed-1].speed<1.2*.84+.002);
+ assert.ok(run.slice(1,resumed).every(p=>!p.kicking));
+ assert.ok(run.slice(resumed).some(p=>p.coasting&&!p.kicking),'returns to coasting after speeding up');
+});
+
+test('held back can pivot on a transition flat bottom, not only street ground',()=>{
+ const mini=skateSim([{frames:120,keys:{KeyS:1}}],{transition:{},speed:.2,fixed:true,dt:1/120});
+ const pool=skateSim([{frames:120,keys:{KeyS:1}}],{bowl:{},position:[.115,0],fixed:true,dt:1/120});
+ for(const run of [mini,pool]){assert.ok(run.some(p=>p.pivot));assert.ok(Math.abs(run.at(-1).yaw-Math.PI)<1e-8);assert.ok(run.at(-1).vx<0&&!run.at(-1).bail);}
 });

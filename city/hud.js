@@ -356,9 +356,10 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
-    : settings.help && skatingNow() && SK.grind ? 'GRINDING: A/D balance (keep the mark in the middle) | SPACE pop off (hold an arrow: flip trick off it)'
-    : settings.help && skatingNow() ? 'W push | S brake, hold: fakie | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
+  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
+    : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
+    : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
     : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
@@ -398,6 +399,7 @@ function hud() {
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
   const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
+  if(skatingNow()&&(SK.transition||SK.airRoute))msg.push((SK.airRoute?SK.airRoute.out:skateAirOutHeld())?'AIR OUT: DECK':'AIR: RETURN INSIDE');
   const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
                                    [msg, msgY, '#fff', cv.width / 2]]) {

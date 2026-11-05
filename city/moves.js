@@ -38,7 +38,7 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the board) the arrows held say
-  if(skatingNow()&&(SK.transition||SK.grind))return skatePop(trick);
+  if(skatingNow()&&(SK.transition||SK.grind||skateAir()))return skatePop(trick);
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   body.buf = -9;
@@ -100,7 +100,7 @@ function stepBody(dt) {
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
   body.lastA = a; body.lx = px; body.ly = py;
   if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; body.buf = body.landedAt = -9; return; }
-  body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
+  body.crouch += clamp((K.KeyC && !skatingNow() && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (wasAir) { // (uphill the ground can come up past you between frames: you still land, rather than being stranded mid-trick)
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
