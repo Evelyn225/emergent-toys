@@ -11,7 +11,7 @@ function skateSpotBox(x, y, hl, hw, height, kind, material) {
   return o;
 }
 function buildSkateSpots() {
-  SKATE_SPOTS.length = SKATE_SPOT_FEATURES.length = SKATE_PATCHES.length = 0;
+  SKATE_SPOTS.length = SKATE_SPOT_FEATURES.length = SKATE_PATCHES.length = 0;skatePatchCount=-1;
   const station = EL_STATIONS.find(s => {
     const x = s.x - 2, y = EL_Y + 1;
     return !isWater(x, y) && !map[idx(Math.floor(x), Math.floor(y))] && ROAD[idx(Math.floor(x), Math.floor(y))];
@@ -48,6 +48,7 @@ function buildSkateSpots() {
       description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
   }
   buildExtraSkateparks();
+  buildStreetSkateSpots();
   const stairs = EL_STATIONS.find(s => s.stairs?.length)?.stairs[0];
   if (stairs) SKATE_SPOTS.push({ id: 'skate-stairs', name: 'Station stairs · kinked handrails', x: stairs.x, y: stairs.y,
     description: 'Two flights joined by a landing, with continuous kinked handrails. Enter from the platform with a valid train pass, then line up a downhill rail run.' });
@@ -65,7 +66,7 @@ function refreshSkateSpotDirectory() {
   if (typeof mapPlaceCache !== 'undefined') mapPlaceCache = null;
 }
 function skateSpotGround(x, y) {
-  let h = 0;
+  let h = skateStreetGround(x,y);
   for (const o of SKATE_SPOT_FEATURES) if (Math.abs(rel(x - o.x)) <= o.hl && Math.abs(rel(y - o.y)) <= o.hw) h = Math.max(h, o.z1);
   for(const o of SK_TRANSITIONS)if(o.spotPark){
     if(o.pool){const q=skatePoolSample(o,x,y);if(q)h=Math.max(h,q.h);continue;}
@@ -74,4 +75,14 @@ function skateSpotGround(x, y) {
   }
   return h;
 }
-const inSkateSpotPatch = (x, y) => SKATE_PATCHES.some(p => Math.abs(rel(x - p.x)) <= p.hl && Math.abs(rel(y - p.y)) <= p.hw);
+let skatePatchCount=-1;
+const skatePatchCells=new Map();
+function inSkateSpotPatch(x,y){
+  if(skatePatchCount!==SKATE_PATCHES.length){
+    skatePatchCells.clear();skatePatchCount=SKATE_PATCHES.length;
+    for(const p of SKATE_PATCHES)for(let ix=Math.floor(p.x-p.hl);ix<=Math.floor(p.x+p.hl);ix++)for(let iy=Math.floor(p.y-p.hw);iy<=Math.floor(p.y+p.hw);iy++){
+      const key=idx(ix,iy),bucket=skatePatchCells.get(key)||[];bucket.push(p);skatePatchCells.set(key,bucket);
+    }
+  }
+  return (skatePatchCells.get(idx(Math.floor(x),Math.floor(y)))||[]).some(p=>Math.abs(rel(x-p.x))<=p.hl&&Math.abs(rel(y-p.y))<=p.hw);
+}

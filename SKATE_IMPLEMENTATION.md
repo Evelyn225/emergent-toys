@@ -203,6 +203,59 @@ Human-speed scoops work across 30/60/120 Hz, diagonal steering does not trigger
 backwards braking, and camera/grab input cannot accidentally become a trick.
 The same controller now reaches movement, vehicles, menus and activities.
 
+## Street lines across the city
+
+Eight additional map destinations occupy clear park edges and service yards,
+spread across Midtown, Brownstones and industrial areas. The six layouts are:
+
+- Four-step rail: a roll-up bank, 72 cm upper landing, four 18 cm treads and
+  two steel handrails with flat/downhill/flat segments.
+- Loading dock: a 60 cm bank-accessed platform, grindable dock edges, sloped
+  exit rail and adjacent low manual pad.
+- Bank-to-ledge plaza: broad banks to a 45 cm deck, steel-edged grind lines,
+  a low ledge and a flat bar as alternate exits.
+- Manual link: two eight-metre pads with a two-metre gap and a parallel ledge.
+- Angled rail line: three low bars at different angles with transfer room and
+  a low bank for another approach.
+- Ledge transfer: two six-metre ledges, a three-metre gap and a long manual pad.
+
+Placement rejects roads, buildings, ponds, paths, trees, benches, grills,
+architecture and existing skate patches. No vegetation or existing fixtures
+are removed. Each spot has a map description and waypoint destination, with
+clear approach/landing space inside its paved footprint.
+
+New obstacles use native solids, shaders, ground sampling and grind paths.
+Sloped rail drawing and local collision height derive from the same polyline
+as its grind path, including the kink; posts meet the ground. Rail tubes do
+not become floating platforms in the heightfield. Street ground and concrete
+patch lookups are indexed by cell to avoid scanning every new spot per query.
+
+Approach banks have a short flat landing before the raised platform, so the
+rider's collision radius clears the bank/platform seam before reaching the
+platform. Ramp height, analytic normal and ray cuts now use rise above the
+base, allowing banks on elevated terrain without changing existing zero-base
+park ramps. Existing ramp defaults retain their original run length.
+
+The browser regression checks all eight sites and six styles, map navigation,
+actual descending rail catches, ray/path/collision agreement, bank access,
+elevated-base ramp normals and drawing, and downhill handrail acceleration.
+The existing skatepark test delegates walkable treads and sloped rail height
+checks to this geometry-specific regression rather than treating them as flat
+solid blocks.
+
+All eight mapped approaches also connect to a public street through existing
+paths/yard gates, checked with native collision queries and segment midpoints
+so a thin fence cannot be skipped. Existing park/spot regressions pass. Isolated
+mutations removing street ground, shifting rail paths away from their drawn
+tubes or removing bank landing flats each fail the new regression.
+
+Close, wide, oblique and night views were inspected. Local serial ABAB against
+exact main `4ff9292` at 177×66 (1170 px): median frame times main/branch were
+13.9/13.3 ms, then 13.3/13.3 ms (60 frames after 20 warm-up frames). Trees remained
+2,254 with the same coordinate checksum; benches remained 468. These are local
+observations, not an FPS guarantee. This content was originally independently
+based on main; the integration below brings in the merged #430 physics fixes.
+
 ## Fixed simulation clock and coordinated rendering
 
 Skating now advances at 120 Hz through `city/skate-clock.js`. Input is observed
@@ -551,3 +604,21 @@ Local serial ABAB against main `22d06d6` at 177×66: median main/branch
 16.5/16.9 ms, then 20.1/24.7 ms. These varied whole-frame rollback views include
 the branch's different chase heading, and do not isolate input/catch cost; they
 are local observations, not an FPS guarantee. Concurrent world work is preserved.
+
+## Street-spots merge with current main
+
+PR #431 now integrates main `d8d6015`, including the merged #430 physics,
+controller, natural-air and roof-camera changes, planting, fitted subway doors,
+and corrected legacy skate fixtures. Both sets of shared notes are retained;
+`ascii-city.bundle.js` was regenerated from the combined source manifest. Native
+street ramp rise/normal support and the eight spot entries remain alongside
+current skating behavior. Reserved world files are unchanged relative to main.
+
+All 16 focused simulation/bundle test files and 11 native browser cases pass:
+street placement/map/ride/grind connectivity, existing park and ramp/grind cases,
+planting, and the current natural-air/fakie/roof regression. Removing street
+ground in an isolated served bundle still fails the street regression. Reviewed
+close, wide, oblique rail and night street views. Local serial ABAB at 177×66
+against exact main `d8d6015`: median main/branch 12.7/12.9 ms, then 14.6/12.5 ms;
+no consistent added cost in these local observations, not an FPS guarantee.
+Tree count/checksum and bench count match current main.

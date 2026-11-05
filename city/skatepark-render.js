@@ -34,10 +34,10 @@ function rayRamp(ox, oy, oz, rx, ry, rz, b) {
     if (den < 0) { if (t > tmin) { tmin = t; face = f; } } else if (t < tmax) tmax = t;
     return tmin <= tmax;
   };
-  const kick = b.ramp === 'kicker', k = kick ? b.z1 / (2 * b.hl) : b.z1 / b.run;
+  const kick = b.ramp === 'kicker', k = kick ? (b.z1-b.z0) / (b.run||2*b.hl) : (b.z1-b.z0) / b.run;
   if (!cut(1, 0, 0, b.hl, 1) || !cut(-1, 0, 0, b.hl, 2) || !cut(0, 1, 0, b.hw, 3) || !cut(0, -1, 0, b.hw, 4) || !cut(0, 0, -1, -b.z0, 6) || !cut(0, 0, 1, b.z1, 5)) return -1;
-  if (!cut(-k, 0, 1, k * b.hl, 7)) return -1; // z <= k (u + hl)
-  if (!kick && !cut(k, 0, 1, k * b.hl, 8)) return -1; // z <= k (hl - u)
+  if (!cut(-k, 0, 1, b.z0+k * b.hl, 7)) return -1; // z <= k (u + hl)
+  if (!kick && !cut(k, 0, 1, b.z0+k * b.hl, 8)) return -1; // z <= k (hl - u)
   if (tmin < 0.01) return -1;
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;

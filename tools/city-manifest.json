@@ -158,6 +158,7 @@
     "city/seated-legs.js",
     "city/skate-parks.js",
     "city/skate-spots.js",
+    "city/skate-street-spots.js",
     "city/skate-paths.js",
     "city/skate-gestures.js",
     "city/skate-physics.js",
