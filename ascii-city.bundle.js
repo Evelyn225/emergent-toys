@@ -1019,8 +1019,8 @@ const figRaster = (body, view, S = 1) => figRasterAt(body, view / FIG_VIEWS * Ma
 function figRasterAt(body, th, near, S = 1, ownerOut = null) {
   const W = FIG_W * S, H = FIG_H * S;
   // a fine sprite casts only round the head finer (where there's a face to see); the rest is the ordinary sprite, scaled
-  let base = null, baseOwner = null;
-  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); base = figRasterAt(body, th, null, 1, baseOwner); }
+  let base = null, baseOwner = null, baseNear = null;
+  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); baseNear = near && new Float32Array(FIG_W * FIG_H); base = figRasterAt(body, th, baseNear, 1, baseOwner); }
   const [f0, f1] = body.face || [0, 0], headMask = base && new Uint8Array(FIG_W * FIG_H); // (the head's pixels, and a pixel round them)
   if (base) for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
     const o = baseOwner[r * FIG_W + c];
@@ -1061,7 +1061,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     }
     if (base && who < 0 && baseOwner[bi_] >= 0 && (baseOwner[bi_] < f0 || baseOwner[bi_] >= f1)) { role = base[bi_]; who = baseOwner[bi_]; }
     spr[r * W + c] = role; owner[r * W + c] = who;
-    if (near) near[r * W + c] = 60 - best;
+    if (near) near[r * W + c] = base && who === baseOwner[bi_] && !Number.isFinite(best) ? baseNear[bi_] : 60 - best;
   };
   if (!base) { for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) cast(r, c, -1); }
   else for (let br = 0; br < FIG_H; br++) for (let bc = 0; bc < FIG_W; bc++) { // the ordinary sprite's pixels in blocks, the head's cast again finer
@@ -1069,7 +1069,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     if (headMask[bi_]) { for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) cast(br * S + j, bc * S + i, bi_); continue; }
     const v = base[bi_], ow = baseOwner[bi_];
     if (!v && ow < 0) continue;
-    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); }
+    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); if (near) near.fill(baseNear[bi_], row, row + S); }
   }
   if (ownerOut) ownerOut.set(owner);
   FIG_FINE = false;
@@ -1106,7 +1106,11 @@ function figSprite(look, view, key, S = 1) {
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
-  cache.set(id, s = figRaster(body, view, S));
+  // Seated limbs project in front of their chair. Keep their actual surface depth,
+  // rather than clipping the whole person at the billboard through their hips.
+  const near = /^sit/.test(key) ? new Float32Array(FIG_W * FIG_H * S * S) : null;
+  cache.set(id, s = near ? figRasterAt(body, view / FIG_VIEWS * Math.PI * 2, near, S) : figRaster(body, view, S));
+  if (near) s.near = near;
   if (figCache.size > 8000) for (const old of [...figCache.keys()].slice(0, 1000)) figCache.delete(old); // the least recently used go
   if (figFineCache.size > 300) for (const old of [...figFineCache.keys()].slice(0, 60)) figFineCache.delete(old);
   return s;
@@ -1244,14 +1248,23 @@ const FIG_FINE_AT = 2, FIG_FINE_MAX = 4;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   const unit = h / FIG_TALL, floor = opts?.light || 0, sparkle = look.sparkle;
   let spr;
-  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
-    // Request a sprite only when a screen cell passes the bounds and depth checks. Invisible figures never cast
-    // sprites or use the frame's fine-detail allowance; this also covers people hidden behind buildings.
+  const sprite = dz => {
     if (!spr) {
       const rowsPer = unit / dz;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
       spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
     }
+    return spr;
+  };
+  const seatedDepth = /^sit/.test(pose) ? (u, z, du, dz) => {
+    const s = sprite(dz), S = s.S || 1, W = FIG_W * S, H = FIG_H * S;
+    const c = Math.floor((u / unit + FIG_W / 2) * S), r = H - 1 - Math.floor(z / unit * S);
+    if (c < 0 || c >= W || r < 0 || r >= H || !s[r * W + c] || !s.near) return 0;
+    return -s.near[r * W + c] * unit * (dx * rx + dy * ry) / Math.max(.001, Math.hypot(rx, ry));
+  } : null;
+  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+    // Standing sprites remain lazy; seated sprites are also requested by the surface-depth sampler.
+    sprite(dz);
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
     const lit = Math.max(floor, L), k = clamp(0.32 + lit / 15 * 0.78, 0.32, 1);
@@ -1265,7 +1278,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  }, true); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
+  }, true, seatedDepth); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
@@ -3262,6 +3275,19 @@ function residentialSideRail(b, f, along, depth, z, height, kind) {
   const rail = architectureDetail(b, f, along, depth, .01, depth, z, z + height, kind, { profile: b.profile });
   rail.c = f.side ? 0 : 1; rail.s = f.side ? 1 : 0; rail.hl = depth; rail.hw = .008;
 }
+// Containers and planting share their support height; window boxes have two wall brackets.
+function residentialPlanting(b, f, along, depth, half, z, windowBox = false) {
+  const extra = { profile: b.profile, detailDistance: 9, windowBox };
+  const hw = windowBox ? .027 : .038, height = windowBox ? .04 : .07;
+  architectureDetail(b, f, along, depth, half, hw, z, z + height, 'planter', extra);
+  if (windowBox) for (const side of [-1, 1])
+    architectureDetail(b, f, along + side * half * .65, depth / 2, .006, depth / 2 + hw, z - .016, z + .006, 'planter-bracket', extra);
+  for (let k = 0; k < 3; k++) {
+    const offset = (k - 1) * half * .6, rise = .045 + hash(k, along, Math.floor(b.seed * 65536)) * .025;
+    architectureDetail(b, f, along + offset, depth, half * .55, hw * 1.2,
+      z + height - .008, z + height + rise, 'leaves', extra);
+  }
+}
 function modernApartmentDetails(b, f) {
   if (!f.front && f.end - f.start < 1.7) return;
   const r = f.residential, p = b.profile;
@@ -3279,8 +3305,7 @@ function modernApartmentDetails(b, f) {
       architectureDetail(b, f, along, depth * 2, half, .008, z, z + height, 'balcony-rail', extra);
       for (const sign of [-1, 1]) residentialSideRail(b, f, along + sign * half, depth, z, height, 'balcony-rail');
       if ((fl + first) % 3 === 1) {
-        architectureDetail(b, f, along - half * .65, depth, .045, .038, z, z + .07, 'planter', { profile: p });
-        architectureDetail(b, f, along - half * .65, depth, .052, .044, z + .07, z + .15, 'leaves', { profile: p });
+        residentialPlanting(b, f, along - half * .65, depth, .045, z);
       }
     }
   }
@@ -3316,7 +3341,17 @@ function residentialDetails(b) {
     const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
     architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
     if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
-    if (b.sty === 16) modernApartmentDetails(b, f); else tenementEscapeDetails(b, f);
+    if (b.sty === 16) modernApartmentDetails(b, f); else {
+      tenementEscapeDetails(b, f);
+      const r = f.residential, escapeUnit = Math.max(0, r.units - 2);
+      for (let fl = 0; fl < r.floors; fl++) for (let unit = 0; unit < r.units; unit++) {
+        if (f.front && !f.low && unit === escapeUnit || (unit + fl) % 3 !== 0) continue;
+        const z = r.base + fl * r.fh + r.fh * .2 - .035;
+        if (z < f.low + .03) continue;
+        const along = f.start + r.margin + (unit + .5) * r.spacing + r.spacing * .23;
+        residentialPlanting(b, f, along, .031, Math.min(.11, r.spacing * .14), z, true);
+      }
+    }
   }
 }
 // Deliberate building compositions for the city's housing and business districts. Ground footprints and shop identities stay
@@ -12593,7 +12628,7 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
-  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]);
+  if (ah) { arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]),ah[2]); return ah[2]; }
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   if (windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc)) return;
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
@@ -14942,7 +14977,7 @@ function drawArchitecture() {
     if (far < 0.02 || edge > far * tf) return;
     if (o.z0 > eye && (o.z0 - eye) * projY > (hor + 1) * far ||
       o.z1 < eye && (eye - o.z1) * projY > (rows + 1 - hor) * far) return;
-    drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.planes ? rayBeveledBay : rayBox);
+    drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.kind === 'leaves' ? homeRayEllipsoid : o.planes ? rayBeveledBay : rayBox);
   });
 }
 // Windows have complete bays, corner margins and a fitted top floor; geometry carries the balconies and escapes.
@@ -15065,9 +15100,27 @@ function residentialDetailShade(o, i, t, L) {
     if (HIT.face >= 7 && fract((HIT.u + o.hl) * 55) < .28) return false;
     BG[i] = C(GRAY, (1.1 + L * .16) * (HIT.face >= 7 ? 1.2 : 1)); set(i, ' ', 0); return true; // the stair's treads lit, its stringers in shadow
   }
+  if (o.kind === 'planter' || o.kind === 'planter-bracket') {
+    const top = HIT.face === 5, fp = t / projY;
+    const rim = top && (Math.abs(HIT.u) > o.hl - .007 || Math.abs(HIT.v) > o.hw - .007);
+    const lip = !top && z > o.z1 - .009;
+    const base = o.kind === 'planter-bracket' ? GRAY : top && !rim ? BRICK : o.windowBox ? GREEN : BRICK;
+    const soil = top && !rim && o.kind === 'planter';
+    BG[i] = C(base, soil ? .7 + L * .08 : (1.5 + L * .3) * shadeFace(HIT.face) + (rim || lip ? 1 : 0)
+      - (!top && o.kind === 'planter' ? coveGroove(HIT.u, .035, .003, fp) * .7 : 0));
+    set(i, ' ', 0);
+    if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7, 1, 0, z);
+    return true;
+  }
   if (o.kind === 'leaves') {
-    if (Math.abs(HIT.u / o.hl) + Math.abs((z - (o.z0 + o.z1) / 2) / (o.z1 - o.z0)) > 1.15) return false;
-    BG[i] = C(GREEN, 1.3 + L * .2 + (hash(Math.floor(HIT.u * 400), Math.floor(z * 400), 1820) - .5) * .9 * clamp(1 - t / projY / .01, 0, 1)); set(i, ' ', 0); return true; // leaves, each its own tone up close
+    const sn = seasonIdx(), h = (z - o.z0) / (o.z1 - o.z0), u = HIT.u / o.hl;
+    const base = sn === 2 ? ORANGE : GREEN;
+    const fine = clamp(1 - t / projY / .015, 0, 1);
+    const clump = leafClump(u * 2 + o.seed * 7, h * 3) * fine;
+    BG[i] = C(base, (1.2 + L * .23) * (.7 + h * .65 - u * .12 + clump) * (sn === 3 ? .7 : 1));
+    set(i, ' ', 0);
+    if (HIT.nz > .5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7, HIT.nz, 0, z);
+    return true;
   }
   if (o.kind === 'service-spine' && HIT.face < 5) {
     const fl = Math.floor((z - .48) / o.fh), floor0 = .48 + fl * o.fh;
@@ -22630,7 +22683,7 @@ function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, Math.hypot(hx - px, hy - py, ARCADE_Z - eye)] : null;
+  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, dx * rel(hx - px) + dy * rel(hy - py)] : null;
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {
@@ -25824,7 +25877,8 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
 // hw = half width. fn(i, u, z, du, dz, L): u across (0 = centre, + right), z = height, du/dz = one cell's size there;
 // it paints the cell and returns true, or false to leave it see-through.
 // behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
-function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
+// depthOffset supplies a seated sprite's surface depth relative to its hip plane.
+function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = null) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, du = 1 / sc, dz = depth / projY;
@@ -25835,14 +25889,18 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      const behind = depth >= ZB[i];
-      if (behind && (!behindGlyphs || depth >= ZBG[i])) continue;
+      // Reject a wholly occluded body before requesting a depth-bearing sprite.
+      if (depthOffset && depth - hw * 2 >= ZB[i] && (!behindGlyphs || depth - hw * 2 >= ZBG[i])) continue;
+      const u = (c + 0.5 - cx) * du;
+      const surfaceDepth = depth + (depthOffset ? depthOffset(u, z, du, dz) : 0);
+      const behind = surfaceDepth >= ZB[i];
+      if (behind && (!behindGlyphs || surfaceDepth >= ZBG[i])) continue;
       const foreground = behind ? CH[i] : null, foregroundCol = behind ? COL[i] : 0;
       const bg = BG[i]; BG[i] = BG_UNSET;
-      const drew = fn(i, (c + 0.5 - cx) * du, z, du, dz, L);
-      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = depth; // (a background it paints is its own, for the fog)
+      const drew = fn(i, u, z, du, dz, L);
+      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = surfaceDepth; // (a background it paints is its own, for the fog)
       if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
-      else if (drew) { ZB[i] = depth; FL[i] = 0; }
+      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; }
     }
   }
 }
@@ -26013,8 +26071,9 @@ function render(dt,sceneOnly=false,mask=null) {
       for (let r = top; r < bot; r++) {
         const i = r * cols + x;
         if (holes && ZB[i] >= 0) continue;
-        W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
-        ZB[i] = d; FL[i] = 0;
+        const surfaceDepth = W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
+        // A canopy can replace a farther wall sample: keep the surface's forward ray depth.
+        ZB[i] = typeof surfaceDepth === 'number' && surfaceDepth > 0 ? surfaceDepth : d; FL[i] = 0;
       }
       clip = Math.min(clip, top);
     }

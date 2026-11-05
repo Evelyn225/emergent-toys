@@ -93,7 +93,7 @@ function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, Math.hypot(hx - px, hy - py, ARCADE_Z - eye)] : null;
+  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy, dx * rel(hx - px) + dy * rel(hy - py)] : null;
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {

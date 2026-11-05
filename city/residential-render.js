@@ -118,9 +118,27 @@ function residentialDetailShade(o, i, t, L) {
     if (HIT.face >= 7 && fract((HIT.u + o.hl) * 55) < .28) return false;
     BG[i] = C(GRAY, (1.1 + L * .16) * (HIT.face >= 7 ? 1.2 : 1)); set(i, ' ', 0); return true; // the stair's treads lit, its stringers in shadow
   }
+  if (o.kind === 'planter' || o.kind === 'planter-bracket') {
+    const top = HIT.face === 5, fp = t / projY;
+    const rim = top && (Math.abs(HIT.u) > o.hl - .007 || Math.abs(HIT.v) > o.hw - .007);
+    const lip = !top && z > o.z1 - .009;
+    const base = o.kind === 'planter-bracket' ? GRAY : top && !rim ? BRICK : o.windowBox ? GREEN : BRICK;
+    const soil = top && !rim && o.kind === 'planter';
+    BG[i] = C(base, soil ? .7 + L * .08 : (1.5 + L * .3) * shadeFace(HIT.face) + (rim || lip ? 1 : 0)
+      - (!top && o.kind === 'planter' ? coveGroove(HIT.u, .035, .003, fp) * .7 : 0));
+    set(i, ' ', 0);
+    if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7, 1, 0, z);
+    return true;
+  }
   if (o.kind === 'leaves') {
-    if (Math.abs(HIT.u / o.hl) + Math.abs((z - (o.z0 + o.z1) / 2) / (o.z1 - o.z0)) > 1.15) return false;
-    BG[i] = C(GREEN, 1.3 + L * .2 + (hash(Math.floor(HIT.u * 400), Math.floor(z * 400), 1820) - .5) * .9 * clamp(1 - t / projY / .01, 0, 1)); set(i, ' ', 0); return true; // leaves, each its own tone up close
+    const sn = seasonIdx(), h = (z - o.z0) / (o.z1 - o.z0), u = HIT.u / o.hl;
+    const base = sn === 2 ? ORANGE : GREEN;
+    const fine = clamp(1 - t / projY / .015, 0, 1);
+    const clump = leafClump(u * 2 + o.seed * 7, h * 3) * fine;
+    BG[i] = C(base, (1.2 + L * .23) * (.7 + h * .65 - u * .12 + clump) * (sn === 3 ? .7 : 1));
+    set(i, ' ', 0);
+    if (HIT.nz > .5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7, HIT.nz, 0, z);
+    return true;
   }
   if (o.kind === 'service-spine' && HIT.face < 5) {
     const fl = Math.floor((z - .48) / o.fh), floor0 = .48 + fl * o.fh;
