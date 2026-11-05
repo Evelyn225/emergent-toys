@@ -158,6 +158,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 }
 
 function render(dt,sceneOnly=false,mask=null) {
+  videoBackroomTick();
   if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;

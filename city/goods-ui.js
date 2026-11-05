@@ -202,8 +202,8 @@ function drawHeld(dt) {
 function artText(lines, x, y, size, colFn) {
   const w = g.measureText('M').width;
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
-  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') g.strokeText(l[k], x + k * w, y + r * size); });
-  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; g.fillText(l[k], x + k * w, y + r * size); } });
+  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ' && l[k] !== '\u0001') g.strokeText(l[k], x + k * w, y + r * size); });
+  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; if(l[k]==='\u0001')g.fillRect(x+k*w,y+r*size,w+.3,size+.3);else g.fillText(l[k], x + k * w, y + r * size); } });
   return w;
 }
 // the hand: a fist seen side-on, four fingers curled round the bottom of what it holds (a band each, knuckles to

@@ -107,6 +107,6 @@ function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
   if(target?.kind==='room-person'&&target.who.stall){openShop(...target.who.stall);return true;}
-  if(target?.kind==='room-person'&&!target.who.cabbie){talkInRoom();return true;}
+  if(target?.kind==='room-person'&&!target.who.cabbie){if(target.who.videoCustomer)say('“I’m just looking for the documentaries.” They refuse to make eye contact.',4);else talkInRoom();return true;}
   return false;
 }
