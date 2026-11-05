@@ -131,3 +131,10 @@ LB + right-stick camera look now permits unlimited full orbits and recenters by
 the short arc. Ramp takeoff has 120 ms of pop grace: finish a loaded flick just
 after the lip for a normal trick. RT can select air-out in that window and does
 not become a grab; the grace cannot grant a second pop.
+
+Air steering now has a short 45 ms spin-rate response rather than an immediate
+rate change. Partial stick holds rotate continuously and release eases to rest
+at the resulting angle, without seeking a half turn. On steep airs the rider
+and board rotate in their actual takeoff/landing plane. The ramp-return chase
+camera eases behind travel, including a fakie descent, without turning the
+rider to match it. LB-look retains its unlimited orbit.

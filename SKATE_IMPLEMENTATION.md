@@ -437,3 +437,38 @@ recentering also fail their regressions. Local serial ABAB against exact main
 14.8/13.0 ms (60 frames after 20 warm-up frames). There is no consistent increase
 in these local observations; they are not an FPS guarantee. Street-content PR
 #431 remains separate and preserved.
+
+## Ramp return camera and continuous air rotation
+
+The chase camera follows actual travel on a transition, retaining the last
+meaningful heading at the near-zero-speed apex. It eases behind a fakie descent
+without turning the rider around, and retains travel-follow on rollout until a
+stop. Manual orbit and deliberate stop/pivot behavior remain available.
+
+Air spin has a 45 ms angular-velocity response to input and release. Partial
+stick depth and short holds produce partial rotations; there is no attraction
+to 180-degree increments. The unspun takeoff frame follows the landing plane
+continuously, with the player's spin applied around that frame's up vector.
+Board and rider now use this same full 3D frame, avoiding horizontal projection
+flips near a vertical ramp. Rider forward vectors are interpolated alongside
+board orientation at render time. New takeoffs reset stale spin/pre-wind;
+lip-grace pops preserve current angular velocity. Landing alignment rules still
+apply, so an unfinished sideways turn can bail.
+
+Regression coverage adds proportional partial spins and several full turns on
+flat, banked and nearly vertical takeoff planes. A rebuilt-bundle browser test
+rides up a native mini ramp, stalls, returns fakie and verifies camera heading;
+it also checks the rendered steep-air rider's tangent facing. Existing bowl
+return/exit, camera, shoe anchor, fixed-clock and unlimited-orbit checks pass.
+
+All 13 focused Node test files pass. Six browser regressions cover the new
+return/spin behavior plus the existing bowl choice, camera, pose, fixed clock
+and stop/pivot/orbit/grace paths. Restoring rider-facing camera follow fails
+the natural rollback test (166 degrees from travel versus 21 degrees with the
+spring still settling); restoring world-yaw board rotation fails the steep
+frame test. Close/wide/day/night air views were reviewed. Local serial ABAB
+at 177×66 against main `4ff9292`: median main/branch 18.3/18.2 ms, then
+17.4/19.9 ms (60 frames after 20 warm-up frames), about 7% higher on average
+with mixed pair results. These are local observations, not an FPS guarantee.
+The final rebuilt-bundle fakie-push/mongo/coast and ramp-energy/powerslide
+regressions also pass (eight distinct browser cases for this follow-up).

@@ -16,7 +16,7 @@ const SK_CAM_BACK = 0.55, SK_CAM_UP = 0.2, SK_CAM_SIDE = 0.25, SK_COMBO_GAP = 1.
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
 const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false, charge: -1, popT: -9, bail: 0, bailAt: null,
-  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camBase:null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
+  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camBase:null,camFollowTravel:false,camTravelYaw:null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
 const skateAir = () => SK.renderContact!=null?SK.renderContact==='air':!SK.transition && !SK.grind && (body.z > 0 || body.vz > 0);
@@ -32,14 +32,14 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
   if(typeof skateFixedReset==='function')skateFixedReset();
-  Object.assign(SK,{kick:0,kicking:false,mongo:false,lipPop:null,pushCruise:false,pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camBase:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,pivot:null,reversing:false});
+  Object.assign(SK,{kick:0,kicking:false,mongo:false,lipPop:null,pushCruise:false,pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camBase:null,camFollowTravel:false,camTravelYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,airForward:null,airSpinV:0,pivot:null,reversing:false});
   skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];SKB.surf=null;
 }
 
 // every frame on the board, in place of walking
 function stepSkate(dt,readInput=true) {
   if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
-    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, transition:null, grind:null, manual:null, leftTransition:null, pivot:null,reversing:false, camTransition:0, camRampUp:0, camRampH:0, look: 0, camYaw: null, camBase:null, camZ: null });
+    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, transition:null, grind:null, manual:null, leftTransition:null, pivot:null,reversing:false, camTransition:0, camRampUp:0, camRampH:0, look: 0, camYaw: null, camBase:null,camFollowTravel:false,camTravelYaw:null, camZ: null });
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
@@ -54,8 +54,7 @@ function stepSkate(dt,readInput=true) {
   if (stepSkateTransition(dt, f > 0||reversePush, f < 0&&!reversePush, s)) return;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
   if (air) {
-    const rate = s * SK_SPIN + (SK.preWind || 0) * 2 * Math.max(0, 1 - (T - SK.popT) / .5);
-    a += rate * dt; SK.spin += rate * dt; // winding before the pop adds a short initial impulse
+    skateAirSpinStep(dt,s); // continuous angular velocity, including pre-wind
   }
   else skateGroundVelocity(dt, f > 0, f < 0, s, f<0&&!!(K.KeyS||SK_INPUT.back));
   // arrows tapped in the air: a flip trick, once the rest of the chord's had a moment to come down
@@ -137,7 +136,7 @@ function skateLand() {
   // Touchdown dissipates impact; it must not become forward speed next tick.
   const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
   SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
-  SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.lipPop=null;SK.pushFakie=null;
+  SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.lipPop=null;SK.pushFakie=null;SK.airSpinV=0;
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
@@ -227,7 +226,12 @@ function skateCam(dt) {
     if(!fresh)SK.camYaw-=turns;
     SK.look=look*Math.exp(-dt*2.5);
   }
-  const follow=SK.bail>0?SK.bailAt[2]:air?SK.dir:a;
+  if(fresh){SK.camFollowTravel=!!(SK.transition||SK.airRoute);SK.camTravelYaw=a;}
+  if(SK.transition)SK.camFollowTravel=true;
+  if(SK.camFollowTravel&&SK.v>.025)SK.camTravelYaw=SK.dir;
+  if(!air&&!SK.transition&&SK.v<.025)SK.camFollowTravel=false;
+  const riding=SK.camFollowTravel?(SK.camTravelYaw??a):a;
+  const follow=SK.bail>0?SK.bailAt[2]:SK.pivot?a:air?(SK.v>.025?SK.dir:SK.camTravelYaw??SK.camBase??SK.dir):riding;
   if(fresh||SK.camBase==null)SK.camBase=follow;
   else SK.camBase+=Math.atan2(Math.sin(follow-SK.camBase),Math.cos(follow-SK.camBase));
   const base=SK.camBase+SK.look,side=base-SK.stance*SK_CAM_SIDE;
@@ -320,16 +324,14 @@ function skaterSprite(look, key, view) {
   return s;
 }
 // as drawFigure: (rx, ry) from the camera, standing on z0, h tall, facing (fx, fy), a figPose key, least brightness
-function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5, normal = [0,0,1], footAnchor = null) {
-  const d0 = Math.hypot(rx, ry) || 1, vx = -rx / d0, vy = -ry / d0;
-  const view = mod(Math.round(Math.atan2(vx * -fy + vy * fx, vx * fx + vy * fy) / (Math.PI * 2) * SK_VIEWS), SK_VIEWS);
-  const { role, near } = skaterSprite(look, key, view), th = view / SK_VIEWS * Math.PI * 2, unit = h / FIG_TALL;
-  // Project the authored pose onto the contact plane. On vert the rider's
-  // height points out from the wall, rather than standing upright through it.
-  const U = normal, d = fx * U[0] + fy * U[1];
-  const len = Math.hypot(fx-d*U[0],fy-d*U[1],-d*U[2]) || 1;
-  const F = [(fx-d*U[0])/len,(fy-d*U[1])/len,-d*U[2]/len];
-  const right = [U[1]*F[2]-U[2]*F[1],U[2]*F[0]-U[0]*F[2],U[0]*F[1]-U[1]*F[0]];
+function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5, normal = [0,0,1], footAnchor = null, forward = null) {
+  // A full tangent facing avoids projecting horizontal yaw through a vert pole.
+  const U=normal,raw=forward||[fx,fy,0],d=raw.reduce((sum,v,i)=>sum+v*U[i],0);
+  const f=raw.map((v,i)=>v-d*U[i]),len=Math.hypot(...f)||1,F=f.map(v=>v/len);
+  const right=[U[1]*F[2]-U[2]*F[1],U[2]*F[0]-U[0]*F[2],U[0]*F[1]-U[1]*F[0]];
+  const towards=[-rx,-ry,eye-z0-h*.5],dot=v=>towards.reduce((sum,n,i)=>sum+n*v[i],0);
+  const view=mod(Math.round(Math.atan2(dot(right),dot(F))/(Math.PI*2)*SK_VIEWS),SK_VIEWS);
+  const {role,near}=skaterSprite(look,key,view),th=view/SK_VIEWS*Math.PI*2,unit=h/FIG_TALL;
   if(footAnchor){
     rx-=(right[0]*footAnchor[0]+F[0]*footAnchor[1]+U[0]*footAnchor[2])*unit;
     ry-=(right[1]*footAnchor[0]+F[1]*footAnchor[1]+U[1]*footAnchor[2])*unit;
@@ -388,5 +390,7 @@ function drawSkater() {
   const air = skateAir(), pushing = SK.kicking && !air, ang = pushing ? skatePushYaw(SKB.yaw) : (air?skateView.a:SKB.yaw) + SK.stance * Math.PI / 2;
   const pose = air ? 'skateair' : SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
   const contactNormal = SK.transition ? SKB.surf.n : air ? SK.airNormal || [0,0,1] : SKB.surf?.n || [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
-  drawSkaterFigure(vx + contactNormal[0] * footOffset, vy + contactNormal[1] * footOffset, z + contactNormal[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, contactNormal, skaterFootAnchor(pose,look));
+  const f=air?SK.airForward:SK.transition?skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).axis:null,u=contactNormal;
+  const facing=f?(pushing?f.map(v=>v*(SK.pushFakie?-1:1)):[u[1]*f[2]-u[2]*f[1],u[2]*f[0]-u[0]*f[2],u[0]*f[1]-u[1]*f[0]].map(v=>v*SK.stance)):null;
+  drawSkaterFigure(vx + u[0] * footOffset, vy + u[1] * footOffset, z + u[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, u, skaterFootAnchor(pose,look),facing);
 }

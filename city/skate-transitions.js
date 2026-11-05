@@ -235,7 +235,7 @@ function skateLipPop(trick,gesture){
   const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:lip.n,pop=POP_V*skateTransitionPopStrength(gesture)/10;
   let v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
   if(out&&!lip.out&&v[2]>0){SKB.v=v;v=skateTransitionLipVelocity(lip.contact,true);}
-  skateAirBegin(lip.source);SK.airRoute={o:lip.source,out};
+  const spinV=SK.airSpinV;skateAirBegin(lip.source);SK.airSpinV=spinV;SK.airRoute={o:lip.source,out};
   return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
 }
 function skateTransitionPop(trick,gesture){
