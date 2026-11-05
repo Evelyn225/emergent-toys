@@ -79,8 +79,8 @@ function skateparkGround(x, y) {
 }
 // a ramp's surface at u along it: a kicker rises the whole way to its lip (+u); a funbox goes up, along its deck, and down
 function rampHeight(o, u) {
-  if (o.ramp === 'kicker') return o.z1 * clamp((u + o.hl) / (2 * o.hl), 0, 1);
-  return o.z1 * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
+  if (o.ramp === 'kicker') return o.z0+(o.z1-o.z0) * clamp((u + o.hl) / (o.run||2*o.hl), 0, 1);
+  return o.z0+(o.z1-o.z0) * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
 }
 const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
 // Slope acceleration and lip exits now live in skate-physics.js.

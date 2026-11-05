@@ -416,10 +416,10 @@ function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are 
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
     if (o.walkStep) continue;
     if(o.bowl){if(skateBowlOuterWall(o,x,y,pad,feet))return true;continue;}
-    if (o.z0 > 0 && !o.spot || o.low && feet >= o.z1 - .004) continue;
+    if (o.z0 > 0 && !o.spot || o.low && feet >= (o.streetRail?skateStreetRailHeight(o,x,y):o.z1) - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (o.ramp) { // (you roll up a ramp: only a kicker's tall back stops you, coming at it from behind or low down its side)
-      if (o.ramp !== 'kicker' || feet >= o.z1 * .7) continue;
+      if (o.ramp !== 'kicker' || feet >= o.z0+(o.z1-o.z0)*.7) continue;
       const u = qx * o.c + qy * o.s;
       if (u > o.hl - .02 && u < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
       continue;
