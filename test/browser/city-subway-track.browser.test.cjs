@@ -13,12 +13,13 @@ test('subway rails have physical supported joints in a closed recessed track bed
    const foot=hit(7.05,y+.06,1,0,0,-1);if(foot.role!=='rail-foot')bad.push('unsupported rail web');
   }
   const sleeper=parts.find(p=>p.subwayTrackRole==='sleeper');if(!sleeper||sleeper.box.z0!==S.bed||sleeper.box.z1!==S.sleeperTop)bad.push('floating sleepers');
-  for(const [x,y,rx,ry,role]of [[23,12,0,-1,'platform-face'],[8,12.5,0,-1,'tunnel-face'],[9.5,11.7,-1,0,'platform-return'],[36.5,11.7,1,0,'platform-return'],[23,14.5,0,1,'back-face'],[1.2,14,-1,0,'end-face'],[44.8,14,1,0,'end-face']]){
+  for(const [x,y,rx,ry,role]of [[23,12,0,-1,'platform-face'],[8,12.5,0,-1,'tunnel-face'],[9.5,11.15,-1,0,'platform-return'],[36.5,11.15,1,0,'platform-return'],[23,14.5,0,1,'back-face'],[1.2,14,-1,0,'end-face'],[44.8,14,1,0,'end-face']]){
    const h=hit(x,y,-.5,rx,ry,0);if(h.role!==role||!Number.isFinite(h.d))bad.push(['open pit face',role,h]);
   }
   const row=rows-1,d0=eye*projY/(row-hor+.5);roomFloor(0,row,0,0,(14-py)/d0);
   const depth=ZB[0],expected=(eye-S.bed)/eye*d0;
   if(Math.abs(depth-expected)>.0001||CH[0]!==' ')bad.push(['bed at platform height',depth,expected]);
+  for(const x of [2,8,38,44])for(const y of [S.centre-SUBWAY_CAR.hw+.01,S.centre+SUBWAY_CAR.hw-.01])if(ROOMW.cell(x,y)>0)bad.push(['tunnel clips car side',x,y]);
   if(!(room.H-1>S.centre+SUBWAY_CAR.hw))bad.push('train clips tunnel back wall');
   px=23;py=11.1;move(0,.4);if(py>11.2)bad.push('player can fall onto track');
   return {bad,parts:parts.length};

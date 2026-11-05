@@ -17941,8 +17941,8 @@ function subwayTrackProps(){
   // Fascia and tunnel returns close the pit down to the ballast, including the
   // two corners where the wider platform meets the narrow tunnel.
   add('platform-face',23,S.edge-.06,14,.06,S.bed,0,STONE,1.5);
-  for(const x of [5,41])add('tunnel-face',x,11.95,4,.05,S.bed,0,GRAY,.8);
-  for(const x of [9,37])add('platform-return',x,S.edge+(12-S.edge)/2,.025,(12-S.edge)/2,S.bed,0,STONE,1.2);
+  for(const x of [5,41])add('tunnel-face',x,10.95,4,.05,S.bed,0,GRAY,.8);
+  for(const x of [9,37])add('platform-return',x,(11+S.edge)/2,.025,(S.edge-11)/2,S.bed,0,STONE,1.2);
   add('back-face',23,15.025,22,.025,S.bed,0,GRAY,.8);
   for(const x of [.975,45.025])add('end-face',x,13.5,.025,1.5,S.bed,0,GRAY,.8);
   for(let x=1.3;x<45;x+=.6)add('sleeper',x,S.centre,.11,1.15,S.bed,S.sleeperTop,BRICK,1.2);
@@ -17962,7 +17962,7 @@ const STATION_GRID = Array.from({ length: 16 }, (_, y) => Array.from({ length: S
   if (x === 0 || x === STATION_W - 1 || y === 15) return '#';
   if (y === 0) return well ? 'D' : '#';
   if (y <= 6) return well ? '.' : '#'; // the stairwell, through the back wall
-  if (y >= ST_TRACK) return '.'; // the track, platform to tunnels
+  if (y >= ST_TRACK-1) return '.'; // the tunnel clears the whole car, including its near side
   return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
 }).join(''));
 // how high the stairs have lifted you at (x, y)
@@ -19159,7 +19159,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
-  if(room.def.floor==='station'&&wy>SUBWAY_TRACK.edge&&(wx>=9&&wx<=37||wy>=ST_TRACK)){
+  if(room.def.floor==='station'&&wy>(wx>=9&&wx<=37?SUBWAY_TRACK.edge:ST_TRACK-1)){
     // Reproject onto the lower bed before recording depth. A zero-height
     // floor here would invisibly occlude the wheels, rails and platform face.
     const bedD=(eye-SUBWAY_TRACK.bed)*projY/(r-hor+.5),bx=px+rx*bedD,by=py+ry*bedD;
