@@ -182,7 +182,8 @@ function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : skatingNow() ? .01 : 0.05;
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
-  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
+  const exitReach = mode === 'room' && room.kind === 'station' ? Math.max(.31,n+.03) : .45; // reach the final subway tread before stepping out
+  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * exitReach), Math.floor(py + fy / n * exitReach)) === 'D') return leaveRoom();
   if (mode === 'walk' && n > 0 && backroomsSeamAt(px + fx / n * 0.1, py + fy / n * 0.1)) return enterBackrooms(); // (backrooms.js)
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   const x0 = px, y0 = py;
