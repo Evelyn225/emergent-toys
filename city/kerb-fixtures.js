@@ -171,6 +171,7 @@ function kerbProfileRadius(profile,lo,hi) {
 }
 function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
   if(hi<0||lo>o.h)return false;
+  if(o.kind==='planter')return plantingFootprint(o,u,v,pad,lo,hi);
   const k=KERB_K,over=(a,b)=>hi>=a*k&&lo<=b*k;
   const rect=(x,y,a,b)=>Math.hypot(Math.max(0,Math.abs(u-x)-a*k),Math.max(0,Math.abs(v-y)-b*k))<=pad;
   const cap=(ax,ay,bx,by,z,r)=>{
@@ -230,7 +231,7 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     if(Math.abs(u)>o.hl+pad||Math.abs(v)>o.hw+pad)continue;
     const lo=z===null?0:z-terrainHeight(o.x,o.y);
     if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
-  }return null;
+  }return parkShrubAt(x,y,pad,z,height);
 }
 // A signal controller cabinet at most junctions: on the kerb beside the first
 // signal pole, half a cell back from the corner, its doors to the pavement.
