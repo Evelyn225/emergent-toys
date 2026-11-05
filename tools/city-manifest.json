@@ -299,6 +299,7 @@
     "city/home-floors.js",
     "city/home-furnishing-ui.js",
     "city/room-fixtures.js",
+    "city/video-backroom.js",
     "city/world-bootstrap.js",
     "city/street-entrances.js",
     "city/night-market-placement.js",

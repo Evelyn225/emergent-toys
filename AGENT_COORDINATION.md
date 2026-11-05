@@ -10,7 +10,7 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** world-quality work resumed at the user's request. Airport bridge/dev arrival and subway cabin refits are merged. Current chunk: subway station handrails and mounted ceiling fittings (`codex/subway-station-fittings`); next pass 22 remainders are physical track/deck joins and train bogies. See `WORLD_QUALITY.md` for tests, timing and the remaining queue. Skating remains separately tracked in `SKATE_PLAN.md` / `SKATE_IMPLEMENTATION.md`.
+- **Codex:** current user-requested chunk is the video-store back-room secret and playable VHS (`codex/video-store-backroom`), including readable parody sleeves, brown-bag rental and home-TV playback. Airport bridge/dev arrival, subway cabin refit, station handrails and ceiling fittings are merged. On return to world quality, pass 22 still needs physical track/deck joins and train bogies. See `WORLD_QUALITY.md` for validation and the remaining queue; skating stays separately tracked.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. The user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
   authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check

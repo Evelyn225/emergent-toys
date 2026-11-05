@@ -1,5 +1,7 @@
 // ---- goods: things you can buy, carry and use. Pure (no DOM), so the node tests can run it; goods-ui.js draws it.
 // kind: food / drink (used up in bites or sips), smoke, gear (kept). uses = bites, sips or drags.
+const videoAdultTape=it=>!!it&&/^vhs_afterhours_\d+$/.test(it.id);
+const videoPlayableTape=it=>!!it&&(it.id==='vhs'||videoAdultTape(it));
 const ITEMS = {
   // food
   hotdog: { name: 'hot dog', price: 3, kind: 'food', uses: 3 }, taco: { name: 'tacos', price: 5, kind: 'food', uses: 3 },
@@ -308,6 +310,7 @@ function useHeld(near) {
   const it = heldItem();
   if (!it) return fx.smoke>0 ? takeSmokeDrag() : ['Your hands are empty.', null];
   const d = ITEMS[it.id];
+  if(videoPlayableTape(it))return videoTapeUse(it);
   if (d.kind === 'drug') return consumeDrug(it);
   animateHeldUse(it);
   if (d.kind === 'food' || d.kind === 'drink') {

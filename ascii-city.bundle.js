@@ -6695,6 +6695,8 @@ const GAMEPLAY_AUDIO = {
 };
 // ---- goods: things you can buy, carry and use. Pure (no DOM), so the node tests can run it; goods-ui.js draws it.
 // kind: food / drink (used up in bites or sips), smoke, gear (kept). uses = bites, sips or drags.
+const videoAdultTape=it=>!!it&&/^vhs_afterhours_\d+$/.test(it.id);
+const videoPlayableTape=it=>!!it&&(it.id==='vhs'||videoAdultTape(it));
 const ITEMS = {
   // food
   hotdog: { name: 'hot dog', price: 3, kind: 'food', uses: 3 }, taco: { name: 'tacos', price: 5, kind: 'food', uses: 3 },
@@ -7003,6 +7005,7 @@ function useHeld(near) {
   const it = heldItem();
   if (!it) return fx.smoke>0 ? takeSmokeDrag() : ['Your hands are empty.', null];
   const d = ITEMS[it.id];
+  if(videoPlayableTape(it))return videoTapeUse(it);
   if (d.kind === 'drug') return consumeDrug(it);
   animateHeldUse(it);
   if (d.kind === 'food' || d.kind === 'drink') {
@@ -19265,6 +19268,7 @@ function roomSprites() {
   prepareInteriorBattens();prepareInteriorHanging();
   const moving = furnishingPlacement?.part?.key; // (the piece you're moving shows only as its preview: home-furnishing-ui.js)
   for (const s of room.props) {
+    if(s.videoCustomer&&s.dead)continue;
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (moving != null && s.furnishingKey === moving) continue;
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
@@ -20090,8 +20094,7 @@ ROOM_DEFS.video = { grid: ['############', '#.......#..#', '#.SS.SS.#..#', '#.SS
       figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true, cutout: true }), // a cardboard action hero
       aisleSign(3, 3.6, 'ACTION', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6, 3.6, 'HORROR', C(GRAY, 1), C(RED, 15), 0.4),
       beadCurtain(9.5, 4.5, 0.5), lintelSign(9.5, 4.5, 0.5, '18+', C(GRAY, 0.5), C(RED, 15)), // the way through to the back
-      hung(10, 2.3, 2.45, (vx, vy, z) => dot(vx, vy, z - 0.06, 0.06, (i, t, L) => { BG[i] = C(RED, 12); return set(i, 'o', C(YEL, 15)), true; }))]; // its red bulb
-    if (chance(0.5)) p.push(shopper(10.3, 2.2, 1, -0.3)); // somebody in there, not looking round
+      ...videoBackroomProps(r)];
     p.push(...shoppers([[1.4, 3.4, 1, 0], [4.5, 2.6, -1, 0], [4.5, 5, 1, 0], [7.4, 3.6, -1, 0]], 0.35));
     return p;
   } };
@@ -26207,6 +26210,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 }
 
 function render(dt,sceneOnly=false,mask=null) {
+  videoBackroomTick();
   if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
@@ -26665,7 +26669,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: (room.tv ? 'E: telly off' : 'E: telly on') + (videoPlayableTape(heldItem()) ? (room.tv && room.videoTape===heldItem().id ? ' · Q: eject tape' : ' · Q: play VHS') : '') }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -27047,7 +27051,7 @@ function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
   if(target?.kind==='room-person'&&target.who.stall){openShop(...target.who.stall);return true;}
-  if(target?.kind==='room-person'&&!target.who.cabbie){talkInRoom();return true;}
+  if(target?.kind==='room-person'&&!target.who.cabbie){if(target.who.videoCustomer)say('“I’m just looking for the documentaries.” They refuse to make eye contact.',4);else talkInRoom();return true;}
   return false;
 }
 // ---- actions
@@ -29114,6 +29118,7 @@ function tone(at, freq, len, gain, type = 'sine', pan = 0) {
   o.type = type; o.frequency.value = freq; p.pan.value = pan;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
   shot(o, g, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
+  return o;
 }
 // footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
 // [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
@@ -31159,8 +31164,8 @@ function drawHeld(dt) {
 function artText(lines, x, y, size, colFn) {
   const w = g.measureText('M').width;
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
-  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') g.strokeText(l[k], x + k * w, y + r * size); });
-  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; g.fillText(l[k], x + k * w, y + r * size); } });
+  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ' && l[k] !== '\u0001') g.strokeText(l[k], x + k * w, y + r * size); });
+  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; if(l[k]==='\u0001')g.fillRect(x+k*w,y+r*size,w+.3,size+.3);else g.fillText(l[k], x + k * w, y + r * size); } });
   return w;
 }
 // the hand: a fist seen side-on, four fingers curled round the bottom of what it holds (a band each, knuckles to
@@ -42340,8 +42345,14 @@ function TELEVISION(x,y,r,scale=1,angle=0) {
  const screenBox=boxAt(0,0,c,s,q(.65),q(.001),q(.79),q(1.47));
  const screenShade=(i,t,L)=>{
   if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
-  const frame=televisionProgramme((HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T,(r.tvChannel??Math.floor(T/24))%4);
-  BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
+  const frame=r.videoTape?videoTapeFrame(r.videoTape,(HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T-(r.videoTapeStart||0)):televisionProgramme((HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T,(r.tvChannel??Math.floor(T/24))%4);
+  BG[i]=C(frame.base,frame.level);set(i,r.videoTape?' ':frame.ch,C(frame.ink,12));
+  if(r.videoTape){
+   const ordinary=r.videoTape==='vhs',word=frame.label;
+   if(word){const zc=q(ordinary?1.3034:1.13),letterW=q(1.25/word.length),along=dx*c+dy*s,tc=Math.max(.05,t-along*HIT.u),far=tc+Math.abs(along)*q(.65);
+    const band=q(.22),fontBand=band*projY/far>=7&&letterW*projX/far>=5?band:0;
+    set(i,signLine(word,HIT.u/letterW+word.length/2,(zc+band/2-HIT.w)/band,i,zc,tc,t,letterW,fontBand,far,c,s)||' ',C(ordinary?ORANGE:WHITE,14));}
+  }return true;
  };
  return {...ROOM_MODEL(x,y,(vx,vy)=>{
   const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v], [sx,sy]=at(0,q(.063));
@@ -48427,7 +48438,7 @@ function setRoomLights(on, r = room) {
 // what E can aim at: the switch, any tap, and (in shops) the ceiling lamps themselves
 function roomFixtureTargets() {
   if (mode !== 'room' || !room) return [];
-  const out = [], sw = roomSwitch();
+  const out = room.kind==='video'?(room.videoRentals||[]).slice():[], sw = roomSwitch();
   if (sw) {
     if (!room.props.includes(sw.model)) room.props.push(sw.model); // (a furnished home rebuilds its props)
     out.push({ kind: 'switch', x: sw.x, y: sw.y, z0: 1.12, z1: 1.3, radius: .08, reach: 2 });
@@ -48443,10 +48454,12 @@ function roomFixtureTargets() {
   return out;
 }
 function roomFixturePrompt(t) {
+  if(t.kind==='video-rental')return `E: rent “${VIDEO_AFTER_HOURS[t.index]}” — $6`;
   if (t.kind === 'tap') return t.tap.on ? 'E: turn the tap off' : 'E: turn the tap on';
   return roomLightsOn() ? 'E: switch the lights off' : 'E: switch the lights on';
 }
 function roomFixtureUse(t) {
+  if(t.kind==='video-rental')return videoRentalUse(t);
   if (t.kind === 'tap') {
     t.tap.on = !t.tap.on;
     if (actx) burst(actx.currentTime, t.tap.on ? .5 : .12, [filt('bandpass', 2800, .8)], t.tap.on ? .07 : .03);
@@ -48461,6 +48474,101 @@ function roomFixtureUse(t) {
   setRoomLights(on);
   if (actx) sfxUse('click');
   say(on ? 'Click. The lights come back up.' : 'Click. The room drops into shadow.', 2);
+}
+// The joke stays on the sleeves and in the awkward behaviour. No explicit imagery.
+const VIDEO_AFTER_HOURS=['Jurassic Pork','Missionary: Impossible','Raiders of the Lost Pants','The Bare Witch Project','The Big Lebooty','Dude, Where Are My Pants?','Shaving Private Ryan','Honey, I Shrunk the Shorts','Romancing the Bone','Saturday Night Beaver','The Full Monty Python','The Lord of the G-Strings'];
+VIDEO_AFTER_HOURS.forEach((title,k)=>{
+ const id='vhs_afterhours_'+k;ITEMS[id]={name:'Brown-bag VHS: '+title,price:6,kind:'gear'};
+ DENSE[id]=()=>sculpt(24,18,(x,y)=>{
+  if(Math.abs(x)>6||y>7||y< -7)return null;
+  if(y< -5.4)return Math.abs(x)<4?['\u0001',C(GRAY,1.2)]:null;
+  const fold=Math.abs(x)>5||Math.abs(x-y*.15-3)<.3||y< -4.7;
+  return ['\u0001',C(WARM,fold?4.5:6.5+(x<0?.6:0))];
+ });
+});
+function videoTitleLines(title){
+ const lines=[];for(const word of title.toUpperCase().split(' ')){if(!lines.length||lines[lines.length-1].length+word.length+1>14)lines.push(word);else lines[lines.length-1]+=' '+word;}return lines;
+}
+function videoSleeves(x,y,c,s,count,first){
+ const fy=c,fx=-s,half=count*.2,parts=[],cases=[];
+ const add=(u,v,hl,hw,z0,z1,shade)=>{const xx=x+c*u+fx*v,yy=y+s*u+fy*v;parts.push(BX(xx,yy,hl,hw,z0,z1,shade,c,s));};
+ const wood=(i,t,L)=>{BG[i]=C(BRICK,(1.7+L*.25)*shadeFace(HIT.face));set(i,' ',0);return true;};
+ add(0,-.14,half+.04,.025,0,1.95,wood);
+ for(const u of [-half-.025,half+.025])add(u,0,.025,.18,0,1.95,wood);
+ for(const z of [.04,.7,1.34,1.94])add(0,0,half+.05,.18,z,z+.04,wood);
+ for(let row=0;row<2;row++)for(let k=0;k<count;k++){
+  const index=first+row*count+k,title=VIDEO_AFTER_HOURS[index],lines=videoTitleLines(title),letterW=.32/(Math.max(...lines.map(l=>l.length))+1),u=(k-(count-1)/2)*.4,z=.74+row*.64,xx=x+c*u+fx*.08,yy=y+s*u+fy*.08;
+  const shade=(i,t,L)=>{
+   const cover=HIT.face===3,bar=HIT.w>z+.075&&HIT.w<z+.13;
+   const label=cover&&HIT.w>z+.17;
+   const pixel=hash(Math.floor((HIT.u+.18)/.045),Math.floor((HIT.w-z)/.04),index+71);
+   BG[i]=C(cover?(bar?BLACK:label?WHITE:pixel>.55?SKIN:WARM):GRAY,cover?(bar?1:label?8:3+Math.floor(pixel*4)*1.5+L*.15):1+L*.2);set(i,' ',0);
+   if(label){
+    const k=Math.floor((z+.32-HIT.w)/.05),line=lines[k],vx=xx+fx*.04-px,vy=yy+fy*.04-py;
+    const far=Math.max(.05,dx*vx+dy*vy+Math.abs(dx*c+dy*s)*.18);
+    // Never scatter sub-cell title fragments. Nearby, every letter fits; farther away, browse with the full prompt.
+    const tc=dx*vx+dy*vy,side=-dy*vx+dx*vy,pixels=letterW*projX*Math.abs((dx*s-dy*c)*tc-side*(dx*c+dy*s))/(far*far);
+    if(line&&pixels>=1)set(i,worldText(line,HIT.u,HIT.w,t,i,vx,vy,z+.295-k*.05,c,s,letterW,.045),C(BLACK,1));
+   }return true;
+  };
+  const prop={...BX(xx,yy,.18,.04,z,z+.32,shade,c,s),videoSleeve:index};parts.push(prop);cases.push({kind:'video-rental',index,x:xx+fx*.045,y:yy+fy*.045,z0:z,z1:z+.32,radius:.18,reach:1.5,part:prop});
+ }
+ return {parts,cases};
+}
+function videoBackroomProps(r){
+ const a=videoSleeves(10,1.15,1,0,4,0),b=videoSleeves(10.85,2.65,0,1,2,8);r.videoRentals=[...a.cases,...b.cases];
+ const customer={...figProp(9.7,2.8,figLook({shades:true,top:'jacket',bot:'pants',hair:'part',col:{top:[BRICK,4],bot:[GRAY,2],skin:[SKIN,11],hair:[GRAY,1]}}),{face:[1,0],still:true}),videoCustomer:true};
+ r.videoCustomer=customer;
+ const lamp=ROOM_MODEL(10,2.3,(vx,vy)=>{rod(vx,vy,3,vx,vy,2.53,.004,GRAY,1);coveRound(vx,vy,1,0,.065,.065,2.4,2.54,.06,(i,t,L)=>{BG[i]=C(RED,10);set(i,' ',0);return true;});});
+ return [...a.parts,...b.parts,customer,lamp];
+}
+let videoMusicNodes=[],videoMusicRoom=null;
+function stopVideoTapeMusic(){
+ if(!videoMusicNodes.length&&!videoMusicRoom)return;
+ for(const node of videoMusicNodes)try{node.stop(actx?.currentTime||0);}catch(e){} // already-ended notes need no further work
+ videoMusicNodes=[];if(videoMusicRoom)videoMusicRoom.videoMusicAt=-1;videoMusicRoom=null;
+}
+function videoBackroomTick(){
+ const r=mode==='room'?room:null;if(!r){stopVideoTapeMusic();return;}
+ if(videoMusicRoom&&(videoMusicRoom!==r||!r.tv||!r.videoTape))stopVideoTapeMusic();
+ if(r.kind==='video'){
+  const inside=px>=9&&py<4.5,dt=clamp(T-(r.videoTick??T),0,.1);r.videoTick=T;
+  if(inside&&!r.videoSeen){r.videoSeen=true;r.videoExitAt=T+.9;say('The customer freezes. "I’m just… looking for the documentaries."',5);}
+  if(r.videoSeen&&!inside&&r.videoInside&&!r.videoRemarked){r.videoRemarked=true;say('The clerk gives you a look. "Find what you were looking for?"',4);}
+  r.videoInside=inside;
+  const p=r.videoCustomer;
+  if(p&&!p.dead&&r.videoExitAt!=null&&T>r.videoExitAt){
+   const path=[[9.5,3.7],[9.5,5.2],[8.2,6.2],[6,8.4],[5.5,8.85]],target=path[r.videoExitStep||0];
+   if(!target)p.dead=true;else{const dx=target[0]-p.x,dy=target[1]-p.y,d=Math.hypot(dx,dy),step=dt*.75;if(d<=step){[p.x,p.y]=target;r.videoExitStep=(r.videoExitStep||0)+1;}else{p.x+=dx/d*step;p.y+=dy/d*step;}p.face=[1,0];}
+  }
+ }
+ if(r.tv&&r.videoTape&&videoPlayableTape({id:r.videoTape})&&actx&&T>(r.videoMusicAt??-1)){
+  r.videoMusicAt=T+(r.videoTape==='vhs'?7:3);const notes=r.videoTape==='vhs'?[164.81,196,246.94,220,196,146.83]:[233.08,277.18,349.23,311.13,233.08];
+  videoMusicRoom=r;videoMusicNodes=notes.map((f,k)=>tone(actx.currentTime+.02+k*(r.videoTape==='vhs'?.7:.18),f,r.videoTape==='vhs'?1.2:.34,.035,'triangle')).filter(node=>typeof node?.stop==='function');
+ }
+}
+function videoRentalUse(t){
+ if(inv.length>=INV_SIZE)return say('Your bag is full. Make room for one more questionable decision.',3);
+ if(!pay(6))return say('The rental is $6. Even artistic research has a budget.',3);
+ carryItem({id:'vhs_afterhours_'+t.index,uses:0});saveGame();say('The clerk silently slides you a plain brown bag. "Due back Tuesday."',4);
+}
+function videoTapeUse(it){
+ if(mode!=='room'||!homeRecord(room)||homeSpot()!=='tv')return ['A VHS tape. Take it to your TV at home and press Q nearby.',null];
+ if(room.videoTape===it.id&&room.tv){room.videoTape=null;return ['You eject the tape. Back to regular television.','click'];}
+ room.videoTape=it.id;room.tv=true;room.videoTapeStart=T;room.videoMusicAt=-1;videoBackroomTick();
+ return [it.id==='vhs'?'The tape clicks in. Mist, pines, a waterfall… FIR CREEK.':'The tape clicks in. A sax-like honk. The entire picture says [ CENSORED ].','click'];
+}
+function videoTapeFrame(id,u,v,time){
+ if(id!=='vhs'){
+  const bar=v>.34&&v<.66,pixel=hash(Math.floor(u*9),Math.floor(v*6),71);
+  return {base:bar?GRAY:pixel>.5?SKIN:WARM,level:bar?1:3+Math.floor(pixel*4)*2,ch:' ',ink:WHITE,label:'[ CENSORED ]'};
+ }
+ // An original slow rural-mystery title sequence: forest, falls and a sawmill.
+ const shot=Math.floor(mod(time,24)/8),mist=Math.sin(u*17+time*.12)*.025;let base=CYAN,level=3,ch=' ',ink=ORANGE;
+ if(shot===0){if(v>.38+mist){base=GREEN;level=2;}const tree=fract(u*11+time*.006),crown=.3+hash(Math.floor((u+time*.00055)*11),4,1)*.18;if(v>crown&&Math.abs(tree-.5)<Math.max(0,(v-crown)*.42)){base=GREEN;level=1;}if(v>.76){base=GRAY;level=3;}}
+ if(shot===1){base=GREEN;level=2;if(Math.abs(u-.53)<.11+.025*Math.sin(v*8)){base=WHITE;level=6+2*Math.sin(v*35-time*1.5);}if(v>.8){base=CYAN;level=4;}}
+ if(shot===2){base=CYAN;level=3;if(v>.55){base=BRICK;level=3;}if(u>.12&&u<.75&&v>.35&&v<.65){base=GRAY;level=3;}if(u>.72&&u<.8&&v>.12&&v<.6){base=GRAY;level=2;}if(v>.73){base=BRICK;level=5+Math.floor(fract(u*13)*2);}}
+ return {base,level,ch,ink,label:mod(time,8)>2?'FIR CREEK':''};
 }
 // Assemble the generated city after authored outdoor geometry has been created,
 // before saves or the first frame. Interior coordinates never enter this pass.
