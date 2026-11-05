@@ -3040,10 +3040,10 @@ function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are 
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
     if (o.walkStep) continue;
     if(o.bowl){if(skateBowlOuterWall(o,x,y,pad,feet))return true;continue;}
-    if (o.z0 > 0 && !o.spot || o.low && feet >= o.z1 - .004) continue;
+    if (o.z0 > 0 && !o.spot || o.low && feet >= (o.streetRail?skateStreetRailHeight(o,x,y):o.z1) - .004) continue;
     const qx = rel(x - o.x), qy = rel(y - o.y);
     if (o.ramp) { // (you roll up a ramp: only a kicker's tall back stops you, coming at it from behind or low down its side)
-      if (o.ramp !== 'kicker' || feet >= o.z1 * .7) continue;
+      if (o.ramp !== 'kicker' || feet >= o.z0+(o.z1-o.z0)*.7) continue;
       const u = qx * o.c + qy * o.s;
       if (u > o.hl - .02 && u < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
       continue;
@@ -3230,8 +3230,8 @@ function skateparkGround(x, y) {
 }
 // a ramp's surface at u along it: a kicker rises the whole way to its lip (+u); a funbox goes up, along its deck, and down
 function rampHeight(o, u) {
-  if (o.ramp === 'kicker') return o.z1 * clamp((u + o.hl) / (2 * o.hl), 0, 1);
-  return o.z1 * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
+  if (o.ramp === 'kicker') return o.z0+(o.z1-o.z0) * clamp((u + o.hl) / (o.run||2*o.hl), 0, 1);
+  return o.z0+(o.z1-o.z0) * clamp(Math.min((u + o.hl) / o.run, (o.hl - u) / o.run), 0, 1);
 }
 const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
 // Slope acceleration and lip exits now live in skate-physics.js.
@@ -17114,10 +17114,10 @@ function rayRamp(ox, oy, oz, rx, ry, rz, b) {
     if (den < 0) { if (t > tmin) { tmin = t; face = f; } } else if (t < tmax) tmax = t;
     return tmin <= tmax;
   };
-  const kick = b.ramp === 'kicker', k = kick ? b.z1 / (2 * b.hl) : b.z1 / b.run;
+  const kick = b.ramp === 'kicker', k = kick ? (b.z1-b.z0) / (b.run||2*b.hl) : (b.z1-b.z0) / b.run;
   if (!cut(1, 0, 0, b.hl, 1) || !cut(-1, 0, 0, b.hl, 2) || !cut(0, 1, 0, b.hw, 3) || !cut(0, -1, 0, b.hw, 4) || !cut(0, 0, -1, -b.z0, 6) || !cut(0, 0, 1, b.z1, 5)) return -1;
-  if (!cut(-k, 0, 1, k * b.hl, 7)) return -1; // z <= k (u + hl)
-  if (!kick && !cut(k, 0, 1, k * b.hl, 8)) return -1; // z <= k (hl - u)
+  if (!cut(-k, 0, 1, b.z0+k * b.hl, 7)) return -1; // z <= k (u + hl)
+  if (!kick && !cut(k, 0, 1, b.z0+k * b.hl, 8)) return -1; // z <= k (hl - u)
   if (tmin < 0.01) return -1;
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;
@@ -36140,7 +36140,7 @@ function skateSpotBox(x, y, hl, hw, height, kind, material) {
   return o;
 }
 function buildSkateSpots() {
-  SKATE_SPOTS.length = SKATE_SPOT_FEATURES.length = SKATE_PATCHES.length = 0;
+  SKATE_SPOTS.length = SKATE_SPOT_FEATURES.length = SKATE_PATCHES.length = 0;skatePatchCount=-1;
   const station = EL_STATIONS.find(s => {
     const x = s.x - 2, y = EL_Y + 1;
     return !isWater(x, y) && !map[idx(Math.floor(x), Math.floor(y))] && ROAD[idx(Math.floor(x), Math.floor(y))];
@@ -36177,6 +36177,7 @@ function buildSkateSpots() {
       description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
   }
   buildExtraSkateparks();
+  buildStreetSkateSpots();
   const stairs = EL_STATIONS.find(s => s.stairs?.length)?.stairs[0];
   if (stairs) SKATE_SPOTS.push({ id: 'skate-stairs', name: 'Station stairs · kinked handrails', x: stairs.x, y: stairs.y,
     description: 'Two flights joined by a landing, with continuous kinked handrails. Enter from the platform with a valid train pass, then line up a downhill rail run.' });
@@ -36194,7 +36195,7 @@ function refreshSkateSpotDirectory() {
   if (typeof mapPlaceCache !== 'undefined') mapPlaceCache = null;
 }
 function skateSpotGround(x, y) {
-  let h = 0;
+  let h = skateStreetGround(x,y);
   for (const o of SKATE_SPOT_FEATURES) if (Math.abs(rel(x - o.x)) <= o.hl && Math.abs(rel(y - o.y)) <= o.hw) h = Math.max(h, o.z1);
   for(const o of SK_TRANSITIONS)if(o.spotPark){
     if(o.pool){const q=skatePoolSample(o,x,y);if(q)h=Math.max(h,q.h);continue;}
@@ -36203,7 +36204,144 @@ function skateSpotGround(x, y) {
   }
   return h;
 }
-const inSkateSpotPatch = (x, y) => SKATE_PATCHES.some(p => Math.abs(rel(x - p.x)) <= p.hl && Math.abs(rel(y - p.y)) <= p.hw);
+let skatePatchCount=-1;
+const skatePatchCells=new Map();
+function inSkateSpotPatch(x,y){
+  if(skatePatchCount!==SKATE_PATCHES.length){
+    skatePatchCells.clear();skatePatchCount=SKATE_PATCHES.length;
+    for(const p of SKATE_PATCHES)for(let ix=Math.floor(p.x-p.hl);ix<=Math.floor(p.x+p.hl);ix++)for(let iy=Math.floor(p.y-p.hw);iy<=Math.floor(p.y+p.hw);iy++){
+      const key=idx(ix,iy),bucket=skatePatchCells.get(key)||[];bucket.push(p);skatePatchCells.set(key,bucket);
+    }
+  }
+  return (skatePatchCells.get(idx(Math.floor(x),Math.floor(y)))||[]).some(p=>Math.abs(rel(x-p.x))<=p.hl&&Math.abs(rel(y-p.y))<=p.hw);
+}
+// Small street lines in existing open park edges and service yards. Placement
+// preserves vegetation, paths, buildings and traffic; no new full-size parks.
+const SKATE_STREET_SITES=[],SKATE_STREET_FEATURES=[],SKATE_STREET_CELLS=new Map();
+function skateStreetPoint(site,u,v){return [site.x+site.c*u-site.s*v,site.y+site.s*u+site.c*v];}
+function skateStreetFeature(site,u,v,hl,hw,height,kind='skateledge',extra={}){
+  const [x,y]=skateStreetPoint(site,u,v),o={x,y,c:site.c,s:site.s,hl,hw,z0:site.base,z1:site.base+height,kind,material:'concrete',low:true,spot:true,streetSite:site.id,...extra};
+  SKATE_STREET_FEATURES.push(o);SKATE_FEATURES.push(o);solids.push(o);
+  const ex=Math.abs(o.c)*o.hl+Math.abs(o.s)*o.hw,ey=Math.abs(o.s)*o.hl+Math.abs(o.c)*o.hw;
+  if(!o.streetRail)for(let ix=Math.floor(x-ex);ix<=Math.floor(x+ex);ix++)for(let iy=Math.floor(y-ey);iy<=Math.floor(y+ey);iy++){
+    const key=idx(ix,iy),bucket=SKATE_STREET_CELLS.get(key)||[];bucket.push(o);SKATE_STREET_CELLS.set(key,bucket);
+  }
+  return o;
+}
+function skateStreetGrind(o,points,kind=o.kind){
+  const a=points[0],b=points.at(-1);
+  GRINDS.push({points,ax:a[0],ay:a[1],bx:b[0],by:b[1],z:o.z1-terrainHeight(o.x,o.y),kind,material:o.material,feature:o});
+}
+function skateStreetEdges(o,from=-o.hl,to=o.hl){
+  for(const side of o.kind==='skaterail'?[0]:[-1,1]){
+    const point=u=>[o.x+o.c*u-o.s*side*o.hw,o.y+o.s*u+o.c*side*o.hw,o.z1];
+    skateStreetGrind(o,[point(from),point(to)]);
+  }
+}
+function skateStreetBank(site,u,v,hl,hw,height,run=hl*2-.08,shape='kicker'){
+  const o=skateStreetFeature(site,u,v,hl,hw,height,'skateramp',{ramp:shape,run,ray:rayRamp});
+  if(shape==='funbox')skateStreetEdges(o,-hl+run,hl-run);
+  return o;
+}
+// A sloped tube and its posts share the grind path's exact endpoints. Model
+// rays run in the object's local frame; the ordinary solid buckets still cull.
+function skateStreetRail(site,v,points){
+  const mid=(points[0][0]+points.at(-1)[0])/2,hl=(points.at(-1)[0]-points[0][0])/2,model=[];
+  const part=(u0,z0,u1,z1,width)=>{
+    const du=u1-u0,dz=z1-z0,len=Math.hypot(du,dz),f=[du/len,0,dz/len];
+    model.push({px:(u0+u1)/2-mid,py:0,pz:site.base+(z0+z1)/2,A:[f,[0,1,0],[-f[2],0,f[0]]],E:[len/2,width,width]});
+  };
+  for(let i=1;i<points.length;i++)part(...points[i-1],...points[i],.003);
+  for(const [u,z]of points)part(u,0,u,z,.003);
+  const ray=(ox,oy,oz,rx,ry,rz,b)=>{
+    const qx=ox-b.x,qy=oy-b.y,u=qx*b.c+qy*b.s,v=-qx*b.s+qy*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+    let nearest=Infinity,hit=null;
+    for(const p of model){const t=rayOBox(u,v,oz,du,dv,rz,p);if(t>.01&&t<nearest){nearest=t;hit={...HIT,w:oz+rz*t};}}
+    if(!hit)return -1;Object.assign(HIT,hit);return nearest;
+  };
+  const top=Math.max(...points.map(p=>p[1]))+.003,o=skateStreetFeature(site,mid,v,hl+.003,.003,top,'skatestreetrail',{streetRail:points.map(([u,z])=>[u-mid,site.base+z+.003]),material:'metal',ray});
+  skateStreetGrind(o,points.map(([u,z])=>[...skateStreetPoint(site,u,v),site.base+z+.003]),'handrail');
+  return o;
+}
+SOLID_SHADE.skatestreetrail=()=> (i,t,L)=>{BG[i]=SK_STEEL(L,HIT.face===5);return set(i,' ',0),true;};
+function skateStreetRailHeight(o,x,y){
+  const u=rel(x-o.x)*o.c+rel(y-o.y)*o.s,points=o.streetRail;
+  for(let i=1;i<points.length;i++)if(u<=points[i][0]){const [a,z]=points[i-1],[b,w]=points[i];return z+(w-z)*clamp((u-a)/(b-a),0,1);}
+  return points.at(-1)[1];
+}
+function skateStreetGround(x,y){
+  let h=0;
+  for(const o of SKATE_STREET_CELLS.get(idx(Math.floor(x),Math.floor(y)))||[]){
+    const dx=rel(x-o.x),dy=rel(y-o.y),u=dx*o.c+dy*o.s,v=-dx*o.s+dy*o.c;
+    if(Math.abs(u)<=o.hl&&Math.abs(v)<=o.hw)h=Math.max(h,o.ramp?rampHeight(o,u):o.z1);
+  }
+  return h;
+}
+function skateStreetSiteClear(x,y,c,s){
+  const hx=Math.abs(c)*1.1+Math.abs(s)*.52,hy=Math.abs(s)*1.1+Math.abs(c)*.52;
+  const near=(o,pad=.12)=>Math.abs(rel(o.x-x))<hx+Math.abs(o.c??1)*(o.hl||0)+Math.abs(o.s||0)*(o.hw||0)+pad&&Math.abs(rel(o.y-y))<hy+Math.abs(o.s||0)*(o.hl||0)+Math.abs(o.c??1)*(o.hw||0)+pad;
+  if(SKATE_PATCHES.some(p=>Math.abs(rel(p.x-x))<hx+p.hl+.2&&Math.abs(rel(p.y-y))<hy+p.hw+.2))return false;
+  if(SKATE_STREET_SITES.some(p=>Math.hypot(rel(p.x-x),rel(p.y-y))<12))return false;
+  if(trees.some(o=>near(o,.3))||benches.some(o=>near(o,.35))||solids.some(o=>near(o))||ARCH_BLOCKERS.some(o=>near(o))||LANDMARK_SOLIDS.some(o=>near(o)))return false;
+  if(typeof GRILLS!=='undefined'&&GRILLS.some(o=>near(o,.25)))return false;
+  let base=null;
+  for(let u=-1.1;u<=1.1001;u+=.22)for(let v=-.52;v<=.5201;v+=.26){
+    const wx=x+c*u-s*v,wy=y+s*u+c*v,bx=Math.floor(wx/8),by=Math.floor(wy/8),lx=mod(wx,8),ly=mod(wy,8);
+    if(isWater(wx,wy)||ROAD[idx(Math.floor(wx),Math.floor(wy))]||map[idx(Math.floor(wx),Math.floor(wy))])return false;
+    if(blockKind(bx,by)==='park'&&(inPond(lx,ly,bx,by,.2)||Math.abs(lx-5)<.35||Math.abs(ly-5)<.35))return false;
+    const h=roadGroundHeight(wx,wy);if(base===null)base=h;else if(Math.abs(base-h)>.002)return false;
+  }
+  return true;
+}
+function buildStreetSkateSpots(){
+  SKATE_STREET_SITES.length=SKATE_STREET_FEATURES.length=0;SKATE_STREET_CELLS.clear();
+  const candidates=[],positions=[[6.6,6.6,0],[6.6,3.4,Math.PI/2],[3.4,6.6,0]];
+  for(const v of [2.6,2.9,3.2,3.5,3.8,4.1,6,6.3,6.9,7.2])positions.push([6.6,v,0],[v,6.6,Math.PI/2]);
+  for(let by=0;by<NB;by++)for(let bx=0;bx<NB;bx++){
+    if(!['park','yard'].includes(blockKind(bx,by))||SKATEPARK&&bx===SKATEPARK.bx&&by===SKATEPARK.by)continue;
+    for(const [u,v,yaw]of positions){
+      const x=bx*8+u,y=by*8+v,c=Math.cos(yaw),s=Math.sin(yaw);
+      if(skateStreetSiteClear(x,y,c,s))candidates.push({x,y,c,s,bx,by,district:districtOf(bx,by),base:roadGroundHeight(x,y)});
+    }
+  }
+  const styles=['stairs','dock','banks','manuals','rails','gap'],used=new Set();
+  const descriptions={
+    stairs:['Four-step rail','A roll-up bank reaches a 72 cm landing and four 18 cm stairs. Two steel handrails run flat, down the steps and out onto the approach; line up on the upper deck for a downhill grind or ollie the set.'],
+    dock:['Loading dock','A bank reaches a 60 cm loading platform with grindable edges and a sloped steel exit rail. Pop off the dock or carry a manual across the adjacent low pad.'],
+    banks:['Bank-to-ledge plaza','Broad banks lead onto a 45 cm deck with steel-edged grind lines. A low ledge and flat bar make alternate exits, with clear run-up and landing space.'],
+    manuals:['Manual link','Two low eight-metre pads with a two-metre gap, plus a parallel concrete ledge. Link manuals, flips and a grind across the open paving.'],
+    rails:['Angled rail line','Three low steel bars at different angles, with space between them to pop out, steer and transfer. A broad low bank offers another approach.'],
+    gap:['Ledge transfer','Two six-metre ledges separated by a three-metre transfer gap, plus a long low manual pad. Build speed on the clear approaches and link the line.']
+  };
+  while(SKATE_STREET_SITES.length<8){
+    const site=candidates.find(p=>!used.has(p.district)&&skateStreetSiteClear(p.x,p.y,p.c,p.s))||candidates.find(p=>skateStreetSiteClear(p.x,p.y,p.c,p.s));
+    if(!site)break;
+    const type=site.district==='industrial'&&!SKATE_STREET_SITES.some(p=>p.type==='dock')?'dock':styles.find(type=>!SKATE_STREET_SITES.some(p=>p.type===type))||styles[SKATE_STREET_SITES.length%styles.length];
+    const id='skate-street:'+SKATE_STREET_SITES.length;Object.assign(site,{id,type});used.add(site.district);SKATE_STREET_SITES.push(site);
+    const box=(u,v,hl,hw,h,kind='skateledge',edge=true,extra={})=>{const o=skateStreetFeature(site,u,v,hl,hw,h,kind,extra);if(edge)skateStreetEdges(o);return o;};
+    if(type==='stairs'){
+      skateStreetBank(site,-.72,0,.25,.22,.072);box(-.26,0,.21,.22,.072);
+      for(let i=0;i<4;i++)box(-.05+(i+.5)*.025,0,.0125,.22,.072-i*.018,'skateledge',false,{walkStep:true});
+      for(const side of [-1,1])skateStreetRail(site,side*.2,[[-.35,.117],[-.05,.117],[.05,.045],[.35,.045]]);
+    }else if(type==='dock'){
+      skateStreetBank(site,-.74,-.08,.24,.2,.06);box(-.25,-.08,.25,.2,.06);box(.64,.23,.3,.1,.018,'manualpad');
+      skateStreetRail(site,-.25,[[-.42,.105],[-.05,.105],[.28,.035],[.5,.035]]);
+    }else if(type==='banks'){
+      skateStreetBank(site,-.28,0,.55,.22,.045,.2,'funbox');box(.61,-.25,.3,.035,.035);box(.61,.25,.3,.004,.027,'skaterail');
+    }else if(type==='manuals'){
+      box(-.5,-.12,.4,.1,.018,'manualpad');box(.5,-.12,.4,.1,.018,'manualpad');box(0,.24,.65,.035,.035);
+    }else if(type==='rails'){
+      for(const [u,v,angle]of [[-.65,-.18,.2],[0,.12,-.25],[.65,-.18,.2]])box(u,v,.24,.004,.028,'skaterail',true,{c:Math.cos(Math.atan2(site.s,site.c)+angle),s:Math.sin(Math.atan2(site.s,site.c)+angle),material:'metal'});
+      skateStreetBank(site,0,-.3,.4,.08,.025,.15,'funbox');
+    }else{
+      box(-.45,-.2,.3,.035,.04);box(.45,-.2,.3,.035,.04);box(0,.22,.8,.1,.018,'manualpad');
+    }
+    const hx=Math.abs(site.c)*1.1+Math.abs(site.s)*.52,hy=Math.abs(site.s)*1.1+Math.abs(site.c)*.52;
+    SKATE_PATCHES.push({x:site.x,y:site.y,hl:hx,hw:hy});
+    const [x,y]=skateStreetPoint(site,-1.02,.4),[name,description]=descriptions[type];
+    SKATE_SPOTS.push({id,name:cap(site.district.replace(/[-_]/g,' '))+' · '+name,x,y,line:{x:site.x,y:site.y},description,street:true,district:site.district});
+  }
+}
 const skateBalanceStick=()=>SK_INPUT.mouseHeld?SK_INPUT.mouse:SK_INPUT.right;
 // Grind paths use absolute world heights and 3D arc lengths. Segments are
 // indexed in every block they cross, rather than only at a long rail's midpoint.
@@ -36571,8 +36709,8 @@ function skateSurface(x, y, zHint) {
       if (Math.abs(top - h) > .001) continue; // a higher city surface owns contact
       ref = o; kind = o.ramp || o.kind; material = o.material || 'concrete';
       if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-(o.bowl ? qx / (u || 1) : o.c) * at.tz, -(o.bowl ? qy / (u || 1) : o.s) * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
-      const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? o.z1 / (2 * o.hl)
-        : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * o.z1 / o.run;
+      const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? (u+o.hl<(o.run||2*o.hl)?(o.z1-o.z0)/(o.run||2*o.hl):0)
+        : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * (o.z1-o.z0) / o.run;
       gx = slope * o.c; gy = slope * o.s;
     }
     if (!ref && typeof inSkatepark === 'function' && (inSkatepark(x, y) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(x,y))) material = 'concrete';

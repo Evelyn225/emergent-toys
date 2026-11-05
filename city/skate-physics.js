@@ -36,8 +36,8 @@ function skateSurface(x, y, zHint) {
       if (Math.abs(top - h) > .001) continue; // a higher city surface owns contact
       ref = o; kind = o.ramp || o.kind; material = o.material || 'concrete';
       if (o.profile) { const at = skateProfilePoint(o.profile, skateProfileU(o.profile, u, (zHint || h) - o.z0)); return { h, n: [-(o.bowl ? qx / (u || 1) : o.c) * at.tz, -(o.bowl ? qy / (u || 1) : o.s) * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o }; }
-      const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? o.z1 / (2 * o.hl)
-        : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * o.z1 / o.run;
+      const slope = !o.ramp ? 0 : o.ramp === 'kicker' ? (u+o.hl<(o.run||2*o.hl)?(o.z1-o.z0)/(o.run||2*o.hl):0)
+        : Math.abs(u) < o.hl - o.run ? 0 : -Math.sign(u) * (o.z1-o.z0) / o.run;
       gx = slope * o.c; gy = slope * o.s;
     }
     if (!ref && typeof inSkatepark === 'function' && (inSkatepark(x, y) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(x,y))) material = 'concrete';

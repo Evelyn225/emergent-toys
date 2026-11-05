@@ -24,7 +24,7 @@ test('the skatepark: real ledges, bars and a pad on concrete in a park, every be
   for(const o of SKATE_FEATURES){
    if(!o.spot&&!inSkatepark(o.x,o.y))bad.push(['outside',o.kind]); // street spots have their own location/traffic checks
    if(!solidsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))].includes(o))bad.push(['not collidable',o.kind]);
-   if(o.ramp)continue; // (a ramp you roll up, not a block you bump: its own test)
+   if(o.ramp||o.walkStep||o.streetRail)continue; // ramps, walkable treads and sloped rails have dedicated surface/path checks
    if(Math.abs(skateparkGround(o.x,o.y)-o.z1)>1e-9)bad.push(['no top to ride',o.kind]);
    // walking you bump into it; with your feet above its top you clear it
    if(!solidAt(o.x,o.y,.03,0))bad.push(['walk through',o.kind]);if(solidAt(o.x,o.y,.03,o.z1+.001))bad.push(['cannot clear',o.kind]);
