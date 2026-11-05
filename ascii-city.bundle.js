@@ -35669,7 +35669,7 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the board) the arrows held say
-  if(skatingNow()&&(SK.transition||SK.grind))return skatePop(trick);
+  if(skatingNow()&&(SK.transition||SK.grind||skateAir()))return skatePop(trick);
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   body.buf = -9;
@@ -36320,13 +36320,33 @@ function skateInputReset() {
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
 }
+// A flip in an existing flight changes the board, never its trajectory.
+function skateAirTrick(key,gesture) {
+  if(!skateAir()||SK.bail>0)return false;
+  const [name,flip,turn]=TRICKS[key]||['ollie',0,0];
+  if(!flip&&!turn)return false;
+  const tr=body.trick,remaining=tr&&(tr.flip||tr.turn)?(tr.duration??tr.air)-tr.t:0;
+  if(remaining>0){
+    if(remaining>.18)return false;
+    SK.lateTrick={key,gesture,until:T+.18};SK.trickKeyT=-1;SK.airArrow=null;return true;
+  }
+  SK.lateTrick=null;SK.trickKeyT=-1;SK.airArrow=null;
+  body.trick=skateTrick('late '+name,flip,turn,.32,!!gesture?.nollie);
+  body.trick.duration=Math.abs(turn)>=1?.32:.24; // a late flick has a shorter wind-up
+  return true;
+}
+function skateAirTrickStep(){
+  const pending=SK.lateTrick;
+  if(!pending)return;
+  if(!skateAir()||SK.bail>0||T>pending.until+1e-6){SK.lateTrick=null;return;}
+  const tr=body.trick;
+  if(!tr||!(tr.flip||tr.turn)||tr.t>=(tr.duration??tr.air))skateAirTrick(pending.key,pending.gesture);
+}
 function skateGesturePlay(gesture) {
   if (!gesture || SK.bail > 0) return false;
   if (skateAir()) {
     if(skateCanLipPop())return skateLipPop(gesture.key,gesture);
-    const [name, flip, turn] = TRICKS[gesture.key] || ['ollie', 0, 0];
-    if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < (body.trick.duration ?? body.trick.air)) return false;
-    body.trick = skateTrick('late ' + name, flip, turn, .32, gesture.nollie);
+    return skateAirTrick(gesture.key,gesture);
   } else skatePop(gesture.key, gesture);
   return true;
 }
@@ -36608,7 +36628,7 @@ function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
 // their orientation into a later kerb hop. Preserve the pop, then prepare for
 // the surface below the predicted touchdown without changing trick rotation.
 function skateAirBegin(source = null) {
-  SK.airRoute=null;SK.pivot=null;SK.lipPop=null;SK.spin=0;SK.airSpinV=0;SK.preWind=0;
+  SK.airRoute=null;SK.pivot=null;SK.lipPop=null;SK.lateTrick=null;SK.airArrow=null;SK.trickKeyT=-1;SK.spin=0;SK.airSpinV=0;SK.preWind=0;
   const up=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).up;
   SK.airPose={t:T,yaw:SKB.yaw,bodyYaw:a,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
   SK.airNormal=up.slice();SK.airForward=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).axis;SK.airSource=source;
@@ -36950,16 +36970,22 @@ function skateFinishTransitionPop(trick,gesture,velocity){
   SK.preWind=clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
   SK.charge=-1;SK.spin=0;SK.popT=T;controllerRumble('pop');if(actx)sfxUse('ollie');return true;
 }
+// Keep ramp pops close to the wall: most impulse is vertical, with only
+// 18% of the old normal's sideways component for wheel clearance.
+function skateTransitionPopDirection(n){
+  const x=n[0]*.18,y=n[1]*.18;
+  return [x,y,Math.sqrt(Math.max(0,1-x*x-y*y))];
+}
 function skateLipPop(trick,gesture){
   if(!skateCanLipPop())return false;
-  const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:lip.n,pop=POP_V*skateTransitionPopStrength(gesture)/10;
+  const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:skateTransitionPopDirection(lip.n),pop=POP_V*skateTransitionPopStrength(gesture)/10;
   let v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
   if(out&&!lip.out&&v[2]>0){SKB.v=v;v=skateTransitionLipVelocity(lip.contact,true);}
   const spinV=SK.airSpinV;skateAirBegin(lip.source);SK.airSpinV=spinV;SK.airRoute={o:lip.source,out};
   return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
 }
 function skateTransitionPop(trick,gesture){
-  const C=SK.transition,out=skateAirOutHeld(),n=out?[0,0,1]:SKB.surf.n;
+  const C=SK.transition,out=skateAirOutHeld(),n=out?[0,0,1]:skateTransitionPopDirection(SKB.surf.n);
   const at=skateProfilePoint(C.o.profile,C.u),v=out&&at.theta>.7?skateTransitionLipVelocity(C,true):SKB.v.slice();
   const pop=POP_V*skateTransitionPopStrength(gesture)/10;
   skateTransitionRelease(C);
@@ -37254,7 +37280,7 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
   if(typeof skateFixedReset==='function')skateFixedReset();
-  Object.assign(SK,{kick:0,kicking:false,mongo:false,lipPop:null,pushCruise:false,pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camBase:null,camFollowTravel:false,camTravelYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,airForward:null,airSpinV:0,pivot:null,reversing:false});
+  Object.assign(SK,{kick:0,kicking:false,mongo:false,lipPop:null,pushCruise:false,pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camBase:null,camFollowTravel:false,camTravelYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,airForward:null,airSpinV:0,lateTrick:null,airArrow:null,pivot:null,reversing:false});
   skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];SKB.surf=null;
 }
 
@@ -37276,13 +37302,14 @@ function stepSkate(dt,readInput=true) {
   if (stepSkateTransition(dt, f > 0||reversePush, f < 0&&!reversePush, s)) return;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
   if (air) {
+    skateAirTrickStep();
     skateAirSpinStep(dt,s); // continuous angular velocity, including pre-wind
   }
   else skateGroundVelocity(dt, f > 0, f < 0, s, f<0&&!!(K.KeyS||SK_INPUT.back));
   // arrows tapped in the air: a flip trick, once the rest of the chord's had a moment to come down
   if (SK.trickKeyT >= 0 && T - SK.trickKeyT > 0.07) {
-    SK.trickKeyT = -1;
-    if (air && !body.trick) { const [name, flip, turn] = TRICKS[arrowTrick()] || ['ollie', 0, 0]; if (name !== 'ollie') body.trick = skateTrick(name, flip, turn, .45); }
+    const key=SK.airArrow??arrowTrick();SK.airArrow=null;SK.trickKeyT = -1;
+    if(air)skateAirTrick(key);
   }
   if (!air) skateManualStep(dt);
   const want = SK.v * dt, x0 = px, y0 = py;
@@ -37306,7 +37333,12 @@ function stepSkate(dt,readInput=true) {
 // Space on the board: down crouches, up pops (or a tap off the touch button, or a flick: straight away)
 function skateSpace(down) {
   if (SK.grind) { if (down) grindPop(); return; } // (off the rail with an ollie: straight away, no wind-up)
-  if (SK.bail > 0 || skateAir()&&!skateCanLipPop()) { if (!down) SK.charge = -1; return; }
+  if (SK.bail > 0) { if (!down) SK.charge = -1; return; }
+  if(skateAir()&&!skateCanLipPop()){
+    if(down)SK.charge=T;
+    else{if(SK.charge>=0)skateAirTrick(arrowTrick());SK.charge=-1;}
+    return;
+  }
   if (down) { if (SK.charge < 0) SK.charge = T; return; }
   if (SK.charge >= 0) skatePop();
 }
@@ -37314,7 +37346,7 @@ function skatePop(trick, gesture) {
   if (SK.transition) return skateTransitionPop(trick, gesture);
   if (SK.grind) return grindPop(trick, gesture); // (the touch Ollie button, or a flick, on a rail)
   if(SK.bail>0)return;
-  if(skateAir())return skateLipPop(trick,gesture);
+  if(skateAir())return skateCanLipPop()?skateLipPop(trick,gesture):skateAirTrick(trick??arrowTrick(),gesture);
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   skateAirBegin();
   skateManualEnd();
@@ -37332,10 +37364,11 @@ function skateAirTime(vz) {
   const slope = (skateGround(worldCoord(x), worldCoord(y)) - skateGround(px, py)) / ahead, rise = slope * SK.v * 10; // (metres a second)
   return 2 * clamp(vz - rise, vz * .45, vz * 1.6) / GRAV; // (z = vz t - g t^2 / 2 meets ground rising at rise m/s)
 }
-function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.trickKeyT = T; }
+function skateArrow() { if(skateAir()){if(SK.trickKeyT<0)SK.trickKeyT=T;SK.airArrow=arrowTrick();} }
 // back on the ground (stepBody): rolling away clean, or not
 function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
+  SK.lateTrick=null;
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   skateAirPose();
   const surf = skateSurface(px, py), axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);

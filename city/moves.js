@@ -38,7 +38,7 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the board) the arrows held say
-  if(skatingNow()&&(SK.transition||SK.grind))return skatePop(trick);
+  if(skatingNow()&&(SK.transition||SK.grind||skateAir()))return skatePop(trick);
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   body.buf = -9;

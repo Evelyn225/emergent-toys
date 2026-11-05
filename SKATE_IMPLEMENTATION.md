@@ -472,3 +472,37 @@ at 177×66 against main `4ff9292`: median main/branch 18.3/18.2 ms, then
 with mixed pair results. These are local observations, not an FPS guarantee.
 The final rebuilt-bundle fakie-push/mongo/coast and ramp-energy/powerslide
 regressions also pass (eight distinct browser cases for this follow-up).
+
+## Airborne tricks and reduced ramp-pop recoil
+
+Arrows (including quick taps), Space plus arrows, mouse/gamepad flicks and touch
+now share an airborne trick path. An existing ollie no longer blocks a late
+flip, and a completed flip or shuvit can be followed by another. Inputs within
+180 ms of the current rotation's end can queue until its catch; an unfinished
+rotation cannot be overwritten. Late rotations use 240 ms, or 320 ms for a full
+board turn, so a reasonably early late flip can finish and catch in a flat
+ollie. They do not add velocity, height, spin pre-wind or a second jump. Existing
+catch/landing requirements still apply. Arrow chords retain their last pressed
+directions through the short chord delay, so releasing a quick tap works.
+
+Transition and lip-grace pops retain the board's physical launch plane while
+biasing the impulse upward. The horizontal component is 18% of the former full
+surface-normal pop, with the vertical component preserving impulse magnitude.
+This avoids kicking the rider several metres toward the bowl centre on a steep
+wall. C/RT exits retain their deliberate outward carry and vertical pop.
+
+The expired-grace regression now expects a late flip rather than no trick, and
+compares its height/vertical speed with an unpopped control to retain the
+no-second-jump invariant. New trajectory tests land late kickflips/heelflips
+and compare their full height curves with a plain ollie. Native browser checks
+exercise five input paths, catch queuing, active-shuvit protection and ramp
+impulses/orientation across every park transition at two wall heights. Existing
+bowl access/returns/exits, pop grace, shoe anchors, fixed-clock and ramp-camera
+regressions pass. Isolated mutations blocking airborne tricks or restoring full
+normal recoil fail their targeted browser checks.
+
+Local serial ABAB at 177×66 against exact main `4ff9292`: median main/branch
+17.2/18.2 ms, then 18.0/17.5 ms (60 frames after 20 warm-up frames). Mixed pair
+results average about 1% higher on the branch; these are local observations,
+not an FPS guarantee. Close, wide, oblique and night views remain reviewable
+with the existing ramp-air capture script. Reserved world files are untouched.

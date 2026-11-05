@@ -69,13 +69,33 @@ function skateInputReset() {
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
 }
+// A flip in an existing flight changes the board, never its trajectory.
+function skateAirTrick(key,gesture) {
+  if(!skateAir()||SK.bail>0)return false;
+  const [name,flip,turn]=TRICKS[key]||['ollie',0,0];
+  if(!flip&&!turn)return false;
+  const tr=body.trick,remaining=tr&&(tr.flip||tr.turn)?(tr.duration??tr.air)-tr.t:0;
+  if(remaining>0){
+    if(remaining>.18)return false;
+    SK.lateTrick={key,gesture,until:T+.18};SK.trickKeyT=-1;SK.airArrow=null;return true;
+  }
+  SK.lateTrick=null;SK.trickKeyT=-1;SK.airArrow=null;
+  body.trick=skateTrick('late '+name,flip,turn,.32,!!gesture?.nollie);
+  body.trick.duration=Math.abs(turn)>=1?.32:.24; // a late flick has a shorter wind-up
+  return true;
+}
+function skateAirTrickStep(){
+  const pending=SK.lateTrick;
+  if(!pending)return;
+  if(!skateAir()||SK.bail>0||T>pending.until+1e-6){SK.lateTrick=null;return;}
+  const tr=body.trick;
+  if(!tr||!(tr.flip||tr.turn)||tr.t>=(tr.duration??tr.air))skateAirTrick(pending.key,pending.gesture);
+}
 function skateGesturePlay(gesture) {
   if (!gesture || SK.bail > 0) return false;
   if (skateAir()) {
     if(skateCanLipPop())return skateLipPop(gesture.key,gesture);
-    const [name, flip, turn] = TRICKS[gesture.key] || ['ollie', 0, 0];
-    if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < (body.trick.duration ?? body.trick.air)) return false;
-    body.trick = skateTrick('late ' + name, flip, turn, .32, gesture.nollie);
+    return skateAirTrick(gesture.key,gesture);
   } else skatePop(gesture.key, gesture);
   return true;
 }

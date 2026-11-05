@@ -12,5 +12,8 @@ test('a right-stick load started on the wall can finish after crossing the copin
 });
 test('holding Space beyond the lip grace cannot add a second jump',()=>{
  const run=skateSim([{frames:first-6},{frames:27,keys:{Space:1}},{keys:{ArrowLeft:1}}],opts);
- assert.equal(run.at(-1).trick,null);
+ const coast=skateSim([{frames:first+22}],opts);
+ assert.equal(run.at(-1).trick,'late kickflip','expired pop grace still permits a flip, without another jump');
+ assert.ok(Math.abs(run.at(-1).vz-coast.at(-1).vz)<1e-8);
+ assert.ok(Math.abs(run.at(-1).worldZ-coast.at(-1).worldZ)<1e-8);
 });

@@ -37,6 +37,8 @@ this implementation. No proprietary tuning numbers have been inferred from it.
 | Gravity | 9.8 m/s² | Physical baseline |
 | Normal pop | 2.9 m/s | Gameplay launch speed; ideal ballistic rise 0.43 m, flat flight 0.59 s |
 | Strong gesture pop | 1.15 × normal | Ideal ballistic rise 0.57 m; not measured board clearance |
+| Ramp-pop sideways component | 18% of the surface normal | Upward bias reduces bowl recoil; total impulse magnitude is retained |
+| Late flip / full-turn duration | 240 / 320 ms | Faster airborne wind-up, with existing catch/landing requirements |
 | Forward push cap | 12 m/s | Deliberately fast gameplay, requested during playtesting |
 | Low-speed push burst | 2.8 m/s | Gameplay acceleration, not a measured kick |
 | Concrete/asphalt rolling coefficient | 0.012 / 0.018 | Starting calibration knobs, not source-validated measurements |

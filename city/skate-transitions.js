@@ -230,16 +230,22 @@ function skateFinishTransitionPop(trick,gesture,velocity){
   SK.preWind=clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
   SK.charge=-1;SK.spin=0;SK.popT=T;controllerRumble('pop');if(actx)sfxUse('ollie');return true;
 }
+// Keep ramp pops close to the wall: most impulse is vertical, with only
+// 18% of the old normal's sideways component for wheel clearance.
+function skateTransitionPopDirection(n){
+  const x=n[0]*.18,y=n[1]*.18;
+  return [x,y,Math.sqrt(Math.max(0,1-x*x-y*y))];
+}
 function skateLipPop(trick,gesture){
   if(!skateCanLipPop())return false;
-  const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:lip.n,pop=POP_V*skateTransitionPopStrength(gesture)/10;
+  const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:skateTransitionPopDirection(lip.n),pop=POP_V*skateTransitionPopStrength(gesture)/10;
   let v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
   if(out&&!lip.out&&v[2]>0){SKB.v=v;v=skateTransitionLipVelocity(lip.contact,true);}
   const spinV=SK.airSpinV;skateAirBegin(lip.source);SK.airSpinV=spinV;SK.airRoute={o:lip.source,out};
   return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
 }
 function skateTransitionPop(trick,gesture){
-  const C=SK.transition,out=skateAirOutHeld(),n=out?[0,0,1]:SKB.surf.n;
+  const C=SK.transition,out=skateAirOutHeld(),n=out?[0,0,1]:skateTransitionPopDirection(SKB.surf.n);
   const at=skateProfilePoint(C.o.profile,C.u),v=out&&at.theta>.7?skateTransitionLipVelocity(C,true):SKB.v.slice();
   const pop=POP_V*skateTransitionPopStrength(gesture)/10;
   skateTransitionRelease(C);

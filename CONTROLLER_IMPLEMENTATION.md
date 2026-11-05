@@ -138,3 +138,10 @@ at the resulting angle, without seeking a half turn. On steep airs the rider
 and board rotate in their actual takeoff/landing plane. The ramp-return chase
 camera eases behind travel, including a fakie descent, without turning the
 rider to match it. LB-look retains its unlimited orbit.
+
+While airborne, another loaded right-stick flick can start a late flip after
+an ollie or completed rotation. A flick in the final 180 ms of an active flip
+queues until its catch. Mouse, quick arrow taps, Space-plus-arrows and touch
+share this behavior. Late flips do not provide another jump; allow time to
+finish/catch before landing. Ramp pops now add mostly upward impulse with only
+18% of the former sideways component, retaining the board's ramp angle.
