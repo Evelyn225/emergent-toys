@@ -88,3 +88,15 @@ or scoop timing each fail the corresponding tests.
 These are scripted Gamepad API checks. A physical controller has not been
 available in this environment; tactile preference can be tuned through the
 new settings.
+
+After integrating main `aed2e4a` (including the planting/depth work), all 11
+Node test files pass: 54 focused controller/skate/bundle cases plus the existing
+aircraft and boat cases. All 18 final browser cases pass, including the five
+controller flows, aircraft, skating and the merged world-quality regressions.
+Desktop and 390 px controller typing screens, controller settings and the
+third-person coping view were reviewed.
+
+Serial ABAB measurements at 177x66 with a connected idle controller measured
+main medians of 12.6/13.0 ms and this branch at 14.0/13.0 ms in the fixed park
+view (about 5% higher on average). These are local observations, not a frame-rate
+guarantee. All geometry/rendering changes from the other agent remain intact.
