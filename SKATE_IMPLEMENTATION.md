@@ -506,3 +506,12 @@ Local serial ABAB at 177×66 against exact main `4ff9292`: median main/branch
 results average about 1% higher on the branch; these are local observations,
 not an FPS guarantee. Close, wide, oblique and night views remain reviewable
 with the existing ramp-air capture script. Reserved world files are untouched.
+
+Integrated main `22d06d6` (planting and subway surfaces), rebuilt the bundle and
+passed ten browser cases across the shared controller, native planting, subway
+stairs and new air-trick/ramp-pop regression. All 80 focused simulation checks
+pass. Close/wide/oblique/night ramp poses were reviewed. A fresh serial ABAB
+against this main at 177×66 measured main/branch medians 17.3/18.4 ms, then
+15.6/17.9 ms, about 10% higher on average. The branch's ramp-return camera frames
+a different view during this scripted rollback, so this is whole-frame gameplay
+cost rather than an isolated pop-helper benchmark; it is not an FPS guarantee.
