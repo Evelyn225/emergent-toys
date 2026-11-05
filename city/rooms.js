@@ -11,19 +11,45 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
   }
   return rows_;
 }
-// A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
+// A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the recessed track (y 12..14) running on into a tunnel at
 // either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
 // from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
 const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6, steps: 18 };
 const STATION_H = STATION_STAIRS.rise + 3;
 const STATION_EXIT_H = 0.3, STATION_EXIT_Z = STATION_H - STATION_EXIT_H / 2 - 0.06;
 const ST_TRACK = 12; // the first track row; the platform edge is just before it
-const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: STATION_W }, (_, x) => {
+// Rail heads, wheel contact and the recessed station bed share one vertical datum.
+const SUBWAY_TRACK={edge:ST_TRACK-.7,centre:ST_TRACK+.9,gauge:1.435,bed:-1.2,
+  sleeperTop:-1.12,railTop:-.98,wheelRadius:.38,bogieCentres:[-2.55,2.55],axleOffset:.54};
+const subwayAxleZ=()=>SUBWAY_TRACK.railTop+SUBWAY_TRACK.wheelRadius;
+function subwayTrackProps(){
+  const S=SUBWAY_TRACK,parts=[];
+  const add=(role,x,y,hl,hw,z0,z1,base,level)=>parts.push({...BX(x,y,hl,hw,z0,z1,subwayPaint(base,level)),subwayTrackRole:role});
+  // Fascia and tunnel returns close the pit down to the ballast, including the
+  // two corners where the wider platform meets the narrow tunnel.
+  add('platform-face',23,S.edge-.06,14,.06,S.bed,0,STONE,1.5);
+  for(const x of [5,41])add('tunnel-face',x,10.95,4,.05,S.bed,0,GRAY,.8);
+  for(const x of [9,37])add('platform-return',x,(11+S.edge)/2,.025,(S.edge-11)/2,S.bed,0,STONE,1.2);
+  add('back-face',23,15.025,22,.025,S.bed,0,GRAY,.8);
+  for(const x of [.975,45.025])add('end-face',x,13.5,.025,1.5,S.bed,0,GRAY,.8);
+  for(let x=1.3;x<45;x+=.6)add('sleeper',x,S.centre,.11,1.15,S.bed,S.sleeperTop,BRICK,1.2);
+  for(const side of [-1,1]){
+    const y=S.centre+side*S.gauge/2;
+    add('rail-foot',23,y,22,.07,S.sleeperTop,-1.10,GRAY,1.2);
+    add('rail-web',23,y,22,.012,-1.10,-1.02,GRAY,1.4);
+    // A narrow real joint between rail lengths, supported by continuous feet.
+    for(let x=1;x<45;x+=6){const end=Math.min(x+6,45);
+      add('rail-head',(x+end)/2,y,(end-x)/2-.006,.035,-1.02,S.railTop,GRAY,3.5);
+    }
+  }
+  return parts;
+}
+const STATION_GRID = Array.from({ length: 16 }, (_, y) => Array.from({ length: STATION_W }, (_, x) => {
   const well = x >= 10 && x <= 12;
-  if (x === 0 || x === STATION_W - 1 || y === 14) return '#';
+  if (x === 0 || x === STATION_W - 1 || y === 15) return '#';
   if (y === 0) return well ? 'D' : '#';
   if (y <= 6) return well ? '.' : '#'; // the stairwell, through the back wall
-  if (y >= ST_TRACK) return '.'; // the track, platform to tunnels
+  if (y >= ST_TRACK-1) return '.'; // the tunnel clears the whole car, including its near side
   return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
 }).join(''));
 // how high the stairs have lifted you at (x, y)
@@ -529,7 +555,7 @@ const ROOM_DEFS = {
     } },
   station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > ST_TRACK - 0.8, stairs: STATION_STAIRS, height: STATION_H,
     props: r => {
-      const p = [...stairSteps(STATION_STAIRS),...stationFittings()];
+      const p = [...stairSteps(STATION_STAIRS),...stationFittings(),...subwayTrackProps()];
       for (const x of [15.5, 20.5, 25.5, 30.5]) p.push(BENCHP(x, 7.5, 0, 1)); // against the back wall
       for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 9 + Math.random() * 1.6, shirt()));
       return p;
@@ -753,11 +779,44 @@ function subwayTrainModel(k){
     add('door-header',door,v,S.halfDoor+.08,.045,S.head,S.head+.11,metal,meta);
     add('door-sill',door,v,S.halfDoor+.08,.055,S.floor-.06,S.floor,metal,meta);
   }
+  const track=SUBWAY_TRACK,R=track.wheelRadius,z=subwayAxleZ();
+  // A horizontal lathe gives each wheel a round tread, bevel and separate
+  // inner flange; the same ray helper already draws clocks and bed casters.
+  const cylinder=(role,u,v,r,half,shade,meta={})=>{
+    add(role,u,v,r,half,z-r,z+r,shade,{...meta,centerZ:z,
+      clockShape:{x:0,y:0,profile:[[-half,0],[-half,r-.008],[-half+.006,r],[half-.006,r],[half,r-.008],[half,0],[-half,0]]}});
+    parts[parts.length-1].ray=homeClockRay;
+  };
+  for(const centre of track.bogieCentres){
+    const meta={subwayBogie:centre};
+    add('bogie-pivot',centre,0,.20,.23,-.42,S.bottom+.02,dark,meta);
+    add('bogie-bolster',centre,0,.12,.565,-.45,-.35,metal,meta);
+    for(const side of [-1,1]){
+      add('bogie-frame',centre,side*.52,.78,.045,-.54,-.39,metal,meta);
+      for(const offset of [-.4,.4])add('suspension',centre+offset,side*.52,.08,.06,-.4,S.bottom,dark,meta);
+    }
+    for(const offset of [-track.axleOffset,track.axleOffset]){
+      const u=centre+offset,axle={...meta,subwayAxle:u};
+      cylinder('axle',u,0,.055,track.gauge/2,dark,axle);
+      add('bogie-crossmember',u,0,.055,.58,-.54,-.45,metal,axle);
+      for(const side of [-1,1]){
+        const v=side*track.gauge/2,m={...axle,subwaySide:side};
+        cylinder('wheel',u,v,R,.05,(i,t,L)=>{
+          const radius=Math.hypot(HIT.u,HIT.w-z),rim=radius>R*.82,hub=radius<R*.24;
+          BG[i]=C(GRAY,(rim?3.3:hub?2:1)+L*(rim?.4:.2));set(i,' ',0);return true;
+        },m);
+        cylinder('wheel-flange',u,side*(track.gauge/2-.057),R+.025,.008,metal,m);
+        add('axle-bearing',u,side*.52,.09,.085,z-.07,-.42,dark,m);
+      }
+    }
+  }
+  add('underfloor-equipment',0,0,.75,.36,-.46,S.bottom,dark);
+  for(const side of [-1,1])add('coupler',side*4.2,0,.10,.12,-.25,-.13,dark);
   SUBWAY_MODELS.set(k,parts);return parts;
 }
 function drawSubwayTrainCar(vx,vy,k,r=room){
   const open=trainDoorAmount(r);
-  for(const p of subwayTrainModel(k))drawBox({...p.box,x:vx+p.box.x+p.slide*open,y:vy+p.box.y},p.shade);
+  for(const p of subwayTrainModel(k))drawBox({...p.box,x:vx+p.box.x+p.slide*open,y:vy+p.box.y},p.shade,p.ray||rayBox);
 }
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
@@ -1187,6 +1246,13 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
+  if(room.def.floor==='station'&&wy>(wx>=9&&wx<=37?SUBWAY_TRACK.edge:ST_TRACK-1)){
+    // Reproject onto the lower bed before recording depth. A zero-height
+    // floor here would invisibly occlude the wheels, rails and platform face.
+    const bedD=(eye-SUBWAY_TRACK.bed)*projY/(r-hor+.5),bx=px+rx*bedD,by=py+ry*bedD;
+    const light=Math.max(0,1-bedD/30)*7*room.def.light,fp=homeBalconyPavingFootprint(bedD,eye-SUBWAY_TRACK.bed);
+    ZB[i]=bedD;BG[i]=C(GRAY,.6+light*.13-.3*coveGroove(bx+by*.3,.23,.05,fp));return set(i,' ',0);
+  }
   const balcony=room.def.balcony;
   if (balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx>=balcony.x1&&wy>=balcony.y0&&wy<balcony.y1)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
   if (room.def.wc && inWc(wx, wy)) { if(ROOM_FLOORS[room.def.bathFloor])return ROOM_FLOORS[room.def.bathFloor](i,f,wx,wy,r,x,L);const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); }
@@ -1219,11 +1285,6 @@ function roomFloor(i, r, x, rx, ry) {
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station': {
       const fp=homeBalconyPavingFootprint(d,eye);set(i,' ',0);
-      if(wy>ST_TRACK-.7){
-        const rail=Math.max(facadeLine(Math.abs(wy-ST_TRACK-.3),.1,fp),facadeLine(Math.abs(wy-ST_TRACK-1.5),.1,fp));
-        const sleeper=wy>ST_TRACK+.3&&wy<ST_TRACK+1.5&&coveGroove(wx,.6,.15,fp)>.5;
-        BG[i]=rail>.5?C(GRAY,2+L*.65):sleeper?C(BRICK,1+L*.25):C(GRAY,.8+L*.15);return;
-      }
       if(wy>ST_TRACK-1){BG[i]=C(YEL,2+L*.5-coveGroove(wx,.15,.025,fp));return;}
       const grout=Math.max(coveGroove(wx,1,.035,fp),coveGroove(wy,1,.035,fp));
       BG[i]=C(STONE,1.5+L*.4-grout);return;

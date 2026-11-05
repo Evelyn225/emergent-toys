@@ -13,7 +13,9 @@ function flight(target,height,landing=false){for(let n=0;n<12000;n++){
  if(!step({throttle:Math.sign(targetThrottle-c.throttle)*.2,pitch,turn:clamp(angle*2.5-c.roll*1.8,-1,1),lift:0}))return {error:'crash',x:c.x,y:c.y,z:c.z,dist,events};
  }return {error:'timeout',x:c.x,y:c.y,z:c.z};}
 legs.push(flight({x:250,y:RUNWAY.y},5));legs.push(flight({x:480,y:220},5));legs.push(flight({x:530,y:220},1.8));legs.push(flight({x:610,y:220},0,true));
-legs.push(flight({x:665,y:220},5));legs.push(flight({x:260,y:69},5));legs.push(flight({x:220,y:69},2.3));legs.push(flight({x:150,y:69},0,true));
+// Stay above the bay until the westbound final reaches the real runway.
+// The replaced ground causeway no longer provides an accidental landing.
+legs.push(flight({x:665,y:220},5));legs.push(flight({x:260,y:69},5));legs.push(flight({x:220,y:69},3.3));legs.push(flight({x:150,y:69},0,true));
 return {legs,events:events.filter((x,i,a)=>a.indexOf(x)===i),craft:{x:c.x,y:c.y,z:c.z,v:c.v,ground:c.ground,dmg:c.dmg,ditched:c.ditched,wrecked:c.wrecked},seconds};
 }
 module.exports={flyFernRoundTrip};
