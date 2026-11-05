@@ -134,3 +134,24 @@ test('phone map controls and supplier details remain reachable at narrow and lan
     await page.locator('[data-map="close"]').click();assert.equal(await page.evaluate(()=>paused),false);
   }
 },true));
+
+for(const mobile of [false,true])test(`GPS sits below time and controls without moving them (${mobile?'touch':'desktop'})`,()=>fixture(async page=>{
+ for(const [width,height]of mobile?[[320,568],[390,844],[844,390]]:[[1170,800]]){
+  await page.setViewportSize({width,height});
+  const r=await page.evaluate(()=>{
+   resize();tod=12;env(0);render(0);settings.help=true;task=job=courierJob=null;
+   const capture=()=>{const texts=[],old=g.fillText;try{g.fillText=function(s,x,y,...args){texts.push({s,x,y,col:g.fillStyle});return old.call(this,s,x,y,...args);};hud();}finally{g.fillText=old;}return texts;};
+   setMapWaypoint({id:'hud-order-test',name:'GPS target',x:px+10,y:py});const active=capture(),bottom=hudBottom;
+   clearMapWaypoint();const inactive=capture();
+   const info=a=>a.filter(t=>t.col==='#bbbbbb'&&t.x===4),before=info(active),after=info(inactive);
+   const gps=active.filter(t=>['E','N','S','W'].includes(t.s)&&t.col==='#d2d6df'||t.s.startsWith('GPS target ·'));
+   return {before,after,gps,bottom,FS,width:cv.width,bar:TOUCH?touchBarBox():null};
+  });
+  assert.ok(r.before.some(t=>/\d\d:\d\d/.test(t.s))&&r.before.length>1,JSON.stringify(r));
+  assert.ok(r.gps.some(t=>t.s.includes('GPS target')));
+  assert.ok(Math.min(...r.gps.map(t=>t.y))>=Math.max(...r.before.map(t=>t.y))+r.FS+4,JSON.stringify(r));
+  assert.deepEqual(r.before,r.after,'activating GPS keeps time and control tips in place');
+  assert.ok(r.bottom>Math.max(...r.gps.map(t=>t.y))+r.FS);
+  if(r.bar)assert.ok(Math.min(...r.gps.map(t=>t.y))>r.bar.bottom,'GPS clears the touch toolbar');
+ }
+},mobile));
