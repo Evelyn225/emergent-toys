@@ -27,6 +27,10 @@ test('subway seats have rounded cushions on supports, poles have solid mounted s
   }
   for(const lamp of lamps){const parts=capture(lamp);if(!lamp.walk||!lamp.overhead||lamp.box.z0<2.9||parts.length!==2||Math.max(...parts.map(p=>p.box.z1))!==3)bad.push('lamp floats or blocks aisle');}
   for(const prop of [...seats,...backs,...poles,...lamps])for(const part of capture(prop))for(const z of [(part.box.z0+part.box.z1)/2,part.box.z1]){Object.assign(HIT,{face:5,u:0,v:0,w:z,nx:0,ny:0,nz:1});CH[0]='?';BG[0]=NONE;part.shade(0,1,10);if(CH[0]!==' '||BG[0]===NONE)bad.push('fixture glyph or missing background');}
+  // A seated viewer near the row end can still see the cushion ahead even when its centre is behind them.
+  const s=seats[0],props=room.props,draw=s.draw,view=[px,py,dx,dy,tf];let shown=false;
+  try{room.props=[s];px=s.x+1.5;py=s.y;dx=1;dy=0;tf=1;s.draw=(...args)=>{shown=true;draw(...args);};roomSprites();}finally{room.props=props;s.draw=draw;[px,py,dx,dy,tf]=view;}
+  if(!shown)bad.push('visible row end culled behind its centre');
   return {bad};});assert.deepEqual(r.bad,[]);
  await p.evaluate(()=>{room.props=room.props.filter(s=>!s.fig);px=3;py=2.2;body.seat=null;});
  await p.keyboard.press('c');assert.deepEqual(await p.evaluate(()=>[!!body.seat,body.seat?.h,py]),[true,.45,1.3]);

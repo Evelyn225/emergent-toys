@@ -18066,11 +18066,11 @@ function subwayBench(x,y){
     for(let k=0;k<6;k++)part(vx,vy,-1.5+k*.6,0,.294,S.depth,S.base,S.top,.025,blue);
     part(vx,vy,0,0,S.half-.04,.2,.34,S.base,.012,CHROME);
     for(const u of [-1.45,1.45])for(const v of [-.16,.16])part(vx,vy,u,v,.035,.035,0,.34,.01,CHROME);
-  },[S.half,S.depth,S.top]),subwaySeat:true,seatRow:{x0:x-1.55,x1:x+1.55,y,fx:0,fy,h:S.top}};
+  },[S.half,S.depth,S.top]),subwaySeat:true,radius:Math.hypot(S.half,S.depth),seatRow:{x0:x-1.55,x1:x+1.55,y,fx:0,fy,h:S.top}};
   const back={...ROOM_MODEL(x,backY,(vx,vy)=>{
     for(let k=0;k<6;k++)part(vx,vy,-1.5+k*.6,0,.294,.05,S.top,S.back,.025,blue);
     for(const u of [-1.45,1.45])part(vx,vy,u,-fy*.025,.025,.025,0,S.back,.01,CHROME);
-  }),box:boxAt(x,backY,1,0,S.half,.05,S.top,S.back),subwaySeatBack:true};
+  }),box:boxAt(x,backY,1,0,S.half,.05,S.top,S.back),subwaySeatBack:true,radius:Math.hypot(S.half,.05)};
   return [seat,back];
 }
 function subwayPole(x,y){
