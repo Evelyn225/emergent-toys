@@ -29732,8 +29732,8 @@ function buildPause() {
         <b>mouse · LB + right stick</b><span>orbit freely around the skater through any number of turns; after looking, recenter takes the short way back.</span>
         <b>hold S · left stick down</b><span>brake quickly; keep holding to pivot 180° and push the other way. Release to coast. Bowl rollbacks can still come down fakie.</span>
         <b>S + A/D · gamepad B</b><span>brake with a direction to powerslide; gamepad B alone brakes to a stop</span>
-        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter left scoop for a 360 flip, right for a 360 shuvit. Half-circle right, then flick upper-right and release: varial heelflip. Quarter-circle left then flick upper-right: hardflip; quarter-circle right then flick upper-left: inward heelflip. Load forward for nollies. Flick again in the air for a late flip.</span>
-        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
+        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter left scoop for a 360 flip, right for a 360 shuvit. Half-circle right, then flick upper-right and release: varial heelflip. Quarter-circle left then flick upper-right: hardflip; quarter-circle right then flick upper-left: inward heelflip. Load forward for nollies. In the air, a quick left/right flick and release also flips without loading again; right-mouse drags work the same way. Loaded flicks and scoops still work.</span>
+        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. Tap arrows during an air to flip, or use Space plus arrows. Air tricks add no extra jump. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
         <b>hold C · RT at takeoff</b><span>air out of a bowl or ramp onto its deck. Without it, bowl airs favor returning inside. Choose before popping or crossing the coping; spins do not change that flight choice. For a coping boardslide, air out, turn the board across the tube and descend with speed along it.</span>
         <b>Q / E · LT / RT</b><span>hold in the air to grab; RT used for an air-out stays reserved until landing; mouse or right stick picks nose, tail or side. Release before landing.</span>
         <b>gentle right stick / mouse</b><span>hold back for a manual or forward for a nose manual; keep the balance mark centred. Manuals link combos across flat ground.</span>
@@ -36324,15 +36324,41 @@ function createSkateGesture() {
   }
   return { sample, reset, get loaded() { return !!load; }, get samples() { return samples.slice(); } };
 }
+// A natural ramp air needs no second pop load: a quick out-and-return flick
+// can choose a trick directly. Loaded/scooped gestures always take priority.
+function createSkateAirFlick(min=.6,window=.2){
+  let peak=null,blocked=false;
+  const reset=()=>{peak=null;blocked=false;};
+  const consume=()=>{peak=null;blocked=true;};
+  function sample(x,y,t){
+    const r=Math.hypot(x,y);
+    if(r<.25){
+      const p=peak;reset();
+      if(p&&t-p.t<=window){const key=flickTrick(p.x,p.y,min);return key?{key,strength:1,nollie:false}:null;}
+    }else if(!blocked){
+      if(!peak&&r>min)peak={x,y,t,r};
+      else if(peak&&r>peak.r){peak.x=x;peak.y=y;peak.r=r;}
+    }
+    return null;
+  }
+  return {sample,reset,consume};
+}
+function skateGestureSample(recognizer,airFlick,x,y,t){
+  const gesture=recognizer.sample(x,y,t);
+  if(gesture){airFlick.consume();return gesture;}
+  if(!skateAir()){airFlick.reset();return null;}
+  if(recognizer.loaded){airFlick.consume();return null;}
+  return airFlick.sample(x,y,t);
+}
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
-  padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
+  padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
-  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
+  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();SK_INPUT.padAirFlick.reset();SK_INPUT.mouseAirFlick.reset();
 }
 // A flip in an existing flight changes the board, never its trajectory.
 function skateAirTrick(key,gesture) {
@@ -36366,16 +36392,16 @@ function skateGesturePlay(gesture) {
 }
 function skateMouseBegin() {
   SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
-  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();
+  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();SK_INPUT.mouseAirFlick.reset();
 }
 function skateMouseMove(x, y) {
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
   SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
-  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+  if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
 }
 function skateMouseEnd() {
-  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(0, 0, T))) SK_INPUT.fired = true;
+  if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,0,0,T))) SK_INPUT.fired = true;
   SK_INPUT.mouseHeld = false; SK_INPUT.mouse = [0, 0];
   return SK_INPUT.fired;
 }
@@ -36403,13 +36429,13 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   // camera. This keeps the initial direction identical above 120 render Hz.
   if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
-  if (!pad) SK_INPUT.padGesture.reset();
-  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25))SK_INPUT.padGesture.reset();
-  else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
+  if (!pad) {SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.reset();}
+  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25)){SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.consume();}
+  else skateGesturePlay(skateGestureSample(SK_INPUT.padGesture,SK_INPUT.padAirFlick,...SK_INPUT.right,T));
   if (SK_INPUT.mouseHeld) {
     const relax = Math.exp(-dt / .15);
     if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map((v,i) => SK.manual&&i===1?v:v*relax);
-    if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+    if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
   }
 }
 
@@ -36676,7 +36702,7 @@ function skateAirBase(dt,pitch,roll) {
       const origin=skateGround(px,py)+height,horizon=clamp((vz+Math.sqrt(vz*vz+2*.98*(height+.5)))/.98,.1,2.5);
       const sample=t=>{const [qx,qy]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*t),worldCoord(py+Math.sin(SK.dir)*SK.v*t));return {x:qx,y:qy,gap:origin+vz*t-.49*t*t-skateGround(qx,qy)};};
       let lo=0,point=null;
-      for(let i=1;i<=12;i++){let hi=horizon*i/12;const q=sample(hi);if(q.gap<=0){for(let j=0;j<5;j++){const mid=(lo+hi)/2;if(sample(mid).gap>0)lo=mid;else hi=mid;}point=sample(hi);break;}lo=hi;}
+      for(let i=1;i<=12;i++){let hi=horizon*i/12;const q=sample(hi);if(q.gap<=0){for(let j=0;j<5;j++){const mid=(lo+hi)/2;if(sample(mid).gap>0)lo=mid;else hi=mid;}point=sample(hi);pose.landAt=T+hi;break;}lo=hi;}
       if(point){surface=skateSurface(point.x,point.y);hit=skateTransitionAt(point.x,point.y,surface.h);}
       pose.landNormal=(hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n).slice();pose.landT=T;
     }
@@ -36686,13 +36712,15 @@ function skateAirBase(dt,pitch,roll) {
   pose.normal=pose.normal.map((v,i)=>v+(target[i]-v)*ease);
   const length=Math.hypot(...pose.normal)||1,n=pose.normal.map(v=>v/length);
   const blend=clamp((T-pose.t-.10)/.32,0,1),smooth=blend*blend*(3-2*blend);
-  // Carry the unspun takeoff frame with the trajectory. User spin is a
-  // continuous offset around that frame, never attracted to a half turn.
-  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
+  // Catch toward the forecast touchdown axis, choosing forward/fakie against
+  // the takeoff heading. Chasing the current velocity through the apex could
+  // accumulate an unsolicited half turn as that velocity reversed.
+  const landingIn=Math.max(0,(pose.landAt??T+flight)-T);
+  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10-.98*landingIn];
   const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
   if(Math.hypot(travel[0],travel[1])>1e-4){
-    const delta=mod(Math.atan2(travel[1],travel[0])-yaw+Math.PI/2,Math.PI)-Math.PI/2,carry=delta*ease*smooth;
-    a+=carry;yaw+=carry;
+    const targetYaw=pose.yaw+mod(Math.atan2(travel[1],travel[0])-pose.yaw+Math.PI/2,Math.PI)-Math.PI/2;
+    const carry=(targetYaw-yaw)*ease*smooth;a+=carry;yaw+=carry;
   }
   const wantPitch=Math.atan2(-(n[0]*Math.cos(yaw)+n[1]*Math.sin(yaw)),Math.max(.001,n[2]));
   const neutral=skateBoardAxes(yaw,wantPitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];
@@ -37474,13 +37502,14 @@ function skateBail(msg) {
 const skateCamBack = () => SK_CAM_BACK * (1 + .6 * (SK.camTransition || 0)) * clamp(cv.width / cv.height / 1.6, 0.4, 1);
 function skateClear(yaw, ahead = 0) { // how far back from you the camera can go that way
   const bx = Math.cos(yaw), by = Math.sin(yaw), most = skateCamBack();
+  const clearanceZ=skateGround(px,py)+body.z/10+SK_CAM_UP-.025;
   let back = 0;
   for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
     const x = px + SKB.v[0] * ahead - bx * step, y = py + SKB.v[1] * ahead - by * step;
     const blocked = mode === 'roof'
-      ? roofHeightAt(x,y)>roofH+ROOF_STEP
-      : [-.03,.03].some(ox=>[-.03,.03].some(oy=>map[idx(Math.floor(x+ox),Math.floor(y+oy))]>.28))
-        || architectureBlocked(x,y,.03) || landmarkBlocked(x,y,.03);
+      ? roofHeightAt(x,y)>Math.max(roofH+ROOF_STEP,clearanceZ)
+      : [-.03,.03].some(ox=>[-.03,.03].some(oy=>map[idx(Math.floor(x+ox),Math.floor(y+oy))]>Math.max(.28,clearanceZ)))
+        || architectureBlocked(x,y,.03,clearanceZ) || landmarkBlocked(x,y,.03);
     if(blocked)break;
     back = step;
   }
@@ -37510,7 +37539,8 @@ function skateCam(dt) {
   SK.camYaw += (target-SK.camYaw)*ease(5.56);
   const room_ = Math.min(skateClear(SK.camYaw), skateClear(SK.camYaw, .15)); // (in at once, back out gently)
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
-  let want = skateGround(px, py) + (SK.grind ? .09 : SK_CAM_UP) + body.z / 10 * (SK.airRoute?.o.bowl ? .85 : .6) + (SK.camRampUp || 0) * SK.camTransition;
+  const riderZ=skateGround(px,py)+body.z/10;
+  let want = riderZ + (SK.grind ? .09 : SK_CAM_UP) + (SK.camRampUp || 0) * SK.camTransition;
   // Keep the eye above the bowl surface along the complete camera boom.
   // The old clearance test checked buildings but ignored the bowl itself.
   if(SK.transition?.o.bowl || SK.camTransition>.05){
@@ -37522,7 +37552,7 @@ function skateCam(dt) {
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
   if (T - SK.lookT > 1) {
     const aheadX = worldCoord(px + Math.cos(SK.dir) * .15), aheadY = worldCoord(py + Math.sin(SK.dir) * .15);
-    const flatTarget = SK.airRoute?.o.bowl ? SKB.p[2]+.08 : skateGround(aheadX, aheadY) + .08 + body.z / 10 * .35;
+    const flatTarget = air ? riderZ+.08 : skateGround(aheadX,aheadY)+.08;
     const rampTarget = SK.transition?.o.bowl ? SKB.p[2]+.08 : Math.max(SKB.p[2]+.08,(SK.camRampH||0)+.02);
     const targetZ = flatTarget + (rampTarget-flatTarget)*SK.camTransition;
     const targetPitch = clamp(Math.atan2(targetZ - SK.camZ, SK.camBack + .15), -.6, .2);

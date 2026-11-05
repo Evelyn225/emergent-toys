@@ -59,15 +59,41 @@ function createSkateGesture() {
   }
   return { sample, reset, get loaded() { return !!load; }, get samples() { return samples.slice(); } };
 }
+// A natural ramp air needs no second pop load: a quick out-and-return flick
+// can choose a trick directly. Loaded/scooped gestures always take priority.
+function createSkateAirFlick(min=.6,window=.2){
+  let peak=null,blocked=false;
+  const reset=()=>{peak=null;blocked=false;};
+  const consume=()=>{peak=null;blocked=true;};
+  function sample(x,y,t){
+    const r=Math.hypot(x,y);
+    if(r<.25){
+      const p=peak;reset();
+      if(p&&t-p.t<=window){const key=flickTrick(p.x,p.y,min);return key?{key,strength:1,nollie:false}:null;}
+    }else if(!blocked){
+      if(!peak&&r>min)peak={x,y,t,r};
+      else if(peak&&r>peak.r){peak.x=x;peak.y=y;peak.r=r;}
+    }
+    return null;
+  }
+  return {sample,reset,consume};
+}
+function skateGestureSample(recognizer,airFlick,x,y,t){
+  const gesture=recognizer.sample(x,y,t);
+  if(gesture){airFlick.consume();return gesture;}
+  if(!skateAir()){airFlick.reset();return null;}
+  if(recognizer.loaded){airFlick.consume();return null;}
+  return airFlick.sample(x,y,t);
+}
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
-  padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
+  padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
-  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
+  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();SK_INPUT.padAirFlick.reset();SK_INPUT.mouseAirFlick.reset();
 }
 // A flip in an existing flight changes the board, never its trajectory.
 function skateAirTrick(key,gesture) {
@@ -101,16 +127,16 @@ function skateGesturePlay(gesture) {
 }
 function skateMouseBegin() {
   SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
-  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();
+  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();SK_INPUT.mouseAirFlick.reset();
 }
 function skateMouseMove(x, y) {
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
   SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
-  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+  if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
 }
 function skateMouseEnd() {
-  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(0, 0, T))) SK_INPUT.fired = true;
+  if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,0,0,T))) SK_INPUT.fired = true;
   SK_INPUT.mouseHeld = false; SK_INPUT.mouse = [0, 0];
   return SK_INPUT.fired;
 }
@@ -138,13 +164,13 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   // camera. This keeps the initial direction identical above 120 render Hz.
   if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
-  if (!pad) SK_INPUT.padGesture.reset();
-  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25))SK_INPUT.padGesture.reset();
-  else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
+  if (!pad) {SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.reset();}
+  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25)){SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.consume();}
+  else skateGesturePlay(skateGestureSample(SK_INPUT.padGesture,SK_INPUT.padAirFlick,...SK_INPUT.right,T));
   if (SK_INPUT.mouseHeld) {
     const relax = Math.exp(-dt / .15);
     if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map((v,i) => SK.manual&&i===1?v:v*relax);
-    if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+    if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
   }
 }
 

@@ -145,3 +145,11 @@ queues until its catch. Mouse, quick arrow taps, Space-plus-arrows and touch
 share this behavior. Late flips do not provide another jump; allow time to
 finish/catch before landing. Ramp pops now add mostly upward impulse with only
 18% of the former sideways component, retaining the board's ramp angle.
+
+Natural ramp airs also accept a quick direct stick flick and release (left for
+kickflip, right for heelflip), without another tail load. Loaded flicks/scoops
+still take priority. Mouse users can right-drag and release, including a short
+20 px drag; arrow taps work during natural airs too. These select a board trick
+without adding another jump. Straight unsteered returns retain the takeoff
+forward/fakie axis; the camera continues following travel and full rider height,
+including off building roofs.

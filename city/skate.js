@@ -212,13 +212,14 @@ function skateBail(msg) {
 const skateCamBack = () => SK_CAM_BACK * (1 + .6 * (SK.camTransition || 0)) * clamp(cv.width / cv.height / 1.6, 0.4, 1);
 function skateClear(yaw, ahead = 0) { // how far back from you the camera can go that way
   const bx = Math.cos(yaw), by = Math.sin(yaw), most = skateCamBack();
+  const clearanceZ=skateGround(px,py)+body.z/10+SK_CAM_UP-.025;
   let back = 0;
   for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
     const x = px + SKB.v[0] * ahead - bx * step, y = py + SKB.v[1] * ahead - by * step;
     const blocked = mode === 'roof'
-      ? roofHeightAt(x,y)>roofH+ROOF_STEP
-      : [-.03,.03].some(ox=>[-.03,.03].some(oy=>map[idx(Math.floor(x+ox),Math.floor(y+oy))]>.28))
-        || architectureBlocked(x,y,.03) || landmarkBlocked(x,y,.03);
+      ? roofHeightAt(x,y)>Math.max(roofH+ROOF_STEP,clearanceZ)
+      : [-.03,.03].some(ox=>[-.03,.03].some(oy=>map[idx(Math.floor(x+ox),Math.floor(y+oy))]>Math.max(.28,clearanceZ)))
+        || architectureBlocked(x,y,.03,clearanceZ) || landmarkBlocked(x,y,.03);
     if(blocked)break;
     back = step;
   }
@@ -248,7 +249,8 @@ function skateCam(dt) {
   SK.camYaw += (target-SK.camYaw)*ease(5.56);
   const room_ = Math.min(skateClear(SK.camYaw), skateClear(SK.camYaw, .15)); // (in at once, back out gently)
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
-  let want = skateGround(px, py) + (SK.grind ? .09 : SK_CAM_UP) + body.z / 10 * (SK.airRoute?.o.bowl ? .85 : .6) + (SK.camRampUp || 0) * SK.camTransition;
+  const riderZ=skateGround(px,py)+body.z/10;
+  let want = riderZ + (SK.grind ? .09 : SK_CAM_UP) + (SK.camRampUp || 0) * SK.camTransition;
   // Keep the eye above the bowl surface along the complete camera boom.
   // The old clearance test checked buildings but ignored the bowl itself.
   if(SK.transition?.o.bowl || SK.camTransition>.05){
@@ -260,7 +262,7 @@ function skateCam(dt) {
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
   if (T - SK.lookT > 1) {
     const aheadX = worldCoord(px + Math.cos(SK.dir) * .15), aheadY = worldCoord(py + Math.sin(SK.dir) * .15);
-    const flatTarget = SK.airRoute?.o.bowl ? SKB.p[2]+.08 : skateGround(aheadX, aheadY) + .08 + body.z / 10 * .35;
+    const flatTarget = air ? riderZ+.08 : skateGround(aheadX,aheadY)+.08;
     const rampTarget = SK.transition?.o.bowl ? SKB.p[2]+.08 : Math.max(SKB.p[2]+.08,(SK.camRampH||0)+.02);
     const targetZ = flatTarget + (rampTarget-flatTarget)*SK.camTransition;
     const targetPitch = clamp(Math.atan2(targetZ - SK.camZ, SK.camBack + .15), -.6, .2);

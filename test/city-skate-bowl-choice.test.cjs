@@ -54,3 +54,13 @@ test('intentional air-outs clear the deck and can land cleanly',()=>{
   assert.ok(run.some(p=>p.airOut===true));assert.ok(run.every(p=>!p.bail));assert.equal(run.at(-1).contact,'ground');
  }
 });
+
+test('unsteered natural bowl airs retain the forward/fakie axis across the apex',()=>{
+ for(const curve of [0,.1]){
+  const run=skateSim([{frames:260}],{bowl:{radius:.3,height:.22,pool:{rx:.6,ry:.9,curve}},position:[.7,0],speed:.9,dt:1/120,fixed:true});
+  const start=run.findIndex(p=>p.contact==='air'),air=run.slice(start).filter(p=>p.contact==='air');assert.ok(start>0&&air.length>40);
+  for(const p of air)assert.ok(angle(p.yaw,air[0].yaw)<(curve?1.4:.01),'landing assist must not accumulate a half-turn');
+  const landing=run.slice(start+1).find(p=>p.contact==='transition');assert.ok(landing?.fakie,'the return is tail-first');
+  assert.ok(run.every(p=>!p.bail));
+ }
+});

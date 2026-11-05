@@ -515,3 +515,39 @@ against this main at 177×66 measured main/branch medians 17.3/18.4 ms, then
 15.6/17.9 ms, about 10% higher on average. The branch's ramp-return camera frames
 a different view during this scripted rollback, so this is whole-frame gameplay
 cost rather than an isolated pop-helper benchmark; it is not an FPS guarantee.
+
+## Natural bowl airs, mouse flicks and roof-drop framing
+
+The natural coping-air path now accepts a quick direct flick and release as
+well as loaded/scooped gestures. Direct right-mouse drags use a 20 px threshold
+and a 400 ms window; controller flicks use 0.6 stick depth and 200 ms. Existing
+loaded gestures take priority, so crossing the centre during a load/flick cannot
+fire an unwanted direct trick. Ground gestures, manuals, grabs and camera look
+retain their own paths. Pause controls describe direct airborne flicks and arrow
+taps. Native browser checks use actual captured mouse and keyboard event handlers
+after rolling up a pool wall and naturally leaving its coping, including a short
+24 px drag, a loaded drag, and a quick arrow tap.
+
+The air catch previously chased the current projected velocity with a new
+nearest-axis choice every tick. On a curved pool that could accumulate a full
+half turn through the apex. It now uses the forecast touchdown velocity and
+chooses forward/fakie against the original takeoff heading. Straight airs retain
+their heading and return fakie; curved approaches can still fit the landing
+plane without turning the nose around. Player-controlled spin remains separate.
+
+The chase camera now tracks full rider world height and aims at the rider in
+flight. Roofs falling out from under a skateboard no longer drag the eye toward
+the street. Boom clearance also tests building/architecture height against the
+camera height, rather than treating any building footprint as an infinitely
+tall wall after switching from roof to walk mode. The native roof-edge test
+checks an actual mode transition, sustained boom length and rider-relative eye
+height; close, wide, oblique and night roof-drop views were reviewed.
+
+All 14 focused Node test files pass. Five browser cases cover natural airs/roof
+drops, prior late tricks/ramp recoil, bowl exits/returns, camera and fixed clock.
+Isolated mutations removing direct flicks, restoring apex-chasing yaw, losing
+rider world height or restoring footprint-only clearance fail their regressions.
+Local serial ABAB against main `22d06d6` at 177×66: median main/branch
+16.5/16.9 ms, then 20.1/24.7 ms. These varied whole-frame rollback views include
+the branch's different chase heading, and do not isolate input/catch cost; they
+are local observations, not an FPS guarantee. Concurrent world work is preserved.

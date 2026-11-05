@@ -66,7 +66,7 @@ function skateAirBase(dt,pitch,roll) {
       const origin=skateGround(px,py)+height,horizon=clamp((vz+Math.sqrt(vz*vz+2*.98*(height+.5)))/.98,.1,2.5);
       const sample=t=>{const [qx,qy]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*t),worldCoord(py+Math.sin(SK.dir)*SK.v*t));return {x:qx,y:qy,gap:origin+vz*t-.49*t*t-skateGround(qx,qy)};};
       let lo=0,point=null;
-      for(let i=1;i<=12;i++){let hi=horizon*i/12;const q=sample(hi);if(q.gap<=0){for(let j=0;j<5;j++){const mid=(lo+hi)/2;if(sample(mid).gap>0)lo=mid;else hi=mid;}point=sample(hi);break;}lo=hi;}
+      for(let i=1;i<=12;i++){let hi=horizon*i/12;const q=sample(hi);if(q.gap<=0){for(let j=0;j<5;j++){const mid=(lo+hi)/2;if(sample(mid).gap>0)lo=mid;else hi=mid;}point=sample(hi);pose.landAt=T+hi;break;}lo=hi;}
       if(point){surface=skateSurface(point.x,point.y);hit=skateTransitionAt(point.x,point.y,surface.h);}
       pose.landNormal=(hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n).slice();pose.landT=T;
     }
@@ -76,13 +76,15 @@ function skateAirBase(dt,pitch,roll) {
   pose.normal=pose.normal.map((v,i)=>v+(target[i]-v)*ease);
   const length=Math.hypot(...pose.normal)||1,n=pose.normal.map(v=>v/length);
   const blend=clamp((T-pose.t-.10)/.32,0,1),smooth=blend*blend*(3-2*blend);
-  // Carry the unspun takeoff frame with the trajectory. User spin is a
-  // continuous offset around that frame, never attracted to a half turn.
-  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
+  // Catch toward the forecast touchdown axis, choosing forward/fakie against
+  // the takeoff heading. Chasing the current velocity through the apex could
+  // accumulate an unsolicited half turn as that velocity reversed.
+  const landingIn=Math.max(0,(pose.landAt??T+flight)-T);
+  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10-.98*landingIn];
   const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
   if(Math.hypot(travel[0],travel[1])>1e-4){
-    const delta=mod(Math.atan2(travel[1],travel[0])-yaw+Math.PI/2,Math.PI)-Math.PI/2,carry=delta*ease*smooth;
-    a+=carry;yaw+=carry;
+    const targetYaw=pose.yaw+mod(Math.atan2(travel[1],travel[0])-pose.yaw+Math.PI/2,Math.PI)-Math.PI/2;
+    const carry=(targetYaw-yaw)*ease*smooth;a+=carry;yaw+=carry;
   }
   const wantPitch=Math.atan2(-(n[0]*Math.cos(yaw)+n[1]*Math.sin(yaw)),Math.max(.001,n[2]));
   const neutral=skateBoardAxes(yaw,wantPitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];

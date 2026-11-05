@@ -14,7 +14,8 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
   fixed ticks, ramp energy, bowl exits, balance/tricks, live kick direction,
   stronger braking, stop/pivot/reverse, unlimited orbit, ramp lip grace,
   downhill return camera follow, continuous 3D air spins, airborne tricks and
-  reduced ramp-pop recoil.
+  reduced ramp-pop recoil, direct natural-air flicks, fakie return-axis
+  preservation and roof-drop camera framing.
   Eight street skate spots are separate in PR #431 (`codex/skate-street-spots`).
   Preserve both sets of source/manifest entries and rebuild the bundle when
   integrating. See `SKATE_IMPLEMENTATION.md`; reserved world files are untouched
