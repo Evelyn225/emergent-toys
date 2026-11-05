@@ -56,3 +56,20 @@ test('a bowl launch cannot be stolen by its coping; rising hops never catch',()=
  ev('SK.airSource=null;body.vz=1;skatePathCatch();');assert.equal(ev('SK.grind'),null);
  ev('body.vz=-1;skatePathCatch();');assert.ok(ev('SK.grind'));
 });
+
+test('an intentional bowl exit can boardslide its launch coping on a crosswise approach',()=>{
+ const {ev}=setup([[0,0,.1],[2,0,.1]]);
+ ev("SK.grind=null;path.kind='coping';path.feature={bowl:true};SK.airSource=path.feature;SK.airRoute={o:path.feature,out:true};px=.3;py=.01;a=Math.PI/2;SK.dir=Math.PI/3;body.z=1;body.vz=-.1;skatePathCatch();");
+ assert.equal(ev('SK.grind?.name'),'boardslide');
+ ev('SK.grind=null;SK.airSource=path.feature;SK.airRoute={o:path.feature,out:false};skatePathCatch();');assert.equal(ev('SK.grind'),null);
+});
+
+test('A, left right-stick and left mouse drag all pull a right-drifting grind back toward centre',()=>{
+ const balances=[];
+ for(const source of ['key','stick','mouse']){
+  const {ev}=setup([[0,0,.1],[2,0,.1]]);
+  ev(`SK.grind.bal=.65;SK.grind.balV=.8;${source==='key'?'K.KeyA=1':source==='stick'?'SK_INPUT.right=[-1,0]':'SK_INPUT.mouseHeld=true;SK_INPUT.mouse=[-1,0]'};for(let i=0;i<18;i++){T+=1/60;stepPathGrind(1/60);}`);
+  assert.ok(ev('SK.grind.bal<.6&&SK.grind.balV<0'),'noticeable recovery within 300 ms');balances.push(ev('SK.grind.bal'));
+ }
+ assert.ok(balances.every(b=>Math.abs(b-balances[0])<1e-12));
+});

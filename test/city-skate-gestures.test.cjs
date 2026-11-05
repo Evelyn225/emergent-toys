@@ -93,3 +93,23 @@ for(const hz of [30,60,120])test(`at ${hz} Hz, human-speed partial-stick gesture
   assert.ok(correct>=95,`${hz}/${key}: ${correct}/100`);
  }
 });
+
+test('partial diagonal flips and every combined flip have playable controller gestures',()=>{
+ const circle=(turn,count)=>Array.from({length:count+1},(_,i)=>[Math.cos(Math.PI/2+turn*i/count),Math.sin(Math.PI/2+turn*i/count)]);
+ const combinations={WA:[...circle(Math.PI/2,7),[.7,-.7]],WD:[...circle(-Math.PI/2,7),[-.7,-.7]],DS:[...circle(-Math.PI,14),[.7,-.7],[0,0]]};
+ for(const [key,path]of Object.entries(combinations)){
+  let correct=0;
+  for(let run=0;run<100;run++){
+   const g=make(),events=[];let t=0;
+   for(const [x,y]of path){const [sx,sy]=stick(x*.9+(random()-.5)*.03,y*.9+(random()-.5)*.03);const e=g.sample(sx,sy,t+=1/60);if(e)events.push(e);}
+   if(events.length===1&&events[0].key===key)correct++;
+  }
+  assert.ok(correct>=95,`${key}: ${correct}/100`);
+  const script=path.map(right=>({sticks:{right:right.map(v=>v*.9)}}));
+  const actual=skateSim(script,{speed:.4}).at(-1);
+  assert.equal(actual.trick,{WA:'hardflip',WD:'inward heelflip',DS:'varial heelflip'}[key]);
+ }
+ for(const [sign,key]of [[-1,'A'],[1,'D']]){
+  const g=make();g.sample(0,.8,0);const [x,y]=stick(sign*.6,-.6),event=g.sample(x,y,.12);assert.equal(event.key,key);
+ }
+});

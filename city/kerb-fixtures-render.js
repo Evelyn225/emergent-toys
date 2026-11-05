@@ -103,7 +103,7 @@ function buildKerbModel(o,near) {
   return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
-function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
+function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['planter','shrub'].includes(o.kind)?buildPlantingModel(o,near):['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
 const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
 // A timber pole (creosoted, tapering, its top chamfered), the crossarm reaching out over the road on a steel brace,
 // a porcelain insulator under each wire, the telephone cable on its bracket, and on some a transformer can on the
@@ -185,4 +185,4 @@ function drawPoleSpans() {
   });
 }
 const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}

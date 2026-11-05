@@ -49,10 +49,11 @@ test('ollie onto a bar going along it and you grind: points while you hold it, o
   const on={grind:!!SK.grind,name:SK.grind?.name,approach:!SK.grind?{v:SK.v,z:body.z,bail:SK.bail,msg:msgText,x:px-g.ax,y:py-g.ay}:null};const top=terrainHeight(g.x,g.y)+g.z;
   const feet=skateGround(px,py)+body.z/10;tRide(20);const mid={grind:!!SK.grind,msg:msgText,onEdge:Math.abs(skateGround(px,py)+body.z/10-top)<1e-3};
   // Lower material friction carries a run along the whole 20 m rail. Keep
-  // balance during that longer ride, then allow the combo clock to bank it.
+  // A moves the visible balance mark left, D right: counter the drift
+  // during that longer ride, then allow the combo clock to bank it.
   for(let i=0;i<360;i++){
    const lean=SK.grind?Math.sign(SK.grind.bal*2+SK.grind.balV):0;
-   tRide(1,!SK.grind?{KeyS:1}:lean>0?{KeyD:1}:lean<0?{KeyA:1}:{});
+   tRide(1,!SK.grind?{KeyS:1}:lean>0?{KeyA:1}:lean<0?{KeyD:1}:{});
   }
   return {on,feet:+(feet-top).toFixed(4),mid,score:SK.score,bail:SK.bail,ground:body.z,msg:msgText};
  });
@@ -76,7 +77,7 @@ test('grinds are named by how the board sits, pop off with a flip into a combo, 
   tRun(g);tRide(10);K.ArrowLeft=1;skateSpace(true);K.ArrowLeft=0;for(let k=0;k<90&&(body.z>0||body.vz>0);k++)tRide(1);
   out.combo=SK.combo?.names.join(' + ')||'';out.bailPop=SK.bail;
   // lean hard the wrong way and you come off
-  tRun(GRINDS.find(g=>g.kind==='skaterail'));let k=0;for(;k<200&&SK.grind;k++){const side=Math.sign(SK.grind.bal||1);tRide(1,side>0?{KeyA:1}:{KeyD:1});}
+  tRun(GRINDS.find(g=>g.kind==='skaterail'));let k=0;for(;k<200&&SK.grind;k++){const side=Math.sign(SK.grind.bal||1);tRide(1,side>0?{KeyD:1}:{KeyA:1});}
   out.lost=SK.bail>0&&/balance/.test(msgText);
   return out;
  });

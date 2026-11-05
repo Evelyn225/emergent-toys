@@ -228,6 +228,7 @@ function citySprites() {
   forNear(solidsB, o => { if(o.pool){const [vx,vy]=R(o.x,o.y);if(Math.hypot(vx,vy)<vis+2&&inView(vx,vy,Math.max(o.hl,o.hw)+.1))drawSkatePool(o);return;} const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile, bowl: o.bowl } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
   drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
+  drawParkShrubs();
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });

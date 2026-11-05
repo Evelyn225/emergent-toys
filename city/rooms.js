@@ -14,7 +14,7 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
 // A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
 // either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
 // from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
-const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6, steps: 18 };
 const STATION_H = STATION_STAIRS.rise + 3;
 const STATION_EXIT_H = 0.3, STATION_EXIT_Z = STATION_H - STATION_EXIT_H / 2 - 0.06;
 const ST_TRACK = 12; // the first track row; the platform edge is just before it
@@ -27,11 +27,21 @@ const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: S
   return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
 }).join(''));
 // how high the stairs have lifted you at (x, y)
-const stairRise = (x, y) => { const s = room && room.def.stairs; return s && x >= s.x0 && x < s.x1 && y < s.y1 ? s.rise * clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1) : 0; };
+const stairRise = (x, y) => {
+  const s = room && room.def.stairs;
+  if (!s || x < s.x0 || x >= s.x1 || y >= s.y1) return 0;
+  const progress = clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1);
+  return s === STATION_STAIRS ? Math.ceil(progress * s.steps) * s.rise / s.steps : s.rise * progress;
+};
 // the steps themselves, as boxes, each a little higher toward the top; walkable (the stairs lift you, see stairRise)
-const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
-  const dy = (s.y1 - s.y0) / 10, top = (k + 1) * s.rise / 10;
+const stairSteps = s => Array.from({ length: s.steps || 10 }, (_, k) => {
+  const dy = (s.y1 - s.y0) / (s.steps || 10), top = (k + 1) * s.rise / (s.steps || 10);
   return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => { // wall to wall
+    // Station tread materials share the same step tops as the walking height.
+    if(s === STATION_STAIRS){
+      const topFace=HIT.face===5,fp=t/projY,nosing=topFace&&facadeLine(Math.abs(HIT.v-dy/2+.03),.06,fp)>.5;
+      BG[i]=C(nosing?YEL:GRAY,nosing?3.5+L*.4:(1+L*.3)*shadeFace(HIT.face)+(topFace?.7:0));set(i,' ',0);return true;
+    }
     // treads (yellow nosing at the front edge) and risers
     BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
     if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
@@ -625,24 +635,70 @@ function trainX(r) {
 }
 const trainStopped = r => { const p = mod(T - r.t0, TRAIN_CYCLE); return p >= 6 && p < 18; };
 
-// a subway car from outside: silver, an orange stripe, lit windows, doors that open while it stands at the platform
-const trainShade = (open, k) => (i, t, L) => {
-  const f = HIT.face, u = HIT.u, w = HIT.w;
-  BG[i] = C(GRAY, (3 + L * 0.5) * shadeFace(f));
-  if (f === 5 || f === 6) return set(i, f === 5 ? '=' : ' ', C(GRAY, L)), true;
-  if (f <= 2) { // the ends: a cab window and headlights on the leading car
-    if (w > 1.8 && w < 2.8 && Math.abs(HIT.v) < 1) { BG[i] = C(CYAN, 2); return set(i, ' ', 0), true; }
-    return set(i, (k === 1 && f === 1 || k === -1 && f === 2) && w < 1.1 && Math.abs(Math.abs(HIT.v) - 0.9) < 0.15 ? 'O' : ' ', C(WHITE, 15)), true;
+// The car and its door pockets share one permanent fitted opening at every stop.
+const SUBWAY_CAR={hl:4.1,hw:1.4,spacing:8.6,bottom:-.28,roof:3,floor:.02,head:2.4,
+  doors:[-2.6,0,2.6],halfDoor:.5,leafHalf:.25,travel:.54,doorTime:.85,windowLo:1.15,windowHi:2.1};
+function trainDoorAmount(r){
+  const p=mod(T-r.t0,TRAIN_CYCLE);if(p<6||p>=18)return 0;
+  const q=Math.min(clamp((p-6)/SUBWAY_CAR.doorTime,0,1),clamp((18-p)/SUBWAY_CAR.doorTime,0,1));
+  return q*q*(3-2*q);
+}
+const trainShade = (_open,k) => (i,t,L) => {
+  const S=SUBWAY_CAR,f=HIT.face,u=HIT.u,w=HIT.w,side=f===3||f===4,fp=t/projY;
+  // The aperture exists even while moving. The leaves below close it.
+  if(side&&w>S.floor-.04&&w<S.head+.07&&S.doors.some(d=>Math.abs(u-d)<S.halfDoor+.02))return false;
+  let base=GRAY,level=(2.5+L*.35)*shadeFace(f);
+  if(f===5)level-=coveGroove(u,.5,.012,fp)*.7;
+  else if(f<=2){
+    if(w>1.65&&w<2.6&&Math.abs(HIT.v)<1){base=CYAN;level=2+L*.16;}
+    else if((k===1&&f===1||k===-1&&f===2)&&w>.65&&w<1&&Math.abs(Math.abs(HIT.v)-.9)<.15){base=WHITE;level=14;}
+  }else if(w>.85&&w<1.05){base=ORANGE;level=3+L*.4;}
+  else if(w>1.2&&w<2.25&&(Math.abs(u)>1.1&&Math.abs(u)<1.5||Math.abs(u)>3.72&&Math.abs(u)<3.98)){
+    const frame=Math.abs(w-1.2)<.035||Math.abs(w-2.25)<.035;
+    base=frame?GRAY:CYAN;level=frame?2+L*.3:1.6+L*.16+(w-1.2)*.5;
   }
-  const door = [-2.6, 0, 2.6].find(dp => Math.abs(u - dp) < 0.6);
-  if (door !== undefined && w < 2.6) {
-    if (open) { BG[i] = C(WARM, 2); return set(i, (Math.floor(u * 4) + Math.floor(w * 4)) % 5 ? ' ' : '.', C(WARM, 9)), true; }
-    return set(i, Math.abs(u - door) < 0.04 ? '|' : ' ', C(GRAY, L * 0.4)), true;
-  }
-  if (w > 1.0 && w < 1.2) return set(i, '=', C(ORANGE, Math.max(L, 11))), true;
-  if (w > 1.55 && w < 2.45 && Math.abs(fract(u / 1.3) - 0.5) < 0.38) { BG[i] = C(CYAN, 2 + L * 0.1); return set(i, hash(Math.floor(u * 3), k, 5) > 0.8 ? 'o' : ' ', C(SKIN, 9)), true; }
-  return set(i, ' ', 0), true;
+  BG[i]=C(base,level);set(i,' ',0);return true;
 };
+const subwayPaint=(base,level=2)=>(i,t,L)=>{BG[i]=C(base,(level+L*.28)*shadeFace(HIT.face));set(i,' ',0);return true;};
+const SUBWAY_MODELS=new Map();
+function subwayTrainModel(k){
+  if(SUBWAY_MODELS.has(k))return SUBWAY_MODELS.get(k);
+  const S=SUBWAY_CAR,parts=[],metal=subwayPaint(GRAY),dark=subwayPaint(GRAY,.8);
+  const add=(role,u,v,hl,hw,z0,z1,shade,extra={},slide=0)=>parts.push({box:{...boxAt(u,v,1,0,hl,hw,z0,z1),subwayRole:role,...extra},shade,slide});
+  add('body',0,0,S.hl,S.hw,S.bottom,S.roof,trainShade(false,k));
+  add('floor',0,0,S.hl-.05,1.32,S.floor-.12,S.floor,subwayPaint(GRAY,1));
+  add('interior-wall',0,1.02,S.hl-.1,.025,S.floor,S.roof-.12,subwayPaint(WARM,2.2));
+  add('interior-seat',0,.72,1.65,.22,S.floor+.36,S.floor+.45,subwayPaint(BLUE));
+  add('interior-seat-back',0,.94,1.65,.035,S.floor+.45,S.floor+.95,subwayPaint(BLUE));
+  for(const u of [-1.2,1.2])add('seat-support',u,.72,.045,.17,S.floor,S.floor+.36,dark);
+  for(const side of [-1,1])for(const door of S.doors){
+    const meta={subwaySide:side,subwayDoor:door},v=side*(S.hw-.025);
+    for(const sign of [-1,1]){
+      add('door-jamb',door+sign*(S.halfDoor+.035),v,.045,.045,S.floor-.04,S.head+.11,metal,meta);
+      // Lined pockets are between the outer skin and the cabin: the leaves never disappear.
+      add('door-pocket',door+sign*.79,side*1.30,.26,.018,S.floor,S.head,metal,meta);
+      const shade=(i,t,L)=>{
+        const z=HIT.w,f=HIT.face;
+        if((f===3||f===4)&&Math.abs(HIT.u)<.14&&z>S.windowLo&&z<S.windowHi)return false;
+        const seal=HIT.u*sign<-.232,stripe=z>.85&&z<1.05;
+        BG[i]=C(seal?GRAY:stripe?ORANGE:GRAY,seal?1:stripe?2.6+L*.4:(2.1+L*.32)*shadeFace(f));set(i,' ',0);return true;
+      };
+      const slide=side<0?sign*S.travel:0,leaf={...meta,subwayLeaf:sign};
+      add('door-panel',door+sign*S.leafHalf,side*1.35,S.leafHalf,.024,S.floor,S.head,shade,leaf,slide);
+      add('door-glass',door+sign*S.leafHalf,side*1.35,.147,.008,S.windowLo-.01,S.windowHi+.01,(i,t,L)=>{
+        const seal=Math.abs(HIT.u)>.128||HIT.w<S.windowLo+.015||HIT.w>S.windowHi-.015;
+        BG[i]=C(seal?GRAY:CYAN,seal?1.2:2+L*.18);set(i,' ',0);return true;
+      },leaf,slide);
+    }
+    add('door-header',door,v,S.halfDoor+.08,.045,S.head,S.head+.11,metal,meta);
+    add('door-sill',door,v,S.halfDoor+.08,.055,S.floor-.06,S.floor,metal,meta);
+  }
+  SUBWAY_MODELS.set(k,parts);return parts;
+}
+function drawSubwayTrainCar(vx,vy,k,r=room){
+  const open=trainDoorAmount(r);
+  for(const p of subwayTrainModel(k))drawBox({...p.box,x:vx+p.box.x+p.slide*open,y:vy+p.box.y},p.shade);
+}
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0) return false;
@@ -996,24 +1052,24 @@ function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the 
   BG[i] = h > 0.85 ? C(ITEM_COL[h * 100 & 7], 3.5 + L * 0.15) : h > 0.5 ? C(GREEN, 2.2 + L * 0.15) : C(GREEN, 1.2 + L * 0.1); return true;
 }
 function stationWall(i, u, uStep, z, d, mx, my, L) {
+  const fp=Math.max(uStep,d/projY);
+  set(i,' ',0);
   if (mx < 9 || mx > 36) {
-    if (mx === 0 || mx === room.W - 1) { BG[i] = NONE; set(i, Math.abs(z - 1.5) < 0.12 && Math.abs(fract(u) - 0.5) < 0.12 ? 'o' : ' ', C(RED, 14)); return true; }
-    const lamp = Math.abs(fract(u / 5) - 0.5) < 0.04 && Math.abs(z - 2.3) < 0.08;
-    set(i, lamp ? 'o' : Math.abs(z - 1.8) < 0.03 ? '=' : (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', lamp ? C(WARM, 13) : C(GRAY, L * 0.25));
-    BG[i] = C(GRAY, 0); return true;
+    const end=mx===0||mx===room.W-1;
+    const lamp=end?Math.abs(z-1.5)<.12&&Math.abs(fract(u)-.5)<.12:Math.abs(fract(u/5)-.5)<.04&&Math.abs(z-2.3)<.08;
+    const course=coveGroove(z,.3,.012,fp);
+    BG[i]=lamp?C(end?RED:WARM,13):C(GRAY,.7+L*.08-course*.5);return true;
   }
-  const far = my === room.H - 1; // the tunnel wall across the tracks
-  const u0 = Math.floor((u - 2) / 8) * 8 + 6;
-  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
-    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.312, 0.438, C(WHITE, 15), C(GREEN, 4))) return true;
-    set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
+  const far = my === room.H - 1, u0 = Math.floor((u - 2) / 8) * 8 + 6;
+  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) {
+    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, .312, .438, C(WHITE, 15), C(GREEN, 4))) return true;
+    BG[i]=C(GREEN,4);return true;
   }
   if (far) {
-    if (z > 2.25 && z < 2.4 && fract(u / 4) < 0.05) { set(i, 'o', C(WARM, 15)); return true; }
-    set(i, hash(Math.floor(u * 4), Math.floor(z * 4), 7) > 0.85 ? ':' : '.', C(GRAY, L * 0.3)); BG[i] = C(GRAY, 1); return true;
+    const lamp=z>2.25&&z<2.4&&fract(u/4)<.05;
+    BG[i]=lamp?C(WARM,13):C(GRAY,1+L*.08-coveGroove(z,.3,.015,fp)*.5);return true;
   }
-  const grout = fract(u / 0.3) < 0.1 || fract(z / 0.3) < 0.1; // white tiles everywhere else
-  set(i, grout ? '+' : ' ', C(GRAY, L * 0.5)); BG[i] = C(WHITE, 4 * L / 14); return true;
+  BG[i]=C(WHITE,2+L*.25-coursedJoint(u,z,.3,.3,uStep,d)*1.5);return true;
 }
 function trainWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0 && my !== room.H - 1) return false;
@@ -1096,14 +1152,17 @@ function roomFloor(i, r, x, rx, ry) {
     case 'casino': return casinoFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
-    case 'station':
-      if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
-        if (Math.abs(wy - ST_TRACK - 0.3) < 0.05 || Math.abs(wy - ST_TRACK - 1.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
-        if (wy > ST_TRACK + 0.3 && wy < ST_TRACK + 1.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
-        return set(i, (r + x) % 3 ? ' ' : '.', C(GRAY, L * 0.5));
+    case 'station': {
+      const fp=homeBalconyPavingFootprint(d,eye);set(i,' ',0);
+      if(wy>ST_TRACK-.7){
+        const rail=Math.max(facadeLine(Math.abs(wy-ST_TRACK-.3),.1,fp),facadeLine(Math.abs(wy-ST_TRACK-1.5),.1,fp));
+        const sleeper=wy>ST_TRACK+.3&&wy<ST_TRACK+1.5&&coveGroove(wx,.6,.15,fp)>.5;
+        BG[i]=rail>.5?C(GRAY,2+L*.65):sleeper?C(BRICK,1+L*.25):C(GRAY,.8+L*.15);return;
       }
-      if (wy > ST_TRACK - 1) return set(i, '=', C(YEL, L * 2)); // mind the gap
-    // fall through: platform tiles
+      if(wy>ST_TRACK-1){BG[i]=C(YEL,2+L*.5-coveGroove(wx,.15,.025,fp));return;}
+      const grout=Math.max(coveGroove(wx,1,.035,fp),coveGroove(wy,1,.035,fp));
+      BG[i]=C(STONE,1.5+L*.4-grout);return;
+    }
     default: {
       const edge = fract(wx) < 0.06 || fract(wy) < 0.06;
       set(i, edge ? '+' : (Math.floor(wx) + Math.floor(wy)) & 1 ? '.' : ' ', C(edge ? GRAY : WHITE, L));
@@ -1253,7 +1312,7 @@ function roomSprites() {
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
-    if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
+    if (tx !== null) for (const k of [-1, 0, 1]) drawSubwayTrainCar(tx + k * SUBWAY_CAR.spacing - px, ST_TRACK + .9 - py, k);
   }
   drawRoomPolice();
 }

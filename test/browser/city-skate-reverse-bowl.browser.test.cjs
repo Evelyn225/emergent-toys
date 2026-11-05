@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
 const{pathToFileURL}=require('node:url'),{chromium}=require('playwright');
-test('back reverses into fakie; bowl jumps work and outside walls cannot lift the skater onto the deck',async()=>{
+test('back stops, pivots and pushes the other way; bowl jumps work and outside walls cannot lift the skater onto the deck',async()=>{
  const browser=await chromium.launch(),page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.addInitScript(()=>requestAnimationFrame=()=>0);
@@ -11,9 +11,10 @@ test('back reverses into fakie; bowl jumps work and outside walls cannot lift th
    const bad=[],o=SK_TRANSITIONS.find(o=>o.pool&&o.spotPark),tick=()=>{T+=1/60;stepSkate(1/60);stepBody(1/60);};
    const reset=()=>{for(const key in K)K[key]=0;skateDismount();SK.lastT=T;SK.bail=0;body.z=body.vz=body.peak=0;body.trick=null;body.buf=-9;};
    reset();px=SKATEPARK.bx*8+5.5;py=SKATEPARK.by*8+3.8;a=SK.dir=0;SK.v=.25;SKB.v=[.25,0,0];
-   K.KeyS=1;for(let i=0;i<240;i++)tick();K.KeyS=0;
+   // Keep this reversal on the clear approach; a longer new-speed run reaches the next ledge.
+   K.KeyS=1;for(let i=0;i<90;i++)tick();K.KeyS=0;
    const reversedX=px;for(let i=0;i<30;i++)tick();
-   if(SKB.v[0]>=0||!SKB.fakie||Math.abs(a)>.01||px>=reversedX||SK.bail)bad.push('back did not brake, reverse and coast fakie');
+   if(SKB.v[0]>=0||SKB.fakie||Math.abs(a-Math.PI)>.01||px>=reversedX||SK.bail)bad.push('back did not stop, pivot, push and coast');
    for(const bowl of SK_TRANSITIONS.filter(o=>o.pool))for(const method of ['jump','space'])for(const yaw of [0,Math.PI/2,Math.PI]){
     const o=bowl;reset();const f=skatePoolFrame(o,o.profile.flat/2+o.profile.radius*.8,0);
     px=o.x+f.x;py=o.y+f.y;a=SK.dir=yaw;SK.v=.6;

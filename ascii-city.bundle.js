@@ -15632,6 +15632,7 @@ function citySprites() {
   forNear(solidsB, o => { if(o.pool){const [vx,vy]=R(o.x,o.y);if(Math.hypot(vx,vy)<vis+2&&inView(vx,vy,Math.max(o.hl,o.hw)+.1))drawSkatePool(o);return;} const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile, bowl: o.bowl } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
   drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
+  drawParkShrubs();
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
@@ -17398,7 +17399,7 @@ function buildKerbModel(o,near) {
   return {parts,draw(x,y,z){view.x=x;view.y=y;view.z=z;view.glow=Math.max(night,overcast*.6);for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,z?p.shiftedRay:p.ray);}};
 }
 const KERB_MODELS=new WeakMap();
-function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
+function kerbModel(o,near=true) {let cache=KERB_MODELS.get(o);if(!cache)KERB_MODELS.set(o,cache=[]);const key=near?1:0;return cache[key]||(cache[key]=(['planter','shrub'].includes(o.kind)?buildPlantingModel(o,near):['pole','guy'].includes(o.kind)?buildPoleModel(o,near):buildKerbModel(o,near)));}
 const drawKerbHydrant=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z),drawKerbBin=drawKerbHydrant,drawKerbMailbox=drawKerbHydrant,drawKerbBollard=drawKerbHydrant,drawKerbCabinet=drawKerbHydrant,drawKerbShelter=drawKerbHydrant;
 // A timber pole (creosoted, tapering, its top chamfered), the crossarm reaching out over the road on a steel brace,
 // a porcelain insulator under each wire, the telephone cable on its bracket, and on some a transformer can on the
@@ -17480,7 +17481,7 @@ function drawPoleSpans() {
   });
 }
 const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:.05))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
 // stock, the control column (display, keypad, coin and note slots, the coin
@@ -17870,7 +17871,7 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
 // A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
 // either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
 // from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
-const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6, steps: 18 };
 const STATION_H = STATION_STAIRS.rise + 3;
 const STATION_EXIT_H = 0.3, STATION_EXIT_Z = STATION_H - STATION_EXIT_H / 2 - 0.06;
 const ST_TRACK = 12; // the first track row; the platform edge is just before it
@@ -17883,11 +17884,21 @@ const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: S
   return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
 }).join(''));
 // how high the stairs have lifted you at (x, y)
-const stairRise = (x, y) => { const s = room && room.def.stairs; return s && x >= s.x0 && x < s.x1 && y < s.y1 ? s.rise * clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1) : 0; };
+const stairRise = (x, y) => {
+  const s = room && room.def.stairs;
+  if (!s || x < s.x0 || x >= s.x1 || y >= s.y1) return 0;
+  const progress = clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1);
+  return s === STATION_STAIRS ? Math.ceil(progress * s.steps) * s.rise / s.steps : s.rise * progress;
+};
 // the steps themselves, as boxes, each a little higher toward the top; walkable (the stairs lift you, see stairRise)
-const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
-  const dy = (s.y1 - s.y0) / 10, top = (k + 1) * s.rise / 10;
+const stairSteps = s => Array.from({ length: s.steps || 10 }, (_, k) => {
+  const dy = (s.y1 - s.y0) / (s.steps || 10), top = (k + 1) * s.rise / (s.steps || 10);
   return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => { // wall to wall
+    // Station tread materials share the same step tops as the walking height.
+    if(s === STATION_STAIRS){
+      const topFace=HIT.face===5,fp=t/projY,nosing=topFace&&facadeLine(Math.abs(HIT.v-dy/2+.03),.06,fp)>.5;
+      BG[i]=C(nosing?YEL:GRAY,nosing?3.5+L*.4:(1+L*.3)*shadeFace(HIT.face)+(topFace?.7:0));set(i,' ',0);return true;
+    }
     // treads (yellow nosing at the front edge) and risers
     BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
     if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
@@ -18481,24 +18492,70 @@ function trainX(r) {
 }
 const trainStopped = r => { const p = mod(T - r.t0, TRAIN_CYCLE); return p >= 6 && p < 18; };
 
-// a subway car from outside: silver, an orange stripe, lit windows, doors that open while it stands at the platform
-const trainShade = (open, k) => (i, t, L) => {
-  const f = HIT.face, u = HIT.u, w = HIT.w;
-  BG[i] = C(GRAY, (3 + L * 0.5) * shadeFace(f));
-  if (f === 5 || f === 6) return set(i, f === 5 ? '=' : ' ', C(GRAY, L)), true;
-  if (f <= 2) { // the ends: a cab window and headlights on the leading car
-    if (w > 1.8 && w < 2.8 && Math.abs(HIT.v) < 1) { BG[i] = C(CYAN, 2); return set(i, ' ', 0), true; }
-    return set(i, (k === 1 && f === 1 || k === -1 && f === 2) && w < 1.1 && Math.abs(Math.abs(HIT.v) - 0.9) < 0.15 ? 'O' : ' ', C(WHITE, 15)), true;
+// The car and its door pockets share one permanent fitted opening at every stop.
+const SUBWAY_CAR={hl:4.1,hw:1.4,spacing:8.6,bottom:-.28,roof:3,floor:.02,head:2.4,
+  doors:[-2.6,0,2.6],halfDoor:.5,leafHalf:.25,travel:.54,doorTime:.85,windowLo:1.15,windowHi:2.1};
+function trainDoorAmount(r){
+  const p=mod(T-r.t0,TRAIN_CYCLE);if(p<6||p>=18)return 0;
+  const q=Math.min(clamp((p-6)/SUBWAY_CAR.doorTime,0,1),clamp((18-p)/SUBWAY_CAR.doorTime,0,1));
+  return q*q*(3-2*q);
+}
+const trainShade = (_open,k) => (i,t,L) => {
+  const S=SUBWAY_CAR,f=HIT.face,u=HIT.u,w=HIT.w,side=f===3||f===4,fp=t/projY;
+  // The aperture exists even while moving. The leaves below close it.
+  if(side&&w>S.floor-.04&&w<S.head+.07&&S.doors.some(d=>Math.abs(u-d)<S.halfDoor+.02))return false;
+  let base=GRAY,level=(2.5+L*.35)*shadeFace(f);
+  if(f===5)level-=coveGroove(u,.5,.012,fp)*.7;
+  else if(f<=2){
+    if(w>1.65&&w<2.6&&Math.abs(HIT.v)<1){base=CYAN;level=2+L*.16;}
+    else if((k===1&&f===1||k===-1&&f===2)&&w>.65&&w<1&&Math.abs(Math.abs(HIT.v)-.9)<.15){base=WHITE;level=14;}
+  }else if(w>.85&&w<1.05){base=ORANGE;level=3+L*.4;}
+  else if(w>1.2&&w<2.25&&(Math.abs(u)>1.1&&Math.abs(u)<1.5||Math.abs(u)>3.72&&Math.abs(u)<3.98)){
+    const frame=Math.abs(w-1.2)<.035||Math.abs(w-2.25)<.035;
+    base=frame?GRAY:CYAN;level=frame?2+L*.3:1.6+L*.16+(w-1.2)*.5;
   }
-  const door = [-2.6, 0, 2.6].find(dp => Math.abs(u - dp) < 0.6);
-  if (door !== undefined && w < 2.6) {
-    if (open) { BG[i] = C(WARM, 2); return set(i, (Math.floor(u * 4) + Math.floor(w * 4)) % 5 ? ' ' : '.', C(WARM, 9)), true; }
-    return set(i, Math.abs(u - door) < 0.04 ? '|' : ' ', C(GRAY, L * 0.4)), true;
-  }
-  if (w > 1.0 && w < 1.2) return set(i, '=', C(ORANGE, Math.max(L, 11))), true;
-  if (w > 1.55 && w < 2.45 && Math.abs(fract(u / 1.3) - 0.5) < 0.38) { BG[i] = C(CYAN, 2 + L * 0.1); return set(i, hash(Math.floor(u * 3), k, 5) > 0.8 ? 'o' : ' ', C(SKIN, 9)), true; }
-  return set(i, ' ', 0), true;
+  BG[i]=C(base,level);set(i,' ',0);return true;
 };
+const subwayPaint=(base,level=2)=>(i,t,L)=>{BG[i]=C(base,(level+L*.28)*shadeFace(HIT.face));set(i,' ',0);return true;};
+const SUBWAY_MODELS=new Map();
+function subwayTrainModel(k){
+  if(SUBWAY_MODELS.has(k))return SUBWAY_MODELS.get(k);
+  const S=SUBWAY_CAR,parts=[],metal=subwayPaint(GRAY),dark=subwayPaint(GRAY,.8);
+  const add=(role,u,v,hl,hw,z0,z1,shade,extra={},slide=0)=>parts.push({box:{...boxAt(u,v,1,0,hl,hw,z0,z1),subwayRole:role,...extra},shade,slide});
+  add('body',0,0,S.hl,S.hw,S.bottom,S.roof,trainShade(false,k));
+  add('floor',0,0,S.hl-.05,1.32,S.floor-.12,S.floor,subwayPaint(GRAY,1));
+  add('interior-wall',0,1.02,S.hl-.1,.025,S.floor,S.roof-.12,subwayPaint(WARM,2.2));
+  add('interior-seat',0,.72,1.65,.22,S.floor+.36,S.floor+.45,subwayPaint(BLUE));
+  add('interior-seat-back',0,.94,1.65,.035,S.floor+.45,S.floor+.95,subwayPaint(BLUE));
+  for(const u of [-1.2,1.2])add('seat-support',u,.72,.045,.17,S.floor,S.floor+.36,dark);
+  for(const side of [-1,1])for(const door of S.doors){
+    const meta={subwaySide:side,subwayDoor:door},v=side*(S.hw-.025);
+    for(const sign of [-1,1]){
+      add('door-jamb',door+sign*(S.halfDoor+.035),v,.045,.045,S.floor-.04,S.head+.11,metal,meta);
+      // Lined pockets are between the outer skin and the cabin: the leaves never disappear.
+      add('door-pocket',door+sign*.79,side*1.30,.26,.018,S.floor,S.head,metal,meta);
+      const shade=(i,t,L)=>{
+        const z=HIT.w,f=HIT.face;
+        if((f===3||f===4)&&Math.abs(HIT.u)<.14&&z>S.windowLo&&z<S.windowHi)return false;
+        const seal=HIT.u*sign<-.232,stripe=z>.85&&z<1.05;
+        BG[i]=C(seal?GRAY:stripe?ORANGE:GRAY,seal?1:stripe?2.6+L*.4:(2.1+L*.32)*shadeFace(f));set(i,' ',0);return true;
+      };
+      const slide=side<0?sign*S.travel:0,leaf={...meta,subwayLeaf:sign};
+      add('door-panel',door+sign*S.leafHalf,side*1.35,S.leafHalf,.024,S.floor,S.head,shade,leaf,slide);
+      add('door-glass',door+sign*S.leafHalf,side*1.35,.147,.008,S.windowLo-.01,S.windowHi+.01,(i,t,L)=>{
+        const seal=Math.abs(HIT.u)>.128||HIT.w<S.windowLo+.015||HIT.w>S.windowHi-.015;
+        BG[i]=C(seal?GRAY:CYAN,seal?1.2:2+L*.18);set(i,' ',0);return true;
+      },leaf,slide);
+    }
+    add('door-header',door,v,S.halfDoor+.08,.045,S.head,S.head+.11,metal,meta);
+    add('door-sill',door,v,S.halfDoor+.08,.055,S.floor-.06,S.floor,metal,meta);
+  }
+  SUBWAY_MODELS.set(k,parts);return parts;
+}
+function drawSubwayTrainCar(vx,vy,k,r=room){
+  const open=trainDoorAmount(r);
+  for(const p of subwayTrainModel(k))drawBox({...p.box,x:vx+p.box.x+p.slide*open,y:vy+p.box.y},p.shade);
+}
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0) return false;
@@ -18852,24 +18909,24 @@ function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the 
   BG[i] = h > 0.85 ? C(ITEM_COL[h * 100 & 7], 3.5 + L * 0.15) : h > 0.5 ? C(GREEN, 2.2 + L * 0.15) : C(GREEN, 1.2 + L * 0.1); return true;
 }
 function stationWall(i, u, uStep, z, d, mx, my, L) {
+  const fp=Math.max(uStep,d/projY);
+  set(i,' ',0);
   if (mx < 9 || mx > 36) {
-    if (mx === 0 || mx === room.W - 1) { BG[i] = NONE; set(i, Math.abs(z - 1.5) < 0.12 && Math.abs(fract(u) - 0.5) < 0.12 ? 'o' : ' ', C(RED, 14)); return true; }
-    const lamp = Math.abs(fract(u / 5) - 0.5) < 0.04 && Math.abs(z - 2.3) < 0.08;
-    set(i, lamp ? 'o' : Math.abs(z - 1.8) < 0.03 ? '=' : (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', lamp ? C(WARM, 13) : C(GRAY, L * 0.25));
-    BG[i] = C(GRAY, 0); return true;
+    const end=mx===0||mx===room.W-1;
+    const lamp=end?Math.abs(z-1.5)<.12&&Math.abs(fract(u)-.5)<.12:Math.abs(fract(u/5)-.5)<.04&&Math.abs(z-2.3)<.08;
+    const course=coveGroove(z,.3,.012,fp);
+    BG[i]=lamp?C(end?RED:WARM,13):C(GRAY,.7+L*.08-course*.5);return true;
   }
-  const far = my === room.H - 1; // the tunnel wall across the tracks
-  const u0 = Math.floor((u - 2) / 8) * 8 + 6;
-  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
-    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.312, 0.438, C(WHITE, 15), C(GREEN, 4))) return true;
-    set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
+  const far = my === room.H - 1, u0 = Math.floor((u - 2) / 8) * 8 + 6;
+  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) {
+    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, .312, .438, C(WHITE, 15), C(GREEN, 4))) return true;
+    BG[i]=C(GREEN,4);return true;
   }
   if (far) {
-    if (z > 2.25 && z < 2.4 && fract(u / 4) < 0.05) { set(i, 'o', C(WARM, 15)); return true; }
-    set(i, hash(Math.floor(u * 4), Math.floor(z * 4), 7) > 0.85 ? ':' : '.', C(GRAY, L * 0.3)); BG[i] = C(GRAY, 1); return true;
+    const lamp=z>2.25&&z<2.4&&fract(u/4)<.05;
+    BG[i]=lamp?C(WARM,13):C(GRAY,1+L*.08-coveGroove(z,.3,.015,fp)*.5);return true;
   }
-  const grout = fract(u / 0.3) < 0.1 || fract(z / 0.3) < 0.1; // white tiles everywhere else
-  set(i, grout ? '+' : ' ', C(GRAY, L * 0.5)); BG[i] = C(WHITE, 4 * L / 14); return true;
+  BG[i]=C(WHITE,2+L*.25-coursedJoint(u,z,.3,.3,uStep,d)*1.5);return true;
 }
 function trainWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0 && my !== room.H - 1) return false;
@@ -18952,14 +19009,17 @@ function roomFloor(i, r, x, rx, ry) {
     case 'casino': return casinoFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
-    case 'station':
-      if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
-        if (Math.abs(wy - ST_TRACK - 0.3) < 0.05 || Math.abs(wy - ST_TRACK - 1.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
-        if (wy > ST_TRACK + 0.3 && wy < ST_TRACK + 1.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
-        return set(i, (r + x) % 3 ? ' ' : '.', C(GRAY, L * 0.5));
+    case 'station': {
+      const fp=homeBalconyPavingFootprint(d,eye);set(i,' ',0);
+      if(wy>ST_TRACK-.7){
+        const rail=Math.max(facadeLine(Math.abs(wy-ST_TRACK-.3),.1,fp),facadeLine(Math.abs(wy-ST_TRACK-1.5),.1,fp));
+        const sleeper=wy>ST_TRACK+.3&&wy<ST_TRACK+1.5&&coveGroove(wx,.6,.15,fp)>.5;
+        BG[i]=rail>.5?C(GRAY,2+L*.65):sleeper?C(BRICK,1+L*.25):C(GRAY,.8+L*.15);return;
       }
-      if (wy > ST_TRACK - 1) return set(i, '=', C(YEL, L * 2)); // mind the gap
-    // fall through: platform tiles
+      if(wy>ST_TRACK-1){BG[i]=C(YEL,2+L*.5-coveGroove(wx,.15,.025,fp));return;}
+      const grout=Math.max(coveGroove(wx,1,.035,fp),coveGroove(wy,1,.035,fp));
+      BG[i]=C(STONE,1.5+L*.4-grout);return;
+    }
     default: {
       const edge = fract(wx) < 0.06 || fract(wy) < 0.06;
       set(i, edge ? '+' : (Math.floor(wx) + Math.floor(wy)) & 1 ? '.' : ' ', C(edge ? GRAY : WHITE, L));
@@ -19109,7 +19169,7 @@ function roomSprites() {
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
-    if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
+    if (tx !== null) for (const k of [-1, 0, 1]) drawSubwayTrainCar(tx + k * SUBWAY_CAR.spacing - px, ST_TRACK + .9 - py, k);
   }
   drawRoomPolice();
 }
@@ -26408,7 +26468,7 @@ const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Mat
 }) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < (room.def.exReach ?? 1.3) && py < 2.4;
-const canBoard = () => room.kind === 'station' && trainStopped(room) && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
+const canBoard = () => room.kind === 'station' && trainStopped(room) && trainDoorAmount(room)>.9 && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
 // near a way out: a door, or the foot of the station stairs
 const nearExit = () => {
   const s = room.def.stairs;
@@ -26659,9 +26719,10 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
-    : settings.help && skatingNow() && SK.grind ? 'GRINDING: A/D balance (keep the mark in the middle) | SPACE pop off (hold an arrow: flip trick off it)'
-    : settings.help && skatingNow() ? 'W push | S brake, hold: fakie | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
+  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
+    : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
+    : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
     : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
@@ -26673,12 +26734,13 @@ function hud() {
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
   const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, baseTop = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
-  const top=baseTop+drawNavigationCompass(baseTop),maxW=top?cv.width-12:beside;
+  const top=baseTop,maxW=top?cv.width-12:beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
+  hudBottom += drawNavigationCompass(hudBottom);
   wantedHud();
   minimap();
   const hotbarTop = hotbar();
@@ -26701,6 +26763,7 @@ function hud() {
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
   const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
+  if(skatingNow()&&(SK.transition||SK.airRoute))msg.push((SK.airRoute?SK.airRoute.out:skateAirOutHeld())?'AIR OUT: DECK':'AIR: RETURN INSIDE');
   const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
                                    [msg, msgY, '#fff', cv.width / 2]]) {
@@ -29710,13 +29773,16 @@ function buildPause() {
       </div>
       <h2>skateboard controls</h2>
       <div class="keys">
-        <b>A / D · left stick</b><span>carve, lean on a grind, spin in the air</span>
-        <b>W · gamepad A</b><span>push; Shift+W or gamepad X: mongo</span>
-        <b>hold S · left stick down</b><span>brake to a stop, then roll backwards fakie; release to coast</span>
+        <b>A / D · left stick</b><span>carve and spin in the air; A/D also moves the grind/manual balance mark left/right toward centre</span>
+        <b>right stick · right-drag mouse</b><span>on a grind, left/right balances; forward/back changes nose/tail pressure. In a manual, forward/back adjusts pitch balance. Keep the gauge mark centred.</span>
+        <b>W · gamepad A / stick forward</b><span>push (from rest, toward the camera view, regular or fakie); Shift+W or gamepad X: mongo</span>
+        <b>mouse · LB + right stick</b><span>orbit freely around the skater through any number of turns; after looking, recenter takes the short way back.</span>
+        <b>hold S · left stick down</b><span>brake quickly; keep holding to pivot 180° and push the other way. Release to coast. Bowl rollbacks can still come down fakie.</span>
         <b>S + A/D · gamepad B</b><span>brake with a direction to powerslide; gamepad B alone brakes to a stop</span>
-        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter scoop for a 360 shuvit or flip. Load forward for nollies. Flick again in the air for a late flip.</span>
-        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie.</span>
-        <b>Q / E · triggers</b><span>hold in the air to grab; mouse or right stick picks nose, tail or side. Release before landing.</span>
+        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter left scoop for a 360 flip, right for a 360 shuvit. Half-circle right, then flick upper-right and release: varial heelflip. Quarter-circle left then flick upper-right: hardflip; quarter-circle right then flick upper-left: inward heelflip. Load forward for nollies. In the air, a quick left/right flick and release also flips without loading again; right-mouse drags work the same way. Loaded flicks and scoops still work.</span>
+        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. Tap arrows during an air to flip, or use Space plus arrows. Air tricks add no extra jump. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
+        <b>hold C · RT at takeoff</b><span>air out of a bowl or ramp onto its deck. Without it, bowl airs favor returning inside. Choose before popping or crossing the coping; spins do not change that flight choice. For a coping boardslide, air out, turn the board across the tube and descend with speed along it.</span>
+        <b>Q / E · LT / RT</b><span>hold in the air to grab; RT used for an air-out stays reserved until landing; mouse or right stick picks nose, tail or side. Release before landing.</span>
         <b>gentle right stick / mouse</b><span>hold back for a manual or forward for a nose manual; keep the balance mark centred. Manuals link combos across flat ground.</span>
       </div>
       <h2>controls</h2>
@@ -35664,7 +35730,7 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the board) the arrows held say
-  if(skatingNow()&&(SK.transition||SK.grind))return skatePop(trick);
+  if(skatingNow()&&(SK.transition||SK.grind||skateAir()))return skatePop(trick);
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   body.buf = -9;
@@ -35726,7 +35792,7 @@ function stepBody(dt) {
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
   body.lastA = a; body.lx = px; body.ly = py;
   if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; body.buf = body.landedAt = -9; return; }
-  body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
+  body.crouch += clamp((K.KeyC && !skatingNow() && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (wasAir) { // (uphill the ground can come up past you between frames: you still land, rather than being stranded mid-trick)
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
@@ -36233,6 +36299,7 @@ function buildStreetSkateSpots(){
     SKATE_SPOTS.push({id,name:cap(site.district.replace(/[-_]/g,' '))+' · '+name,x,y,line:{x:site.x,y:site.y},description,street:true,district:site.district});
   }
 }
+const skateBalanceStick=()=>SK_INPUT.mouseHeld?SK_INPUT.mouse:SK_INPUT.right;
 // Grind paths use absolute world heights and 3D arc lengths. Segments are
 // indexed in every block they cross, rather than only at a long rail's midpoint.
 const GRIND_PATHS = [], grindPathBuckets = new Map();
@@ -36319,12 +36386,16 @@ function skatePathCatch() {
       // Kerbs need an intentional hop; simply carving down a street must not
       // stick the skater to its painted-height pavement edge.
       if (!air && (path.kind === 'kerb' || path.kind === 'bench')) continue;
-      if(path.kind==='coping'&&air&&SK.airSource===path.feature)continue;
+      if(path.kind==='coping'&&air&&SK.airSource===path.feature&&!SK.airRoute?.out)continue;
       const q = grindPathNearest(seg, px, py);
       if (q.gap > (path.kind==='coping' ? .025 : .08) || feet < q.p[2] - .012 || feet > q.p[2] + (air ? .035 : .003)) continue;
       const hl = Math.hypot(seg.d[0], seg.d[1]);
       const along = (Math.cos(SK.dir) * seg.d[0] + Math.sin(SK.dir) * seg.d[1]) / hl;
-      if (Math.abs(along) < (path.kind==='coping'?Math.cos(Math.PI/7):.5) || !hl) continue;
+      // A board can be crosswise while its momentum carries it along the tube.
+      // A descending, crosswise coping approach is a deliberate boardslide.
+      const boardAcross=Math.abs(Math.sin(a-Math.atan2(seg.d[1],seg.d[0])))>Math.sin(Math.PI/3);
+      const approach=path.kind==='coping'?(boardAcross ? .35 : Math.cos(Math.PI/7)):.5;
+      if (Math.abs(along) < approach || !hl) continue;
       if (!best || q.gap < best.q.gap) best = { seg, path, q, dir: Math.sign(along) };
     }
   if (best) startPathGrind(best.path, best.q.distance, best.dir);
@@ -36335,7 +36406,7 @@ function startPathGrind(path, distance, dir) {
   if (tr && tr.name !== 'ollie') { const c = SK.combo ||= { names: [], pts: 0, t: T }; c.names.push(tr.name.toUpperCase()); c.pts += SK_POINTS[tr.name] || 50; }
   const angle = Math.atan2(at.tangent[1], at.tangent[0]);
   const off = Math.abs(mod(a - angle + Math.PI / 2, Math.PI) - Math.PI / 2);
-  const right = SK_INPUT.right, pressure = K.ArrowUp ? -1 : K.ArrowDown ? 1 : right[1];
+  const right = skateBalanceStick(), pressure = K.ArrowUp ? -1 : K.ArrowDown ? 1 : right[1];
   const name = grindFamily(off, path.kind, right[0], pressure, dir);
   // Keep g/top/t for the compatibility release and the existing park tests.
   const g = path.legacy || { ...path, ax: at.seg.from[0], ay: at.seg.from[1], bx: at.seg.to[0], by: at.seg.to[1] };
@@ -36343,7 +36414,7 @@ function startPathGrind(path, distance, dir) {
     name, t0: T, bal: 0, balV: (Math.random() - .5) * .6, scrapeT: 0, boardOff: a - angle - (dir < 0 ? Math.PI : 0) };
   px = at.p[0]; py = at.p[1]; SK.dir = angle + (dir < 0 ? Math.PI : 0);
   SK.v = SK.grind.speed; body.trick = null; body.vz = 0; SK.spin = 0;
-  SK.transition=null;SK.manual=null;SK.airPose=null;SK.airSource=null;SK.airNormal=[0,0,1];
+  SK.transition=null;SK.manual=null;SK.airRoute=null;SK.airPose=null;SK.airSource=null;SK.airNormal=[0,0,1];
   SKB.roll=0;SKB.pitch=Math.atan2(at.tangent[2]*dir,Math.hypot(at.tangent[0],at.tangent[1]));
   SKB.yaw=a;SKB.surf={h:at.p[2],n:[0,0,1],kind:'grind',material:path.material,ref:path};
   body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
@@ -36352,16 +36423,17 @@ function startPathGrind(path, distance, dir) {
 }
 function stepPathGrind(dt) {
   const G = SK.grind, at = grindPathAt(G.path, G.distance), material = G.path.material || 'stone', held = T - G.t0;
-  if (Math.hypot(...SK_INPUT.right) > .3) {
+  const balanceStick=skateBalanceStick();
+  if (Math.abs(balanceStick[1]) > .3&&Math.abs(balanceStick[1])>Math.abs(balanceStick[0])) {
     const off = Math.abs(mod(G.boardOff + Math.PI / 2, Math.PI) - Math.PI / 2);
-    G.name = grindFamily(off, G.path.kind, ...SK_INPUT.right, G.dir);
+    G.name = grindFamily(off, G.path.kind, 0,balanceStick[1], G.dir);
   }
   G.speed = Math.max(0, G.speed + (-.98 * at.tangent[2] * G.dir - .98 * (GRIND_FRICTION[material] || .06)) * dt);
   SK.v = G.speed * Math.hypot(at.tangent[0], at.tangent[1]);
-  const steer = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  const steer = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer+balanceStick[0], -1, 1);
   const unstable = ['smith', 'feeble', 'crooked grind', 'overcrook'].includes(G.name) ? 1.5 : 1;
-  G.balV += ((Math.random() - .5) * (1.6 + held * .5) * unstable + G.bal * 1.4 - steer * 3.2) * dt;
-  G.balV *= Math.exp(-dt * .8); G.bal += G.balV * dt;
+  G.balV += ((Math.random() - .5) * (1.6 + held * .5) * unstable + G.bal * 1.4 + steer * 6) * dt;
+  G.balV *= Math.exp(-dt * (1.6+Math.abs(steer)*3)); G.bal += (G.balV+steer*.65) * dt;
   if (Math.abs(G.bal) > 1) return skateBail('BAIL! You lost your balance.');
   G.distance += G.dir * G.speed * dt;
   if (G.path.closed) G.distance = mod(G.distance, G.path.length);
@@ -36401,7 +36473,7 @@ function createSkateGesture() {
       armed=true;
     }
     if (!load) {
-      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0 };
+      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
       return null;
     }
     if (radius > .45) {
@@ -36411,18 +36483,23 @@ function createSkateGesture() {
     if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
     if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
+    let acrossCentre=false;
     if (radius > .45) {
+      load.finish=[x,y];
       const angle = Math.atan2(y, x), delta = Math.atan2(Math.sin(angle - load.angle), Math.cos(angle - load.angle));
       // A straight flick crosses the centre and jumps angle by pi. Only a
       // series of small angular steps is a scoop, never that single jump.
-      if (Math.abs(delta) < 1.2) load.arc += delta;
+      if (Math.abs(delta) < 1.2) load.arc += delta;else acrossCentre=true;
       load.angle = angle;
     }
     const arc = Math.abs(load.arc), curled = arc > 1.3;
-    const forward = y * load.side < -.6;
+    load.maxArc=Math.max(load.maxArc,arc);
+    const forward = radius>.6&&y*load.side<-.35&&-y*load.side/radius>.45;
+    const quarterFlip=acrossCentre&&arc>.8&&arc<2.3&&forward&&x*Math.sign(load.arc)>.3;
     const released = radius < .25;
-    if ((!curled && forward) || (curled && released && arc > 2.3)) {
-      const key = arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+    const heelScoop=load.maxArc>2.3&&arc>1.6&&arc<3.9&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
+    if (quarterFlip || (!curled && forward) || (curled && released && (arc > 2.3||heelScoop))) {
+      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
       load = null; armed = false;firedAt=t;centred=false; return result;
     }
@@ -36432,70 +36509,130 @@ function createSkateGesture() {
   }
   return { sample, reset, get loaded() { return !!load; }, get samples() { return samples.slice(); } };
 }
+// A natural ramp air needs no second pop load: a quick out-and-return flick
+// can choose a trick directly. Loaded/scooped gestures always take priority.
+function createSkateAirFlick(min=.6,window=.2){
+  let peak=null,blocked=false;
+  const reset=()=>{peak=null;blocked=false;};
+  const consume=()=>{peak=null;blocked=true;};
+  function sample(x,y,t){
+    const r=Math.hypot(x,y);
+    if(r<.25){
+      const p=peak;reset();
+      if(p&&t-p.t<=window){const key=flickTrick(p.x,p.y,min);return key?{key,strength:1,nollie:false}:null;}
+    }else if(!blocked){
+      if(!peak&&r>min)peak={x,y,t,r};
+      else if(peak&&r>peak.r){peak.x=x;peak.y=y;peak.r=r;}
+    }
+    return null;
+  }
+  return {sample,reset,consume};
+}
+function skateGestureSample(recognizer,airFlick,x,y,t){
+  const gesture=recognizer.sample(x,y,t);
+  if(gesture){airFlick.consume();return gesture;}
+  if(!skateAir()){airFlick.reset();return null;}
+  if(recognizer.loaded){airFlick.consume();return null;}
+  return airFlick.sample(x,y,t);
+}
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
-const SK_INPUT = { steer: 0, steerTarget: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
-  padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
+  padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
-  Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+  Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
-  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
+  SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();SK_INPUT.padAirFlick.reset();SK_INPUT.mouseAirFlick.reset();
+}
+// A flip in an existing flight changes the board, never its trajectory.
+function skateAirTrick(key,gesture) {
+  if(!skateAir()||SK.bail>0)return false;
+  const [name,flip,turn]=TRICKS[key]||['ollie',0,0];
+  if(!flip&&!turn)return false;
+  const tr=body.trick,remaining=tr&&(tr.flip||tr.turn)?(tr.duration??tr.air)-tr.t:0;
+  if(remaining>0){
+    if(remaining>.18)return false;
+    SK.lateTrick={key,gesture,until:T+.18};SK.trickKeyT=-1;SK.airArrow=null;return true;
+  }
+  SK.lateTrick=null;SK.trickKeyT=-1;SK.airArrow=null;
+  body.trick=skateTrick('late '+name,flip,turn,.32,!!gesture?.nollie);
+  body.trick.duration=Math.abs(turn)>=1?.32:.24; // a late flick has a shorter wind-up
+  return true;
+}
+function skateAirTrickStep(){
+  const pending=SK.lateTrick;
+  if(!pending)return;
+  if(!skateAir()||SK.bail>0||T>pending.until+1e-6){SK.lateTrick=null;return;}
+  const tr=body.trick;
+  if(!tr||!(tr.flip||tr.turn)||tr.t>=(tr.duration??tr.air))skateAirTrick(pending.key,pending.gesture);
 }
 function skateGesturePlay(gesture) {
   if (!gesture || SK.bail > 0) return false;
   if (skateAir()) {
-    const [name, flip, turn] = TRICKS[gesture.key] || ['ollie', 0, 0];
-    if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < (body.trick.duration ?? body.trick.air)) return false;
-    body.trick = skateTrick('late ' + name, flip, turn, .32, gesture.nollie);
+    if(skateCanLipPop())return skateLipPop(gesture.key,gesture);
+    return skateAirTrick(gesture.key,gesture);
   } else skatePop(gesture.key, gesture);
   return true;
 }
 function skateMouseBegin() {
   SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
-  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();
+  SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();SK_INPUT.mouseAirFlick.reset();
 }
 function skateMouseMove(x, y) {
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
   SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
-  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+  if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
 }
 function skateMouseEnd() {
-  if (skateGesturePlay(SK_INPUT.mouseGesture.sample(0, 0, T))) SK_INPUT.fired = true;
+  if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,0,0,T))) SK_INPUT.fired = true;
   SK_INPUT.mouseHeld = false; SK_INPUT.mouse = [0, 0];
   return SK_INPUT.fired;
 }
-function skatePollInput(dt) {
+function skatePollInput(dt,framePad,fixedSteer=false) {
   if (typeof paused !== 'undefined' && paused || typeof document !== 'undefined' && document.hidden) { skateInputReset(); return; }
   // Exactly one Gamepad API read per simulation frame. No synthetic key presses,
   // so disconnecting a pad cannot leave the keyboard stuck down.
   let pads = [];
-  try { pads = typeof controllerSkatePad==='function'&&CONTROLLER.sampleT===T ? [controllerSkatePad()] : typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
+  try { pads = framePad!==undefined ? framePad?[framePad]:[] : typeof controllerSkatePad==='function'&&CONTROLLER.sampleT===T ? [controllerSkatePad()] : typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
   const pad = Array.from(pads).find(p => p?.connected && (p.mapping === 'standard' || !p.mapping));
   const button = i => pad?.buttons[i]?.value || (pad?.buttons[i]?.pressed ? 1 : 0);
   const dead=typeof settings==='undefined' ? .15 : clamp(Number(settings.controllerDeadzone)||.15,.05,.35);
   const left=pad?skateStick(pad.axes[0],pad.axes[1],dead):[0,0];
   SK_INPUT.steerTarget=pad?controllerStick(pad.axes[0],pad.axes[1],dead)[0]:0;
-  SK_INPUT.steer=pad?controllerEase(SK_INPUT.steer,SK_INPUT.steerTarget,dt*(typeof settings==='undefined'?1:clamp(Number(settings.controllerSteering)||1,.5,2))):0;
+  SK_INPUT.padActive=!!pad;if(!fixedSteer)skateSteerStep(dt);
   SK_INPUT.back=left[1]>(SK_INPUT.back ? .3 : .55)&&Math.abs(left[0])<left[1]*.7;
-  SK_INPUT.push = button(0) > .5 || button(2) > .5; SK_INPUT.mongo = button(2) > .5;
-  SK_INPUT.brake = button(1) > .5; SK_INPUT.grabL = button(6); SK_INPUT.grabR = button(7);
+  SK_INPUT.forward=left[1]<-(SK_INPUT.forward ? .3 : .55)&&Math.abs(left[0])<-left[1]*.7;
+  SK_INPUT.push = button(0) > .5 || button(2) > .5 || SK_INPUT.forward; SK_INPUT.mongo = button(2) > .5;
+  SK_INPUT.brake = button(1) > .5; SK_INPUT.airOut=button(7)>.55;
+  SK_INPUT.grabL = button(6);
+  // RT chooses an exit while riding a transition. That same held trigger
+  // cannot become an accidental grab (and landing bail) during its flight.
+  SK_INPUT.grabR = (SK.transition||SK.airRoute?.out||skateCanLipPop()) ? 0 : button(7);
+  // Capture a stopped push before a render-only frame can move the chase
+  // camera. This keeps the initial direction identical above 120 render Hz.
+  if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
-  if (!pad) SK_INPUT.padGesture.reset();
-  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25))SK_INPUT.padGesture.reset();
-  else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
+  if (!pad) {SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.reset();}
+  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25)){SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.consume();}
+  else skateGesturePlay(skateGestureSample(SK_INPUT.padGesture,SK_INPUT.padAirFlick,...SK_INPUT.right,T));
   if (SK_INPUT.mouseHeld) {
     const relax = Math.exp(-dt / .15);
-    if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map(v => v * relax);
-    if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
+    if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map((v,i) => SK.manual&&i===1?v:v*relax);
+    if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
   }
+}
+
+function skateSteerStep(dt){
+  const response=typeof settings==='undefined'?1:clamp(Number(settings.controllerSteering)||1,.5,2);
+  SK_INPUT.steer=SK_INPUT.padActive?controllerEase(SK_INPUT.steer,SK_INPUT.steerTarget,dt*response):0;
 }
 // Skating uses cells and seconds throughout. The legacy body height is metres;
 // skateBoardSync is the only conversion boundary for that height.
 const SKB = { p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, roll: 0,
   riderYaw: 0, contact: 'ground', surf: null, stance: 1, fakie: false };
-const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, reverseCap: .45, reverseAccel: .3, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
+const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, pivotTime: .24, drag: .04, brake: .6, slide: 1.1, concrete: .012, asphalt: .018 };
 const skateSurfaceCells = new Map();
 let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }
@@ -36542,74 +36679,133 @@ function skateSurface(x, y, zHint) {
   const len = Math.hypot(gx, gy, 1);
   return { h, n: [-gx / len, -gy / len, 1 / len], kind, material, ref };
 }
+// Bend an existing velocity onto a new riding plane without manufacturing
+// kinetic energy. Reconstructing vz from unchanged horizontal speed did that.
+function skateTangentVelocity(v,n) {
+  const speed=Math.hypot(...v),z=-(v[0]*n[0]+v[1]*n[1])/Math.max(.001,n[2]);
+  const tangent=[v[0],v[1],z],length=Math.hypot(...tangent);
+  return length>1e-9?tangent.map(x=>x*speed/length):[0,0,0];
+}
+function skateContactVelocity(n) {
+  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,skateAir()?body.vz/10:SKB.surf?SKB.v[2]:0];
+  if(!skateAir())return skateTangentVelocity(v,n);
+  const dot=v.reduce((sum,x,i)=>sum+x*n[i],0);
+  return v.map((x,i)=>x-dot*n[i]);
+}
+// Nearest parallel board heading preserves a rollback as fakie. Camera look
+// chooses the travel direction only when starting a push from rest.
+function skateFaceTravel() {
+  if(SK.v>.005)a+=mod(SK.dir-a+Math.PI/2,Math.PI)-Math.PI/2;
+  return Math.cos(SK.dir-a)<0;
+}
+function skatePushFromRest(push,speed) {
+  if(!push||skateAir()){SK.pushFakie=null;return;}
+  if(speed>=.025){SK.pushFakie=Math.cos(SK.dir-a)<0;return;}
+  if(SK.pushFakie!=null)return;
+  const facing=typeof third!=='undefined'&&third&&Number.isFinite(SK.camYaw)?SK.camYaw:a+(SK.look||0);
+  SK.dir=facing;a+=mod(facing-a+Math.PI/2,Math.PI)-Math.PI/2;
+  SK.pushFakie=Math.cos(facing-a)<0;
+}
+function skatePushReady(push,speed) {
+  if(!push){SK.pushCruise=false;return false;}
+  // Tapered kicks plus drag settle below the hard push cap. Coast at the
+  // top of that sustainable cruising range, then resume after a clear drop.
+  if(speed>=SK_PHYS.pushCap*.88)SK.pushCruise=true;
+  else if(speed<SK_PHYS.pushCap*.84)SK.pushCruise=false;
+  return !SK.pushCruise&&speed<SK_PHYS.pushCap;
+}
+const skatePushYaw=(yaw=a)=>yaw+((SK.pushFakie??SKB.fakie)?Math.PI:0);
+const skateRideYaw=()=>a+(SK.slide||0)*Math.PI/2;
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
   SKB.riderYaw = a; SKB.stance = SK.stance;
-  if (!skateAir()) SKB.yaw = a;
+  if (!skateAir() && !SK.transition && !SK.grind) SKB.yaw = skateRideYaw();
   SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : SK.transition ? 'transition' : skateAir() ? 'air' : SK.manual ? 'manual' : 'ground';
   if (SKB.contact === 'grind' && SK.grind.exitVelocity) SKB.v = SK.grind.exitVelocity.slice();
   else if (SKB.contact !== 'ground' && SKB.contact !== 'manual' && SKB.contact !== 'transition') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
 }
 function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
-  const surf = SKB.surf = skateSurface(px, py), n = surf.n;
+  const previous=SKB.surf,surf = SKB.surf = skateSurface(px, py), n = surf.n;
   // External teleports, mounting and the compatibility release may still write
   // SK.v/SK.dir. Import those only when they differ from the last derived state.
   const hv = Math.hypot(SKB.v[0], SKB.v[1]);
   if (Math.abs(hv - SK.v) > 1e-6 || (hv > 1e-6 && Math.abs(Math.atan2(SKB.v[1], SKB.v[0]) - SK.dir) > 1e-6)) {
     SKB.v[0] = Math.cos(SK.dir) * SK.v; SKB.v[1] = Math.sin(SK.dir) * SK.v;
   }
+  if(previous)SKB.v=skateTangentVelocity(SKB.v,n);
   let vx = SKB.v[0], vy = SKB.v[1];
   // The board remains tangent: gravity projected into that plane acts even at
   // zero speed, so reaching a stall never traps you halfway up a hill.
   vx += SK_PHYS.gravity * n[2] * n[0] * dt;
   vy += SK_PHYS.gravity * n[2] * n[1] * dt;
   let speed = Math.hypot(vx, vy);
+  if(speed>=.025)SK.dir=Math.atan2(vy,vx);
+  const back=reverse&&!push&&Math.abs(steer)<.35;
+  if(!back)SK.reversing=false;
+  if(back&&!SK.reversing&&!SK.pivot&&speed<.02){
+    SK.reversing=true;SK.pivot={from:a,to:a+Math.PI,t:0};
+    SK.kick=0;SK.pushFakie=null;SK.pushCruise=false;SK.slide=0;SK.sliding=false;skateManualEnd();
+    // Discard complete orbit windings without moving the physical camera.
+    const base=SK.camBase??a;
+    if(SK.camYaw!=null)SK.camYaw=base+Math.atan2(Math.sin(SK.camYaw-base),Math.cos(SK.camYaw-base));
+    SK.look=0;SK.lookT=-9;
+  }
+  if(SK.pivot){
+    const p=SK.pivot;p.t+=dt;const t=clamp(p.t/SK_PHYS.pivotTime,0,1),smooth=t*t*(3-2*t);
+    a=p.from+(p.to-p.from)*smooth;SK.dir=a;vx=vy=speed=0;
+    if(t>=1){SK.pivot=null;SK.reversing=back;}
+  }
+  const turning=!!SK.pivot,reversePush=back&&SK.reversing&&!turning;
+  push=(push||reversePush)&&!turning;brake=brake&&!SK.reversing&&!turning;
+  if(reversePush&&speed<.025)SK.pushFakie=false;else skatePushFromRest(push,speed);
   SK.kicking = false;
   SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
-  if (push && SK.charge < 0 && !skateGestureLoaded() && speed < SK_PHYS.pushCap) {
+  if (skatePushReady(push,speed) && SK.charge < 0 && !skateGestureLoaded()) {
     const before = SK.kick; SK.kick += dt / .7; SK.kicking = true;
     if (before < .15 && SK.kick >= .15) {
       const burst = SK_PHYS.pushBurst * Math.max(0, 1 - speed / SK_PHYS.pushCap);
-      vx += Math.cos(a) * burst; vy += Math.sin(a) * burst;
+      const facing=skatePushYaw();
+      vx += Math.cos(facing) * burst; vy += Math.sin(facing) * burst;
       if (actx) sfxSkate('push');
     }
     if (SK.kick >= 1) SK.kick -= 1;
   } else SK.kick = 0;
   speed = Math.hypot(vx, vy);
-  const turn = steer * (2.6 - 1.43 * Math.min(1, speed / SK_PHYS.pushCap)) * dt;
+  const turn = (turning?0:steer) * (2.6 - 1.43 * Math.min(1, speed / SK_PHYS.pushCap)) * dt;
+  const beforeTurn=Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));
   a += turn;
   const c = Math.cos(turn), s = Math.sin(turn), tx = vx * c - vy * s;
   vy = vx * s + vy * c; vx = tx;
-  const sliding = brake && Math.abs(steer) > .1 && speed > .12;
-  SK.slide = sliding ? steer : 0;
+  if(Math.hypot(vx,vy)>1e-9){const scale=beforeTurn/Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));vx*=scale;vy*=scale;}
+  speed=Math.hypot(vx,vy);
+  // Require deliberate braking + steering; hysteresis avoids stick chatter.
+  const sliding = brake && Math.abs(steer) > (SK.sliding ? .25 : .45) && speed > .12;
+  SK.sliding=sliding;
+  const slideTarget=sliding?Math.sign(steer):0;
+  SK.slide=(SK.slide||0)+(slideTarget-(SK.slide||0))*(1-Math.exp(-12*dt));
   if (sliding && SK.combo && !SK.reverted && T - (SK.landedAt ?? -9) < .25) {
     SK.combo.names.push('REVERT'); SK.combo.pts += 75; SK.combo.t = T; SK.reverted = true;
   }
-  // Holding back must first finish braking. Once stopped, it becomes a
-  // modest backwards push; the board heading and stance stay unchanged.
-  const reversing=reverse&&!push&&Math.abs(steer)<.1&&(SK.reversing||speed<.015);
-  SK.reversing=reversing;
-  if (brake && !reversing && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
+  if (brake && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
     SK.dragT = .12; if (actx) sfxSkate('drag', Math.min(1, speed / SK_TOP));
   }
   const mu = surf.material === 'concrete' ? SK_PHYS.concrete : surf.material === 'grass' ? .06 : SK_PHYS.asphalt;
-  const loss = ((brake&&!reversing ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
+  const loss = ((brake ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
     + SK_PHYS.drag * speed * speed) * dt + speed * Math.abs(turn) * .025;
   const keep = speed > 0 ? Math.max(0, speed - loss) / speed : 0;
   vx *= keep; vy *= keep;
-  if(reversing){
-    const backward=Math.max(0,-vx*Math.cos(a)-vy*Math.sin(a));
-    const impulse=SK_PHYS.reverseAccel*dt*Math.max(0,1-backward/SK_PHYS.reverseCap);
-    vx-=Math.cos(a)*impulse;vy-=Math.sin(a)*impulse;
-  }
   // Limit extreme downhill runs, never ordinary slope acceleration.
-  const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy) || 1)); vx *= cap; vy *= cap;
+  const tangentZ=-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]);
+  const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy,tangentZ) || 1)); vx *= cap; vy *= cap;
   const vz = -(vx * n[0] + vy * n[1]) / Math.max(.05, n[2]);
   SKB.v = [vx, vy, vz]; SK.v = Math.hypot(vx, vy);
   if (SK.v > 1e-7) SK.dir = Math.atan2(vy, vx);
   SKB.fakie = Math.cos(SK.dir - a) < 0;
-  SKB.pitch = Math.atan2(vz, SK.v || 1e-9) * (SKB.fakie ? -1 : 1);
-  SKB.roll = -steer * Math.min(.18, SK.v * .2);
+  const yaw=skateRideYaw();
+  SKB.pitch=Math.atan2(-(n[0]*Math.cos(yaw)+n[1]*Math.sin(yaw)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(yaw,SKB.pitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];
+  const dot=v=>n.reduce((sum,k,i)=>sum+k*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral))-steer*Math.min(.18,SK.v*.2);
   if (sliding && actx && T > SK.scrapeT) { SK.scrapeT = T + .15; sfxSkate('scrape', .5); }
 }
 function skateSurfaceExit(x0, y0, dt) {
@@ -36657,53 +36853,79 @@ function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
 // their orientation into a later kerb hop. Preserve the pop, then prepare for
 // the surface below the predicted touchdown without changing trick rotation.
 function skateAirBegin(source = null) {
+  SK.airRoute=null;SK.pivot=null;SK.lipPop=null;SK.lateTrick=null;SK.airArrow=null;SK.trickKeyT=-1;SK.spin=0;SK.airSpinV=0;SK.preWind=0;
   const up=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).up;
-  SK.airPose={t:T,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
-  SK.airNormal=up.slice();SK.airSource=source;
+  SK.airPose={t:T,yaw:SKB.yaw,bodyYaw:a,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
+  SK.airNormal=up.slice();SK.airForward=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).axis;SK.airSource=source;
+}
+// Ease angular speed, never the angle: releasing can leave any partial turn.
+function skateAirSpinStep(dt,steer){
+  const target=steer*SK_SPIN+(SK.preWind||0)*2*Math.max(0,1-(T-SK.popT)/.5);
+  SK.airSpinV=(SK.airSpinV||0)+(target-(SK.airSpinV||0))*(1-Math.exp(-dt/.045));
+  const turn=SK.airSpinV*dt;a+=turn;SK.spin+=turn;
+}
+function skateApplyAirFrame(frame){
+  SKB.yaw=Math.atan2(frame.axis[1],frame.axis[0]);SKB.pitch=Math.asin(clamp(frame.axis[2],-1,1));
+  const neutral=skateBoardAxes(SKB.yaw,SKB.pitch,0).up,right=[-Math.sin(SKB.yaw),Math.cos(SKB.yaw),0];
+  const dot=v=>frame.up.reduce((sum,x,i)=>sum+x*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral));
 }
 function skateAirBase(dt,pitch,roll) {
   const pose=SK.airPose;
-  if(!pose)return {pitch,roll};
+  if(!pose)return {yaw:a-(SK.spin||0),pitch,roll};
+  if(pose.yaw==null){pose.yaw=a-(SK.spin||0);pose.bodyYaw=pose.yaw;}
+  let yaw=pose.yaw+a-(SK.spin||0)-pose.bodyYaw;
+  pitch=pose.pitch??pitch;roll=pose.roll??roll;
   const height=Math.max(0,body.z/10),vz=body.vz/10;
   const flight=clamp((vz+Math.sqrt(vz*vz+2*.98*height))/.98,0,1.2);
-  const x=worldCoord(px+Math.cos(SK.dir)*SK.v*flight),y=worldCoord(py+Math.sin(SK.dir)*SK.v*flight);
-  const surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
+  const [x,y]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*flight),worldCoord(py+Math.sin(SK.dir)*SK.v*flight));
+  let surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
+  if(SK.airRoute&&!SK.airRoute.out&&SK.airRoute.o.bowl){
+    // A steep wall can meet the descending board well before a flat-ground
+    // flight-time estimate. Predict the first contact on the assisted path.
+    if(!pose.landNormal||T-(pose.landT||0)>.05){
+      const origin=skateGround(px,py)+height,horizon=clamp((vz+Math.sqrt(vz*vz+2*.98*(height+.5)))/.98,.1,2.5);
+      const sample=t=>{const [qx,qy]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*t),worldCoord(py+Math.sin(SK.dir)*SK.v*t));return {x:qx,y:qy,gap:origin+vz*t-.49*t*t-skateGround(qx,qy)};};
+      let lo=0,point=null;
+      for(let i=1;i<=12;i++){let hi=horizon*i/12;const q=sample(hi);if(q.gap<=0){for(let j=0;j<5;j++){const mid=(lo+hi)/2;if(sample(mid).gap>0)lo=mid;else hi=mid;}point=sample(hi);pose.landAt=T+hi;break;}lo=hi;}
+      if(point){surface=skateSurface(point.x,point.y);hit=skateTransitionAt(point.x,point.y,surface.h);}
+      pose.landNormal=(hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n).slice();pose.landT=T;
+    }
+    surface={...surface,n:pose.landNormal};hit=null;
+  }
   const target=hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n,ease=1-Math.exp(-14*dt);
   pose.normal=pose.normal.map((v,i)=>v+(target[i]-v)*ease);
   const length=Math.hypot(...pose.normal)||1,n=pose.normal.map(v=>v/length);
   const blend=clamp((T-pose.t-.10)/.32,0,1),smooth=blend*blend*(3-2*blend);
-  // With no requested body spin, catch toward travel in the landing plane.
-  // Choose the nearer forward/switch axis so a vert return does not turn 180.
-  if(Math.abs(SK.spin||0)<.05&&!K.KeyA&&!K.KeyD&&!SK_INPUT.steer){
-    const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
-    const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
-    if(Math.hypot(travel[0],travel[1])>1e-4){
-      const delta=mod(Math.atan2(travel[1],travel[0])-a+Math.PI/2,Math.PI)-Math.PI/2;
-      a+=delta*ease*smooth;
-    }
+  // Catch toward the forecast touchdown axis, choosing forward/fakie against
+  // the takeoff heading. Chasing the current velocity through the apex could
+  // accumulate an unsolicited half turn as that velocity reversed.
+  const landingIn=Math.max(0,(pose.landAt??T+flight)-T);
+  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10-.98*landingIn];
+  const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
+  if(Math.hypot(travel[0],travel[1])>1e-4){
+    const targetYaw=pose.yaw+mod(Math.atan2(travel[1],travel[0])-pose.yaw+Math.PI/2,Math.PI)-Math.PI/2;
+    const carry=(targetYaw-yaw)*ease*smooth;a+=carry;yaw+=carry;
   }
-  const wantPitch=Math.atan2(-(n[0]*Math.cos(a)+n[1]*Math.sin(a)),Math.max(.001,n[2]));
-  const neutral=skateBoardAxes(a,wantPitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
+  const wantPitch=Math.atan2(-(n[0]*Math.cos(yaw)+n[1]*Math.sin(yaw)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(yaw,wantPitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];
   const dot=(v,w)=>v.reduce((s,k,i)=>s+k*w[i],0);
   const wantRoll=Math.atan2(dot(n,right),dot(n,neutral));
   const angle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from))*smooth;
-  const base={pitch:angle(pitch,wantPitch),roll:angle(roll,wantRoll)};
-  SK.airNormal=skateBoardAxes(a,base.pitch,base.roll).up;
+  const base={yaw,pitch:angle(pitch,wantPitch),roll:angle(roll,wantRoll)};
+  SK.airNormal=skateBoardAxes(yaw,base.pitch,base.roll).up;
   return base;
 }
 function skateAirPose(dt = 0) {
   const tr = body.trick;
-  SKB.riderYaw = a;
-  if (!tr) { const base=skateAirBase(dt,SK.airPose?.pitch??SKB.pitch,SK.airPose?.roll??SKB.roll);SKB.yaw=SKB.riderYaw=a;SKB.pitch=base.pitch;SKB.roll=base.roll;return; }
-  const duration = tr.duration ?? tr.air, p = clamp(tr.t / duration, 0, 1), e = p * p * (3 - 2 * p);
-  const base=skateAirBase(dt,tr.pitch||0,tr.baseRoll||0);
-  SKB.riderYaw=a;
+  const base=skateAirBase(dt,SK.airPose?.pitch??SKB.pitch,SK.airPose?.roll??SKB.roll);
+  const rider=skateTrickAxes(base.yaw,base.pitch,base.roll,0,SK.spin||0);
+  SK.airForward=rider.axis;SK.airNormal=rider.up;SKB.riderYaw=a;
+  if(!tr){skateApplyAirFrame(rider);return;}
+  const duration=tr.duration??tr.air,p=clamp(tr.t/duration,0,1),e=p*p*(3-2*p);
   const popPitch=base.pitch+Math.sin(Math.min(1,p*4)*Math.PI)*.35*(tr.nollie?-1:1);
-  const frame=skateTrickAxes(a,popPitch,base.roll,e*tr.flip*Math.PI*2,e*tr.turn*Math.PI*2);
-  SKB.yaw=Math.atan2(frame.axis[1],frame.axis[0]);SKB.pitch=Math.asin(clamp(frame.axis[2],-1,1));
-  const neutral=skateBoardAxes(SKB.yaw,SKB.pitch,0),rightAxis=[-Math.sin(SKB.yaw),Math.cos(SKB.yaw),0];
-  const dot=(x,y)=>x.reduce((v,n,i)=>v+n*y[i],0);
-  SKB.roll=Math.atan2(dot(frame.up,rightAxis),dot(frame.up,neutral.up));
+  const frame=skateTrickAxes(base.yaw,popPitch,base.roll,e*tr.flip*Math.PI*2,(SK.spin||0)+e*tr.turn*Math.PI*2);
+  skateApplyAirFrame(frame);
   if (tr.caughtAt == null && tr.t >= duration) tr.caughtAt = duration;
   const left = K.KeyQ || SK_INPUT.grabL > .25, right = K.KeyE || SK_INPUT.grabR > .25;
   if ((left || right) && tr.caughtAt != null) {
@@ -36730,13 +36952,14 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = SK_INPUT.mouseHeld ? SK_INPUT.mouse[1] : SK_INPUT.right[1];
-  const held = Math.abs(depth) > .18 && Math.abs(depth) < .55 && SK.v > .06;
+  const depth = skateBalanceStick()[1];
+  const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
+  const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
   if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
   const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
-  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - SK.steer * .12 - m.balV * 1.6) * dt;
-  m.bal += m.balV * dt;
+  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 + SK.steer * 3.2 - m.balV * (1.6+Math.abs(SK.steer)*2)) * dt;
+  m.bal += (m.balV+SK.steer*.6+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }
   if (m.bal > 1) return skateManualEnd(true);
   SKB.pitch += (m.nose ? -1 : 1) * (.15 + m.bal * .12);
@@ -36801,10 +37024,10 @@ function addSkateTransition(x, y, options = {}, yaw = 0) {
 function enterSkateTransition(hit) {
   if (hit.o.bowl) return enterSkateBowl(hit);
   const { o, u, axis, at } = hit, tangent = [o.c * at.tx, o.s * at.tx, at.tz];
-  const vertical = skateAir() ? body.vz / 10 : -(Math.cos(SK.dir) * SK.v * hit.n[0] + Math.sin(SK.dir) * SK.v * hit.n[1]) / Math.max(.05, hit.n[2]);
-  SK.transition = { o, u, axis, vs: Math.cos(SK.dir) * SK.v * tangent[0] + Math.sin(SK.dir) * SK.v * tangent[1] + vertical * tangent[2],
-    va: -Math.cos(SK.dir) * SK.v * o.s + Math.sin(SK.dir) * SK.v * o.c };
-  skateManualEnd(); body.trick = null; body.vz = 0;
+  const v=skateContactVelocity(hit.n);
+  SK.transition = { o, u, axis, vs: v.reduce((sum,x,i)=>sum+x*tangent[i],0),
+    va: -v[0]*o.s+v[1]*o.c };
+  SK.airRoute=null;skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateTransitionPlace(C) {
   if (C.o.bowl) return skateBowlPlace(C);
@@ -36822,22 +37045,78 @@ function skateTransitionPlace(C) {
   body.ground = skateGround(px, py); body.groundMode = mode;
   return at;
 }
+const skateAirOutHeld=()=>!!(K.KeyC||SK_INPUT.airOut);
+function skateTransitionLipVelocity(C,out) {
+  const o=C.o,v=SKB.v;
+  let tangent=o.bowl?[-Math.sin(C.axis),Math.cos(C.axis),0]:[-o.s,o.c,0];
+  if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,C.axis).tv,len=Math.hypot(...tv);tangent=tv.map(x=>x/len);}
+  const sign=o.bowl?1:Math.sign(C.u)||1,outward=[tangent[1]*sign,-tangent[0]*sign,0];
+  const along=v.reduce((sum,x,i)=>sum+x*tangent[i],0),across=Math.sqrt(Math.max(0,v.reduce((sum,x)=>sum+x*x,0)-along*along));
+  // Deliberate exits trade part of the vertical air for outward carry; they
+  // do not add speed. Ordinary coping airs point up along the coping.
+  const exit=out?across*.4:0,up=Math.sqrt(Math.max(0,across*across-exit*exit));
+  return [tangent[0]*along+outward[0]*exit,tangent[1]*along+outward[1]*exit,up];
+}
+// Return airs follow the inside of curved coping instead of drifting across
+// its tangent onto the deck. Only the boundary is assisted; inward travel and
+// height remain free. The same map predicts the landing plane for catches.
+function skateAirRoutePoint(x,y) {
+  const route=SK.airRoute,o=route?.o;
+  if(!o?.bowl||route.out)return [x,y];
+  const dx=rel(x-o.x),dy=rel(y-o.y),axis=Math.atan2(dy,dx),radius=Math.hypot(dx,dy);
+  const lip=o.pool?skatePoolFloor(o,axis)+o.profile.tip-o.profile.flat/2:o.profile.tip;
+  const inside=Math.max(.01,lip-.015);
+  return radius>inside?[worldCoord(o.x+dx*inside/radius),worldCoord(o.y+dy*inside/radius)]:[x,y];
+}
+function skateTransitionAirStep() {
+  if(!skateAir()||!SK.airRoute||SK.airRoute.out)return;
+  const [x,y]=skateAirRoutePoint(px,py);
+  if(Math.hypot(rel(x-px),rel(y-py))<1e-10)return;
+  px=x;py=y;
+  const o=SK.airRoute.o,axis=Math.atan2(rel(py-o.y),rel(px-o.x));
+  let tangent=[-Math.sin(axis),Math.cos(axis)];
+  if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,axis).tv,len=Math.hypot(tv[0],tv[1]);tangent=[tv[0]/len,tv[1]/len];}
+  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,outward=[tangent[1],-tangent[0]],out=vx*outward[0]+vy*outward[1];
+  if(out>0){const v=[vx-outward[0]*out,vy-outward[1]*out];SK.v=Math.hypot(...v);if(SK.v>1e-9)SK.dir=Math.atan2(v[1],v[0]);}
+}
 function skateTransitionRelease(C, coping = false) {
-  const v = SKB.v.slice(), at = skateProfilePoint(C.o.profile, C.u);
-  skateAirBegin(C.o);
-  // The coping rounds the last few degrees of the mini's truncated quarter
-  // into a vertical takeoff. Preserve energy and axis motion for the return.
-  if (coping) { v[0] = -(C.o.bowl ? Math.sin(C.axis) : C.o.s) * C.va; v[1] = (C.o.bowl ? Math.cos(C.axis) : C.o.c) * C.va; v[2] = Math.abs(C.vs); }
+  const out=skateAirOutHeld(),v=coping?skateTransitionLipVelocity(C,out):SKB.v.slice();
+  skateAirBegin(C.o);SK.airRoute={o:C.o,out};
   SK.transition = null; SK.leftTransition = C.o; SK.leftTransitionT = T;
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
+  if(C.o.bowl&&!out){
+    const z=SKB.p[2];skateTransitionAirStep();
+    SKB.p=[px,py,z];SKB.v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,v[2]];
+    body.ground=skateGround(px,py);body.groundMode=mode;body.z=Math.max(.002,(z-body.ground)*10);
+  }
+  SK.lipPop=coping?{t:T,source:C.o,n:SKB.surf.n.slice(),out,contact:{o:C.o,u:C.u,axis:C.axis}}:null;
+}
+function skateTransitionKick(C,dt,push) {
+  const at=skateProfilePoint(C.o.profile,C.u),speed=C.velocity?Math.hypot(...C.velocity):Math.hypot(C.vs,C.va);
+  skatePushFromRest(push,speed);SK.kicking=false;
+  if(!skatePushReady(push,speed)||at.theta>.25||SK.charge>=0||skateGestureLoaded()){SK.kick=0;return;}
+  const before=SK.kick;SK.kick+=dt/.7;SK.kicking=true;
+  if(before<.15&&SK.kick>=.15){
+    const facing=skatePushYaw(),n=SKB.surf?.n||[0,0,1];
+    const v=skateTangentVelocity([Math.cos(facing),Math.sin(facing),0],n),burst=SK_PHYS.pushBurst*(1-speed/SK_PHYS.pushCap);
+    if(C.velocity)C.velocity=C.velocity.map((x,i)=>x+v[i]*burst);
+    else if(C.o.bowl){C.vs+=(v[0]*Math.cos(C.axis)*at.tx+v[1]*Math.sin(C.axis)*at.tx+v[2]*at.tz)*burst;C.va+=(-v[0]*Math.sin(C.axis)+v[1]*Math.cos(C.axis))*burst;}
+    else{C.vs+=(v[0]*C.o.c*at.tx+v[1]*C.o.s*at.tx+v[2]*at.tz)*burst;C.va+=(-v[0]*C.o.s+v[1]*C.o.c)*burst;}
+    if(actx)sfxSkate('push');
+  }
+  if(SK.kick>=1)SK.kick-=1;
 }
 function stepSkateTransition(dt, push, brake, steer) {
+  if(SK.pivot)return false;
+  const flatReverse=SK.reversing||brake&&(K.KeyS||SK_INPUT.back)&&SK.v<.02&&Math.abs(steer)<.35;
+  if(SK.transition&&flatReverse&&skateProfilePoint(SK.transition.o.profile,SK.transition.u).theta<.1){SK.transition=null;body.z=body.vz=0;return false;}
   if (mode !== 'walk') { SK.transition = null; return false; }
   let C = SK.transition;
   if (!C) {
     let hit = skateTransitionAt(px, py, skateGround(px, py) + body.z / 10);
+    if(hit&&flatReverse&&hit.at.theta<.1)return false;
     let drop = false;
     if (!hit && push && SK.v < .1 && !skateAir()) for (const o of SK_TRANSITIONS) {
       const dx = rel(px - o.x), dy = rel(py - o.y), x = dx * o.c + dy * o.s, axis = -dx * o.s + dy * o.c;
@@ -36873,21 +37152,16 @@ function stepSkateTransition(dt, push, brake, steer) {
     enterSkateTransition(hit); C = SK.transition;
     if (drop) { C.vs = -Math.sign(C.u) * .1; if(C.o.pool){const f=skatePoolFrame(C.o,C.u,C.axis);C.velocity=f.tu.map(v=>-.1*v);} }
   }
+  skateTransitionKick(C,dt,push);
   if (C.o.bowl) return stepSkateBowl(C, dt, push, brake, steer);
   const at = skateProfilePoint(C.o.profile, C.u), p = C.o.profile;
   const direction = Math.sign(C.vs) || -Math.sign(C.u) || 1;
-  C.vs += (-.98 * at.tz - (brake ? .25 : SK_PHYS.concrete * .98) * direction) * dt;
+  C.vs += (-.98 * at.tz - (brake ? SK_PHYS.brake : SK_PHYS.concrete * .98) * direction) * dt;
   // Pumping adds a small amount of work through the bottom of each turn;
   // ordinary pushes retain the same cadence and taper as flat riding.
   if (push && !skateGestureLoaded() && SK.charge < 0) {
     C.vs += direction * .06 * Math.sin(at.theta * 2) * dt;
-    if (at.theta < .2 && Math.abs(C.vs) < SK_PHYS.pushCap) {
-      const before = SK.kick; SK.kick += dt / .7;
-      if (before < .15 && SK.kick >= .15) C.vs += direction * SK_PHYS.pushBurst * (1 - Math.abs(C.vs) / SK_PHYS.pushCap);
-      if (SK.kick >= 1) SK.kick -= 1;
-      SK.kicking = true;
-    }
-  } else SK.kick = 0;
+  }
   const turn = steer * 1.6 * dt, c = Math.cos(turn), s = Math.sin(turn), vs = C.vs * c - C.va * s;
   C.va = (C.vs * s + C.va * c) * Math.exp(-.04 * dt); C.vs = vs; a += turn;
   // Coping stalls: hold down for rock-to-fakie, up for an axle stall;
@@ -36910,17 +37184,39 @@ function stepSkateTransition(dt, push, brake, steer) {
   if (SK.combo && !SK.transition && !skateAir() && T - SK.combo.t > SK_COMBO_GAP) bankCombo();
   return true;
 }
-function skateTransitionPop(trick, gesture) {
-  const C = SK.transition, n = SKB.surf.n, v = SKB.v.slice();
+const SK_LIP_GRACE=.12;
+function skateCanLipPop(){return skateAir()&&!!SK.lipPop&&T>=SK.lipPop.t&&T-SK.lipPop.t<=SK_LIP_GRACE&&!body.trick&&!SK.grind&&!SK.bail;}
+function skateTransitionPopStrength(gesture){
+  const load=SK.charge>=0?clamp((T-SK.charge)/SK_CHARGE,0,1):0;
+  return gesture?.strength??1+(3.4/POP_V-1)*load;
+}
+function skateFinishTransitionPop(trick,gesture,velocity){
+  SK.lipPop=null;SK.v=Math.hypot(velocity[0],velocity[1]);if(SK.v>1e-9)SK.dir=Math.atan2(velocity[1],velocity[0]);body.vz=velocity[2]*10;SKB.v=velocity;
+  const [name,flip,turn]=TRICKS[trick??arrowTrick()]||['ollie',0,0];
+  body.trick=skateTrick(name,flip,turn,skateAirTime(body.vz),!!gesture?.nollie);
+  SK.preWind=clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
+  SK.charge=-1;SK.spin=0;SK.popT=T;controllerRumble('pop');if(actx)sfxUse('ollie');return true;
+}
+// Keep ramp pops close to the wall: most impulse is vertical, with only
+// 18% of the old normal's sideways component for wheel clearance.
+function skateTransitionPopDirection(n){
+  const x=n[0]*.18,y=n[1]*.18;
+  return [x,y,Math.sqrt(Math.max(0,1-x*x-y*y))];
+}
+function skateLipPop(trick,gesture){
+  if(!skateCanLipPop())return false;
+  const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:skateTransitionPopDirection(lip.n),pop=POP_V*skateTransitionPopStrength(gesture)/10;
+  let v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
+  if(out&&!lip.out&&v[2]>0){SKB.v=v;v=skateTransitionLipVelocity(lip.contact,true);}
+  const spinV=SK.airSpinV;skateAirBegin(lip.source);SK.airSpinV=spinV;SK.airRoute={o:lip.source,out};
+  return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
+}
+function skateTransitionPop(trick,gesture){
+  const C=SK.transition,out=skateAirOutHeld(),n=out?[0,0,1]:skateTransitionPopDirection(SKB.surf.n);
+  const at=skateProfilePoint(C.o.profile,C.u),v=out&&at.theta>.7?skateTransitionLipVelocity(C,true):SKB.v.slice();
+  const pop=POP_V*skateTransitionPopStrength(gesture)/10;
   skateTransitionRelease(C);
-  const pop = POP_V * (gesture?.strength ?? 1) / 10;
-  const velocity = v.map((x, i) => x + n[i] * pop);
-  SK.v = Math.hypot(velocity[0], velocity[1]); SK.dir = Math.atan2(velocity[1], velocity[0]); body.vz = velocity[2] * 10;
-  const [name, flip, turn] = TRICKS[trick ?? arrowTrick()] || ['ollie', 0, 0];
-  body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
-  SK.charge = -1; SK.spin = 0; SK.popT = T;
-  controllerRumble('pop');
-  if (actx) sfxUse('ollie');
+  return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
 }
 const SK_BOWL_STAIRS=[];
 // Sweep the quarter profile around a circular floor. Tangential speed and
@@ -36974,11 +37270,10 @@ function skateBowlHit(o, x, y, zHint) {
 }
 function enterSkateBowl(hit) {
   if(hit.o.pool)return enterSkatePool(hit);
-  const { o, axis, u, at } = hit, vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
-  const vertical = skateAir() ? body.vz / 10 : -(vx * hit.n[0] + vy * hit.n[1]) / Math.max(.05, hit.n[2]);
+  const {o,axis,u,at}=hit,[vx,vy,vertical]=skateContactVelocity(hit.n);
   SK.transition = { o, u, axis, vs: (vx * Math.cos(axis) + vy * Math.sin(axis)) * at.tx + vertical * at.tz,
     va: -vx * Math.sin(axis) + vy * Math.cos(axis), yawOff: Math.cos(a - SK.dir) < 0 ? Math.PI : 0 };
-  skateManualEnd(); body.trick = null; body.vz = 0;
+  SK.airRoute=null;skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateBowlPlace(C) {
   if(C.o.pool)return skatePoolPlace(C);
@@ -36988,7 +37283,7 @@ function skateBowlPlace(C) {
   SKB.v = [c * p.tx * C.vs - s * C.va, s * p.tx * C.vs + c * C.va, p.tz * C.vs];
   SK.v = Math.hypot(SKB.v[0], SKB.v[1]);
   if (SK.v > 1e-7) SK.dir = Math.atan2(SKB.v[1], SKB.v[0]);
-  a = SK.dir + C.yawOff;
+  C.yawOff=skateFaceTravel()?Math.PI:0;
   SKB.yaw = a; SKB.riderYaw = a; SKB.pitch = Math.atan2(SKB.v[2] * (C.yawOff ? -1 : 1), SK.v || 1e-9);
   const normal = [-c * p.tz, -s * p.tz, p.tx], axes = skateBoardAxes(a, SKB.pitch, 0);
   const right = [-Math.sin(a), Math.cos(a), 0];
@@ -37005,7 +37300,7 @@ function stepSkateBowl(C, dt, push, brake, steer) {
   // Project centripetal acceleration into the radial profile; preserve angular
   // momentum when the radius changes. The gravity term pulls a slow carve down.
   C.vs += (C.va * C.va * at.tx / radius - .98 * at.tz) * dt;
-  const speed = Math.hypot(C.vs, C.va), loss = (brake ? .25 : .98 * SK_PHYS.concrete) * dt;
+  const speed = Math.hypot(C.vs, C.va), loss = (brake ? SK_PHYS.brake : .98 * SK_PHYS.concrete) * dt;
   const keep = speed ? Math.max(0, speed - loss) / speed : 0;
   C.vs *= keep; C.va *= keep;
   const turn = steer * 1.5 * dt, c = Math.cos(turn), s = Math.sin(turn), radial = C.vs * c - C.va * s;
@@ -37087,17 +37382,16 @@ function addSkatePool(x,y,options,pool) {
   return o;
 }
 function enterSkatePool(hit) {
-  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v;
-  const vz=skateAir()?body.vz/10:-(vx*hit.n[0]+vy*hit.n[1])/Math.max(.1,hit.n[2]);
+  const [vx,vy,vz]=skateContactVelocity(hit.n);
   SK.transition={o:hit.o,u:hit.u,axis:hit.axis,velocity:[vx,vy,vz],vs:0,va:0,yawOff:Math.cos(a-SK.dir)<0?Math.PI:0};
-  skateManualEnd();body.trick=null;body.vz=0;
+  SK.airRoute=null;skateManualEnd();body.trick=null;body.vz=0;
 }
 function skatePoolPlace(C) {
   const f=skatePoolFrame(C.o,C.u,C.axis),n=f.n;
   px=worldCoord(C.o.x+f.x);py=worldCoord(C.o.y+f.y);
   SKB.v=C.velocity.slice();SK.v=Math.hypot(SKB.v[0],SKB.v[1]);
   if(SK.v>1e-7)SK.dir=Math.atan2(SKB.v[1],SKB.v[0]);
-  a=SK.dir+C.yawOff;SKB.yaw=SKB.riderYaw=a;
+  C.yawOff=skateFaceTravel()?Math.PI:0;SKB.yaw=SKB.riderYaw=a;
   SKB.pitch=Math.atan2(SKB.v[2]*(C.yawOff?-1:1),SK.v||1e-9);
   const up=skateBoardAxes(a,SKB.pitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
   const dot=(v,w)=>v.reduce((s,k,i)=>s+k*w[i],0);
@@ -37115,7 +37409,7 @@ function stepSkatePool(C,dt,push,brake,steer) {
   v=v.map((k,i)=>k*c+cross[i]*s);
   // Pump through the lower wall, with the same modest work as a mini ramp.
   const gain=push ? .06*Math.sin(f.at.theta*2)*dt : 0;
-  const target=Math.max(0,speed+gain-(brake ? .25 : .98*SK_PHYS.concrete)*dt);
+  const target=Math.max(0,speed+gain-(brake ? SK_PHYS.brake : .98*SK_PHYS.concrete)*dt);
   if(speed>1e-8)v=v.map(k=>k*target/speed);
   speed=target;
   const nextV=v.map((k,i)=>k+(.98*n[2]*n[i]-(i===2 ? .98 : 0))*dt);
@@ -37132,14 +37426,7 @@ function stepSkatePool(C,dt,push,brake,steer) {
   C.velocity=len>1e-9?v.map(k=>k*Math.sqrt(energy)/len):v;
   C.vs=du;C.va=rate*next.r;
   skatePoolPlace(C);
-  if(coping){
-    // Round the lip into a vertical takeoff while keeping motion along the
-    // curved coping. This returns an air to the pool instead of its outer deck.
-    const length=Math.hypot(next.tv[0],next.tv[1]),tangent=[next.tv[0]/length,next.tv[1]/length];
-    const along=SKB.v[0]*tangent[0]+SKB.v[1]*tangent[1],total=SKB.v.reduce((s,k)=>s+k*k,0);
-    SKB.v=[tangent[0]*along,tangent[1]*along,Math.sqrt(Math.max(0,total-along*along))];
-    skateTransitionRelease(C);
-  }
+  if(coping)skateTransitionRelease(C,true);
   else if(C.u<p.flat/2-.006){SK.transition=null;body.z=body.vz=0;SKB.contact='ground';}
   return true;
 }
@@ -37204,10 +37491,10 @@ const SK_CAM_BACK = 0.55, SK_CAM_UP = 0.2, SK_CAM_SIDE = 0.25, SK_COMBO_GAP = 1.
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
 const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false, charge: -1, popT: -9, bail: 0, bailAt: null,
-  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
+  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camBase:null,camFollowTravel:false,camTravelYaw:null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
-const skateAir = () => !SK.transition && !SK.grind && (body.z > 0 || body.vz > 0);
+const skateAir = () => SK.renderContact!=null?SK.renderContact==='air':!SK.transition && !SK.grind && (body.z > 0 || body.vz > 0);
 const skateGround = (x, y) => mode === 'roof' ? roofH : walkGround(x, y); // (the street, or the roof you're rolling across)
 // the arrows held down, as a TRICKS key (moves.js)
 function arrowTrick() {
@@ -37219,40 +37506,44 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
-  Object.assign(SK,{transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,reversing:false});
-  skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];
+  if(typeof skateFixedReset==='function')skateFixedReset();
+  Object.assign(SK,{kick:0,kicking:false,mongo:false,lipPop:null,pushCruise:false,pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camBase:null,camFollowTravel:false,camTravelYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,airForward:null,airSpinV:0,lateTrick:null,airArrow:null,pivot:null,reversing:false});
+  skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];SKB.surf=null;
 }
 
 // every frame on the board, in place of walking
-function stepSkate(dt) {
+function stepSkate(dt,readInput=true) {
   if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
-    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, transition:null, grind:null, manual:null, leftTransition:null, reversing:false, camTransition:0, camRampUp:0, camRampH:0, look: 0, camYaw: null, camZ: null });
+    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, transition:null, grind:null, manual:null, leftTransition:null, pivot:null,reversing:false, camTransition:0, camRampUp:0, camRampH:0, look: 0, camYaw: null, camBase:null,camFollowTravel:false,camTravelYaw:null, camZ: null });
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
-  skatePollInput(dt);
+  if(readInput)skatePollInput(dt);
   if (SK.bail > 0) return stepSkateBail(dt);
   if (SK.grind) { stepGrind(dt); skateBoardSync(); return; }
   const air = skateAir(), f = (K.KeyW || SK_INPUT.push ? 1 : 0) - (K.KeyS || SK_INPUT.brake || SK_INPUT.back ? 1 : 0), s = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
   SK.steer = s; SK.kicking = false;
-  if(air||SK.transition)SK.reversing=false;
-  if (stepSkateTransition(dt, f > 0, f < 0, s)) return;
+  const backHeld=!!(K.KeyS||SK_INPUT.back)&&!K.KeyW&&!SK_INPUT.push;
+  if(!backHeld)SK.reversing=false;
+  const reversePush=backHeld&&SK.reversing&&!SK.pivot&&Math.abs(s)<.35;
+  if (stepSkateTransition(dt, f > 0||reversePush, f < 0&&!reversePush, s)) return;
   if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
   if (air) {
-    const rate = s * SK_SPIN + (SK.preWind || 0) * 2 * Math.max(0, 1 - (T - SK.popT) / .5);
-    a += rate * dt; SK.spin += rate * dt; // winding before the pop adds a short initial impulse
+    skateAirTrickStep();
+    skateAirSpinStep(dt,s); // continuous angular velocity, including pre-wind
   }
   else skateGroundVelocity(dt, f > 0, f < 0, s, f<0&&!!(K.KeyS||SK_INPUT.back));
   // arrows tapped in the air: a flip trick, once the rest of the chord's had a moment to come down
   if (SK.trickKeyT >= 0 && T - SK.trickKeyT > 0.07) {
-    SK.trickKeyT = -1;
-    if (air && !body.trick) { const [name, flip, turn] = TRICKS[arrowTrick()] || ['ollie', 0, 0]; if (name !== 'ollie') body.trick = skateTrick(name, flip, turn, .45); }
+    const key=SK.airArrow??arrowTrick();SK.airArrow=null;SK.trickKeyT = -1;
+    if(air)skateAirTrick(key);
   }
   if (!air) skateManualStep(dt);
   const want = SK.v * dt, x0 = px, y0 = py;
   move(Math.cos(SK.dir) * want, Math.sin(SK.dir) * want);
   const mx = rel(px - x0), my = rel(py - y0), got = Math.hypot(mx, my);
   if (dt > 0) { body.mx = mx / dt; body.my = my / dt; }
+  if(air)skateTransitionAirStep();
   skateSurfaceExit(x0, y0, dt);
   if (want > 1e-6 && got < want * 0.98) { // something in the way: scrape along it, or stop dead
     const lost = SK.v * (1 - got / want);
@@ -37269,14 +37560,20 @@ function stepSkate(dt) {
 // Space on the board: down crouches, up pops (or a tap off the touch button, or a flick: straight away)
 function skateSpace(down) {
   if (SK.grind) { if (down) grindPop(); return; } // (off the rail with an ollie: straight away, no wind-up)
-  if (SK.bail > 0 || skateAir()) { if (!down) SK.charge = -1; return; }
+  if (SK.bail > 0) { if (!down) SK.charge = -1; return; }
+  if(skateAir()&&!skateCanLipPop()){
+    if(down)SK.charge=T;
+    else{if(SK.charge>=0)skateAirTrick(arrowTrick());SK.charge=-1;}
+    return;
+  }
   if (down) { if (SK.charge < 0) SK.charge = T; return; }
   if (SK.charge >= 0) skatePop();
 }
 function skatePop(trick, gesture) {
   if (SK.transition) return skateTransitionPop(trick, gesture);
   if (SK.grind) return grindPop(trick, gesture); // (the touch Ollie button, or a flick, on a rail)
-  if (SK.bail > 0 || skateAir()) return;
+  if(SK.bail>0)return;
+  if(skateAir())return skateCanLipPop()?skateLipPop(trick,gesture):skateAirTrick(trick??arrowTrick(),gesture);
   const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   skateAirBegin();
   skateManualEnd();
@@ -37294,10 +37591,11 @@ function skateAirTime(vz) {
   const slope = (skateGround(worldCoord(x), worldCoord(y)) - skateGround(px, py)) / ahead, rise = slope * SK.v * 10; // (metres a second)
   return 2 * clamp(vz - rise, vz * .45, vz * 1.6) / GRAV; // (z = vz t - g t^2 / 2 meets ground rising at rise m/s)
 }
-function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.trickKeyT = T; }
+function skateArrow() { if(skateAir()){if(SK.trickKeyT<0)SK.trickKeyT=T;SK.airArrow=arrowTrick();} }
 // back on the ground (stepBody): rolling away clean, or not
 function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
+  SK.lateTrick=null;
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   skateAirPose();
   const surf = skateSurface(px, py), axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
@@ -37317,6 +37615,10 @@ function skateLand() {
   else if ((Math.abs(d) > Math.PI / 2) !== SKB.fakie) SK.stance = -SK.stance;
   if (sloppy && !standing && (Math.abs(d) > Math.PI / 2) !== SKB.fakie) SK.stance = -SK.stance;
   a = SK.dir + (SKB.fakie ? Math.PI : 0);
+  // Touchdown dissipates impact; it must not become forward speed next tick.
+  const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
+  SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
+  SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.lipPop=null;SK.pushFakie=null;SK.airSpinV=0;
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
@@ -37371,6 +37673,7 @@ function bankCombo() {
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
 function skateBail(msg) {
+  SK.airRoute=null;SK.lipPop=null;SK.pivot=null;SK.reversing=false;
   skateBailStart();controllerRumble('bail',SK.bailData.speed);
   SK.manual = null; SK.grind = null; SK.transition = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
@@ -37384,13 +37687,14 @@ function skateBail(msg) {
 const skateCamBack = () => SK_CAM_BACK * (1 + .6 * (SK.camTransition || 0)) * clamp(cv.width / cv.height / 1.6, 0.4, 1);
 function skateClear(yaw, ahead = 0) { // how far back from you the camera can go that way
   const bx = Math.cos(yaw), by = Math.sin(yaw), most = skateCamBack();
+  const clearanceZ=skateGround(px,py)+body.z/10+SK_CAM_UP-.025;
   let back = 0;
   for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
     const x = px + SKB.v[0] * ahead - bx * step, y = py + SKB.v[1] * ahead - by * step;
     const blocked = mode === 'roof'
-      ? roofHeightAt(x,y)>roofH+ROOF_STEP
-      : [-.03,.03].some(ox=>[-.03,.03].some(oy=>map[idx(Math.floor(x+ox),Math.floor(y+oy))]>.28))
-        || architectureBlocked(x,y,.03) || landmarkBlocked(x,y,.03);
+      ? roofHeightAt(x,y)>Math.max(roofH+ROOF_STEP,clearanceZ)
+      : [-.03,.03].some(ox=>[-.03,.03].some(oy=>map[idx(Math.floor(x+ox),Math.floor(y+oy))]>Math.max(.28,clearanceZ)))
+        || architectureBlocked(x,y,.03,clearanceZ) || landmarkBlocked(x,y,.03);
     if(blocked)break;
     back = step;
   }
@@ -37400,15 +37704,28 @@ function skateCam(dt) {
   const fresh = SK.camYaw == null, air = skateAir(), ease = k => fresh ? 1 : 1 - Math.exp(-k * dt);
   SK.camTransition = fresh ? (SK.transition ? 1 : 0) : (SK.camTransition || 0) + ((SK.transition ? 1 : 0) - (SK.camTransition || 0)) * ease(3);
   if (SK.transition) { SK.camRampH=SK.transition.o.z0+SK.transition.o.profile.height; SK.camRampUp=.12*Math.min(1,Math.abs(SK.transition.u)/SK.transition.o.profile.limit); }
-  if (T - SK.lookT > 1) SK.look *= 1 - Math.min(1, dt * 2.5);
-  const base = (SK.bail > 0 ? SK.bailAt[2] : air ? SK.dir : a) + SK.look, side = base - SK.stance * SK_CAM_SIDE;
+  if (T - SK.lookT > 1) {
+    const look=Math.atan2(Math.sin(SK.look),Math.cos(SK.look)),turns=SK.look-look;
+    if(!fresh)SK.camYaw-=turns;
+    SK.look=look*Math.exp(-dt*2.5);
+  }
+  if(fresh){SK.camFollowTravel=!!(SK.transition||SK.airRoute);SK.camTravelYaw=a;}
+  if(SK.transition)SK.camFollowTravel=true;
+  if(SK.camFollowTravel&&SK.v>.025)SK.camTravelYaw=SK.dir;
+  if(!air&&!SK.transition&&SK.v<.025)SK.camFollowTravel=false;
+  const riding=SK.camFollowTravel?(SK.camTravelYaw??a):a;
+  const follow=SK.bail>0?SK.bailAt[2]:SK.pivot?a:air?(SK.v>.025?SK.dir:SK.camTravelYaw??SK.camBase??SK.dir):riding;
+  if(fresh||SK.camBase==null)SK.camBase=follow;
+  else SK.camBase+=Math.atan2(Math.sin(follow-SK.camBase),Math.cos(follow-SK.camBase));
+  const base=SK.camBase+SK.look,side=base-SK.stance*SK_CAM_SIDE;
   SK.camSide = (fresh ? 1 : SK.camSide ?? 1) + ((skateClear(side) > skateCamBack() * 0.9 ? 1 : 0) - (SK.camSide ?? 1)) * ease(3);
   const target = base - SK.stance * SK_CAM_SIDE * SK.camSide * (air ? 0 : 1);
   if (fresh) SK.camYaw = target;
-  SK.camYaw += (mod(target - SK.camYaw + Math.PI, 2 * Math.PI) - Math.PI) * ease(5.56);
+  SK.camYaw += (target-SK.camYaw)*ease(5.56);
   const room_ = Math.min(skateClear(SK.camYaw), skateClear(SK.camYaw, .15)); // (in at once, back out gently)
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
-  let want = skateGround(px, py) + (SK.grind ? .09 : SK_CAM_UP) + body.z / 10 * 0.6 + (SK.camRampUp || 0) * SK.camTransition;
+  const riderZ=skateGround(px,py)+body.z/10;
+  let want = riderZ + (SK.grind ? .09 : SK_CAM_UP) + (SK.camRampUp || 0) * SK.camTransition;
   // Keep the eye above the bowl surface along the complete camera boom.
   // The old clearance test checked buildings but ignored the bowl itself.
   if(SK.transition?.o.bowl || SK.camTransition>.05){
@@ -37420,7 +37737,7 @@ function skateCam(dt) {
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
   if (T - SK.lookT > 1) {
     const aheadX = worldCoord(px + Math.cos(SK.dir) * .15), aheadY = worldCoord(py + Math.sin(SK.dir) * .15);
-    const flatTarget = skateGround(aheadX, aheadY) + .08 + body.z / 10 * .35;
+    const flatTarget = air ? riderZ+.08 : skateGround(aheadX,aheadY)+.08;
     const rampTarget = SK.transition?.o.bowl ? SKB.p[2]+.08 : Math.max(SKB.p[2]+.08,(SK.camRampH||0)+.02);
     const targetZ = flatTarget + (rampTarget-flatTarget)*SK.camTransition;
     const targetPitch = clamp(Math.atan2(targetZ - SK.camZ, SK.camBack + .15), -.6, .2);
@@ -37491,16 +37808,14 @@ function skaterSprite(look, key, view) {
   return s;
 }
 // as drawFigure: (rx, ry) from the camera, standing on z0, h tall, facing (fx, fy), a figPose key, least brightness
-function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5, normal = [0,0,1], footAnchor = null) {
-  const d0 = Math.hypot(rx, ry) || 1, vx = -rx / d0, vy = -ry / d0;
-  const view = mod(Math.round(Math.atan2(vx * -fy + vy * fx, vx * fx + vy * fy) / (Math.PI * 2) * SK_VIEWS), SK_VIEWS);
-  const { role, near } = skaterSprite(look, key, view), th = view / SK_VIEWS * Math.PI * 2, unit = h / FIG_TALL;
-  // Project the authored pose onto the contact plane. On vert the rider's
-  // height points out from the wall, rather than standing upright through it.
-  const U = normal, d = fx * U[0] + fy * U[1];
-  const len = Math.hypot(fx-d*U[0],fy-d*U[1],-d*U[2]) || 1;
-  const F = [(fx-d*U[0])/len,(fy-d*U[1])/len,-d*U[2]/len];
-  const right = [U[1]*F[2]-U[2]*F[1],U[2]*F[0]-U[0]*F[2],U[0]*F[1]-U[1]*F[0]];
+function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5, normal = [0,0,1], footAnchor = null, forward = null) {
+  // A full tangent facing avoids projecting horizontal yaw through a vert pole.
+  const U=normal,raw=forward||[fx,fy,0],d=raw.reduce((sum,v,i)=>sum+v*U[i],0);
+  const f=raw.map((v,i)=>v-d*U[i]),len=Math.hypot(...f)||1,F=f.map(v=>v/len);
+  const right=[U[1]*F[2]-U[2]*F[1],U[2]*F[0]-U[0]*F[2],U[0]*F[1]-U[1]*F[0]];
+  const towards=[-rx,-ry,eye-z0-h*.5],dot=v=>towards.reduce((sum,n,i)=>sum+n*v[i],0);
+  const view=mod(Math.round(Math.atan2(dot(right),dot(F))/(Math.PI*2)*SK_VIEWS),SK_VIEWS);
+  const {role,near}=skaterSprite(look,key,view),th=view/SK_VIEWS*Math.PI*2,unit=h/FIG_TALL;
   if(footAnchor){
     rx-=(right[0]*footAnchor[0]+F[0]*footAnchor[1]+U[0]*footAnchor[2])*unit;
     ry-=(right[1]*footAnchor[0]+F[1]*footAnchor[1]+U[1]*footAnchor[2])*unit;
@@ -37554,12 +37869,113 @@ function drawSkater() {
   if (SK.bailAt) return skateBailDraw();
   const { x, y } = skateView, [vx, vy] = R(x, y), g = skateGround(x, y), z = g + body.z / 10;
   if (!SK.transition || SKB.surf.n[2] > .5) drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
-  const roll = skateAir() ? SKB.roll : 0, yaw = skateAir() ? SKB.yaw : skateView.a, nose = skateAir() ? SKB.pitch : 0;
-  drawSkateBoard(vx, vy, z, yaw + (SK.slide || 0) * Math.PI / 2, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
-  const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
+  const roll = skateAir() ? SKB.roll : 0, yaw = SKB.yaw, nose = skateAir() ? SKB.pitch : 0;
+  drawSkateBoard(vx, vy, z, yaw, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
+  const air = skateAir(), pushing = SK.kicking && !air, ang = pushing ? skatePushYaw(SKB.yaw) : (air?skateView.a:SKB.yaw) + SK.stance * Math.PI / 2;
   const pose = air ? 'skateair' : SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
-  const contactNormal = SK.transition ? SKB.surf.n : air ? SK.airNormal || [0,0,1] : [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
-  drawSkaterFigure(vx + contactNormal[0] * footOffset, vy + contactNormal[1] * footOffset, z + contactNormal[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, contactNormal, skaterFootAnchor(pose,look));
+  const contactNormal = SK.transition ? SKB.surf.n : air ? SK.airNormal || [0,0,1] : SKB.surf?.n || [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
+  const f=air?SK.airForward:SK.transition?skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).axis:null,u=contactNormal;
+  const facing=f?(pushing?f.map(v=>v*(SK.pushFakie?-1:1)):[u[1]*f[2]-u[2]*f[1],u[2]*f[0]-u[0]*f[2],u[0]*f[1]-u[1]*f[0]].map(v=>v*SK.stance)):null;
+  drawSkaterFigure(vx + u[0] * footOffset, vy + u[1] * footOffset, z + u[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, u, skaterFootAnchor(pose,look),facing);
+}
+// Fixed skating ticks, independent of render rate. The world retains its
+// existing 50 ms frame budget: at most six 120 Hz ticks run in one frame.
+const SKATE_DT=1/120,SKATE_FRAME_MAX=.05;
+const SK_CLOCK={active:false,time:0,accumulator:0,previous:null,current:null,camera:null};
+function skateFixedReset(){SK_CLOCK.active=false;SK_CLOCK.accumulator=0;SK_CLOCK.previous=SK_CLOCK.current=null;SK_CLOCK.camera=null;}
+function skatePoseCapture(){
+  return {mode,p:[px,py,skateGround(px,py)+body.z/10],a,pitch,v:SKB.v.slice(),board:skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll),
+    vz:body.vz,trick:body.trick?{...body.trick}:null,contact:SKB.contact,
+    surf:SKB.surf?{...SKB.surf,n:SKB.surf.n.slice()}:null,airNormal:SK.airNormal?.slice(),airForward:SK.airForward?.slice(),
+    transition:SK.transition?{...SK.transition}:null,grind:SK.grind?{...SK.grind}:null,
+    speed:SK.v,dir:SK.dir,kick:SK.kick,kicking:SK.kicking,mongo:SK.mongo,pushFakie:SK.pushFakie,
+    bail:SK.bail,bailAt:SK.bailAt?.slice(),bailData:SK.bailData?{...SK.bailData,board:SK.bailData.board.slice()}:null,
+    camera:SK_CLOCK.camera?.slice()};
+}
+function skateFixedFrame(dt){
+  const end=T,c=SK_CLOCK;
+  const moved=c.current&&Math.hypot(rel(px-c.current.p[0]),rel(py-c.current.p[1]))>.15;
+  if(!c.active||moved||c.current?.mode!==mode||Math.abs(c.time+c.accumulator-(end-dt))>.1){
+    skateFixedReset();c.active=true;c.time=end-dt;c.current=skatePoseCapture();c.previous=c.current;
+  }
+  try{
+    T=c.time;
+    // Observe input once, at the simulation boundary. Steering response itself
+    // advances on the fixed clock; gestures are observed once per frame.
+    if(typeof controllerSkatePad==='function')skatePollInput(dt,controllerSkatePad(),true);
+    else skatePollInput(dt,undefined,true);
+    c.accumulator+=Math.min(SKATE_FRAME_MAX,Math.max(0,dt));
+    while(c.accumulator+1e-10>=SKATE_DT){
+      c.previous=c.current;c.time+=SKATE_DT;T=c.time;
+      skateSteerStep(SKATE_DT);stepSkate(SKATE_DT,false);stepBody(SKATE_DT);
+      if(typeof stepRoof==='function')stepRoof();skateBoardSync();
+      if(typeof skateCamOn==='function'&&skateCamOn()){
+        c.camera=[...skateCam(SKATE_DT),pitch];
+      }
+      c.current=skatePoseCapture();c.accumulator=Math.max(0,c.accumulator-SKATE_DT);
+      if(!skatingNow()||sleep){skateFixedReset();break;}
+    }
+  }finally{T=end;if(typeof CONTROLLER!=='undefined')CONTROLLER.sampleT=end;}
+  return true;
+}
+const skateLerp=(a,b,t)=>a+(b-a)*t;
+const skateAngleLerp=(a,b,t)=>a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*t;
+function skateVectorLerp(a,b,t){return a.map((v,i)=>skateLerp(v,b[i],t));}
+function skateNormalLerp(a,b,t){const n=skateVectorLerp(a,b,t),l=Math.hypot(...n);return l<1e-6?b.slice():n.map(v=>v/l);}
+// Convert the board's orthonormal basis to a quaternion. Interpolating its
+// Euler angles independently can turn a vertical board sideways at +/-pi.
+function skateQuaternion(axes){
+  const f=axes.axis,u=axes.up,r=[u[1]*f[2]-u[2]*f[1],u[2]*f[0]-u[0]*f[2],u[0]*f[1]-u[1]*f[0]];
+  const m=[f[0],r[0],u[0],f[1],r[1],u[1],f[2],r[2],u[2]],q=[0,0,0,0],trace=m[0]+m[4]+m[8];
+  if(trace>0){const s=Math.sqrt(trace+1)*2;q[3]=s/4;q[0]=(m[7]-m[5])/s;q[1]=(m[2]-m[6])/s;q[2]=(m[3]-m[1])/s;}
+  else{const i=m[0]>m[4]&&m[0]>m[8]?0:m[4]>m[8]?1:2,j=(i+1)%3,k=(i+2)%3;
+    const s=Math.sqrt(1+m[i*3+i]-m[j*3+j]-m[k*3+k])*2;
+    q[i]=s/4;q[3]=(m[k*3+j]-m[j*3+k])/s;q[j]=(m[j*3+i]+m[i*3+j])/s;q[k]=(m[k*3+i]+m[i*3+k])/s;
+  }
+  return q;
+}
+function skateBoardBlend(from,to,t){
+  const a=skateQuaternion(from),b=skateQuaternion(to);let dot=a.reduce((v,n,i)=>v+n*b[i],0);
+  if(dot<0){for(let i=0;i<4;i++)b[i]=-b[i];dot=-dot;}
+  let x=1-t,y=t;
+  if(dot<.9995){const theta=Math.acos(clamp(dot,-1,1)),s=Math.sin(theta);x=Math.sin((1-t)*theta)/s;y=Math.sin(t*theta)/s;}
+  const q=a.map((v,i)=>v*x+b[i]*y),len=Math.hypot(...q);const [qx,qy,qz,qw]=q.map(v=>v/len);
+  const axis=[1-2*(qy*qy+qz*qz),2*(qx*qy+qz*qw),2*(qx*qz-qy*qw)];
+  const up=[2*(qx*qz+qy*qw),2*(qy*qz-qx*qw),1-2*(qx*qx+qy*qy)];
+  const yaw=Math.atan2(axis[1],axis[0]),pitch=Math.asin(clamp(axis[2],-1,1)),neutral=skateBoardAxes(yaw,pitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];
+  const d=v=>up.reduce((sum,n,i)=>sum+n*v[i],0);
+  return {yaw,pitch,roll:Math.atan2(d(right),d(neutral))};
+}
+function skatePoseSample(){
+  const c=SK_CLOCK,b=c.current,a=c.previous;
+  if(!c.active||!a||!b)return null;
+  const t=clamp(c.accumulator/SKATE_DT,0,1);
+  if(a.mode!==b.mode||Math.hypot(rel(b.p[0]-a.p[0]),rel(b.p[1]-a.p[1]))>.15||(a.contact==='bail')!==(b.contact==='bail'))return {...b,orientation:skateBoardBlend(b.board,b.board,0)};
+  const p=[worldCoord(a.p[0]+rel(b.p[0]-a.p[0])*t),worldCoord(a.p[1]+rel(b.p[1]-a.p[1])*t),skateLerp(a.p[2],b.p[2],t)];
+  const camera=a.camera&&b.camera?[worldCoord(a.camera[0]+rel(b.camera[0]-a.camera[0])*t),worldCoord(a.camera[1]+rel(b.camera[1]-a.camera[1])*t),skateAngleLerp(a.camera[2],b.camera[2],t),skateLerp(a.camera[3],b.camera[3],t),skateAngleLerp(a.camera[4],b.camera[4],t)]:b.camera;
+  const tr=b.trick?{...b.trick,t:skateLerp(a.trick?.name===b.trick.name?a.trick.t:0,b.trick.t,t)}:null;
+  let bailData=b.bailData,bailAt=b.bailAt;
+  if(a.bailData&&b.bailData){bailData={...bailData,board:skateVectorLerp(a.bailData.board,b.bailData.board,t),yaw:skateAngleLerp(a.bailData.yaw,b.bailData.yaw,t),roll:skateAngleLerp(a.bailData.roll,b.bailData.roll,t)};bailAt=[...p.slice(0,2),b.bailAt[2],skateAngleLerp(a.bailAt[3],b.bailAt[3],t)];}
+  return {...b,p,a:skateAngleLerp(a.a,b.a,t),pitch:skateAngleLerp(a.pitch,b.pitch,t),v:skateVectorLerp(a.v,b.v,t),vz:skateLerp(a.vz,b.vz,t),
+    orientation:skateBoardBlend(a.board,b.board,t),surf:b.surf?{...b.surf,n:a.surf?.ref===b.surf.ref?skateNormalLerp(a.surf.n,b.surf.n,t):b.surf.n}:null,
+    airNormal:a.airNormal&&b.airNormal?skateNormalLerp(a.airNormal,b.airNormal,t):b.airNormal,
+    airForward:a.airForward&&b.airForward?skateNormalLerp(a.airForward,b.airForward,t):b.airForward,
+    trick:tr,camera,bailData,bailAt,speed:skateLerp(a.speed,b.speed,t),dir:skateAngleLerp(a.dir,b.dir,t),
+    kick:a.kicking&&b.kicking?mod(a.kick+mod(b.kick-a.kick,1)*t,1):b.kick};
+}
+function skateFixedRender(draw){
+  const pose=skatePoseSample();if(!pose)return draw(null);
+  const position=[px,py,a,pitch],oldBody={z:body.z,vz:body.vz,trick:body.trick};
+  const oldBoard={p:SKB.p,v:SKB.v,riderYaw:SKB.riderYaw,yaw:SKB.yaw,pitch:SKB.pitch,roll:SKB.roll,surf:SKB.surf,contact:SKB.contact};
+  const old={};for(const key of ['v','dir','kick','kicking','mongo','pushFakie','airNormal','airForward','transition','grind','bail','bailAt','bailData','renderContact'])old[key]=SK[key];
+  try{
+    [px,py]=pose.p;a=pose.a;pitch=pose.camera?pose.camera[4]:pose.pitch;
+    body.z=(pose.p[2]-skateGround(px,py))*10;body.vz=pose.vz;body.trick=pose.trick;
+    Object.assign(SKB,{p:pose.p,v:pose.v,riderYaw:pose.a,...pose.orientation,surf:pose.surf,contact:pose.contact});
+    Object.assign(SK,{v:pose.speed,dir:pose.dir,kick:pose.kick,kicking:pose.kicking,mongo:pose.mongo,pushFakie:pose.pushFakie,airNormal:pose.airNormal,airForward:pose.airForward,transition:pose.transition,grind:pose.grind,
+      bail:pose.bail,bailAt:pose.bailAt,bailData:pose.bailData,renderContact:pose.contact});
+    return draw(pose.camera);
+  }finally{[px,py,a,pitch]=position;Object.assign(body,oldBody);Object.assign(SKB,oldBoard);Object.assign(SK,old);}
 }
 // Authored once, after relocating the old city and before buckets/terrain/save loading.
 function buildWildIslands() {
@@ -48792,6 +49208,7 @@ function kerbProfileRadius(profile,lo,hi) {
 }
 function kerbFootprint(o,u,v,pad,lo=0,hi=Infinity) {
   if(hi<0||lo>o.h)return false;
+  if(o.kind==='planter')return plantingFootprint(o,u,v,pad,lo,hi);
   const k=KERB_K,over=(a,b)=>hi>=a*k&&lo<=b*k;
   const rect=(x,y,a,b)=>Math.hypot(Math.max(0,Math.abs(u-x)-a*k),Math.max(0,Math.abs(v-y)-b*k))<=pad;
   const cap=(ax,ay,bx,by,z,r)=>{
@@ -48851,7 +49268,7 @@ function kerbAt(x,y,pad,z=null,height=Infinity) {
     if(Math.abs(u)>o.hl+pad||Math.abs(v)>o.hw+pad)continue;
     const lo=z===null?0:z-terrainHeight(o.x,o.y);
     if(kerbFootprint(o,u,v,pad,lo,lo+height))return o;
-  }return null;
+  }return parkShrubAt(x,y,pad,z,height);
 }
 // A signal controller cabinet at most junctions: on the kerb beside the first
 // signal pole, half a cell back from the corner, its doors to the pavement.
@@ -49077,6 +49494,91 @@ function railwayColumnCast(i,x,z,du,dz,limit,normal,d) {
   for(const o of cache.static[row])railwayTest(o,x,z,du,dz);
   for(const o of cache.moving[row])railwayTest(o,x,z,du,dz);
   return RAILWAY_HIT;
+}
+// Planting on the finished city: kerb troughs leave the 1.2 m walking line free;
+// park shrubs stay off paths, ponds, trees, benches and the skate areas.
+const PLANTER = { hl:.09, hw:.035, top:.065, wall:.008, soil:.052 };
+const SHRUB_CLUMPS = [
+  {u:-.065,v:0,z:.075,r:.07,h:.07},
+  {u:0,v:0,z:.10,r:.08,h:.085},
+  {u:.065,v:0,z:.078,r:.07,h:.073}
+];
+const PLANTER_PARTS = [
+  {u:0,v:0,hl:PLANTER.hl,hw:PLANTER.hw,z0:0,z1:.01,role:'base'},
+  ...[-1,1].flatMap(side=>[
+    {u:0,v:side*(PLANTER.hw-PLANTER.wall/2),hl:PLANTER.hl,hw:PLANTER.wall/2,z0:.01,z1:PLANTER.top,role:'wall'},
+    {u:side*(PLANTER.hl-PLANTER.wall/2),v:0,hl:PLANTER.wall/2,hw:PLANTER.hw-PLANTER.wall,z0:.01,z1:PLANTER.top,role:'wall'}
+  ]),
+  {u:0,v:0,hl:PLANTER.hl-PLANTER.wall,hw:PLANTER.hw-PLANTER.wall,z0:.01,z1:PLANTER.soil,role:'soil'}
+];
+function plantingFootprint(o,u,v,pad,lo,hi) {
+  if(o.kind==='planter')return hi>=0&&lo<=PLANTER.top&&Math.hypot(Math.max(0,Math.abs(u)-PLANTER.hl),Math.max(0,Math.abs(v)-PLANTER.hw))<=pad;
+  return SHRUB_CLUMPS.some(q=>{
+    const dz=Math.max(lo-q.z,q.z-hi,0)/q.h;
+    return dz<=1&&Math.hypot(u-q.u,v-q.v)<=q.r*Math.sqrt(1-dz*dz)+pad;
+  });
+}
+const PLANTER_CLUMPS=[-.055,0,.055].map((u,k)=>({u,v:0,z:PLANTER.soil+.035+(k===1?.008:0),r:.034,h:.045}));
+function buildPlantingModel(o,near) {
+  const view={z:0},parts=[];
+  const add=(p,leaf=false)=>{
+    const box=boxAt(o.c*p.u-o.s*p.v,o.s*p.u+o.c*p.v,o.c,o.s,leaf?p.r:p.hl,leaf?p.r:p.hw,leaf?p.z-p.h:p.z0,leaf?p.z+p.h:p.z1);
+    const shade=(i,t,L)=>{
+      if(leaf){
+        const height=(HIT.w-view.z-box.z0)/(box.z1-box.z0),fine=near?clamp(1-t/projY/.015,0,1):0;
+        const detail=leafClump(HIT.u/p.r*2+o.seed*7,height*3)*fine;
+        const sn=seasonIdx(),autumn=o.kind==='planter'&&sn===2;
+        BG[i]=C(autumn?ORANGE:GREEN,(1.1+L*.25)*(.65+height*.65+detail)*(sn===3?.8:1));
+      }else{
+        const top=HIT.face===5,soil=p.role==='soil';
+        BG[i]=C(soil?BRICK:o.col,soil?.6+L*.075:(1.6+L*.3)*shadeFace(HIT.face)+(top?.8:0));
+      }
+      set(i,' ',0);
+      const exposure=leaf?HIT.nz:HIT.face===5?1:0;
+      if(exposure>.5){paintSettledSnow(i,o.x+o.c*(p.u+HIT.u)-o.s*(p.v+HIT.v),o.y+o.s*(p.u+HIT.u)+o.c*(p.v+HIT.v),L*.7,exposure,0,HIT.w);set(i,' ',0);}
+      return true;
+    };
+    const ray=leaf?homeRayEllipsoid:rayBox,local={...box};
+    const shiftedRay=(ox,oy,oz,rx,ry,rz,B)=>{
+      const height=B.z0-box.z0;local.x=B.x;local.y=B.y;
+      const t=ray(ox,oy,oz-height,rx,ry,rz,local);if(t>=0)HIT.w+=height;return t;
+    };
+    parts.push({role:leaf?'leaves':p.role,box,shade,ray,shiftedRay});
+  };
+  if(o.kind==='planter')for(const p of PLANTER_PARTS)add(p);
+  for(const p of o.kind==='planter'?PLANTER_CLUMPS:SHRUB_CLUMPS)add(p,true);
+  return {parts,draw(x,y,z){view.z=z;for(const p of parts)drawBox({...p.box,x:x+p.box.x,y:y+p.box.y,z0:z+p.box.z0,z1:z+p.box.z1},p.shade,p.shiftedRay);}};
+}
+const drawStreetPlanter=(o,x,y,z,near)=>kerbModel(o,near).draw(x,y,z);
+const drawParkShrub=drawStreetPlanter;
+KERB_KINDS.planter={hl:PLANTER.hl,hw:PLANTER.hw,h:.15};
+KERB_DRAW.planter=drawStreetPlanter;
+const parkShrubs=[],parkShrubsB=bucketed([]),parkShrubCells=new Uint8Array(N*N);
+function parkShrubAt(x,y,pad,z=null,height=Infinity){
+  if(pad<=.4&&!parkShrubCells[idx(x,y)])return null;
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of parkShrubsB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)]){
+    const lo=z===null?0:z-terrainHeight(o.x,o.y);
+    if(plantingFootprint(o,rel(x-o.x),rel(y-o.y),pad,lo,lo+height))return o;
+  }return null;
+}
+function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
+for(const edge of [CURB,2-CURB])alongStreets(4.5,edge,(x,y,ax,ay,bx,by)=>{
+  const district=districtAt(x-ax*.5,y-ay*.5);
+  if(!['midtown','brownstones','chinatown'].includes(district)||hash(bx,by,edge<1?1961:1962)>.32)return;
+  if(SKATE_SPOTS.some(p=>p.id.startsWith('skate-kerb:')&&Math.hypot(rel(p.x-x),rel(p.y-y))<4))return;
+  addKerb(x,y,'planter',ax,ay,{col:district==='midtown'?STONE:BRICK});
+});
+// Leave the east/south park edges available for the concurrent street-skate lines.
+for(const [bx,by] of parks)for(const [u,v] of [[2.2,2.2],[2.2,4.2],[4.2,2.2],[4.2,4.2]]){
+  const x=bx*8+u,y=by*8+v,hl=.14,hw=.09,z=terrainHeight(x,y);
+  if(map[idx(x,y)]||ROAD[idx(x,y)]||isWater(x,y)||inPond(u,v,bx,by,.4))continue;
+  if(trees.some(t=>Math.hypot(rel(t.x-x),rel(t.y-y))<.4)||benches.some(b=>Math.hypot(rel(b.x-x),rel(b.y-y))<.5))continue;
+  if(SKATE_PATCHES.some(p=>Math.abs(rel(x-p.x))<p.hl+.3&&Math.abs(rel(y-p.y))<p.hw+.3))continue;
+  if([-1,1].some(s=>Math.abs(terrainHeight(x+s*hl,y)-z)>.002||Math.abs(terrainHeight(x,y+s*hw)-z)>.002))continue;
+  const o={x,y,c:1,s:0,hl,hw,h:.19,kind:'shrub',seed:hash(x,y,1963)};
+  if(streetGeometryCollision({...o,z0:z,z1:z+o.h},true)||streetEntranceCollision({...o,z0:z,z1:z+o.h}))continue;
+  parkShrubs.push(o);parkShrubsB[bi(Math.floor(x/8),Math.floor(y/8))].push(o);
+  for(let ix=Math.floor(x-hl-.4);ix<=Math.floor(x+hl+.4);ix++)for(let iy=Math.floor(y-hw-.4);iy<=Math.floor(y+hw+.4);iy++)parkShrubCells[idx(ix,iy)]=1;
 }
 // The display is raycast in the window's own coordinates, behind its pane.
 // Static miniature pieces are cached; only the three short train cars move.
@@ -49852,7 +50354,7 @@ onkeydown = e => {
   if (onFoot && !sleep) {
     if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
     if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
-    if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
+    if (e.code === 'KeyC' && !skatingNow()) { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyX') dropHere();
     if (e.code === 'KeyP') startPee();
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
@@ -49884,7 +50386,7 @@ function turnBy(mx, my) {
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s;
   else if (mode === 'sea' || mode === 'boat') look=clamp(look+mx*.003*s,-Math.PI,Math.PI);
-  else if (skatingNow()) { SK.look = clamp(SK.look + mx * 0.003 * s, -2.6, 2.6); SK.lookT = T; } // on the board: look round (the camera swings back behind you)
+  else if (skatingNow()) { SK.look += mx * 0.003 * s; SK.lookT = T; } // on the board: look round (the camera swings back behind you)
   else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
@@ -49926,7 +50428,7 @@ addEventListener('mouseup', e => {
   if (e.button === 0) K.MouseUse = 0;
   if (e.button === 2) {
     gun.aimHeld = false;
-    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) { const played = skateMouseEnd(); if (!played && !skateAir()) jump(flickTrick(f.x, f.y)); } }
+    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) { const balancing=!!(SK.grind||SK.manual),played = skateMouseEnd(); if (!played && !balancing && !skateAir()) jump(flickTrick(f.x, f.y)); } }
   }
 });
 function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; flick = null; skateInputReset(); }
@@ -49972,7 +50474,8 @@ function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : skatingNow() ? .01 : 0.05;
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
-  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
+  const exitReach = mode === 'room' && room.kind === 'station' ? Math.max(.31,n+.03) : .45; // reach the final subway tread before stepping out
+  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * exitReach), Math.floor(py + fy / n * exitReach)) === 'D') return leaveRoom();
   if (mode === 'walk' && n > 0 && backroomsSeamAt(px + fx / n * 0.1, py + fy / n * 0.1)) return enterBackrooms(); // (backrooms.js)
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   const x0 = px, y0 = py;
@@ -50099,10 +50602,10 @@ function drive(dt) {
 let t0 = performance.now();
 function loop(t) {
   controllerTick(clamp((t-t0)/1000,0,.05));
-  if (paused) { t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  if (freecam) { transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
@@ -50113,7 +50616,7 @@ function loop(t) {
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
-  if (game) { // a cabinet or a shift has the screen; the world carries on behind it
+  if (game) { skateFixedReset(); // a cabinet or a shift has the screen; the world carries on behind it
     stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
     requestAnimationFrame(loop); return;
   }
@@ -50121,8 +50624,9 @@ function loop(t) {
   if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && handheldMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
   stepBathroomDoors(dt);
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
+  let skateStepped=false;if(!skatingNow()||sleep||chute)skateFixedReset();
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
-  else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
+  else if (!sleep && skatingNow()) skateStepped=skateFixedFrame(dt); // (on the board: skate.js)
   else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1); // sprint 29 km/h (the board: skate.js), cars top out at 79
@@ -50151,7 +50655,7 @@ function loop(t) {
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') stepElRide(dt);
   else if (mode === 'ferry') stepFerryRide(dt);
-  stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
+  if(!skateStepped){stepBody(dt);stepRoof();}stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
@@ -50211,15 +50715,21 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw, cz] = skateCam(dt);
-    const baseFOV = FOV; FOV += Math.min(1, Math.hypot(...SKB.v) / 1.4) * 12 * Math.PI / 180;
-    skateView = { x: px, y: py, a, eye: cz }; px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved; skateView = null; FOV = baseFOV;
+    skateFixedRender(camera=>{
+      const saved = [px, py, a], [cx, cy, yaw, cz] = camera||skateCam(dt), baseFOV = FOV;
+      try {
+        FOV += Math.min(1, Math.hypot(...SKB.v) / 1.4) * 12 * Math.PI / 180;
+        skateView = { x: px, y: py, a, eye: cz }; px = cx; py = cy; a = yaw; render(dt);
+      } finally { [px, py, a] = saved; skateView = null; FOV = baseFOV; }
+    });
   } else { // a drink or two and the world sways; more and you're seeing double
+    const draw=()=>{
     camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : skatingNow() ? SK.look : 0; // (and at the wheel, wherever you're looking)
     a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
+    };if(skatingNow())skateFixedRender(draw);else draw();
   }
   audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
   requestAnimationFrame(loop);
@@ -50393,7 +50903,7 @@ function touchActions() {
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     touchHeldActions(out);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
-    out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
+    out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']);if(skatingNow())out.push(['Air out','KeyC','hold']); // (on the board: swipe off it for a trick, see bindFlick)
   }
   if (e) out.push([e, 'KeyE', 'main']);
   return out;
@@ -50720,7 +51230,7 @@ function controllerTick(dt){
   for(const key in motion)motion[key]=0;
   if(skate){
     if(edge(5))controllerTap('KeyE');
-    controllerHint('A push · X mongo · B brake · right stick tricks · LB + right stick look · RB interact · Y actions');
+    controllerHint('A / stick forward push · X mongo · B brake · hold stick back: pivot/reverse · right stick tricks · hold RT at takeoff: air out · LB + right stick look · RB interact · Y actions');
   }else{
     if(edge(4))cycleQuickSlot(-1);if(edge(5))cycleQuickSlot(1);
     hold('Space',held(0));hold(vehicle?'KeyS':'KeyC',held(1));hold('KeyE',held(2));

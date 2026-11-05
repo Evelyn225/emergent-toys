@@ -100,3 +100,56 @@ Serial ABAB measurements at 177x66 with a connected idle controller measured
 main medians of 12.6/13.0 ms and this branch at 14.0/13.0 ms in the fixed park
 view (about 5% higher on average). These are local observations, not a frame-rate
 guarantee. All geometry/rendering changes from the other agent remain intact.
+
+Bowl/ramp exits: hold RT at takeoff to air out (keyboard C; touch Air out).
+The exit choice lasts through the flight and reserves RT, so it cannot
+accidentally become a held grab. Ordinary airs favor returning inside the bowl.
+Left-stick forward is an alternate push input. A push from rest follows camera
+look and can start fakie; looking around while moving does not steer velocity.
+
+Balance: A/D moves the gauge left/right; right stick X balances grinds and Y
+adjusts nose/tail pressure. A/D also corrects manuals; stick Y controls manual
+pitch. Hold right mouse and drag for equivalent controls. Release a balance
+drag without popping; Space or an intentional load/flick still pops out.
+
+Additional trick gestures (from a tail load):
+- Half-circle right, flick upper-right, release: varial heelflip.
+- Quarter-circle left, flick upper-right: hardflip.
+- Quarter-circle right, flick upper-left: inward heelflip.
+Partial diagonal flicks now register kickflips/heelflips without needing a
+full-depth vertical component. Existing half/three-quarter scoops are retained.
+
+Repeated push presses while already fakie now keep pushing tail-first, with the
+push/mongo pose facing that kick. From-rest camera-facing selection still applies.
+Holding push near sustainable cruising speed idles the kick animation and coasts;
+kicks resume after a speed drop, with hysteresis to avoid rapid toggling.
+
+Latest back action: left-stick back or S brakes quickly; keep holding after
+stopping to pivot 180 degrees and push away in the new direction. Release to
+coast. B only brakes. Natural bowl/hill rollbacks can still ride fakie.
+LB + right-stick camera look now permits unlimited full orbits and recenters by
+the short arc. Ramp takeoff has 120 ms of pop grace: finish a loaded flick just
+after the lip for a normal trick. RT can select air-out in that window and does
+not become a grab; the grace cannot grant a second pop.
+
+Air steering now has a short 45 ms spin-rate response rather than an immediate
+rate change. Partial stick holds rotate continuously and release eases to rest
+at the resulting angle, without seeking a half turn. On steep airs the rider
+and board rotate in their actual takeoff/landing plane. The ramp-return chase
+camera eases behind travel, including a fakie descent, without turning the
+rider to match it. LB-look retains its unlimited orbit.
+
+While airborne, another loaded right-stick flick can start a late flip after
+an ollie or completed rotation. A flick in the final 180 ms of an active flip
+queues until its catch. Mouse, quick arrow taps, Space-plus-arrows and touch
+share this behavior. Late flips do not provide another jump; allow time to
+finish/catch before landing. Ramp pops now add mostly upward impulse with only
+18% of the former sideways component, retaining the board's ramp angle.
+
+Natural ramp airs also accept a quick direct stick flick and release (left for
+kickflip, right for heelflip), without another tail load. Loaded flicks/scoops
+still take priority. Mouse users can right-drag and release, including a short
+20 px drag; arrow taps work during natural airs too. These select a board trick
+without adding another jump. Straight unsteered returns retain the takeoff
+forward/fakie axis; the camera continues following travel and full rider height,
+including off building roofs.

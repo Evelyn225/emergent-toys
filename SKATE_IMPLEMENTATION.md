@@ -253,5 +253,372 @@ Close, wide, oblique and night views were inspected. Local serial ABAB against
 exact main `4ff9292` at 177×66 (1170 px): median frame times main/branch were
 13.9/13.3 ms, then 13.3/13.3 ms (60 frames after 20 warm-up frames). Trees remained
 2,254 with the same coordinate checksum; benches remained 468. These are local
-observations, not an FPS guarantee. Physics/controller fixes remain separate
-in PR #430; this street-content change is independently based on main.
+observations, not an FPS guarantee. This content was originally independently
+based on main; the integration below brings in the merged #430 physics fixes.
+
+## Fixed simulation clock and coordinated rendering
+
+Skating now advances at 120 Hz through `city/skate-clock.js`. Input is observed
+once per rendered frame; controller steering response, movement, body contact
+and chase-camera smoothing advance on fixed ticks. Legacy direct simulation
+helpers remain available. Other world modes keep their existing clock and the
+50 ms frame cap remains, bounding catch-up to six skating ticks per frame.
+
+Rider position, board orientation, airborne trick progress and chase camera
+interpolate between the same two snapshots. Board frames use shortest-path
+quaternion interpolation through vertical orientations and angle wraps. Drawing
+uses temporary sampled state and restores authoritative physics in `finally`.
+Pause, dismount, mode changes and teleports reset history. Fractional tick time
+survives mixed short and 50 ms frames. Preferred speed, pop strength and camera
+distance are unchanged; `SKATE_TUNING.md` separates research references from
+playability choices and explains how to calibrate physical values.
+
+Validation: scripted keyboard/controller push, carve and ollie trajectories
+match at 30/60/120/144 Hz; mixed short/hitch frames match elapsed fixed time.
+Board-axis, shared camera phase and renderer-error restoration checks accompany
+a real-loop browser regression covering pause, hitch and teleport behavior.
+Existing controller, camera, park geometry, ramp, grind and rollback browser
+cases pass. Isolated mutations to timestep, camera phase and retained remainder
+each fail the targeted regression.
+
+Local serial ABAB timing against exact main `4ff9292` at 177×66 (1170 px
+viewport), mounted stationary skating with live 60 Hz main-loop ticks: median
+frame times main/branch were 16.9/15.9 ms, then 14.4/12.7 ms over 60 frames per
+run after 20 warm-up frames. This shows no regression in that scene; it is not
+an FPS guarantee. Third-person riding and popped poses were inspected visually.
+
+## Ramp energy and powerslide stance fixes
+
+Changing ground normals now bends the existing velocity onto the new plane
+without increasing its magnitude. Carving on a bank also preserves speed before
+its usual friction loss. Mini-ramp, round-bowl and pool entry use that same
+bounded conversion; airborne entry projects away the normal impact velocity.
+The downhill cap now bounds total speed, including its vertical component.
+Touchdown overwrites the airborne velocity with the landed tangent velocity,
+so a subsequent ground tick cannot turn impact speed into forward speed.
+
+Powerslides require brake plus a deliberate steering input (>0.45 after the
+controller response curve), and remain engaged down to 0.25 to avoid chatter.
+The board eases into/out of the sideways stance. Grounded board orientation,
+rider facing and the authored shoe anchor now share that stance; ordinary bank
+riding uses the ground normal for the rider too. Dismount and touchdown clear
+slide state. Walking, desired flat cruising speed and camera distance remain
+unchanged.
+
+Validation covers kinetic + potential energy over a rounded ramp, bounded entry
+into all three transition implementations, braking corrections, slide engagement
+hysteresis and easing. The real kicker launches without gaining energy or
+bailing, and production drawing inputs keep rider stance aligned to the sliding
+board. Existing ramp, loaded flip, grind, rollback and fixed-clock browser cases
+pass. Removing energy transport or lowering the slide threshold fails the new
+regressions.
+
+Local serial ABAB against main `4ff9292`, 177×66 at 1170 px, live stationary
+60 Hz skating: main/branch median frame times were 13.4/13.6 ms, then 14.2/13.3 ms
+(60 measured frames after 20 warm-up frames). No material regression in this
+scene; these are local observations. Day and night powerslide poses were
+inspected: both shoes remain over the sideways deck.
+
+## Deliberate air-outs, coping slides and fakie rollbacks
+
+Hold C or controller RT when popping from a transition or crossing its coping
+to air out onto the deck. The choice latches at takeoff; releasing the control
+or spinning does not switch the flight. A normal coping air keeps upward and
+along-coping momentum. A deliberate exit trades part of the upward component
+for outward carry without adding speed; an exit pop adds its impulse upward.
+RT remains reserved during that exit flight, avoiding an accidental held grab
+and automatic landing bail. Q/E and LT still grab; RT can grab in other airs.
+C retains sit/crouch behavior off the skateboard. Touch has a held Air out
+button. Pause controls, skating help and the controller hint show the mapping;
+the HUD identifies RETURN INSIDE versus AIR OUT: DECK.
+
+Ordinary bowl flights have an inside-coping boundary assist, which removes
+outward horizontal velocity at that boundary. It prevents a tangent across a
+curved rim from accidentally becoming a deck exit; inward motion and height
+remain free. Catch preparation samples the first ballistic contact with the
+bank on that assisted path, cached at 20 Hz, rather than assuming flat ground.
+Completed half/full spins can settle toward the new landing direction after
+steering is released. An incomplete sideways spin still needs correction.
+
+A normal return air remains protected from catching its own coping. An
+intentional exit can catch it while descending; a crosswise board accepts a
+wider travel approach and selects a boardslide. Separate deck approaches also
+work. Ascending hops cannot catch. Grind capture still clears the bowl bank.
+
+Bowl contact now follows the nearest forward/switch board heading instead of
+forcing a 180 when travel reverses, so a straight rollback comes down fakie;
+angled carving still follows the curve. Starting a push from rest uses camera
+look to choose travel, preserving whichever parallel board heading is nearest.
+W, gamepad A and forward on the left stick push; once moving, camera look does
+not redirect momentum. Transition bottoms receive the same timed kick bursts.
+
+Validation includes C/RT equivalence and latched choice, clean deck exits,
+spinning return airs around four pockets of a curvy pool, round/oval rollbacks,
+camera-facing regular/fakie starts and deliberate coping boardslides. Real-game
+browser checks exercise keyboard C, RT plus a right-stick gesture, RT grab
+suppression, return boundaries, both coping approaches, controls and a camera-
+facing fakie push. Existing coping protection, bowl access and shared controller
+browser regressions pass.
+
+## Balance response and complete controller trick mapping
+
+A/D now moves the visible balance mark left/right, rather than the previous
+reversed sign. Grind corrections have a direct response plus stronger damped
+control, so they can counter an already outward-moving wobble within 300 ms.
+Manual A/D correction is now substantial too. Right-stick X and held right-drag
+mouse X also balance grinds; fore/aft pressure changes grind variation without
+lateral balance input unexpectedly changing its family. Manuals retain stick
+or mouse Y pitch control, accept a wider correction range after starting, and
+keep a held mouse's fore/aft pressure instead of decaying it away. Releasing a
+balance drag no longer triggers the mouse's fallback ollie.
+
+The gesture recognizer previously never emitted DS, WA or WD, leaving varial
+heelflips, hardflips and inward heelflips inaccessible through controller/mouse
+gestures. It now recognizes: right half-scoop, upper-right flick and release
+for DS; left quarter-scoop then upper-right flick for WA; right quarter-scoop
+then upper-left flick for WD. Diagonal flicks use direction plus magnitude,
+so a partial stick at 45 degrees can kickflip/heelflip. Existing ollie, shuvit,
+360 shuvit, 360 flip, nollie and late-flip behavior remains covered. Pause
+controls describe the full mapping.
+
+Regression tests cover recovering an outward-drifting grind using A, right
+stick and sustained mouse movement; manual gauge direction/correction;
+100 noisy paths per newly mapped combination; partial diagonal flicks; and
+all nine tricks through the actual shared controller adapter. The existing
+browser grind fixtures now counter the meter with A when it is right of centre,
+and deliberately push D to lose balance, matching the corrected visible sign.
+
+A stopped push's direction is captured when input is observed, before any
+render-only frame can advance the chase camera. This keeps camera-facing starts
+consistent at render rates above the 120 Hz simulation tick. Bowl-air camera
+framing now follows the rider's height, keeping deliberate exits in view.
+
+Local serial ABAB on actual curvy-pool airs against main `4ff9292`, 177×66 at
+1170 px: median main/branch frame times 15.5/17.5 ms, then 19.0/17.4 ms. Results
+vary between runs; the mean of the two medians differs by about 1.2%. These are
+local observations, not an FPS guarantee. Return/exit poses and route indicators
+were inspected, including the revised air framing. Isolated route, rollback,
+camera-push, RT-selection and coping-protection mutations fail regressions.
+
+## Fakie push direction and coasting at cruising speed
+
+A new push while already rolling now chooses forward/fakie from actual travel,
+so releasing and pressing W again while fakie reinforces tail-first motion.
+Previously only a push started from rest could choose fakie; later kicks fell
+back to the nose direction. From-rest camera selection is unchanged. Airborne
+input and touchdown clear the kick direction so a later ground push chooses
+from its new travel rather than retaining a stale takeoff heading.
+
+The authored push/mongo figure now faces the same direction as the kick while
+the board keeps its heading and stance. Its planted shoe remains anchored to
+the deck. Interpolated drawing snapshots include kick direction, pushing state
+and mongo state, so rendering cannot show a different kick from the simulated
+one. Dismount clears kick phase and pushing flags immediately.
+
+Holding push coasts at the top of the sustainable flat-speed range, then resumes
+only after a clear speed drop. The thresholds are 88% / 84% of the push cap
+(currently 10.56 / 10.08 m/s). This reflects the existing tapered kick/drag curve,
+which settles below the hard 12 m/s cap, rather than waiting for an unreachable
+exact cap. The hard cap, burst strength and camera distance remain unchanged.
+Ground and transition-bottom kicks use the same hysteresis.
+
+Validation scripts repeat separate regular/fakie and mongo kicks at several
+headings, assert tail-first acceleration without a board turn, and verify idle
+coasting and resumed kicks from one held input. A real-browser regression checks
+both the drawn figure heading and impulse direction, preserves the planted
+push/mongo leg, and catches stale phase across resets. The former test expecting
+W to reverse an already moving fakie run now explicitly checks the requested
+behavior: stop first to choose a new direction; moving pushes reinforce travel.
+
+The browser push/pose, fixed-clock, shoe-anchor and reverse/bowl cases pass.
+Removing the moving-fakie direction choice or the cruise gate fails its isolated
+regression. Local serial ABAB against exact main `4ff9292`, 177×66 at 1170 px:
+median main/branch frame times were 13.0/13.0 ms, then 13.5/13.4 ms (60 frames
+after 20 warm-up frames). Regular/fakie push poses were inspected. These local
+observations are not an FPS guarantee.
+
+## Responsive stop/pivot/reverse, free orbit and lip grace
+
+S or left-stick back now brakes at 6 m/s² (previously 2.5). Continued back input
+after stopping commits a 240 ms 180-degree board/rider pivot, then starts timed
+push kicks in that new direction. Releasing back coasts. Gamepad B remains a
+brake-only action; brake plus strong steering powerslides at 11 m/s². The pivot
+works on streets and flat transition bottoms. Steep-wall rollbacks without a
+back-input pivot remain fakie. This replaces the previous deliberate S action
+that kept the heading fixed and built a slow 4.5 m/s tail-first roll.
+
+Kick direction is now checked against live momentum throughout a held push,
+including when gravity reverses a hill climb. The previous per-press latch could
+remain forward after a rollback. From-rest camera-direction choice and cruise
+coasting still apply. Tests model natural fakie independently of S, since S is
+now an explicit turn-around action.
+
+Skating mouse look and controller LB + right-stick look can orbit through any
+number of full turns. The chase camera keeps a continuous following heading
+and a separate unbounded look offset, rather than clamping at +/-2.6 radians.
+After looking stops, idle recentering discards complete windings from both the
+offset and camera phase together, preserving its physical position and returning
+by the short arc. A deliberate pivot clears the orbit offset and the chase
+camera follows the new board direction. Air spins still do not turn the camera.
+
+Natural coping takeoffs retain one 120 ms lip-pop opportunity. A Space load or
+stick/mouse gesture started on the wall can finish just after takeoff and still
+be a normal pop/flip, rather than disappearing or becoming a weaker late flip.
+It uses the takeoff normal/current velocity and the same pop strength and spin
+pre-wind as a transition pop; air-out uses its upward pop direction. C/RT can
+choose an exit during this grace as part of the deliberate pop. The opportunity
+is consumed once, expires, and clears on unrelated flight/landing/dismount/bail.
+RT is reserved during the grace so an exit flick cannot become an accidental
+grab. Existing later airborne flips remain distinct from a new pop.
+
+Validation covers stop time from 8 m/s, stationary pivot before reverse kicks,
+keyboard/controller equivalence, transition-flat pivots, release/coasting,
+natural fakie, and live kick direction during a held-input hill rollback.
+Space and gamepad flick scripts exercise lip grace and expiry. Real browser
+checks cover camera follow, three full mouse orbits, multiple controller orbits,
+short-arc recentering, both grace inputs, late RT air-out and no double pop.
+Existing fixed-clock, bowl access/landing, shoe-anchor, camera and controller
+regressions pass. The old reversal browser run is shorter to keep the new,
+faster push-away on its clear approach before reaching the next ledge.
+
+Final validation: 84 focused Node checks and five rebuilt-bundle browser cases
+pass. Isolated mutations restoring weak brakes, disabling the pivot, retaining
+a stale held-push direction or removing lip grace fail their regressions. Camera
+mutations restoring the old orbit clamp or removing phase adjustment during
+recentering also fail their regressions. Local serial ABAB against exact main
+`4ff9292`, 177×66 at 1170 px: median main/branch frame times 13.9/15.3 ms, then
+14.8/13.0 ms (60 frames after 20 warm-up frames). There is no consistent increase
+in these local observations; they are not an FPS guarantee. Street-content PR
+#431 remains separate and preserved.
+
+## Ramp return camera and continuous air rotation
+
+The chase camera follows actual travel on a transition, retaining the last
+meaningful heading at the near-zero-speed apex. It eases behind a fakie descent
+without turning the rider around, and retains travel-follow on rollout until a
+stop. Manual orbit and deliberate stop/pivot behavior remain available.
+
+Air spin has a 45 ms angular-velocity response to input and release. Partial
+stick depth and short holds produce partial rotations; there is no attraction
+to 180-degree increments. The unspun takeoff frame follows the landing plane
+continuously, with the player's spin applied around that frame's up vector.
+Board and rider now use this same full 3D frame, avoiding horizontal projection
+flips near a vertical ramp. Rider forward vectors are interpolated alongside
+board orientation at render time. New takeoffs reset stale spin/pre-wind;
+lip-grace pops preserve current angular velocity. Landing alignment rules still
+apply, so an unfinished sideways turn can bail.
+
+Regression coverage adds proportional partial spins and several full turns on
+flat, banked and nearly vertical takeoff planes. A rebuilt-bundle browser test
+rides up a native mini ramp, stalls, returns fakie and verifies camera heading;
+it also checks the rendered steep-air rider's tangent facing. Existing bowl
+return/exit, camera, shoe anchor, fixed-clock and unlimited-orbit checks pass.
+
+All 13 focused Node test files pass. Six browser regressions cover the new
+return/spin behavior plus the existing bowl choice, camera, pose, fixed clock
+and stop/pivot/orbit/grace paths. Restoring rider-facing camera follow fails
+the natural rollback test (166 degrees from travel versus 21 degrees with the
+spring still settling); restoring world-yaw board rotation fails the steep
+frame test. Close/wide/day/night air views were reviewed. Local serial ABAB
+at 177×66 against main `4ff9292`: median main/branch 18.3/18.2 ms, then
+17.4/19.9 ms (60 frames after 20 warm-up frames), about 7% higher on average
+with mixed pair results. These are local observations, not an FPS guarantee.
+The final rebuilt-bundle fakie-push/mongo/coast and ramp-energy/powerslide
+regressions also pass (eight distinct browser cases for this follow-up).
+
+## Airborne tricks and reduced ramp-pop recoil
+
+Arrows (including quick taps), Space plus arrows, mouse/gamepad flicks and touch
+now share an airborne trick path. An existing ollie no longer blocks a late
+flip, and a completed flip or shuvit can be followed by another. Inputs within
+180 ms of the current rotation's end can queue until its catch; an unfinished
+rotation cannot be overwritten. Late rotations use 240 ms, or 320 ms for a full
+board turn, so a reasonably early late flip can finish and catch in a flat
+ollie. They do not add velocity, height, spin pre-wind or a second jump. Existing
+catch/landing requirements still apply. Arrow chords retain their last pressed
+directions through the short chord delay, so releasing a quick tap works.
+
+Transition and lip-grace pops retain the board's physical launch plane while
+biasing the impulse upward. The horizontal component is 18% of the former full
+surface-normal pop, with the vertical component preserving impulse magnitude.
+This avoids kicking the rider several metres toward the bowl centre on a steep
+wall. C/RT exits retain their deliberate outward carry and vertical pop.
+
+The expired-grace regression now expects a late flip rather than no trick, and
+compares its height/vertical speed with an unpopped control to retain the
+no-second-jump invariant. New trajectory tests land late kickflips/heelflips
+and compare their full height curves with a plain ollie. Native browser checks
+exercise five input paths, catch queuing, active-shuvit protection and ramp
+impulses/orientation across every park transition at two wall heights. Existing
+bowl access/returns/exits, pop grace, shoe anchors, fixed-clock and ramp-camera
+regressions pass. Isolated mutations blocking airborne tricks or restoring full
+normal recoil fail their targeted browser checks.
+
+Local serial ABAB at 177×66 against exact main `4ff9292`: median main/branch
+17.2/18.2 ms, then 18.0/17.5 ms (60 frames after 20 warm-up frames). Mixed pair
+results average about 1% higher on the branch; these are local observations,
+not an FPS guarantee. Close, wide, oblique and night views remain reviewable
+with the existing ramp-air capture script. Reserved world files are untouched.
+
+Integrated main `22d06d6` (planting and subway surfaces), rebuilt the bundle and
+passed ten browser cases across the shared controller, native planting, subway
+stairs and new air-trick/ramp-pop regression. All 80 focused simulation checks
+pass. Close/wide/oblique/night ramp poses were reviewed. A fresh serial ABAB
+against this main at 177×66 measured main/branch medians 17.3/18.4 ms, then
+15.6/17.9 ms, about 10% higher on average. The branch's ramp-return camera frames
+a different view during this scripted rollback, so this is whole-frame gameplay
+cost rather than an isolated pop-helper benchmark; it is not an FPS guarantee.
+
+## Natural bowl airs, mouse flicks and roof-drop framing
+
+The natural coping-air path now accepts a quick direct flick and release as
+well as loaded/scooped gestures. Direct right-mouse drags use a 20 px threshold
+and a 400 ms window; controller flicks use 0.6 stick depth and 200 ms. Existing
+loaded gestures take priority, so crossing the centre during a load/flick cannot
+fire an unwanted direct trick. Ground gestures, manuals, grabs and camera look
+retain their own paths. Pause controls describe direct airborne flicks and arrow
+taps. Native browser checks use actual captured mouse and keyboard event handlers
+after rolling up a pool wall and naturally leaving its coping, including a short
+24 px drag, a loaded drag, and a quick arrow tap.
+
+The air catch previously chased the current projected velocity with a new
+nearest-axis choice every tick. On a curved pool that could accumulate a full
+half turn through the apex. It now uses the forecast touchdown velocity and
+chooses forward/fakie against the original takeoff heading. Straight airs retain
+their heading and return fakie; curved approaches can still fit the landing
+plane without turning the nose around. Player-controlled spin remains separate.
+
+The chase camera now tracks full rider world height and aims at the rider in
+flight. Roofs falling out from under a skateboard no longer drag the eye toward
+the street. Boom clearance also tests building/architecture height against the
+camera height, rather than treating any building footprint as an infinitely
+tall wall after switching from roof to walk mode. The native roof-edge test
+checks an actual mode transition, sustained boom length and rider-relative eye
+height; close, wide, oblique and night roof-drop views were reviewed.
+
+All 14 focused Node test files pass. Five browser cases cover natural airs/roof
+drops, prior late tricks/ramp recoil, bowl exits/returns, camera and fixed clock.
+Isolated mutations removing direct flicks, restoring apex-chasing yaw, losing
+rider world height or restoring footprint-only clearance fail their regressions.
+Local serial ABAB against main `22d06d6` at 177×66: median main/branch
+16.5/16.9 ms, then 20.1/24.7 ms. These varied whole-frame rollback views include
+the branch's different chase heading, and do not isolate input/catch cost; they
+are local observations, not an FPS guarantee. Concurrent world work is preserved.
+
+## Street-spots merge with current main
+
+PR #431 now integrates main `d8d6015`, including the merged #430 physics,
+controller, natural-air and roof-camera changes, planting, fitted subway doors,
+and corrected legacy skate fixtures. Both sets of shared notes are retained;
+`ascii-city.bundle.js` was regenerated from the combined source manifest. Native
+street ramp rise/normal support and the eight spot entries remain alongside
+current skating behavior. Reserved world files are unchanged relative to main.
+
+All 16 focused simulation/bundle test files and 11 native browser cases pass:
+street placement/map/ride/grind connectivity, existing park and ramp/grind cases,
+planting, and the current natural-air/fakie/roof regression. Removing street
+ground in an isolated served bundle still fails the street regression. Reviewed
+close, wide, oblique rail and night street views. Local serial ABAB at 177×66
+against exact main `d8d6015`: median main/branch 12.7/12.9 ms, then 14.6/12.5 ms;
+no consistent added cost in these local observations, not an FPS guarantee.
+Tree count/checksum and bench count match current main.

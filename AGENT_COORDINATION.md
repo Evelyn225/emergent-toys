@@ -10,12 +10,12 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** eight street skate spots on `codex/skate-street-spots`, from main
-  after #429. Scope: new street spot builder, native ramp/rail height support,
-  spot ground/paving buckets, map destinations, tests and generated bundle.
-  Separate physics/controller fixes remain in PR #430 (`codex/skate-fixed-step`).
-  Preserve both when integrating; see `SKATE_IMPLEMENTATION.md`. Reserved world
-  files are untouched; the general world-quality checklist stays paused.
+- **Codex:** integrating eight street skate spots in PR #431
+  (`codex/skate-street-spots`) with current main, including the merged physics,
+  controller, natural-air, fakie-return and roof-camera fixes from #430.
+  Preserve both street content and current physics/manifest entries; regenerate
+  the bundle. See `SKATE_IMPLEMENTATION.md`. Reserved world files are untouched;
+  the general world-quality checklist stays paused.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
   the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
