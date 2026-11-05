@@ -91,7 +91,7 @@ function setRoomLights(on, r = room) {
 // what E can aim at: the switch, any tap, and (in shops) the ceiling lamps themselves
 function roomFixtureTargets() {
   if (mode !== 'room' || !room) return [];
-  const out = [], sw = roomSwitch();
+  const out = room.kind==='video'?(room.videoRentals||[]).slice():[], sw = roomSwitch();
   if (sw) {
     if (!room.props.includes(sw.model)) room.props.push(sw.model); // (a furnished home rebuilds its props)
     out.push({ kind: 'switch', x: sw.x, y: sw.y, z0: 1.12, z1: 1.3, radius: .08, reach: 2 });
@@ -107,10 +107,12 @@ function roomFixtureTargets() {
   return out;
 }
 function roomFixturePrompt(t) {
+  if(t.kind==='video-rental')return `E: rent “${VIDEO_AFTER_HOURS[t.index]}” — $6`;
   if (t.kind === 'tap') return t.tap.on ? 'E: turn the tap off' : 'E: turn the tap on';
   return roomLightsOn() ? 'E: switch the lights off' : 'E: switch the lights on';
 }
 function roomFixtureUse(t) {
+  if(t.kind==='video-rental')return videoRentalUse(t);
   if (t.kind === 'tap') {
     t.tap.on = !t.tap.on;
     if (actx) burst(actx.currentTime, t.tap.on ? .5 : .12, [filt('bandpass', 2800, .8)], t.tap.on ? .07 : .03);

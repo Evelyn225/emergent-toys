@@ -1416,6 +1416,7 @@ function roomSprites() {
   prepareInteriorBattens();prepareInteriorHanging();
   const moving = furnishingPlacement?.part?.key; // (the piece you're moving shows only as its preview: home-furnishing-ui.js)
   for (const s of room.props) {
+    if(s.videoCustomer&&s.dead)continue;
     if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (moving != null && s.furnishingKey === moving) continue;
     if (s.draw) { if (inView(s.x - px, s.y - py, s.radius??1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)

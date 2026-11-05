@@ -27,8 +27,14 @@ function TELEVISION(x,y,r,scale=1,angle=0) {
  const screenBox=boxAt(0,0,c,s,q(.65),q(.001),q(.79),q(1.47));
  const screenShade=(i,t,L)=>{
   if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
-  const frame=televisionProgramme((HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T,(r.tvChannel??Math.floor(T/24))%4);
-  BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
+  const frame=r.videoTape?videoTapeFrame(r.videoTape,(HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T-(r.videoTapeStart||0)):televisionProgramme((HIT.u/q(.65)+1)/2,(q(1.47)-HIT.w)/q(.68),T,(r.tvChannel??Math.floor(T/24))%4);
+  BG[i]=C(frame.base,frame.level);set(i,r.videoTape?' ':frame.ch,C(frame.ink,12));
+  if(r.videoTape){
+   const ordinary=r.videoTape==='vhs',word=frame.label;
+   if(word){const zc=q(ordinary?1.3034:1.13),letterW=q(1.25/word.length),along=dx*c+dy*s,tc=Math.max(.05,t-along*HIT.u),far=tc+Math.abs(along)*q(.65);
+    const band=q(.22),fontBand=band*projY/far>=7&&letterW*projX/far>=5?band:0;
+    set(i,signLine(word,HIT.u/letterW+word.length/2,(zc+band/2-HIT.w)/band,i,zc,tc,t,letterW,fontBand,far,c,s)||' ',C(ordinary?ORANGE:WHITE,14));}
+  }return true;
  };
  return {...ROOM_MODEL(x,y,(vx,vy)=>{
   const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v], [sx,sy]=at(0,q(.063));
