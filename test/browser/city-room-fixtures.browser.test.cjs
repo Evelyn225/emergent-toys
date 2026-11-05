@@ -252,27 +252,31 @@ test('the telescope ring is drawn in characters: black corners, a brass ring of 
  assert.deepEqual(r,[]);
 }));
 
-test('coming down sideways on the board: slow, a sloppy landing you ride out for half points; fast, a bail',()=>fixture(async p=>{
+test('caught landings: thirty degrees scrubs speed for half points, sideways bails, reverse alignment rides switch',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
-  const land=(v,turn,trick='kickflip')=>{SK.bail=0;SK.combo=null;SK.stance=1;SK.v=v;SK.dir=0;a=turn;SK.spin=0;SK.popT=T-.5;
-   body.trick={name:trick,flip:1,turn:0,t:1,air:1};skateLand();body.trick=null;
+  // Isolate scoring from takeoff history on a flat road; tricks are caught before touchdown.
+  mode='walk';room=null;[px,py]=citySourcePoint(41.5,73.5);body.z=body.vz=body.impactV=0;SK.airPose=null;SKB.pitch=SKB.roll=0;SKB.fakie=false;
+  const land=(v,turn,trick='kickflip',caughtAt=.7)=>{SKB.pitch=SKB.roll=0;SK.bail=0;SK.combo=null;SK.stance=1;SK.v=v;SK.dir=0;a=turn;SK.spin=0;SK.popT=T-.5;
+   body.trick={name:trick,flip:1,turn:0,t:1,air:1,caughtAt};skateLand();body.trick=null;
    const out={bail:SK.bail>0,msg:msgText,v:SK.v,dir:SK.dir,a,stance:SK.stance};SK.bail=0;return out;};
-  const clean=land(.3,0),slow=land(.3,Math.PI/2),fast=land(.7,Math.PI/2),still=land(.05,Math.PI/2),back=land(.3,Math.PI*.7);
+  const clean=land(.3,0),slow=land(.3,Math.PI/6),fast=land(.7,Math.PI/2),still=land(.05,Math.PI/6),back=land(.3,Math.PI*.95),late=land(.3,0,'kickflip',.99);
   const pts=s=>+(s.msg.match(/(\d+)$/)||[])[1];
-  return {clean,slow,fast,still,back,half:pts(slow)/pts(clean)};
+  return {clean,slow,fast,still,back,late,half:pts(slow)/pts(clean)};
  });
+ assert.ok(!r.clean.bail&&/^KICKFLIP!/.test(r.clean.msg),'aligned caught landing is clean');
+ assert.ok(r.late.bail,'catching just before touchdown must bail');
  assert.ok(!r.slow.bail&&/^SLOPPY KICKFLIP!/.test(r.slow.msg),JSON.stringify(r.slow));
  assert.ok(Math.abs(r.half-.5)<.05,'half points: '+r.half);
- assert.ok(Math.abs(r.slow.v-.15)<1e-9&&Math.abs(r.slow.dir-r.slow.a)<1e-9,'scrubs speed, rolls the way the board points: '+JSON.stringify(r.slow));
- assert.ok(r.back.stance===-1&&!r.back.bail,'more than a quarter round: rides away switch');
+ assert.ok(Math.abs(r.slow.v-.21)<1e-9&&Math.abs(r.slow.dir-r.slow.a)<1e-9,'scrubs speed, rolls the way the board points: '+JSON.stringify(r.slow));
+ assert.ok(r.back.stance===-1&&!r.back.bail,'reverse alignment: rides away switch');
  assert.ok(r.fast.bail&&/^BAIL!/.test(r.fast.msg),'fast: still a bail');
  assert.ok(!r.still.bail&&/^SLOPPY KICKFLIP!/.test(r.still.msg)&&r.still.v===.05,'barely moving: no bail, no speed lost, scored on its own (sloppy)');
 }));
 
 test('combos need you moving: a trick landed standing still scores alone, stopping or waiting too long banks the combo, and a bar shows the time left',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
-  mode='walk';room=null;clearInventory();carryItem({id:'skateboard',uses:0});fx.skating=true;body.z=body.vz=0;SK.lastT=T;
-  const land=(v,trick)=>{SK.bail=0;SK.v=v;SK.dir=a;SK.spin=0;SK.popT=T-.4;body.trick={name:trick,flip:1,turn:0,t:1,air:1};skateLand();body.trick=null;};
+  mode='walk';room=null;clearInventory();carryItem({id:'skateboard',uses:0});fx.skating=true;[px,py]=citySourcePoint(41.5,73.5);body.z=body.vz=body.impactV=0;SK.airPose=null;SKB.pitch=SKB.roll=0;SKB.fakie=false;SK.lastT=T;
+  const land=(v,trick)=>{SK.bail=0;SK.v=v;SK.dir=a;SK.spin=0;SK.popT=T-.4;body.trick={name:trick,flip:1,turn:0,t:1,air:1,caughtAt:.7};skateLand();body.trick=null;};
   const out={};
   SK.combo=null;SK.score=0;land(.05,'kickflip');out.standing={score:SK.score,combo:!!SK.combo,msg:msgText};
   SK.score=0;land(.5,'kickflip');T+=.5;land(.5,'heelflip');out.moving={names:SK.combo?.names.length,score:SK.score,msg:msgText};
