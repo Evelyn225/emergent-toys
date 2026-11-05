@@ -38,14 +38,14 @@ function addSkatePool(x,y,options,pool) {
 function enterSkatePool(hit) {
   const [vx,vy,vz]=skateContactVelocity(hit.n);
   SK.transition={o:hit.o,u:hit.u,axis:hit.axis,velocity:[vx,vy,vz],vs:0,va:0,yawOff:Math.cos(a-SK.dir)<0?Math.PI:0};
-  skateManualEnd();body.trick=null;body.vz=0;
+  SK.airRoute=null;skateManualEnd();body.trick=null;body.vz=0;
 }
 function skatePoolPlace(C) {
   const f=skatePoolFrame(C.o,C.u,C.axis),n=f.n;
   px=worldCoord(C.o.x+f.x);py=worldCoord(C.o.y+f.y);
   SKB.v=C.velocity.slice();SK.v=Math.hypot(SKB.v[0],SKB.v[1]);
   if(SK.v>1e-7)SK.dir=Math.atan2(SKB.v[1],SKB.v[0]);
-  a=SK.dir+C.yawOff;SKB.yaw=SKB.riderYaw=a;
+  C.yawOff=skateFaceTravel()?Math.PI:0;SKB.yaw=SKB.riderYaw=a;
   SKB.pitch=Math.atan2(SKB.v[2]*(C.yawOff?-1:1),SK.v||1e-9);
   const up=skateBoardAxes(a,SKB.pitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
   const dot=(v,w)=>v.reduce((s,k,i)=>s+k*w[i],0);
@@ -80,14 +80,7 @@ function stepSkatePool(C,dt,push,brake,steer) {
   C.velocity=len>1e-9?v.map(k=>k*Math.sqrt(energy)/len):v;
   C.vs=du;C.va=rate*next.r;
   skatePoolPlace(C);
-  if(coping){
-    // Round the lip into a vertical takeoff while keeping motion along the
-    // curved coping. This returns an air to the pool instead of its outer deck.
-    const length=Math.hypot(next.tv[0],next.tv[1]),tangent=[next.tv[0]/length,next.tv[1]/length];
-    const along=SKB.v[0]*tangent[0]+SKB.v[1]*tangent[1],total=SKB.v.reduce((s,k)=>s+k*k,0);
-    SKB.v=[tangent[0]*along,tangent[1]*along,Math.sqrt(Math.max(0,total-along*along))];
-    skateTransitionRelease(C);
-  }
+  if(coping)skateTransitionRelease(C,true);
   else if(C.u<p.flat/2-.006){SK.transition=null;body.z=body.vz=0;SKB.contact='ground';}
   return true;
 }

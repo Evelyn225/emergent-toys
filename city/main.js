@@ -62,7 +62,7 @@ onkeydown = e => {
   if (onFoot && !sleep) {
     if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
     if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
-    if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
+    if (e.code === 'KeyC' && !skatingNow()) { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyX') dropHere();
     if (e.code === 'KeyP') startPee();
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
@@ -136,7 +136,7 @@ addEventListener('mouseup', e => {
   if (e.button === 0) K.MouseUse = 0;
   if (e.button === 2) {
     gun.aimHeld = false;
-    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) { const played = skateMouseEnd(); if (!played && !skateAir()) jump(flickTrick(f.x, f.y)); } }
+    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) { const balancing=!!(SK.grind||SK.manual),played = skateMouseEnd(); if (!played && !balancing && !skateAir()) jump(flickTrick(f.x, f.y)); } }
   }
 });
 function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; flick = null; skateInputReset(); }

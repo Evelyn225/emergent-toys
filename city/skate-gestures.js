@@ -23,7 +23,7 @@ function createSkateGesture() {
       armed=true;
     }
     if (!load) {
-      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0 };
+      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
       return null;
     }
     if (radius > .45) {
@@ -33,18 +33,23 @@ function createSkateGesture() {
     if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
     if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
+    let acrossCentre=false;
     if (radius > .45) {
+      load.finish=[x,y];
       const angle = Math.atan2(y, x), delta = Math.atan2(Math.sin(angle - load.angle), Math.cos(angle - load.angle));
       // A straight flick crosses the centre and jumps angle by pi. Only a
       // series of small angular steps is a scoop, never that single jump.
-      if (Math.abs(delta) < 1.2) load.arc += delta;
+      if (Math.abs(delta) < 1.2) load.arc += delta;else acrossCentre=true;
       load.angle = angle;
     }
     const arc = Math.abs(load.arc), curled = arc > 1.3;
-    const forward = y * load.side < -.6;
+    load.maxArc=Math.max(load.maxArc,arc);
+    const forward = radius>.6&&y*load.side<-.35&&-y*load.side/radius>.45;
+    const quarterFlip=acrossCentre&&arc>.8&&arc<2.3&&forward&&x*Math.sign(load.arc)>.3;
     const released = radius < .25;
-    if ((!curled && forward) || (curled && released && arc > 2.3)) {
-      const key = arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+    const heelScoop=load.maxArc>2.3&&arc>1.6&&arc<3.9&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
+    if (quarterFlip || (!curled && forward) || (curled && released && (arc > 2.3||heelScoop))) {
+      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
       load = null; armed = false;firedAt=t;centred=false; return result;
     }
@@ -56,11 +61,11 @@ function createSkateGesture() {
 }
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
-const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
 function skateInputReset() {
-  Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+  Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
 }
@@ -101,15 +106,23 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   SK_INPUT.steerTarget=pad?controllerStick(pad.axes[0],pad.axes[1],dead)[0]:0;
   SK_INPUT.padActive=!!pad;if(!fixedSteer)skateSteerStep(dt);
   SK_INPUT.back=left[1]>(SK_INPUT.back ? .3 : .55)&&Math.abs(left[0])<left[1]*.7;
-  SK_INPUT.push = button(0) > .5 || button(2) > .5; SK_INPUT.mongo = button(2) > .5;
-  SK_INPUT.brake = button(1) > .5; SK_INPUT.grabL = button(6); SK_INPUT.grabR = button(7);
+  SK_INPUT.forward=left[1]<-(SK_INPUT.forward ? .3 : .55)&&Math.abs(left[0])<-left[1]*.7;
+  SK_INPUT.push = button(0) > .5 || button(2) > .5 || SK_INPUT.forward; SK_INPUT.mongo = button(2) > .5;
+  SK_INPUT.brake = button(1) > .5; SK_INPUT.airOut=button(7)>.55;
+  SK_INPUT.grabL = button(6);
+  // RT chooses an exit while riding a transition. That same held trigger
+  // cannot become an accidental grab (and landing bail) during its flight.
+  SK_INPUT.grabR = (SK.transition||SK.airRoute?.out) ? 0 : button(7);
+  // Capture a stopped push before a render-only frame can move the chase
+  // camera. This keeps the initial direction identical above 120 render Hz.
+  if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
   if (!pad) SK_INPUT.padGesture.reset();
   else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25))SK_INPUT.padGesture.reset();
   else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
   if (SK_INPUT.mouseHeld) {
     const relax = Math.exp(-dt / .15);
-    if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map(v => v * relax);
+    if (T - SK_INPUT.mouseT > .015) SK_INPUT.mouse = SK_INPUT.mouse.map((v,i) => SK.manual&&i===1?v:v*relax);
     if (skateGesturePlay(SK_INPUT.mouseGesture.sample(...SK_INPUT.mouse, T))) SK_INPUT.fired = true;
   }
 }

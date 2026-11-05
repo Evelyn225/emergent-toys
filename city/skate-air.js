@@ -32,6 +32,7 @@ function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
 // their orientation into a later kerb hop. Preserve the pop, then prepare for
 // the surface below the predicted touchdown without changing trick rotation.
 function skateAirBegin(source = null) {
+  SK.airRoute=null;
   const up=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).up;
   SK.airPose={t:T,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
   SK.airNormal=up.slice();SK.airSource=source;
@@ -41,15 +42,29 @@ function skateAirBase(dt,pitch,roll) {
   if(!pose)return {pitch,roll};
   const height=Math.max(0,body.z/10),vz=body.vz/10;
   const flight=clamp((vz+Math.sqrt(vz*vz+2*.98*height))/.98,0,1.2);
-  const x=worldCoord(px+Math.cos(SK.dir)*SK.v*flight),y=worldCoord(py+Math.sin(SK.dir)*SK.v*flight);
-  const surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
+  const [x,y]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*flight),worldCoord(py+Math.sin(SK.dir)*SK.v*flight));
+  let surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
+  if(SK.airRoute&&!SK.airRoute.out&&SK.airRoute.o.bowl){
+    // A steep wall can meet the descending board well before a flat-ground
+    // flight-time estimate. Predict the first contact on the assisted path.
+    if(!pose.landNormal||T-(pose.landT||0)>.05){
+      const origin=skateGround(px,py)+height,horizon=clamp((vz+Math.sqrt(vz*vz+2*.98*(height+.5)))/.98,.1,2.5);
+      const sample=t=>{const [qx,qy]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*t),worldCoord(py+Math.sin(SK.dir)*SK.v*t));return {x:qx,y:qy,gap:origin+vz*t-.49*t*t-skateGround(qx,qy)};};
+      let lo=0,point=null;
+      for(let i=1;i<=12;i++){let hi=horizon*i/12;const q=sample(hi);if(q.gap<=0){for(let j=0;j<5;j++){const mid=(lo+hi)/2;if(sample(mid).gap>0)lo=mid;else hi=mid;}point=sample(hi);break;}lo=hi;}
+      if(point){surface=skateSurface(point.x,point.y);hit=skateTransitionAt(point.x,point.y,surface.h);}
+      pose.landNormal=(hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n).slice();pose.landT=T;
+    }
+    surface={...surface,n:pose.landNormal};hit=null;
+  }
   const target=hit&&Math.abs(hit.o.z0+hit.at.z-surface.h)<.025?hit.n:surface.n,ease=1-Math.exp(-14*dt);
   pose.normal=pose.normal.map((v,i)=>v+(target[i]-v)*ease);
   const length=Math.hypot(...pose.normal)||1,n=pose.normal.map(v=>v/length);
   const blend=clamp((T-pose.t-.10)/.32,0,1),smooth=blend*blend*(3-2*blend);
   // With no requested body spin, catch toward travel in the landing plane.
   // Choose the nearer forward/switch axis so a vert return does not turn 180.
-  if(Math.abs(SK.spin||0)<.05&&!K.KeyA&&!K.KeyD&&!SK_INPUT.steer){
+  const finishedSpin=Math.abs(SK.spin||0)<.05||SK.airRoute&&!SK.airRoute.out&&Math.abs(Math.sin(SK.spin||0))<Math.sin(.25);
+  if(finishedSpin&&!K.KeyA&&!K.KeyD&&!SK_INPUT.steer){
     const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
     const vn=v.reduce((sum,k,i)=>sum+k*n[i],0),travel=v.map((k,i)=>k-vn*n[i]);
     if(Math.hypot(travel[0],travel[1])>1e-4){
@@ -105,13 +120,14 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = SK_INPUT.mouseHeld ? SK_INPUT.mouse[1] : SK_INPUT.right[1];
-  const held = Math.abs(depth) > .18 && Math.abs(depth) < .55 && SK.v > .06;
+  const depth = skateBalanceStick()[1];
+  const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
+  const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
   if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
   const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
-  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - SK.steer * .12 - m.balV * 1.6) * dt;
-  m.bal += m.balV * dt;
+  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 + SK.steer * 3.2 - m.balV * (1.6+Math.abs(SK.steer)*2)) * dt;
+  m.bal += (m.balV+SK.steer*.6+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }
   if (m.bal > 1) return skateManualEnd(true);
   SKB.pitch += (m.nose ? -1 : 1) * (.15 + m.bal * .12);

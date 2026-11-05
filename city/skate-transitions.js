@@ -60,7 +60,7 @@ function enterSkateTransition(hit) {
   const v=skateContactVelocity(hit.n);
   SK.transition = { o, u, axis, vs: v.reduce((sum,x,i)=>sum+x*tangent[i],0),
     va: -v[0]*o.s+v[1]*o.c };
-  skateManualEnd(); body.trick = null; body.vz = 0;
+  SK.airRoute=null;skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateTransitionPlace(C) {
   if (C.o.bowl) return skateBowlPlace(C);
@@ -78,16 +78,67 @@ function skateTransitionPlace(C) {
   body.ground = skateGround(px, py); body.groundMode = mode;
   return at;
 }
+const skateAirOutHeld=()=>!!(K.KeyC||SK_INPUT.airOut);
+function skateTransitionLipVelocity(C,out) {
+  const o=C.o,v=SKB.v;
+  let tangent=o.bowl?[-Math.sin(C.axis),Math.cos(C.axis),0]:[-o.s,o.c,0];
+  if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,C.axis).tv,len=Math.hypot(...tv);tangent=tv.map(x=>x/len);}
+  const sign=o.bowl?1:Math.sign(C.u)||1,outward=[tangent[1]*sign,-tangent[0]*sign,0];
+  const along=v.reduce((sum,x,i)=>sum+x*tangent[i],0),across=Math.sqrt(Math.max(0,v.reduce((sum,x)=>sum+x*x,0)-along*along));
+  // Deliberate exits trade part of the vertical air for outward carry; they
+  // do not add speed. Ordinary coping airs point up along the coping.
+  const exit=out?across*.4:0,up=Math.sqrt(Math.max(0,across*across-exit*exit));
+  return [tangent[0]*along+outward[0]*exit,tangent[1]*along+outward[1]*exit,up];
+}
+// Return airs follow the inside of curved coping instead of drifting across
+// its tangent onto the deck. Only the boundary is assisted; inward travel and
+// height remain free. The same map predicts the landing plane for catches.
+function skateAirRoutePoint(x,y) {
+  const route=SK.airRoute,o=route?.o;
+  if(!o?.bowl||route.out)return [x,y];
+  const dx=rel(x-o.x),dy=rel(y-o.y),axis=Math.atan2(dy,dx),radius=Math.hypot(dx,dy);
+  const lip=o.pool?skatePoolFloor(o,axis)+o.profile.tip-o.profile.flat/2:o.profile.tip;
+  const inside=Math.max(.01,lip-.015);
+  return radius>inside?[worldCoord(o.x+dx*inside/radius),worldCoord(o.y+dy*inside/radius)]:[x,y];
+}
+function skateTransitionAirStep() {
+  if(!skateAir()||!SK.airRoute||SK.airRoute.out)return;
+  const [x,y]=skateAirRoutePoint(px,py);
+  if(Math.hypot(rel(x-px),rel(y-py))<1e-10)return;
+  px=x;py=y;
+  const o=SK.airRoute.o,axis=Math.atan2(rel(py-o.y),rel(px-o.x));
+  let tangent=[-Math.sin(axis),Math.cos(axis)];
+  if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,axis).tv,len=Math.hypot(tv[0],tv[1]);tangent=[tv[0]/len,tv[1]/len];}
+  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,outward=[tangent[1],-tangent[0]],out=vx*outward[0]+vy*outward[1];
+  if(out>0){const v=[vx-outward[0]*out,vy-outward[1]*out];SK.v=Math.hypot(...v);if(SK.v>1e-9)SK.dir=Math.atan2(v[1],v[0]);}
+}
 function skateTransitionRelease(C, coping = false) {
-  const v = SKB.v.slice(), at = skateProfilePoint(C.o.profile, C.u);
-  skateAirBegin(C.o);
-  // The coping rounds the last few degrees of the mini's truncated quarter
-  // into a vertical takeoff. Preserve energy and axis motion for the return.
-  if (coping) { v[0] = -(C.o.bowl ? Math.sin(C.axis) : C.o.s) * C.va; v[1] = (C.o.bowl ? Math.cos(C.axis) : C.o.c) * C.va; v[2] = Math.abs(C.vs); }
+  const out=skateAirOutHeld(),v=coping?skateTransitionLipVelocity(C,out):SKB.v.slice();
+  skateAirBegin(C.o);SK.airRoute={o:C.o,out};
   SK.transition = null; SK.leftTransition = C.o; SK.leftTransitionT = T;
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
+  if(C.o.bowl&&!out){
+    const z=SKB.p[2];skateTransitionAirStep();
+    SKB.p=[px,py,z];SKB.v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,v[2]];
+    body.ground=skateGround(px,py);body.groundMode=mode;body.z=Math.max(.002,(z-body.ground)*10);
+  }
+}
+function skateTransitionKick(C,dt,push) {
+  const at=skateProfilePoint(C.o.profile,C.u),speed=C.velocity?Math.hypot(...C.velocity):Math.hypot(C.vs,C.va);
+  skatePushFromRest(push,speed);SK.kicking=false;
+  if(!push||at.theta>.25||speed>=SK_PHYS.pushCap||SK.charge>=0||skateGestureLoaded()){SK.kick=0;return;}
+  const before=SK.kick;SK.kick+=dt/.7;SK.kicking=true;
+  if(before<.15&&SK.kick>=.15){
+    const facing=a+(SK.pushFakie?Math.PI:0),n=SKB.surf?.n||[0,0,1];
+    const v=skateTangentVelocity([Math.cos(facing),Math.sin(facing),0],n),burst=SK_PHYS.pushBurst*(1-speed/SK_PHYS.pushCap);
+    if(C.velocity)C.velocity=C.velocity.map((x,i)=>x+v[i]*burst);
+    else if(C.o.bowl){C.vs+=(v[0]*Math.cos(C.axis)*at.tx+v[1]*Math.sin(C.axis)*at.tx+v[2]*at.tz)*burst;C.va+=(-v[0]*Math.sin(C.axis)+v[1]*Math.cos(C.axis))*burst;}
+    else{C.vs+=(v[0]*C.o.c*at.tx+v[1]*C.o.s*at.tx+v[2]*at.tz)*burst;C.va+=(-v[0]*C.o.s+v[1]*C.o.c)*burst;}
+    if(actx)sfxSkate('push');
+  }
+  if(SK.kick>=1)SK.kick-=1;
 }
 function stepSkateTransition(dt, push, brake, steer) {
   if (mode !== 'walk') { SK.transition = null; return false; }
@@ -129,6 +180,7 @@ function stepSkateTransition(dt, push, brake, steer) {
     enterSkateTransition(hit); C = SK.transition;
     if (drop) { C.vs = -Math.sign(C.u) * .1; if(C.o.pool){const f=skatePoolFrame(C.o,C.u,C.axis);C.velocity=f.tu.map(v=>-.1*v);} }
   }
+  skateTransitionKick(C,dt,push);
   if (C.o.bowl) return stepSkateBowl(C, dt, push, brake, steer);
   const at = skateProfilePoint(C.o.profile, C.u), p = C.o.profile;
   const direction = Math.sign(C.vs) || -Math.sign(C.u) || 1;
@@ -137,13 +189,7 @@ function stepSkateTransition(dt, push, brake, steer) {
   // ordinary pushes retain the same cadence and taper as flat riding.
   if (push && !skateGestureLoaded() && SK.charge < 0) {
     C.vs += direction * .06 * Math.sin(at.theta * 2) * dt;
-    if (at.theta < .2 && Math.abs(C.vs) < SK_PHYS.pushCap) {
-      const before = SK.kick; SK.kick += dt / .7;
-      if (before < .15 && SK.kick >= .15) C.vs += direction * SK_PHYS.pushBurst * (1 - Math.abs(C.vs) / SK_PHYS.pushCap);
-      if (SK.kick >= 1) SK.kick -= 1;
-      SK.kicking = true;
-    }
-  } else SK.kick = 0;
+  }
   const turn = steer * 1.6 * dt, c = Math.cos(turn), s = Math.sin(turn), vs = C.vs * c - C.va * s;
   C.va = (C.vs * s + C.va * c) * Math.exp(-.04 * dt); C.vs = vs; a += turn;
   // Coping stalls: hold down for rock-to-fakie, up for an axle stall;
@@ -167,7 +213,9 @@ function stepSkateTransition(dt, push, brake, steer) {
   return true;
 }
 function skateTransitionPop(trick, gesture) {
-  const C = SK.transition, n = SKB.surf.n, v = SKB.v.slice();
+  const C = SK.transition, out=skateAirOutHeld(),n = out?[0,0,1]:SKB.surf.n;
+  const at=skateProfilePoint(C.o.profile,C.u);
+  const v=out&&at.theta>.7?skateTransitionLipVelocity(C,true):SKB.v.slice();
   skateTransitionRelease(C);
   const pop = POP_V * (gesture?.strength ?? 1) / 10;
   const velocity = v.map((x, i) => x + n[i] * pop);

@@ -100,3 +100,21 @@ Serial ABAB measurements at 177x66 with a connected idle controller measured
 main medians of 12.6/13.0 ms and this branch at 14.0/13.0 ms in the fixed park
 view (about 5% higher on average). These are local observations, not a frame-rate
 guarantee. All geometry/rendering changes from the other agent remain intact.
+
+Bowl/ramp exits: hold RT at takeoff to air out (keyboard C; touch Air out).
+The exit choice lasts through the flight and reserves RT, so it cannot
+accidentally become a held grab. Ordinary airs favor returning inside the bowl.
+Left-stick forward is an alternate push input. A push from rest follows camera
+look and can start fakie; looking around while moving does not steer velocity.
+
+Balance: A/D moves the gauge left/right; right stick X balances grinds and Y
+adjusts nose/tail pressure. A/D also corrects manuals; stick Y controls manual
+pitch. Hold right mouse and drag for equivalent controls. Release a balance
+drag without popping; Space or an intentional load/flick still pops out.
+
+Additional trick gestures (from a tail load):
+- Half-circle right, flick upper-right, release: varial heelflip.
+- Quarter-circle left, flick upper-right: hardflip.
+- Quarter-circle right, flick upper-left: inward heelflip.
+Partial diagonal flicks now register kickflips/heelflips without needing a
+full-depth vertical component. Existing half/three-quarter scoops are retained.

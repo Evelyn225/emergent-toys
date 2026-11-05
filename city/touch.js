@@ -118,7 +118,7 @@ function touchActions() {
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     touchHeldActions(out);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
-    out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
+    out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']);if(skatingNow())out.push(['Air out','KeyC','hold']); // (on the board: swipe off it for a trick, see bindFlick)
   }
   if (e) out.push([e, 'KeyE', 'main']);
   return out;

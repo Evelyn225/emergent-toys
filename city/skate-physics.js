@@ -62,6 +62,19 @@ function skateContactVelocity(n) {
   const dot=v.reduce((sum,x,i)=>sum+x*n[i],0);
   return v.map((x,i)=>x-dot*n[i]);
 }
+// Nearest parallel board heading preserves a rollback as fakie. Camera look
+// chooses the travel direction only when starting a push from rest.
+function skateFaceTravel() {
+  if(SK.v>.005)a+=mod(SK.dir-a+Math.PI/2,Math.PI)-Math.PI/2;
+  return Math.cos(SK.dir-a)<0;
+}
+function skatePushFromRest(push,speed) {
+  if(!push){SK.pushFakie=null;return;}
+  if(speed>=.025||SK.pushFakie!=null)return;
+  const facing=typeof third!=='undefined'&&third&&Number.isFinite(SK.camYaw)?SK.camYaw:a+(SK.look||0);
+  SK.dir=facing;a+=mod(facing-a+Math.PI/2,Math.PI)-Math.PI/2;
+  SK.pushFakie=Math.cos(facing-a)<0;
+}
 const skateRideYaw=()=>a+(SK.slide||0)*Math.PI/2;
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
@@ -86,13 +99,15 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   vx += SK_PHYS.gravity * n[2] * n[0] * dt;
   vy += SK_PHYS.gravity * n[2] * n[1] * dt;
   let speed = Math.hypot(vx, vy);
+  skatePushFromRest(push,speed);
   SK.kicking = false;
   SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
   if (push && SK.charge < 0 && !skateGestureLoaded() && speed < SK_PHYS.pushCap) {
     const before = SK.kick; SK.kick += dt / .7; SK.kicking = true;
     if (before < .15 && SK.kick >= .15) {
       const burst = SK_PHYS.pushBurst * Math.max(0, 1 - speed / SK_PHYS.pushCap);
-      vx += Math.cos(a) * burst; vy += Math.sin(a) * burst;
+      const facing=a+(SK.pushFakie?Math.PI:0);
+      vx += Math.cos(facing) * burst; vy += Math.sin(facing) * burst;
       if (actx) sfxSkate('push');
     }
     if (SK.kick >= 1) SK.kick -= 1;

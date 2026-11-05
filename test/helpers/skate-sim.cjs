@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function skateSim(script, { fixed=false,frameTimes=null,dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, physics = {}, transition = null, bowl = null, position = [0, 0] } = {}) {
+function skateSim(script, { look=0,fixed=false,frameTimes=null,dt = 1 / 60, speed = 0, yaw = 0, ground = () => 0, physics = {}, transition = null, bowl = null, position = [0, 0] } = {}) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .05) throw new RangeError('dt must be in (0, .05] seconds');
   for (const frame of script) {
     if (!Number.isInteger(frame.frames ?? 1) || (frame.frames ?? 1) < 1) throw new RangeError('frames must be a positive integer');
@@ -32,12 +32,12 @@ function skateSim(script, { fixed=false,frameTimes=null,dt = 1 / 60, speed = 0, 
   for (const file of ['controller-core.js', 'moves.js', 'skate-paths.js', 'skate-gestures.js', 'skate-physics.js', 'skate-air.js', 'skate-transitions.js', 'skate-bowl.js', 'skate-pool-render.js', 'skate-pool.js', 'skate-bails.js', 'skate.js', 'skate-clock.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../city', file), 'utf8'), ctx, { filename: file });
   }
-  Object.assign(ctx, { initialSpeed: speed, initialYaw: yaw, dt, fixed,physics, transition, bowl, position });
-  vm.runInContext('stepRoof=()=>{};Object.assign(SK_PHYS,physics); if(transition)addSkateTransition(0,0,transition); if(bowl){if(bowl.pool)addSkatePool(0,0,bowl,bowl.pool);else addSkateBowl(0,0,bowl);} [px,py]=position; a=SK.dir=initialYaw; SK.v=initialSpeed; SK.lastT=T;', ctx);
+  Object.assign(ctx, { initialLook:look,initialSpeed: speed, initialYaw: yaw, dt, fixed,physics, transition, bowl, position });
+  vm.runInContext('stepRoof=()=>{};Object.assign(SK_PHYS,physics); if(transition)addSkateTransition(0,0,transition); if(bowl){if(bowl.pool)addSkatePool(0,0,bowl,bowl.pool);else addSkateBowl(0,0,bowl);} [px,py]=position; a=SK.dir=initialYaw; SK.v=initialSpeed;SK.look=initialLook; SK.lastT=T;', ctx);
   const trajectory = [];
   const snapshot = () => JSON.parse(vm.runInContext(`JSON.stringify({
     t:T-100, x:px, y:py, z:body.z, worldZ:SKB.p[2], contact:SKB.contact, velocity:SKB.v, vz:body.vz, speed:SK.v, yaw:a,
-    slide:SK.slide||0,sliding:!!SK.sliding,boardYaw:SKB.yaw,heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
+    airOut:SK.airRoute?.out??null,slide:SK.slide||0,sliding:!!SK.sliding,boardYaw:SKB.yaw,heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
     board:skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll), normal:SKB.surf?.n,
     trick:body.trick?.name??null, manual:!!SK.manual, fakie:SKB.fakie, vx:SKB.v[0], vy:SKB.v[1], score:SK.score, combo:SK.combo?.pts??0, comboNames:SK.combo?.names??[]
   })`, ctx));

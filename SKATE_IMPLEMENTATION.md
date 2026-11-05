@@ -265,3 +265,84 @@ Local serial ABAB against main `4ff9292`, 177×66 at 1170 px, live stationary
 (60 measured frames after 20 warm-up frames). No material regression in this
 scene; these are local observations. Day and night powerslide poses were
 inspected: both shoes remain over the sideways deck.
+
+## Deliberate air-outs, coping slides and fakie rollbacks
+
+Hold C or controller RT when popping from a transition or crossing its coping
+to air out onto the deck. The choice latches at takeoff; releasing the control
+or spinning does not switch the flight. A normal coping air keeps upward and
+along-coping momentum. A deliberate exit trades part of the upward component
+for outward carry without adding speed; an exit pop adds its impulse upward.
+RT remains reserved during that exit flight, avoiding an accidental held grab
+and automatic landing bail. Q/E and LT still grab; RT can grab in other airs.
+C retains sit/crouch behavior off the skateboard. Touch has a held Air out
+button. Pause controls, skating help and the controller hint show the mapping;
+the HUD identifies RETURN INSIDE versus AIR OUT: DECK.
+
+Ordinary bowl flights have an inside-coping boundary assist, which removes
+outward horizontal velocity at that boundary. It prevents a tangent across a
+curved rim from accidentally becoming a deck exit; inward motion and height
+remain free. Catch preparation samples the first ballistic contact with the
+bank on that assisted path, cached at 20 Hz, rather than assuming flat ground.
+Completed half/full spins can settle toward the new landing direction after
+steering is released. An incomplete sideways spin still needs correction.
+
+A normal return air remains protected from catching its own coping. An
+intentional exit can catch it while descending; a crosswise board accepts a
+wider travel approach and selects a boardslide. Separate deck approaches also
+work. Ascending hops cannot catch. Grind capture still clears the bowl bank.
+
+Bowl contact now follows the nearest forward/switch board heading instead of
+forcing a 180 when travel reverses, so a straight rollback comes down fakie;
+angled carving still follows the curve. Starting a push from rest uses camera
+look to choose travel, preserving whichever parallel board heading is nearest.
+W, gamepad A and forward on the left stick push; once moving, camera look does
+not redirect momentum. Transition bottoms receive the same timed kick bursts.
+
+Validation includes C/RT equivalence and latched choice, clean deck exits,
+spinning return airs around four pockets of a curvy pool, round/oval rollbacks,
+camera-facing regular/fakie starts and deliberate coping boardslides. Real-game
+browser checks exercise keyboard C, RT plus a right-stick gesture, RT grab
+suppression, return boundaries, both coping approaches, controls and a camera-
+facing fakie push. Existing coping protection, bowl access and shared controller
+browser regressions pass.
+
+## Balance response and complete controller trick mapping
+
+A/D now moves the visible balance mark left/right, rather than the previous
+reversed sign. Grind corrections have a direct response plus stronger damped
+control, so they can counter an already outward-moving wobble within 300 ms.
+Manual A/D correction is now substantial too. Right-stick X and held right-drag
+mouse X also balance grinds; fore/aft pressure changes grind variation without
+lateral balance input unexpectedly changing its family. Manuals retain stick
+or mouse Y pitch control, accept a wider correction range after starting, and
+keep a held mouse's fore/aft pressure instead of decaying it away. Releasing a
+balance drag no longer triggers the mouse's fallback ollie.
+
+The gesture recognizer previously never emitted DS, WA or WD, leaving varial
+heelflips, hardflips and inward heelflips inaccessible through controller/mouse
+gestures. It now recognizes: right half-scoop, upper-right flick and release
+for DS; left quarter-scoop then upper-right flick for WA; right quarter-scoop
+then upper-left flick for WD. Diagonal flicks use direction plus magnitude,
+so a partial stick at 45 degrees can kickflip/heelflip. Existing ollie, shuvit,
+360 shuvit, 360 flip, nollie and late-flip behavior remains covered. Pause
+controls describe the full mapping.
+
+Regression tests cover recovering an outward-drifting grind using A, right
+stick and sustained mouse movement; manual gauge direction/correction;
+100 noisy paths per newly mapped combination; partial diagonal flicks; and
+all nine tricks through the actual shared controller adapter. The existing
+browser grind fixtures now counter the meter with A when it is right of centre,
+and deliberately push D to lose balance, matching the corrected visible sign.
+
+A stopped push's direction is captured when input is observed, before any
+render-only frame can advance the chase camera. This keeps camera-facing starts
+consistent at render rates above the 120 Hz simulation tick. Bowl-air camera
+framing now follows the rider's height, keeping deliberate exits in view.
+
+Local serial ABAB on actual curvy-pool airs against main `4ff9292`, 177×66 at
+1170 px: median main/branch frame times 15.5/17.5 ms, then 19.0/17.4 ms. Results
+vary between runs; the mean of the two medians differs by about 1.2%. These are
+local observations, not an FPS guarantee. Return/exit poses and route indicators
+were inspected, including the revised air framing. Isolated route, rollback,
+camera-push, RT-selection and coping-protection mutations fail regressions.
