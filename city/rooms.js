@@ -805,7 +805,7 @@ function subwayTrainModel(k){
           const radius=Math.hypot(HIT.u,HIT.w-z),rim=radius>R*.82,hub=radius<R*.24;
           BG[i]=C(GRAY,(rim?3.3:hub?2:1)+L*(rim?.4:.2));set(i,' ',0);return true;
         },m);
-        cylinder('wheel-flange',u,side*(track.gauge/2-.06),R+.025,.008,metal,m);
+        cylinder('wheel-flange',u,side*(track.gauge/2-.057),R+.025,.008,metal,m);
         add('axle-bearing',u,side*.52,.09,.085,z-.07,-.42,dark,m);
       }
     }

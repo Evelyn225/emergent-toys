@@ -38,6 +38,8 @@ test('moving subway cars retain round wheelsets on both rails, joined bearings, 
     const bottom=p.ray(b.x,b.y,-2,0,0,1,b);if(Math.abs(-2+bottom-S.railTop)>1e-8)bad.push('wheel tread does not contact rail head');
     const corner=p.ray(b.x+S.wheelRadius*.9,b.y-.2,b.centerZ+S.wheelRadius*.9,0,1,0,b);if(corner>=0)bad.push('square wheel silhouette');
     const face=p.ray(b.x,b.y-.2,b.centerZ,0,1,0,b);if(!(face>0))bad.push('open wheel face');else{CH[0]='?';p.shade(0,face,10);if(CH[0]!==' ')bad.push('wheel glyph');}
+    const flange=parts.find(q=>q.box.subwayRole==='wheel-flange'&&q.box.subwayAxle===b.subwayAxle&&q.box.subwaySide===b.subwaySide)?.box;
+    if(!flange||Math.abs(flange.y-b.y)>flange.hw+b.hw||Math.abs(flange.y-rail)-flange.hw<=.035)bad.push('flange misses tread or strikes rail head');
     const bearing=parts.find(q=>q.box.subwayRole==='axle-bearing'&&q.box.subwayBogie===b.subwayBogie&&q.box.subwayAxle===b.subwayAxle&&q.box.subwaySide===b.subwaySide)?.box;
     const axle=parts.find(q=>q.box.subwayRole==='axle'&&q.box.subwayAxle===b.subwayAxle)?.box;
     if(!bearing||!axle||bearing.z0>b.centerZ||bearing.z1<b.centerZ||axle.hw<Math.abs(bearing.y-S.centre)+bearing.hw)bad.push('axle disconnected from bearing');
