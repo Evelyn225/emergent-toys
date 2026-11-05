@@ -8,7 +8,7 @@ function skatePoseCapture(){
     vz:body.vz,trick:body.trick?{...body.trick}:null,contact:SKB.contact,
     surf:SKB.surf?{...SKB.surf,n:SKB.surf.n.slice()}:null,airNormal:SK.airNormal?.slice(),
     transition:SK.transition?{...SK.transition}:null,grind:SK.grind?{...SK.grind}:null,
-    speed:SK.v,dir:SK.dir,kick:SK.kick,kicking:SK.kicking,
+    speed:SK.v,dir:SK.dir,kick:SK.kick,kicking:SK.kicking,mongo:SK.mongo,pushFakie:SK.pushFakie,
     bail:SK.bail,bailAt:SK.bailAt?.slice(),bailData:SK.bailData?{...SK.bailData,board:SK.bailData.board.slice()}:null,
     camera:SK_CLOCK.camera?.slice()};
 }
@@ -86,12 +86,12 @@ function skateFixedRender(draw){
   const pose=skatePoseSample();if(!pose)return draw(null);
   const position=[px,py,a,pitch],oldBody={z:body.z,vz:body.vz,trick:body.trick};
   const oldBoard={p:SKB.p,v:SKB.v,riderYaw:SKB.riderYaw,yaw:SKB.yaw,pitch:SKB.pitch,roll:SKB.roll,surf:SKB.surf,contact:SKB.contact};
-  const old={};for(const key of ['v','dir','kick','airNormal','transition','grind','bail','bailAt','bailData','renderContact'])old[key]=SK[key];
+  const old={};for(const key of ['v','dir','kick','kicking','mongo','pushFakie','airNormal','transition','grind','bail','bailAt','bailData','renderContact'])old[key]=SK[key];
   try{
     [px,py]=pose.p;a=pose.a;pitch=pose.camera?pose.camera[4]:pose.pitch;
     body.z=(pose.p[2]-skateGround(px,py))*10;body.vz=pose.vz;body.trick=pose.trick;
     Object.assign(SKB,{p:pose.p,v:pose.v,riderYaw:pose.a,...pose.orientation,surf:pose.surf,contact:pose.contact});
-    Object.assign(SK,{v:pose.speed,dir:pose.dir,kick:pose.kick,airNormal:pose.airNormal,transition:pose.transition,grind:pose.grind,
+    Object.assign(SK,{v:pose.speed,dir:pose.dir,kick:pose.kick,kicking:pose.kicking,mongo:pose.mongo,pushFakie:pose.pushFakie,airNormal:pose.airNormal,transition:pose.transition,grind:pose.grind,
       bail:pose.bail,bailAt:pose.bailAt,bailData:pose.bailData,renderContact:pose.contact});
     return draw(pose.camera);
   }finally{[px,py,a,pitch]=position;Object.assign(body,oldBody);Object.assign(SKB,oldBoard);Object.assign(SK,old);}

@@ -69,12 +69,22 @@ function skateFaceTravel() {
   return Math.cos(SK.dir-a)<0;
 }
 function skatePushFromRest(push,speed) {
-  if(!push){SK.pushFakie=null;return;}
-  if(speed>=.025||SK.pushFakie!=null)return;
+  if(!push||skateAir()){SK.pushFakie=null;return;}
+  if(SK.pushFakie!=null)return;
+  if(speed>=.025){SK.pushFakie=Math.cos(SK.dir-a)<0;return;}
   const facing=typeof third!=='undefined'&&third&&Number.isFinite(SK.camYaw)?SK.camYaw:a+(SK.look||0);
   SK.dir=facing;a+=mod(facing-a+Math.PI/2,Math.PI)-Math.PI/2;
   SK.pushFakie=Math.cos(facing-a)<0;
 }
+function skatePushReady(push,speed) {
+  if(!push){SK.pushCruise=false;return false;}
+  // Tapered kicks plus drag settle below the hard push cap. Coast at the
+  // top of that sustainable cruising range, then resume after a clear drop.
+  if(speed>=SK_PHYS.pushCap*.88)SK.pushCruise=true;
+  else if(speed<SK_PHYS.pushCap*.84)SK.pushCruise=false;
+  return !SK.pushCruise&&speed<SK_PHYS.pushCap;
+}
+const skatePushYaw=(yaw=a)=>yaw+((SK.pushFakie??SKB.fakie)?Math.PI:0);
 const skateRideYaw=()=>a+(SK.slide||0)*Math.PI/2;
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
@@ -102,11 +112,11 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   skatePushFromRest(push,speed);
   SK.kicking = false;
   SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
-  if (push && SK.charge < 0 && !skateGestureLoaded() && speed < SK_PHYS.pushCap) {
+  if (skatePushReady(push,speed) && SK.charge < 0 && !skateGestureLoaded()) {
     const before = SK.kick; SK.kick += dt / .7; SK.kicking = true;
     if (before < .15 && SK.kick >= .15) {
       const burst = SK_PHYS.pushBurst * Math.max(0, 1 - speed / SK_PHYS.pushCap);
-      const facing=a+(SK.pushFakie?Math.PI:0);
+      const facing=skatePushYaw();
       vx += Math.cos(facing) * burst; vy += Math.sin(facing) * burst;
       if (actx) sfxSkate('push');
     }

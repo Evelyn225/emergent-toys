@@ -118,3 +118,8 @@ Additional trick gestures (from a tail load):
 - Quarter-circle right, flick upper-left: inward heelflip.
 Partial diagonal flicks now register kickflips/heelflips without needing a
 full-depth vertical component. Existing half/three-quarter scoops are retained.
+
+Repeated push presses while already fakie now keep pushing tail-first, with the
+push/mongo pose facing that kick. From-rest camera-facing selection still applies.
+Holding push near sustainable cruising speed idles the kick animation and coasts;
+kicks resume after a speed drop, with hysteresis to avoid rapid toggling.

@@ -36452,12 +36452,22 @@ function skateFaceTravel() {
   return Math.cos(SK.dir-a)<0;
 }
 function skatePushFromRest(push,speed) {
-  if(!push){SK.pushFakie=null;return;}
-  if(speed>=.025||SK.pushFakie!=null)return;
+  if(!push||skateAir()){SK.pushFakie=null;return;}
+  if(SK.pushFakie!=null)return;
+  if(speed>=.025){SK.pushFakie=Math.cos(SK.dir-a)<0;return;}
   const facing=typeof third!=='undefined'&&third&&Number.isFinite(SK.camYaw)?SK.camYaw:a+(SK.look||0);
   SK.dir=facing;a+=mod(facing-a+Math.PI/2,Math.PI)-Math.PI/2;
   SK.pushFakie=Math.cos(facing-a)<0;
 }
+function skatePushReady(push,speed) {
+  if(!push){SK.pushCruise=false;return false;}
+  // Tapered kicks plus drag settle below the hard push cap. Coast at the
+  // top of that sustainable cruising range, then resume after a clear drop.
+  if(speed>=SK_PHYS.pushCap*.88)SK.pushCruise=true;
+  else if(speed<SK_PHYS.pushCap*.84)SK.pushCruise=false;
+  return !SK.pushCruise&&speed<SK_PHYS.pushCap;
+}
+const skatePushYaw=(yaw=a)=>yaw+((SK.pushFakie??SKB.fakie)?Math.PI:0);
 const skateRideYaw=()=>a+(SK.slide||0)*Math.PI/2;
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
@@ -36485,11 +36495,11 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   skatePushFromRest(push,speed);
   SK.kicking = false;
   SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
-  if (push && SK.charge < 0 && !skateGestureLoaded() && speed < SK_PHYS.pushCap) {
+  if (skatePushReady(push,speed) && SK.charge < 0 && !skateGestureLoaded()) {
     const before = SK.kick; SK.kick += dt / .7; SK.kicking = true;
     if (before < .15 && SK.kick >= .15) {
       const burst = SK_PHYS.pushBurst * Math.max(0, 1 - speed / SK_PHYS.pushCap);
-      const facing=a+(SK.pushFakie?Math.PI:0);
+      const facing=skatePushYaw();
       vx += Math.cos(facing) * burst; vy += Math.sin(facing) * burst;
       if (actx) sfxSkate('push');
     }
@@ -36818,10 +36828,10 @@ function skateTransitionRelease(C, coping = false) {
 function skateTransitionKick(C,dt,push) {
   const at=skateProfilePoint(C.o.profile,C.u),speed=C.velocity?Math.hypot(...C.velocity):Math.hypot(C.vs,C.va);
   skatePushFromRest(push,speed);SK.kicking=false;
-  if(!push||at.theta>.25||speed>=SK_PHYS.pushCap||SK.charge>=0||skateGestureLoaded()){SK.kick=0;return;}
+  if(!skatePushReady(push,speed)||at.theta>.25||SK.charge>=0||skateGestureLoaded()){SK.kick=0;return;}
   const before=SK.kick;SK.kick+=dt/.7;SK.kicking=true;
   if(before<.15&&SK.kick>=.15){
-    const facing=a+(SK.pushFakie?Math.PI:0),n=SKB.surf?.n||[0,0,1];
+    const facing=skatePushYaw(),n=SKB.surf?.n||[0,0,1];
     const v=skateTangentVelocity([Math.cos(facing),Math.sin(facing),0],n),burst=SK_PHYS.pushBurst*(1-speed/SK_PHYS.pushCap);
     if(C.velocity)C.velocity=C.velocity.map((x,i)=>x+v[i]*burst);
     else if(C.o.bowl){C.vs+=(v[0]*Math.cos(C.axis)*at.tx+v[1]*Math.sin(C.axis)*at.tx+v[2]*at.tz)*burst;C.va+=(-v[0]*Math.sin(C.axis)+v[1]*Math.cos(C.axis))*burst;}
@@ -37205,7 +37215,7 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
   if(typeof skateFixedReset==='function')skateFixedReset();
-  Object.assign(SK,{pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,reversing:false});
+  Object.assign(SK,{kick:0,kicking:false,mongo:false,pushCruise:false,pushFakie:null,airRoute:null,slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,reversing:false});
   skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];SKB.surf=null;
 }
 
@@ -37307,7 +37317,7 @@ function skateLand() {
   // Touchdown dissipates impact; it must not become forward speed next tick.
   const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
   SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
-  SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;
+  SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.pushFakie=null;
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
@@ -37548,7 +37558,7 @@ function drawSkater() {
   if (!SK.transition || SKB.surf.n[2] > .5) drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
   const roll = skateAir() ? SKB.roll : 0, yaw = SKB.yaw, nose = skateAir() ? SKB.pitch : 0;
   drawSkateBoard(vx, vy, z, yaw, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
-  const air = skateAir(), pushing = SK.kicking && !air, ang = (air?skateView.a:SKB.yaw) + (pushing ? 0 : SK.stance * Math.PI / 2);
+  const air = skateAir(), pushing = SK.kicking && !air, ang = pushing ? skatePushYaw(SKB.yaw) : (air?skateView.a:SKB.yaw) + SK.stance * Math.PI / 2;
   const pose = air ? 'skateair' : SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
   const contactNormal = SK.transition ? SKB.surf.n : air ? SK.airNormal || [0,0,1] : SKB.surf?.n || [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
   drawSkaterFigure(vx + contactNormal[0] * footOffset, vy + contactNormal[1] * footOffset, z + contactNormal[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, contactNormal, skaterFootAnchor(pose,look));
@@ -37563,7 +37573,7 @@ function skatePoseCapture(){
     vz:body.vz,trick:body.trick?{...body.trick}:null,contact:SKB.contact,
     surf:SKB.surf?{...SKB.surf,n:SKB.surf.n.slice()}:null,airNormal:SK.airNormal?.slice(),
     transition:SK.transition?{...SK.transition}:null,grind:SK.grind?{...SK.grind}:null,
-    speed:SK.v,dir:SK.dir,kick:SK.kick,kicking:SK.kicking,
+    speed:SK.v,dir:SK.dir,kick:SK.kick,kicking:SK.kicking,mongo:SK.mongo,pushFakie:SK.pushFakie,
     bail:SK.bail,bailAt:SK.bailAt?.slice(),bailData:SK.bailData?{...SK.bailData,board:SK.bailData.board.slice()}:null,
     camera:SK_CLOCK.camera?.slice()};
 }
@@ -37641,12 +37651,12 @@ function skateFixedRender(draw){
   const pose=skatePoseSample();if(!pose)return draw(null);
   const position=[px,py,a,pitch],oldBody={z:body.z,vz:body.vz,trick:body.trick};
   const oldBoard={p:SKB.p,v:SKB.v,riderYaw:SKB.riderYaw,yaw:SKB.yaw,pitch:SKB.pitch,roll:SKB.roll,surf:SKB.surf,contact:SKB.contact};
-  const old={};for(const key of ['v','dir','kick','airNormal','transition','grind','bail','bailAt','bailData','renderContact'])old[key]=SK[key];
+  const old={};for(const key of ['v','dir','kick','kicking','mongo','pushFakie','airNormal','transition','grind','bail','bailAt','bailData','renderContact'])old[key]=SK[key];
   try{
     [px,py]=pose.p;a=pose.a;pitch=pose.camera?pose.camera[4]:pose.pitch;
     body.z=(pose.p[2]-skateGround(px,py))*10;body.vz=pose.vz;body.trick=pose.trick;
     Object.assign(SKB,{p:pose.p,v:pose.v,riderYaw:pose.a,...pose.orientation,surf:pose.surf,contact:pose.contact});
-    Object.assign(SK,{v:pose.speed,dir:pose.dir,kick:pose.kick,airNormal:pose.airNormal,transition:pose.transition,grind:pose.grind,
+    Object.assign(SK,{v:pose.speed,dir:pose.dir,kick:pose.kick,kicking:pose.kicking,mongo:pose.mongo,pushFakie:pose.pushFakie,airNormal:pose.airNormal,transition:pose.transition,grind:pose.grind,
       bail:pose.bail,bailAt:pose.bailAt,bailData:pose.bailData,renderContact:pose.contact});
     return draw(pose.camera);
   }finally{[px,py,a,pitch]=position;Object.assign(body,oldBody);Object.assign(SKB,oldBoard);Object.assign(SK,old);}

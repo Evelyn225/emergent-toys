@@ -346,3 +346,40 @@ vary between runs; the mean of the two medians differs by about 1.2%. These are
 local observations, not an FPS guarantee. Return/exit poses and route indicators
 were inspected, including the revised air framing. Isolated route, rollback,
 camera-push, RT-selection and coping-protection mutations fail regressions.
+
+## Fakie push direction and coasting at cruising speed
+
+A new push while already rolling now chooses forward/fakie from actual travel,
+so releasing and pressing W again while fakie reinforces tail-first motion.
+Previously only a push started from rest could choose fakie; later kicks fell
+back to the nose direction. From-rest camera selection is unchanged. Airborne
+input and touchdown clear the kick direction so a later ground push chooses
+from its new travel rather than retaining a stale takeoff heading.
+
+The authored push/mongo figure now faces the same direction as the kick while
+the board keeps its heading and stance. Its planted shoe remains anchored to
+the deck. Interpolated drawing snapshots include kick direction, pushing state
+and mongo state, so rendering cannot show a different kick from the simulated
+one. Dismount clears kick phase and pushing flags immediately.
+
+Holding push coasts at the top of the sustainable flat-speed range, then resumes
+only after a clear speed drop. The thresholds are 88% / 84% of the push cap
+(currently 10.56 / 10.08 m/s). This reflects the existing tapered kick/drag curve,
+which settles below the hard 12 m/s cap, rather than waiting for an unreachable
+exact cap. The hard cap, burst strength and camera distance remain unchanged.
+Ground and transition-bottom kicks use the same hysteresis.
+
+Validation scripts repeat separate regular/fakie and mongo kicks at several
+headings, assert tail-first acceleration without a board turn, and verify idle
+coasting and resumed kicks from one held input. A real-browser regression checks
+both the drawn figure heading and impulse direction, preserves the planted
+push/mongo leg, and catches stale phase across resets. The former test expecting
+W to reverse an already moving fakie run now explicitly checks the requested
+behavior: stop first to choose a new direction; moving pushes reinforce travel.
+
+The browser push/pose, fixed-clock, shoe-anchor and reverse/bowl cases pass.
+Removing the moving-fakie direction choice or the cruise gate fails its isolated
+regression. Local serial ABAB against exact main `4ff9292`, 177×66 at 1170 px:
+median main/branch frame times were 13.0/13.0 ms, then 13.5/13.4 ms (60 frames
+after 20 warm-up frames). Regular/fakie push poses were inspected. These local
+observations are not an FPS guarantee.

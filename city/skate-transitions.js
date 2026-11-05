@@ -128,10 +128,10 @@ function skateTransitionRelease(C, coping = false) {
 function skateTransitionKick(C,dt,push) {
   const at=skateProfilePoint(C.o.profile,C.u),speed=C.velocity?Math.hypot(...C.velocity):Math.hypot(C.vs,C.va);
   skatePushFromRest(push,speed);SK.kicking=false;
-  if(!push||at.theta>.25||speed>=SK_PHYS.pushCap||SK.charge>=0||skateGestureLoaded()){SK.kick=0;return;}
+  if(!skatePushReady(push,speed)||at.theta>.25||SK.charge>=0||skateGestureLoaded()){SK.kick=0;return;}
   const before=SK.kick;SK.kick+=dt/.7;SK.kicking=true;
   if(before<.15&&SK.kick>=.15){
-    const facing=a+(SK.pushFakie?Math.PI:0),n=SKB.surf?.n||[0,0,1];
+    const facing=skatePushYaw(),n=SKB.surf?.n||[0,0,1];
     const v=skateTangentVelocity([Math.cos(facing),Math.sin(facing),0],n),burst=SK_PHYS.pushBurst*(1-speed/SK_PHYS.pushCap);
     if(C.velocity)C.velocity=C.velocity.map((x,i)=>x+v[i]*burst);
     else if(C.o.bowl){C.vs+=(v[0]*Math.cos(C.axis)*at.tx+v[1]*Math.sin(C.axis)*at.tx+v[2]*at.tz)*burst;C.va+=(-v[0]*Math.sin(C.axis)+v[1]*Math.cos(C.axis))*burst;}
