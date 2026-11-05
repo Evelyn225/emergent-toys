@@ -554,7 +554,7 @@
         <div class="toggle-row">
           <span class="t-label">Shimmer</span>
           <label class="pill-toggle">
-            <input type="checkbox" id="shimmerToggle" checked>
+            <input type="checkbox" id="shimmerToggle">
             <div class="pill-track"></div>
           </label>
         </div>
@@ -678,7 +678,7 @@
     };
     const COLUMNS = [40, 60, 80, 100, 130, 160, 200, 240];   // detail 1..8
 
-    const settings = { detail: 4, ramp: 'classic', contrast: 1, invert: false, shimmer: true };
+    const settings = { detail: 4, ramp: 'classic', contrast: 1, invert: false, shimmer: false };
     let source = null;          // { kind: 'image', bitmap, name } or { kind: 'camera', video, stream }
     let grid = null;            // { cols, rows, idx: Uint8Array } from the last sample
     let cameraTimer = 0, shimmerTimer = 0;
