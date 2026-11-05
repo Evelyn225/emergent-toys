@@ -10,7 +10,7 @@
 let pilot = null, airEye = 0, airCamYaw = 0;
 const airMouse = [0, 0]; // the mouse's say on the controls: it springs back
 const airStick = [0, 0]; // the touch stick's (touch.js): held where the thumb has it, back to the middle when it lets go
-const airInput = k => clamp(airMouse[k] + airStick[k], -1, 1);
+const airInput = k => clamp(airMouse[k] + airStick[k] + controllerAxis(0,k?'flightY':'flightX'), -1, 1);
 const flyable = c => c.type === 'airliner' ? c.state === 'parked' : !!PLANE_TYPES[c.type].price; // (an airliner: only one at its gate)
 // the parked aircraft you're standing by (at its cockpit door, its side), or null
 function nearAircraft() {
@@ -126,7 +126,7 @@ function stepFlight(dt) {
   if (wreckCam) return stepWreck(dt);
   const c = pilot, T_ = PLANE_TYPES[c.type];
   const turn = clamp((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + airInput(0), -1, 1);
-  const thr = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0);
+  const thr = controllerAxis((K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0),'throttle');
   const nose = clamp((K.ArrowUp ? 1 : 0) - (K.ArrowDown ? 1 : 0) - airInput(1), -1, 1);
   const lift = clamp((K.KeyR || K.Space ? 1 : 0) - (K.KeyF ? 1 : 0) + (T_.heli ? nose : 0), -1, 1);
   for (const k of [0, 1]) airMouse[k] *= Math.exp(-6 * dt);

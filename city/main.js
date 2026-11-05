@@ -1,5 +1,6 @@
 // Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
+  if(typeof CONTROLLER!=='undefined'&&CONTROLLER.dispatching)return;
   if ((e.code === 'Escape' && !NATIVE_MOUSE_APP) || paused || mouseCaptured()) return;
   lockMouse();
 }
@@ -232,11 +233,11 @@ function drive(dt) {
   const oldA = a;
   // A wreck disables controls but need not have the PIT manoeuvre's spin timer.
   const c = me, spun = c.spunT > T, disabled = spun || c.wrecked;
-  const f = disabled ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = disabled ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const f = disabled ? 0 : controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = disabled ? 0 : controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
   const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (c.spunT - T) / 2.5; }
-  if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * dt;
-  else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * dt;
+  if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * f * dt;
+  else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * -f * dt;
   else c.v *= 1 - 0.7 * dt;
   c.v = clamp(c.v, -0.5, (K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2) * carPower(c)); // (a car you own goes as fast as its model; a smoking one doesn't)
   if (c.wrecked) c.v = 0;
@@ -307,12 +308,13 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  controllerTick(clamp((t-t0)/1000,0,.05));
   if (paused) { t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
   if (freecam) { transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
-  T += dt; msgT -= dt;
+  T += dt;CONTROLLER.sampleT=T; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
   const fishingCompetitionLine=stepFishingCompetition(dt);
   if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
@@ -334,7 +336,7 @@ function loop(t) {
   else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1); // sprint 29 km/h (the board: skate.js), cars top out at 79
-    const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+    const f = controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'forward'), s = controllerAxis((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0),'side');
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up

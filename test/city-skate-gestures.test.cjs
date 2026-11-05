@@ -62,3 +62,34 @@ test('scripted gamepad input drives the production adapter; steering never pops'
   assert.equal(t.at(-1).trick, 'kickflip');
   assert.ok(t.at(-1).vz > 0);
 });
+
+test('human-speed scoops recognise at 30, 60 and 120 Hz without duplicate rebound pops',()=>{
+ for(const hz of [30,60,120])for(const key of ['S','AS','360S']){
+  const g=make(),turn=key==='S'?Math.PI:key==='AS'?Math.PI*1.5:-Math.PI*1.5;
+  const events=[],count=Math.round(hz*.32);let t=0;
+  for(let i=0;i<=count;i++){
+   const angle=Math.PI/2+turn*i/count,ev=g.sample(Math.cos(angle),Math.sin(angle),t+=1/hz);if(ev)events.push(ev);
+  }
+  const ev=g.sample(0,0,t+=1/hz);if(ev)events.push(ev);
+  assert.equal(events.length,1,`${hz}/${key}`);assert.equal(events[0].key,key);
+  for(const [x,y]of [[0,-.3],[0,.7],[0,-.7],[0,0]]){const bounce=g.sample(x,y,t+=.008);assert.equal(bounce,null);}
+ }
+});
+
+for(const hz of [30,60,120])test(`at ${hz} Hz, human-speed partial-stick gestures remain at least 95% correct`,()=>{
+ for(const key of Object.keys(paths)){
+  let correct=0;
+  for(let run=0;run<100;run++){
+   const g=make(),events=[],scoop=['S','AS','360S'].includes(key),count=Math.round(hz*(scoop?.32:.14)),depth=.85+random()*.15;let t=0;
+   for(let i=0;i<=count;i++){
+    let x,y;
+    if(scoop){const turn=key==='S'?Math.PI:key==='AS'?Math.PI*1.5:-Math.PI*1.5,angle=Math.PI/2+turn*i/count;x=Math.cos(angle);y=Math.sin(angle);}
+    else {const path=paths[key],at=i/count*(path.length-1),j=Math.min(path.length-2,Math.floor(at)),f=at-j;x=path[j][0]+(path[j+1][0]-path[j][0])*f;y=path[j][1]+(path[j+1][1]-path[j][1])*f;}
+    const event=g.sample(x*depth+(random()-.5)*.04,y*depth+(random()-.5)*.04,t+=1/hz);if(event)events.push(event);
+   }
+   const event=g.sample(0,0,t+1/hz);if(event)events.push(event);
+   if(events.length===1&&events[0].key===key)correct++;
+  }
+  assert.ok(correct>=95,`${hz}/${key}: ${correct}/100`);
+ }
+});

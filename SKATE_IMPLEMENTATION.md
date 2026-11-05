@@ -192,3 +192,13 @@ back versus brake, returning to forward travel, jumps up/across/down both real
 pools through Space and the shared action, outside-wall approaches including a
 long displacement, and stair/deck access. Existing grind, powerslide, ramp,
 gesture and camera-related simulation checks are retained.
+
+
+## Controller feel and shared controls
+
+`CONTROLLER_IMPLEMENTATION.md` documents the shared controller layer, mappings,
+new settings and validation. Skate steering has a softer radial response and
+short attack/release easing, while right-stick gestures remain unfiltered.
+Human-speed scoops work across 30/60/120 Hz, diagonal steering does not trigger
+backwards braking, and camera/grab input cannot accidentally become a trick.
+The same controller now reaches movement, vehicles, menus and activities.

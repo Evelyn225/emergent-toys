@@ -128,7 +128,7 @@ function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
 }
 function stepSea(dt) { // throttle and helm; the shore and everything else in the water stops you
   const b = sea, k = BOAT_KINDS[b.kind];
-  const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const f = controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
   const cruise = K.ShiftLeft || K.ShiftRight, limit = cruise ? k.cruise : k.top;
   if (f > 0) {
     // Releasing cruise eases back to harbour speed instead of cutting velocity instantly.
@@ -136,11 +136,11 @@ function stepSea(dt) { // throttle and helm; the shore and everything else in th
     else {
       let acceleration = cruise ? 1.6 : 1;
       if (b.v < 0) acceleration = 2;
-      b.v = Math.min(limit, b.v + k.acc * acceleration * dt);
+      b.v = Math.min(limit, b.v + k.acc * acceleration * f * dt);
     }
   } else if (f < 0) {
     const brake = b.v > 0 ? k.acc * 1.5 + Math.max(0, b.v - k.top) * .75 : k.acc * .6;
-    b.v -= brake * dt;
+    b.v -= brake * -f * dt;
   } else b.v *= Math.max(0, 1 - .35 * dt);
   b.v = clamp(b.v, -k.top * .3, k.cruise);
   const turn = s * dt * k.turn * clamp(Math.abs(b.v) / .35, .25, 1) * Math.min(1, k.top / Math.max(k.top, Math.abs(b.v))) * (b.v < -.02 ? -1 : 1);

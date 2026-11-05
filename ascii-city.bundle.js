@@ -296,7 +296,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1 };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
@@ -485,6 +485,49 @@ function railwayAtDistance(distance) {
   const at=mod(distance,RAILWAY_LENGTH);let lo=0,hi=RAILWAY_ARC.length-1;
   while(hi-lo>1){const mid=(lo+hi)>>1;if(RAILWAY_ARC[mid]<at)lo=mid;else hi=mid;}
   return railwaySample(lo,(at-RAILWAY_ARC[lo])/(RAILWAY_ARC[hi]-RAILWAY_ARC[lo]));
+}
+// Shared analog math. Trick sticks use a linear response; steering/look have
+// a softer centre and reach full travel before a worn stick hits its gate.
+function controllerStick(x=0,y=0,dead=.15,power=1.45){
+  if(!Number.isFinite(x)||!Number.isFinite(y))return [0,0];
+  const radius=Math.hypot(x,y);
+  if(radius<=dead)return [0,0];
+  const magnitude=Math.pow(Math.min(1,(radius-dead)/(.95-dead)),power);
+  return [x/radius*magnitude,y/radius*magnitude];
+}
+function controllerEase(value,target,dt){
+  const tau=value*target<0||Math.abs(target)<Math.abs(value) ? .035 : .065;
+  const next=value+(target-value)*(1-Math.exp(-Math.max(0,Math.min(.1,dt))/tau));
+  return Math.abs(next)<.002&&Math.abs(target)<.002?0:next;
+}
+function controllerThreshold(index){return index===6||index===7 ? .18 : .5;}
+function controllerButton(pad,index){
+  const button=pad?.buttons?.[index],value=button?.value??(button?.pressed?1:0);
+  return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0;
+}
+const CONTROLLER={pad:null,id:null,sampleT:-Infinity,keys:new Set(),realKeys:new Set(),buttons:[],blocked:[],
+  context:'',root:null,focus:0,repeat:0,direction:'',time:0,active:false,lastUsed:-Infinity,
+  motion:{forward:0,side:0,steer:0,throttle:0,flightX:0,flightY:0},sheet:null,keyboard:null};
+function controllerAxis(key,axis){return key||CONTROLLER.motion[axis]||0;}
+
+// Short contact cues; unsupported or permission-denied actuators are optional.
+function controllerRumble(kind,impact=0){
+  if(!CONTROLLER.active||!CONTROLLER.pad||typeof settings!=='undefined'&&settings.controllerVibration===false||typeof paused!=='undefined'&&paused)return;
+  const actuator=CONTROLLER.pad.vibrationActuator||CONTROLLER.pad.hapticActuators?.[0];
+  if(!actuator)return;
+  const cues={pop:[.14,.04,45],grind:[.2,.08,60],land:[.12,Math.min(.55,.08+Math.abs(impact)*.045),85],bail:[.25,Math.min(.7,.25+Math.abs(impact)*.3),150]};
+  const cue=cues[kind];if(!cue)return;
+  const [weakMagnitude,strongMagnitude,duration]=cue;
+  CONTROLLER.rumbleActuator=actuator;CONTROLLER.rumbleUntil=(typeof performance==='undefined'?Date.now():performance.now())+duration;
+  try{
+    const effect=actuator.playEffect?actuator.playEffect('dual-rumble',{startDelay:0,duration,weakMagnitude,strongMagnitude}):actuator.pulse?.(Math.max(weakMagnitude,strongMagnitude),duration);
+    return Promise.resolve(effect).catch(()=>{});
+  }catch(_){}
+}
+function controllerStopRumble(){
+  const actuator=CONTROLLER.rumbleActuator;if(!actuator||!CONTROLLER.rumbleUntil)return;
+  CONTROLLER.rumbleUntil=0;
+  try{const stop=actuator.reset?actuator.reset():actuator.playEffect?.('dual-rumble',{startDelay:0,duration:1,weakMagnitude:0,strongMagnitude:0});Promise.resolve(stop).catch(()=>{});}catch(_){}
 }
 // Moderate loss of tyre grip follows lingering wetness and accumulated, exposed snow.
 function roadTraction(x, y) {
@@ -10117,7 +10160,7 @@ function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
 }
 function stepSea(dt) { // throttle and helm; the shore and everything else in the water stops you
   const b = sea, k = BOAT_KINDS[b.kind];
-  const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const f = controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
   const cruise = K.ShiftLeft || K.ShiftRight, limit = cruise ? k.cruise : k.top;
   if (f > 0) {
     // Releasing cruise eases back to harbour speed instead of cutting velocity instantly.
@@ -10125,11 +10168,11 @@ function stepSea(dt) { // throttle and helm; the shore and everything else in th
     else {
       let acceleration = cruise ? 1.6 : 1;
       if (b.v < 0) acceleration = 2;
-      b.v = Math.min(limit, b.v + k.acc * acceleration * dt);
+      b.v = Math.min(limit, b.v + k.acc * acceleration * f * dt);
     }
   } else if (f < 0) {
     const brake = b.v > 0 ? k.acc * 1.5 + Math.max(0, b.v - k.top) * .75 : k.acc * .6;
-    b.v -= brake * dt;
+    b.v -= brake * -f * dt;
   } else b.v *= Math.max(0, 1 - .35 * dt);
   b.v = clamp(b.v, -k.top * .3, k.cruise);
   const turn = s * dt * k.turn * clamp(Math.abs(b.v) / .35, .25, 1) * Math.min(1, k.top / Math.max(k.top, Math.abs(b.v))) * (b.v < -.02 ? -1 : 1);
@@ -28138,7 +28181,7 @@ function drawHeliModel(o, F, s, look) {
 let pilot = null, airEye = 0, airCamYaw = 0;
 const airMouse = [0, 0]; // the mouse's say on the controls: it springs back
 const airStick = [0, 0]; // the touch stick's (touch.js): held where the thumb has it, back to the middle when it lets go
-const airInput = k => clamp(airMouse[k] + airStick[k], -1, 1);
+const airInput = k => clamp(airMouse[k] + airStick[k] + controllerAxis(0,k?'flightY':'flightX'), -1, 1);
 const flyable = c => c.type === 'airliner' ? c.state === 'parked' : !!PLANE_TYPES[c.type].price; // (an airliner: only one at its gate)
 // the parked aircraft you're standing by (at its cockpit door, its side), or null
 function nearAircraft() {
@@ -28254,7 +28297,7 @@ function stepFlight(dt) {
   if (wreckCam) return stepWreck(dt);
   const c = pilot, T_ = PLANE_TYPES[c.type];
   const turn = clamp((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + airInput(0), -1, 1);
-  const thr = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0);
+  const thr = controllerAxis((K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0),'throttle');
   const nose = clamp((K.ArrowUp ? 1 : 0) - (K.ArrowDown ? 1 : 0) - airInput(1), -1, 1);
   const lift = clamp((K.KeyR || K.Space ? 1 : 0) - (K.KeyF ? 1 : 0) + (T_.heli ? nose : 0), -1, 1);
   for (const k of [0, 1]) airMouse[k] *= Math.exp(-6 * dt);
@@ -29591,6 +29634,21 @@ function buildPause() {
       <h2>mouse</h2>
       ${slider('sensitivity', 'Sensitivity', 0.25, 3, 0.05)}
       ${toggle('invertY', 'Invert Y')}
+      <h2>controller</h2>
+      ${slider('controllerDeadzone', 'Stick dead zone', .05, .35, .01)}
+      ${slider('controllerLook', 'Look speed', .25, 3, .05)}
+      ${slider('controllerSteering', 'Steering response', .5, 2, .1)}
+      ${toggle('controllerInvertY', 'Invert controller look')}
+      ${toggle('controllerVibration', 'Controller vibration')}
+      <div class="keys">
+        <b>left / right stick</b><span>move / look; left click: run or cruise; right click: camera</span>
+        <b>A · X · B</b><span>jump / action · interact · crouch / back; menus: A choose, B back</span>
+        <b>Y · Start · View</b><span>all current actions · pause · city map</span>
+        <b>LT / RT</b><span>aim / use held item; vehicles: brake / power; skating: grabs</span>
+        <b>D-pad</b><span>up: inventory; down: actions; left / right: quick slots; activities: directions</span>
+        <b>menus</b><span>D-pad or left stick selects; left / right adjusts sliders and slots; right stick scrolls. A on a text field opens controller typing.</span>
+        <b>skating</b><span>A pushes, X mongo, B brakes; left stick carves, right stick flicks. Hold LB to look with the right stick; RB interacts. Y includes getting off the board.</span>
+      </div>
       <h2>skateboard controls</h2>
       <div class="keys">
         <b>A / D · left stick</b><span>carve, lean on a grind, spin in the air</span>
@@ -36092,6 +36150,7 @@ function startPathGrind(path, distance, dir) {
   SKB.roll=0;SKB.pitch=Math.atan2(at.tangent[2]*dir,Math.hypot(at.tangent[0],at.tangent[1]));
   SKB.yaw=a;SKB.surf={h:at.p[2],n:[0,0,1],kind:'grind',material:path.material,ref:path};
   body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
+  controllerRumble('grind');
   if (actx) sfxSkate('scrape', .9); say(name.toUpperCase() + '!', 1);
 }
 function stepPathGrind(dt) {
@@ -36130,8 +36189,8 @@ function skateStick(x = 0, y = 0, dead = .15) {
   return [x * scale, y * scale];
 }
 function createSkateGesture() {
-  let samples = [], load = null, armed = true, lastTime = -Infinity;
-  const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; };
+  let samples = [], load = null, armed = true, lastTime = -Infinity, firedAt=-Infinity, centred=false;
+  const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; firedAt=-Infinity;centred=false; };
   function sample(x, y, t) {
     if (![x, y, t].every(Number.isFinite)) return null;
     if (t < lastTime) reset();
@@ -36139,7 +36198,11 @@ function createSkateGesture() {
     samples.push({ x, y, t });
     samples = samples.filter(p => t - p.t <= .4).slice(-128);
     const radius = Math.hypot(x, y);
-    if (!armed) { if (radius < .25) armed = true; return null; }
+    if(!armed){
+      if(radius<.25)centred=true;
+      if(!centred||t-firedAt<.09)return null;
+      armed=true;
+    }
     if (!load) {
       if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0 };
       return null;
@@ -36150,7 +36213,7 @@ function createSkateGesture() {
     }
     if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
-    if (t - load.t > .18) { load = null; return null; }
+    if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
     if (radius > .45) {
       const angle = Math.atan2(y, x), delta = Math.atan2(Math.sin(angle - load.angle), Math.cos(angle - load.angle));
       // A straight flick crosses the centre and jumps angle by pi. Only a
@@ -36162,9 +36225,9 @@ function createSkateGesture() {
     const forward = y * load.side < -.6;
     const released = radius < .25;
     if ((!curled && forward) || (curled && released && arc > 2.3)) {
-      const key = arc > 4.2 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+      const key = arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
-      load = null; armed = false; return result;
+      load = null; armed = false;firedAt=t;centred=false; return result;
     }
     // Passing through centre is part of a straight flick; retain the load
     // until the 180 ms deadline instead of cancelling at that midpoint.
@@ -36174,11 +36237,11 @@ function createSkateGesture() {
 }
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
-const SK_INPUT = { steer: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+const SK_INPUT = { steer: 0, steerTarget: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
 function skateInputReset() {
-  Object.assign(SK_INPUT, { steer: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+  Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
 }
@@ -36211,15 +36274,19 @@ function skatePollInput(dt) {
   // Exactly one Gamepad API read per simulation frame. No synthetic key presses,
   // so disconnecting a pad cannot leave the keyboard stuck down.
   let pads = [];
-  try { pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
+  try { pads = typeof controllerSkatePad==='function'&&CONTROLLER.sampleT===T ? [controllerSkatePad()] : typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
   const pad = Array.from(pads).find(p => p?.connected && (p.mapping === 'standard' || !p.mapping));
   const button = i => pad?.buttons[i]?.value || (pad?.buttons[i]?.pressed ? 1 : 0);
-  const left=pad?skateStick(pad.axes[0],pad.axes[1]):[0,0];
-  SK_INPUT.steer=left[0];SK_INPUT.back=left[1]>.35;
+  const dead=typeof settings==='undefined' ? .15 : clamp(Number(settings.controllerDeadzone)||.15,.05,.35);
+  const left=pad?skateStick(pad.axes[0],pad.axes[1],dead):[0,0];
+  SK_INPUT.steerTarget=pad?controllerStick(pad.axes[0],pad.axes[1],dead)[0]:0;
+  SK_INPUT.steer=pad?controllerEase(SK_INPUT.steer,SK_INPUT.steerTarget,dt*(typeof settings==='undefined'?1:clamp(Number(settings.controllerSteering)||1,.5,2))):0;
+  SK_INPUT.back=left[1]>(SK_INPUT.back ? .3 : .55)&&Math.abs(left[0])<left[1]*.7;
   SK_INPUT.push = button(0) > .5 || button(2) > .5; SK_INPUT.mongo = button(2) > .5;
   SK_INPUT.brake = button(1) > .5; SK_INPUT.grabL = button(6); SK_INPUT.grabR = button(7);
-  SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3]) : [0, 0];
+  SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
   if (!pad) SK_INPUT.padGesture.reset();
+  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25))SK_INPUT.padGesture.reset();
   else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
   if (SK_INPUT.mouseHeld) {
     const relax = Math.exp(-dt / .15);
@@ -36655,6 +36722,7 @@ function skateTransitionPop(trick, gesture) {
   const [name, flip, turn] = TRICKS[trick ?? arrowTrick()] || ['ollie', 0, 0];
   body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
   SK.charge = -1; SK.spin = 0; SK.popT = T;
+  controllerRumble('pop');
   if (actx) sfxUse('ollie');
 }
 const SK_BOWL_STAIRS=[];
@@ -37016,9 +37084,10 @@ function skatePop(trick, gesture) {
   skateAirBegin();
   skateManualEnd();
   SK.charge = -1; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
-  SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + (SK_INPUT.steerTarget??SK_INPUT.steer), -1, 1);
   body.vz = POP_V * (gesture ? gesture.strength : 1 + (3.4 / POP_V - 1) * load);
   body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
+  controllerRumble('pop');
   if (actx) sfxUse('ollie');
 }
 // how long you'll be in the air from a pop at vz (m/s), given the slope ahead: uphill the ground comes up to meet you
@@ -37042,6 +37111,7 @@ function skateLand() {
   const flubbed = quality === 'bail', sideways = quality === 'sloppy';
   const standing = SK.v < SK_STILL; // (barely moving: nothing to fall off, and nothing to carry a combo)
   if (flubbed) return skateBail('BAIL! Your feet never found the board.');
+  controllerRumble('land',body.impactV||0);
   const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
   SK.landedAt = T; SK.reverted = false;
   SK.v *= Math.max(.5, 1 - Math.max(0, (body.impactV || 0) - 4.5) * surf.n[2] * .04);
@@ -37095,6 +37165,7 @@ function grindPop(trick, gesture) { // Space on the rail: an ollie off it, with 
   const key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   endGrind(); SK.offGrind = false;
   body.vz = POP_V * (gesture?.strength ?? 1); body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie); SK.popT = T;
+  controllerRumble('pop');
   if (actx) sfxUse('ollie');
 }
 function bankCombo() {
@@ -37103,7 +37174,7 @@ function bankCombo() {
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
 function skateBail(msg) {
-  skateBailStart();
+  skateBailStart();controllerRumble('bail',SK.bailData.speed);
   SK.manual = null; SK.grind = null; SK.transition = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
   if (actx) playClip('ground-impact', clamp(SK.bailData.speed * .6, .15, .6));
@@ -49522,6 +49593,7 @@ function drawFerries() {
 }
 // Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
+  if(typeof CONTROLLER!=='undefined'&&CONTROLLER.dispatching)return;
   if ((e.code === 'Escape' && !NATIVE_MOUSE_APP) || paused || mouseCaptured()) return;
   lockMouse();
 }
@@ -49754,11 +49826,11 @@ function drive(dt) {
   const oldA = a;
   // A wreck disables controls but need not have the PIT manoeuvre's spin timer.
   const c = me, spun = c.spunT > T, disabled = spun || c.wrecked;
-  const f = disabled ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = disabled ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const f = disabled ? 0 : controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = disabled ? 0 : controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
   const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (c.spunT - T) / 2.5; }
-  if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * dt;
-  else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * dt;
+  if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * f * dt;
+  else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * -f * dt;
   else c.v *= 1 - 0.7 * dt;
   c.v = clamp(c.v, -0.5, (K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2) * carPower(c)); // (a car you own goes as fast as its model; a smoking one doesn't)
   if (c.wrecked) c.v = 0;
@@ -49829,12 +49901,13 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  controllerTick(clamp((t-t0)/1000,0,.05));
   if (paused) { t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
   if (freecam) { transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
-  T += dt; msgT -= dt;
+  T += dt;CONTROLLER.sampleT=T; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
   const fishingCompetitionLine=stepFishingCompetition(dt);
   if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
@@ -49856,7 +49929,7 @@ function loop(t) {
   else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1); // sprint 29 km/h (the board: skate.js), cars top out at 79
-    const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+    const f = controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'forward'), s = controllerAxis((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0),'side');
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
@@ -50240,4 +50313,243 @@ function onTouch(e) {
 if (TOUCH) {
   buildTouch();
   for (const ev of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) cv.addEventListener(ev, onTouch, { passive: false });
+}
+// Menus use their real buttons/inputs: purchases, storage and routing keep the
+// same handlers and validation as mouse/touch. No parallel menu state machine.
+function controllerVisible(el){return !!el&&el.getClientRects().length>0&&getComputedStyle(el).visibility!=='hidden';}
+function controllerMenuRoot(){
+  return [...document.querySelectorAll('.menu,#bigmap')].filter(controllerVisible)
+    .sort((a,b)=>(+getComputedStyle(b).zIndex||0)-(+getComputedStyle(a).zIndex||0)).at(0)||null;
+}
+function controllerControls(root){
+  return [...root.querySelectorAll('button,a[href],input,select,textarea,[tabindex]')]
+    .filter(el=>!el.disabled&&el.tabIndex!==-1&&el.type!=='hidden'&&controllerVisible(el));
+}
+function controllerFocus(root,index){
+  const items=controllerControls(root);if(!items.length)return null;
+  CONTROLLER.focus=mod(index,items.length);const el=items[CONTROLLER.focus];
+  document.querySelectorAll('.controller-focus').forEach(e=>{if(e!==el)e.classList.remove('controller-focus');});
+  if(document.activeElement!==el){el.focus({preventScroll:true});el.scrollIntoView({block:'nearest',inline:'nearest'});}
+  el.classList.add('controller-focus');return el;
+}
+function controllerMoveFocus(root,x,y){
+  const items=controllerControls(root),current=items.indexOf(document.activeElement);
+  if(current<0)return controllerFocus(root,CONTROLLER.focus);
+  const el=items[current];
+  if(x&&(el.type==='range'||el.tagName==='SELECT')){
+    if(el.tagName==='SELECT'){
+      const choices=[...el.options].map((v,i)=>!v.disabled?i:-1).filter(i=>i>=0);
+      if(!choices.length)return;
+      el.selectedIndex=choices[mod(choices.indexOf(el.selectedIndex)+x,choices.length)];
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+    }else{
+      const step=Number(el.step)||1;el.value=clamp(+el.value+x*step,Number(el.min)||0,Number(el.max)||100);
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    return;
+  }
+  const r=el.getBoundingClientRect(),cx=r.x+r.width/2,cy=r.y+r.height/2;
+  let best=-1,score=Infinity;
+  items.forEach((item,i)=>{if(i===current)return;const b=item.getBoundingClientRect(),dx=b.x+b.width/2-cx,dy=b.y+b.height/2-cy;
+    const along=dx*x+dy*y,across=Math.abs(dx*y-dy*x),cost=along+across*3;
+    if(along>3&&cost<score){best=i;score=cost;}
+  });
+  controllerFocus(root,best<0?current+(x||y):best);
+}
+function controllerCloseSheet(){
+  const sheet=CONTROLLER.sheet;if(!sheet||sheet.style.display==='none')return;
+  sheet.style.display='none';paused=!!CONTROLLER.returnPaused;
+}
+function controllerActions(){
+  if(controllerMenuRoot())return;
+  CONTROLLER.returnPaused=paused;controllerReleaseKeys();skateInputReset();
+  const entries=[...touchActions(),...SHEET.filter(([, ,when])=>!when||when()).map(([label,key])=>[label,key]),
+    ['Inventory','KeyI'],['Map','KeyM'],['Camera','KeyV']];
+  if(mode==='walk'&&nearAircraft()&&!nearAircraft().owned)entries.push(['Buy aircraft','KeyU']);
+  const unique=entries.filter(([label,key],i,a)=>a.findIndex(v=>v[1]===key)===i);
+  const sheet=CONTROLLER.sheet||=menuEl('controller-actions',1700,'<div class="panel"><h1>Actions</h1><p class="sub">A choose · B back</p><div data-actions></div></div>');
+  const list=sheet.querySelector('[data-actions]');list.replaceChildren();
+  for(const [label,key] of unique){const b=document.createElement('button');b.className='item';b.textContent=label;
+    b.onclick=()=>{controllerCloseSheet();controllerTap(key);};list.appendChild(b);}
+  paused=true;releaseMouse();sheet.style.display='flex';CONTROLLER.focus=0;
+}
+function controllerKeyboard(input){
+  const kb=CONTROLLER.keyboard||=menuEl('controller-keyboard',1900,'<div class="panel" style="width:min(650px,95vw)"><h1>Type</h1><p data-value style="overflow-wrap:anywhere"></p><p class="sub">A type · X erase · Y shift · B done</p><div data-keys style="display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:8px"></div></div>');
+  CONTROLLER.textInput=input;CONTROLLER.uppercase=false;
+  const grid=kb.querySelector('[data-keys]');grid.replaceChildren();
+  const chars=input.type==='number'?'0123456789.-':'abcdefghijklmnopqrstuvwxyz0123456789 -_.,!?@\'';
+  const update=()=>{kb.querySelector('[data-value]').textContent=input.type==='password'?'•'.repeat(input.value.length):input.value||' ';};
+  for(const char of chars){const b=document.createElement('button');b.textContent=char===' '?'space':char;b.dataset.char=char;b.style.minHeight='32px';if(char===' ')b.style.gridColumn='span 2';
+    b.onclick=()=>{if(input.maxLength>=0&&input.value.length>=input.maxLength)return;
+      input.value+=CONTROLLER.uppercase?char.toUpperCase():char;input.dispatchEvent(new Event('input',{bubbles:true}));update();};grid.appendChild(b);}
+  for(const [label,fn]of [['Erase',()=>controllerErase()],['Clear',()=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));update();}],['Done',()=>controllerCloseKeyboard()]]){
+    const b=document.createElement('button');b.textContent=label;b.style.gridColumn='span 2';b.style.minHeight='32px';b.onclick=fn;grid.appendChild(b);}
+  update();kb.style.display='flex';CONTROLLER.focus=0;
+}
+function controllerErase(){
+  const input=CONTROLLER.textInput;if(!input)return;
+  input.value=[...input.value].slice(0,-1).join('');input.dispatchEvent(new Event('input',{bubbles:true}));
+  CONTROLLER.keyboard.querySelector('[data-value]').textContent=input.type==='password'?'•'.repeat(input.value.length):input.value||' ';
+}
+function controllerCloseKeyboard(){
+  if(CONTROLLER.keyboard)CONTROLLER.keyboard.style.display='none';
+  CONTROLLER.textInput?.dispatchEvent(new Event('change',{bubbles:true}));CONTROLLER.textInput?.focus();
+  CONTROLLER.textInput=null;
+}
+function controllerMenuBack(root){
+  if(root===CONTROLLER.keyboard)return controllerCloseKeyboard();
+  if(root===CONTROLLER.sheet)return controllerCloseSheet();
+  if(bigMapOpen()){if(BIGMAP.selected){BIGMAP.selected=null;mapDirectoryUI();bigMapDraw();return;}return closeBigMap();}
+  if(root===pauseEl)return closePause(false);
+  controllerTap('Escape');
+}
+function controllerMenuStep(root,edge,held,left,right,dt){
+  if(CONTROLLER.root!==root){CONTROLLER.root=root;CONTROLLER.focus=0;}
+  const items=controllerControls(root);if(!items.includes(document.activeElement))controllerFocus(root,CONTROLLER.focus);
+  const x=held(15)?1:held(14)?-1:Math.abs(left[0])>.3?Math.sign(left[0]):0;
+  const y=held(13)?1:held(12)?-1:Math.abs(left[1])>.3?Math.sign(left[1]):0;
+  const direction=x||y?`${x},${y}`:'';
+  if(direction!==CONTROLLER.direction){CONTROLLER.direction=direction;CONTROLLER.repeat=.32;if(direction)controllerMoveFocus(root,x,y);}
+  else if(direction&&(CONTROLLER.repeat-=dt)<=0){CONTROLLER.repeat=.11;controllerMoveFocus(root,x,y);}
+  if(edge(1)){controllerMenuBack(root);return;}
+  if(edge(0)){
+    const el=controllerFocus(root,items.indexOf(document.activeElement)>=0?items.indexOf(document.activeElement):CONTROLLER.focus);
+    if(el&&(el.tagName==='TEXTAREA'||el.tagName==='INPUT'&&['text','search','password','email','number','url'].includes(el.type)))controllerKeyboard(el);
+    else if(root===pauseEl&&el?.dataset.act==='resume')closePause(false);
+    else if(el?.type==='range')el.dispatchEvent(new Event('input',{bubbles:true}));
+    else el?.click();
+  }
+  if(root===CONTROLLER.keyboard){
+    if(edge(2))controllerErase();
+    if(edge(3)){CONTROLLER.uppercase=!CONTROLLER.uppercase;root.querySelectorAll('[data-char]').forEach(b=>b.textContent=CONTROLLER.uppercase?b.dataset.char.toUpperCase():b.dataset.char===' '?'space':b.dataset.char);}
+  }else if(bigMapOpen()){
+    if(edge(4))bigMapZoom(.8);if(edge(5))bigMapZoom(1.25);if(edge(2))bigMapCentre();
+    if(edge(3))controllerKeyboard(bigMapEl.querySelector('input'));
+    if(Math.hypot(...right)>.1)bigMapPan(-right[0]*dt*650,-right[1]*dt*650);
+  }else if(Math.abs(right[1])>.1)(root.querySelector('.panel')||root).scrollBy(0,right[1]*dt*650);
+}
+// One browser poll per frame, including paused menus. Skating consumes the
+// same snapshot, while its unfiltered trick stick stays separate from look.
+function controllerReadPad(){
+  let pads=[];try{pads=Array.from(navigator.getGamepads?.()||[]);}catch(_){}
+  const valid=p=>p?.connected&&(!p.mapping||p.mapping==='standard');
+  return pads.find(p=>valid(p)&&`${p.index}:${p.id}`===CONTROLLER.id)||pads.find(valid)||null;
+}
+function controllerSkateLook(){return !!CONTROLLER.pad&&!CONTROLLER.blocked[4]&&controllerButton(CONTROLLER.pad,4)>.5;}
+function controllerSkatePad(){
+  if(paused||CONTROLLER.menu||freecam||!CONTROLLER.pad)return null;
+  const p=CONTROLLER.pad,look=controllerSkateLook();
+  return {connected:true,mapping:'standard',axes:[p.axes[0],p.axes[1],look||!CONTROLLER.stickArmed?0:p.axes[2],look||!CONTROLLER.stickArmed?0:p.axes[3]],
+    buttons:Array.from({length:17},(_,i)=>({value:CONTROLLER.blocked[i]?0:controllerButton(p,i)}))};
+}
+function controllerKey(code,down){
+  CONTROLLER.dispatching=true;
+  try{window.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',{code,key:code==='Space'?' ':code==='Escape'?'Escape':code,bubbles:true,cancelable:true}));}
+  finally{CONTROLLER.dispatching=false;}
+}
+function controllerTap(code){controllerKey(code,true);controllerKey(code,false);}
+function controllerReleaseKeys(){
+  controllerStopRumble();
+  for(const code of CONTROLLER.keys)if(!CONTROLLER.realKeys.has(code))controllerKey(code,false);
+  CONTROLLER.keys.clear();for(const key in CONTROLLER.motion)CONTROLLER.motion[key]=0;
+  if(typeof gun!=='undefined')gun.aimHeld=false;
+}
+function controllerKeys(wanted){
+  for(const code of CONTROLLER.keys)if(!wanted.has(code)&&!CONTROLLER.realKeys.has(code))controllerKey(code,false);
+  for(const code of wanted)if(!CONTROLLER.keys.has(code)&&!CONTROLLER.realKeys.has(code))controllerKey(code,true);
+  CONTROLLER.keys=wanted;
+}
+function controllerHint(text){
+  let hint=document.getElementById('controller-hint');
+  if(!hint){hint=document.createElement('div');hint.id='controller-hint';hint.style.cssText='position:fixed;bottom:8px;left:8px;right:8px;z-index:2100;pointer-events:none;color:#d2ecea;background:#080b10dd;padding:6px 10px;font:13px monospace;width:fit-content;max-width:calc(100vw - 36px)';document.body.appendChild(hint);}
+  if(hint.textContent!==text)hint.textContent=text;const display=CONTROLLER.active?'block':'none';if(hint.style.display!==display)hint.style.display=display;
+}
+function controllerTick(dt){
+  dt=Math.max(0,Math.min(.05,dt));CONTROLLER.time+=dt;
+  const pad=controllerReadPad(),id=pad?`${pad.index}:${pad.id}`:null,previous=CONTROLLER.buttons;
+  CONTROLLER.pad=pad;CONTROLLER.sampleT=T;
+  if(id!==CONTROLLER.id){
+    const lost=!!CONTROLLER.id;controllerReleaseKeys();skateInputReset();CONTROLLER.id=id;
+    CONTROLLER.context='';CONTROLLER.hadContext=false;CONTROLLER.active=!!pad;CONTROLLER.buttons=[];CONTROLLER.blocked=Array.from({length:17},(_,i)=>controllerButton(pad,i)>controllerThreshold(i));
+    CONTROLLER.stickArmed=!pad||Math.hypot(pad.axes[2]||0,pad.axes[3]||0)<.25;
+    if(lost&&!pad&&!paused)openPause();
+  }
+  if(document.hidden||!document.hasFocus()){
+    controllerReleaseKeys();skateInputReset();CONTROLLER.pad=null;
+    CONTROLLER.blocked=Array.from({length:17},(_,i)=>controllerButton(pad,i)>controllerThreshold(i)*.5);return;
+  }
+  if(!pad){controllerHint('');return;}
+  const values=Array.from({length:17},(_,i)=>controllerButton(pad,i));
+  values.forEach((v,i)=>{if(v<controllerThreshold(i)*.5)CONTROLLER.blocked[i]=false;});
+  const held=i=>!CONTROLLER.blocked[i]&&values[i]>controllerThreshold(i),edge=i=>held(i)&&!(previous[i]>controllerThreshold(i));
+  const dead=clamp(Number(settings.controllerDeadzone)||.15,.05,.35);
+  const left=controllerStick(pad.axes[0],pad.axes[1],dead),right=controllerStick(pad.axes[2],pad.axes[3],dead);
+  if(Math.hypot(pad.axes[2]||0,pad.axes[3]||0)<.25)CONTROLLER.stickArmed=true;
+  const cameraLook=controllerSkateLook();
+  if(CONTROLLER.wasSkateLook&&!cameraLook&&Math.hypot(...right)>.1)CONTROLLER.stickArmed=false;
+  CONTROLLER.wasSkateLook=cameraLook;
+  if(values.some((v,i)=>v>((i===6||i===7)?.08:.5)&&!CONTROLLER.blocked[i])||Math.hypot(...left)>.05||Math.hypot(...right)>.05)CONTROLLER.active=true;
+  const root=controllerMenuRoot();CONTROLLER.menu=root;const context=root?`menu:${root.id}`:game?`game:${game.kind}:${game.g.id}`:`world:${mode}:${skatingNow()}`;
+  if(context!==CONTROLLER.context){
+    controllerReleaseKeys();skateInputReset();CONTROLLER.stickArmed=Math.hypot(pad.axes[2]||0,pad.axes[3]||0)<.25;CONTROLLER.context=context;CONTROLLER.direction='';
+    // Never carry an accept/interaction into the menu or mode it just opened.
+    if(CONTROLLER.hadContext)values.forEach((v,i)=>{if(v>controllerThreshold(i)&&previous[i]>controllerThreshold(i))CONTROLLER.blocked[i]=true;});
+    CONTROLLER.hadContext=true;
+  }
+  CONTROLLER.buttons=values;
+  if(!CONTROLLER.active){controllerReleaseKeys();return;}
+  if(edge(9)){
+    controllerReleaseKeys();if(root)controllerMenuBack(root);else openPause();return;
+  }
+  if(root){
+    controllerMenuStep(root,edge,held,controllerStick(pad.axes[0],pad.axes[1],dead,1),right,dt);
+    controllerHint(root===CONTROLLER.keyboard?'A type · X erase · Y shift · B done':bigMapOpen()?'D-pad navigate · A select · B back · Y search · LB/RB zoom · right stick pan':'D-pad / left stick navigate · A select · B back · right stick scroll');return;
+  }
+  if(paused||sleep){controllerReleaseKeys();return;}
+  if(edge(8)){controllerReleaseKeys();openBigMap();return;}
+  if(edge(3)){controllerReleaseKeys();controllerActions();return;}
+  const wanted=new Set(),hold=(code,on)=>{if(on)wanted.add(code);};
+  if(game){
+    hold('Space',held(0));hold('KeyE',held(1));hold('ArrowUp',held(2)||held(12)||left[1]<-.45);
+    hold('ArrowDown',held(13)||left[1]>.45);hold('ArrowLeft',held(14)||left[0]<-.45);hold('ArrowRight',held(15)||left[0]>.45);
+    controllerKeys(wanted);controllerHint('A action / hold · D-pad move · X secondary · B leave · Y actions · Start pause');return;
+  }
+  if(edge(12)){controllerReleaseKeys();controllerTap('KeyI');return;}
+  if(edge(13)){controllerReleaseKeys();controllerActions();return;}
+  if(edge(14))cycleQuickSlot(-1);if(edge(15))cycleQuickSlot(1);
+  if(edge(11))controllerTap('KeyV');
+  const vehicle=['drive','sea','boat','air'].includes(mode),skate=skatingNow()&&!freecam;
+  const motion=CONTROLLER.motion;
+  for(const key in motion)motion[key]=0;
+  if(skate){
+    if(edge(5))controllerTap('KeyE');
+    controllerHint('A push · X mongo · B brake · right stick tricks · LB + right stick look · RB interact · Y actions');
+  }else{
+    if(edge(4))cycleQuickSlot(-1);if(edge(5))cycleQuickSlot(1);
+    hold('Space',held(0));hold(vehicle?'KeyS':'KeyC',held(1));hold('KeyE',held(2));
+    hold('ShiftLeft',held(10));
+    if(vehicle){
+      motion.steer=left[0];motion.throttle=(CONTROLLER.blocked[7]?0:controllerButton(pad,7))-(CONTROLLER.blocked[6]?0:controllerButton(pad,6));
+      if(mode==='air'){motion.flightX=left[0];motion.flightY=left[1];}
+      if(mode==='boat'){hold('KeyW',motion.throttle>.15||left[1]<-.3);hold('KeyS',motion.throttle<-.15||left[1]>.3);hold('KeyD',left[0]>.2);hold('KeyA',left[0]<-.2);}
+    }else if(['walk','room','roof','elplat'].includes(mode)&&!chute&&!freecam){
+      motion.forward=-left[1];motion.side=left[0];
+      hold('KeyQ',held(7));gun.aimHeld=held(6)&&canAimGun();
+    }else{
+      hold('KeyW',left[1]<-.2);hold('KeyS',left[1]>.2);hold('KeyD',left[0]>.2);hold('KeyA',left[0]<-.2);hold('KeyQ',held(7));
+    }
+    controllerHint(vehicle?'Left stick steer / fly · RT power · LT brake / reverse · X enter / exit · A action · Y actions':'Left stick move · right stick look · A jump · X interact · B crouch / sit · RT use · LT aim · Y actions');
+  }
+  controllerKeys(wanted);
+  if(!skate||cameraLook){
+    const lookSpeed=2.5*clamp(Number(settings.controllerLook)||1,.25,3),s=settings.sensitivity||1;
+    turnBy(right[0]*lookSpeed*dt/(.003*s),right[1]*lookSpeed*.7*dt/(.002*s)*(settings.controllerInvertY?-1:1)*(settings.invertY?-1:1));
+  }
+}
+addEventListener('keydown',e=>{if(!CONTROLLER.dispatching){CONTROLLER.realKeys.add(e.code);CONTROLLER.active=false;}});
+addEventListener('keyup',e=>{if(!CONTROLLER.dispatching){CONTROLLER.realKeys.delete(e.code);if(CONTROLLER.keys.has(e.code))K[e.code]=1;}});
+addEventListener('mousedown',()=>{CONTROLLER.active=false;});
+addEventListener('blur',()=>{controllerReleaseKeys();CONTROLLER.realKeys.clear();skateInputReset();if(CONTROLLER.active&&!paused)openPause();});
+{
+ const style=document.createElement('style');style.textContent='.controller-focus{outline:2px solid #a5eee6!important;outline-offset:3px!important;color:#fff!important}.slider:has(.controller-focus){outline:2px solid #a5eee6}';document.head.appendChild(style);
 }

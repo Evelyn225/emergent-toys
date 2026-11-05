@@ -10,13 +10,14 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** user resumed work on the skating overhaul on 4 November. Phases
-  0–8 are implemented locally as a commit/branch series, ending at
-  `codex/skate-phase-8`, from `9665098`. See `SKATE_IMPLEMENTATION.md` for scope,
-  validation and remaining physical-gamepad playtest. Phase branches are pushed; `codex/multiple-skateparks` includes the series,
-  two additional parks and current main for an integration PR. No overlapping
-  open skate PRs were found during the overlap check. The older general
-  quality checklist work remains paused.
+- **Codex:** shared controller support and skate-input tuning are on
+  `codex/skate-controller-feel`, based on main after the skating fixes (#427).
+  Scope: new `controller*` input/UI files, movement hooks in main/boats/flight,
+  skate input, settings/pause, tests and generated bundle. See
+  `CONTROLLER_IMPLEMENTATION.md`. Planting PR #423 is now merged into main; its world
+  quality changes are preserved. Rebuild the bundle from both manifests when
+  integrating. Earlier skate phases and fixes are recorded in
+  `SKATE_IMPLEMENTATION.md`; the general world-quality checklist stays paused.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
   the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is

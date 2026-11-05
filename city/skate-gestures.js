@@ -8,8 +8,8 @@ function skateStick(x = 0, y = 0, dead = .15) {
   return [x * scale, y * scale];
 }
 function createSkateGesture() {
-  let samples = [], load = null, armed = true, lastTime = -Infinity;
-  const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; };
+  let samples = [], load = null, armed = true, lastTime = -Infinity, firedAt=-Infinity, centred=false;
+  const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; firedAt=-Infinity;centred=false; };
   function sample(x, y, t) {
     if (![x, y, t].every(Number.isFinite)) return null;
     if (t < lastTime) reset();
@@ -17,7 +17,11 @@ function createSkateGesture() {
     samples.push({ x, y, t });
     samples = samples.filter(p => t - p.t <= .4).slice(-128);
     const radius = Math.hypot(x, y);
-    if (!armed) { if (radius < .25) armed = true; return null; }
+    if(!armed){
+      if(radius<.25)centred=true;
+      if(!centred||t-firedAt<.09)return null;
+      armed=true;
+    }
     if (!load) {
       if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0 };
       return null;
@@ -28,7 +32,7 @@ function createSkateGesture() {
     }
     if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
-    if (t - load.t > .18) { load = null; return null; }
+    if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
     if (radius > .45) {
       const angle = Math.atan2(y, x), delta = Math.atan2(Math.sin(angle - load.angle), Math.cos(angle - load.angle));
       // A straight flick crosses the centre and jumps angle by pi. Only a
@@ -40,9 +44,9 @@ function createSkateGesture() {
     const forward = y * load.side < -.6;
     const released = radius < .25;
     if ((!curled && forward) || (curled && released && arc > 2.3)) {
-      const key = arc > 4.2 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+      const key = arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
-      load = null; armed = false; return result;
+      load = null; armed = false;firedAt=t;centred=false; return result;
     }
     // Passing through centre is part of a straight flick; retain the load
     // until the 180 ms deadline instead of cancelling at that midpoint.
@@ -52,11 +56,11 @@ function createSkateGesture() {
 }
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
-const SK_INPUT = { steer: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+const SK_INPUT = { steer: 0, steerTarget: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
   right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture() };
 function skateInputReset() {
-  Object.assign(SK_INPUT, { steer: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
+  Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, push: false, mongo: false, brake: false, back: false, grabL: 0, grabR: 0,
     right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();
 }
@@ -89,15 +93,19 @@ function skatePollInput(dt) {
   // Exactly one Gamepad API read per simulation frame. No synthetic key presses,
   // so disconnecting a pad cannot leave the keyboard stuck down.
   let pads = [];
-  try { pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
+  try { pads = typeof controllerSkatePad==='function'&&CONTROLLER.sampleT===T ? [controllerSkatePad()] : typeof navigator !== 'undefined' ? navigator.getGamepads?.() || [] : []; } catch (_) { /* browser policy may deny gamepads */ }
   const pad = Array.from(pads).find(p => p?.connected && (p.mapping === 'standard' || !p.mapping));
   const button = i => pad?.buttons[i]?.value || (pad?.buttons[i]?.pressed ? 1 : 0);
-  const left=pad?skateStick(pad.axes[0],pad.axes[1]):[0,0];
-  SK_INPUT.steer=left[0];SK_INPUT.back=left[1]>.35;
+  const dead=typeof settings==='undefined' ? .15 : clamp(Number(settings.controllerDeadzone)||.15,.05,.35);
+  const left=pad?skateStick(pad.axes[0],pad.axes[1],dead):[0,0];
+  SK_INPUT.steerTarget=pad?controllerStick(pad.axes[0],pad.axes[1],dead)[0]:0;
+  SK_INPUT.steer=pad?controllerEase(SK_INPUT.steer,SK_INPUT.steerTarget,dt*(typeof settings==='undefined'?1:clamp(Number(settings.controllerSteering)||1,.5,2))):0;
+  SK_INPUT.back=left[1]>(SK_INPUT.back ? .3 : .55)&&Math.abs(left[0])<left[1]*.7;
   SK_INPUT.push = button(0) > .5 || button(2) > .5; SK_INPUT.mongo = button(2) > .5;
   SK_INPUT.brake = button(1) > .5; SK_INPUT.grabL = button(6); SK_INPUT.grabR = button(7);
-  SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3]) : [0, 0];
+  SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
   if (!pad) SK_INPUT.padGesture.reset();
+  else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25))SK_INPUT.padGesture.reset();
   else skateGesturePlay(SK_INPUT.padGesture.sample(...SK_INPUT.right, T));
   if (SK_INPUT.mouseHeld) {
     const relax = Math.exp(-dt / .15);
