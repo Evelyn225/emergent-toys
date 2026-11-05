@@ -12,7 +12,7 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 - **Codex:** fixed-step skating and coordinated rider/board/camera interpolation
   are on `codex/skate-fixed-step`, based on main after controller PR #429.
-  Scope: `city/skate-clock.js`, skating input/main-loop hooks, tests, tuning
+  Scope: fixed clock, ramp energy conservation, powerslide input/stance, tests, tuning
   references and generated bundle. See `SKATE_TUNING.md` and
   `SKATE_IMPLEMENTATION.md`. World-quality changes are preserved; reserved files
   remain untouched. The general world-quality checklist stays paused.

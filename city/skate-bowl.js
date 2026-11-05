@@ -50,8 +50,7 @@ function skateBowlHit(o, x, y, zHint) {
 }
 function enterSkateBowl(hit) {
   if(hit.o.pool)return enterSkatePool(hit);
-  const { o, axis, u, at } = hit, vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
-  const vertical = skateAir() ? body.vz / 10 : -(vx * hit.n[0] + vy * hit.n[1]) / Math.max(.05, hit.n[2]);
+  const {o,axis,u,at}=hit,[vx,vy,vertical]=skateContactVelocity(hit.n);
   SK.transition = { o, u, axis, vs: (vx * Math.cos(axis) + vy * Math.sin(axis)) * at.tx + vertical * at.tz,
     va: -vx * Math.sin(axis) + vy * Math.cos(axis), yawOff: Math.cos(a - SK.dir) < 0 ? Math.PI : 0 };
   skateManualEnd(); body.trick = null; body.vz = 0;

@@ -49,22 +49,37 @@ function skateSurface(x, y, zHint) {
   const len = Math.hypot(gx, gy, 1);
   return { h, n: [-gx / len, -gy / len, 1 / len], kind, material, ref };
 }
+// Bend an existing velocity onto a new riding plane without manufacturing
+// kinetic energy. Reconstructing vz from unchanged horizontal speed did that.
+function skateTangentVelocity(v,n) {
+  const speed=Math.hypot(...v),z=-(v[0]*n[0]+v[1]*n[1])/Math.max(.001,n[2]);
+  const tangent=[v[0],v[1],z],length=Math.hypot(...tangent);
+  return length>1e-9?tangent.map(x=>x*speed/length):[0,0,0];
+}
+function skateContactVelocity(n) {
+  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,skateAir()?body.vz/10:SKB.surf?SKB.v[2]:0];
+  if(!skateAir())return skateTangentVelocity(v,n);
+  const dot=v.reduce((sum,x,i)=>sum+x*n[i],0);
+  return v.map((x,i)=>x-dot*n[i]);
+}
+const skateRideYaw=()=>a+(SK.slide||0)*Math.PI/2;
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
   SKB.riderYaw = a; SKB.stance = SK.stance;
-  if (!skateAir()) SKB.yaw = a;
+  if (!skateAir() && !SK.transition && !SK.grind) SKB.yaw = skateRideYaw();
   SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : SK.transition ? 'transition' : skateAir() ? 'air' : SK.manual ? 'manual' : 'ground';
   if (SKB.contact === 'grind' && SK.grind.exitVelocity) SKB.v = SK.grind.exitVelocity.slice();
   else if (SKB.contact !== 'ground' && SKB.contact !== 'manual' && SKB.contact !== 'transition') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
 }
 function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
-  const surf = SKB.surf = skateSurface(px, py), n = surf.n;
+  const previous=SKB.surf,surf = SKB.surf = skateSurface(px, py), n = surf.n;
   // External teleports, mounting and the compatibility release may still write
   // SK.v/SK.dir. Import those only when they differ from the last derived state.
   const hv = Math.hypot(SKB.v[0], SKB.v[1]);
   if (Math.abs(hv - SK.v) > 1e-6 || (hv > 1e-6 && Math.abs(Math.atan2(SKB.v[1], SKB.v[0]) - SK.dir) > 1e-6)) {
     SKB.v[0] = Math.cos(SK.dir) * SK.v; SKB.v[1] = Math.sin(SK.dir) * SK.v;
   }
+  if(previous)SKB.v=skateTangentVelocity(SKB.v,n);
   let vx = SKB.v[0], vy = SKB.v[1];
   // The board remains tangent: gravity projected into that plane acts even at
   // zero speed, so reaching a stall never traps you halfway up a hill.
@@ -84,11 +99,17 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   } else SK.kick = 0;
   speed = Math.hypot(vx, vy);
   const turn = steer * (2.6 - 1.43 * Math.min(1, speed / SK_PHYS.pushCap)) * dt;
+  const beforeTurn=Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));
   a += turn;
   const c = Math.cos(turn), s = Math.sin(turn), tx = vx * c - vy * s;
   vy = vx * s + vy * c; vx = tx;
-  const sliding = brake && Math.abs(steer) > .1 && speed > .12;
-  SK.slide = sliding ? steer : 0;
+  if(Math.hypot(vx,vy)>1e-9){const scale=beforeTurn/Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));vx*=scale;vy*=scale;}
+  speed=Math.hypot(vx,vy);
+  // Require deliberate braking + steering; hysteresis avoids stick chatter.
+  const sliding = brake && Math.abs(steer) > (SK.sliding ? .25 : .45) && speed > .12;
+  SK.sliding=sliding;
+  const slideTarget=sliding?Math.sign(steer):0;
+  SK.slide=(SK.slide||0)+(slideTarget-(SK.slide||0))*(1-Math.exp(-12*dt));
   if (sliding && SK.combo && !SK.reverted && T - (SK.landedAt ?? -9) < .25) {
     SK.combo.names.push('REVERT'); SK.combo.pts += 75; SK.combo.t = T; SK.reverted = true;
   }
@@ -110,13 +131,17 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
     vx-=Math.cos(a)*impulse;vy-=Math.sin(a)*impulse;
   }
   // Limit extreme downhill runs, never ordinary slope acceleration.
-  const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy) || 1)); vx *= cap; vy *= cap;
+  const tangentZ=-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]);
+  const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy,tangentZ) || 1)); vx *= cap; vy *= cap;
   const vz = -(vx * n[0] + vy * n[1]) / Math.max(.05, n[2]);
   SKB.v = [vx, vy, vz]; SK.v = Math.hypot(vx, vy);
   if (SK.v > 1e-7) SK.dir = Math.atan2(vy, vx);
   SKB.fakie = Math.cos(SK.dir - a) < 0;
-  SKB.pitch = Math.atan2(vz, SK.v || 1e-9) * (SKB.fakie ? -1 : 1);
-  SKB.roll = -steer * Math.min(.18, SK.v * .2);
+  const yaw=skateRideYaw();
+  SKB.pitch=Math.atan2(-(n[0]*Math.cos(yaw)+n[1]*Math.sin(yaw)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(yaw,SKB.pitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];
+  const dot=v=>n.reduce((sum,k,i)=>sum+k*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral))-steer*Math.min(.18,SK.v*.2);
   if (sliding && actx && T > SK.scrapeT) { SK.scrapeT = T + .15; sfxSkate('scrape', .5); }
 }
 function skateSurfaceExit(x0, y0, dt) {

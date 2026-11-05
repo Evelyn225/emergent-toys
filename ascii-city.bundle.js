@@ -36409,22 +36409,37 @@ function skateSurface(x, y, zHint) {
   const len = Math.hypot(gx, gy, 1);
   return { h, n: [-gx / len, -gy / len, 1 / len], kind, material, ref };
 }
+// Bend an existing velocity onto a new riding plane without manufacturing
+// kinetic energy. Reconstructing vz from unchanged horizontal speed did that.
+function skateTangentVelocity(v,n) {
+  const speed=Math.hypot(...v),z=-(v[0]*n[0]+v[1]*n[1])/Math.max(.001,n[2]);
+  const tangent=[v[0],v[1],z],length=Math.hypot(...tangent);
+  return length>1e-9?tangent.map(x=>x*speed/length):[0,0,0];
+}
+function skateContactVelocity(n) {
+  const v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,skateAir()?body.vz/10:SKB.surf?SKB.v[2]:0];
+  if(!skateAir())return skateTangentVelocity(v,n);
+  const dot=v.reduce((sum,x,i)=>sum+x*n[i],0);
+  return v.map((x,i)=>x-dot*n[i]);
+}
+const skateRideYaw=()=>a+(SK.slide||0)*Math.PI/2;
 function skateBoardSync() {
   SKB.p = [px, py, skateGround(px, py) + body.z / 10];
   SKB.riderYaw = a; SKB.stance = SK.stance;
-  if (!skateAir()) SKB.yaw = a;
+  if (!skateAir() && !SK.transition && !SK.grind) SKB.yaw = skateRideYaw();
   SKB.contact = SK.bail > 0 ? 'bail' : SK.grind ? 'grind' : SK.transition ? 'transition' : skateAir() ? 'air' : SK.manual ? 'manual' : 'ground';
   if (SKB.contact === 'grind' && SK.grind.exitVelocity) SKB.v = SK.grind.exitVelocity.slice();
   else if (SKB.contact !== 'ground' && SKB.contact !== 'manual' && SKB.contact !== 'transition') SKB.v = [Math.cos(SK.dir) * SK.v, Math.sin(SK.dir) * SK.v, body.vz / 10];
 }
 function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
-  const surf = SKB.surf = skateSurface(px, py), n = surf.n;
+  const previous=SKB.surf,surf = SKB.surf = skateSurface(px, py), n = surf.n;
   // External teleports, mounting and the compatibility release may still write
   // SK.v/SK.dir. Import those only when they differ from the last derived state.
   const hv = Math.hypot(SKB.v[0], SKB.v[1]);
   if (Math.abs(hv - SK.v) > 1e-6 || (hv > 1e-6 && Math.abs(Math.atan2(SKB.v[1], SKB.v[0]) - SK.dir) > 1e-6)) {
     SKB.v[0] = Math.cos(SK.dir) * SK.v; SKB.v[1] = Math.sin(SK.dir) * SK.v;
   }
+  if(previous)SKB.v=skateTangentVelocity(SKB.v,n);
   let vx = SKB.v[0], vy = SKB.v[1];
   // The board remains tangent: gravity projected into that plane acts even at
   // zero speed, so reaching a stall never traps you halfway up a hill.
@@ -36444,11 +36459,17 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   } else SK.kick = 0;
   speed = Math.hypot(vx, vy);
   const turn = steer * (2.6 - 1.43 * Math.min(1, speed / SK_PHYS.pushCap)) * dt;
+  const beforeTurn=Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));
   a += turn;
   const c = Math.cos(turn), s = Math.sin(turn), tx = vx * c - vy * s;
   vy = vx * s + vy * c; vx = tx;
-  const sliding = brake && Math.abs(steer) > .1 && speed > .12;
-  SK.slide = sliding ? steer : 0;
+  if(Math.hypot(vx,vy)>1e-9){const scale=beforeTurn/Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));vx*=scale;vy*=scale;}
+  speed=Math.hypot(vx,vy);
+  // Require deliberate braking + steering; hysteresis avoids stick chatter.
+  const sliding = brake && Math.abs(steer) > (SK.sliding ? .25 : .45) && speed > .12;
+  SK.sliding=sliding;
+  const slideTarget=sliding?Math.sign(steer):0;
+  SK.slide=(SK.slide||0)+(slideTarget-(SK.slide||0))*(1-Math.exp(-12*dt));
   if (sliding && SK.combo && !SK.reverted && T - (SK.landedAt ?? -9) < .25) {
     SK.combo.names.push('REVERT'); SK.combo.pts += 75; SK.combo.t = T; SK.reverted = true;
   }
@@ -36470,13 +36491,17 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
     vx-=Math.cos(a)*impulse;vy-=Math.sin(a)*impulse;
   }
   // Limit extreme downhill runs, never ordinary slope acceleration.
-  const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy) || 1)); vx *= cap; vy *= cap;
+  const tangentZ=-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]);
+  const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy,tangentZ) || 1)); vx *= cap; vy *= cap;
   const vz = -(vx * n[0] + vy * n[1]) / Math.max(.05, n[2]);
   SKB.v = [vx, vy, vz]; SK.v = Math.hypot(vx, vy);
   if (SK.v > 1e-7) SK.dir = Math.atan2(vy, vx);
   SKB.fakie = Math.cos(SK.dir - a) < 0;
-  SKB.pitch = Math.atan2(vz, SK.v || 1e-9) * (SKB.fakie ? -1 : 1);
-  SKB.roll = -steer * Math.min(.18, SK.v * .2);
+  const yaw=skateRideYaw();
+  SKB.pitch=Math.atan2(-(n[0]*Math.cos(yaw)+n[1]*Math.sin(yaw)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(yaw,SKB.pitch,0).up,right=[-Math.sin(yaw),Math.cos(yaw),0];
+  const dot=v=>n.reduce((sum,k,i)=>sum+k*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral))-steer*Math.min(.18,SK.v*.2);
   if (sliding && actx && T > SK.scrapeT) { SK.scrapeT = T + .15; sfxSkate('scrape', .5); }
 }
 function skateSurfaceExit(x0, y0, dt) {
@@ -36668,9 +36693,9 @@ function addSkateTransition(x, y, options = {}, yaw = 0) {
 function enterSkateTransition(hit) {
   if (hit.o.bowl) return enterSkateBowl(hit);
   const { o, u, axis, at } = hit, tangent = [o.c * at.tx, o.s * at.tx, at.tz];
-  const vertical = skateAir() ? body.vz / 10 : -(Math.cos(SK.dir) * SK.v * hit.n[0] + Math.sin(SK.dir) * SK.v * hit.n[1]) / Math.max(.05, hit.n[2]);
-  SK.transition = { o, u, axis, vs: Math.cos(SK.dir) * SK.v * tangent[0] + Math.sin(SK.dir) * SK.v * tangent[1] + vertical * tangent[2],
-    va: -Math.cos(SK.dir) * SK.v * o.s + Math.sin(SK.dir) * SK.v * o.c };
+  const v=skateContactVelocity(hit.n);
+  SK.transition = { o, u, axis, vs: v.reduce((sum,x,i)=>sum+x*tangent[i],0),
+    va: -v[0]*o.s+v[1]*o.c };
   skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateTransitionPlace(C) {
@@ -36841,8 +36866,7 @@ function skateBowlHit(o, x, y, zHint) {
 }
 function enterSkateBowl(hit) {
   if(hit.o.pool)return enterSkatePool(hit);
-  const { o, axis, u, at } = hit, vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
-  const vertical = skateAir() ? body.vz / 10 : -(vx * hit.n[0] + vy * hit.n[1]) / Math.max(.05, hit.n[2]);
+  const {o,axis,u,at}=hit,[vx,vy,vertical]=skateContactVelocity(hit.n);
   SK.transition = { o, u, axis, vs: (vx * Math.cos(axis) + vy * Math.sin(axis)) * at.tx + vertical * at.tz,
     va: -vx * Math.sin(axis) + vy * Math.cos(axis), yawOff: Math.cos(a - SK.dir) < 0 ? Math.PI : 0 };
   skateManualEnd(); body.trick = null; body.vz = 0;
@@ -36954,8 +36978,7 @@ function addSkatePool(x,y,options,pool) {
   return o;
 }
 function enterSkatePool(hit) {
-  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v;
-  const vz=skateAir()?body.vz/10:-(vx*hit.n[0]+vy*hit.n[1])/Math.max(.1,hit.n[2]);
+  const [vx,vy,vz]=skateContactVelocity(hit.n);
   SK.transition={o:hit.o,u:hit.u,axis:hit.axis,velocity:[vx,vy,vz],vs:0,va:0,yawOff:Math.cos(a-SK.dir)<0?Math.PI:0};
   skateManualEnd();body.trick=null;body.vz=0;
 }
@@ -37087,8 +37110,8 @@ const SK_POINTS = { '360 shuvit': 200, ollie: 50, kickflip: 100, heelflip: 100, 
 // Clear constraints at the inventory boundary, before walking can move away.
 function skateDismount() {
   if(typeof skateFixedReset==='function')skateFixedReset();
-  Object.assign(SK,{transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,reversing:false});
-  skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];
+  Object.assign(SK,{slide:0,sliding:false,transition:null,grind:null,manual:null,combo:null,bail:0,bailAt:null,bailData:null,lastT:-9,camYaw:null,camZ:null,camTransition:0,camRampUp:0,camRampH:0,airPose:null,airSource:null,airNormal:null,reversing:false});
+  skateInputReset();SKB.contact='ground';SKB.v=[0,0,0];SKB.surf=null;
 }
 
 // every frame on the board, in place of walking
@@ -37185,6 +37208,10 @@ function skateLand() {
   else if ((Math.abs(d) > Math.PI / 2) !== SKB.fakie) SK.stance = -SK.stance;
   if (sloppy && !standing && (Math.abs(d) > Math.PI / 2) !== SKB.fakie) SK.stance = -SK.stance;
   a = SK.dir + (SKB.fakie ? Math.PI : 0);
+  // Touchdown dissipates impact; it must not become forward speed next tick.
+  const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
+  SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
+  SKB.surf=surf;SK.slide=0;SK.sliding=false;
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
@@ -37422,11 +37449,11 @@ function drawSkater() {
   if (SK.bailAt) return skateBailDraw();
   const { x, y } = skateView, [vx, vy] = R(x, y), g = skateGround(x, y), z = g + body.z / 10;
   if (!SK.transition || SKB.surf.n[2] > .5) drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
-  const roll = skateAir() ? SKB.roll : 0, yaw = skateAir() ? SKB.yaw : skateView.a, nose = skateAir() ? SKB.pitch : 0;
-  drawSkateBoard(vx, vy, z, yaw + (SK.slide || 0) * Math.PI / 2, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
-  const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
+  const roll = skateAir() ? SKB.roll : 0, yaw = SKB.yaw, nose = skateAir() ? SKB.pitch : 0;
+  drawSkateBoard(vx, vy, z, yaw, nose + (!skateAir() ? SKB.pitch : 0), roll + (!skateAir() ? SKB.roll : 0));
+  const air = skateAir(), pushing = SK.kicking && !air, ang = (air?skateView.a:SKB.yaw) + (pushing ? 0 : SK.stance * Math.PI / 2);
   const pose = air ? 'skateair' : SK.charge >= 0 || skateGestureLoaded() ? 'crouch' : pushing ? (SK.mongo ? 'mongo' : 'push') + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + SK.steer * SK.stance);
-  const contactNormal = SK.transition ? SKB.surf.n : air ? SK.airNormal || [0,0,1] : [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
+  const contactNormal = SK.transition ? SKB.surf.n : air ? SK.airNormal || [0,0,1] : SKB.surf?.n || [0,0,1], footOffset = SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
   drawSkaterFigure(vx + contactNormal[0] * footOffset, vy + contactNormal[1] * footOffset, z + contactNormal[2] * footOffset, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, contactNormal, skaterFootAnchor(pose,look));
 }
 // Fixed skating ticks, independent of render rate. The world retains its

@@ -233,3 +233,35 @@ viewport), mounted stationary skating with live 60 Hz main-loop ticks: median
 frame times main/branch were 16.9/15.9 ms, then 14.4/12.7 ms over 60 frames per
 run after 20 warm-up frames. This shows no regression in that scene; it is not
 an FPS guarantee. Third-person riding and popped poses were inspected visually.
+
+## Ramp energy and powerslide stance fixes
+
+Changing ground normals now bends the existing velocity onto the new plane
+without increasing its magnitude. Carving on a bank also preserves speed before
+its usual friction loss. Mini-ramp, round-bowl and pool entry use that same
+bounded conversion; airborne entry projects away the normal impact velocity.
+The downhill cap now bounds total speed, including its vertical component.
+Touchdown overwrites the airborne velocity with the landed tangent velocity,
+so a subsequent ground tick cannot turn impact speed into forward speed.
+
+Powerslides require brake plus a deliberate steering input (>0.45 after the
+controller response curve), and remain engaged down to 0.25 to avoid chatter.
+The board eases into/out of the sideways stance. Grounded board orientation,
+rider facing and the authored shoe anchor now share that stance; ordinary bank
+riding uses the ground normal for the rider too. Dismount and touchdown clear
+slide state. Walking, desired flat cruising speed and camera distance remain
+unchanged.
+
+Validation covers kinetic + potential energy over a rounded ramp, bounded entry
+into all three transition implementations, braking corrections, slide engagement
+hysteresis and easing. The real kicker launches without gaining energy or
+bailing, and production drawing inputs keep rider stance aligned to the sliding
+board. Existing ramp, loaded flip, grind, rollback and fixed-clock browser cases
+pass. Removing energy transport or lowering the slide threshold fails the new
+regressions.
+
+Local serial ABAB against main `4ff9292`, 177×66 at 1170 px, live stationary
+60 Hz skating: main/branch median frame times were 13.4/13.6 ms, then 14.2/13.3 ms
+(60 measured frames after 20 warm-up frames). No material regression in this
+scene; these are local observations. Day and night powerslide poses were
+inspected: both shoes remain over the sideways deck.

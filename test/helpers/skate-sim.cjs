@@ -37,7 +37,7 @@ function skateSim(script, { fixed=false,frameTimes=null,dt = 1 / 60, speed = 0, 
   const trajectory = [];
   const snapshot = () => JSON.parse(vm.runInContext(`JSON.stringify({
     t:T-100, x:px, y:py, z:body.z, worldZ:SKB.p[2], contact:SKB.contact, velocity:SKB.v, vz:body.vz, speed:SK.v, yaw:a,
-    heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
+    slide:SK.slide||0,sliding:!!SK.sliding,boardYaw:SKB.yaw,heading:SK.dir, spin:SK.spin, stance:SK.stance, bail:SK.bail,
     board:skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll), normal:SKB.surf?.n,
     trick:body.trick?.name??null, manual:!!SK.manual, fakie:SKB.fakie, vx:SKB.v[0], vy:SKB.v[1], score:SK.score, combo:SK.combo?.pts??0, comboNames:SK.combo?.names??[]
   })`, ctx));

@@ -57,9 +57,9 @@ function addSkateTransition(x, y, options = {}, yaw = 0) {
 function enterSkateTransition(hit) {
   if (hit.o.bowl) return enterSkateBowl(hit);
   const { o, u, axis, at } = hit, tangent = [o.c * at.tx, o.s * at.tx, at.tz];
-  const vertical = skateAir() ? body.vz / 10 : -(Math.cos(SK.dir) * SK.v * hit.n[0] + Math.sin(SK.dir) * SK.v * hit.n[1]) / Math.max(.05, hit.n[2]);
-  SK.transition = { o, u, axis, vs: Math.cos(SK.dir) * SK.v * tangent[0] + Math.sin(SK.dir) * SK.v * tangent[1] + vertical * tangent[2],
-    va: -Math.cos(SK.dir) * SK.v * o.s + Math.sin(SK.dir) * SK.v * o.c };
+  const v=skateContactVelocity(hit.n);
+  SK.transition = { o, u, axis, vs: v.reduce((sum,x,i)=>sum+x*tangent[i],0),
+    va: -v[0]*o.s+v[1]*o.c };
   skateManualEnd(); body.trick = null; body.vz = 0;
 }
 function skateTransitionPlace(C) {

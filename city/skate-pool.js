@@ -36,8 +36,7 @@ function addSkatePool(x,y,options,pool) {
   return o;
 }
 function enterSkatePool(hit) {
-  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v;
-  const vz=skateAir()?body.vz/10:-(vx*hit.n[0]+vy*hit.n[1])/Math.max(.1,hit.n[2]);
+  const [vx,vy,vz]=skateContactVelocity(hit.n);
   SK.transition={o:hit.o,u:hit.u,axis:hit.axis,velocity:[vx,vy,vz],vs:0,va:0,yawOff:Math.cos(a-SK.dir)<0?Math.PI:0};
   skateManualEnd();body.trick=null;body.vz=0;
 }
