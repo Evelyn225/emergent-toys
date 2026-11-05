@@ -125,6 +125,7 @@ function resolveCruiserContact(c, o, hit) {
 }
 // The full rotated footprint, including the rear bumper. Separating axes keep even a sideways drift out of walls.
 function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
+  if(!airportBridgeCarClear(x,y,hx,hy,hl,hw))return false;
   const ex = Math.abs(hx) * hl + Math.abs(hy) * hw, ey = Math.abs(hy) * hl + Math.abs(hx) * hw;
   if(worldReady&&ROAD_BRIDGES.some(b=>y+ey>=b.y0&&y-ey<=b.y1&&[-1,1].some(side=>Math.abs(x-b.x-side*.97)<ex+.01)))return false;
   const diagonal = 0.5 * (Math.abs(hx) + Math.abs(hy));

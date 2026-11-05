@@ -53,7 +53,7 @@ function airportFloor(i, r, x, wx, wy, L, d) { // [base, level] for the floor ce
     return [GRAY, LP * .3];
   }
   if (Y < AIRPORT.y0 + 1.6) { // the landside road, from the causeway along the front
-    return paint(roadLine(Math.abs(Y - (AIRPORT.y0 + 0.85)), .06, fp) * roadBands(X, .5, .5, fp), YEL, tarmac());
+    return paint(roadLine(Math.abs(Y - (worldReady ? CAUSEWAY.y0 : AIRPORT.y0 + 0.85)), .06, fp) * roadBands(X, .5, .5, fp), YEL, tarmac());
   }
   return lawnSurface(wx, wy, fine, LP, -.02); // grass, mown
 }
