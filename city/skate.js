@@ -93,9 +93,10 @@ function skatePop(trick, gesture) {
   skateAirBegin();
   skateManualEnd();
   SK.charge = -1; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
-  SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + SK_INPUT.steer, -1, 1);
+  SK.preWind = clamp((K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + (SK_INPUT.steerTarget??SK_INPUT.steer), -1, 1);
   body.vz = POP_V * (gesture ? gesture.strength : 1 + (3.4 / POP_V - 1) * load);
   body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
+  controllerRumble('pop');
   if (actx) sfxUse('ollie');
 }
 // how long you'll be in the air from a pop at vz (m/s), given the slope ahead: uphill the ground comes up to meet you
@@ -119,6 +120,7 @@ function skateLand() {
   const flubbed = quality === 'bail', sideways = quality === 'sloppy';
   const standing = SK.v < SK_STILL; // (barely moving: nothing to fall off, and nothing to carry a combo)
   if (flubbed) return skateBail('BAIL! Your feet never found the board.');
+  controllerRumble('land',body.impactV||0);
   const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
   SK.landedAt = T; SK.reverted = false;
   SK.v *= Math.max(.5, 1 - Math.max(0, (body.impactV || 0) - 4.5) * surf.n[2] * .04);
@@ -172,6 +174,7 @@ function grindPop(trick, gesture) { // Space on the rail: an ollie off it, with 
   const key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
   endGrind(); SK.offGrind = false;
   body.vz = POP_V * (gesture?.strength ?? 1); body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie); SK.popT = T;
+  controllerRumble('pop');
   if (actx) sfxUse('ollie');
 }
 function bankCombo() {
@@ -180,7 +183,7 @@ function bankCombo() {
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
 function skateBail(msg) {
-  skateBailStart();
+  skateBailStart();controllerRumble('bail',SK.bailData.speed);
   SK.manual = null; SK.grind = null; SK.transition = null; SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
   if (actx) playClip('ground-impact', clamp(SK.bailData.speed * .6, .15, .6));

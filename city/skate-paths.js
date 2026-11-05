@@ -112,6 +112,7 @@ function startPathGrind(path, distance, dir) {
   SKB.roll=0;SKB.pitch=Math.atan2(at.tangent[2]*dir,Math.hypot(at.tangent[0],at.tangent[1]));
   SKB.yaw=a;SKB.surf={h:at.p[2],n:[0,0,1],kind:'grind',material:path.material,ref:path};
   body.z = Math.max(.001, (at.p[2] - skateGround(px, py)) * 10);
+  controllerRumble('grind');
   if (actx) sfxSkate('scrape', .9); say(name.toUpperCase() + '!', 1);
 }
 function stepPathGrind(dt) {

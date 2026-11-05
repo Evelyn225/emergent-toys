@@ -175,5 +175,6 @@ function skateTransitionPop(trick, gesture) {
   const [name, flip, turn] = TRICKS[trick ?? arrowTrick()] || ['ollie', 0, 0];
   body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
   SK.charge = -1; SK.spin = 0; SK.popT = T;
+  controllerRumble('pop');
   if (actx) sfxUse('ollie');
 }

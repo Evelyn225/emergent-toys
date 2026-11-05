@@ -11,6 +11,7 @@ function setup(points){
  function endGrind(){exited=SK.grind;SK.grind=null;}
  function skateBail(){throw new Error('unexpected bail');}
  `,ctx);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../city/controller-core.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../city/skate-paths.js'),'utf8'),ctx);
  const ev=s=>vm.runInContext(s,ctx);
  ev("const path=addGrindPath(points,{kind:'handrail',material:'metal'});startPathGrind(path,0,1);");

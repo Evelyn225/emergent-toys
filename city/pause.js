@@ -75,6 +75,21 @@ function buildPause() {
       <h2>mouse</h2>
       ${slider('sensitivity', 'Sensitivity', 0.25, 3, 0.05)}
       ${toggle('invertY', 'Invert Y')}
+      <h2>controller</h2>
+      ${slider('controllerDeadzone', 'Stick dead zone', .05, .35, .01)}
+      ${slider('controllerLook', 'Look speed', .25, 3, .05)}
+      ${slider('controllerSteering', 'Steering response', .5, 2, .1)}
+      ${toggle('controllerInvertY', 'Invert controller look')}
+      ${toggle('controllerVibration', 'Controller vibration')}
+      <div class="keys">
+        <b>left / right stick</b><span>move / look; left click: run or cruise; right click: camera</span>
+        <b>A · X · B</b><span>jump / action · interact · crouch / back; menus: A choose, B back</span>
+        <b>Y · Start · View</b><span>all current actions · pause · city map</span>
+        <b>LT / RT</b><span>aim / use held item; vehicles: brake / power; skating: grabs</span>
+        <b>D-pad</b><span>up: inventory; down: actions; left / right: quick slots; activities: directions</span>
+        <b>menus</b><span>D-pad or left stick selects; left / right adjusts sliders and slots; right stick scrolls. A on a text field opens controller typing.</span>
+        <b>skating</b><span>A pushes, X mongo, B brakes; left stick carves, right stick flicks. Hold LB to look with the right stick; RB interacts. Y includes getting off the board.</span>
+      </div>
       <h2>skateboard controls</h2>
       <div class="keys">
         <b>A / D · left stick</b><span>carve, lean on a grind, spin in the air</span>
