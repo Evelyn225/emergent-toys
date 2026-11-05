@@ -790,8 +790,7 @@ ROOM_DEFS.video = { grid: ['############', '#.......#..#', '#.SS.SS.#..#', '#.SS
       figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true, cutout: true }), // a cardboard action hero
       aisleSign(3, 3.6, 'ACTION', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6, 3.6, 'HORROR', C(GRAY, 1), C(RED, 15), 0.4),
       beadCurtain(9.5, 4.5, 0.5), lintelSign(9.5, 4.5, 0.5, '18+', C(GRAY, 0.5), C(RED, 15)), // the way through to the back
-      hung(10, 2.3, 2.45, (vx, vy, z) => dot(vx, vy, z - 0.06, 0.06, (i, t, L) => { BG[i] = C(RED, 12); return set(i, 'o', C(YEL, 15)), true; }))]; // its red bulb
-    if (chance(0.5)) p.push(shopper(10.3, 2.2, 1, -0.3)); // somebody in there, not looking round
+      ...videoBackroomProps(r)];
     p.push(...shoppers([[1.4, 3.4, 1, 0], [4.5, 2.6, -1, 0], [4.5, 5, 1, 0], [7.4, 3.6, -1, 0]], 0.35));
     return p;
   } };

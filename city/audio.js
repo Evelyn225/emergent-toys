@@ -160,6 +160,7 @@ function tone(at, freq, len, gain, type = 'sine', pan = 0) {
   o.type = type; o.frequency.value = freq; p.pan.value = pan;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
   shot(o, g, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
+  return o;
 }
 // footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
 // [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
