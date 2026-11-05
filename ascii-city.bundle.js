@@ -32712,10 +32712,14 @@ DENSE.petcat = heldPetCarrier;
 DENSE.petdog = heldPetCarrier;
 // Groceries have their own full-size pictures; dropped icons stay small. Meals show their food, serving dish,
 // remaining portions and cooking quality, rather than stretching a ground icon into a hand.
+// Surface samples fill cells; only explicitly tagged printing stays as text.
+function foodSculpt(W,H,sample){
+  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
+}
 function heldGroceryPackage(it) {
   const id = it.id, meat = ['rawchicken', 'mince', 'bacon'].includes(id);
   const labels = { rice: 'RICE', pasta: 'PASTA', drynoodles: 'NOODLES', butter: 'BUTTER', tofu: 'TOFU' };
-  return sculpt(30, 17, (x, y) => {
+  return foodSculpt(30, 17, (x, y) => {
     if (id === 'eggs') {
       if (Math.abs(x) > 7.8 || y < -5.8 || y > 6.5) return null;
       for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
@@ -32744,17 +32748,17 @@ function heldGroceryPackage(it) {
       return [n > .65 ? '~' : '%', C(n > .65 ? WARM : RED, 8 + b * 5)];
     }
     const label = dText(x, y, 0, .4, labels[id] || id.toUpperCase());
-    if (label) return [label, C(id === 'butter' ? RED : BLUE, 14)];
+    if (label) return [label, C(id === 'butter' ? RED : BLUE, 14),true];
     if (id === 'pasta' || id === 'drynoodles') {
-      if (y > 2 && y < 5.8) return [id === 'pasta' ? '|' : '~', C(YEL, 12 + dCyl(x, half) * 3)];
+      if (y > 2 && y < 5.8) return [' ',C(YEL,(Math.sin(x*3+(id==='drynoodles'?Math.sin(y*1.3):0))>0?11:6)+dCyl(x,half)*3)];
     }
-    if (id === 'rice' && y > 2) return [hash(Math.floor(x * 3), Math.floor(y * 3), 8104) > .4 ? ':' : '.', C(WHITE, 14)];
+    if (id === 'rice' && y > 2) return [' ',C(WHITE,hash(Math.floor(x*2),Math.floor(y*2),8104)>.4?15:9)];
     return dLit(dCyl(x, half), id === 'butter' ? YEL : WHITE, 8);
   });
 }
 function heldProduce(it) {
   const id = it.id;
-  return sculpt(30, 17, (x, y) => {
+  return foodSculpt(30, 17, (x, y) => {
     const oval = (cx, cy, rx, ry, col) => dEll(x, y, cx, cy, rx, ry) < 1 ? dLit(dBall(x, y, cx, cy, rx, ry), col, 8) : null;
     if (id === 'cheese') {
       if (y < -5 || y > 6 || x < -6.5 || x > 6.5 - (y + 5) * .25) return null;
@@ -32811,7 +32815,7 @@ const HELD_BOWLS = new Set(['fishcurry', 'pomodoro', 'bolognese', 'macncheese', 
 const HELD_HAND_FOOD = { homeburger: 'burger', skewers: 'yakitori', fishstick: 'yakitori' };
 function heldToast(it, f) {
   const toast = it.id === 'toast', fish = it.id === 'fishsandwich', burnt = it.q === 'burnt';
-  return sculpt(30, 15, (x, y) => {
+  return foodSculpt(30, 15, (x, y) => {
     const bite = dBites(x, y, f, 7);
     if (bite === true) return null;
     const half = 6.8 + (y < -2 ? Math.sqrt(Math.max(0, 1 - ((y + 2) / 4.5) ** 2)) * 1.4 : 0);
@@ -32832,10 +32836,10 @@ function heldMeal(it, f) {
   if (['toast', 'grilledcheese', 'fishsandwich'].includes(id)) return heldToast(it, f);
   if (HELD_HAND_FOOD[id]) {
     const [art, col] = DENSE[HELD_HAND_FOOD[id]](it, f);
-    return [art, (ch, r, c) => burnt ? C(GRAY, 5 + (r + c) % 3) : col(ch, r, c)];
+    return [art.map(line=>line.replace(/[^ ]/g,'\u0001')), (ch, r, c) => burnt ? C(GRAY, 5 + (r + c) % 3) : col(art[r][c], r, c)];
   }
   const bowl = HELD_BOWLS.has(id), soup = ['fishcurry', 'chickencurry', 'tomatosoup'].includes(id);
-  return sculpt(34, 19, (x, y) => {
+  return foodSculpt(34, 19, (x, y) => {
     const steam = dSteam(x, y, -3.3, f, [-3.1, 2.7], 5);
     if (steam && !burnt) return steam;
     const dish = dEll(x, y, 0, 2.6, 9.4, bowl ? 5.5 : 4.6);
@@ -32844,18 +32848,20 @@ function heldMeal(it, f) {
     const ceramic = () => dLit(b, WHITE, 8);
     if (rim > 1 || bowl && y > 3) return ceramic();
     if (rim > .87) return ['=', C(it.q === 'perfect' ? CYAN : WHITE, 13)];
-    const eaten = x > -8 + f * 16;
-    if (eaten) return bowl ? [':', C(WHITE, 7)] : ceramic();
+    // Soup recedes down the bowl instead of losing a rectangular side.
+    const liquid=soup&&f>0&&dEll(x,y,0,1.3+(1-f)*1.1,7.9,2.6*(.6+.4*f))<1;
+    const eaten=soup?!liquid:x>-8+f*16;
+    if(eaten)return bowl?[' ',C(WHITE,7)]:ceramic();
     const food = (ch, col, light = 13) => [ch, C(burnt ? GRAY : col, burnt ? 4 + hash(x, y, 8111) * 3 : light)];
-    const n = hash(Math.floor(x * 2.3), Math.floor(y * 2.3), 8110);
+    const n = hash(Math.floor(x * .65), Math.floor(y * .65), 8110);
     if (['panfish', 'fishchips', 'grilledfish'].includes(id)) {
       if (id === 'grilledfish' && dEll(x, y, 5.4, 1.8, 1.8, 1.5) < 1) return food('o', YEL, 15);
-      if (id === 'fishchips' && y > 1.7 && Math.abs(x) < 7.2) return food(Math.floor(x * 1.2) & 1 ? '|' : '=', YEL);
-      if (dEll(x, y, -1, 0, 5.9, 2.1) < 1) return food(Math.abs(fract((x + y) * .35) - .5) < .1 ? '/' : dFill(b), id === 'panfish' ? ORANGE : WARM);
+      if (id === 'fishchips' && y > 1.7 && Math.abs(x) < 7.2) return food('|',YEL,(Math.floor(x*1.2)&1)?14:10);
+      if (dEll(x, y, -1, 0, 5.9, 2.1) < 1) return food(' ',Math.abs(fract((x+y)*.35)-.5)<.1?BRICK:id==='panfish'?ORANGE:WARM,9+dBall(x,y,-1,0,5.9,2.1)*6);
       return ceramic();
     }
     if (id === 'friedeggs' || id === 'baconeggs') {
-      if (id === 'baconeggs' && y > 2.6) return food(Math.sin(x * 2 + y) > 0 ? '~' : '=', RED);
+      if (id === 'baconeggs' && y > 2.6) return food(' ',Math.sin(x*2+y)>0?RED:WARM);
       for (const cx of [-3.2, 3]) {
         if (dEll(x, y, cx, .5, 3.2, 2.5) < 1) return food(dEll(x, y, cx, .4, 1.2, 1.1) < 1 ? '@' : '#', dEll(x, y, cx, .4, 1.2, 1.1) < 1 ? YEL : WHITE, 15);
       }
@@ -32866,21 +32872,21 @@ function heldMeal(it, f) {
       return ceramic();
     }
     if (id === 'roastchicken') {
-      if (dEll(x, y, 0, .3, 4.5, 2.8) < 1) return food(n > .8 ? '%' : '#', BRICK, 14);
+      if (dEll(x, y, 0, .3, 4.5, 2.8) < 1) return food(' ',BRICK,8+dBall(x,y,0,.3,4.5,2.8)*7);
       for (const cx of [-6, 6]) if (dEll(x, y, cx, 1.8, 1.7, 2) < 1) return food('o', WARM);
       return ceramic();
     }
     if (id === 'jacketpotato') {
-      if (dEll(x, y, 0, 1, 5.6, 2.7) < 1) return food(Math.abs(y - 1) < .6 || Math.abs(x) < .5 ? '=' : '#', Math.abs(y - 1) < .6 ? YEL : BRICK);
+      if (dEll(x, y, 0, 1, 5.6, 2.7) < 1) return food(Math.abs(y - 1) < .6 || Math.abs(x) < .5 ? '=' : '#', Math.abs(y-1)<.6||Math.abs(x)<.5?YEL:BRICK);
       return ceramic();
     }
     if (id === 'grilledveg') return food(n > .7 ? '%' : n > .4 ? '#' : 'o', n > .7 ? GREEN : n > .4 ? RED : WARM);
-    if (soup) return food(n > .82 ? 'o' : n > .68 ? ',' : '~', n > .82 ? WARM : n > .68 ? GREEN : id === 'tomatosoup' ? RED : ORANGE);
+    if (soup) return food(n > .82 ? 'o' : n > .68 ? ',' : '~', n > .82 ? WARM : n > .68 ? GREEN : id === 'tomatosoup' ? RED : ORANGE,10+b*4);
     if (id === 'risotto' && n > .8) return food('o', BRICK);
     if (id === 'friedrice' && n > .75) return food(n > .9 ? '%' : '@', n > .9 ? GREEN : YEL);
     if (id === 'stirfry' && n > .8) return food('%', GREEN);
     const col = id === 'pomodoro' || id === 'bolognese' ? RED : id === 'risotto' || id === 'friedrice' ? WHITE : YEL;
-    return food(id === 'risotto' || id === 'friedrice' ? ':' : Math.sin(x * 2 + y * 1.5) > 0 ? '~' : '=', col);
+    return food(' ',col,id==='risotto'||id==='friedrice'?10+Math.floor(n*4):10+b*3+(Math.sin(x*2+y*1.5)>0?1:-2));
   });
 }
 for (const recipe of RECIPES) DENSE[recipe.id] = heldMeal;
@@ -33186,23 +33192,25 @@ function heldPictureTop(picture, s, hsz) {
   const handEdge = -g.measureText('_').actualBoundingBoxAscent;
   g.font = s + 'px monospace';
   const middle = Math.floor(picture.width / 2), metrics = new Map();
-  let bottom = -Infinity, strokeHeight = s;
+  let bottom = -Infinity, strokeHeight = s, solidGrip=false;
   // Align the actual ink to the fingers. Many characters end well above the bottom of their cell.
   for (let r = Math.max(0, picture.gripRows - 2); r < picture.gripRows; r++) {
     for (let c = Math.max(0, middle - 2); c < Math.min(picture.width, middle + 3); c++) {
       const ch = picture.art[r][c];
       if (!ch || ch === ' ') continue;
-      if (!metrics.has(ch)) metrics.set(ch, g.measureText(ch));
+      // Solid picture cells occupy a full rectangle, independent of font ink.
+      if (!metrics.has(ch)) metrics.set(ch,ch==='\u0001'?{actualBoundingBoxAscent:0,actualBoundingBoxDescent:s+.3}:g.measureText(ch));
       const ink = metrics.get(ch), edge = r * s + ink.actualBoundingBoxDescent;
       if (edge > bottom) {
-        bottom = edge;
+        bottom = edge;solidGrip=ch==='\u0001';
         strokeHeight = ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent;
       }
     }
   }
   if (!Number.isFinite(bottom)) bottom = picture.gripRows * s;
-  // Leave the item's last stroke visible above the hand's dark outline, including one-pixel bases such as '_'.
-  const clearance = Math.max(strokeHeight < s * .3 ? 2 : 1.5, hsz * .07);
+  // Text needs clearance for its outline; solid rectangles meet the fingers.
+  // Keep thin text bases such as '_' visible above the hand's dark outline.
+  const clearance = solidGrip?.25:Math.max(strokeHeight < s * .3 ? 2 : 1.5, hsz * .07);
   const top = handEdge - clearance - bottom;
   picture.gripLayout = { s, hsz, top };
   return top;
