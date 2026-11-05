@@ -9,6 +9,8 @@ test('subway station floor, track bed and walls use colour; lettering remains on
    for(let wx=9;wx<36;wx+=.11)for(let wy=7;wy<14;wy+=.09){const r=rows-1,d=eye*projY/(r-hor+.5);CH[0]='?';roomFloor(0,r,0,(wx-px)/d,(wy-py)/d);samples++;if(CH[0]!==' ')glyphs++;materials.add(BG[0]>>4);}
    for(const d of [1,12])for(const [mx,my]of [[10,6],[10,14],[2,14],[0,12]])for(let u=0;u<8;u+=.13)for(let z=.05;z<3;z+=.09){if(z>1.55&&z<1.95)continue;CH[0]='?';stationWall(0,u,.005,z,d,mx,my,10);samples++;if(CH[0]!==' ')glyphs++;}
   }
+  // Sleepers now live below the platform as native solids, rather than floor paint.
+  for(const p of room.props.filter(p=>p.subwayTrackRole==='sleeper')){HIT.face=5;HIT.u=HIT.v=0;HIT.w=p.box.z1;p.shade(0,1,10);materials.add(BG[0]>>4);if(CH[0]!==' ')glyphs++;}
   const old=wallText;let signs=0;try{wallText=(...a)=>{if(a[5]===room.word)signs++;return false;};stationWall(0,6,.01,1.75,1,10,6,10);}finally{wallText=old;}
   return {glyphs,samples,materials:[...materials],signs};
  });assert.equal(r.glyphs,0,JSON.stringify(r));assert.ok(r.samples>10000&&r.signs>0);assert.equal(r.materials.length,4);
