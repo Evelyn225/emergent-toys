@@ -18055,6 +18055,42 @@ const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
 });
 // a grab pole, floor to ceiling
 const GRAB_POLE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => rod(vx, vy, 0, vx, vy, room.def.height || 3, 0.02, WHITE, 1.1), [0.03, 0.03, 3]); // (floor to ceiling)
+// Subway fixtures retain the existing cushion height and seating rows.
+const SUBWAY_CABIN_HEIGHT=3;
+const SUBWAY_SEAT={half:1.8,depth:.25,top:.45,base:.385,back:.95};
+function subwayBench(x,y){
+  const S=SUBWAY_SEAT,fy=y<2?1:-1,backY=y-fy*.28;
+  const blue=(i,t,L)=>{BG[i]=C(BLUE,(2.3+L*.3)*shadeFace(HIT.face));set(i,' ',0);return true;};
+  const part=(vx,vy,u,v,hx,hy,z0,z1,r,shade)=>coveRound(vx+u,vy+v,1,0,hx,hy,z0,z1,r,shade);
+  const seat={...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=0;k<6;k++)part(vx,vy,-1.5+k*.6,0,.294,S.depth,S.base,S.top,.025,blue);
+    part(vx,vy,0,0,S.half-.04,.2,.34,S.base,.012,CHROME);
+    for(const u of [-1.45,1.45])for(const v of [-.16,.16])part(vx,vy,u,v,.035,.035,0,.34,.01,CHROME);
+  },[S.half,S.depth,S.top]),subwaySeat:true,radius:Math.hypot(S.half,S.depth),seatRow:{x0:x-1.55,x1:x+1.55,y,fx:0,fy,h:S.top}};
+  const back={...ROOM_MODEL(x,backY,(vx,vy)=>{
+    for(let k=0;k<6;k++)part(vx,vy,-1.5+k*.6,0,.294,.05,S.top,S.back,.025,blue);
+    for(const u of [-1.45,1.45])part(vx,vy,u,-fy*.025,.025,.025,0,S.back,.01,CHROME);
+  }),box:boxAt(x,backY,1,0,S.half,.05,S.top,S.back),subwaySeatBack:true,radius:Math.hypot(S.half,.05)};
+  return [seat,back];
+}
+function subwayPole(x,y){
+  const height=SUBWAY_CABIN_HEIGHT,radius=.025;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    drum(vx,vy,radius,0,height,CHROME);
+    drum(vx,vy,.065,0,.018,CHROME);drum(vx,vy,.065,height-.018,height,CHROME);
+  },[radius,radius,height]),subwayPole:true};
+}
+function subwayCabinLamp(x,y){
+  const ceiling=SUBWAY_CABIN_HEIGHT,glass=(i,t,L)=>{BG[i]=C(WHITE,ceilLit()?13:CEIL_OFF_LAMP);set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.9,.12,ceiling-.065,ceiling,.012,CHROME);
+    coveRound(vx,vy,1,0,.86,.085,ceiling-.075,ceiling-.064,.004,glass);
+  }),box:boxAt(x,y,1,0,.9,.12,ceiling-.075,ceiling),walk:true,overhead:true,subwayLamp:true};
+}
+function subwayCabinFloor(i,wx,wy,L,fp){
+  const seam=coveGroove(wx,2.5,.012,fp),edge=facadeLine(Math.min(Math.abs(wy-1),Math.abs(wy-4)),.07,fp);
+  BG[i]=C(GRAY,1.3+L*.28-seam*.6+edge*.7);set(i,' ',0);
+}
 // a coil of rope lying flat on the floor, a sailor's coil: one rope spiralling in from its outer end, each turn lying
 // against the last, its loose end trailing off into the room. One surface from one distance function (the spiral and
 // the tail together), traced per cell, so the turns never overlap and it's lit and twisted continuously along its length.
@@ -18332,14 +18368,15 @@ const ROOM_DEFS = {
       for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 9 + Math.random() * 1.6, shirt()));
       return p;
     } },
-  train: { grid: boxRoom(22, 5, {}, false), light: 1, floor: 'train', ceil: 'strip', wall: trainWall,
+  train: { grid: boxRoom(22, 5, {}, false), height: SUBWAY_CABIN_HEIGHT, light: 1, floor: 'train', ceil: 'strip', wall: trainWall,
     props: r => {
       const p = [];
       for (const x of [3, 8, 13, 18]) for (const y of [1.3, 3.7]) {
-        p.push({ ...BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seatRow: { x0: x - 1.55, x1: x + 1.55, y, fx: 0, fy: y < 2 ? 1 : -1 } }, BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
-        if (chance(0.35)) p.push({ ...sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.45), face: [0, y < 2 ? 1 : -1] });
+        p.push(...subwayBench(x,y));
+        if (chance(0.35)) p.push({ ...sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), SUBWAY_SEAT.top), face: [0, y < 2 ? 1 : -1] });
       }
-      for (const x of [5.5, 10.5, 15.5]) p.push(GRAB_POLE(x, 2.5));
+      for (const x of [5.5, 10.5, 15.5]) p.push(subwayPole(x, 2.5));
+      for(const x of [3,8,13,18])for(const y of [1.8,3.2])p.push(subwayCabinLamp(x,y));
       return p;
     } },
   // the cafe: the counter and its pastry case, five tables, and the toilet through the door in the back corner
@@ -18929,18 +18966,23 @@ function stationWall(i, u, uStep, z, d, mx, my, L) {
   BG[i]=C(WHITE,2+L*.25-coursedJoint(u,z,.3,.3,uStep,d)*1.5);return true;
 }
 function trainWall(i, u, uStep, z, d, mx, my, L) {
-  if (my !== 0 && my !== room.H - 1) return false;
-  if (z > 1.05 && z < 1.95) { // windows: tunnel lights streaking past
-    if (fract(u / 1.8) < 0.06) { set(i, '|', C(GRAY, L)); return true; }
-    const s = fract(u * 1.2 + room.track * 4), s2 = fract(u * 0.5 + room.track * 1.5 + 0.3); // near and far tunnel lights
-    set(i, s < 0.06 ? '=' : s2 < 0.04 ? '-' : ' ', C(YEL, s < 0.06 ? 13 : 7)); BG[i] = C(GRAY, 1); return true;
+  const side=my===0||my===room.H-1,fp=Math.abs(uStep);
+  let base=GRAY,level=2.6+L*.3;
+  if(side&&z>1.05&&z<1.95){
+    const frame=coveGroove(u,1.8,.04,fp)>.5||z<1.09||z>1.91;
+    const near=fract(u*1.2+room.track*4)<.06,far=fract(u*.5+room.track*1.5+.3)<.04;
+    base=frame?GRAY:near||far?YEL:GRAY;level=frame?1.7+L*.2:near?12:far?6:1;
+  }else if(side&&z>2.05&&z<2.4){
+    BG[i]=C(WHITE,2+L*.22);
+    const k=Math.floor(u/6),ad=ADS[mod(k,ADS.length)];
+    if(wallText(i,u,uStep,z,d,ad,k*6+3,2.22,.15,.3,C(NEON[mod(k,4)],14),BG[i]))return true;
+    set(i,' ',0);return true;
+  }else{
+    level-=coveGroove(u,2.5,.015,fp)*.7;
+    if(z<.13)level=1+L*.18;
+    else if(z>.85&&z<1.02){base=ORANGE;level=2.4+L*.3;}
   }
-  if (z > 2.05 && z < 2.4) { // ads above the windows
-    const k = Math.floor(u / 6), ad = ADS[mod(k, ADS.length)];
-    if (wallText(i, u, uStep, z, d, ad, k * 6 + 3, 2.22, 0.15, 0.3, C(NEON[mod(k, 4)], 14))) return true;
-    set(i, '-', C(GRAY, L * 0.5)); return true;
-  }
-  return false;
+  BG[i]=C(base,level);set(i,' ',0);return true;
 }
 
 function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
@@ -19000,7 +19042,7 @@ function roomFloor(i, r, x, rx, ry) {
       BG[i] = C(BRICK, 1 + f);
       return set(i, border ? '=' : motif ? '+' : ' ', C(YEL, L * (border ? 1.3 : 0.7)));
     }
-    case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
+    case 'train': return subwayCabinFloor(i,wx,wy,L,homeBalconyPavingFootprint(d,eye));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
@@ -19137,6 +19179,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return sharedDarkCeil(i);
+  if(room.kind==='train'){BG[i]=C(WHITE,2.5);set(i,' ',0);return;}
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   if (strip && !ceilLit()) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
