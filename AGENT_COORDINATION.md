@@ -10,15 +10,9 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** integrating eight street skate spots in PR #431
-  (`codex/skate-street-spots`) with current main, including the merged physics,
-  controller, natural-air, fakie-return and roof-camera fixes from #430.
-  Preserve both street content and current physics/manifest entries; regenerate
-  the bundle. See `SKATE_IMPLEMENTATION.md`. Reserved world files are untouched;
-  the general world-quality checklist stays paused.
+- **Codex:** world-quality work resumed at the user's request. Airport bridge/dev arrival and subway cabin refits are merged. Current chunk: subway station handrails and mounted ceiling fittings (`codex/subway-station-fittings`); next pass 22 remainders are physical track/deck joins and train bogies. See `WORLD_QUALITY.md` for tests, timing and the remaining queue. Skating remains separately tracked in `SKATE_PLAN.md` / `SKATE_IMPLEMENTATION.md`.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
-  (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
-  the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
+  (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. The user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
   authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check
   open PRs before touching `city/skate*.js`, `city/skatepark*.js` or the sea.
 - **Reserved, don't edit without agreement:** `city/bathroom-quality.js`, DINER,
