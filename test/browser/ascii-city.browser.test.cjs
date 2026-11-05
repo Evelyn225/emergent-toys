@@ -1182,7 +1182,7 @@ const SKATE_SETUP = () => {
   window.skRide = (n, keys = {}) => { for (let k = 0; k < n; k++) { for (const c in K) K[c] = 0; Object.assign(K, keys); T += 1 / 30; stepSkate(1 / 30); stepBody(1 / 30); } };
   window.skFly = (keys = {}) => { let n = 0; while ((body.z > 0 || body.vz > 0) && n++ < 120) skRide(1, keys); };
 };
-test('the board drives like a vehicle: W kicks you up to speed, you roll on when you let go, S brakes, A and D carve', () => withPage(async page => {
+test('the board drives like a vehicle: W kicks you up to speed, you roll on when you let go, S brakes then turns to push back, A and D carve', () => withPage(async page => {
   await page.evaluate(SKATE_SETUP);
   const r = await page.evaluate(() => {
     skRide(1);
@@ -1190,8 +1190,9 @@ test('the board drives like a vehicle: W kicks you up to speed, you roll on when
     skRide(110, { KeyW: 1 }); const top = SK.v, x0 = px;
     skRide(30); const coast = SK.v, rolled = rel(px - x0);
     const a0 = a; skRide(20, { KeyA: 1 }); const left = a - a0;
-    skRide(90, { KeyS: 1 }); const braked = SK.v;
-    return { early, top, cruise: SK_TOP, coast, rolled, left, braked };
+    const heading=a;let minSpeed=Infinity,pivot=false;
+    for(let i=0;i<90;i++){skRide(1,{KeyS:1});minSpeed=Math.min(minSpeed,SK.v);pivot ||= !!SK.pivot;}
+    return { early, top, cruise: SK_TOP, coast, rolled, left, minSpeed, pivot, reverseSpeed:SK.v, turn:a-heading };
   });
   assert.ok(r.early > 0 && r.early < 0.4, `the first push is not top speed (${r.early})`);
   // Phase 1: fixed .6 m/s bursts taper toward a 6 m/s cap. Four seconds of
@@ -1199,7 +1200,8 @@ test('the board drives like a vehicle: W kicks you up to speed, you roll on when
   assert.ok(r.top > r.early * 2 && r.top < r.cruise, `successive kicks build speed (${r.top})`);
   assert.ok(r.coast > r.top * 0.85 && r.rolled > r.top * 0.8, `let go and you keep rolling (${r.coast}, ${r.rolled})`);
   assert.ok(r.left < -0.5, `A carves left (${r.left})`);
-  assert.strictEqual(r.braked, 0, 'S drags you to a stop');
+  assert.ok(r.minSpeed<.02&&r.pivot,'S stops before pivoting: '+JSON.stringify(r));
+  assert.ok(Math.abs(r.turn-Math.PI)<.05&&r.reverseSpeed>.1,'holding S then pushes back the other way: '+JSON.stringify(r));
 }));
 test('in the air A and D spin you: a 180 rides away switch, a quarter turn is a bail, and tricks back to back are a combo', () => withPage(async page => {
   await page.evaluate(SKATE_SETUP);
