@@ -32,7 +32,7 @@ function skateTrickAxes(yaw,pitch,bank,flip,shuv) {
 // their orientation into a later kerb hop. Preserve the pop, then prepare for
 // the surface below the predicted touchdown without changing trick rotation.
 function skateAirBegin(source = null) {
-  SK.airRoute=null;
+  SK.airRoute=null;SK.pivot=null;SK.lipPop=null;
   const up=skateBoardAxes(SKB.yaw,SKB.pitch,SKB.roll).up;
   SK.airPose={t:T,pitch:SKB.pitch,roll:SKB.roll,normal:up.slice()};
   SK.airNormal=up.slice();SK.airSource=source;

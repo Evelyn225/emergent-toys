@@ -10,13 +10,13 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** fixed-step skating and coordinated rider/board/camera interpolation
-  are on `codex/skate-fixed-step`, based on main after controller PR #429.
-  Scope: fixed clock, ramp energy, powerslides, C/RT bowl exits and coping slides,
-  fakie/camera-facing pushes, balance response and complete controller tricks, tests, tuning
-  references and generated bundle. See `SKATE_TUNING.md` and
-  `SKATE_IMPLEMENTATION.md`. World-quality changes are preserved; reserved files
-  remain untouched. The general world-quality checklist stays paused.
+- **Codex:** physics/controller follow-ups on `codex/skate-fixed-step` (PR #430):
+  fixed ticks, ramp energy, bowl exits, balance/tricks, live kick direction,
+  stronger braking, stop/pivot/reverse, unlimited orbit and ramp lip grace.
+  Eight street skate spots are separate in PR #431 (`codex/skate-street-spots`).
+  Preserve both sets of source/manifest entries and rebuild the bundle when
+  integrating. See `SKATE_IMPLEMENTATION.md`; reserved world files are untouched
+  and the general world-quality checklist remains paused.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. Codex is paused, and
   the user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is

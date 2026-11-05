@@ -63,7 +63,7 @@ function stepSkatePool(C,dt,push,brake,steer) {
   v=v.map((k,i)=>k*c+cross[i]*s);
   // Pump through the lower wall, with the same modest work as a mini ramp.
   const gain=push ? .06*Math.sin(f.at.theta*2)*dt : 0;
-  const target=Math.max(0,speed+gain-(brake ? .25 : .98*SK_PHYS.concrete)*dt);
+  const target=Math.max(0,speed+gain-(brake ? SK_PHYS.brake : .98*SK_PHYS.concrete)*dt);
   if(speed>1e-8)v=v.map(k=>k*target/speed);
   speed=target;
   const nextV=v.map((k,i)=>k+(.98*n[2]*n[i]-(i===2 ? .98 : 0))*dt);

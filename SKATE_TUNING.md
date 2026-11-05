@@ -41,7 +41,7 @@ this implementation. No proprietary tuning numbers have been inferred from it.
 | Low-speed push burst | 2.8 m/s | Gameplay acceleration, not a measured kick |
 | Concrete/asphalt rolling coefficient | 0.012 / 0.018 | Starting calibration knobs, not source-validated measurements |
 | Air drag | 0.004 /m | Starting calibration knob |
-| Foot brake | 2.5 m/s² | Starting calibration knob |
+| Foot brake | 6 m/s² | Responsive gameplay braking, requested during playtesting |
 | Camera distance / height | 5.5 m / 2 m | Readability and user preference; aspect and collision adjustments apply |
 | Clean wheels-down / alignment limits | 25° / 20° | Gameplay forgiveness |
 

@@ -93,7 +93,7 @@ function controllerTick(dt){
   for(const key in motion)motion[key]=0;
   if(skate){
     if(edge(5))controllerTap('KeyE');
-    controllerHint('A / stick forward push · X mongo · B brake · right stick tricks · hold RT at takeoff: air out · LB + right stick look · RB interact · Y actions');
+    controllerHint('A / stick forward push · X mongo · B brake · hold stick back: pivot/reverse · right stick tricks · hold RT at takeoff: air out · LB + right stick look · RB interact · Y actions');
   }else{
     if(edge(4))cycleQuickSlot(-1);if(edge(5))cycleQuickSlot(1);
     hold('Space',held(0));hold(vehicle?'KeyS':'KeyC',held(1));hold('KeyE',held(2));

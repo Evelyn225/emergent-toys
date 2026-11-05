@@ -124,6 +124,7 @@ function skateTransitionRelease(C, coping = false) {
     SKB.p=[px,py,z];SKB.v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,v[2]];
     body.ground=skateGround(px,py);body.groundMode=mode;body.z=Math.max(.002,(z-body.ground)*10);
   }
+  SK.lipPop=coping?{t:T,source:C.o,n:SKB.surf.n.slice(),out,contact:{o:C.o,u:C.u,axis:C.axis}}:null;
 }
 function skateTransitionKick(C,dt,push) {
   const at=skateProfilePoint(C.o.profile,C.u),speed=C.velocity?Math.hypot(...C.velocity):Math.hypot(C.vs,C.va);
@@ -141,10 +142,14 @@ function skateTransitionKick(C,dt,push) {
   if(SK.kick>=1)SK.kick-=1;
 }
 function stepSkateTransition(dt, push, brake, steer) {
+  if(SK.pivot)return false;
+  const flatReverse=SK.reversing||brake&&(K.KeyS||SK_INPUT.back)&&SK.v<.02&&Math.abs(steer)<.35;
+  if(SK.transition&&flatReverse&&skateProfilePoint(SK.transition.o.profile,SK.transition.u).theta<.1){SK.transition=null;body.z=body.vz=0;return false;}
   if (mode !== 'walk') { SK.transition = null; return false; }
   let C = SK.transition;
   if (!C) {
     let hit = skateTransitionAt(px, py, skateGround(px, py) + body.z / 10);
+    if(hit&&flatReverse&&hit.at.theta<.1)return false;
     let drop = false;
     if (!hit && push && SK.v < .1 && !skateAir()) for (const o of SK_TRANSITIONS) {
       const dx = rel(px - o.x), dy = rel(py - o.y), x = dx * o.c + dy * o.s, axis = -dx * o.s + dy * o.c;
@@ -184,7 +189,7 @@ function stepSkateTransition(dt, push, brake, steer) {
   if (C.o.bowl) return stepSkateBowl(C, dt, push, brake, steer);
   const at = skateProfilePoint(C.o.profile, C.u), p = C.o.profile;
   const direction = Math.sign(C.vs) || -Math.sign(C.u) || 1;
-  C.vs += (-.98 * at.tz - (brake ? .25 : SK_PHYS.concrete * .98) * direction) * dt;
+  C.vs += (-.98 * at.tz - (brake ? SK_PHYS.brake : SK_PHYS.concrete * .98) * direction) * dt;
   // Pumping adds a small amount of work through the bottom of each turn;
   // ordinary pushes retain the same cadence and taper as flat riding.
   if (push && !skateGestureLoaded() && SK.charge < 0) {
@@ -212,17 +217,31 @@ function stepSkateTransition(dt, push, brake, steer) {
   if (SK.combo && !SK.transition && !skateAir() && T - SK.combo.t > SK_COMBO_GAP) bankCombo();
   return true;
 }
-function skateTransitionPop(trick, gesture) {
-  const C = SK.transition, out=skateAirOutHeld(),n = out?[0,0,1]:SKB.surf.n;
-  const at=skateProfilePoint(C.o.profile,C.u);
-  const v=out&&at.theta>.7?skateTransitionLipVelocity(C,true):SKB.v.slice();
+const SK_LIP_GRACE=.12;
+function skateCanLipPop(){return skateAir()&&!!SK.lipPop&&T>=SK.lipPop.t&&T-SK.lipPop.t<=SK_LIP_GRACE&&!body.trick&&!SK.grind&&!SK.bail;}
+function skateTransitionPopStrength(gesture){
+  const load=SK.charge>=0?clamp((T-SK.charge)/SK_CHARGE,0,1):0;
+  return gesture?.strength??1+(3.4/POP_V-1)*load;
+}
+function skateFinishTransitionPop(trick,gesture,velocity){
+  SK.lipPop=null;SK.v=Math.hypot(velocity[0],velocity[1]);if(SK.v>1e-9)SK.dir=Math.atan2(velocity[1],velocity[0]);body.vz=velocity[2]*10;SKB.v=velocity;
+  const [name,flip,turn]=TRICKS[trick??arrowTrick()]||['ollie',0,0];
+  body.trick=skateTrick(name,flip,turn,skateAirTime(body.vz),!!gesture?.nollie);
+  SK.preWind=clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
+  SK.charge=-1;SK.spin=0;SK.popT=T;controllerRumble('pop');if(actx)sfxUse('ollie');return true;
+}
+function skateLipPop(trick,gesture){
+  if(!skateCanLipPop())return false;
+  const lip=SK.lipPop,out=lip.out||skateAirOutHeld(),n=out?[0,0,1]:lip.n,pop=POP_V*skateTransitionPopStrength(gesture)/10;
+  let v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,body.vz/10];
+  if(out&&!lip.out&&v[2]>0){SKB.v=v;v=skateTransitionLipVelocity(lip.contact,true);}
+  skateAirBegin(lip.source);SK.airRoute={o:lip.source,out};
+  return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
+}
+function skateTransitionPop(trick,gesture){
+  const C=SK.transition,out=skateAirOutHeld(),n=out?[0,0,1]:SKB.surf.n;
+  const at=skateProfilePoint(C.o.profile,C.u),v=out&&at.theta>.7?skateTransitionLipVelocity(C,true):SKB.v.slice();
+  const pop=POP_V*skateTransitionPopStrength(gesture)/10;
   skateTransitionRelease(C);
-  const pop = POP_V * (gesture?.strength ?? 1) / 10;
-  const velocity = v.map((x, i) => x + n[i] * pop);
-  SK.v = Math.hypot(velocity[0], velocity[1]); SK.dir = Math.atan2(velocity[1], velocity[0]); body.vz = velocity[2] * 10;
-  const [name, flip, turn] = TRICKS[trick ?? arrowTrick()] || ['ollie', 0, 0];
-  body.trick = skateTrick(name, flip, turn, skateAirTime(body.vz), !!gesture?.nollie);
-  SK.charge = -1; SK.spin = 0; SK.popT = T;
-  controllerRumble('pop');
-  if (actx) sfxUse('ollie');
+  return skateFinishTransitionPop(trick,gesture,v.map((x,i)=>x+n[i]*pop));
 }

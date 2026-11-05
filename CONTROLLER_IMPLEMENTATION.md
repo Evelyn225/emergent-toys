@@ -123,3 +123,11 @@ Repeated push presses while already fakie now keep pushing tail-first, with the
 push/mongo pose facing that kick. From-rest camera-facing selection still applies.
 Holding push near sustainable cruising speed idles the kick animation and coasts;
 kicks resume after a speed drop, with hysteresis to avoid rapid toggling.
+
+Latest back action: left-stick back or S brakes quickly; keep holding after
+stopping to pivot 180 degrees and push away in the new direction. Release to
+coast. B only brakes. Natural bowl/hill rollbacks can still ride fakie.
+LB + right-stick camera look now permits unlimited full orbits and recenters by
+the short arc. Ramp takeoff has 120 ms of pop grace: finish a loaded flick just
+after the lip for a normal trick. RT can select air-out in that window and does
+not become a grab; the grace cannot grant a second pop.

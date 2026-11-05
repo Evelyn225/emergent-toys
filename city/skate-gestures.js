@@ -72,6 +72,7 @@ function skateInputReset() {
 function skateGesturePlay(gesture) {
   if (!gesture || SK.bail > 0) return false;
   if (skateAir()) {
+    if(skateCanLipPop())return skateLipPop(gesture.key,gesture);
     const [name, flip, turn] = TRICKS[gesture.key] || ['ollie', 0, 0];
     if (!flip && !turn || body.trick && body.trick.flip && body.trick.t < (body.trick.duration ?? body.trick.air)) return false;
     body.trick = skateTrick('late ' + name, flip, turn, .32, gesture.nollie);
@@ -112,7 +113,7 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   SK_INPUT.grabL = button(6);
   // RT chooses an exit while riding a transition. That same held trigger
   // cannot become an accidental grab (and landing bail) during its flight.
-  SK_INPUT.grabR = (SK.transition||SK.airRoute?.out) ? 0 : button(7);
+  SK_INPUT.grabR = (SK.transition||SK.airRoute?.out||skateCanLipPop()) ? 0 : button(7);
   // Capture a stopped push before a render-only frame can move the chase
   // camera. This keeps the initial direction identical above 120 render Hz.
   if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));

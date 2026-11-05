@@ -2,7 +2,7 @@
 // skateBoardSync is the only conversion boundary for that height.
 const SKB = { p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, roll: 0,
   riderYaw: 0, contact: 'ground', surf: null, stance: 1, fakie: false };
-const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, reverseCap: .45, reverseAccel: .3, drag: .04, brake: .25, slide: .75, concrete: .012, asphalt: .018 };
+const SK_PHYS = { gravity: .98, pushCap: 1.2, pushBurst: .28, pivotTime: .24, drag: .04, brake: .6, slide: 1.1, concrete: .012, asphalt: .018 };
 const skateSurfaceCells = new Map();
 let skateSurfaceCount = -1;
 function skateSurfaceReset() { skateSurfaceCells.clear(); skateSurfaceCount = -1; }
@@ -70,8 +70,8 @@ function skateFaceTravel() {
 }
 function skatePushFromRest(push,speed) {
   if(!push||skateAir()){SK.pushFakie=null;return;}
-  if(SK.pushFakie!=null)return;
   if(speed>=.025){SK.pushFakie=Math.cos(SK.dir-a)<0;return;}
+  if(SK.pushFakie!=null)return;
   const facing=typeof third!=='undefined'&&third&&Number.isFinite(SK.camYaw)?SK.camYaw:a+(SK.look||0);
   SK.dir=facing;a+=mod(facing-a+Math.PI/2,Math.PI)-Math.PI/2;
   SK.pushFakie=Math.cos(facing-a)<0;
@@ -109,7 +109,25 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   vx += SK_PHYS.gravity * n[2] * n[0] * dt;
   vy += SK_PHYS.gravity * n[2] * n[1] * dt;
   let speed = Math.hypot(vx, vy);
-  skatePushFromRest(push,speed);
+  if(speed>=.025)SK.dir=Math.atan2(vy,vx);
+  const back=reverse&&!push&&Math.abs(steer)<.35;
+  if(!back)SK.reversing=false;
+  if(back&&!SK.reversing&&!SK.pivot&&speed<.02){
+    SK.reversing=true;SK.pivot={from:a,to:a+Math.PI,t:0};
+    SK.kick=0;SK.pushFakie=null;SK.pushCruise=false;SK.slide=0;SK.sliding=false;skateManualEnd();
+    // Discard complete orbit windings without moving the physical camera.
+    const base=SK.camBase??a;
+    if(SK.camYaw!=null)SK.camYaw=base+Math.atan2(Math.sin(SK.camYaw-base),Math.cos(SK.camYaw-base));
+    SK.look=0;SK.lookT=-9;
+  }
+  if(SK.pivot){
+    const p=SK.pivot;p.t+=dt;const t=clamp(p.t/SK_PHYS.pivotTime,0,1),smooth=t*t*(3-2*t);
+    a=p.from+(p.to-p.from)*smooth;SK.dir=a;vx=vy=speed=0;
+    if(t>=1){SK.pivot=null;SK.reversing=back;}
+  }
+  const turning=!!SK.pivot,reversePush=back&&SK.reversing&&!turning;
+  push=(push||reversePush)&&!turning;brake=brake&&!SK.reversing&&!turning;
+  if(reversePush&&speed<.025)SK.pushFakie=false;else skatePushFromRest(push,speed);
   SK.kicking = false;
   SK.mongo = !!(K.ShiftLeft || K.ShiftRight || SK_INPUT.mongo);
   if (skatePushReady(push,speed) && SK.charge < 0 && !skateGestureLoaded()) {
@@ -123,7 +141,7 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
     if (SK.kick >= 1) SK.kick -= 1;
   } else SK.kick = 0;
   speed = Math.hypot(vx, vy);
-  const turn = steer * (2.6 - 1.43 * Math.min(1, speed / SK_PHYS.pushCap)) * dt;
+  const turn = (turning?0:steer) * (2.6 - 1.43 * Math.min(1, speed / SK_PHYS.pushCap)) * dt;
   const beforeTurn=Math.hypot(vx,vy,-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]));
   a += turn;
   const c = Math.cos(turn), s = Math.sin(turn), tx = vx * c - vy * s;
@@ -138,23 +156,14 @@ function skateGroundVelocity(dt, push, brake, steer, reverse = false) {
   if (sliding && SK.combo && !SK.reverted && T - (SK.landedAt ?? -9) < .25) {
     SK.combo.names.push('REVERT'); SK.combo.pts += 75; SK.combo.t = T; SK.reverted = true;
   }
-  // Holding back must first finish braking. Once stopped, it becomes a
-  // modest backwards push; the board heading and stance stay unchanged.
-  const reversing=reverse&&!push&&Math.abs(steer)<.1&&(SK.reversing||speed<.015);
-  SK.reversing=reversing;
-  if (brake && !reversing && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
+  if (brake && !sliding && speed > .01 && (SK.dragT -= dt) <= 0) {
     SK.dragT = .12; if (actx) sfxSkate('drag', Math.min(1, speed / SK_TOP));
   }
   const mu = surf.material === 'concrete' ? SK_PHYS.concrete : surf.material === 'grass' ? .06 : SK_PHYS.asphalt;
-  const loss = ((brake&&!reversing ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
+  const loss = ((brake ? sliding ? SK_PHYS.slide : SK_PHYS.brake : mu * SK_PHYS.gravity)
     + SK_PHYS.drag * speed * speed) * dt + speed * Math.abs(turn) * .025;
   const keep = speed > 0 ? Math.max(0, speed - loss) / speed : 0;
   vx *= keep; vy *= keep;
-  if(reversing){
-    const backward=Math.max(0,-vx*Math.cos(a)-vy*Math.sin(a));
-    const impulse=SK_PHYS.reverseAccel*dt*Math.max(0,1-backward/SK_PHYS.reverseCap);
-    vx-=Math.cos(a)*impulse;vy-=Math.sin(a)*impulse;
-  }
   // Limit extreme downhill runs, never ordinary slope acceleration.
   const tangentZ=-(vx*n[0]+vy*n[1])/Math.max(.001,n[2]);
   const cap = Math.min(1, 1.4 / (Math.hypot(vx, vy,tangentZ) || 1)); vx *= cap; vy *= cap;

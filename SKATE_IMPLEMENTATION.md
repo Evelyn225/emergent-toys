@@ -383,3 +383,57 @@ regression. Local serial ABAB against exact main `4ff9292`, 177×66 at 1170 px:
 median main/branch frame times were 13.0/13.0 ms, then 13.5/13.4 ms (60 frames
 after 20 warm-up frames). Regular/fakie push poses were inspected. These local
 observations are not an FPS guarantee.
+
+## Responsive stop/pivot/reverse, free orbit and lip grace
+
+S or left-stick back now brakes at 6 m/s² (previously 2.5). Continued back input
+after stopping commits a 240 ms 180-degree board/rider pivot, then starts timed
+push kicks in that new direction. Releasing back coasts. Gamepad B remains a
+brake-only action; brake plus strong steering powerslides at 11 m/s². The pivot
+works on streets and flat transition bottoms. Steep-wall rollbacks without a
+back-input pivot remain fakie. This replaces the previous deliberate S action
+that kept the heading fixed and built a slow 4.5 m/s tail-first roll.
+
+Kick direction is now checked against live momentum throughout a held push,
+including when gravity reverses a hill climb. The previous per-press latch could
+remain forward after a rollback. From-rest camera-direction choice and cruise
+coasting still apply. Tests model natural fakie independently of S, since S is
+now an explicit turn-around action.
+
+Skating mouse look and controller LB + right-stick look can orbit through any
+number of full turns. The chase camera keeps a continuous following heading
+and a separate unbounded look offset, rather than clamping at +/-2.6 radians.
+After looking stops, idle recentering discards complete windings from both the
+offset and camera phase together, preserving its physical position and returning
+by the short arc. A deliberate pivot clears the orbit offset and the chase
+camera follows the new board direction. Air spins still do not turn the camera.
+
+Natural coping takeoffs retain one 120 ms lip-pop opportunity. A Space load or
+stick/mouse gesture started on the wall can finish just after takeoff and still
+be a normal pop/flip, rather than disappearing or becoming a weaker late flip.
+It uses the takeoff normal/current velocity and the same pop strength and spin
+pre-wind as a transition pop; air-out uses its upward pop direction. C/RT can
+choose an exit during this grace as part of the deliberate pop. The opportunity
+is consumed once, expires, and clears on unrelated flight/landing/dismount/bail.
+RT is reserved during the grace so an exit flick cannot become an accidental
+grab. Existing later airborne flips remain distinct from a new pop.
+
+Validation covers stop time from 8 m/s, stationary pivot before reverse kicks,
+keyboard/controller equivalence, transition-flat pivots, release/coasting,
+natural fakie, and live kick direction during a held-input hill rollback.
+Space and gamepad flick scripts exercise lip grace and expiry. Real browser
+checks cover camera follow, three full mouse orbits, multiple controller orbits,
+short-arc recentering, both grace inputs, late RT air-out and no double pop.
+Existing fixed-clock, bowl access/landing, shoe-anchor, camera and controller
+regressions pass. The old reversal browser run is shorter to keep the new,
+faster push-away on its clear approach before reaching the next ledge.
+
+Final validation: 84 focused Node checks and five rebuilt-bundle browser cases
+pass. Isolated mutations restoring weak brakes, disabling the pivot, retaining
+a stale held-push direction or removing lip grace fail their regressions. Camera
+mutations restoring the old orbit clamp or removing phase adjustment during
+recentering also fail their regressions. Local serial ABAB against exact main
+`4ff9292`, 177×66 at 1170 px: median main/branch frame times 13.9/15.3 ms, then
+14.8/13.0 ms (60 frames after 20 warm-up frames). There is no consistent increase
+in these local observations; they are not an FPS guarantee. Street-content PR
+#431 remains separate and preserved.

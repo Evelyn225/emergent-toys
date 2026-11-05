@@ -80,7 +80,7 @@ function stepSkateBowl(C, dt, push, brake, steer) {
   // Project centripetal acceleration into the radial profile; preserve angular
   // momentum when the radius changes. The gravity term pulls a slow carve down.
   C.vs += (C.va * C.va * at.tx / radius - .98 * at.tz) * dt;
-  const speed = Math.hypot(C.vs, C.va), loss = (brake ? .25 : .98 * SK_PHYS.concrete) * dt;
+  const speed = Math.hypot(C.vs, C.va), loss = (brake ? SK_PHYS.brake : .98 * SK_PHYS.concrete) * dt;
   const keep = speed ? Math.max(0, speed - loss) / speed : 0;
   C.vs *= keep; C.va *= keep;
   const turn = steer * 1.5 * dt, c = Math.cos(turn), s = Math.sin(turn), radial = C.vs * c - C.va * s;
