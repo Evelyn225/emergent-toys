@@ -4,9 +4,9 @@ let browser;test.before(async()=>browser=await chromium.launch());test.after(asy
 async function fixture(run){const p=await browser.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>{requestAnimationFrame=()=>0;HTMLCanvasElement.prototype.requestPointerLock=()=>Promise.resolve();});await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;T=10;heldUse=null;for(const k in fx)fx[k]=0;enterRoom('florist',{word:'FLORIST',ret:[100,100,0]},[5,5.8,-Math.PI/2]);room.props=[];});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
 test('every bought food and drink paints colour surfaces, retains complete package lettering and visibly depletes',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
-  const ids=Object.keys(ITEMS).filter(id=>['food','drink'].includes(ITEMS[id].kind)&&!ITEMS[id].cooked),labels={coffee:'CAFE',water:'AQUA',soda:'COLA',energy:'ZAP',popcorn:'POPCORN',fries:'FRIES',chicken:'CHICKEN',chips:'CHIPS',candy:'CANDY',fortunecookie:'LUCK',noodlebox:'@'},bad=[];let surfaces=0,letters='';
+  const ids=Object.keys(ITEMS).filter(id=>['food','drink'].includes(ITEMS[id].kind)&&!ITEMS[id].cooked),labels={coffee:'CAFE',water:'AQUA',soda:'COLA',energy:'ZAP',popcorn:'POPCORN',fries:'FRIES',chicken:'CHICKEN',chips:'CHIPS',candy:'CANDY',fortunecookie:'LUCK',noodlebox:'NOODLES'},bad=[];let surfaces=0,letters='';
   const signature=([art,col])=>art.map((line,r)=>[...line].map((ch,c)=>ch===' '?' ':ch+':'+col(ch,r,c)).join(',')).join('\n'),rect=g.fillRect,text=g.fillText,stroke=g.strokeText;
-  try{g.fillRect=()=>surfaces++;g.fillText=ch=>{letters+=ch;if(!/[A-Z@]/.test(ch))bad.push(['surface reached text painter',ch]);};g.strokeText=ch=>{if(!/[A-Z@]/.test(ch))bad.push(['surface reached outline painter',ch]);};
+  try{g.fillRect=()=>surfaces++;g.fillText=ch=>{letters+=ch;if(!/[A-Z]/.test(ch))bad.push(['surface reached text painter',ch]);};g.strokeText=ch=>{if(!/[A-Z]/.test(ch))bad.push(['surface reached outline painter',ch]);};
    for(const id of ids){const I=ITEMS[id];for(const f of [1,.5,.25,0]){const[art,col]=DENSE[id]({id,uses:Math.ceil(I.uses*f)},f);let cells=0;
     for(const line of art)for(const ch of line)if(ch!==' '){cells++;if(ch!=='\u0001'&&!labels[id]?.includes(ch))bad.push(['surface glyph',id,f,ch]);}
     if(f>0&&cells<2)bad.push(['empty picture',id,f]);if(f>0&&labels[id]&&!art.some(l=>l.includes(labels[id])))bad.push(['broken label',id,f]);
@@ -14,7 +14,7 @@ test('every bought food and drink paints colour surfaces, retains complete packa
    }if(I.uses>1&&signature(DENSE[id]({id,uses:I.uses},1))===signature(DENSE[id]({id,uses:1},1/I.uses)))bad.push(['no depletion',id]);}
   }finally{g.fillRect=rect;g.fillText=text;g.strokeText=stroke;}
   return{bad:bad.slice(0,12),count:ids.length,surfaces,letters};
- });assert.deepEqual(r.bad,[],JSON.stringify(r));assert.ok(r.count>=54&&r.surfaces>10000);for(const word of ['CAFE','AQUA','COLA','CHICKEN','POPCORN','LUCK'])assert.ok(r.letters.includes(word),word);
+ });assert.deepEqual(r.bad,[],JSON.stringify(r));assert.ok(r.count>=54&&r.surfaces>10000);for(const word of ['CAFE','AQUA','COLA','CHICKEN','POPCORN','LUCK','NOODLES'])assert.ok(r.letters.includes(word),word);
 }));
 test('drink levels lower inside solid rims and bases, while the sake cup keeps its whole ceramic silhouette',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{

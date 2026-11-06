@@ -32266,7 +32266,7 @@ Object.assign(DENSE, {
     for (const o of [0, 1]) { const s = dStraw(x, y, 4.3 + o, -1, 1.2 + o, -7.6, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; }
     const hw = 4.6 - (y + 1.4) * 0.14;
     if (y > -1.4 && y < 6.8 && Math.abs(x) < hw) {
-      if (dEll(x, y, 0, 2.6, 1.3, 1.3) < 1) return ['@',C(RED,13),true]; // the printed mark
+      const label=dText(x,y,0,2.6,'NOODLES');if(label)return [label,C(RED,13),true];
       return dLit(0.55 + 0.45 * dCyl(x, hw), WHITE, 7);
     }
     const heap = -1.4 - 2.6 * f;
