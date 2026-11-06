@@ -82,7 +82,7 @@ function drawBulletHoles() {
     const vx = rel(h.x - px), vy = rel(h.y - py);
     if (vx * h.nx + vy * h.ny >= 0) continue; // (from round the back of the wall)
     const p = fishProj(vx, vy, h.z);
-    if (p && p.depth < Math.min(vis, 6)) fishPut(p.c, p.r, p.depth, p.depth < 0.6 ? 'o' : '.', C(GRAY, 2.5), C(GRAY, 0.6));
+    if (p && p.depth < Math.min(vis, 6)) fishSurface(p.c,p.r,p.depth,C(GRAY,1));
   }
 }
 
@@ -207,17 +207,17 @@ function drawShots() {
     if (age > 0.09 || s.indoors) continue;
     const ox = rel(s.x0 - px) + Math.cos(a + 0.6) * 0.02, oy = rel(s.y0 - py) + Math.sin(a + 0.6) * 0.02;
     const p0 = fishProj(ox + Math.cos(a) * 0.08, oy + Math.sin(a) * 0.08, s.z0 - 0.02), p1 = fishProj(rel(s.x - px), rel(s.y - py), s.z);
-    if (p0 && p1) fishSeg(p0, p1, C(age < 0.04 ? WHITE : YEL, 15));
-    if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishPut(p1.c, p1.r, p1.depth, '*', C(s.what === 'car' ? YEL : WHITE, 14)); // (sparks, or a puff of grit)
+    if (p0 && p1) fishSeg(p0,p1,C(age<.04?WHITE:YEL,15),true);
+    if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishSurface(p1.c,p1.r,p1.depth,C(s.what==='car'?YEL:WHITE,14)); // (sparks, or a puff of grit)
   }
   for (const s of gun.copShots) { // theirs: a flash at the officer's outstretched hands, and a streak coming at you
     if (T - s.t > 0.09 || s.room) continue;
     const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy) || 1, hx = vx - vx / d * 0.03, hy = vy - vy / d * 0.03; // (a step toward you from them: the muzzle)
-    drawArt(hx, hy, 0.11, 0.07, 0.07, ['\\|/', '-@-', '/|\\'], ch => ch === '@' ? C(WHITE, 15) : C(T - s.t < 0.04 ? YEL : ORANGE, 15));
+    const [flash,col]=heldMuzzleFlash(T-s.t<.04?1:.6);drawArt(hx,hy,.11,.07,.07,flash,(ch,r,L,c)=>col(ch,r,c),true);
     if (T - s.t < 0.06) { // passing you on one side (a miss) or straight at you (a hit), ending just short of your eyes
       const k = 0.12 / d, mx = vx * k - vy / d * (s.hit ? 0 : 0.05 * s.side), my = vy * k + vx / d * (s.hit ? 0 : 0.05 * s.side);
       const p0 = fishProj(hx, hy, 0.13), p1 = fishProj(mx, my, eye - 0.02);
-      if (p0 && p1) fishSeg(p0, p1, C(YEL, 14));
+      if (p0 && p1) fishSeg(p0,p1,C(YEL,14),true);
     }
   }
 }
@@ -235,10 +235,10 @@ function drawBlood() {
       const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
       if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
       const col = dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
-      if (k > 0.85) { BG[i] = BG_UNSET; return set(i, k > 1 ? '.' : ',', C(col, (5 - dry * 2) * lv)), true; } // (the soaked-in edge, and the spatters past it)
+      if(k>.85){BG[i]=C(col,(2.8-dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
       BG[i] = C(col, (2.6 - k * 0.8 - dry * 1.1) * lv);
       const glint = dry < 0.4 && k < 0.5 && hash(Math.floor(HIT.u * 160), Math.floor(HIT.v * 160), 4412) > 0.9; // (wet: it catches the light)
-      return set(i, glint ? '~' : ' ', C(RED, 9 * lv)), true;
+      if(glint)BG[i]=C(RED,5*lv);return set(i,' ',0),true;
     });
   }
 }
@@ -246,7 +246,7 @@ function drawBlood() {
 function drawSheet(o, vx, vy) {
   const fx_ = o.down.fx, fy_ = o.down.fy;
   drawBox(boxAt(vx + fx_ * 0.02, vy + fy_ * 0.02, fx_, fy_, 0.1, 0.04, 0, 0.025), (i, t, L) => {
-    BG[i] = C(WHITE, 4 + L * 0.6); return set(i, HIT.face === 5 ? (fract(HIT.u * 9 + HIT.v * 4) < 0.25 ? '~' : ' ') : '_', C(GRAY, 9 + L * 0.3)), true; // (folds in it, over the shape of them)
+    const fold=HIT.face===5&&fract(HIT.u*9+HIT.v*4)<.25;BG[i]=C(WHITE,4+L*.6-(fold?2:0));return set(i,' ',0),true; // (folds in it, over the shape of them)
   });
 }
 

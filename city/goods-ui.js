@@ -822,7 +822,7 @@ function drawBall() {
   const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R;
   const Rm = ballSpin(rel(ball.x - (ball.lx ?? ball.x)), rel(ball.y - (ball.ly ?? ball.y)));
   ball.lx = ball.x; ball.ly = ball.y;
-  if (BALL_R * 2 * projX / d < 3) return dot(vx, vy, zc, BALL_R, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i, 'o', C(GRAY, L)), true; });
+  if (BALL_R * 2 * projX / d < 3) return dot(vx, vy, zc, BALL_R, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i,' ',0),true; });
   drawBox(boxAt(vx, vy, 1, 0, BALL_R, BALL_R, zc - BALL_R, zc + BALL_R), (i, t, L) => {
     const nx = HIT.u, ny = HIT.v, nz = HIT.w, light = 0.6 + 0.4 * Math.max(0, -nx * 0.4 + ny * 0.3 + nz * 0.75);
     const bx = Rm[0] * nx + Rm[3] * ny + Rm[6] * nz, by = Rm[1] * nx + Rm[4] * ny + Rm[7] * nz, bz = Rm[2] * nx + Rm[5] * ny + Rm[8] * nz; // (into the ball's own frame)
