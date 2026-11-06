@@ -2,17 +2,29 @@
 // again as the Hornet, in police colours (white, a dark belly, yellow and blue squares down the side), its red and blue
 // lights flashing; and its searchlight, a beam slanting down to a pool of light on the street (or the roof it's on).
 // The rotor thuds, louder the nearer it is.
+let chopperPoolBackground=new Uint8Array(0);
+function drawChopperPool(lx,ly,ground,strength){
+  if(chopperPoolBackground.length!==BG.length)chopperPoolBackground=new Uint8Array(BG.length);
+  chopperPoolBackground.set(BG);
+  // The pool changes illumination, retaining surface detail, lettering and depth.
+  drawBox(boxAt(lx, ly, 1, 0, SPOT_R, SPOT_R, ground + 0.0003, ground + 0.0008), (i, t, L) => {
+    const r = Math.hypot(HIT.u, HIT.v) / SPOT_R, k = (1 - r * r) * strength;
+    const background=chopperPoolBackground[i];
+    if(k<=0||background===NONE)return false;
+    // Only illuminate the existing receiving surface, not scenery beyond it.
+    if(Number.isFinite(ZBG[i])&&Math.abs(ZBG[i]-t)>Math.max(.015,t*.015))return false;
+    const illuminated=lightPoolColour(background>>4,background&15,k,Math.floor(i/cols),i%cols,WHITE);
+    BG[i]=(illuminated&0xf0)|Math.max(background&15,illuminated&15);
+    return false; // light leaves the existing surface's depth and flags intact
+  }, rayCopperDrum);
+}
 function drawChopper() {
   if (!heli) return;
   const vx = rel(heli.x - px), vy = rel(heli.y - py), z = heli.z, hx = Math.cos(heli.h), hy = Math.sin(heli.h);
   if (Math.hypot(vx, vy) > vis + 4) return;
-  const lx = rel(heli.sx - px), ly = rel(heli.sy - py), ground = map[idx(Math.floor(heli.sx), Math.floor(heli.sy))] || 0;
+  const lx = rel(heli.sx - px), ly = rel(heli.sy - py), ground = Math.max(map[idx(Math.floor(heli.sx),Math.floor(heli.sy))]||0,roadGroundHeight(heli.sx,heli.sy));
   const strength = 0.35 + 0.65 * Math.max(night, overcast * 0.6); // (much plainer by night)
-  // the pool of light: brightest in the middle, fading to its edge
-  drawBox(boxAt(lx, ly, 1, 0, SPOT_R, SPOT_R, ground + 0.0003, ground + 0.0008), (i, t, L) => {
-    const r = Math.hypot(HIT.u, HIT.v) / SPOT_R, k = (1 - r * r) * strength;
-    BG[i] = C(WHITE, 3 + k * 9); set(i, k > 0.55 ? ' ' : '.', C(YEL, 6 + k * 8)); FOGS[i] = 0; return true;
-  }, rayCopperDrum);
+  drawChopperPool(lx,ly,ground,strength);
   // the beam: specks of light down the line from the helicopter's belly to the pool, in front of whatever's behind
   const bx = vx + hx * 0.17 * CHOPPER_SIZE, by = vy + hy * 0.17 * CHOPPER_SIZE, bz = z - 0.07 * CHOPPER_SIZE; // (from the lamp under its nose)
   // A widening volume: rings grow from the lamp to the existing circular ground pool.
