@@ -34,6 +34,7 @@ function stadiumAtmosphere() {
   if (m.events.length < stadiumSeen || m !== stadiumAtmosphere.m) { stadiumAtmosphere.m = m; stadiumSeen = m.events.length; } // (a new match: start from now)
   if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
   while (stadiumSeen < m.events.length) stadiumEvent(m, m.events[stadiumSeen++]);
+  tickStadiumReplay();
   // the home end singing: when they've something to sing about, now and then, not over an attack
   if (m.phase === 'play' && (stadiumChantT -= 1 / 60) <= 0) {
     stadiumChantT = 22 + Math.random() * 25;
@@ -42,6 +43,7 @@ function stadiumAtmosphere() {
 }
 function stadiumEvent(m, e) {
   const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft'].includes(e.kind);
+  if (e.kind === 'goal') queueStadiumReplay(m, e); // (the build-up, again, in a few seconds: stadium.js)
   // the PA and the commentary: the big moments always; the rest when nothing else is up
   let line = null;
   if (e.kind === 'kickoff') { if (e.period === 1) return; line = 'The second half is under way.'; } // (the first half's is the welcome)

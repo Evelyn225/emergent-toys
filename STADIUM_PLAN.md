@@ -49,7 +49,12 @@ Yes, as a medium-to-large feature. Most of what it needs exists:
     - a roar for home goals, a cheer and a groan for away goals, boos for cards against the home side
     - the home end clapping and chanting
   - **Words:** PA and commentary lines for every event, and the score and clock in the top status line.
-- **Next:** phase 6 (replays on the big screen and the TV view, celebrations), then phase 7 (extras).
+- **Phase 6 (replays and celebrations):**
+  - **Big screen:** a 20 m screen beside the scoreboard shows the match top-down.
+  - **Replays:** after every goal, the build-up (from the engine's 8-second buffer) replays at 55% speed. It plays on the big screen (marked REPLAY), and with V on, on TV from a camera low behind that goal.
+  - **TV during celebrations:** the camera follows the scorer, not the ball in the net.
+  - **Celebrations:** the scorer bursts about 14 m toward the corner fans and is mobbed, arms up. The other side stands with hands on heads.
+- **Next:** phase 7 (extras: betting, concessions and scarves, season tickets, cup matches).
 
 ## 1. What the player gets
 
