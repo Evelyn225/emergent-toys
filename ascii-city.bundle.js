@@ -630,8 +630,8 @@ function vehicleGroundFrame([hl,hw],x,y,hx,hy,sample=roadGroundHeight) {
 // your health starts to go, faster with both; at nothing you pass out and wake up in the hospital with a bill
 // (crime-ui.js / actions.js). Food heals a little as you eat it, health comes back slowly while you're fed and
 // watered, and the nurse at the hospital patches you up for a fee. A long fall off a roof costs health too (moves.js).
-const DRINK_LAST = 30 * 60, FOOD_LAST = 40 * 60; // seconds from full to empty
-const STARVE_T = 4 * 60; // seconds from full health to passing out with one meter empty (half that with both)
+const DRINK_LAST = 60 * 60, FOOD_LAST = 80 * 60; // seconds from full to empty
+const STARVE_T = 10 * 60; // seconds from full health to passing out with one meter empty (half that with both)
 const HEAL_T = 10 * 60; // seconds to get your health all the way back, fed and watered
 const MEDICAL_BILL = 80, NURSE_FEE = 25;
 const FOOD_HEALS = 0.4; // health per point of hunger filled: a burger (50) is 20 health, a candy bar 8
@@ -673,6 +673,19 @@ function eatSome(id, d, k = 1) { // k: how much more (or less) it does for you (
   if (wasThirsty && needs.drink >= 30) return ' That\'s better.';
   return '';
 }
+// Shared warning text stays accurate for either resource, even after a save
+// reload or another message replaces the brief stage-change announcement.
+function needsAlert(){
+  const stage=v=>v<=0?3:v<=10?2:v<=20?1:0,f=stage(needs.food),w=stage(needs.drink);
+  if(!f&&!w)return null;
+  const labels=[];
+  if(f)labels.push(f===3?'STARVING':f===2?'FOOD CRITICAL':'LOW FOOD');
+  if(w)labels.push(w===3?'DEHYDRATED':w===2?'WATER CRITICAL':'LOW WATER');
+  const empty=f===3||w===3,weak=empty&&needs.health<35;
+  const action=f&&w?'Eat and drink':f?'Eat':'Drink';
+  return {stage:`${f}:${w}:${weak?1:0}`,urgent:f>=2||w>=2,
+    text:(weak?'FAINTING - ':'')+labels.join(' + ')+' - '+(empty?'health falling. ':'')+action+(empty?' now.':' soon.')};
+}
 // every frame (on your feet or not). Returns 'faint' when you've gone down, or a warning to show once
 function stepNeeds(dt, canFaint) {
   const fed = typeof fx !== 'undefined' && fx.fed > 0 ? 0.5 : 1; // (well fed, after something perfect you cooked: cooking.js)
@@ -683,12 +696,11 @@ function stepNeeds(dt, canFaint) {
   if (empty) needs.health = Math.max(canFaint ? 0 : 1, needs.health - dt * 100 / STARVE_T * empty); // (not at the wheel: you hang on till you're out)
   else if (needs.food > 30 && needs.drink > 30) needs.health = Math.min(maxHealth(), needs.health + dt * 100 / HEAL_T);
   if (needs.health <= 0) return 'faint';
-  // a word when things get bad: once per stage
-  const stage = needs.health < 35 ? 'weak' : needs.drink <= 0 ? 'parched' : needs.food <= 0 ? 'starving' : needs.drink < 20 ? 'thirsty' : needs.food < 20 ? 'hungry' : '';
-  if (stage === needs.warned) return '';
-  needs.warned = stage;
-  return { weak: 'Your vision swims. You need to eat and drink, now, or you\'ll pass out.', parched: 'Your mouth is bone dry. You\'re getting weaker.',
-    starving: 'Your stomach aches. You\'re getting weaker.', thirsty: 'You\'re thirsty.', hungry: 'You\'re getting hungry.' }[stage] || '';
+  // Announce stage changes once; the HUD keeps the current warning visible.
+  const alert=needsAlert(),stage=alert?.stage||(needs.health<35?'weak':'');
+  if(stage===needs.warned)return '';
+  needs.warned=stage;
+  return alert?.text||(stage==='weak'?'Your vision swims. Find medical help.':'');
 }
 // fell `m` metres: health it costs (a storey or so is nothing; past about 25m it's the hospital whatever)
 const fallHurt = m => m < 4 ? 0 : (m - 4) * 4.5;
@@ -27798,8 +27810,9 @@ function hud() {
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
-  const meters = needMeters();
-  hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
+  const meters = needMeters(),alert=needsAlert(),alertLines=alert?wrapText(alert.text,maxW):[];
+  const alertHeight=alertLines.length?(FS+4)*alertLines.length+8:0;
+  hudBottom = top + (lines.length + task_.length + 1) * FS + 14 + alertHeight;
   hudBottom += drawNavigationCompass(hudBottom);
   wantedHud();
   minimap();
@@ -27814,8 +27827,15 @@ function hud() {
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
     for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
   }
+  if(alertLines.length){
+    const y=top+FS*(lines.length+1)+10,width=Math.min(maxW+8,Math.max(...alertLines.map(s=>g.measureText(s).width))+12);
+    g.fillStyle=alert.urgent?'#4b1111':'#3d2a08';g.fillRect(0,y,width,alertHeight-2);
+    g.fillStyle=alert.urgent?'#ff7055':'#ffc45c';g.fillRect(0,y,3,alertHeight-2);
+    g.font='bold '+FS+'px monospace';g.fillStyle=alert.urgent?'#ffd4c2':'#ffd56a';
+    alertLines.forEach((s,k)=>g.fillText(s,6,y+4+k*(FS+4)));g.font=FS+'px monospace';
+  }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = top + FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = top + FS * (lines.length + 1) + 10 + alertHeight, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }

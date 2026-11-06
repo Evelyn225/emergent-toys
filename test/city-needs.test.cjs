@@ -29,14 +29,14 @@ test('the meters run down in real time, thirst first; empty, your health goes; a
   ev('refillNeeds()');
   run(15 * 60);
   const [f, d] = j('[needs.food, needs.drink]');
-  assert.ok(d < f && Math.abs(d - 50) < 1 && Math.abs(f - 62.5) < 1, `half an hour drains thirst, 40 minutes hunger (${f}, ${d})`);
+  assert.ok(d < f && Math.abs(d - 75) < 1 && Math.abs(f - 81.25) < 1, `an hour drains thirst, 80 minutes hunger (${f}, ${d})`);
   assert.strictEqual(j('needs.health'), 100);
   ev('needs.drink = 0; needs.food = 80; needs.health = 100');
-  assert.match(run(60), /bone dry/, 'warned');
-  assert.ok(j('needs.health') < 80, 'health draining');
+  assert.match(run(60), /DEHYDRATED/, 'warned');
+  assert.ok(Math.abs(j('needs.health') - 90) < .01, 'one empty meter takes ten minutes to drain full health');
   ev('needs.health = 100'); assert.notStrictEqual(run(10 * 60, false), 'faint', 'driving: no faint');
   assert.strictEqual(j('needs.health'), 1);
-  assert.strictEqual(run(5), 'faint');
+  assert.strictEqual(run(10), 'faint');
   ev('money = 60');
   assert.strictEqual(j('hospitalised()'), 60, 'the bill, or all you have');
   assert.deepStrictEqual(j('[money, needs.health, needs.drink >= 50]'), [0, 100, true]);
