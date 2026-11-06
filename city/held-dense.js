@@ -1,6 +1,6 @@
 // ===== held items, drawn at a little over the world's own character size
-// with twice the detail: each picture is sculpted cell by cell from a shape, shaded through a ramp of characters
-// with a light from the top left, like an ASCII-art image, instead of being outlined in big letters.
+// Pictures sample shaped surfaces into colour cells, lit from the top left.
+// Explicitly tagged labels and wires retain their characters.
 const D_RAMP = ' .:-=+*#%@', D_ASPECT = 0.6; // a character is about 0.6 as wide as it is tall
 const dRamp = b => D_RAMP[clamp(Math.round(b * (D_RAMP.length - 1)), 1, D_RAMP.length - 1)];
 const D_FILL = '=+*#%@', dFill = b => D_FILL[clamp(Math.round(b * (D_FILL.length - 1)), 0, D_FILL.length - 1)]; // solid: light shows in the colour
@@ -13,7 +13,7 @@ function sculpt(W, H, fn) {
 }
 // Surface samples fill cells; only explicitly tagged printing stays as text.
 function sculptSurface(W,H,sample){
-  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
+  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&cell[0]===' '&&cell[1]===0)return null;if(cell&&!cell[2])cell[0]='\u0001';return cell;});
 }
 // light on a surface with normal (nx, ny up-is-negative, nz toward you): from the top left, a little in front
 const dLight = (nx, ny, nz) => clamp(0.15 + 0.85 * Math.max(0, -0.45 * nx - 0.55 * ny + 0.7 * nz), 0, 1);

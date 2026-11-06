@@ -31471,11 +31471,11 @@ function drawYoyo(x, y) {
   const trail = clamp((Math.abs(yoyo.angV) - 2) / 4, 0, 1);
   if (trail > 0) {
     g.save(); g.globalAlpha = trail;
-    for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * .02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); }
+    for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * .02 * k, len); heldToolEllipse(r.x,r.y,w*.5,s*.5,C(RED,8-k*2)); }
     g.restore();
   }
   const spin = yoyo.spin * .2; // slower visible spokes avoid strobing; contact and recall never reset their phase
-  const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
+  const [art, col] = sculptSurface(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
     if (r < 0.6) return ['@', C(WHITE, 15)];
@@ -31818,8 +31818,8 @@ function drawBall() {
   }, raySphere);
 }
 // ===== held items, drawn at a little over the world's own character size
-// with twice the detail: each picture is sculpted cell by cell from a shape, shaded through a ramp of characters
-// with a light from the top left, like an ASCII-art image, instead of being outlined in big letters.
+// Pictures sample shaped surfaces into colour cells, lit from the top left.
+// Explicitly tagged labels and wires retain their characters.
 const D_RAMP = ' .:-=+*#%@', D_ASPECT = 0.6; // a character is about 0.6 as wide as it is tall
 const dRamp = b => D_RAMP[clamp(Math.round(b * (D_RAMP.length - 1)), 1, D_RAMP.length - 1)];
 const D_FILL = '=+*#%@', dFill = b => D_FILL[clamp(Math.round(b * (D_FILL.length - 1)), 0, D_FILL.length - 1)]; // solid: light shows in the colour
@@ -31832,7 +31832,7 @@ function sculpt(W, H, fn) {
 }
 // Surface samples fill cells; only explicitly tagged printing stays as text.
 function sculptSurface(W,H,sample){
-  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
+  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&cell[0]===' '&&cell[1]===0)return null;if(cell&&!cell[2])cell[0]='\u0001';return cell;});
 }
 // light on a surface with normal (nx, ny up-is-negative, nz toward you): from the top left, a little in front
 const dLight = (nx, ny, nz) => clamp(0.15 + 0.85 * Math.max(0, -0.45 * nx - 0.55 * ny + 0.7 * nz), 0, 1);
@@ -31909,7 +31909,7 @@ function drawHeldDense(it, cx, hy, hsz, picture = heldPicture(it), s = heldFrame
   if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top + (sparkBurn() * 9) * s, s * 2); // (at the burning point, working its way down)
   g.font = FS + 'px monospace';
 }
-// ===== the rest of the held items, sculpted the dense way (see held-dense.js). Each is (it, f) => sculpt(W, H, fn):
+// ===== the rest of the held items, sculpted the dense way (see held-dense.js). Each is (it, f) => sculptSurface(W, H, fn):
 // x across and y down in row heights from the middle, f how much is left. Whatever you eat or drink shows it going:
 // a level dropping, steam fading, fewer pieces, or bites out of it.
 const dCol = (col, b, lo = 6, hi = 15) => C(col, lo + clamp(b, 0, 1) * (hi - lo));
@@ -31973,7 +31973,7 @@ const dCan = (col, word, stripe, deco) => (it, f) => sculptSurface(26, 15, (x, y
 });
 // n pieces in a row along a tray (sushi, dumplings, takoyaki): which piece (x, y) is in, and where in it
 const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); return k >= 0 && k < n ? [k, x - x0 - (k + 0.5) * step] : null; };
-const dCarKeys = () => sculpt(22, 16, (x, y) => {
+const dCarKeys = () => sculptSurface(22, 16, (x, y) => {
   const body = dEll(x, y, 0.8, -2.1, 2.25, 3.8);
   if (body < 1) {
     if (body > 0.82) return ['#', C(GRAY, 13)];
@@ -31989,7 +31989,7 @@ const dCarKeys = () => sculpt(22, 16, (x, y) => {
 
 function heldHotelPainting(it) {
   const p = HOTEL_PAINTINGS.find(p => p.id === it.id);
-  return sculpt(32, 20, (x, y) => {
+  return sculptSurface(32, 20, (x, y) => {
     if (Math.abs(x) > 8 || Math.abs(y) > 6) return null;
     if (Math.abs(x) > 7.1 || Math.abs(y) > 5.1) return dLit(.65, YEL, 10, 15);
     const [ch, hue] = hotelPaintingPixel(p, (x + 7.1) / 14.2, (y + 5.1) / 10.2);
@@ -32001,7 +32001,7 @@ Object.assign(DENSE, {
   hotelharbour: heldHotelPainting,
   hotelstilllife: heldHotelPainting,
   // ---- the night market's, and the two that bend the world
-  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
+  pocketwatch: () => sculptSurface(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
     const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
     if (dEll(x, y, 0, -6.2, 1.1, 0.8) < 1 && dEll(x, y, 0, -6.2, 1.1, 0.8) > 0.55) return ['o', C(GRAY, 12)]; // the ring for the chain
     if (Math.abs(x) < 0.7 && y > -5.6 && y < -4.4) return dLit(0.7, YEL, 8); // the crown
@@ -32017,8 +32017,8 @@ Object.assign(DENSE, {
     if (Math.abs(rx * 0.7 - ry - 1.2) < 0.25 && rx > -1 && rx < 3.6) return ['/', C(CYAN, 10)]; // the crack across the glass
     return ['.', C(WARM, 6 + dBall(x, y, cx, cy, R * 0.84) * 3)]; // the face, old and yellowed
   }),
-  cityglobe: () => sculpt(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
-    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14)] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
+  cityglobe: () => sculptSurface(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
+    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
     const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
     if (d > 1 || y > 4.2) return null;
     if (d > 0.92) return ['|', C(WHITE, 12)];
@@ -32059,14 +32059,14 @@ Object.assign(DENSE, {
     if (y < top && y > top - 4) for (const s of [-1.4, 0.4, 1.8]) { const ph = y * 1.2 + T * 2 + s; if (Math.abs(x - s - Math.sin(ph) * 0.6) < 0.25) return ['~', C(GREEN, 7 + (y - top + 4) * 1.5)]; } // the stink
     return null;
   }),
-  redstring: () => sculpt(24, 10, (x, y) => { // a loop of red thread, a knot and a gold bead
+  redstring: () => sculptSurface(24, 10, (x, y) => { // a loop of red thread, a knot and a gold bead
     if (dEll(x, y, 2.2, 3.2, 0.7, 0.6) < 1) return dLit(0.85, YEL, 10);
     const d = dEll(x, y, 0, 0, 5.6, 3.4);
-    if (Math.abs(d - 1) < 0.1) return ['~', C(RED, 12 + Math.sin(x * 2) * 2)];
-    if (Math.abs(x - 3.4) < 0.3 && y > 3 && y < 4.6) return ['\\', C(RED, 12)];
+    if (Math.abs(d - 1) < 0.1) return ['~',C(RED,12+Math.sin(x*2)*2),true];
+    if (Math.abs(x - 3.4) < 0.3 && y > 3 && y < 4.6) return ['\\',C(RED,12),true];
     return null;
   }),
-  luckycoin: () => sculpt(22, 12, (x, y) => { // a gold coin with a square hole, characters round it
+  luckycoin: () => sculptSurface(22, 12, (x, y) => { // a gold coin with a square hole, characters round it
     const d = dEll(x, y, 0, 0, 5, 5);
     if (d > 1) return null;
     if (Math.abs(x) < 1.1 && Math.abs(y) < 1.1) return null; // the hole
@@ -32075,7 +32075,7 @@ Object.assign(DENSE, {
     const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
     return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
   }),
-  orrery: () => sculpt(28, 16, (x, y) => { // brass rings round a glowing sun, planets on arms going round, a crank, a wooden base
+  orrery: () => sculptSurface(28, 16, (x, y) => { // brass rings round a glowing sun, planets on arms going round, a crank, a wooden base
     if (y > 5 && y < 7.4 && Math.abs(x) < 5.4) return dLit(0.55 - (y - 5) * 0.1, BRICK, 7);
     if (Math.abs(x) < 0.3 && y > 2.4 && y <= 5) return ['|', C(YEL, 12)];
     if (y > 0.6 && y < 1.4 && x > 4.6 && x < 7) return ['-', C(YEL, 11)]; if (x > 6.6 && x < 7.4 && y > -0.4 && y < 1.4) return ['o', C(BRICK, 13)]; // the crank
@@ -32088,7 +32088,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  diamond: () => sculpt(24, 14, (x, y) => { // a big cut stone, facets catching the light, a glint running across
+  diamond: () => sculptSurface(24, 14, (x, y) => { // a big cut stone, facets catching the light, a glint running across
     if (y < -3.6 || y > 5.6) return null;
     const hw = y < -2 ? 3.4 + (y + 3.6) * 1.1 : 5.2 * (1 - (y + 2) / 7.6);
     if (Math.abs(x) > hw) return null;
@@ -32102,15 +32102,15 @@ Object.assign(DENSE, {
     if (d > 1 || notch < 1) return null;
     return dLit(dBall(x, y, -0.6, 0.4, 5, 3.4), YEL, 7, 14);
   }),
-  tigerbalm: it => sculpt(24, 12, (x, y) => { // a little round tin, a tiger on the lid
+  tigerbalm: it => sculptSurface(24, 12, (x, y) => { // a little round tin, a tiger on the lid
     if (Math.abs(x) > 5.2 || y < -4.6 || y > 4.6) return null;
     if (y < -3) return dLit(0.75 - Math.abs(x) * 0.05, GRAY, 8, 14); // the lid's rim
-    const t_ = dText(x, y, 0, 2.6, 'TIGER'); if (t_) return [t_, C(YEL, 15)];
+    const t_ = dText(x, y, 0, 2.6, 'TIGER'); if (t_) return [t_, C(YEL, 15),true];
     if (dEll(x, y, 0, -0.6, 2.2, 1.6) < 1) return [Math.abs(x) < 0.4 && y > -0.6 ? 'v' : fract(x * 0.8) < 0.3 ? '|' : '%', C(ORANGE, 14)]; // the tiger's face, striped
     return dLit(0.5 - x * 0.04, RED, 7, 12);
   }),
-  lantern: () => sculpt(24, 16, (x, y) => { // a red paper lantern, ribbed, glowing from inside, a gold tassel
-    if (Math.abs(x) < 0.25 && y < -6) return ['|', C(GRAY, 10)];
+  lantern: () => sculptSurface(24, 16, (x, y) => { // a red paper lantern, ribbed, glowing from inside, a gold tassel
+    if (Math.abs(x) < 0.25 && y < -6) return ['|',C(GRAY,10),true];
     if (y > 5.6 && y < 7.6 && Math.abs(x) < 0.6) return ['|', C(YEL, 13)];
     if ((y < -5 && y > -6 || y > 4.6 && y < 5.6) && Math.abs(x) < 2.2) return ['=', C(YEL, 14)];
     const d = dEll(x, y, 0, -0.2, 5, 4.8);
@@ -32119,9 +32119,9 @@ Object.assign(DENSE, {
     if (Math.abs(fract(x / (5 * Math.sqrt(Math.max(0.05, 1 - (y / 4.8) ** 2))) * 3 + 0.5) - 0.5) < 0.07) return ['|', C(RED, 6 + lit * 4)]; // the ribs
     return [dFill(clamp(lit, 0, 1)), C(lit > 0.7 ? YEL : lit > 0.45 ? ORANGE : RED, 8 + lit * 7)];
   }),
-  firecrackers: it => sculpt(20, 17, (x, y) => { // a string of red crackers on a fuse, one pair fewer each time
+  firecrackers: it => sculptSurface(20, 17, (x, y) => { // a string of red crackers on a fuse, one pair fewer each time
     const n = Math.max(1, it.uses), top = 6.6 - n * 3.6;
-    if (y < top - 0.4 && y > top - 3.4 && Math.abs(x - Math.sin(y * 2) * 0.4) < 0.3) return ['~', C(GRAY, 11)]; // the fuse
+    if (y < top - 0.4 && y > top - 3.4 && Math.abs(x - Math.sin(y * 2) * 0.4) < 0.3) return ['~',C(GRAY,11),true]; // the fuse
     if (y < top - 3.4 && y > top - 4.6 && Math.abs(x) < 1) return ['*', C(T % 0.4 < 0.2 ? YEL : WHITE, 15)];
     if (y < top || y > 7) return null;
     if (Math.abs(x) < 0.25) return ['|', C(GRAY, 9)];
@@ -32129,13 +32129,13 @@ Object.assign(DENSE, {
     if (Math.abs(x - cx) < 1.4 && fract((y - top) / 1.8) < 0.7) return Math.abs(x - cx) > 1.1 ? ['|', C(YEL, 12)] : dLit(0.5 - (x - cx) * 0.15, RED, 8, 14);
     return null;
   }),
-  mysterybox: () => sculpt(24, 13, (x, y) => { // a cardboard box, a red ribbon, a question mark, rattling
+  mysterybox: () => sculptSurface(24, 13, (x, y) => { // a cardboard box, a red ribbon, a question mark, rattling
     const jig = Math.sin(T * 13) > 0.92 ? 0.3 : 0;
     x -= jig;
     if (y < -3.6 && y > -5.2 && Math.abs(x) < 2.2 && Math.abs(Math.abs(x) - 1.1) < 0.6) return ['8', C(RED, 13)]; // the bow
     if (Math.abs(x) > 5 || y < -3.6 || y > 5.4) return null;
     if (Math.abs(x) < 0.45 || Math.abs(y + 1.6) < 0.4) return ['#', C(RED, 12)];
-    const q = dText(x, y, 2.6, 2.2, '?'); if (q) return [q, C(WHITE, 15)];
+    const q = dText(x, y, 2.6, 2.2, '?'); if (q) return [q, C(WHITE, 15),true];
     return dLit(0.45 + (y < -2.5 ? 0.25 : 0) - x * 0.03, WARM, 6, 11); // cardboard
   }),
   // ---- drinks
@@ -32451,9 +32451,9 @@ Object.assign(DENSE, {
     if (y > -2.4 && y <= -0.6 && Math.abs(dx) < 2 - (y < -1.8 ? 0.4 : 0)) return [(Math.floor((dx + y) * 2) & 1) ? '=' : '#', (Math.floor((dx + y) * 2) & 1) ? C(WHITE, 14) : C(k & 1 ? RED : ORANGE, 14)];
     return null;
   }),
-  vhs: () => sculpt(30, 10, (x, y) => { // a black cassette, two reels behind its window, a label
+  vhs: () => sculptSurface(30, 10, (x, y) => { // a black cassette, two reels behind its window, a label
     if (Math.abs(x) > 8.4 || Math.abs(y) > 4.2) return null;
-    const t = dText(x, y, 0, -2.8, 'MOVIE NITE'); if (t) return [t, C(GRAY, 6)];
+    const t = dText(x, y, 0, -2.8, 'MOVIE NITE'); if (t) return [t, C(GRAY, 6),true];
     if (y < -2 && Math.abs(x) < 6) return ['=', C(WHITE, 13)];
     for (const cx of [-3, 3]) { const d = dEll(x, y, cx, 0.8, 1.6, 1.6); if (d < 1) return [d < 0.4 ? 'o' : '*', C(WHITE, d < 0.4 ? 14 : 10)]; }
     if (y > -0.8 && y < 2.4 && Math.abs(x) < 4.8) return [':', C(GRAY, 5)];
@@ -32492,54 +32492,54 @@ Object.assign(DENSE, {
     return dLit(0.75 - (y + 2.6) * 0.1, MAG, 7);
   }),
   // ---- things
-  cigarettes: it => sculpt(22, 16, (x, y) => { // the pack, as many sticking out as are left
+  cigarettes: it => sculptSurface(22, 16, (x, y) => { // the pack, as many sticking out as are left
     const n = Math.max(0, it.uses);
     if (y < -3 && y > -7 && Math.abs(x) < 2.6) { const k = Math.floor((x + 2.6) / 1.05); if (k < n && fract((x + 2.6) / 1.05) > 0.3) return y < -6.2 + k * 0.2 ? ['#', C(ORANGE, 13)] : ['|', C(WHITE, 15)]; }
     if (y < -3 || y > 7.4 || Math.abs(x) > 3.6) return null;
-    const t = dText(x, y, 0, -0.6, 'SMOKES'); if (t) return [t, C(WHITE, 15)];
+    const t = dText(x, y, 0, -0.6, 'SMOKES'); if (t) return [t, C(WHITE, 15),true];
     if (y < 1 && y > -2) return dLit(0.6 + 0.3 * dCyl(x, 3.6), RED, 7);
     return dLit(0.55 + 0.4 * dCyl(x, 3.6), WHITE, 8);
   }),
-  book: () => sculpt(28, 15, (x, y) => { // a hardback: blue cover, pages along the edge, a title
+  book: () => sculptSurface(28, 15, (x, y) => { // a hardback: blue cover, pages along the edge, a title
     if (x > 6.6 && x < 7.4 && y > -5.6 && y < 6.6) return ['|', C(WHITE, 13)];
     if (y > 6 && y < 6.8 && x > -5.6 && x < 7.4) return ['_', C(WHITE, 13)];
     if (x < -6.6 || x > 6.6 || y < -6.6 || y > 6) return null;
     if (x < -5.6) return ['|', C(BLUE, 8)];
-    const t = dText(x, y, 0.4, -2.6, 'NOVEL'); if (t) return [t, C(YEL, 15)];
+    const t = dText(x, y, 0.4, -2.6, 'NOVEL'); if (t) return [t, C(YEL, 15),true];
     if (Math.abs(y - 1) < 0.4 && Math.abs(x - 0.4) < 3) return ['~', C(YEL, 12)];
     return dLit(0.75 - (y + 6.6) * 0.04 - (x + 5.6) * 0.02, BLUE, 6);
   }),
-  newspaper: () => sculpt(30, 14, (x, y) => { // folded: the masthead, a headline, a photo, columns
+  newspaper: () => sculptSurface(30, 14, (x, y) => { // folded: the masthead, a headline, a photo, columns
     if (Math.abs(x) > 8.4 || Math.abs(y) > 6.4) return null;
-    const t = dText(x, y, 0, -5, 'THE DAILY'); if (t) return [t, C(GRAY, 3)];
+    const t = dText(x, y, 0, -5, 'THE DAILY'); if (t) return [t, C(GRAY, 3),true];
     if (Math.abs(y + 3.8) < 0.3) return ['=', C(GRAY, 6)];
     if (y > -3 && y < 1 && x < -1.4 && x > -7.6) return [noise(x * 2, y * 2, 983) > 0.5 ? '#' : '+', C(GRAY, 6 + noise(x * 3, y * 3, 984) * 4)];
     if (fract(y) < 0.4 && (x > -0.6 || y > 1.4) && hash(Math.floor(x * 2), Math.floor(y), 985) > 0.2 && Math.abs(fract(x * 0.3) - 0.5) < 0.42) return ['-', C(GRAY, 7)];
     return dLit(0.85 - Math.abs(x) * 0.02, WHITE, 11, 15);
   }),
-  vinyl: () => sculpt(30, 15, (x, y) => { // the record sliding out of its sleeve
+  vinyl: () => sculptSurface(30, 15, (x, y) => { // the record sliding out of its sleeve
     const d = Math.hypot(x - 2.6, (y + 1.4) * 1.05);
     if (d < 6.2 && (x > 3 || y < -5.4)) { if (d < 0.4) return ['o', C(WHITE, 15)]; if (d < 1.8) return ['@', C(RED, 13)]; return [Math.abs(fract(d * 1.2) - 0.5) < 0.12 ? ':' : '#', C(GRAY, d > 5.6 ? 8 : 4)]; }
     if (Math.abs(x + 0.6) > 6.4 || y < -5.4 || y > 6.6) return null;
-    const t = dText(x, y, -0.6, 3.6, 'GREATEST HITS'); if (t) return [t, C(WHITE, 15)];
+    const t = dText(x, y, -0.6, 3.6, 'GREATEST HITS'); if (t) return [t, C(WHITE, 15),true];
     if (dEll(x, y, -0.6, -0.6, 3, 3) < 1) return dLit(dBall(x, y, -0.6, -0.6, 3), YEL, 9);
     return dLit(0.7 - (y + 5.4) * 0.03, MAG, 7);
   }),
-  flowers: () => sculpt(28, 17, (x, y) => { // a bouquet in brown paper
+  flowers: () => sculptSurface(28, 17, (x, y) => { // a bouquet in brown paper
     const heads = [[-3, -5.4, RED], [0, -6.4, YEL], [3, -5.4, MAG], [-1.6, -3.4, WHITE], [1.6, -3.4, ORANGE], [-4.2, -2.4, MAG], [4.2, -2.4, RED]];
     for (const [cx, cy, col] of heads) { const d = dEll(x, y, cx, cy, 1.4, 1.3); if (d < 1) return [d < 0.35 ? '@' : '*', d < 0.35 ? C(YEL, 15) : dCol(col, dBall(x, y, cx, cy, 1.4, 1.3), 9)]; }
     if (y > -2 && y < 2 && Math.abs(x) < 3.5 - (y + 2) * 0.4 && fract(x * 1.1) < 0.35) return ['|', C(GREEN, 13)];
     if (y > 0.4 && y < 8 && Math.abs(x) < 4.2 - (y - 0.4) * 0.38) return [fract(x * 0.5 - y * 0.3) < 0.1 ? '\\' : dFill(0.6), dCol(BRICK, 0.7 - Math.abs(x) * 0.06, 8)];
     return null;
   }),
-  ball: () => sculpt(24, 12, (x, y) => { // a football: white, black patches
+  ball: () => sculptSurface(24, 12, (x, y) => { // a football: white, black patches
     const b = dBall(x, y, 0, 0, 5.6);
     if (b < 0) return null;
     const ax = x / 5.6, ay = y / 5.6, az = Math.sqrt(Math.max(0, 1 - ax * ax - ay * ay));
     const patch = [[0, 0, 1], [0.8, -0.5, 0.35], [-0.8, -0.5, 0.35], [0, 0.9, 0.4], [0.6, 0.7, 0.4], [-0.6, 0.7, 0.4], [0, -0.95, 0.3]].some(([px, py, pz]) => { const l = Math.hypot(px, py, pz); return (ax * px + ay * py + az * pz) / l > 0.93; });
     return patch ? ['#', C(GRAY, 2 + b * 3)] : dLit(b, WHITE, 7);
   }),
-  boombox: () => sculpt(32, 13, (x, y) => { // two speakers, a tape deck, a handle, an aerial
+  boombox: () => sculptSurface(32, 13, (x, y) => { // two speakers, a tape deck, a handle, an aerial
     if (Math.abs(x - 6 - (y + 6) * 0.6) < 0.2 && y < -2.8 && y > -6.4) return ['/', C(GRAY, 13)];
     if (y < -2.6 && y > -4.2 && Math.abs(x) < 5 && (Math.abs(x) > 4.4 || y < -3.6)) return ['=', C(GRAY, 12)];
     if (Math.abs(x) > 9 || y < -2.6 || y > 5.8) return null;
@@ -32548,7 +32548,7 @@ Object.assign(DENSE, {
     if (Math.abs(x) < 2.2 && y > 3 && y < 4) return ['#', C(RED, 13)];
     return dLit(0.6 - (y + 2.6) * 0.05, GRAY, 6, 12);
   }),
-  skateboard: () => sculpt(16, 17, (x, y) => { // held up on end: the deck's graphic, trucks and wheels
+  skateboard: () => sculptSurface(16, 17, (x, y) => { // held up on end: the deck's graphic, trucks and wheels
     for (const ty of [-5.2, 5.2]) {
       if (Math.abs(y - ty) < 0.3 && Math.abs(x) < 2.4) return ['=', C(GRAY, 13)];
       if (Math.abs(y - ty) < 0.8 && Math.abs(Math.abs(x) - 2.8) < 0.5) return ['O', C(WHITE, 15)];
@@ -32557,32 +32557,32 @@ Object.assign(DENSE, {
     const stripe = Math.floor((y + 8) * 0.6) & 1;
     return dLit(0.55 + 0.4 * dCyl(x, 2.2), stripe ? RED : YEL, 7);
   }),
-  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo in your hand, its string looped round your finger below
-    if (y > 2.5 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
+  yoyo: () => sculptSurface(18, 15, (x, y) => { // the yo-yo in your hand, its string looped round your finger below
+    if (y > 2.5 && Math.abs(x) < 0.15) return ['|',C(WHITE,11),true];
     const d = dEll(x, y, 0, -2.4, 3.6, 3.6);
     if (d > 1) return null;
     if (d < 0.25) return ['@', C(WHITE, 15)];
     return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, -2.4, 3.6)), dCol(RED, dBall(x, y, 0, -2.4, 3.6), 7)];
   }),
-  vape: () => sculpt(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
+  vape: () => sculptSurface(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
     if (y < -7 && Math.abs(x) < 0.9) return fx.vape > 0 ? ['@', C(ORANGE, 10 + fx.vape * 1.7)] : ['o', C(GRAY, 10)];
     if (Math.abs(x) > 1.6 || y < -7 || y > 8) return null;
-    const k = Math.floor((y + 4) / 1.4), word = 'MANGO';
-    if (Math.abs(x) < 0.4 && k >= 0 && k < 5 && Math.abs(fract((y + 4) / 1.4) - 0.5) < 0.36) return [word[k], C(YEL, 15)];
+    const word='MANGO',k=[0,1,2,3,4].find(k=>y===Math.round(-4+(k+.5)*1.4));
+    if(Math.abs(x)<.4&&k!==undefined) return [word[k], C(YEL, 15),true];
     return dLit(0.5 + 0.45 * dCyl(x, 1.6), ORANGE, 7);
   }),
-  pipe: () => sculpt(28, 10, (x, y) => { // a briar pipe: the bowl, the stem off to the right
+  pipe: () => sculptSurface(28, 10, (x, y) => { // a briar pipe: the bowl, the stem off to the right
     const hw = 2.2 - Math.max(0, y - 1) * 0.5;
     if (x < 1.2 && x > -3.6 && y > -3.4 && y < 3.6 && Math.abs(x + 1.2) < hw) return y < -2.8 ? ['=', C(BRICK, 8)] : dLit(0.5 + 0.45 * dCyl(x + 1.2, hw), BRICK, 6);
     if (y > 1.4 && y < 2.6 - (x - 1) * 0.08 && x >= 0.6 && x < 8) return ['=', dCol(BRICK, 0.6 - (y - 1.4) * 0.3, 5)];
     return null;
   }),
-  harmonica: () => sculpt(32, 7, (x, y) => { // chrome covers, a row of holes
+  harmonica: () => sculptSurface(32, 7, (x, y) => { // chrome covers, a row of holes
     if (Math.abs(x) > 9 || Math.abs(y) > 2.6) return null;
     if (Math.abs(y) < 0.7) return Math.abs(fract(x * 0.7) - 0.5) < 0.22 ? ['o', C(GRAY, 4)] : ['|', C(BRICK, 11)];
     return dLit(0.6 + 0.35 * (y < 0 ? 1 - Math.abs(y + 1.6) / 1 : -0.3) - Math.abs(x) * 0.02, WHITE, 6);
   }),
-  sharkplush: () => sculpt(32, 11, (x, y) => { // a grey shark, white belly, fin and tail, a stitched eye
+  sharkplush: () => sculptSurface(32, 11, (x, y) => { // a grey shark, white belly, fin and tail, a stitched eye
     if (y < -1 && y > -5 && x > -1 && x < 2.4 - (y + 5) * 0.2 && x > -1 + (y + 5) * 0.6 - 2.4) return ['#', C(GRAY, 9)];
     const tail = x > 6.4 && x < 9.4 && Math.abs(y) < (x - 6.4) * 0.9;
     const body = dEll(x, y, -0.6, 0.6, 7.6, 2.8);
@@ -32593,7 +32593,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  snowglobe: () => sculpt(24, 15, (x, y) => { // a glass globe: snow drifting down round a little fish, a wooden base
+  snowglobe: () => sculptSurface(24, 15, (x, y) => { // a glass globe: snow drifting down round a little fish, a wooden base
     if (y > 4.4 && y < 7 && Math.abs(x) < 4.6 - (y - 4.4) * -0.3) return dLit(0.6 - (y - 4.4) * 0.1, BRICK, 7);
     const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
     if (d > 1 || y > 4.4) return null;
@@ -32610,7 +32610,7 @@ Object.assign(DENSE, {
     const t = dText(x, y, 0, 0.6, 'ZAP'); if (t) return [t,C(WHITE,15),true];
     return [dCyl(x, hw) > 0.92 ? '|' : dFill(dCyl(x, hw)), dCyl(x, hw) > 0.92 ? C(WHITE, 15) : dCol(col, dCyl(x, hw))];
   }),
-  plushcat: () => sculpt(26, 14, (x, y) => { // a lucky cat, one paw up and waving
+  plushcat: () => sculptSurface(26, 14, (x, y) => { // a lucky cat, one paw up and waving
     const wave = Math.sin(T * 4) * 0.5;
     if (dEll(x, y, 4.6 + wave * 0.4, -3 + wave, 1.2, 1.6) < 1) return dLit(0.8, WHITE, 11);
     for (const s of [-1, 1]) if (y > -6.4 && y < -3.6 && Math.abs(x - s * 2.4) < 1.2 - (y + 6.4) * -0.1 && Math.abs(x - s * 2.4) < (y + 6.4) * 0.5) return ['^', C(s > 0 ? WHITE : WHITE, 13)];
@@ -32623,7 +32623,7 @@ Object.assign(DENSE, {
     if (dEll(x, y, 0, 3, 4.2, 3.6) < 1) return Math.abs(y - 0.8) < 0.35 && Math.abs(x) < 3.6 ? ['=', C(RED, 14)] : dLit(dBall(x, y, 0, 3, 4.2, 3.6), WHITE, 9);
     return null;
   }),
-  plushbear: () => sculpt(26, 15, (x, y) => { // a brown teddy, sitting
+  plushbear: () => sculptSurface(26, 15, (x, y) => { // a brown teddy, sitting
     for (const s of [-1, 1]) if (dEll(x, y, s * 2.8, -5.4, 1.2, 1.2) < 1) return dLit(0.6, BRICK, 8);
     const head = dEll(x, y, 0, -2.8, 3.4, 2.8);
     if (head < 1) {
@@ -32669,7 +32669,7 @@ Object.assign(DENSE, {
     if (cell === 2) return ['%', C(GREEN, 13)]; // greens
     return ['=', C(YEL, 14)]; // tamagoyaki
   }),
-  duck: () => sculpt(24, 12, (x, y) => { // a rubber duck
+  duck: () => sculptSurface(24, 12, (x, y) => { // a rubber duck
     if (dEll(x, y, -4.4, -1.6, 1.4, 0.7) < 1) return ['>', C(ORANGE, 15)];
     const head = dEll(x, y, -1.6, -2.4, 2.4, 2.2);
     if (head < 1) return dEll(x, y, -2.4, -3, 0.4, 0.4) < 1 ? ['o', C(GRAY, 2)] : dLit(dBall(x, y, -1.6, -2.4, 2.4, 2.2), YEL, 9);
@@ -32677,13 +32677,13 @@ Object.assign(DENSE, {
     if (x > 4 && x < 6.6 && y < 1 && y > -1.6 + (6.6 - x) * 0.3) return dLit(0.7, YEL, 9); // the tail
     return null;
   }),
-  jadebangle: () => sculpt(24, 11, (x, y) => { // a jade bangle, seen at a tilt: a ring, light running round it
+  jadebangle: () => sculptSurface(24, 11, (x, y) => { // a jade bangle, seen at a tilt: a ring, light running round it
     const d = dEll(x, y, 0, 0, 5.2, 4.2), inner = dEll(x, y, 0, 0, 3.7, 2.8);
     if (d > 1 || inner < 1) return null;
     const a = Math.atan2(y, x), b = 0.45 + 0.4 * Math.cos(a + 2.3) + (noise(x * 2, y * 2, 1311) - 0.5) * 0.3; // (veins in the stone)
     return [b > 0.85 ? '@' : dFill(b), C(b > 0.85 ? WHITE : GREEN, 6 + clamp(b, 0, 1) * 9)];
   }),
-  jadedragon: () => sculpt(26, 14, (x, y) => { // a little carved jade dragon on a wooden stand
+  jadedragon: () => sculptSurface(26, 14, (x, y) => { // a little carved jade dragon on a wooden stand
     if (y > 4.6 && y < 6.4 && Math.abs(x) < 5.2 - (y - 4.6) * -0.4) return dLit(0.7 - (y - 4.6) * 0.2, BRICK, 7);
     if (dEll(x, y, 2.6, -3.6, 0.35, 0.35) < 1) return ['@', C(RED, 15)]; // its eye
     if (y < -2 && y > -4.8 && Math.abs(x - 3.2) < 1.8 + (y + 2) * 0.2) return dLit(dBall(x, y, 3, -3.4, 2, 1.5), GREEN, 8); // the head
@@ -32698,7 +32698,7 @@ Object.assign(DENSE, {
     if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
     return null;
   }),
-  goldfish: () => sculpt(24, 15, (x, y) => {
+  goldfish: () => sculptSurface(24, 15, (x, y) => {
     if (Math.abs(x) > 6 || Math.abs(y) > 4.5) return null;
     if (Math.hypot(x, y + 0.3) > 5.7) return ['|', C(RED, 11)];
     const swim = T * 0.65, dir = Math.cos(swim) < 0 ? -1 : 1;
@@ -32724,13 +32724,13 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  postcard: () => sculpt(24, 12, (x, y) => {
+  postcard: () => sculptSurface(24, 12, (x, y) => {
     if (Math.abs(x) > 7 || Math.abs(y) > 4.5) return null;
     if (Math.abs(x) > 6.4 || Math.abs(y) > 4) return dLit(0.45, WHITE, 10);
     const t = dText(x, y, -3.4, -1.5, 'T REX');
-    return t ? [t, C(BRICK, 13)] : y < 0 ? dLit(0.55, GREEN, 8) : dLit(0.5, CYAN, 8);
+    return t ? [t, C(BRICK, 13),true] : y < 0 ? dLit(0.55, GREEN, 8) : dLit(0.5, CYAN, 8);
   }),
-  dinotoy: () => sculpt(24, 14, (x, y) => {
+  dinotoy: () => sculptSurface(24, 14, (x, y) => {
     if (dEll(x, y, 2.8, -3.2, 0.35, 0.35) < 1) return ['@', C(WHITE, 15)];
     if (y < -2 && y > -5 && x > 0 && x < 6) return dLit(dBall(x, y, 3, -3.5, 3, 1.5), GREEN, 8);
     if (y > -1.8 && y < 2 && x > -4 && x < 4) return dLit(dBall(x, y, 0, 0, 4, 2.2), GREEN, 8);
@@ -32738,7 +32738,7 @@ Object.assign(DENSE, {
     if (Math.abs(x - 1.5) < 0.45 && y > 1.4 && y < 4 || Math.abs(x - 3.5) < 0.45 && y > 1.4 && y < 4) return ['|', C(GREEN, 11)];
     return null;
   }),
-  replicastar: () => sculpt(22, 15, (x, y) => {
+  replicastar: () => sculptSurface(22, 15, (x, y) => {
     const r = Math.hypot(x, y), a = Math.atan2(y, x), edge = 5.6 + 1.1 * Math.cos(a * 5);
     return r <= edge && r >= edge - 1.3 ? dLit(0.55 + 0.35 * Math.cos(a * 5), CYAN, 8, 14) : null;
   }),
@@ -32746,7 +32746,7 @@ Object.assign(DENSE, {
   key_car_sedan: dCarKeys,
   key_car_sports: dCarKeys,
   // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
-  sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
+  sparklers: () => { const front = sparkBurn() * 9 - 7; return sculptSurface(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|',C(GRAY,12),true]); },
   umbrella: () => sculptSurface(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
     if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];
@@ -32760,7 +32760,7 @@ Object.assign(DENSE, {
 // Pet carriers: a solid shell with the animal visible behind the door grille.
 function heldPetCarrier(it) {
   const cat = it.id === 'petcat';
-  return sculpt(28, 17, (x, y) => {
+  return sculptSurface(28, 17, (x, y) => {
     if (y < -5.5) {
       if (y > -7.5 && Math.abs(x) < 2.5 && (y < -6.7 || Math.abs(x) > 1.8)) return ['=', C(GRAY, 13)];
       return null;
@@ -32956,26 +32956,26 @@ function heldMeal(it, f) {
 }
 for (const recipe of RECIPES) DENSE[recipe.id] = heldMeal;
 // Fishing finds, small treasures and ammunition get full held art as well as their small ground icons.
-DENSE.neon = it => sculpt(28, 23, (x,y) => {
+DENSE.neon = it => sculptSurface(28, 23, (x,y) => {
   if (Math.abs(x)>5.8 || y < -9.5 || y > 9.5) return null;
   if (Math.abs(y)>8.2 || Math.abs(x)>5.1) return ['=',C(GRAY,12)];
   const text=dText(x,y,0,-1,'NEON') || dText(x,y,0,3,`${it.uses} PACKS`);
-  if(text)return[text,C(WHITE,15)];
+  if(text)return[text,C(WHITE,15),true];
   return dLit(.7-x*.035,MAG,7);
 });
 DROPPED_ART.neon = () => [['.------.','| NEON |','| :::: |',"'------'"],ch=>C(/[NEON]/.test(ch)?WHITE:MAG,13)];
-DENSE.weed = it => sculpt(28,25,(x,y)=>{
+DENSE.weed = it => sculptSurface(28,25,(x,y)=>{
   if (Math.abs(x)>6.3 || y < -10.3 || y>10.3) return null;
   if (Math.abs(x)>5.6 || Math.abs(y)>9) return ['=',C(WARM,12)];
   const text=dText(x,y,0,-6.6,'WEED') || dText(x,y,0,6.7,`${it.uses} PACKS`);
-  if(text) return [text,C(WHITE,15)];
+  if(text) return [text,C(WHITE,15),true];
   // A central stalk and three joined leaf pairs behind the clear front of the pouch.
   if(Math.abs(x)<.4&&Math.abs(y)<4.5) return ['|',C(GREEN,15)];
   for(const v of [-2.8,0,2.8]) if(Math.abs(y-v+Math.abs(x)*.6)<.65&&Math.abs(x)<4.6) return [x<0?'\\':'/',C(GREEN,13)];
   return dLit(.65-x*.03,GREEN,4);
 });
 DROPPED_ART.weed = () => [['.------.','| WEED |','| \\|/ |',"'------'"],ch=>C(/[WEED]/.test(ch)?WHITE:GREEN,13)];
-DENSE.joint = () => sculpt(20,27,(x,y)=>{
+DENSE.joint = () => sculptSurface(20,27,(x,y)=>{
   if(y < -11 || y>11) return null;
   const width=1.1+(y+11)*.025;
   if(Math.abs(x)>width)return null;
@@ -33004,7 +33004,7 @@ DROPPED_ART.ammo = it => [[' .--------.', '| o o o o |', '|.38 BOX  |', " '-----
 
 function heldShellfish(it) {
   const crab = it.id === 'crab', wave = Math.sin(T * 2.4);
-  return sculpt(32, 19, (x, y) => {
+  return sculptSurface(32, 19, (x, y) => {
     if (crab) {
       for (const sg of [-1, 1]) {
         for (let k = 0; k < 3; k++) if (Math.abs(y - (2 + k * 1.7 + sg * x * .15)) < .35 && x * sg > 2.7 && x * sg < 8) return ['/', C(RED, 12)];
@@ -33029,7 +33029,7 @@ DENSE.crab = DENSE.squid = heldShellfish;
 
 function heldFishingJunk(it) {
   const id = it.id;
-  return sculpt(32, 19, (x, y) => {
+  return sculptSurface(32, 19, (x, y) => {
     if (id === 'oldboot') {
       const cuff = x > -5.6 && x < 1.5 && y > -7.7 && y < 2.5;
       const foot = dEll(x, y, 1.2, 4.5, 7.2, 3.1) < 1;
@@ -33042,7 +33042,7 @@ function heldFishingJunk(it) {
       if (Math.abs(x) > 5.4 - Math.max(0, 1 - Math.abs(y)) || Math.abs(y) > 6.7) return null;
       if (Math.abs(y) > 5.8) return ['=', C(GRAY, 12)];
       const word = dText(x, y, 0, -.4, 'BEANS');
-      return word ? [word, C(WHITE, 14)] : [Math.abs(y - x * .4 - 2) < .4 ? '/' : '#', C(y < 2.4 ? ORANGE : GRAY, 8 + dCyl(x, 5.4) * 5)];
+      return word ? [word, C(WHITE, 14),true] : [Math.abs(y - x * .4 - 2) < .4 ? '/' : '#', C(y < 2.4 ? ORANGE : GRAY, 8 + dCyl(x, 5.4) * 5)];
     }
     if (id === 'seaweed') {
       for (let k = 0; k < 5; k++) if (Math.abs(x - (k - 2) * 2.2 - Math.sin(y * .5 + T * .9 + k) * .8) < .45 && Math.abs(y) < 7.7 - Math.abs(k - 2)) return [k & 1 ? ')' : '(', C(GREEN, 10 + k)];
@@ -33053,7 +33053,7 @@ function heldFishingJunk(it) {
       if (y < -4.4 && y > -8 && Math.abs(Math.abs(x) - 3) < .6) return ['|', C(WHITE, 12)];
       if (d > 1) return null;
       const word = dText(x, y, 0, 1, 'THANK YOU');
-      if (word) return [word, C(RED, 13)];
+      if (word) return [word, C(RED, 13),true];
       return d > .85 ? ['|', C(WHITE, 11)] : Math.abs(x + 3.2) < .3 ? [':', C(WHITE, 8)] : null;
     }
     if (id === 'tyre' || id === 'trolleywheel') {
@@ -33105,7 +33105,7 @@ function heldPocketknife(it) {
 function heldTreasure(it) {
   const id = it.id, phase = heldUsePhase(it), glint = Math.sin(T * 2.3) > .94;
   if (id === 'pocketknife') return heldPocketknife(it);
-  return sculpt(28, 19, (x, y) => {
+  return sculptSurface(28, 19, (x, y) => {
     if (id === 'bottlemsg') {
       const half = y < -4.4 ? 1.4 : y < -1.8 ? 1.4 + (y + 4.4) : 4.2;
       if (y < -8 || y > 8 || Math.abs(x) > half) return null;
@@ -33130,7 +33130,7 @@ function heldTreasure(it) {
         if (Math.abs(x) > 3 || Math.abs(y) > 3.5) return dLit(.7, GRAY, 10);
         const time = String(Math.floor(tod)).padStart(2, '0') + ':' + String(Math.floor(fract(tod) * 60)).padStart(2, '0');
         const text = dText(x, y, 0, .2, time);
-        return text ? [text, C(CYAN, 15)] : ['.', C(GRAY, 3)];
+        return text ? [text, C(CYAN, 15),true] : ['.', C(GRAY, 3)];
       }
       return null;
     }
@@ -33145,7 +33145,7 @@ function heldTreasure(it) {
     if (d > .82) return dLit(.6 - x * .035, id === 'compass' ? YEL : GRAY, 9);
     if (id === 'compass') {
       for (const [cx, cy, word] of [[0, -4.1, 'N'], [4.1, .2, 'E'], [0, 4.2, 'S'], [-4.1, .2, 'W']]) {
-        const text = dText(x, y, cx, cy, word); if (text) return [text, C(WHITE, 14)];
+        const text = dText(x, y, cx, cy, word); if (text) return [text, C(WHITE, 14),true];
       }
       const angle = -a + (phase >= 0 ? Math.sin(phase * 10) * .15 * (1 - phase) : 0);
       const along = x * Math.sin(angle) - y * Math.cos(angle), across = x * Math.cos(angle) + y * Math.sin(angle);
@@ -33153,13 +33153,13 @@ function heldTreasure(it) {
       return ['.', C(GRAY, 3)];
     }
     const stamp = dText(x, y, 0, -1.2, 'KING') || dText(x, y, 0, 2, '1908');
-    return stamp ? [stamp, C(WHITE, 14)] : dLit(.7 - x * .035, GRAY, 8);
+    return stamp ? [stamp, C(WHITE, 14),true] : dLit(.7 - x * .035, GRAY, 8);
   });
 }
 for (const id of ['bottlemsg', 'oldcoin', 'goldring', 'pearl', 'compass', 'divewatch', 'pocketknife', 'wishcoins']) DENSE[id] = heldTreasure;
 
 // The moving-day lamp keeps its pleated amber shade and metal foot in your hand.
-DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
+DENSE.movinglamp = () => sculptSurface(30, 27, (x,y) => {
   if(y < -11 || y > 11)return null;
   if(y < -1){
     const width=3.1+(y+11)*.38;
@@ -33176,15 +33176,15 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
 // (state.js stretches the view distance): far enough to make out the other islands across the water.
 const TELESCOPE_REACH=5;
 const telescopeActive=()=>(!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()||!!fx.lookout&&mode==='walk')&&!freecam; // (yours, or the lookout's: islands-content.js)
-DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
+DENSE.telescope=()=>sculptSurface(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
  return [Math.abs(x+5)<.5||Math.abs(x-7)<.5?'|':'=',C(YEL,8+Math.max(0,5-Math.abs(y)))];
 });
 DROPPED_ART.telescope=()=>[[' ___============(O)'],ch=>C(ch==='O'?CYAN:YEL,12)];
-// The eyepiece, drawn in the character grid before the frame is presented: black all round; a brass ring of glyphs,
-// a bright inner lip and an outer edge that follow the circle (- / | \) with a knurled grip of short radial strokes
-// between them, lit from the upper left; and the view darkening a little towards the rim. Measured in pixels, so the circle is round whatever the cell's shape
+// The eyepiece uses solid colour cells: a brass inner lip and knurled middle,
+// a shaded outer edge, and a darkened view rim. Pixel distances keep it round
+// whatever the character cell's shape. The control caption remains lettering.
 function drawTelescope(){
  if(!telescopeActive())return;
  const cx=cols*cw/2,cy=rows*FS/2,R=Math.min(cx,cy)*.82,band=cw*3.6,lip=cw*1.1,edge=cw*.9;
@@ -33193,13 +33193,11 @@ function drawTelescope(){
   if(d<R*.88)continue;
   if(d<R){const k=Math.round((d-R*.88)/(R*.12)*3);if(BG[i]!==NONE)BG[i]=(BG[i]&0xF0)|Math.max(0,(BG[i]&15)-k);COL[i]=(COL[i]&0xF0)|Math.max(0,(COL[i]&15)-k);continue;} // (vignette)
   FOGS[i]=FOGB[i]=0;
-  if(d>R+band){BG[i]=NONE;set(i,' ',0);continue;}
-  const th=Math.atan2(dy_,dx_),tx=-Math.sin(th),ty=Math.cos(th),deg=(Math.atan2(ty,tx)*180/Math.PI+360)%180;
-  const along=deg<22.5||deg>157.5?'-':deg>67.5&&deg<112.5?'|':tx*ty<0?'/':'\\',across={'-':'|','|':'-','/':'\\','\\':'/'}[along];
+  if(d>R+band){BG[i]=C(GRAY,0);set(i,' ',0);continue;}
+  const th=Math.atan2(dy_,dx_);
   const shine=.75+.35*Math.cos(th+Math.PI*.75),inner=d<R+lip,outer=d>R+band-edge; // (the light from over your left shoulder)
   const knurl=!inner&&!outer&&fract(th*64/TAU)<.5;
-  BG[i]=C(BRICK,(inner?3:outer?1.2:2)*shine);
-  set(i,inner||outer?along:knurl?across:' ',C(inner?YEL:WARM,(inner?13:outer?7:9)*shine));
+  BG[i]=C(inner?YEL:outer?GRAY:BRICK,(inner?13:outer?7:knurl?8:5)*shine);set(i,' ',0);
  }
  if(!fx.lookout){ // the caption, under the ring (at the lookout the prompt says how to step back)
   const text='6x   Q: lower telescope',r=Math.min(rows-2,Math.floor((cy+R+band)/FS)+1),c0=Math.floor(cols/2-text.length/2);
@@ -33288,12 +33286,10 @@ function heldPageTurn(it, picture) {
   if (span < 2) return picture;
   const left = 3, right = left + span, rows = picture.art.map(line => [...line]);
   for (let r = 2; r < picture.height - 2; r++) for (let c = left; c < right; c++) {
-    let ch = r % 3 === 0 ? '=' : '.';
-    if (c === right - 1) ch = '/';
-    rows[r][c] = ch;
+    rows[r][c]='\u0001';
   }
   return { ...picture, art: rows.map(row => row.join('')), col: (ch, r, c) =>
-    r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(ch === '/' ? WHITE : WARM, 13) : picture.col(ch, r, c) };
+    r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(c===right-1?WHITE:r%3===0?GRAY:WARM,c===right-1?14:r%3===0?8:13) : picture.col(ch, r, c) };
 }
 function heldPicture(it) {
   // Cell animation runs at 15 fps. Only the current picture is retained.
@@ -33751,8 +33747,8 @@ function denseFish(it) {
     if (ny > 0.35 && !d.ugly && !koi) return [dFill(b), C(WHITE, 5 + b * 9)]; // the belly, paler
     return [b > 0.9 ? '@' : dFill(b), C(koi ? (fract(x * 0.3 + y * 0.1) < 0.5 ? YEL : ORANGE) : col, 5 + b * 10)];
   };
-  if (!it.hang) return sculpt(W, H, cell);
-  return sculpt(Math.round(H / D_ASPECT), Math.round(W * D_ASPECT), (x, y) => { // hooked by the mouth: head up
+  if (!it.hang) return sculptSurface(W, H, cell);
+  return sculptSurface(Math.round(H / D_ASPECT), Math.round(W * D_ASPECT), (x, y) => { // hooked by the mouth: head up
     const c = cell(y + (W * D_ASPECT) / 2 - (rx - cx0) - 0.5, x);
     return c && [HANG_CH[c[0]] ?? c[0], c[1]];
   });
@@ -48414,7 +48410,7 @@ ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.
     ...[[3,5],[9,6],[14,5],[3,10],[9,10],[14,10]].map(([x,y],k)=>HOME_PENDANT(x,y,3.4,r,k)),
   ]};
 ROOM_CEILS.idea=(i)=>{BG[i]=C(WHITE,5);set(i,' ',0);};
-DENSE.camera=()=>sculpt(36,20,(x,y)=>{
+DENSE.camera=()=>sculptSurface(36,20,(x,y)=>{
   const dx=Math.max(Math.abs(x)-7,0),dy=Math.max(Math.abs(y)-3.6,0);
   if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?['#',C(GRAY,9)]:null;
   const lens=Math.hypot(x-1.5,y);
@@ -48424,7 +48420,7 @@ DENSE.camera=()=>sculpt(36,20,(x,y)=>{
 });
 // Flatpacks keep their own silhouette in the bag and in the player's hands.
 function heldFurnitureFlatpack(it) {
-  return sculpt(64,26,(x,y)=>{
+  return sculptSurface(64,26,(x,y)=>{
     const u=x+17,v=y+8;
     if(u<0||u>34)return null;
     const top=-u*.14,edge=top+5;
@@ -48433,7 +48429,7 @@ function heldFurnitureFlatpack(it) {
     if(tape)return ['#',C(STONE,lid?9:7)];
     if(!lid&&!right&&u>3&&u<12&&v>edge+4&&v<edge+10){
       const icon=(Math.abs(u-7.5)<3.5&&Math.abs(v-edge-7)<.45)||(Math.abs(u-5)<.45&&v>edge+7)||(Math.abs(u-10)<.45&&v>edge+7);
-      return [icon?'|':' ',C(BRICK,7)];
+      return [' ',C(icon?BRICK:WHITE,icon?7:11)];
     }
     if(!lid&&!right&&u>19&&u<24&&v>edge+9&&v<edge+12)return ['|',C(BRICK,3)];
     return ['#',C(WARM,lid?8:right?4:6)];

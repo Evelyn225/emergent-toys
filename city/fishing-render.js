@@ -384,8 +384,8 @@ function denseFish(it) {
     if (ny > 0.35 && !d.ugly && !koi) return [dFill(b), C(WHITE, 5 + b * 9)]; // the belly, paler
     return [b > 0.9 ? '@' : dFill(b), C(koi ? (fract(x * 0.3 + y * 0.1) < 0.5 ? YEL : ORANGE) : col, 5 + b * 10)];
   };
-  if (!it.hang) return sculpt(W, H, cell);
-  return sculpt(Math.round(H / D_ASPECT), Math.round(W * D_ASPECT), (x, y) => { // hooked by the mouth: head up
+  if (!it.hang) return sculptSurface(W, H, cell);
+  return sculptSurface(Math.round(H / D_ASPECT), Math.round(W * D_ASPECT), (x, y) => { // hooked by the mouth: head up
     const c = cell(y + (W * D_ASPECT) / 2 - (rx - cx0) - 0.5, x);
     return c && [HANG_CH[c[0]] ?? c[0], c[1]];
   });

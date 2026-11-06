@@ -167,14 +167,15 @@ test('only the item is culled behind the hand pixels: scenery shows through and 
 test('using items keeps the hand steady while pages and blades animate, and stays separate from inventory slots and camera', () => withItems(async page => {
   const r = await page.evaluate(() => {
     const camera = [px, py, a, pitch], gestures = [], pictures = [];
+    const signature=pic=>JSON.stringify(pic.art.map((l,r)=>[...l].map((ch,c)=>[ch,pic.col(ch,r,c)])));
     for (const id of ['duck', 'book', 'newspaper', 'pocketknife', 'oldcoin', 'snowglobe', 'coffee', 'plushcat', 'compass']) {
       inv.length = 0; inv.push({ id, uses: ITEMS[id].uses || 0 }); held = 0;
       animateHeldUse(inv[0]); const idle = heldGesture(inv[0], 14);
       T += .2; const use = heldGesture(inv[0], 14);
       if (JSON.stringify(idle) !== JSON.stringify(use)) gestures.push(id);
       if (['book', 'newspaper', 'pocketknife'].includes(id)) {
-        const active = heldPicture(inv[0]).art.join('\n'); T += 1;
-        if (active !== heldPicture(inv[0]).art.join('\n')) pictures.push(id);
+        const active = signature(heldPicture(inv[0])); T += 1;
+        if (active !== signature(heldPicture(inv[0]))) pictures.push(id);
       } else T += 1;
     }
     inv.length = 0; inv.push({ id: 'duck', uses: 0 }, { id: 'duck', uses: 0 }); held = 0;

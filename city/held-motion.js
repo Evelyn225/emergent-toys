@@ -17,12 +17,10 @@ function heldPageTurn(it, picture) {
   if (span < 2) return picture;
   const left = 3, right = left + span, rows = picture.art.map(line => [...line]);
   for (let r = 2; r < picture.height - 2; r++) for (let c = left; c < right; c++) {
-    let ch = r % 3 === 0 ? '=' : '.';
-    if (c === right - 1) ch = '/';
-    rows[r][c] = ch;
+    rows[r][c]='\u0001';
   }
   return { ...picture, art: rows.map(row => row.join('')), col: (ch, r, c) =>
-    r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(ch === '/' ? WHITE : WARM, 13) : picture.col(ch, r, c) };
+    r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(c===right-1?WHITE:r%3===0?GRAY:WARM,c===right-1?14:r%3===0?8:13) : picture.col(ch, r, c) };
 }
 function heldPicture(it) {
   // Cell animation runs at 15 fps. Only the current picture is retained.
