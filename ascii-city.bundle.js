@@ -52487,6 +52487,13 @@ function gotoShop(word) {
   }
   if (!best) return say(`No ${word} in town.`);
   px = worldCoord(best.x); py = worldCoord(best.y); a = best.a; pitch = 0;
+  if (!free(px, py)) { // (a hydrant, a bin, a parked fire engine on that spot: the nearest clear one along the pavement)
+    const tx = Math.abs(Math.sin(best.a)) > .5 ? 1 : 0, ty = 1 - tx, ox = px, oy = py;
+    search: for (let r = .05; r <= .6; r += .05) for (const s of [1, -1]) for (const out of [0, .1, .2]) {
+      const x = worldCoord(ox + tx * r * s - Math.cos(best.a) * out), y = worldCoord(oy + ty * r * s - Math.sin(best.a) * out);
+      if (free(x, y)) { px = x; py = y; break search; }
+    }
+  }
   say(`Outside ${word}. ${openAt(best.sh, tod) ? 'Walk up and press E.' : `Closed, opens at ${best.sh.hours[0]}:00.`}`, 5);
 }
 { const w = new URLSearchParams(location.search).get('goto'); if (w) gotoShop(w.toUpperCase()); }
