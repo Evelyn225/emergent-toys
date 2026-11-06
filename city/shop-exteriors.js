@@ -89,6 +89,7 @@ function drawShopExterior(e, vx, vy) {
   }
 }
 function shopExteriors() {
+  abandonedShopDressing();
   forNear(shopExteriorList(), e => {
     const [vx, vy] = R(e.x, e.y), d = Math.hypot(vx, vy);
     if (d > SHOP_WINDOW.near * 2.5 || !inView(vx, vy, .5)) return;
