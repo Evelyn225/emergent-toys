@@ -66,7 +66,7 @@ const MatchEngine = (() => {
       seed, r, t: 0, minutes: opts.minutes ?? 12, period: 1, phase: 'kickoff', phaseT: 0, stoppage: [0, 0], added: [0, 0],
       ball: { p: [0, 0, BALL_R], v: [0, 0, 0], owner: null, lastTouch: null, lastKick: null, kickT: -9 },
       events: [], stats: [{ shots: 0, onTarget: 0, poss: 0, passes: 0, passesDone: 0, fouls: 0, corners: 0, offsides: 0, yellow: 0, red: 0, saves: 0 }, null],
-      restart: null, pendingPass: null, advantage: null, celebrate: null, replay: [], diag: {},
+      restart: null, pendingPass: null, advantage: null, celebrate: null, replay: [], diag: {}, knockout: !!opts.knockout,
     };
     m.stats[1] = { ...m.stats[0] };
     m.teams = [makeTeam(club(opts.home ?? 'yards'), 0, r), makeTeam(club(opts.away ?? 'docks'), 1, r)];
@@ -602,8 +602,10 @@ const MatchEngine = (() => {
     const minNow = minute(m), half = m.period === 1 ? 45 : 90;
     if (m.phase === 'ht') { if (m.t >= m.phaseT) { m.period = 2; for (const t of m.teams) for (const p of onPitch(t)) p.stamina = Math.min(1, p.stamina + .15); kickoff(m, 1); log(m, 'kickoff', 1); } return; }
     if (m.phase === 'ft') return;
+    if (m.phase === 'pens') return shootoutTick(m, dt);
     if (minNow >= half + Math.round(m.added[m.period - 1] || 0) && m.phase !== 'goal') {
       if (m.period === 1) { m.phase = 'ht'; m.phaseT = m.t + 4; log(m, 'ht', 0, { score: [m.teams[0].score, m.teams[1].score] }); return; }
+      if (m.knockout && m.teams[0].score === m.teams[1].score) return startShootout(m); // (a cup tie, level: penalties)
       m.phase = 'ft'; log(m, 'ft', 0, { score: [m.teams[0].score, m.teams[1].score] }); return;
     }
     if (minNow >= half - .1 && !m.added[m.period - 1]) m.added[m.period - 1] = clampN(Math.round(1 + m.stoppage[m.period - 1] + m.r() * 2), 1, 7), log(m, 'added', 0, { mins: m.added[m.period - 1] });
@@ -657,6 +659,54 @@ const MatchEngine = (() => {
     // the last twelve seconds, for replays
     if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.filter(p => !p.off).map(p => [p.pos[0], p.pos[1], p.face[0], p.face[1], hyp(p.vel[0], p.vel[1]), t.side, p.role === 'GK' ? 1 : 0, p.number])) }); if (m.replay.length > 80) m.replay.shift(); }
   }
+  // ---- a penalty shootout (a cup tie level at full time): five each at one end, taken in turn, then sudden death.
+  // Everyone else waits arm in arm on the halfway line; the keepers take turns in goal.
+  function startShootout(m) {
+    const r = m.r, first = r() < .5 ? 0 : 1, end = r() < .5 ? -1 : 1;
+    const order = t => { const out = onPitch(t).filter(p => p.role !== 'GK').sort((a, b) => b.attrs.shooting - a.attrs.shooting), gk = onPitch(t).find(p => p.role === 'GK'); return gk ? [...out, gk] : out; };
+    m.phase = 'pens'; m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null; m.restart = null; m.celebrate = null;
+    m.shoot = { end, first, next: first, goals: [0, 0], taken: [0, 0], kicks: [], order: m.teams.map(order), step: 'walk', at: m.t + 4, last: null };
+    log(m, 'pens', first, { score: [m.teams[0].score, m.teams[1].score] });
+  }
+  const shootDecided = S => {
+    const [g0, g1] = S.goals, [t0, t1] = S.taken;
+    if (t0 <= 5 && t1 <= 5 && (g0 + 5 - t0 < g1 || g1 + 5 - t1 < g0)) return true;
+    return t0 >= 5 && t0 === t1 && g0 !== g1;
+  };
+  function shootoutTick(m, dt) {
+    const S = m.shoot, side = S.next, team = m.teams[side], other = m.teams[1 - side], gx = S.end * PITCH.hl, spot = gx - S.end * PITCH.spot;
+    const list = S.order[side], taker = list[S.taken[side] % list.length], keeper = onPitch(other).find(p => p.role === 'GK');
+    for (const t of m.teams) for (const p of onPitch(t)) { // the rest on the halfway line, the waiting keeper by the box
+      const k = t.players.indexOf(p);
+      p.target = p === taker ? [spot - S.end * (S.step === 'walk' ? 2 : 1.2), 0] : p === keeper ? [gx, 0]
+        : p.role === 'GK' ? [gx - S.end * 17, PITCH.boxHW + 2] : [S.end * 1.2 * (t.side ? 1 : -1) + S.end * .1, (k - 5) * 1.1 + (t.side ? .4 : -.4)];
+      p.urgency = p === taker ? .6 : .35; movePlayer(m, p, dt);
+    }
+    if (S.step === 'walk') { m.ball.p = [spot, 0, BALL_R]; m.ball.v = [0, 0, 0]; if (m.t >= S.at && hyp(taker.pos[0] - taker.target[0], taker.pos[1] - taker.target[1]) < .6) { S.step = 'run'; S.at = m.t + 1.4; log(m, 'penup', side, { player: taker.name }); } return; }
+    if (S.step === 'run') { if (m.t < S.at) return; // (the run-up) then the kick, the dive
+      const r = m.r, aim = r() < .5 ? -1 : 1, dive = r() < .45 ? aim : r() < .5 ? -aim : 0, skill = taker.role === 'GK' ? .2 : taker.attrs.shooting;
+      const scored = dive === aim ? r() < .58 - (keeper?.attrs.gk ?? .5) * .15 : r() < .86 + skill * .1, saved = !scored && dive === aim, wide = !scored && !saved;
+      const ty = aim * PITCH.goalHW * (wide ? 1.25 : .62), tz = wide && r() < .5 ? PITCH.goalH + .6 : .3 + r() * 1.4;
+      S.flight = { from: [spot, 0, BALL_R], to: [scored ? gx + S.end * .6 : saved ? gx - S.end * .3 : gx + S.end * 2, saved ? ty * .7 : ty, saved ? Math.min(tz, 1.2) : tz], t0: m.t, dur: .45 };
+      S.taken[side]++; if (scored) S.goals[side]++;
+      S.last = { side, taker, keeper, scored, saved, t: m.t, dive };
+      S.kicks.push({ side, player: taker.name, scored }); m.stats[side].shots++; if (!wide) m.stats[side].onTarget++; if (saved) m.stats[1 - side].saves++;
+      m.ball.lastKick = { by: taker, t: m.t, shot: true }; m.ball.lastTouch = taker;
+      log(m, 'pen', side, { player: taker.name, keeper: keeper?.name, scored, saved, pens: S.goals.slice(), n: S.taken[side] });
+      S.step = 'after'; S.at = m.t + 3.2; return;
+    }
+    // the ball in flight, then a pause: the taker walks back, the next one comes forward
+    const F = S.flight, k = clampN((m.t - F.t0) / F.dur, 0, 1);
+    m.ball.p = [F.from[0] + (F.to[0] - F.from[0]) * k, F.from[1] + (F.to[1] - F.from[1]) * k, F.from[2] + (F.to[2] - F.from[2]) * k + Math.sin(k * Math.PI) * .3];
+    if (keeper && S.last.dive && m.t - F.t0 < .8) { keeper.pos[1] += S.last.dive * dt * 3; keeper.dive = S.last.dive; } else if (keeper) keeper.dive = 0;
+    if (m.t < S.at) return;
+    if (shootDecided(S)) {
+      const w = S.goals[0] > S.goals[1] ? 0 : 1; m.pens = S.goals.slice(); m.phase = 'ft';
+      log(m, 'shootout', w, { pens: m.pens.slice(), score: [m.teams[0].score, m.teams[1].score] });
+      log(m, 'ft', 0, { score: [m.teams[0].score, m.teams[1].score], pens: m.pens.slice() }); return;
+    }
+    S.next = S.taken[0] === S.taken[1] ? S.first : 1 - S.first; S.step = 'walk'; S.at = m.t + 1.5; m.ball.p = [spot, 0, BALL_R];
+  }
   // run the match on by `seconds` of play (fixed steps; any remainder carries over)
   function step(m, seconds) {
     m.acc = (m.acc || 0) + seconds;
@@ -665,7 +715,7 @@ const MatchEngine = (() => {
   }
   function simulate(m) { while (m.phase !== 'ft') tick(m); return m; }
   // a match's result for the league table
-  const result = m => ({ home: m.teams[0].club.id, away: m.teams[1].club.id, score: [m.teams[0].score, m.teams[1].score],
+  const result = m => ({ home: m.teams[0].club.id, away: m.teams[1].club.id, score: [m.teams[0].score, m.teams[1].score], pens: m.pens || null,
     scorers: m.events.filter(e => e.kind === 'goal').map(e => ({ side: e.side, player: e.player, min: Math.ceil(e.min), og: e.og })) });
 
   return { PITCH, CLUBS, FORMATIONS, TUNE, DT, create, step, simulate, tick, minute, dirOf, result, threat, xg, rng, offsideSet };

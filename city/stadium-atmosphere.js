@@ -18,21 +18,26 @@ const STADIUM_LINES = {
   sub: e => `Substitution, ${stadiumMatch.teams[e.side].name}: ${e.on} on for ${e.off}.`,
   offside: e => `Flag's up: ${e.player} offside.`,
   added: e => `The fourth official's board: ${e.mins} minute${e.mins > 1 ? 's' : ''} added on.`,
+  penup: e => `${e.player} steps up...`,
+  pens: e => `Level at full time, so it's penalties. ${stadiumMatch.teams[e.side].name} to go first.`,
+  pen: e => `${e.player}: ${e.scored ? pick(['SCORES!', 'tucks it away!', 'sends the keeper the wrong way!']) : e.saved ? `SAVED by ${e.keeper}!` : pick(['MISSES!', 'over the bar!', 'wide!'])}  ${penText(e.pens)}`,
+  shootout: e => `${stadiumMatch.teams[e.side].name} win it on penalties, ${Math.max(...e.pens)}-${Math.min(...e.pens)}!${stadiumMatch.cup === 'Cup final' ? ` The City Cup goes to ${stadiumMatch.teams[e.side].name}!` : ` They're through.`}`,
 };
+const penText = p => { const m = stadiumMatch; return `(${m.teams[0].short} ${p[0]}-${p[1]} ${m.teams[1].short} on pens)`; };
 const scoreText = e => { const m = stadiumMatch; return `${m.teams[0].short} ${e.score[0]}-${e.score[1]} ${m.teams[1].short}`; };
 // the line up top: the score and the clock, while you're at the ground
 function stadiumScoreLine() {
   const m = stadiumMatch; if (!m) return 'The Yards Ground';
   const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
   const clock = m.kick != null && nowHour() < m.kick ? `kick-off ${String(Math.floor(m.kick % 24)).padStart(2, '0')}:${String(Math.round(m.kick % 1 * 60)).padStart(2, '0')}`
-    : m.phase === 'ft' ? 'full time' : m.phase === 'ht' ? 'half time' : `${Math.min(Math.floor(min), half)}'${min > half ? '+' + Math.ceil(min - half) : ''}`;
-  return `${h.name} ${h.score}-${a.score} ${a.name}   ${clock}`;
+    : m.phase === 'pens' ? `penalties ${m.shoot.goals[0]}-${m.shoot.goals[1]}` : m.phase === 'ft' ? (m.pens ? `full time, ${m.pens[0]}-${m.pens[1]} on pens` : 'full time') : m.phase === 'ht' ? 'half time' : `${Math.min(Math.floor(min), half)}'${min > half ? '+' + Math.ceil(min - half) : ''}`;
+  return `${m.cup ? m.cup + ': ' : ''}${h.name} ${h.score}-${a.score} ${a.name}   ${clock}`;
 }
 // every frame at the ground: what's new in the match, told and heard
 function stadiumAtmosphere() {
   const m = stadiumMatch; if (!m || mode !== 'room' || room?.kind !== 'stadium') return;
   if (m.events.length < stadiumSeen || m !== stadiumAtmosphere.m) { stadiumAtmosphere.m = m; stadiumSeen = m.events.length; } // (a new match: start from now)
-  if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
+  if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground${m.cup ? ` for the ${m.cup}` : ''}: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
   while (stadiumSeen < m.events.length) stadiumEvent(m, m.events[stadiumSeen++]);
   tickStadiumReplay();
   // the home end singing: when they've something to sing about, now and then, not over an attack
@@ -42,7 +47,8 @@ function stadiumAtmosphere() {
   }
 }
 function stadiumEvent(m, e) {
-  const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft'].includes(e.kind);
+  const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft', 'pens', 'pen', 'shootout'].includes(e.kind);
+  if (e.kind === 'ft' && e.pens) return; // (the shootout's line said it)
   if (e.kind === 'goal') queueStadiumReplay(m, e); // (the build-up, again, in a few seconds: stadium.js)
   // the PA and the commentary: the big moments always; the rest when nothing else is up
   let line = null;
@@ -53,7 +59,8 @@ function stadiumEvent(m, e) {
   if (line && (big || e.kind === 'kickoff' || msgT <= 0 || T - stadiumSaidT > 2.5)) { say(line, big ? 5 : 2.8); stadiumSaidT = T; }
   // and the sound of it
   const s = { kickoff: 'whistle', foul: 'peep', offside: 'peep', ht: 'whistle2', ft: 'whistle3', shot: 'ooh', save: 'applause', miss: 'groan', woodwork: 'groan',
-    goal: home ? 'roar' : 'awaygoal', yellow: home ? 'boo' : 'cheer', red: home ? 'boo' : 'roarSmall', penalty: home ? 'roarSmall' : 'boo', sub: 'applause', corner: 'swell' }[e.kind];
+    goal: home ? 'roar' : 'awaygoal', yellow: home ? 'boo' : 'cheer', red: home ? 'boo' : 'roarSmall', penalty: home ? 'roarSmall' : 'boo', sub: 'applause', corner: 'swell',
+    pens: 'whistle', pen: e.scored ? (home ? 'roarSmall' : 'awaygoal') : home ? 'groan' : 'cheer', shootout: home ? 'roar' : 'awaygoal' }[e.kind];
   if (s) sfxStadium(s, m);
   if (e.kind === 'foul' || e.kind === 'penalty' || e.kind === 'yellow' || e.kind === 'red') sfxStadium('peep', m);
 }
@@ -103,5 +110,6 @@ function stadiumCrowdLevel() {
   if (m.phase === 'ht') return .4;
   if (m.phase === 'ft') return .3;
   if (m.phase === 'goal') return 1;
+  if (m.phase === 'pens') return m.shoot.step === 'run' ? .25 : m.shoot.step === 'after' ? .85 : .5; // (a hush for the run-up)
   return .55 + .45 * (m.danger || 0);
 }

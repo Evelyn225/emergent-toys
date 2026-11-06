@@ -3381,7 +3381,7 @@ const MatchEngine = (() => {
       seed, r, t: 0, minutes: opts.minutes ?? 12, period: 1, phase: 'kickoff', phaseT: 0, stoppage: [0, 0], added: [0, 0],
       ball: { p: [0, 0, BALL_R], v: [0, 0, 0], owner: null, lastTouch: null, lastKick: null, kickT: -9 },
       events: [], stats: [{ shots: 0, onTarget: 0, poss: 0, passes: 0, passesDone: 0, fouls: 0, corners: 0, offsides: 0, yellow: 0, red: 0, saves: 0 }, null],
-      restart: null, pendingPass: null, advantage: null, celebrate: null, replay: [], diag: {},
+      restart: null, pendingPass: null, advantage: null, celebrate: null, replay: [], diag: {}, knockout: !!opts.knockout,
     };
     m.stats[1] = { ...m.stats[0] };
     m.teams = [makeTeam(club(opts.home ?? 'yards'), 0, r), makeTeam(club(opts.away ?? 'docks'), 1, r)];
@@ -3917,8 +3917,10 @@ const MatchEngine = (() => {
     const minNow = minute(m), half = m.period === 1 ? 45 : 90;
     if (m.phase === 'ht') { if (m.t >= m.phaseT) { m.period = 2; for (const t of m.teams) for (const p of onPitch(t)) p.stamina = Math.min(1, p.stamina + .15); kickoff(m, 1); log(m, 'kickoff', 1); } return; }
     if (m.phase === 'ft') return;
+    if (m.phase === 'pens') return shootoutTick(m, dt);
     if (minNow >= half + Math.round(m.added[m.period - 1] || 0) && m.phase !== 'goal') {
       if (m.period === 1) { m.phase = 'ht'; m.phaseT = m.t + 4; log(m, 'ht', 0, { score: [m.teams[0].score, m.teams[1].score] }); return; }
+      if (m.knockout && m.teams[0].score === m.teams[1].score) return startShootout(m); // (a cup tie, level: penalties)
       m.phase = 'ft'; log(m, 'ft', 0, { score: [m.teams[0].score, m.teams[1].score] }); return;
     }
     if (minNow >= half - .1 && !m.added[m.period - 1]) m.added[m.period - 1] = clampN(Math.round(1 + m.stoppage[m.period - 1] + m.r() * 2), 1, 7), log(m, 'added', 0, { mins: m.added[m.period - 1] });
@@ -3972,6 +3974,54 @@ const MatchEngine = (() => {
     // the last twelve seconds, for replays
     if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.filter(p => !p.off).map(p => [p.pos[0], p.pos[1], p.face[0], p.face[1], hyp(p.vel[0], p.vel[1]), t.side, p.role === 'GK' ? 1 : 0, p.number])) }); if (m.replay.length > 80) m.replay.shift(); }
   }
+  // ---- a penalty shootout (a cup tie level at full time): five each at one end, taken in turn, then sudden death.
+  // Everyone else waits arm in arm on the halfway line; the keepers take turns in goal.
+  function startShootout(m) {
+    const r = m.r, first = r() < .5 ? 0 : 1, end = r() < .5 ? -1 : 1;
+    const order = t => { const out = onPitch(t).filter(p => p.role !== 'GK').sort((a, b) => b.attrs.shooting - a.attrs.shooting), gk = onPitch(t).find(p => p.role === 'GK'); return gk ? [...out, gk] : out; };
+    m.phase = 'pens'; m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null; m.restart = null; m.celebrate = null;
+    m.shoot = { end, first, next: first, goals: [0, 0], taken: [0, 0], kicks: [], order: m.teams.map(order), step: 'walk', at: m.t + 4, last: null };
+    log(m, 'pens', first, { score: [m.teams[0].score, m.teams[1].score] });
+  }
+  const shootDecided = S => {
+    const [g0, g1] = S.goals, [t0, t1] = S.taken;
+    if (t0 <= 5 && t1 <= 5 && (g0 + 5 - t0 < g1 || g1 + 5 - t1 < g0)) return true;
+    return t0 >= 5 && t0 === t1 && g0 !== g1;
+  };
+  function shootoutTick(m, dt) {
+    const S = m.shoot, side = S.next, team = m.teams[side], other = m.teams[1 - side], gx = S.end * PITCH.hl, spot = gx - S.end * PITCH.spot;
+    const list = S.order[side], taker = list[S.taken[side] % list.length], keeper = onPitch(other).find(p => p.role === 'GK');
+    for (const t of m.teams) for (const p of onPitch(t)) { // the rest on the halfway line, the waiting keeper by the box
+      const k = t.players.indexOf(p);
+      p.target = p === taker ? [spot - S.end * (S.step === 'walk' ? 2 : 1.2), 0] : p === keeper ? [gx, 0]
+        : p.role === 'GK' ? [gx - S.end * 17, PITCH.boxHW + 2] : [S.end * 1.2 * (t.side ? 1 : -1) + S.end * .1, (k - 5) * 1.1 + (t.side ? .4 : -.4)];
+      p.urgency = p === taker ? .6 : .35; movePlayer(m, p, dt);
+    }
+    if (S.step === 'walk') { m.ball.p = [spot, 0, BALL_R]; m.ball.v = [0, 0, 0]; if (m.t >= S.at && hyp(taker.pos[0] - taker.target[0], taker.pos[1] - taker.target[1]) < .6) { S.step = 'run'; S.at = m.t + 1.4; log(m, 'penup', side, { player: taker.name }); } return; }
+    if (S.step === 'run') { if (m.t < S.at) return; // (the run-up) then the kick, the dive
+      const r = m.r, aim = r() < .5 ? -1 : 1, dive = r() < .45 ? aim : r() < .5 ? -aim : 0, skill = taker.role === 'GK' ? .2 : taker.attrs.shooting;
+      const scored = dive === aim ? r() < .58 - (keeper?.attrs.gk ?? .5) * .15 : r() < .86 + skill * .1, saved = !scored && dive === aim, wide = !scored && !saved;
+      const ty = aim * PITCH.goalHW * (wide ? 1.25 : .62), tz = wide && r() < .5 ? PITCH.goalH + .6 : .3 + r() * 1.4;
+      S.flight = { from: [spot, 0, BALL_R], to: [scored ? gx + S.end * .6 : saved ? gx - S.end * .3 : gx + S.end * 2, saved ? ty * .7 : ty, saved ? Math.min(tz, 1.2) : tz], t0: m.t, dur: .45 };
+      S.taken[side]++; if (scored) S.goals[side]++;
+      S.last = { side, taker, keeper, scored, saved, t: m.t, dive };
+      S.kicks.push({ side, player: taker.name, scored }); m.stats[side].shots++; if (!wide) m.stats[side].onTarget++; if (saved) m.stats[1 - side].saves++;
+      m.ball.lastKick = { by: taker, t: m.t, shot: true }; m.ball.lastTouch = taker;
+      log(m, 'pen', side, { player: taker.name, keeper: keeper?.name, scored, saved, pens: S.goals.slice(), n: S.taken[side] });
+      S.step = 'after'; S.at = m.t + 3.2; return;
+    }
+    // the ball in flight, then a pause: the taker walks back, the next one comes forward
+    const F = S.flight, k = clampN((m.t - F.t0) / F.dur, 0, 1);
+    m.ball.p = [F.from[0] + (F.to[0] - F.from[0]) * k, F.from[1] + (F.to[1] - F.from[1]) * k, F.from[2] + (F.to[2] - F.from[2]) * k + Math.sin(k * Math.PI) * .3];
+    if (keeper && S.last.dive && m.t - F.t0 < .8) { keeper.pos[1] += S.last.dive * dt * 3; keeper.dive = S.last.dive; } else if (keeper) keeper.dive = 0;
+    if (m.t < S.at) return;
+    if (shootDecided(S)) {
+      const w = S.goals[0] > S.goals[1] ? 0 : 1; m.pens = S.goals.slice(); m.phase = 'ft';
+      log(m, 'shootout', w, { pens: m.pens.slice(), score: [m.teams[0].score, m.teams[1].score] });
+      log(m, 'ft', 0, { score: [m.teams[0].score, m.teams[1].score], pens: m.pens.slice() }); return;
+    }
+    S.next = S.taken[0] === S.taken[1] ? S.first : 1 - S.first; S.step = 'walk'; S.at = m.t + 1.5; m.ball.p = [spot, 0, BALL_R];
+  }
   // run the match on by `seconds` of play (fixed steps; any remainder carries over)
   function step(m, seconds) {
     m.acc = (m.acc || 0) + seconds;
@@ -3980,7 +4030,7 @@ const MatchEngine = (() => {
   }
   function simulate(m) { while (m.phase !== 'ft') tick(m); return m; }
   // a match's result for the league table
-  const result = m => ({ home: m.teams[0].club.id, away: m.teams[1].club.id, score: [m.teams[0].score, m.teams[1].score],
+  const result = m => ({ home: m.teams[0].club.id, away: m.teams[1].club.id, score: [m.teams[0].score, m.teams[1].score], pens: m.pens || null,
     scorers: m.events.filter(e => e.kind === 'goal').map(e => ({ side: e.side, player: e.player, min: Math.ceil(e.min), og: e.og })) });
 
   return { PITCH, CLUBS, FORMATIONS, TUNE, DT, create, step, simulate, tick, minute, dirOf, result, threat, xg, rng, offsideSet };
@@ -31506,13 +31556,85 @@ const groundPair = n => roundPairs(roundOf(n))[Math.floor(n / ((MatchEngine.CLUB
 const clubName = id => MatchEngine.CLUBS.find(c => c.id === id)?.name || id;
 const clubShort = id => MatchEngine.CLUBS.find(c => c.id === id)?.short || id;
 const fixtureSeed = (n, k) => ((n + 1) * 7919 + k * 104729 + league.season * 31) >>> 0;
-// the next fixture at the ground (now, if it's on): { n, when, short, home, away, kick (hours), live, open }
+// the next fixture at the ground (now, if it's on): { n, when, short, home, away, kick (hours), live, open, seed, cup }
+// A league match has its slot for n; a cup tie a negative n (cupId), and cup: the round's name
 function stadiumNextFixture() {
   const h = nowHour(); let n = Math.max(0, slotAt(h));
   if (slotHour(n) + MATCH_HOURS <= h) n++; // (that one's over: the next)
-  const [home, away] = groundPair(n), kick = slotHour(n), slot = LEAGUE_SLOTS[n % LEAGUE_SLOTS.length];
-  const today = Math.floor(kick / 24) === dayNum, when = (today ? 'TODAY ' + slot.name.slice(4) : slot.name);
-  return { n, home, away, kick, when, short: `${clubShort(home)} v ${clubShort(away)}`, live: h >= kick && h < kick + MATCH_HOURS, open: h >= kick - GATES_EARLY && h < kick + MATCH_HOURS };
+  const c = nextCupAtGround(h), id = c && c.kick < slotHour(n) ? c.id : n, g = groundFixture(id), slot = LEAGUE_SLOTS[n % LEAGUE_SLOTS.length];
+  const today = Math.floor(g.kick / 24) === dayNum, day = g.cup ? CUP_ROUNDS[cupRound(id)].day : slot.name.slice(0, 3), time = g.cup ? CUP_ROUNDS[cupRound(id)].time : slot.name.slice(4);
+  return { n: id, home: g.home, away: g.away, kick: g.kick, seed: g.seed, cup: g.cup, when: today ? 'TODAY ' + time : `${day} ${time}`,
+    short: `${clubShort(g.home)} v ${clubShort(g.away)}`, live: h >= g.kick && h < g.kick + MATCH_HOURS, open: h >= g.kick - GATES_EARLY && h < g.kick + MATCH_HOURS };
+}
+// a fixture at the ground by its id, league or cup: { home, away, kick, seed, cup (the round's name, or null) }
+function groundFixture(n) {
+  if (n >= 0) { const [home, away] = groundPair(n); return { home, away, kick: slotHour(n), seed: fixtureSeed(n, groundPairIndex(n)), cup: null }; }
+  const S = cupSeason(n), r = cupRound(n), tie = cupTies(S, r)?.[cupGroundTie(S, r)] || ['yards', 'docks'];
+  return { home: tie[0], away: tie[1], kick: cupKick(S, r), seed: cupSeed(S, r, cupGroundTie(S, r)), cup: CUP_ROUNDS[r].name };
+}
+
+// ===== the City Cup: the eight clubs drawn into a knockout every season, alongside the league. Quarter-finals on the
+// Thursday night of the season's second week, semis two weeks on, the final on the Sunday afternoon of the sixth week,
+// always at the Yards. One tie of each round is played at the ground; level at full time, it goes to penalties.
+const CUP_ROUNDS = [{ name: 'Cup quarter-final', short: 'QF', week: 1, day: 'THU', time: '19:30', tod: 19.5 },
+  { name: 'Cup semi-final', short: 'SF', week: 3, day: 'THU', time: '19:30', tod: 19.5 },
+  { name: 'Cup final', short: 'F', week: 5, day: 'SUN', time: '15:00', tod: 15 }];
+const CUP_DAYS = [3, 3, 6], SEASON_SLOTS = () => (MatchEngine.CLUBS.length - 1) * 2; // (days: Mon = 0)
+// the season a slot or an hour belongs to (absolute: the league's own count starts where you came in)
+const seasonOfHour = h => Math.floor(h / (7 * 24 * SEASON_SLOTS() / LEAGUE_SLOTS.length));
+const cupKick = (S, r) => ((S * SEASON_SLOTS() / LEAGUE_SLOTS.length + CUP_ROUNDS[r].week) * 7 + CUP_DAYS[r]) * 24 + CUP_ROUNDS[r].tod;
+const cupId = (S, r) => -(S * 3 + r + 1), cupSeason = id => Math.floor((-id - 1) / 3), cupRound = id => (-id - 1) % 3;
+const cupSeed = (S, r, k) => ((S + 1) * 15485863 + r * 7919 + k * 104729) >>> 0;
+const cupGroundTie = (S, r) => r === 2 ? 0 : Math.floor(hash(S, r, 4409) * (r ? 2 : 4));
+// the draw for the quarter-finals (from the season), and who's in the later rounds once the one before is played
+function cupDraw(S) {
+  const r = MatchEngine.rng(cupSeed(S, 9, 0)), ids = MatchEngine.CLUBS.map(c => c.id);
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  return [0, 2, 4, 6].map(k => [ids[k], ids[k + 1]]);
+}
+function cupTies(S, r) {
+  if (r === 0) return cupDraw(S);
+  const prev = league.cup?.S === S ? league.cup.rounds[r - 1] : null;
+  if (!prev || prev.length < (r === 1 ? 4 : 2)) return null; // (not decided yet)
+  const w = prev.map(t => t.winner);
+  return r === 1 ? [[w[0], w[1]], [w[2], w[3]]] : [[w[0], w[1]]];
+}
+// the next cup tie at the ground not yet over, if its sides are known
+function nextCupAtGround(h) {
+  for (let S = seasonOfHour(h); S <= seasonOfHour(h) + 1; S++) for (let r = 0; r < 3; r++) {
+    if (cupKick(S, r) + MATCH_HOURS <= h) continue;
+    if (r > 0 && league.cup?.S !== S) return null; // (a cup that started before you came: wait for the next one)
+    return cupTies(S, r) ? { id: cupId(S, r), kick: cupKick(S, r) } : null;
+  }
+  return null;
+}
+// a tie settled: from the match you watched, or a scoreline from the two sides' strength and, level, a shootout
+function cupPens(seed, home, away) {
+  const r = MatchEngine.rng(seed ^ 0x5bd1e995), g = [0, 0], t = [0, 0];
+  for (let k = 0; k < 40; k++) {
+    const side = k % 2; t[side]++; if (r() < .74) g[side]++;
+    if (t[0] <= 5 && t[1] <= 5 && (g[0] + 5 - t[0] < g[1] || g[1] + 5 - t[1] < g[0])) break;
+    if (t[0] >= 5 && t[0] === t[1] && g[0] !== g[1]) break;
+  }
+  return g;
+}
+function playCupRound(S, r) {
+  if (r === 0) league.cup = { S, rounds: [] };
+  else if (league.cup?.S !== S) return;
+  const ties = cupTies(S, r); if (!ties) return;
+  const id = cupId(S, r), ground = cupGroundTie(S, r), out = [];
+  ties.forEach(([home, away], k) => {
+    const m = k === ground && stadiumMatch && stadiumMatch.slot === id ? stadiumMatch : null;
+    let score, pens = null;
+    if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const res = MatchEngine.result(m); score = res.score; pens = res.pens; }
+    else { score = quickScore(home, away, cupSeed(S, r, k)); if (score[0] === score[1]) pens = cupPens(cupSeed(S, r, k), home, away); }
+    const winner = (pens ? pens[0] > pens[1] : score[0] > score[1]) ? home : away;
+    out.push({ home, away, score, pens, winner });
+    league.results.push({ n: k === ground ? id : id * 10 - k, home, away, score, pens, cup: CUP_ROUNDS[r].short }); if (league.results.length > 40) league.results.shift();
+    if (k === ground) settleBets(id, home, away, score); // (stadium-extras.js: a bet's on the ninety minutes)
+  });
+  league.cup.rounds[r] = out;
+  if (r === 2) league.cup.winner = league.cupHolder = out[0].winner;
 }
 const stadiumGatesOpen = () => stadiumNextFixture().open;
 const stadiumMatchLive = () => stadiumNextFixture().live;
@@ -31551,6 +31673,10 @@ function updateLeague() {
     league.played = n;
     if (roundOf(n + 1) === 0) { league.season++; league.table = {}; } // (a new season: the table starts again)
   }
+  // the cup: every round over by now, in order (a new league starts with the next cup to begin, not one under way)
+  const cOver = c => cupKick(Math.floor(c / 3), c % 3) + MATCH_HOURS <= h;
+  if (league.cupPlayed == null) { let c = seasonOfHour(h) * 3 - 1; while (cOver(c + 1)) c++; league.cupPlayed = c; }
+  for (let guard = 0; guard < 12 && cOver(league.cupPlayed + 1); guard++) { const c = ++league.cupPlayed; playCupRound(Math.floor(c / 3), c % 3); }
 }
 // the table, sorted: points, goal difference, goals scored
 const leagueTable = () => MatchEngine.CLUBS.map(c => ({ id: c.id, name: c.name, short: c.short, ...(league.table[c.id] || { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }) }))
@@ -31559,8 +31685,8 @@ const leagueTable = () => MatchEngine.CLUBS.map(c => ({ id: c.id, name: c.name, 
 function stadiumLiveMatch() {
   const f = stadiumNextFixture();
   if (!stadiumMatch || stadiumMatch.slot !== f.n) {
-    stadiumMatch = MatchEngine.create({ home: f.home, away: f.away, seed: fixtureSeed(f.n, groundPairIndex(f.n)) });
-    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.crowd = .55 + hash(f.n, 3, 2321) * .3; // (a decent gate: plenty of empty seats about)
+    stadiumMatch = MatchEngine.create({ home: f.home, away: f.away, seed: f.seed, knockout: !!f.cup });
+    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.cup = f.cup; stadiumMatch.crowd = (f.cup ? .75 : .55) + hash(f.n, 3, 2321) * (f.cup ? .2 : .3); // (a decent gate: plenty of empty seats about)
   }
   const m = stadiumMatch, progress = clamp((nowHour() - f.kick) / MATCH_HOURS, 0, 1);
   if (progress > 0) { const target = progress * stadiumPlaySeconds(m); while (m.t < target && m.phase !== 'ft') MatchEngine.tick(m); }
@@ -31571,7 +31697,8 @@ const groundPairIndex = n => { const g = groundPair(n); return roundPairs(roundO
 const stadiumPlaySeconds = m => m.minutes * 60 + 4 + 8;
 // the save: the league goes with you
 const leagueSave = () => league;
-function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1, bets: Array.isArray(d.bets) ? d.bets.slice(0, 8) : [], seasonTicket: d.seasonTicket ?? null }; }
+function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1, bets: Array.isArray(d.bets) ? d.bets.slice(0, 8) : [], seasonTicket: d.seasonTicket ?? null,
+  cup: d.cup && typeof d.cup === 'object' && Array.isArray(d.cup.rounds) ? d.cup : null, cupPlayed: Number.isInteger(d.cupPlayed) ? d.cupPlayed : null, cupHolder: typeof d.cupHolder === 'string' ? d.cupHolder : null }; }
 // ===== the Yards ground (STADIUM_PLAN.md): an old-school football ground. Four separate stands round a full-size pitch:
 // the tall main stand down the north side, the east and south stands, and a standing terrace behind the west goal,
 // each with a pitched roof on steel columns; four floodlight pylons in the corners; a scoreboard over the south stand.
@@ -31687,7 +31814,7 @@ function crowdShade(i, t, L, s, k, u) {
   if (s.axis === 'y' && Math.abs(sx - px) < .8 && Math.abs(sy - py) < .5) return false; // (the seat you're in, and the ones either side, are yours)
   if (crowdNear(s, k, seat)) return false; // (close by: drawn as people, nearCrowdProp)
   const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
-  const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, standing = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
+  const cheering = stadiumCheers(m) === side, standing = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
   const zIn = HIT.w - (k + 1) * s.rise, tall = standing ? 1.55 : 1.05, w = (fract(u / SEAT_PITCH) - .5) * SEAT_PITCH / .5; // (w: across the seat, in half-metres from its middle)
   if (HIT.face === 5) { // seen from above (the rows below you): the tops of heads, shoulders either side
     const across = Math.abs((s.axis === 'y' ? HIT.v : HIT.u)) / (s.depth * .3);
@@ -31705,6 +31832,10 @@ function crowdShade(i, t, L, s, k, u) {
   const scarf = zIn > tall - .38 && hash(seat, k, 2207) > .6, colour = hash(seat, k, 2208) > .8 ? 1 : 0;
   BG[i] = kitCol(scarf ? kit[1] : kit[colour], (scarf ? 7 : 5.5) * (.55 + L * .03) - (zIn < .35 ? 1.5 : 0)); return set(i, ' ', 0), true;
 }
+// which side's fans are up celebrating (-1: nobody's): a goal, a penalty in the shootout, the shootout won
+const stadiumCheers = m => !m ? -1 : m.phase === 'goal' ? m.celebrate?.side ?? -1
+  : m.phase === 'pens' ? (m.shoot.step === 'after' && m.shoot.last ? (m.shoot.last.scored ? m.shoot.last.side : 1 - m.shoot.last.side) : -1)
+  : m.phase === 'ft' && m.pens && m.t - m.shoot.last.t < 20 ? (m.pens[0] > m.pens[1] ? 0 : 1) : -1;
 // the supporters close round you: real people, sat on the row or up on their feet, in their side's colours. Further
 // off the strip above stands in for them (it leaves out these seats, so nobody is drawn twice)
 const CROWD_NEAR = 6.5, CROWD_H = 1.6; // (a touch under full height: sat down, the heads in front sit below your eyes)
@@ -31747,10 +31878,10 @@ const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, r
         const hs = hash(seat, k, s.id.length * 31 + 2203); if (hs > fill) continue;
         if (Math.abs(x - px) < .8 && Math.abs(y - py) < .5) continue; // (your seat, and the ones either side)
         const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
-        const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, gutted = m && m.phase === 'goal' && m.celebrate && m.celebrate.side !== side;
+        const cheers = stadiumCheers(m), cheering = cheers === side, gutted = cheers === 1 - side;
         const up = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
         const fx = along ? 0 : -s.out, fy = along ? -s.out : 0, look = crowdLook(s, k, seat, kit, side);
-        const pose = cheering && fract(T * 2 + hs * 7) < .8 ? 'cheer' : gutted && hs < fill * .4 ? 'dejected' : up ? 'stand' : 'sit' + Math.round(.42 / (CROWD_H / FIG_TALL));
+        const pose = cheering && fract(T * 2 + hs * 7) < .8 ? 'cheer' : gutted && !s.seats && hs < fill * .4 ? 'dejected' : up ? 'stand' : 'sit' + Math.round(.42 / (CROWD_H / FIG_TALL));
         drawFigure(rx, ry, z0, CROWD_H, fx, fy, look, pose);
       }
     }
@@ -31782,8 +31913,8 @@ const goalFrame = end => {
 const scoreboard = () => ({ x: STADIUM.cx - 14, y: 111.5, radius: 9, draw: (vx, vy) => {
   const m = stadiumMatch; if (!m) return;
   const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
-  const clock = m.phase === 'ft' ? 'FT' : m.phase === 'ht' ? 'HT' : String(Math.min(Math.floor(min), half)).padStart(2, '0') + "'";
-  const line1 = `${h.short} ${h.score}-${a.score} ${a.short}`, line2 = clock + (m.phase === 'goal' ? ' GOAL!' : '');
+  const pens = m.phase === 'pens' ? m.shoot.goals : m.pens, clock = m.phase === 'ft' ? 'FT' : m.phase === 'pens' ? 'PENS' : m.phase === 'ht' ? 'HT' : String(Math.min(Math.floor(min), half)).padStart(2, '0') + "'";
+  const line1 = `${h.short} ${h.score}-${a.score} ${a.short}`, line2 = clock + (m.phase === 'goal' ? ' GOAL!' : pens ? ` ${pens[0]}-${pens[1]}` : '');
   for (const e of [-1, 1]) drawBox(boxAt(vx + e * 5, vy + .2, 1, 0, .15, .15, 11.4, 14), solid(GRAY));
   drawBox(boxAt(vx, vy, 1, 0, 7, .25, 14, 18.6), (i, t, L) => {
     if (HIT.face !== 4) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
@@ -31807,7 +31938,7 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
   MatchEngine.step(m, dt);
   stadiumAtmosphere(); // the commentary and the crowd (stadium-atmosphere.js)
   if (m.kick != null && m.phase !== 'ft') { // the city clock at the match's pace: about two hours from kick-off to the final whistle
-    const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, 1) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24;
+    const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, .985) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24; // (short of the end while it's on: penalties can run over)
   }
   // how dangerous it is right now (the crowd's on its feet): the ball near a goal, in play
   const P = MatchEngine.PITCH, bx = m.ball.p[0];
@@ -31824,7 +31955,8 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
     if (p.off && !p.leaving) continue;
     const x = pitchX(p.pos[0]), y = pitchY(p.pos[1]), sp = Math.hypot(p.vel[0], p.vel[1]);
     p.stride = (p.stride || 0) + sp * (m.lastDt || .016);
-    const c = m.phase === 'goal' ? m.celebrate : null, scorer = c?.scorer, mob = c && t.side === c.side && p.role !== 'GK' && scorer && Math.hypot(p.pos[0] - scorer.pos[0], p.pos[1] - scorer.pos[1]) < 4;
+    const L = m.phase === 'pens' && m.shoot.step === 'after' ? m.shoot.last : null; // (a penalty just taken: the taker and the keeper react)
+    const c = m.phase === 'goal' ? m.celebrate : L && (L.taker === p && L.scored || L.keeper === p && L.saved) ? { side: t.side, scorer: p } : L && L.taker === p ? { side: 1 - t.side } : null, scorer = c?.scorer, mob = c && t.side === c.side && p.role !== 'GK' && scorer && Math.hypot(p.pos[0] - scorer.pos[0], p.pos[1] - scorer.pos[1]) < 4;
     const pose = c && (scorer === p || mob) && sp < 2.5 ? 'cheer' // (the scorer arms aloft, mobbed by the rest)
       : c && t.side !== c.side && sp < 1.2 ? 'dejected' // (the other lot, hands on heads)
       : sp > 4.2 ? 'run' + (Math.floor(p.stride / 1.9 * 8) & 7) : sp > .5 ? 'walk' + (Math.floor(p.stride / 1.5 * 8) & 7) : 'stand';
@@ -31910,7 +32042,12 @@ function stadiumCam(dt) {
     const end = stadiumReplay.end, bx = pitchX(rf.b[0]), by = pitchY(rf.b[1]), x = pitchX(end * (MatchEngine.PITCH.hl + 9)), y = STADIUM.cy + end * 4, z = 4.2, dx = bx - x, dy = by - y, d = Math.hypot(dx, dy) || 1;
     return { x, y, z, a: Math.atan2(dy, dx), pitch: -projY * Math.tan(Math.atan2(z - Math.max(0, rf.b[2]), d)) / rows, fov: (30 + clamp(d / 50, 0, 1) * 18) * Math.PI / 180 };
   }
-  const m = stadiumMatch, sc = m.phase === 'goal' && m.celebrate?.scorer, b = sc ? [sc.pos[0], sc.pos[1], 1] : m.ball.p, bx = pitchX(b[0]), by = pitchY(b[1]); // (after a goal, on the scorer, not the ball in the net)
+  const m = stadiumMatch;
+  if (m.phase === 'pens') { // the shootout: low behind the taker, the keeper on the line in front
+    const P = MatchEngine.PITCH, end = m.shoot.end, gx = pitchX(end * P.hl), gy = STADIUM.cy, x = pitchX(end * (P.hl - P.spot - 13)), y = gy + 1.5, z = 3.4, d = Math.hypot(gx - x, gy - y);
+    return { x, y, z, a: Math.atan2(gy - y, gx - x), pitch: -projY * Math.tan(Math.atan2(z - 1, d)) / rows, fov: 30 * Math.PI / 180 };
+  }
+  const sc = m.phase === 'goal' && m.celebrate?.scorer, b = sc ? [sc.pos[0], sc.pos[1], 1] : m.ball.p, bx = pitchX(b[0]), by = pitchY(b[1]); // (after a goal, on the scorer, not the ball in the net)
   const want = STADIUM.cx + clamp(b[0] * .82, -44, 44);
   stadiumCamX = stadiumCamX == null ? want : stadiumCamX + (want - stadiumCamX) * Math.min(1, dt * 1.6);
   const x = stadiumCamX, y = 19.6, z = 12.4, dx = bx - x, dy = by - y, d = Math.hypot(dx, dy) || 1;
@@ -31998,10 +32135,11 @@ function openStadiumTickets() {
   const table = leagueTable().slice(0, 8).map((t, k) => `<div class="tbl"><span>${k + 1}. ${t.name}</span><span>${t.p}</span><span>${t.gf - t.ga >= 0 ? '+' : ''}${t.gf - t.ga}</span><span><b>${t.pts}</b></span></div>`).join('');
   const minute = stadiumMatch?.slot === f.n && f.live ? Math.floor(Math.min(90, MatchEngine.minute(stadiumLiveMatch()))) : null;
   showPanel(ticketEl, `<style>#tickets .tbl{display:grid;grid-template-columns:1fr 2.5em 3em 2.5em;gap:4px;font-size:.9em;opacity:.9}#tickets .tbl span:not(:first-child){text-align:right}</style>
-    <h1>The Yards Ground</h1><p class="sub">${clubName(f.home)} v ${clubName(f.away)} &middot; ${f.live ? `kicked off${minute != null ? `, ${minute}'` : ''}` : 'kick-off ' + f.when.replace('TODAY ', '')} &middot; you have ${fmt$(money)}</p>
+    <h1>The Yards Ground</h1><p class="sub">${f.cup ? `<b>${f.cup}</b> &middot; ` : ''}${clubName(f.home)} v ${clubName(f.away)} &middot; ${f.live ? `kicked off${minute != null ? `, ${minute}'` : ''}` : 'kick-off ' + f.when.replace('TODAY ', '')} &middot; you have ${fmt$(money)}</p>
     ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price && !hasSeasonTicket() ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${hasSeasonTicket() ? 'season ticket' : fmt$(s.price)}</span></button>`).join('')}
     ${stadiumExtrasHtml(f)}
     <h2>the table</h2><div class="tbl"><span></span><span>P</span><span>GD</span><span>Pts</span></div>${table}
+    ${cupBracketHtml()}
     <p class="hint">E / Esc close</p>`);
   ticketEl.onclick = e => {
     const x = e.target.closest('button[data-x]'); if (x) { const r = stadiumExtra(f, x.dataset.x); if (r) say(r[1], 4); return openStadiumTickets(); }
@@ -32010,6 +32148,25 @@ function openStadiumTickets() {
     hidePanel(ticketEl); enterStadium(b.dataset.sec);
     say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
   };
+}
+
+// the City Cup so far this season: each round's ties, scores (and pens) where they're played, the winner through in bold
+function cupBracketHtml() {
+  const h = nowHour(), S = seasonOfHour(h), mine = league.cup?.S === S;
+  if (!mine && cupKick(S, 0) + MATCH_HOURS <= h) return `<h2>the City Cup</h2><p class="sub">Under way. The draw for next season's is at the start of the season.</p>`;
+  const tie = (t, played) => {
+    if (!t) return '';
+    const [home, away] = played ? [played.home, played.away] : t, nm = id => played?.winner === id ? `<b>${clubShort(id)}</b>` : clubShort(id);
+    const sc = played ? `${played.score[0]}-${played.score[1]}${played.pens ? ` <small>(${played.pens[0]}-${played.pens[1]} pens)</small>` : ''}` : 'v';
+    return `<div class="tie"><span>${nm(home)}</span><span>${sc}</span><span>${nm(away)}</span></div>`;
+  };
+  const rows = CUP_ROUNDS.map((R, r) => {
+    const played = mine ? league.cup.rounds[r] : null, ties = played || cupTies(S, r);
+    const when = `${R.day} ${R.time}`, at = played ? '' : ` <small>${when}</small>`;
+    return `<p class="sub">${R.name.replace('Cup ', '')}${at}</p>${ties ? ties.map(t => played ? tie(t, t) : tie(t)).join('') : '<p class="sub"><small>to be decided</small></p>'}`;
+  }).join('');
+  const won = mine && league.cup.winner ? `<p class="sub">Winners: <b>${clubName(league.cup.winner)}</b></p>` : league.cupHolder ? `<p class="sub">Holders: ${clubName(league.cupHolder)}</p>` : '';
+  return `<style>#tickets .tie{display:grid;grid-template-columns:1fr 8em 1fr;gap:4px;font-size:.9em;opacity:.9}#tickets .tie span:nth-child(2){text-align:center}#tickets .tie span:nth-child(3){text-align:right}</style><h2>the City Cup</h2>${rows}${won}`;
 }
 
 // ---- replays (phase 6): the build-up to every goal, kept from the engine's last eight seconds (match-engine.js replay),
@@ -32078,21 +32235,26 @@ const STADIUM_LINES = {
   sub: e => `Substitution, ${stadiumMatch.teams[e.side].name}: ${e.on} on for ${e.off}.`,
   offside: e => `Flag's up: ${e.player} offside.`,
   added: e => `The fourth official's board: ${e.mins} minute${e.mins > 1 ? 's' : ''} added on.`,
+  penup: e => `${e.player} steps up...`,
+  pens: e => `Level at full time, so it's penalties. ${stadiumMatch.teams[e.side].name} to go first.`,
+  pen: e => `${e.player}: ${e.scored ? pick(['SCORES!', 'tucks it away!', 'sends the keeper the wrong way!']) : e.saved ? `SAVED by ${e.keeper}!` : pick(['MISSES!', 'over the bar!', 'wide!'])}  ${penText(e.pens)}`,
+  shootout: e => `${stadiumMatch.teams[e.side].name} win it on penalties, ${Math.max(...e.pens)}-${Math.min(...e.pens)}!${stadiumMatch.cup === 'Cup final' ? ` The City Cup goes to ${stadiumMatch.teams[e.side].name}!` : ` They're through.`}`,
 };
+const penText = p => { const m = stadiumMatch; return `(${m.teams[0].short} ${p[0]}-${p[1]} ${m.teams[1].short} on pens)`; };
 const scoreText = e => { const m = stadiumMatch; return `${m.teams[0].short} ${e.score[0]}-${e.score[1]} ${m.teams[1].short}`; };
 // the line up top: the score and the clock, while you're at the ground
 function stadiumScoreLine() {
   const m = stadiumMatch; if (!m) return 'The Yards Ground';
   const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
   const clock = m.kick != null && nowHour() < m.kick ? `kick-off ${String(Math.floor(m.kick % 24)).padStart(2, '0')}:${String(Math.round(m.kick % 1 * 60)).padStart(2, '0')}`
-    : m.phase === 'ft' ? 'full time' : m.phase === 'ht' ? 'half time' : `${Math.min(Math.floor(min), half)}'${min > half ? '+' + Math.ceil(min - half) : ''}`;
-  return `${h.name} ${h.score}-${a.score} ${a.name}   ${clock}`;
+    : m.phase === 'pens' ? `penalties ${m.shoot.goals[0]}-${m.shoot.goals[1]}` : m.phase === 'ft' ? (m.pens ? `full time, ${m.pens[0]}-${m.pens[1]} on pens` : 'full time') : m.phase === 'ht' ? 'half time' : `${Math.min(Math.floor(min), half)}'${min > half ? '+' + Math.ceil(min - half) : ''}`;
+  return `${m.cup ? m.cup + ': ' : ''}${h.name} ${h.score}-${a.score} ${a.name}   ${clock}`;
 }
 // every frame at the ground: what's new in the match, told and heard
 function stadiumAtmosphere() {
   const m = stadiumMatch; if (!m || mode !== 'room' || room?.kind !== 'stadium') return;
   if (m.events.length < stadiumSeen || m !== stadiumAtmosphere.m) { stadiumAtmosphere.m = m; stadiumSeen = m.events.length; } // (a new match: start from now)
-  if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
+  if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground${m.cup ? ` for the ${m.cup}` : ''}: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
   while (stadiumSeen < m.events.length) stadiumEvent(m, m.events[stadiumSeen++]);
   tickStadiumReplay();
   // the home end singing: when they've something to sing about, now and then, not over an attack
@@ -32102,7 +32264,8 @@ function stadiumAtmosphere() {
   }
 }
 function stadiumEvent(m, e) {
-  const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft'].includes(e.kind);
+  const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft', 'pens', 'pen', 'shootout'].includes(e.kind);
+  if (e.kind === 'ft' && e.pens) return; // (the shootout's line said it)
   if (e.kind === 'goal') queueStadiumReplay(m, e); // (the build-up, again, in a few seconds: stadium.js)
   // the PA and the commentary: the big moments always; the rest when nothing else is up
   let line = null;
@@ -32113,7 +32276,8 @@ function stadiumEvent(m, e) {
   if (line && (big || e.kind === 'kickoff' || msgT <= 0 || T - stadiumSaidT > 2.5)) { say(line, big ? 5 : 2.8); stadiumSaidT = T; }
   // and the sound of it
   const s = { kickoff: 'whistle', foul: 'peep', offside: 'peep', ht: 'whistle2', ft: 'whistle3', shot: 'ooh', save: 'applause', miss: 'groan', woodwork: 'groan',
-    goal: home ? 'roar' : 'awaygoal', yellow: home ? 'boo' : 'cheer', red: home ? 'boo' : 'roarSmall', penalty: home ? 'roarSmall' : 'boo', sub: 'applause', corner: 'swell' }[e.kind];
+    goal: home ? 'roar' : 'awaygoal', yellow: home ? 'boo' : 'cheer', red: home ? 'boo' : 'roarSmall', penalty: home ? 'roarSmall' : 'boo', sub: 'applause', corner: 'swell',
+    pens: 'whistle', pen: e.scored ? (home ? 'roarSmall' : 'awaygoal') : home ? 'groan' : 'cheer', shootout: home ? 'roar' : 'awaygoal' }[e.kind];
   if (s) sfxStadium(s, m);
   if (e.kind === 'foul' || e.kind === 'penalty' || e.kind === 'yellow' || e.kind === 'red') sfxStadium('peep', m);
 }
@@ -32163,6 +32327,7 @@ function stadiumCrowdLevel() {
   if (m.phase === 'ht') return .4;
   if (m.phase === 'ft') return .3;
   if (m.phase === 'goal') return 1;
+  if (m.phase === 'pens') return m.shoot.step === 'run' ? .25 : m.shoot.step === 'after' ? .85 : .5; // (a hush for the run-up)
   return .55 + .45 * (m.danger || 0);
 }
 // ===== the extras at the Yards ground (STADIUM_PLAN.md, phase 7): a bet on the match at the ticket window (odds from the
@@ -32209,15 +32374,15 @@ function useScarf(it) {
 // the programme: both sides' line-ups, as named on the day
 function readProgramme(it) {
   const n = it.uses; // (the programme keeps its fixture's slot in uses: saved with it)
-  const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) && n >= 0 ? stadiumFixtureTeams(n) : null;
+  const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) ? stadiumFixtureTeams(n) : null;
   if (!m) return ['A programme from an old match. You flick through the adverts.', 'page'];
   const xi = t => t.players.filter(p => !p.off && !p.sub).map(p => p.name).join(', ');
   return [`${m.teams[0].name}: ${xi(m.teams[0])}.  ${m.teams[1].name}: ${xi(m.teams[1])}.`, 'page'];
 }
 // the teams for fixture n, as the engine would name them (the same seed the match is played with)
 function stadiumFixtureTeams(n) {
-  const [home, away] = groundPair(n);
-  return MatchEngine.create({ home, away, seed: fixtureSeed(n, groundPairIndex(n)) });
+  const g = groundFixture(n);
+  return MatchEngine.create({ home: g.home, away: g.away, seed: g.seed, knockout: !!g.cup });
 }
 // the kiosk inside the gate: near enough to reach, and what it sells
 const nearKiosk = () => mode === 'room' && room?.kind === 'stadium' && Math.hypot(px - KIOSK.x, py - KIOSK.y) < 1.6;

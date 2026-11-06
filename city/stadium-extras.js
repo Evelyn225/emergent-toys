@@ -42,15 +42,15 @@ function useScarf(it) {
 // the programme: both sides' line-ups, as named on the day
 function readProgramme(it) {
   const n = it.uses; // (the programme keeps its fixture's slot in uses: saved with it)
-  const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) && n >= 0 ? stadiumFixtureTeams(n) : null;
+  const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) ? stadiumFixtureTeams(n) : null;
   if (!m) return ['A programme from an old match. You flick through the adverts.', 'page'];
   const xi = t => t.players.filter(p => !p.off && !p.sub).map(p => p.name).join(', ');
   return [`${m.teams[0].name}: ${xi(m.teams[0])}.  ${m.teams[1].name}: ${xi(m.teams[1])}.`, 'page'];
 }
 // the teams for fixture n, as the engine would name them (the same seed the match is played with)
 function stadiumFixtureTeams(n) {
-  const [home, away] = groundPair(n);
-  return MatchEngine.create({ home, away, seed: fixtureSeed(n, groundPairIndex(n)) });
+  const g = groundFixture(n);
+  return MatchEngine.create({ home: g.home, away: g.away, seed: g.seed, knockout: !!g.cup });
 }
 // the kiosk inside the gate: near enough to reach, and what it sells
 const nearKiosk = () => mode === 'room' && room?.kind === 'stadium' && Math.hypot(px - KIOSK.x, py - KIOSK.y) < 1.6;

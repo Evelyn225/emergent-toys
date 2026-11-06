@@ -44,8 +44,8 @@ test('no match on: the gates are shut, and they tell you the next fixture',()=>c
 test('results come in as the week goes by, the match you watched among them; the table is saved',()=>city(async p=>{
  await p.evaluate(()=>{updateLeague();const f=stadiumNextFixture();dayNum=Math.floor(f.kick/24);tod=f.kick-dayNum*24+.5;enterStadium('south');for(let k=0;k<5;k++){T+=.1;render(0);}window.__watched=[stadiumMatch.slot,stadiumMatch.teams[0].club.id];leaveRoom();
   dayNum+=10;updateLeague();saveGame();});
- const r=await p.evaluate(()=>({played:league.played,results:league.results.length,watched:league.results.find(x=>x.n===window.__watched[0]&&x.home===window.__watched[1]),games:leagueTable().reduce((s,t)=>s+t.p,0)}));
- assert.ok(r.results>=8,'two rounds and more');assert.ok(r.watched,'the match you were at is on the record');assert.equal(r.games,r.results*2);
+ const r=await p.evaluate(()=>({played:league.played,results:league.results.length,watched:league.results.find(x=>x.n===window.__watched[0]&&x.home===window.__watched[1]),league:league.results.filter(x=>!x.cup).length,games:leagueTable().reduce((s,t)=>s+t.p,0)}));
+ assert.ok(r.results>=8,'two rounds and more');assert.ok(r.watched,'the match you were at is on the record');assert.equal(r.games,r.league*2,'every league result in the table (the cup ties are kept apart)');
  await p.reload();await p.waitForFunction(()=>typeof leagueTable==='function'&&worldReady);
  assert.equal(await p.evaluate(()=>league.results.length),r.results,'kept in the save');
 }));

@@ -61,7 +61,13 @@ Yes, as a medium-to-large feature. Most of what it needs exists:
   - **Programme:** lists both line-ups when read with Q.
   - **Kiosk:** a "Pies & Pints" kiosk inside the gate.
   - **Saving:** the scarf's club and the programme's fixture are kept in the save.
-- **Not done:** cup competitions.
+- **The City Cup (`city/league.js`):**
+  - **Format:** all eight clubs drawn into a knockout every season. Quarter-finals on the Thursday night (19:30) of week 2, semis on the Thursday of week 4, the final on the Sunday afternoon (15:00) of week 6.
+  - **At the ground:** one tie of each round, and always the final. The ground's next fixture is whichever comes first, league or cup (cup ties have negative ids).
+  - **Penalties:** a knockout match level at full time goes to a shootout in the engine (`knockout: true`). Five each, then sudden death, at one end. Conversion is about 72%. The other ties are settled with the quick scoreline and a quick shootout.
+  - **Presentation:** the shootout is on the score line, the scoreboard (PENS 2-1) and the PA, kick by kick. A hush for each run-up, then the crowd reacts. The TV view moves low behind the taker. The ticket window shows the bracket and the holders.
+  - **Rules:** bets on a cup tie are on the ninety minutes. A league that starts mid-cup waits for the next draw. The cup, the holders and the progress are saved.
+- **Close-up crowd:** within 6.5 m, the supporters are real seated figures on tip-up seats. Further off, the strip texture is used.
 
 ## 1. What the player gets
 
