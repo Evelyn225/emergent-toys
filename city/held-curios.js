@@ -225,9 +225,9 @@ DENSE.telescope=()=>sculptSurface(36,18,(x,y)=>{
  return [Math.abs(x+5)<.5||Math.abs(x-7)<.5?'|':'=',C(YEL,8+Math.max(0,5-Math.abs(y)))];
 });
 DROPPED_ART.telescope=()=>[[' ___============(O)'],ch=>C(ch==='O'?CYAN:YEL,12)];
-// The eyepiece, drawn in the character grid before the frame is presented: black all round; a brass ring of glyphs,
-// a bright inner lip and an outer edge that follow the circle (- / | \) with a knurled grip of short radial strokes
-// between them, lit from the upper left; and the view darkening a little towards the rim. Measured in pixels, so the circle is round whatever the cell's shape
+// The eyepiece uses solid colour cells: a brass inner lip and knurled middle,
+// a shaded outer edge, and a darkened view rim. Pixel distances keep it round
+// whatever the character cell's shape. The control caption remains lettering.
 function drawTelescope(){
  if(!telescopeActive())return;
  const cx=cols*cw/2,cy=rows*FS/2,R=Math.min(cx,cy)*.82,band=cw*3.6,lip=cw*1.1,edge=cw*.9;
