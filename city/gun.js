@@ -62,13 +62,13 @@ function traceShot(x, y, z, hx, hy, slope) {
       }
       end = hi; what = 'ground'; break;
     }
-    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d),islandSightHeight(x+hx*d,y+hy*d),streetSceneHeight(x+hx*d,y+hy*d)) > zz) {
+    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d),islandSightHeight(x+hx*d,y+hy*d,zz),streetSceneHeight(x+hx*d,y+hy*d)) > zz) {
       // Refine the first solid crossing as we do for terrain. A steeper roof
       // can rise several centimetres during one coarse trace step.
       let lo=Math.max(0,d-.02),hi=d;
       for(let n=0;n<10;n++){
         const mid=(lo+hi)/2,mx=x+hx*mid,my=y+hy*mid;
-        if(Math.max(map[idx(Math.floor(mx),Math.floor(my))],islandRoofHeight(mx,my),islandSightHeight(mx,my),streetSceneHeight(mx,my))>z+slope*mid)hi=mid;else lo=mid;
+        if(Math.max(map[idx(Math.floor(mx),Math.floor(my))],islandRoofHeight(mx,my),islandSightHeight(mx,my,z+slope*mid),streetSceneHeight(mx,my))>z+slope*mid)hi=mid;else lo=mid;
       }
       end=hi;what='wall';break;
     }
