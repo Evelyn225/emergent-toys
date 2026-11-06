@@ -22,6 +22,11 @@ test('mouse manuals start neutrally across gentle pulls and retain loaded, scoop
    tricks.push({name:body.trick?.name,recognized:SK_INPUT.fired});if(body.trick?.name!==name||!SK_INPUT.fired)bad.push(['motion path',name,body.trick?.name,SK_INPUT.fired]);
   }
   reset();mouse('mousedown');mouse('mousemove',-60,0);const recognized=SK_INPUT.fired;mouse('mouseup');if(recognized||body.trick?.name!=='kickflip')bad.push('simple direction fallback changed');
+  reset();mouse('mousedown');mouse('mousemove',0,21);tick();
+  const text=[],fill=g.fillText.bind(g);g.fillText=(line,...args)=>{text.push(String(line));return fill(line,...args);};try{hud();}finally{g.fillText=fill;}
+  const manualHint=text.find(line=>line.startsWith('MANUAL:'));if(!manualHint||manualHint.includes('A/D moves balance'))bad.push('outdated manual HUD');
+  openPause();pauseEl.querySelector('[data-act="controls"]').click();controlsEl.querySelector('[data-controls-tab="skate"]').click();
+  if(!controlsOpen()||!controlsEl.textContent.includes('starting drag sets neutral'))bad.push('mouse instructions missing from dedicated controls');
   return {bad,tricks};
  });assert.deepEqual(r.bad,[]);assert.deepEqual(errors,[]);
  }finally{await browser.close();}

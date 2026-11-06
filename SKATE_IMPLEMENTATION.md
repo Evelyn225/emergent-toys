@@ -702,3 +702,10 @@ new native regression. Close, wide, oblique and night manual views were reviewed
 Local serial ABAB against exact main `fec4cf8` at 177×66: main/branch median
 12.5/14.9 ms, then 13.1/12.9 ms (60 frames after 20 warm-up frames). Mixed local
 results, not an FPS guarantee. Reserved and concurrent world work is untouched.
+
+Integrated main `b85b241` and preserved its new dedicated Controls screen; the
+mouse neutral-point instructions now live on its Skateboarding tab. The live
+manual HUD hint is also corrected: fore/aft pressure balances, A/D steers.
+The final browser regression checks both the actual HUD output and opening that
+Controls tab, alongside real mouse gestures. Three rebuilt-bundle browser cases
+and the focused Node suite pass after this integration.

@@ -27780,7 +27780,7 @@ function hud() {
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
-    : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
+    : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
     : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
@@ -30721,6 +30721,38 @@ function asciiBar(f) {
                                               : '<span style="color:rgba(255,255,255,0.14)">░</span>';
   return s;
 }
+
+// Controls reference: quiet typography, explicit bindings and generous spacing.
+{
+  const style = document.createElement('style');
+  style.textContent = `
+    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#111719; border:1px solid #364344; border-radius:12px; box-shadow:0 24px 80px #0009; }
+    #controls .controls-header { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
+    #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
+    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:13px; }
+    #controls .controls-back { width:auto; gap:16px; font-size:12px; padding:10px 12px; border:1px solid #465654; border-radius:5px; }
+    #controls .controls-tabs { display:flex; flex-wrap:wrap; gap:8px; padding:24px 0; border-bottom:1px solid #33403f; }
+    #controls .controls-tabs button { font:inherit; font-size:12px; padding:10px 14px; border:1px solid #3e4c49; border-radius:5px; background:transparent; color:#afbfbb; cursor:pointer; }
+    #controls .controls-tabs button[aria-pressed=true] { background:#b8d9ca; color:#14231c; border-color:#b8d9ca; }
+    #controls button:focus-visible { outline:2px solid #d1f5df; outline-offset:4px; }
+    #controls h2 { margin:24px 0 14px; padding:0; text-transform:none; font-size:16px; color:#e3eee9; }
+    #controls .keys { display:flex; flex-direction:column; gap:0; padding:0; }
+    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:13px; line-height:1.7; }
+    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:5px; padding:5px 10px; line-height:1.5; font-size:12px; width:fit-content; }
+    #controls .control-binding span { color:#b1bdb8; }
+    #controls .controls-footer { margin-top:24px; font-size:11px; color:#81918a; }
+    #controls [hidden] { display:none !important; }
+    @media(max-width:600px) {
+      #controls .controls-panel { padding:20px 16px; }
+      #controls .controls-header { align-items:start; flex-direction:column; gap:16px; }
+      #controls .control-binding { grid-template-columns:1fr; gap:8px; }
+      #controls .controls-tabs { gap:6px; }
+      #controls .controls-tabs button { padding:9px; }
+    }
+  `;
+  document.head.appendChild(style);
+}
 // Capture the rendered game, including the HUD, without DOM menus or OS dialogs.
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
@@ -30840,6 +30872,7 @@ function buildPause() {
       <h1>Paused</h1>
       <p class="sub">Glyphport</p>
       <button class="item" data-act="resume">Resume</button>
+      <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
       <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
@@ -30871,42 +30904,7 @@ function buildPause() {
       ${slider('controllerSteering', 'Steering response', .5, 2, .1)}
       ${toggle('controllerInvertY', 'Invert controller look')}
       ${toggle('controllerVibration', 'Controller vibration')}
-      <div class="keys">
-        <b>left / right stick</b><span>move / look; left click: run or cruise; right click: camera</span>
-        <b>A · X · B</b><span>jump / action · interact · crouch / back; menus: A choose, B back</span>
-        <b>Y · Start · View</b><span>all current actions · pause · city map</span>
-        <b>LT / RT</b><span>aim / use held item; vehicles: brake / power; skating: grabs</span>
-        <b>D-pad</b><span>up: inventory; down: actions; left / right: quick slots; activities: directions</span>
-        <b>menus</b><span>D-pad or left stick selects; left / right adjusts sliders and slots; right stick scrolls. A on a text field opens controller typing.</span>
-        <b>skating</b><span>A pushes, X mongo, B brakes; left stick carves, right stick flicks. Hold LB to look with the right stick; RB interacts. Y includes getting off the board.</span>
-      </div>
-      <h2>skateboard controls</h2>
-      <div class="keys">
-        <b>A / D · left stick</b><span>carve and spin in the air; A/D also balances grinds; manual balance uses fore/aft pressure, not steering</span>
-        <b>right stick · right-drag mouse</b><span>on a grind, left/right balances; forward/back changes nose/tail pressure. In a manual, forward/back adjusts pitch balance. Keep the gauge mark centred.</span>
-        <b>W · gamepad A / stick forward</b><span>push (from rest, toward the camera view, regular or fakie); Shift+W or gamepad X: mongo</span>
-        <b>mouse · LB + right stick</b><span>orbit freely around the skater through any number of turns; after looking, recenter takes the short way back.</span>
-        <b>hold S · left stick down</b><span>brake quickly; keep holding to pivot 180° and push the other way. Release to coast. Bowl rollbacks can still come down fakie.</span>
-        <b>S + A/D · gamepad B</b><span>brake with a direction to powerslide; gamepad B alone brakes to a stop</span>
-        <b>right mouse · right stick</b><span>pull back to load, flick forward to ollie; forward-left kickflip, forward-right heelflip. Scoop a half-circle and release for a shuvit; three-quarter left scoop for a 360 flip, right for a 360 shuvit. Half-circle right, then flick upper-right and release: varial heelflip. Quarter-circle left then flick upper-right: hardflip; quarter-circle right then flick upper-left: inward heelflip. Load forward for nollies. In the air, a quick left/right flick and release also flips without loading again; right-mouse drags work the same way. Loaded flicks and scoops still work.</span>
-        <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. Tap arrows during an air to flip, or use Space plus arrows. Air tricks add no extra jump. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
-        <b>hold C · RT at takeoff</b><span>air out of a bowl or ramp onto its deck. Without it, bowl airs favor returning inside. Choose before popping or crossing the coping; spins do not change that flight choice. For a coping boardslide, air out, turn the board across the tube and descend with speed along it.</span>
-        <b>Q / E · LT / RT</b><span>hold in the air to grab; RT used for an air-out stays reserved until landing; mouse or right stick picks nose, tail or side. Release before landing.</span>
-        <b>gentle right stick / mouse</b><span>hold partway back for a manual or partway forward for a nose manual; adjust that same fore/aft pressure to balance. With a mouse, the starting drag centres the balance; use small forward/back movements while holding right-click. Full stick deflection loads a pop. Manuals link combos across flat ground.</span>
-      </div>
-      <h2>controls</h2>
-      <div class="keys">
-        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, W pushes, A/D carve, Space (held, let go) ollies, arrows or a right-click flick do flip tricks, A/D in the air spin</span>
-        <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
-        <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>hold to aim the revolver; on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
-        <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M / Shift+M</b><span>full map / minimap</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
-        <b>I</b><span>what you carry; assign items to quick slots</span><b>Q / left mouse</b><span>use held item; R reloads the revolver</span>
-        <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
-        <b>P</b><span>pee</span>
-        <b>Esc</b><span>pause</span>
-        <b>F12</b><span>take screenshot</span>
-      </div>
+
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
@@ -30946,6 +30944,7 @@ function buildPause() {
     if (b.dataset.act === 'screenshot-folder') openScreenshotFolder();
     if (b.dataset.act === 'update') desktopUpdateAction();
     if (b.dataset.act === 'quit') quitDesktopGame();
+    if (b.dataset.act === 'controls') openControls();
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
@@ -30958,6 +30957,119 @@ function buildPause() {
   });
   el.show = show;
   return el;
+}
+
+
+// A separate reference screen keeps the pause/settings menu compact.
+let controlsEl = null;
+const controlsOpen = () => controlsEl?.style.display === 'flex';
+function closeControls() {
+  controlsEl.style.display = 'none';
+  pauseEl.style.display = 'flex';
+  pauseEl.querySelector('[data-act="controls"]').focus();
+}
+function openControls() {
+  if (!controlsEl) {
+    controlsEl = menuEl('controls', 510, `
+      <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
+        <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
+        <button class="item controls-back" data-controls-back>← Back to pause <span class="k">Esc</span></button></header>
+        <nav class="controls-tabs" aria-label="Control categories">
+          <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
+          <button data-controls-tab="controller" aria-pressed="false">Controller</button>
+          <button data-controls-tab="skate" aria-pressed="false">Skateboarding</button>
+        </nav>
+        <section data-controls-section="keyboard"><h2>Keyboard & mouse</h2><div class="keys">
+          <b>WASD</b><span>Move on foot or drive.</span>
+          <b>Mouse</b><span>Look around. Click the game to capture the mouse.</span>
+          <b>Shift</b><span>Hold to run.</span>
+          <b>E</b><span>Interact: talk, use, buy or get in.</span>
+          <b>Space</b><span>Jump. Tap again near landing to bunny hop. In a car, hold for the handbrake or a drift.</span>
+          <b>Right mouse</b><span>Hold to aim the revolver.</span>
+          <b>C</b><span>Hold to crouch, or sit when there’s a seat.</span>
+          <b>H</b><span>Hail a taxi.</span>
+          <b>V</b><span>Change the car camera.</span>
+          <b>M</b><span>Open the city map.</span>
+          <b>Shift + M</b><span>Toggle the minimap.</span>
+          <b>1–8</b><span>Equip a quick-slot item. Press the same key again to put it away. In a taxi or train, pick a stop.</span>
+          <b>0</b><span>Put away what you’re holding.</span>
+          <b>I</b><span>Open your inventory and assign quick slots.</span>
+          <b>Q / left mouse</b><span>Use what you’re holding.</span>
+          <b>R</b><span>Reload the revolver.</span>
+          <b>B</b><span>Play the next boombox tape.</span>
+          <b>G</b><span>Pickpocket, shoplift or grab.</span>
+          <b>L</b><span>Pick a lock at night.</span>
+          <b>J</b><span>Start taxi work or a shift.</span>
+          <b>N</b><span>Toggle sound.</span>
+          <b>P</b><span>Pee.</span>
+          <b>Esc</b><span>Pause. In this guide, go back to the pause menu.</span>
+          <b>F12</b><span>Take a screenshot.</span>
+      </div></section>
+        <section data-controls-section="controller" hidden><h2>Controller</h2><div class="keys">
+          <b>Left stick</b><span>Move. Click the stick to run or cruise.</span>
+          <b>Right stick</b><span>Look around. Click the stick to change the camera.</span>
+          <b>A</b><span>Jump or do the current action. In menus, choose.</span>
+          <b>X</b><span>Interact.</span>
+          <b>B</b><span>Crouch. In menus, go back.</span>
+          <b>Y</b><span>Show the actions you can do here.</span>
+          <b>Start</b><span>Pause.</span>
+          <b>View</b><span>Open the city map.</span>
+          <b>LT / RT</b><span>LT aims; RT uses your held item. In a vehicle, LT brakes and RT adds power.</span>
+          <b>D-pad up / down</b><span>Up opens your inventory. Down opens actions.</span>
+          <b>D-pad left / right</b><span>Switch quick slots. During activities, choose a direction.</span>
+          <b>Menu navigation</b><span>Use the D-pad or left stick to select. Left and right adjust sliders or slots. Scroll with the right stick.</span>
+          <b>Text fields</b><span>Select a text field and press A to open the on-screen keyboard.</span>
+          <b>On a skateboard</b><span>A pushes, X pushes mongo (with your front foot), and B brakes. See Skateboarding for tricks and balance.</span>
+          <b>LB + right stick</b><span>Hold LB to look around while skating.</span>
+          <b>RB / Y while skating</b><span>RB interacts. Press Y for actions, including getting off the board.</span>
+      </div></section>
+        <section data-controls-section="skate" hidden><h2>Skateboarding</h2><div class="keys">
+          <b>W / gamepad A / left stick forward</b><span>Push. From a stop, you head toward the camera view.</span>
+          <b>Shift + W / gamepad X</b><span>Push mongo: use your front foot to push.</span>
+          <b>A / D / left stick</b><span>Carve on the ground. Spin in the air.</span>
+          <b>Mouse / LB + right stick</b><span>Look around the skater. On a controller, hold LB while moving the right stick.</span>
+          <b>Hold S / left stick down</b><span>Brake. Keep holding to turn around and push the other way. Release to coast.</span>
+          <b>S + A/D / gamepad B</b><span>Hold S and steer to powerslide. Gamepad B brakes to a stop.</span>
+          <b>Space</b><span>Hold to load an ollie, then release to jump.</span>
+          <b>Arrow keys</b><span>Choose a flip while holding Space, or tap an arrow in the air. Air tricks don’t give you another jump.</span>
+          <b>Touch: Ollie</b><span>Tap Ollie to jump, or swipe from it to choose a trick.</span>
+          <b>Right mouse / right stick</b><span>For gesture tricks, hold the right mouse button and drag, or move the right stick. Directions below refer to that drag or stick movement.</span>
+          <b>Ollie / nollie</b><span>Pull back to load, then flick forward for an ollie. Load forward instead for a nollie.</span>
+          <b>Kickflip / heelflip</b><span>After loading, flick forward-left for a kickflip or forward-right for a heelflip.</span>
+          <b>Shuvit</b><span>Scoop a half-circle, then release.</span>
+          <b>360 flip / 360 shuvit</b><span>Scoop three-quarters of a circle, then release. Left gives a 360 flip; right gives a 360 shuvit.</span>
+          <b>Varial heelflip</b><span>Scoop a half-circle right, then flick upper-right and release.</span>
+          <b>Hardflip</b><span>Scoop a quarter-circle left, then flick upper-right and release.</span>
+          <b>Inward heelflip</b><span>Scoop a quarter-circle right, then flick upper-left and release.</span>
+          <b>Flips in the air</b><span>Flick left or right and release. You don’t need to load again. Loaded flicks and scoops work too.</span>
+          <b>C / RT before takeoff</b><span>Hold to jump out of a bowl or ramp onto the deck. Otherwise, bowl airs aim back inside. Choose before you pop or cross the lip.</span>
+          <b>Coping boardslide</b><span>Jump out, turn the board across the coping (the tube along the lip), then come down moving along it.</span>
+          <b>Q / E / LT / RT in the air</b><span>Hold to grab. Use the mouse or right stick to choose nose, tail or side. Let go before landing. RT can’t grab if you used it to jump out.</span>
+          <b>Manual / nose manual</b><span>Hold the right stick or mouse partway back for a manual, or partway forward for a nose manual. Full deflection loads a jump. Manuals link combos across flat ground.</span>
+          <b>Grind balance</b><span>Use A/D to move the balance marker toward the centre. With the right stick or a right-mouse drag, left/right balances and forward/back shifts nose/tail pressure.</span>
+          <b>Manual balance</b><span>Adjust forward/back pressure to keep the balance marker centred. With a mouse, the starting drag sets neutral; keep right-click held and move gently forward/back to correct. A/D steers; it doesn’t balance a manual.</span>
+      </div></section>
+        <footer class="controls-footer">Game paused · Settings are available in the pause menu</footer>
+      </div>`);
+    // Each binding is a single, aligned row, even when its explanation wraps.
+    controlsEl.querySelectorAll('.keys').forEach(list => {
+      for (const key of [...list.querySelectorAll('b')]) {
+        const description = key.nextElementSibling;
+        const row = document.createElement('div'); row.className = 'control-binding';
+        list.insertBefore(row, key); row.append(key, description);
+      }
+    });
+    controlsEl.addEventListener('click', e => {
+      if (e.target.closest('[data-controls-back]')) return closeControls();
+      const tab = e.target.closest('[data-controls-tab]');
+      if (!tab) return;
+      controlsEl.querySelectorAll('[data-controls-tab]').forEach(button => button.setAttribute('aria-pressed', String(button === tab)));
+      controlsEl.querySelectorAll('[data-controls-section]').forEach(section => section.hidden = section.dataset.controlsSection !== tab.dataset.controlsTab);
+    });
+  }
+  pauseEl.style.display = 'none';
+  controlsEl.style.display = 'flex';
+  controlsEl.querySelector('[data-controls-back]').focus();
 }
 
 const homeEl = document.getElementById('home');
@@ -30980,11 +31092,12 @@ function openPause() {
 }
 function closePause(lock) {
   if (!paused) return;
+  if (controlsOpen()) closeControls();
   resetStartOver();
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) lockMouse(); // resuming with the mouse: take it straight back
 }
-const togglePause = () => paused ? closePause(NATIVE_MOUSE_APP) : openPause();
+const togglePause = () => controlsOpen() ? closeControls() : paused ? closePause(NATIVE_MOUSE_APP) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
 document.addEventListener('pointerlockchange', () => {
