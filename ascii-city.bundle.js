@@ -35569,6 +35569,49 @@ const tellyNews = () => { const l = newsLines(true); return l.length ? ` The loc
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
 const workshopHome = () => mode === 'room' ? homeRecord(room) : null;
+// Keep the original placement/collision envelope; the fan has a real open
+// front, rear plate, supported shaft and separate blades behind its guard.
+function workshopFan(p,w,running){
+  const c=Math.cos(p.a),s=Math.sin(p.a),metal=solid(GRAY),blade=solid(CYAN);
+  metal.workshopRole='fan-frame';blade.workshopRole='fan-blade';
+  const shaft=solid(GRAY);shaft.workshopRole='fan-shaft';
+  return {x:p.x,y:p.y,radius:.25,box:boxAt(p.x,p.y,c,s,.15,.12,1.06,1.52),draw(vx,vy){
+    const at=(u,v,z)=>[vx+c*u-s*v,vy+s*u+c*v,z],part=(u,v,hl,hw,z0,z1,role)=>{
+      const q=at(u,v,0),b=boxAt(q[0],q[1],c,s,hl,hw,z0,z1);b.workshopRole=role;drawBox(b,metal);
+    },rod=(a,b,r,shade)=>drawRod(...at(...a),...at(...b),r,shade);
+    part(0,0,.15,.12,1.06,1.17,'fan-bottom');part(0,0,.15,.12,1.43,1.52,'fan-top');
+    for(const side of [-1,1])part(side*.135,0,.015,.12,1.17,1.43,'fan-side');
+    part(0,-.105,.12,.015,1.17,1.43,'fan-back');part(0,-.05,.06,.04,1.24,1.36,'fan-motor');
+    rod([0,-.01,1.30],[0,.06,1.30],.018,shaft);
+    const angle=w.powered&&running()?T*8:0;
+    for(let k=0;k<3;k++){
+      const a=angle+k*TAU/3;
+      rod([Math.cos(a)*.025,.04,1.30+Math.sin(a)*.025],[Math.cos(a)*.088,.04,1.30+Math.sin(a)*.088],.018,blade);
+    }
+    for(let k=0;k<16;k++){
+      const a=k*TAU/16,b=(k+1)*TAU/16;
+      rod([Math.cos(a)*.116,.105,1.30+Math.sin(a)*.116],[Math.cos(b)*.116,.105,1.30+Math.sin(b)*.116],.006,metal);
+    }
+    for(const u of [-.06,0,.06]){
+      const dz=Math.sqrt(.116**2-u*u);rod([u,.11,1.30-dz],[u,.11,1.30+dz],.0024,metal);
+    }
+  }};
+}
+function workshopProcessorShade(p,w,running){
+  const c=Math.cos(p.a),s=Math.sin(p.a);
+  return(i,t,L)=>{
+    const f=HIT.face,u=HIT.u,z=HIT.w,on=w.powered,active=on&&running();
+    BG[i]=C(GRAY,(2+L*.3)*shadeFace(f));set(i,' ',0);
+    if(f!==3)return true;
+    if(Math.abs(u)<.16&&z>1.20&&z<1.36){
+      BG[i]=C(GRAY,1);const word=!on?'OFF':active?'RUN':'IDLE',letterW=.075,band=.075,zc=1.28;
+      const along=dx*c+dy*s,tc=Math.max(.05,t-along*u),far=tc+Math.abs(along)*.24;
+      set(i,signLine(word,u/letterW+word.length/2,(zc+band/2-z)/band,i,zc,tc,t,letterW,0,far,c,s)||' ',C(on?active?YEL:GREEN:GRAY,on?14:8+L*.3));
+    }
+    if(Math.hypot(u-.16,z-1.51)<.012){BG[i]=C(on?GREEN:RED,on?14:4);set(i,' ',0);}
+    return true;
+  };
+}
 function workshopProps(r, parts = null) { // (parts: draw these instead, as the placement preview does)
   const home = homeRecord(r); if (!home) return [];
   const w = workshopState(home), props = [];
@@ -35592,32 +35635,23 @@ function workshopProps(r, parts = null) { // (parts: draw these instead, as the 
           const stem=Math.abs(u)<.018, branch=Math.abs(mod(z+Math.abs(u)*.85,.18)-.09)<.032;
           if (!stem && (!branch || Math.abs(u)>width)) return false;
           const bud=p.crop.left===0 && z>height-.08;
-          let ch='|';
-          if (bud) ch='*';
-          else if (!stem) ch=u<0?'\\':'/';
-          set(i,ch,C(bud?WARM:GREEN,L+4));
+          BG[i]=C(bud?WARM:GREEN,L+4);set(i,' ',0);
           return true;
         }));
       }
       // The rail is always there; bought lamps visibly attach above the plants.
       props.push(box(0,-.4,.72,.035,1.82,1.9,(i,t,L)=>{
-        set(i,'=',C(w.upgrades.lamp&&w.powered?WARM:GRAY,w.upgrades.lamp&&w.powered?15:L));
+        const glow=w.upgrades.lamp&&w.powered&&HIT.face===6;BG[i]=C(glow?WARM:GRAY,glow?15:1+L*.35);set(i,' ',0);
         return true;
       }));
       for (const x of [-.68,.68]) props.push(box(x,-.4,.025,.025,.68,1.82,solid(GRAY)));
       continue;
     }
     const running = () => workshopRun?.home === home && workshopRun.bench.key === p.bench && game?.kind === 'workshop';
-    if (p.id === 'processor') props.push(box(0, 0, .24, .27, .93, 1.6, (i, t, L) => {
-      const on = w.powered, active = running();
-      BG[i] = C(GRAY, 1 + L * .15);
-      const ch = HIT.face === 5 ? '=' : HIT.w > 1.15 && HIT.w < 1.4 ? (active ? '|/-\\'[Math.floor(T * 8) % 4] : 'O') : HIT.w > 1.48 ? '*' : ':';
-      return set(i, ch, C(on ? MAG : GRAY, on ? 12 : L)), true;
-    }));
+    if(p.id==='processor')props.push(box(0,0,.24,.27,.93,1.6,workshopProcessorShade(p,w,running)));
     if (p.id === 'packer') props.push(box(0, 0, .23, .27, .93, 1.23, solid(GRAY, { panel: .2, top: '=' })),
       box(0, 0, .06, .22, 1.23, 1.5, solid(MAG, { top: '_' })));
-    if (p.id === 'fan') props.push(box(0, 0, .15, .12, .93, 1.06, solid(GRAY)),
-      box(0, 0, .15, .12, 1.06, 1.52, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, running() ? '|/-\\'[Math.floor(T * 10) % 4] : '+', C(CYAN, L + 3)), true; }));
+    if(p.id==='fan')props.push(box(0,0,.15,.12,.93,1.06,solid(GRAY)),workshopFan(p,w,running));
   }
   return props;
 }
