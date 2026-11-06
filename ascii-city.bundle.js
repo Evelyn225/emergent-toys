@@ -51408,7 +51408,7 @@ function saveGame() {
   if (citySaveBackupPending != null && keepCitySaveBackup(citySaveBackupPending)) {
     citySaveBackupPending = null; citySaveBlocked = false;
   }
-  if (citySaveBlocked) return false;
+  if (citySaveBlocked || startingOver) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
   const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
@@ -51511,7 +51511,14 @@ function loadGame() {
   }
   citySaveBlocked = citySaveBackupPending != null;
 }
-function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
+// Start over: nothing may save again on the way out (the timer, or leaving the page as it reloads, used to write the
+// old game straight back, so you kept your money and things), then the save goes and the city starts fresh
+function newGame() {
+  citySaveBlocked = true; citySaveBackupPending = null; startingOver = true;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ }
+  location.reload();
+}
+let startingOver = false;
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
