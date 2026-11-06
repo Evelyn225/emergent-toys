@@ -161,6 +161,7 @@ function interact() {
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
+    if (room.kind === 'stadium') { body.seat = null; say('You head for the exit.', 2); return leaveRoom(); } // (out early, whenever you like)
     if(hotelAmenityUse())return;
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;

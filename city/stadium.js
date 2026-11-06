@@ -1,0 +1,261 @@
+// ===== the Yards ground (STADIUM_PLAN.md): an old-school football ground. Four separate stands round a full-size pitch:
+// the tall main stand down the north side, the east and south stands, and a standing terrace behind the west goal,
+// each with a pitched roof on steel columns; four floodlight pylons in the corners; a scoreboard over the south stand.
+// The match itself is the engine's (match-engine.js), played out by real figures on the grass. Room units: metres,
+// x east along the pitch, y south across it; the floor rises up the stands (stadiumRise, through stairRise).
+const STADIUM = { W: 150, H: 114, cx: 75, cy: 57, hl: 52.5, hw: 34, runoff: 5.5, board: 3.2 };
+// the stands: which side, where the front row is, how many rows, how deep and how high each, along which span
+const STANDS = [
+  { id: 'north', axis: 'y', front: 18.8, out: -1, rows: 20, depth: .85, rise: .46, a0: 14, a1: 136, roof: 13.2, seats: true, home: .7 },
+  { id: 'south', axis: 'y', front: 95.4, out: 1, rows: 16, depth: .85, rise: .42, a0: 20, a1: 130, roof: 11.4, seats: true, home: .55 },
+  { id: 'east', axis: 'x', front: 133.4, out: 1, rows: 14, depth: .85, rise: .4, a0: 22, a1: 92, roof: 10.4, seats: true, home: .2 }, // (the away end)
+  { id: 'west', axis: 'x', front: 16.6, out: -1, rows: 18, depth: .6, rise: .28, a0: 22, a1: 92, roof: 9.4, seats: false, home: .95 }, // (the terrace: standing)
+];
+const standOf = (x, y) => {
+  for (const s of STANDS) {
+    const a = s.axis === 'y' ? x : y, back = (s.axis === 'y' ? y : x) - s.front;
+    const k = Math.floor(back * s.out / s.depth);
+    if (a >= s.a0 && a <= s.a1 && k >= 0 && k < s.rows) return { s, k };
+  }
+  return null;
+};
+// how high the floor is here: up a row of the stand for every row back
+function stadiumRise(x, y) { const at = standOf(x, y); return at ? (at.k + 1) * at.s.rise : 0; }
+const pitchX = x => STADIUM.cx + x, pitchY = y => STADIUM.cy + y; // (the engine's pitch to the room)
+
+// how far a point on the pitch (folded into one quarter: ax, ay >= 0) is from the nearest marking, in metres
+function pitchMarkDist(ax, ay, lx, ly) {
+  const P = MatchEngine.PITCH, seg = (v, c, lo, hi, w) => w < lo ? Math.hypot(Math.abs(v - c), lo - w) : w > hi ? Math.hypot(Math.abs(v - c), w - hi) : Math.abs(v - c);
+  const spotX = P.hl - P.spot, r = Math.hypot(lx, ly), toSpot = Math.hypot(ax - spotX, ay);
+  return Math.min(
+    seg(ax, P.hl, 0, P.hw, ay), seg(ay, P.hw, 0, P.hl, ax), seg(ax, 0, 0, P.hw, ay), // goal line, touchline, halfway
+    Math.abs(r - P.circle), Math.max(0, r - .15), // the centre circle and spot
+    seg(ax, P.hl - P.boxD, 0, P.boxHW, ay), seg(ay, P.boxHW, P.hl - P.boxD, P.hl, ax), // the penalty box
+    seg(ax, P.hl - P.sixD, 0, P.sixHW, ay), seg(ay, P.sixHW, P.hl - P.sixD, P.hl, ax), // the six-yard box
+    ax < P.hl - P.boxD ? Math.abs(toSpot - P.circle) : 1e3, Math.max(0, toSpot - .15), // the arc, the penalty spot
+    Math.abs(Math.hypot(P.hl - ax, P.hw - ay) - 1)); // the corner arcs
+}
+// the pitch: mown in stripes across it, the markings in white, filtered to the cell's footprint; the run-off a darker,
+// worn green; the cinder track by the boards
+ROOM_FLOORS.pitch = (i, f, wx, wy, r, x, L) => {
+  const fp = homeBalconyPavingFootprint(eye * projY / Math.max(.5, r - hor + .5), eye), lx = wx - STADIUM.cx, ly = wy - STADIUM.cy;
+  const P = MatchEngine.PITCH, ax = Math.abs(lx), ay = Math.abs(ly), lw = .12;
+  const inside = ax <= P.hl + .06 && ay <= P.hw + .06;
+  const lit = night > .3 ? .92 : 1; // (evenly lit: by day the sun, after dark the floodlights)
+  if (!inside) { // the run-off and the track
+    const track = ax > P.hl + STADIUM.runoff - 1.4 || ay > P.hw + STADIUM.runoff - 1.4;
+    BG[i] = track ? C(BRICK, 2.6 * lit) : C(GREEN, 2.7 * lit); return set(i, ' ', 0);
+  }
+  const stripe = Math.floor((lx + P.hl) / 5.25) & 1;
+  // the markings: how far this point is from the nearest line, and how much of the cell a 12cm line would cover
+  // its width on screen: across the line, how much grass one character covers (a lot in depth, little sideways), so a
+  // line's always at least a character wide and never more, whichever way it runs
+  const md = (x, y) => pitchMarkDist(Math.abs(x), Math.abs(y), x, y), d = md(lx, ly), e = .05;
+  const gx = (md(lx + e, ly) - md(lx - e, ly)) / (2 * e), gy = (md(lx, ly + e) - md(lx, ly - e)) / (2 * e);
+  const dist = Math.hypot(wx - px, wy - py), fpDep = dist * dist / (eye * projY), fpLat = dist / projX, ca = Math.cos(a), sa = Math.sin(a);
+  const across = Math.max(.01, Math.abs(gx * ca + gy * sa) * fpDep + Math.abs(-gx * sa + gy * ca) * fpLat);
+  const cover = d < .06 ? 1 : clamp(1 - (d - .06) / (across * .7), 0, 1);
+  const wear = ax > P.hl - 7 && ay < 6 ? .35 * (1 - ax / P.hl) : 0; // (the goalmouths, worn)
+  const grass = (stripe ? 4.6 : 3.6) * lit + (hash(Math.floor(wx * 6), Math.floor(wy * 6), 2202) - .5) * .4 * clamp(1 - fp / .1, 0, 1);
+  if (cover > .45) BG[i] = C(WHITE, (9 + cover * 4) * lit); // (the line)
+  else BG[i] = C(wear > .1 && hash(Math.floor(wx * 3), Math.floor(wy * 3), 2201) > .6 ? BRICK : GREEN, grass + cover * 4);
+  return set(i, ' ', 0);
+};
+// the sky over the open ground (and, round the stands' backs, above the outer walls): the floodlights' glow at night
+const stadiumSky = (wx, wy) => night > .5 ? C(BLUE, 1.4) : consSky();
+ROOM_CEILS.sky = (i, r, x, wx, wy) => { BG[i] = stadiumSky(wx, wy); set(i, ' ', 0); };
+// the outer walls: the back of each stand, brick and corrugated sheeting, EXIT signs at the gangways; open sky above
+function stadiumWall(i, u, uStep, z, d, mx, my, L) {
+  set(i, ' ', 0);
+  if (z > 15) { BG[i] = stadiumSky(); return true; }
+  if (z > 11.5) { BG[i] = C(GRAY, (1.6 + L * .12) - (fract(u * 4) < .1 ? .5 : 0)); return true; } // the sheeting, ribbed
+  if (z < 2.4 && Math.abs(fract(u / 24) - .5) < .04) { if (wallText(i, u, uStep, z, d, 'EXIT', Math.floor(u / 24) * 24 + 12, 2.1, .12, .2, C(GREEN, 12), C(GRAY, 1))) return true; }
+  BG[i] = C(BRICK, (1.6 + L * .18) - Math.max(coveGroove(z, .075, .008, d / projY), coveGroove(u + (Math.floor(z / .075) & 1) * .11, .22, .008, uStep)) * .6);
+  return true;
+}
+// a supporter's colours: the home end in the home side's kit, the away end in the away side's
+const STADIUM_KIT = { RED, WHITE, BLUE, GREEN, YEL, BRICK, CYAN, MAG, GRAY };
+const kitCol = (name, lvl) => C(STADIUM_KIT[name] ?? GRAY, lvl);
+
+// the stands as models: a tier of concrete for every row (walked on: its top is the floor), a strip of supporters
+// sitting or standing along each, a roof on columns over the lot, railings at the front
+function standProps(s, r) {
+  const out = [], P = MatchEngine.PITCH, rows = s.rows, along = s.axis === 'y', mid = (s.a0 + s.a1) / 2, half = (s.a1 - s.a0) / 2;
+  const box = (a, b, ha, hb, z0, z1, shade, extra = {}) => along ? { ...BX(a, b, ha, hb, z0, z1, shade), ...extra } : { ...BX(b, a, hb, ha, z0, z1, shade), ...extra };
+  for (let k = 0; k < rows; k++) {
+    const b0 = s.front + s.out * k * s.depth, b1 = b0 + s.out * s.depth, bc = (b0 + b1) / 2, top = (k + 1) * s.rise;
+    out.push(box(mid, bc, half, s.depth / 2, 0, top, (i, t, L) => { // the tier: its tread (a seat back along it on a seated stand), its riser
+      const f = HIT.face, isTop = f === 5, u = along ? HIT.u : HIT.v;
+      if (isTop && s.seats) { const seat = fract(u / .5); BG[i] = C(s.home > .5 ? RED : BLUE, (seat < .15 ? .8 : 1.6) + L * .1); return set(i, ' ', 0), true; }
+      BG[i] = C(GRAY, (isTop ? 2.4 : 1.7 * shadeFace(f)) + L * .15 - (isTop && fract(u / 4) < .02 ? .5 : 0)); return set(i, ' ', 0), true;
+    }, { walk: true }));
+    // the supporters along the row: a seat every half metre, most of them taken, everyone facing the pitch
+    out.push(box(mid, bc + s.out * s.depth * .15, half, s.depth * .3, top, top + (s.seats ? 1.1 : 1.65), (i, t, L) => crowdShade(i, t, L, s, k, along ? HIT.u : HIT.v), { walk: true }));
+    if (s.seats && along) out.push({ x: mid, y: bc, seatRow: { x0: s.a0 + .5, x1: s.a1 - .5, y: bc, fx: 0, fy: -s.out, h: .45 } }); // (a seat anywhere along the row: sit down with C)
+  }
+  // the barrier and the boards at the front, the roof over the back on its columns
+  const back = s.front + s.out * rows * s.depth, roofIn = s.front - s.out * 1.2, roofC = (back + roofIn) / 2, roofH = Math.abs(back - roofIn) / 2;
+  out.push(box(mid, s.front - s.out * .1, half, .06, 0, 1.05, solid(GRAY, { bright: .9 })));
+  out.push(box(mid, roofC, half + .5, roofH, s.roof, s.roof + .35, (i, t, L) => { // the roof: corrugated underneath, lit by a row of lamps
+    const u = along ? HIT.u : HIT.v, lamp = HIT.face === 6 && Math.abs(fract(u / 6) - .5) < .04 && Math.abs((along ? HIT.v : HIT.u)) < roofH * .3;
+    BG[i] = lamp ? C(WHITE, night > .3 ? 13 : 4) : C(GRAY, HIT.face === 6 ? 1.1 - (fract(u * 3) < .15 ? .3 : 0) : 2.2 * shadeFace(HIT.face) + L * .2); return set(i, ' ', 0), true;
+  }));
+  for (const f of [.04, .3, .7, .96]) out.push(box(s.a0 + (s.a1 - s.a0) * f, roofIn + s.out * .2, .12, .12, 0, s.roof, solid(GRAY, { bright: 1.1 }))); // (columns: in somebody's way, but not the halfway line's)
+  return out;
+}
+// the crowd along a row: a head, a shirt in their side's colours, sometimes a scarf; an empty seat here and there;
+// on their feet when their side scores, arms up
+function crowdShade(i, t, L, s, k, u) {
+  const m = stadiumMatch, seat = Math.floor(u / .5), h = hash(seat, k, s.id.length * 31 + 2203), fill = m ? m.crowd : .8;
+  if (h > fill) return false; // (an empty seat: you see it, or the row behind)
+  const sx = s.axis === 'y' ? s.a0 + (s.a1 - s.a0) / 2 + u : 0, sy = s.front + s.out * (k + .5) * s.depth;
+  if (s.axis === 'y' && Math.abs(sx - px) < .8 && Math.abs(sy - py) < .5) return false; // (the seat you're in, and the ones either side, are yours)
+  const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
+  const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, standing = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
+  const zIn = HIT.w - (k + 1) * s.rise, tall = standing ? 1.55 : 1.05, w = fract(u / .5) - .5;
+  if (HIT.face === 5) { // seen from above (the rows below you): the tops of heads, shoulders either side
+    const across = Math.abs((s.axis === 'y' ? HIT.v : HIT.u)) / (s.depth * .3);
+    if (Math.abs(w) > .34 || across > .9) return false;
+    const hair = Math.abs(w) < .13 && across < .5;
+    BG[i] = hair ? C(hash(seat, k, 2209) > .7 ? BRICK : GRAY, hash(seat, k, 2209) > .7 ? 4 : 1.6) : kitCol(kit[hash(seat, k, 2208) > .8 ? 1 : 0], 5 * (.55 + L * .03)); return set(i, ' ', 0), true;
+  }
+  const arms = cheering && zIn > tall && zIn < tall + .45 && Math.abs(Math.abs(w) - .3) < .08 && fract(T * 2 + h * 7) < .8;
+  if (zIn > tall + (arms ? .45 : 0) || Math.abs(w) > .36) return false;
+  if (arms) { BG[i] = C(SKIN, 9 + L * .1); return set(i, ' ', 0), true; }
+  const head = zIn > tall - .24 && Math.abs(w) < .14;
+  if (zIn > tall - .24 && !head) return false;
+  const skin = [[SKIN, 12], [SKIN, 10], [BRICK, 7], [BRICK, 5]][Math.floor(hash(seat, k, 2205) * 4)];
+  if (head) { BG[i] = zIn > tall - .06 && hash(seat, k, 2206) > .4 ? C(GRAY, 2) : C(skin[0], skin[1] * (.55 + L * .03)); return set(i, ' ', 0), true; }
+  const scarf = zIn > tall - .38 && hash(seat, k, 2207) > .6, colour = hash(seat, k, 2208) > .8 ? 1 : 0;
+  BG[i] = kitCol(scarf ? kit[1] : kit[colour], (scarf ? 7 : 5.5) * (.55 + L * .03) - (zIn < .35 ? 1.5 : 0)); return set(i, ' ', 0), true;
+}
+// a floodlight pylon in a corner: a lattice mast and a bank of lamps on top, blazing after dark
+const floodlight = (x, y) => ({ x, y, radius: 4, draw: (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .45, .45, 0, 34), (i, t, L) => { const lat = Math.abs(fract(HIT.w / 1.2 + (HIT.u + HIT.v) * .9) - .5) < .12; BG[i] = C(GRAY, (lat ? 2.6 : 1.4) + L * .15); return set(i, ' ', 0), true; });
+  const ax = STADIUM.cx - x, ay = STADIUM.cy - y, d = Math.hypot(ax, ay), c = ax / d, s = ay / d;
+  drawBox(boxAt(vx + c * .6, vy + s * .6, -s, c, 2.6, .35, 33, 36.4), (i, t, L) => {
+    const front = HIT.face === 4 || HIT.face === 3, lamp = front && Math.abs(fract(HIT.u / .65) - .5) < .38 && Math.abs(fract((HIT.w - 33) / .85) - .5) < .38;
+    BG[i] = lamp ? C(night > .3 ? WHITE : GRAY, night > .3 ? 15 : 5) : C(GRAY, 1.6 + L * .1); return set(i, ' ', 0), true;
+  });
+} });
+// the goals: posts and bar in white, a net behind on its stanchions you can see through
+const goalFrame = end => {
+  const P = MatchEngine.PITCH, gx = pitchX(end * P.hl), y0 = pitchY(-P.goalHW), y1 = pitchY(P.goalHW), white = solid(WHITE, { bright: 1.2 });
+  const post = .06, depth = 2.2, out = [];
+  for (const y of [y0, y1]) out.push(BX(gx + end * post, y, post, post, 0, P.goalH + post, white));
+  out.push(BX(gx + end * post, (y0 + y1) / 2, post, P.goalHW + post, P.goalH, P.goalH + post * 2, white));
+  out.push({ ...BX(gx + end * (depth / 2 + .1), (y0 + y1) / 2, depth / 2, P.goalHW, 0, P.goalH, (i, t, L) => { // the net: a mesh, sagging at the back
+    const a = HIT.face === 3 || HIT.face === 4 ? HIT.u : HIT.v, mesh = Math.abs(fract(a / .12) - .5) > .38 || Math.abs(fract(HIT.w / .12) - .5) > .38;
+    if (!mesh || HIT.face === 1 && end > 0 || HIT.face === 2 && end < 0) return false;
+    BG[i] = C(WHITE, 5 + L * .15); return set(i, ' ', 0), true;
+  }), walk: true });
+  return out;
+};
+// the scoreboard over the south stand: both names, the score and the clock, lit
+const scoreboard = () => ({ x: STADIUM.cx, y: 111.5, radius: 9, draw: (vx, vy) => {
+  const m = stadiumMatch; if (!m) return;
+  const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
+  const clock = m.phase === 'ft' ? 'FT' : m.phase === 'ht' ? 'HT' : String(Math.min(Math.floor(min), half)).padStart(2, '0') + "'";
+  const line1 = `${h.short} ${h.score}-${a.score} ${a.short}`, line2 = clock + (m.phase === 'goal' ? ' GOAL!' : '');
+  for (const e of [-1, 1]) drawBox(boxAt(vx + e * 5, vy + .2, 1, 0, .15, .15, 11.4, 14), solid(GRAY));
+  drawBox(boxAt(vx, vy, 1, 0, 7, .25, 14, 18), (i, t, L) => {
+    if (HIT.face !== 4) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
+    const top = HIT.w > 16, ch = faceText(top ? line1 : line2, i, t, vx, vy, 6.6, top ? 16.3 : 14.4, 1.4);
+    BG[i] = C(GRAY, .4); return set(i, ch && ch !== ' ' ? ch : ' ', m.phase === 'goal' && fract(T * 3) < .5 ? C(YEL, 15) : C(top ? WHITE : YEL, 14)), true;
+  });
+} });
+// the match: the engine stepped on with the clock, the players, the referee and the ball drawn where it puts them
+function stadiumLooks(m) {
+  return m.looks ||= m.teams.map(t => ({
+    out: figLook({ hair: 'short', top: 'tee', bot: 'shorts', tights: true, col: { top: [STADIUM_KIT[t.kit[0]], 9], bot: [STADIUM_KIT[t.kit[1]], 10], tights: [STADIUM_KIT[t.kit[0]], 7], shoe: [GRAY, 1] } }),
+    gk: figLook({ hair: 'short', top: 'long', bot: 'shorts', tights: true, col: { top: [t.side ? ORANGE : GREEN, 8], bot: [GRAY, 2], tights: [GRAY, 2], shoe: [GRAY, 1] } }),
+  }));
+}
+const stadiumRefLook = () => STADIUM_REF ||= figLook({ hair: 'buzz', top: 'tee', bot: 'shorts', tights: true, col: { top: [GRAY, 1.5], bot: [GRAY, 1], tights: [GRAY, 1], shoe: [GRAY, 1], skin: [SKIN, 11] } });
+let STADIUM_REF = null, stadiumMatch = null; // (the match on today: it carries on while you're in the concourse)
+const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () => {
+  const m = stadiumMatch; if (!m) return;
+  const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T;
+  MatchEngine.step(m, dt);
+  // how dangerous it is right now (the crowd's on its feet): the ball near a goal, in play
+  const P = MatchEngine.PITCH, bx = m.ball.p[0];
+  m.danger = m.phase === 'play' ? clamp((Math.abs(bx) - (P.hl - 30)) / 25, 0, 1) * clamp(1 - Math.abs(m.ball.p[1]) / 30, 0, 1) : 0;
+}, draw: () => {
+  const m = stadiumMatch; if (!m) return;
+  const looks = stadiumLooks(m);
+  for (const t of m.teams) for (const p of t.players) {
+    if (p.off && !p.leaving) continue;
+    const x = pitchX(p.pos[0]), y = pitchY(p.pos[1]), sp = Math.hypot(p.vel[0], p.vel[1]);
+    p.stride = (p.stride || 0) + sp * (m.lastDt || .016);
+    const pose = m.phase === 'goal' && m.celebrate?.side === t.side && m.celebrate.scorer === p ? 'wave'
+      : sp > 4.2 ? 'run' + (Math.floor(p.stride / 1.9 * 8) & 7) : sp > .5 ? 'walk' + (Math.floor(p.stride / 1.5 * 8) & 7) : 'stand';
+    if (!inView(x - px, y - py, 1)) continue;
+    drawFigure(x - px, y - py, 0, 1.8, p.face[0], p.face[1], p.role === 'GK' ? looks[t.side].gk : looks[t.side].out, pose, { hold: p, light: night > .3 ? 7 : 0 });
+  }
+  const rx = pitchX(m.ref.pos[0]), ry = pitchY(m.ref.pos[1]);
+  if (inView(rx - px, ry - py, 1)) drawFigure(rx - px, ry - py, 0, 1.78, m.ref.face[0], m.ref.face[1], stadiumRefLook(), 'stand', { hold: m.ref });
+  // the ball, and its shadow on the grass (it's small: never less than a cell, so you can follow it from the stands)
+  const b = m.ball.p, bx = pitchX(b[0]) - px, by = pitchY(b[1]) - py, d = Math.hypot(bx, by), r = Math.max(.11, d * .45 / projY);
+  if (inView(bx, by, 1)) {
+    dot(bx, by, .005, r * .9, (i) => { BG[i] = C(GRAY, .6); return set(i, ' ', 0), true; });
+    dot(bx, by, b[2] - .11, r, (i, t, L) => { BG[i] = C(WHITE, 13); return set(i, ' ', 0), true; });
+  }
+} });
+// the ground's grid: walls round the outside, a gate in the south-east corner
+function stadiumGrid() {
+  const { W, H } = STADIUM, rows = [];
+  for (let y = 0; y < H; y++) {
+    let row = '';
+    for (let x = 0; x < W; x++) row += x === 0 || y === 0 || x === W - 1 || y === H - 1 ? (y === H - 1 && (x === 140 || x === 141) ? 'D' : '#') : '.';
+    rows.push(row);
+  }
+  return rows;
+}
+ROOM_DEFS.stadium = {
+  grid: stadiumGrid(), light: 1, height: 40, vis: 200, floor: 'pitch', ceil: 'sky', sign: false, wall: stadiumWall, rise: stadiumRise, outdoor: true,
+  props: r => {
+    const p = [matchProp(), scoreboard(), ...goalFrame(-1), ...goalFrame(1)];
+    for (const s of STANDS) p.push(...standProps(s, r));
+    for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
+    // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
+    const P = MatchEngine.PITCH, bx = P.hl + STADIUM.board, by = P.hw + STADIUM.board;
+    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'GLYPHPORT', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
+    for (const [e, ax] of [[-1, 'x'], [1, 'x'], [-1, 'y'], [1, 'y']]) {
+      const len = ax === 'x' ? bx : by, cxp = ax === 'x' ? STADIUM.cx : STADIUM.cx + e * bx, cyp = ax === 'x' ? STADIUM.cy + e * by : STADIUM.cy;
+      for (let k = 0, n = Math.round(len * 2 / 12); k < n; k++) {
+        const off = -len + (k + .5) * len * 2 / n, x = ax === 'x' ? cxp + off : cxp, y = ax === 'x' ? cyp : cyp + off, word = ads[(k + (e + 1) * 3 + (ax === 'y' ? 5 : 0)) % ads.length];
+        const col = [RED, BLUE, GREEN, YEL, MAG, CYAN][(k + e + 2) % 6];
+        p.push({ x, y, radius: 6, box: { ...boxAt(x, y, ax === 'x' ? 1 : 0, ax === 'x' ? 0 : 1, len / n - .05, .08, 0, .9) }, draw: (vx, vy) => drawBox(boxAt(vx, vy, ax === 'x' ? 1 : 0, ax === 'x' ? 0 : 1, len / n - .05, .08, 0, .9), (i, t, L) => {
+          if (HIT.face !== 3 && HIT.face !== 4 || HIT.w < .15) { BG[i] = C(GRAY, 1.5); return set(i, ' ', 0), true; }
+          const ch = ax === 'x' ? faceText(word, i, t, vx, vy, len / n - .4, .25, .55) : ' ';
+          BG[i] = C(col, 4 + L * .15); return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 15)), true;
+        }) });
+      }
+    }
+    return p;
+  } };
+// into the ground, and a match on (a new one if there isn't one: the home side the Yards)
+function enterStadium(away) {
+  enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a] }, [139.5, 106.5, -Math.PI * .75]);
+  stadiumTV = false; stadiumCamX = null; // (you walk in seeing it with your own eyes)
+  if (!stadiumMatch || stadiumMatch.phase === 'ft') {
+    const clubs = MatchEngine.CLUBS.filter(c => c.id !== 'yards');
+    stadiumMatch = MatchEngine.create({ home: 'yards', away: away || clubs[Math.random() * clubs.length | 0].id, seed: Math.random() * 1e9 | 0 });
+    stadiumMatch.crowd = .78 + Math.random() * .17;
+  }
+}
+
+// ---- the TV view (V): a camera on the gantry slung under the front of the main stand's roof, panning to follow the
+// ball along the touchline and tilting down to it, through a narrower lens, like the match on the telly
+let stadiumView = null, stadiumCamX = null, stadiumTV = false;
+const stadiumTVOk = () => mode === 'room' && room?.kind === 'stadium' && !!stadiumMatch;
+const stadiumTVOn = () => stadiumTV && stadiumTVOk() && !freecam;
+function stadiumCam(dt) {
+  const m = stadiumMatch, b = m.ball.p, bx = pitchX(b[0]), by = pitchY(b[1]);
+  const want = STADIUM.cx + clamp(b[0] * .82, -44, 44);
+  stadiumCamX = stadiumCamX == null ? want : stadiumCamX + (want - stadiumCamX) * Math.min(1, dt * 1.6);
+  const x = stadiumCamX, y = 19.6, z = 12.4, dx = bx - x, dy = by - y, d = Math.hypot(dx, dy) || 1;
+  const fov = (34 + clamp(d / 60, 0, 1) * 10) * Math.PI / 180; // (tighter on play near the camera's side, wider across)
+  const tilt = Math.atan2(z - Math.max(0, b[2] * .5), d);
+  return { x, y, z, a: Math.atan2(dy, dx), pitch: -projY * Math.tan(tilt) / rows, fov };
+}

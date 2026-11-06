@@ -71,7 +71,8 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
+  if (e.code === 'KeyV' && stadiumTVOk()) stadiumTV = !stadiumTV; // (at the football: the TV view, stadium.js)
+  else if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; transitSubwayDeparted(); }
@@ -422,6 +423,10 @@ function loop(t) {
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+  } else if (stadiumTVOn()) { // at the football with the TV view on: from the gantry, following the ball (stadium.js)
+    const saved = [px, py, a, pitch], baseFOV = FOV, cam = stadiumCam(dt);
+    try { FOV = cam.fov; stadiumView = { eye: cam.z }; px = cam.x; py = cam.y; a = cam.a; pitch = cam.pitch; render(dt); }
+    finally { [px, py, a, pitch] = saved; stadiumView = null; FOV = baseFOV; }
   } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
     skateFixedRender(camera=>{
       const saved = [px, py, a], [cx, cy, yaw, cz] = camera||skateCam(dt), baseFOV = FOV;
