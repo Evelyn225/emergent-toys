@@ -82,6 +82,7 @@ function buildPause() {
       ${slider('controllerSteering', 'Steering response', .5, 2, .1)}
       ${toggle('controllerInvertY', 'Invert controller look')}
       ${toggle('controllerVibration', 'Controller vibration')}
+
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
@@ -222,9 +223,9 @@ function openControls() {
           <b>C / RT before takeoff</b><span>Hold to jump out of a bowl or ramp onto the deck. Otherwise, bowl airs aim back inside. Choose before you pop or cross the lip.</span>
           <b>Coping boardslide</b><span>Jump out, turn the board across the coping (the tube along the lip), then come down moving along it.</span>
           <b>Q / E / LT / RT in the air</b><span>Hold to grab. Use the mouse or right stick to choose nose, tail or side. Let go before landing. RT can’t grab if you used it to jump out.</span>
-          <b>Manual / nose manual</b><span>Gently hold the right stick or mouse back for a manual, or forward for a nose manual. Keep the balance marker centred to link combos across flat ground.</span>
+          <b>Manual / nose manual</b><span>Hold the right stick or mouse partway back for a manual, or partway forward for a nose manual. Full deflection loads a jump. Manuals link combos across flat ground.</span>
           <b>Grind balance</b><span>Use A/D to move the balance marker toward the centre. With the right stick or a right-mouse drag, left/right balances and forward/back shifts nose/tail pressure.</span>
-          <b>Manual balance</b><span>Use A/D for sideways balance. Move the right stick or mouse forward/back to adjust the board’s tilt. Keep the marker centred.</span>
+          <b>Manual balance</b><span>Adjust forward/back pressure with the right stick or mouse to keep the balance marker centred. A/D steers; it doesn’t balance a manual.</span>
       </div></section>
         <footer class="controls-footer">Game paused · Settings are available in the pause menu</footer>
       </div>`);

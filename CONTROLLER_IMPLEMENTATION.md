@@ -153,3 +153,11 @@ still take priority. Mouse users can right-drag and release, including a short
 without adding another jump. Straight unsteered returns retain the takeoff
 forward/fakie axis; the camera continues following travel and full rider height,
 including off building roofs.
+
+Manual update: hold the right stick partway back (or partway forward for a nose
+manual), then adjust that same fore/aft pressure to balance. Left/right input
+steers and no longer balances a manual. Full deflection loads the pop instead.
+Right-mouse forward/back drag follows the same control, with held pressure
+preserved during sideways movement. Grind balance keeps its existing A/D and
+right-stick/mouse left/right controls. Mongo chase follows actual travel even
+while pushing fakie; manual camera orbit remains available.

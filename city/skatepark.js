@@ -27,7 +27,7 @@ function buildSkatepark() {
     };
     edge(add(6.0, 6.0, true, .3, .004, .035, 'skaterail'), 0, 'metal'); // a 6 m flat bar, 35 cm up
     edge(add(7.3, 6.9, false, .35, .004, .03, 'skaterail'), 0, 'metal'); // and a 7 m one, 30 cm
-    for (const [x, y, hl, hw, z] of [[6.5, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
+    for (const [x, y, hl, hw, z] of [[6.2, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
       const o = add(x, y, true, hl, hw, z, 'skateledge');
       edge(o, -1, 'metal'); edge(o, 1, 'metal'); // (steel coping on both edges)
     }
@@ -51,7 +51,7 @@ function buildSkatepark() {
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
     if (typeof addSkateTransition === 'function') {
       addSkateTransition(ox + 4.85, oy + 7.5);
-      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
+      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .68 });
     }
     if (typeof addSkatePool === 'function') addSkatePool(ox + 6.3, oy + 4.7, {radius:.22,height:.16,deck:.055}, {rx:.22,ry:.48});
   }

@@ -3229,7 +3229,7 @@ function buildSkatepark() {
     };
     edge(add(6.0, 6.0, true, .3, .004, .035, 'skaterail'), 0, 'metal'); // a 6 m flat bar, 35 cm up
     edge(add(7.3, 6.9, false, .35, .004, .03, 'skaterail'), 0, 'metal'); // and a 7 m one, 30 cm
-    for (const [x, y, hl, hw, z] of [[6.5, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
+    for (const [x, y, hl, hw, z] of [[6.2, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
       const o = add(x, y, true, hl, hw, z, 'skateledge');
       edge(o, -1, 'metal'); edge(o, 1, 'metal'); // (steel coping on both edges)
     }
@@ -3253,7 +3253,7 @@ function buildSkatepark() {
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
     if (typeof addSkateTransition === 'function') {
       addSkateTransition(ox + 4.85, oy + 7.5);
-      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
+      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .68 });
     }
     if (typeof addSkatePool === 'function') addSkatePool(ox + 6.3, oy + 4.7, {radius:.22,height:.16,deck:.055}, {rx:.22,ry:.48});
   }
@@ -14140,6 +14140,23 @@ function duskSky(up, az, d, k) {
   const at = n + (d < t - n ? 1 : 0);
   return at < DUSK_RAMP.length ? DUSK_RAMP[at] : -1;
 }
+// Fixed world directions projected once per frame. Hashing screen pixels made
+// stars reshuffle whenever the chase camera changed pitch or speed widened FOV.
+const SKY_STARS=Array.from({length:768},(_,id)=>{
+  const az=hash(id,74,1)*Math.PI*2,z=.03+hash(id,74,2)*.96,r=Math.sqrt(1-z*z);
+  return {x:Math.cos(az)*r,y:Math.sin(az)*r,z,seed:hash(id,74,3)};
+});
+let skyStarIndex=new Int16Array(0);
+function prepareSkyStars(){
+  if(skyStarIndex.length!==cols*rows)skyStarIndex=new Int16Array(cols*rows);
+  skyStarIndex.fill(-1);
+  if(night<=.5||overcast>=.4)return;
+  for(let id=0;id<SKY_STARS.length;id++){
+    const star=SKY_STARS[id],d=dx*star.x+dy*star.y;if(d<=0)continue;
+    const x=Math.floor(cols/2+(-dy*star.x+dx*star.y)*projX/d),y=Math.floor(hor-star.z*projY/d);
+    if(x>=0&&x<cols&&y>=0&&y<rows)skyStarIndex[y*cols+x]=id;
+  }
+}
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
@@ -14166,11 +14183,10 @@ function skyCell(i, r, x, rx, ry) {
       }
     }
   }
-  // stars: one cell each (indexed per screen column, but fixed to the world), twinkling
-  const s = hash(Math.floor(az * projX), r - hor, 3);
-  if (night > 0.5 && overcast < 0.4 && s > 0.988) {
-    const tw = 0.6 + 0.4 * Math.sin(T * 3 + s * 1e4);
-    return set(i, s > 0.998 ? '*' : s > 0.994 ? '+' : '.', C([WHITE, WHITE, CYAN, YEL][s * 1e5 & 3], (s > 0.994 ? 13 : 7) * night * tw));
+  const starId=skyStarIndex[i];
+  if(night>.5&&overcast<.4&&starId>=0){
+    const s=SKY_STARS[starId].seed,tw=.6+.4*Math.sin(T*3+s*1e4);
+    return set(i,s>.84?'*':s>.5?'+':'.',C([WHITE,WHITE,CYAN,YEL][s*1e5&3],(s>.5?13:7)*night*tw));
   }
   set(i, ' ', 0);
 }
@@ -27115,6 +27131,7 @@ function render(dt,sceneOnly=false,mask=null) {
   tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
+  if(city)prepareSkyStars();
   lookHit = null;
   for (let x = 0; x < cols; x++) {
     if(mask&&!mask.columns[x])continue;
@@ -30887,6 +30904,7 @@ function buildPause() {
       ${slider('controllerSteering', 'Steering response', .5, 2, .1)}
       ${toggle('controllerInvertY', 'Invert controller look')}
       ${toggle('controllerVibration', 'Controller vibration')}
+
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
@@ -31027,9 +31045,9 @@ function openControls() {
           <b>C / RT before takeoff</b><span>Hold to jump out of a bowl or ramp onto the deck. Otherwise, bowl airs aim back inside. Choose before you pop or cross the lip.</span>
           <b>Coping boardslide</b><span>Jump out, turn the board across the coping (the tube along the lip), then come down moving along it.</span>
           <b>Q / E / LT / RT in the air</b><span>Hold to grab. Use the mouse or right stick to choose nose, tail or side. Let go before landing. RT can’t grab if you used it to jump out.</span>
-          <b>Manual / nose manual</b><span>Gently hold the right stick or mouse back for a manual, or forward for a nose manual. Keep the balance marker centred to link combos across flat ground.</span>
+          <b>Manual / nose manual</b><span>Hold the right stick or mouse partway back for a manual, or partway forward for a nose manual. Full deflection loads a jump. Manuals link combos across flat ground.</span>
           <b>Grind balance</b><span>Use A/D to move the balance marker toward the centre. With the right stick or a right-mouse drag, left/right balances and forward/back shifts nose/tail pressure.</span>
-          <b>Manual balance</b><span>Use A/D for sideways balance. Move the right stick or mouse forward/back to adjust the board’s tilt. Keep the marker centred.</span>
+          <b>Manual balance</b><span>Adjust forward/back pressure with the right stick or mouse to keep the balance marker centred. A/D steers; it doesn’t balance a manual.</span>
       </div></section>
         <footer class="controls-footer">Game paused · Settings are available in the pause menu</footer>
       </div>`);
@@ -37773,7 +37791,7 @@ function buildExtraSkateparks() {
       SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-bowl.profile.height*2-.08,y,line:{x,y},
         description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-metre walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
     }else{
-      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:.55});
+      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:1.1});
       mini.spot=mini.spotPark=true;
       skateSpotBox(x-.8,y+.45,.25,.004,.025,'skaterail','metal');
       skateSpotBox(x-.05,y+.45,.3,.1,.02,'manualpad','concrete');
@@ -38237,11 +38255,11 @@ function skateGestureSample(recognizer,airFlick,x,y,t){
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
-  right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
+  right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
-    right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
+    right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();SK_INPUT.padAirFlick.reset();SK_INPUT.mouseAirFlick.reset();
 }
 // A flip in an existing flight changes the board, never its trajectory.
@@ -38280,7 +38298,7 @@ function skateMouseBegin() {
 }
 function skateMouseMove(x, y) {
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
-  SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
+  SK_INPUT.mouse = SK.manual?[clamp(m[0]+x/60,-1,1),clamp(m[1]+y/60,-1,1)]:[(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
   if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
 }
@@ -38313,6 +38331,7 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   // camera. This keeps the initial direction identical above 120 render Hz.
   if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
+  SK_INPUT.manualDepth=pad?skateStick(0,pad.axes[3],dead)[1]:0;
   if (!pad) {SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.reset();}
   else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25)){SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.consume();}
   else skateGesturePlay(skateGestureSample(SK_INPUT.padGesture,SK_INPUT.padAirFlick,...SK_INPUT.right,T));
@@ -38524,6 +38543,7 @@ function skateTrick(name, flip, turn, air, nollie = false) {
   return { name, flip, turn, air, t: 0, nollie, duration: flip || turn ? (Math.abs(turn) >= 1 ? .46 : .38) : .08,
     pitch: SKB.pitch, baseRoll: Math.atan2(Math.sin(SKB.roll),Math.cos(SKB.roll)), caughtAt: flip||turn?null:0, grab: null, grabTime: 0, grabPoints: 0 };
 }
+function skateTrickName(tr){return tr?.nollie?(tr.name==='ollie'?'nollie':'nollie '+tr.name):tr?.name||'ollie';}
 function skateBoardAxes(yaw, pitch, roll) {
   const c = Math.cos(yaw), s = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
   return { axis: [c * cp, s * cp, sp], up: [-c * sp * cr - s * sr, -s * sp * cr + c * sr, cp * cr] };
@@ -38579,7 +38599,7 @@ function skateAirBase(dt,pitch,roll) {
   const flight=clamp((vz+Math.sqrt(vz*vz+2*.98*height))/.98,0,1.2);
   const [x,y]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*flight),worldCoord(py+Math.sin(SK.dir)*SK.v*flight));
   let surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
-  if(SK.airRoute&&!SK.airRoute.out&&SK.airRoute.o.bowl){
+  if(SK.airRoute&&!SK.airRoute.out){
     // A steep wall can meet the descending board well before a flat-ground
     // flight-time estimate. Predict the first contact on the assisted path.
     if(!pose.landNormal||T-(pose.landT||0)>.05){
@@ -38651,23 +38671,23 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = skateBalanceStick()[1];
+  const depth = SK_INPUT.mouseHeld?SK_INPUT.mouse[1]:(SK_INPUT.manualDepth??skateBalanceStick()[1]);
   const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
   const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
   if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
   const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
-  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 + SK.steer * 3.2 - m.balV * (1.6+Math.abs(SK.steer)*2)) * dt;
-  m.bal += (m.balV+SK.steer*.6+control*.15) * dt;
+  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - m.balV * 1.6) * dt;
+  m.bal += (m.balV+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }
   if (m.bal > 1) return skateManualEnd(true);
-  SKB.pitch += (m.nose ? -1 : 1) * (.15 + m.bal * .12);
+  SKB.pitch += (m.nose ? -.15 : .15) + m.bal * .12;
   SKB.contact = 'manual';
 }
 // A circular riding profile, extruded along its axis. u is signed arc length
 // from the flat bottom's centre; unlike a heightfield this can include vert.
 const SK_TRANSITIONS = [];
-function skateProfile({ radius = .18, height = .14, extension = 0, flat = .24, width = .42, deck = .06 } = {}) {
+function skateProfile({ radius = .18, height = .14, extension = 0, flat = .24, width = .9, deck = .06 } = {}) {
   const angle = Math.acos(clamp(1 - (height - extension) / radius, 0, 1));
   const curve = radius * angle, limit = flat / 2 + curve + extension;
   const tip = flat / 2 + radius * Math.sin(angle), points = [];
@@ -38737,9 +38757,12 @@ function skateTransitionPlace(C) {
   SKB.v = [o.c * at.tx * C.vs - o.s * C.va, o.s * at.tx * C.vs + o.c * C.va, at.tz * C.vs];
   SK.v = Math.hypot(SKB.v[0], SKB.v[1]);
   if (SK.v > 1e-7) SK.dir = Math.atan2(SKB.v[1], SKB.v[0]);
-  SKB.pitch = Math.atan2(at.tz, at.tx) * Math.sign(Math.cos(a) * o.c + Math.sin(a) * o.s || 1);
-  SKB.roll = 0; SKB.yaw = a; SKB.p = [px, py, z]; SKB.contact = 'transition';
-  SKB.surf = { h: z, n: [-o.c * at.tz, -o.s * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o };
+  const n=[-o.c*at.tz,-o.s*at.tz,at.tx];
+  SKB.pitch=Math.atan2(-(n[0]*Math.cos(a)+n[1]*Math.sin(a)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(a,SKB.pitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
+  const dot=v=>n.reduce((sum,k,i)=>sum+k*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral));SKB.yaw=a;SKB.p=[px,py,z];SKB.contact='transition';
+  SKB.surf = { h:z,n,kind:'transition',material:'concrete',ref:o };
   SKB.fakie = Math.cos(SK.dir - a) < 0;
   body.ground = skateGround(px, py); body.groundMode = mode;
   return at;
@@ -38761,7 +38784,13 @@ function skateTransitionLipVelocity(C,out) {
 // height remain free. The same map predicts the landing plane for catches.
 function skateAirRoutePoint(x,y) {
   const route=SK.airRoute,o=route?.o;
-  if(!o?.bowl||route.out)return [x,y];
+  if(!o||route.out)return [x,y];
+  if(!o.bowl){
+    const dx=rel(x-o.x),dy=rel(y-o.y),u=dx*o.c+dy*o.s,axis=-dx*o.s+dy*o.c;
+    if(Math.abs(axis)>o.hw)return [x,y];
+    const inside=o.profile.tip-.015,limited=clamp(u,-inside,inside);
+    return [worldCoord(o.x+o.c*limited-o.s*axis),worldCoord(o.y+o.s*limited+o.c*axis)];
+  }
   const dx=rel(x-o.x),dy=rel(y-o.y),axis=Math.atan2(dy,dx),radius=Math.hypot(dx,dy);
   const lip=o.pool?skatePoolFloor(o,axis)+o.profile.tip-o.profile.flat/2:o.profile.tip;
   const inside=Math.max(.01,lip-.015);
@@ -38773,9 +38802,9 @@ function skateTransitionAirStep() {
   if(Math.hypot(rel(x-px),rel(y-py))<1e-10)return;
   px=x;py=y;
   const o=SK.airRoute.o,axis=Math.atan2(rel(py-o.y),rel(px-o.x));
-  let tangent=[-Math.sin(axis),Math.cos(axis)];
+  let tangent=o.bowl?[-Math.sin(axis),Math.cos(axis)]:[-o.s,o.c];
   if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,axis).tv,len=Math.hypot(tv[0],tv[1]);tangent=[tv[0]/len,tv[1]/len];}
-  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,outward=[tangent[1],-tangent[0]],out=vx*outward[0]+vy*outward[1];
+  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,sign=o.bowl?1:Math.sign(rel(px-o.x)*o.c+rel(py-o.y)*o.s)||1,outward=[tangent[1]*sign,-tangent[0]*sign],out=vx*outward[0]+vy*outward[1];
   if(out>0){const v=[vx-outward[0]*out,vy-outward[1]*out];SK.v=Math.hypot(...v);if(SK.v>1e-9)SK.dir=Math.atan2(v[1],v[0]);}
 }
 function skateTransitionRelease(C, coping = false) {
@@ -38785,7 +38814,7 @@ function skateTransitionRelease(C, coping = false) {
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
-  if(C.o.bowl&&!out){
+  if(!out){
     const z=SKB.p[2];skateTransitionAirStep();
     SKB.p=[px,py,z];SKB.v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,v[2]];
     body.ground=skateGround(px,py);body.groundMode=mode;body.z=Math.max(.002,(z-body.ground)*10);
@@ -39252,7 +39281,7 @@ function stepSkate(dt,readInput=true) {
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
   if ((!air && SK.v > .1) || air && body.vz <= 0) grindCatch();
-  if (air && body.trick) say(`${body.trick.name.toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
+  if (air && body.trick) say(`${skateTrickName(body.trick).toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
   skateBoardSync();
   if (SK.combo && !air && !SK.manual && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
 }
@@ -39297,7 +39326,7 @@ function skateLand() {
   SK.lateTrick=null;
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   skateAirPose();
-  const surf = skateSurface(px, py), axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
+  const surf = skateSurface(px, py), returnHit=SK.airRoute&&!SK.airRoute.out?skateTransitionAt(px,py,surf.h):null, axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
   const vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
   const quality = skateLandingQuality({ ...axes, normal: surf.n,
     velocity: [vx, vy, -(vx * surf.n[0] + vy * surf.n[1]) / Math.max(.05, surf.n[2])],
@@ -39308,6 +39337,7 @@ function skateLand() {
   controllerRumble('land',body.impactV||0);
   const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
   SK.landedAt = T; SK.reverted = false;
+  if(returnHit&&surf.ref===returnHit.o)SKB.fakie=Math.abs(d)>Math.PI/2;
   SK.v *= Math.max(.5, 1 - Math.max(0, (body.impactV || 0) - 4.5) * surf.n[2] * .04);
   if (sloppy && standing) SK.dir = a; // (stood still, you just turn the board under you)
   else if (sloppy) { SK.v *= 0.7; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
@@ -39318,11 +39348,17 @@ function skateLand() {
   const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
   SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
   SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.lipPop=null;SK.pushFakie=null;SK.airSpinV=0;
+  // A frame can cross the wall surface between transition proximity checks.
+  // Re-enter with the real falling velocity instead of flattening it to hv.
+  if(returnHit&&surf.ref===returnHit.o){
+    body.z=.001;body.vz=-(body.impactV||0)*(sloppy?.7:1);
+    enterSkateTransition(returnHit);skateTransitionPlace(SK.transition);
+  }
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
-  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
+  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie',displayName=skateTrickName(tr);
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (SKB.fakie ? 'FAKIE ' : '') + (tr?.nollie ? 'NOLLIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase() + (tr?.lastGrab ? ' + ' + tr.lastGrab.toUpperCase() : '');
+  const label = (SKB.fakie ? 'FAKIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (displayName !== 'ollie' || !side ? ' ' + displayName : '')).trim().toUpperCase() + (tr?.lastGrab ? ' + ' + tr.lastGrab.toUpperCase() : '');
   const pts = Math.round(((SK_POINTS[name.replace(/^late /, '')] || 50) + (tr?.grabPoints || 0) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
   if (standing) { // the one trick, scored by itself: a combo needs you moving
     if (SK.combo) bankCombo();
@@ -39409,7 +39445,7 @@ function skateCam(dt) {
     SK.look=look*Math.exp(-dt*2.5);
   }
   if(fresh){SK.camFollowTravel=!!(SK.transition||SK.airRoute);SK.camTravelYaw=a;}
-  if(SK.transition)SK.camFollowTravel=true;
+  if(SK.transition||SK.mongo&&SK.v>.025)SK.camFollowTravel=true;
   if(SK.camFollowTravel&&SK.v>.025)SK.camTravelYaw=SK.dir;
   if(!air&&!SK.transition&&SK.v<.025)SK.camFollowTravel=false;
   const riding=SK.camFollowTravel?(SK.camTravelYaw??a):a;
@@ -52599,6 +52635,13 @@ function gotoShop(word) {
   }
   if (!best) return say(`No ${word} in town.`);
   px = worldCoord(best.x); py = worldCoord(best.y); a = best.a; pitch = 0;
+  if (!free(px, py)) { // (a hydrant, a bin, a parked fire engine on that spot: the nearest clear one along the pavement)
+    const tx = Math.abs(Math.sin(best.a)) > .5 ? 1 : 0, ty = 1 - tx, ox = px, oy = py;
+    search: for (let r = .05; r <= .6; r += .05) for (const s of [1, -1]) for (const out of [0, .1, .2]) {
+      const x = worldCoord(ox + tx * r * s - Math.cos(best.a) * out), y = worldCoord(oy + ty * r * s - Math.sin(best.a) * out);
+      if (free(x, y)) { px = x; py = y; break search; }
+    }
+  }
   say(`Outside ${word}. ${openAt(best.sh, tod) ? 'Walk up and press E.' : `Closed, opens at ${best.sh.hours[0]}:00.`}`, 5);
 }
 { const w = new URLSearchParams(location.search).get('goto'); if (w) gotoShop(w.toUpperCase()); }

@@ -78,7 +78,7 @@ function stepSkate(dt,readInput=true) {
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
   if ((!air && SK.v > .1) || air && body.vz <= 0) grindCatch();
-  if (air && body.trick) say(`${body.trick.name.toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
+  if (air && body.trick) say(`${skateTrickName(body.trick).toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
   skateBoardSync();
   if (SK.combo && !air && !SK.manual && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
 }
@@ -123,7 +123,7 @@ function skateLand() {
   SK.lateTrick=null;
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   skateAirPose();
-  const surf = skateSurface(px, py), axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
+  const surf = skateSurface(px, py), returnHit=SK.airRoute&&!SK.airRoute.out?skateTransitionAt(px,py,surf.h):null, axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
   const vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
   const quality = skateLandingQuality({ ...axes, normal: surf.n,
     velocity: [vx, vy, -(vx * surf.n[0] + vy * surf.n[1]) / Math.max(.05, surf.n[2])],
@@ -134,6 +134,7 @@ function skateLand() {
   controllerRumble('land',body.impactV||0);
   const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
   SK.landedAt = T; SK.reverted = false;
+  if(returnHit&&surf.ref===returnHit.o)SKB.fakie=Math.abs(d)>Math.PI/2;
   SK.v *= Math.max(.5, 1 - Math.max(0, (body.impactV || 0) - 4.5) * surf.n[2] * .04);
   if (sloppy && standing) SK.dir = a; // (stood still, you just turn the board under you)
   else if (sloppy) { SK.v *= 0.7; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
@@ -144,11 +145,17 @@ function skateLand() {
   const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
   SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
   SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.lipPop=null;SK.pushFakie=null;SK.airSpinV=0;
+  // A frame can cross the wall surface between transition proximity checks.
+  // Re-enter with the real falling velocity instead of flattening it to hv.
+  if(returnHit&&surf.ref===returnHit.o){
+    body.z=.001;body.vz=-(body.impactV||0)*(sloppy?.7:1);
+    enterSkateTransition(returnHit);skateTransitionPlace(SK.transition);
+  }
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
-  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
+  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie',displayName=skateTrickName(tr);
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (SKB.fakie ? 'FAKIE ' : '') + (tr?.nollie ? 'NOLLIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase() + (tr?.lastGrab ? ' + ' + tr.lastGrab.toUpperCase() : '');
+  const label = (SKB.fakie ? 'FAKIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (displayName !== 'ollie' || !side ? ' ' + displayName : '')).trim().toUpperCase() + (tr?.lastGrab ? ' + ' + tr.lastGrab.toUpperCase() : '');
   const pts = Math.round(((SK_POINTS[name.replace(/^late /, '')] || 50) + (tr?.grabPoints || 0) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
   if (standing) { // the one trick, scored by itself: a combo needs you moving
     if (SK.combo) bankCombo();
@@ -235,7 +242,7 @@ function skateCam(dt) {
     SK.look=look*Math.exp(-dt*2.5);
   }
   if(fresh){SK.camFollowTravel=!!(SK.transition||SK.airRoute);SK.camTravelYaw=a;}
-  if(SK.transition)SK.camFollowTravel=true;
+  if(SK.transition||SK.mongo&&SK.v>.025)SK.camFollowTravel=true;
   if(SK.camFollowTravel&&SK.v>.025)SK.camTravelYaw=SK.dir;
   if(!air&&!SK.transition&&SK.v<.025)SK.camFollowTravel=false;
   const riding=SK.camFollowTravel?(SK.camTravelYaw??a):a;
