@@ -143,6 +143,7 @@ function promptText() {
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
+    if (room.kind === 'stadium') return (stadiumTV ? 'V: back to your seat   ' : (body.seat ? '' : 'C: sit down   ') + 'V: TV view   ') + 'E: leave the ground';
     const hotelPrompt=hotelAmenityPrompt();if(hotelPrompt)return hotelPrompt;
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';

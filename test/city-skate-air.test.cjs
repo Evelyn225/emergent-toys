@@ -107,12 +107,12 @@ test('short downhill ollies do not require catching a board that never flipped',
  }
 });
 
-test('manual A/D correction moves the gauge directly and stick depth can counter drift',()=>{
+test('manual balance uses fore/aft pressure independently of steering',()=>{
  const run=(steer,depth)=>{
   const c=vm.createContext({});vm.runInContext(`let T=1;const actx=null;const SK={v:.6,steer:${steer},manual:{nose:false,t0:0,bal:.6,balV:.6}},SKB={pitch:0},SK_INPUT={right:[0,${depth}]};const skateAir=()=>false,skateBalanceStick=()=>SK_INPUT.right;`,c);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../city/skate-air.js'),'utf8'),c);
   vm.runInContext('for(let i=0;i<10;i++){T+=1/60;skateManualStep(1/60);}',c);return vm.runInContext('SK.manual.bal',c);
  };
  const neutral=run(0,.35),left=run(-1,.35),right=run(1,.35),stick=run(0,.2);
- assert.ok(left<.6&&left<neutral&&right>neutral,'A moves gauge left, D right');assert.ok(stick<neutral,'shallower tail pressure counters backward drift');
+ assert.equal(left,neutral,'left steering does not balance');assert.equal(right,neutral,'right steering does not balance');assert.ok(stick<neutral,'shallower tail pressure counters backward drift');assert.ok(run(0,.5)>neutral,'deeper tail pressure tips back');
 });

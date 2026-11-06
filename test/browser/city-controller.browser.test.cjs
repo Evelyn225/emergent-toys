@@ -32,9 +32,7 @@ test('controller walks analog, looks, jumps and interacts; disconnect clears hel
 test('controller navigates actions, inventory, settings and map search without a keyboard',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
   const bad=[];padTap(3);if(CONTROLLER.sheet?.style.display!=='flex')bad.push('actions not open');
-  for(let i=0;i<25&&document.activeElement?.textContent!=='Inventory';i++)padTap(13);
-  if(document.activeElement?.textContent!=='Inventory')bad.push('cannot navigate to inventory');
-  padTap(0);if(invEl?.style.display!=='flex')bad.push('inventory not open');
+  padTap(1);padTap(12);if(invEl?.style.display!=='flex')bad.push('D-pad inventory not open');
   const items=controllerControls(invEl),select=invEl.querySelector('select');controllerFocus(invEl,items.indexOf(select));const oldSlot=quickSlots.indexOf(0);
   padTap(15);if(quickSlots.indexOf(0)===oldSlot)bad.push('quick slot did not change');
   padButton(1,true);padFrame(3);if(paused||K.KeyC)bad.push('back leaked into crouch');padButton(1,false);
@@ -53,7 +51,7 @@ test('controller navigates actions, inventory, settings and map search without a
   padTap(8);if(!bigMapOpen())bad.push('map not open');
   padTap(3);if(CONTROLLER.keyboard?.style.display!=='flex')bad.push('typing not open');
   padTap(0);padTap(15);padTap(0);padTap(2);
-  if(BIGMAP.query!=='a')bad.push(['typing/erase failed',BIGMAP.query]);
+  if(BIGMAP.query!=='q')bad.push(['typing/erase failed',BIGMAP.query]);
   padTap(1);if(!bigMapOpen()||CONTROLLER.keyboard.style.display!=='none')bad.push('typing back closed map');
   padTap(1);if(bigMapOpen()||paused)bad.push('map did not close');return bad;
  });assert.deepEqual(r,[]);

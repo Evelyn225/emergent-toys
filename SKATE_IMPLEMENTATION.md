@@ -622,3 +622,54 @@ close, wide, oblique rail and night street views. Local serial ABAB at 177×66
 against exact main `d8d6015`: median main/branch 12.7/12.9 ms, then 14.6/12.5 ms;
 no consistent added cost in these local observations, not an FPS guarantee.
 Tree count/checksum and bench count match current main.
+
+## Manual pressure, half-pipes, mongo follow and stars
+
+Manuals now balance solely through partial fore/aft right-stick or right-mouse
+pressure. Steering still carves but no longer pushes the pitch meter sideways.
+Gamepad manual depth uses a one-axis dead zone, so lateral stick deflection does
+not change held pressure; a held mouse manual keeps its fore/aft value when
+moving sideways too. Gentle back pressure starts a manual, forward starts a
+nose manual, deeper/shallower pressure corrects its pitch, and full stick remains
+available to load a pop. Nose-manual pitch now follows the signed pressure.
+Grind balance retains A/D and right-stick/mouse left/right control.
+
+Trick display names are shared between the air HUD and landing/combo labels:
+a nose-loaded ollie is NOLLIE, never NOLLIE OLLIE. Flip names retain their nollie
+prefix and scoring still uses the underlying trick. Mongo runs latch the chase
+camera to actual travel, including a fakie push, while preserving free orbit.
+
+All three half-pipes are wider: the original mini is 9 m, vert is 6.8 m, and Flow
+Yard's mini is 11 m. The long nearby park ledge moves 3 m left to preserve clear
+space beside the wider vert ramp. Ramp drawing, collision and coping edges use
+the widened shared profile. Half-pipe airs now use the same inside boundary and
+forecast landing plane as bowls. Both signed walls remove outward drift for
+ordinary return airs, while deliberate C/RT exits retain their existing path.
+Angled riders are fitted to the complete profile normal instead of receiving a
+straight-up-the-ramp pitch with zero bank. A heightfield touchdown that occurs
+between proximity checks now enters the transition with the actual descending
+velocity and preserves fakie, avoiding the old lost momentum and forced turn.
+
+Stars now come from a fixed deterministic catalogue of world directions,
+projected once per frame into single screen cells. Ramp camera pitch, yaw and
+speed FOV move those same stars rather than reseeding screen-space noise.
+Cloud and world occlusion, ASCII glyphs and twinkling remain in the sky shader.
+
+Validation exercises fore/aft manual correction independently of steering,
+mouse/controller horizontal input, full-depth pop loading, actual NOLLIE combo
+labels, keyboard/controller mongo camera follow, steep board/surface alignment,
+and natural/popped airs on both sides of every native half-pipe. Existing bowl,
+roof, grind, camera and fixed-clock regressions pass. Five isolated mutations
+restoring duplicate labels, radial manual pressure, zero-bank ramp poses,
+rider-facing mongo chase or screen-hashed stars fail the new browser regression.
+
+Final verification: all 16 focused simulation, syntax and bundle test files pass,
+and five final rebuilt-bundle browser cases pass (the new follow-up, both ramp
+profiles, existing grind/gesture balance, bowl choice, and natural-air/roof
+framing). An additional isolated mutation dropping the heightfield-to-transition
+momentum handoff fails the vert-pop speed regression. Reviewed close, wide,
+oblique and night ramp views. Local serial ABAB at 177×66 against exact main
+`309ff4a`: main/branch medians 12.6/11.9 ms, then 13.2/12.8 ms (60 frames after
+20 warm-up frames). These local observations show no added cost in this view;
+they are not an FPS guarantee. Other world/stadium work and reserved files remain
+untouched.

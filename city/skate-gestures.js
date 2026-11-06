@@ -88,11 +88,11 @@ function skateGestureSample(recognizer,airFlick,x,y,t){
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
-  right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
+  right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
-    right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
+    right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();SK_INPUT.padAirFlick.reset();SK_INPUT.mouseAirFlick.reset();
 }
 // A flip in an existing flight changes the board, never its trajectory.
@@ -131,7 +131,7 @@ function skateMouseBegin() {
 }
 function skateMouseMove(x, y) {
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
-  SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
+  SK_INPUT.mouse = SK.manual?[clamp(m[0]+x/60,-1,1),clamp(m[1]+y/60,-1,1)]:[(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
   if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
 }
@@ -164,6 +164,7 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   // camera. This keeps the initial direction identical above 120 render Hz.
   if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
+  SK_INPUT.manualDepth=pad?skateStick(0,pad.axes[3],dead)[1]:0;
   if (!pad) {SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.reset();}
   else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25)){SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.consume();}
   else skateGesturePlay(skateGestureSample(SK_INPUT.padGesture,SK_INPUT.padAirFlick,...SK_INPUT.right,T));

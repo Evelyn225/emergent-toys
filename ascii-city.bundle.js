@@ -449,7 +449,7 @@ function env(dt) {
   vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow) * (typeof telescopeActive === 'function' && telescopeActive() ? TELESCOPE_REACH : 1); // (through a telescope you see further: held-curios.js)
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
-  if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
+  if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = room.def.vis ?? 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
 // Small authored street stories. Coordinates are chosen on the finished city;
 // time and saved state drive them even when the player is elsewhere.
@@ -3229,7 +3229,7 @@ function buildSkatepark() {
     };
     edge(add(6.0, 6.0, true, .3, .004, .035, 'skaterail'), 0, 'metal'); // a 6 m flat bar, 35 cm up
     edge(add(7.3, 6.9, false, .35, .004, .03, 'skaterail'), 0, 'metal'); // and a 7 m one, 30 cm
-    for (const [x, y, hl, hw, z] of [[6.5, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
+    for (const [x, y, hl, hw, z] of [[6.2, 7.4, .45, .03, .04], [5.95, 6.75, .25, .035, .06]]) { // ledges: 9 m at 40 cm, 5 m at 60 cm
       const o = add(x, y, true, hl, hw, z, 'skateledge');
       edge(o, -1, 'metal'); edge(o, 1, 'metal'); // (steel coping on both edges)
     }
@@ -3253,7 +3253,7 @@ function buildSkatepark() {
     ramp(6.3, 3.4, true, .175, .12, .05, 'kicker', .35);
     if (typeof addSkateTransition === 'function') {
       addSkateTransition(ox + 4.85, oy + 7.5);
-      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .34 });
+      addSkateTransition(ox + 7.2, oy + 7.65, { radius: .3, height: .36, extension: .06, width: .68 });
     }
     if (typeof addSkatePool === 'function') addSkatePool(ox + 6.3, oy + 4.7, {radius:.22,height:.16,deck:.055}, {rx:.22,ry:.48});
   }
@@ -3286,6 +3286,673 @@ function rampHeight(o, u) {
 }
 const skateRampAt = (x, y) => SKATE_FEATURES.find(o => { if (!o.ramp) return false; const qx = rel(x - o.x), qy = rel(y - o.y); return Math.abs(qx * o.c + qy * o.s) <= o.hl && Math.abs(-qx * o.s + qy * o.c) <= o.hw; });
 // Slope acceleration and lip exits now live in skate-physics.js.
+// ===== the football match engine (STADIUM_PLAN.md): a whole match of eleven against eleven, simulated from the ball,
+// the players and the rules, deterministic for a seed, headless (no drawing here; the stadium draws from it). Physics
+// runs at real speed in metres and seconds; the match clock runs faster (90 minutes over `minutes` of play), the way
+// football games do it. Pitch: x along its length, y across, origin on the centre spot; the home side attacks +x in the
+// first half. Everything here is inside MatchEngine so nothing leaks into the city's globals.
+const MatchEngine = (() => {
+  const PITCH = { hl: 52.5, hw: 34, goalHW: 3.66, goalH: 2.44, boxD: 16.5, boxHW: 20.16, sixD: 5.5, sixHW: 9.16, spot: 11, circle: 9.15 };
+  const DT = 0.05, G = 9.8, BALL_R = 0.11;
+  const rng = seed => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const clampN = (v, a, b) => v < a ? a : v > b ? b : v, hyp = Math.hypot;
+  const SURNAMES = ['Okafor', 'Novak', 'Ruiz', 'Tanaka', 'Murphy', 'Haddad', 'Silva', 'Kowalski', 'Nguyen', 'Mensah', 'Rossi', 'Petrov', 'Byrne', 'Osei', 'Lindqvist',
+    'Moreau', 'Cohen', 'Achebe', 'Park', 'Fischer', 'Duarte', 'Yilmaz', 'Brennan', 'Costa', 'Ivanov', 'Kamara', 'Sato', 'Walsh', 'Ferreira', 'Diallo', 'Hughes',
+    'Bakker', 'Lopez', 'Kim', 'Adeyemi', 'Romano', 'Horvat', 'Quinn', 'Mbeki', 'Dubois', 'Jansen', 'Vargas', 'Chen', 'Okonkwo', 'Sorensen', 'Reyes', 'Gallo', 'Doyle'];
+  // the clubs: one a neighbourhood, kit colours as palette names (the stadium maps them to colours)
+  const CLUBS = [
+    { id: 'yards', name: 'Yards Athletic', short: 'YAR', kit: ['RED', 'WHITE'], rating: .62, formation: '442' },
+    { id: 'docks', name: 'Docks United', short: 'DOC', kit: ['BLUE', 'WHITE'], rating: .58, formation: '433' },
+    { id: 'midtown', name: 'Midtown Rovers', short: 'MID', kit: ['GREEN', 'WHITE'], rating: .55, formation: '4231' },
+    { id: 'chinatown', name: 'Chinatown Dragons', short: 'CHI', kit: ['YEL', 'RED'], rating: .57, formation: '433' },
+    { id: 'brownstones', name: 'Brownstone Albion', short: 'BRO', kit: ['BRICK', 'WHITE'], rating: .53, formation: '442' },
+    { id: 'downtown', name: 'Downtown City', short: 'DTC', kit: ['CYAN', 'BLUE'], rating: .66, formation: '4231' },
+    { id: 'shotengai', name: 'Shotengai Stars', short: 'SHO', kit: ['MAG', 'WHITE'], rating: .5, formation: '433' },
+    { id: 'belle', name: 'Belle Epoque', short: 'BEL', kit: ['WHITE', 'GRAY'], rating: .54, formation: '442' },
+  ];
+  // formation slots: [role, depth 0 (own goal) .. 1 (theirs), width -1 .. 1]; slot 0 is the keeper
+  const FORMATIONS = {
+    442: [['GK', 0, 0], ['DF', .1, -.78], ['DF', .06, -.27], ['DF', .06, .27], ['DF', .1, .78], ['MF', .48, -.8], ['MF', .42, -.25], ['MF', .42, .25], ['MF', .48, .8], ['FW', .9, -.22], ['FW', .9, .22]],
+    433: [['GK', 0, 0], ['DF', .1, -.78], ['DF', .06, -.27], ['DF', .06, .27], ['DF', .1, .78], ['MF', .38, -.42], ['MF', .34, 0], ['MF', .38, .42], ['FW', .86, -.7], ['FW', .94, 0], ['FW', .86, .7]],
+    4231: [['GK', 0, 0], ['DF', .1, -.78], ['DF', .06, -.27], ['DF', .06, .27], ['DF', .1, .78], ['MF', .3, -.25], ['MF', .3, .25], ['MF', .64, -.72], ['MF', .62, 0], ['MF', .64, .72], ['FW', .94, 0]],
+  };
+  const TUNE = { // (calibrated against §3.6 of STADIUM_PLAN.md: see test/city-match-engine.test.cjs)
+    think: .22, shotXg: .09, shotBias: 1, crossBase: .3, homeBoost: .017, passRisk: 2.2, dribbleSpace: 5.5, tackleRange: 1.25, foulBase: .2,
+    control: .84, passErr: .07, shotErr: .3, keeperReach: 1.5, keeperReact: .3, keeperBase: .62, block: .32, recvReach: 2,
+  };
+  const BOARD = { full: 90 * 60 };
+
+  function makePlayer(club, k, role, r, seedName) {
+    const base = club.rating, v = (lo = -.12, hi = .12) => clampN(base + lo + r() * (hi - lo), .2, .97);
+    const p = {
+      team: null, slot: k, role, number: k === 0 ? 1 : [0, 2, 5, 6, 3, 7, 8, 4, 11, 9, 10][k] || k + 1, name: seedName,
+      pos: [0, 0], vel: [0, 0], face: [1, 0], stamina: 1, target: [0, 0], urgency: .5, nextThink: 0, job: 'shape', carded: 0, off: false,
+      attrs: { pace: v(), accel: v(), control: v(), passing: v(), shooting: v(), tackling: v(), heading: v(), positioning: v(), vision: v(), gk: role === 'GK' ? v(.05, .25) : v(-.4, -.2) },
+    };
+    if (role === 'DF') { p.attrs.tackling = clampN(p.attrs.tackling + .12, .2, .97); p.attrs.heading = clampN(p.attrs.heading + .1, .2, .97); p.attrs.shooting -= .12; }
+    if (role === 'FW') { p.attrs.shooting = clampN(p.attrs.shooting + .14, .2, .97); p.attrs.tackling -= .15; p.attrs.pace = clampN(p.attrs.pace + .06, .2, .97); }
+    if (role === 'MF') { p.attrs.passing = clampN(p.attrs.passing + .1, .2, .97); p.attrs.vision = clampN(p.attrs.vision + .08, .2, .97); }
+    return p;
+  }
+  function makeTeam(club, side, r) {
+    if (side === 0) club = { ...club, rating: club.rating + TUNE.homeBoost }; // (the home crowd behind them)
+    const used = new Set(), name = () => { let n; do n = SURNAMES[r() * SURNAMES.length | 0]; while (used.has(n) && used.size < SURNAMES.length); used.add(n); return n; };
+    const slots = FORMATIONS[club.formation];
+    const t = { club, side, name: club.name, short: club.short, kit: club.kit, formation: club.formation, score: 0, subsLeft: 3,
+      players: slots.map(([role], k) => makePlayer(club, k, role, r, name())),
+      bench: ['GK', 'DF', 'MF', 'MF', 'FW'].map((role, k) => makePlayer(club, 11 + k, role, r, name())) };
+    t.bench.forEach((p, k) => { p.number = 12 + k; });
+    for (const p of [...t.players, ...t.bench]) p.team = t;
+    return t;
+  }
+
+  // ---- a new match: { home, away } clubs (or ids), seed, minutes of play for the 90 (default 12)
+  function create(opts = {}) {
+    const club = c => typeof c === 'string' ? CLUBS.find(k => k.id === c) : c;
+    const seed = opts.seed ?? 1, r = rng(seed);
+    const m = {
+      seed, r, t: 0, minutes: opts.minutes ?? 12, period: 1, phase: 'kickoff', phaseT: 0, stoppage: [0, 0], added: [0, 0],
+      ball: { p: [0, 0, BALL_R], v: [0, 0, 0], owner: null, lastTouch: null, lastKick: null, kickT: -9 },
+      events: [], stats: [{ shots: 0, onTarget: 0, poss: 0, passes: 0, passesDone: 0, fouls: 0, corners: 0, offsides: 0, yellow: 0, red: 0, saves: 0 }, null],
+      restart: null, pendingPass: null, advantage: null, celebrate: null, replay: [], diag: {},
+    };
+    m.stats[1] = { ...m.stats[0] };
+    m.teams = [makeTeam(club(opts.home ?? 'yards'), 0, r), makeTeam(club(opts.away ?? 'docks'), 1, r)];
+    m.ref = { pos: [-10, 15], vel: [0, 0], face: [1, 0] };
+    kickoff(m, 0);
+    log(m, 'kickoff', 0);
+    return m;
+  }
+  const clockScale = m => BOARD.full / (m.minutes * 60); // match seconds per second of play
+  const minute = m => m.t * clockScale(m) / 60; // the match clock, minutes
+  const dirOf = (m, team) => (team.side === 0 ? 1 : -1) * (m.period === 2 ? -1 : 1); // which way a team attacks (+x / -x)
+  const onPitch = team => team.players.filter(p => !p.off);
+  const opp = (m, team) => m.teams[1 - team.side];
+  const diag = (m, k) => { m.diag[k] = (m.diag[k] || 0) + 1; };
+  const log = (m, kind, side, extra = {}) => m.events.push({ t: Math.min(m.period === 1 ? 45 : 90, minute(m)), min: minute(m), period: m.period, kind, side, ...extra });
+
+  // ---- restarts: where everyone goes, who takes it, after how long
+  function kickoff(m, side, place = true) { // (place: lined up already, at the start of a half; after a goal they walk back)
+    m.phase = 'restart'; m.restart = { type: 'kickoff', side, at: [0, 0], wait: place ? 2.5 : 4 }; m.ball.owner = null;
+    m.ball.p = [0, 0, BALL_R]; m.ball.v = [0, 0, 0];
+    if (place) for (const team of m.teams) for (const p of onPitch(team)) { const s = slotPos(m, team, p, 0, false, true); p.pos = s.slice(); p.vel = [0, 0]; }
+    const team = m.teams[side], taker = onPitch(team).filter(p => p.role === 'FW').sort((a, b) => Math.abs(a.pos[1]) - Math.abs(b.pos[1]))[0] || onPitch(team)[9];
+    m.restart.taker = taker; if (place) taker.pos = [-dirOf(m, team) * .4, 0];
+  }
+  function setRestart(m, type, side, at, extra = {}) {
+    m.phase = 'restart'; m.ball.owner = null; m.ball.v = [0, 0, 0];
+    m.ball.p = [at[0], at[1], BALL_R];
+    const team = m.teams[side], ds = onPitch(team).filter(p => type === 'goalkick' ? p.role === 'GK' : p.role !== 'GK');
+    const taker = extra.taker || ds.sort((a, b) => hyp(a.pos[0] - at[0], a.pos[1] - at[1]) - hyp(b.pos[0] - at[0], b.pos[1] - at[1]))[0];
+    m.restart = { type, side, at, taker, wait: { throwin: 1.6, corner: 3.2, goalkick: 2.4, freekick: 2.6, penalty: 3.5, kickoff: 2 }[type] || 2, ...extra };
+    m.pendingPass = null;
+  }
+
+  // ---- team shape: where a player's slot puts them now (team's attacking frame, then back to pitch coords)
+  function slotPos(m, team, p, ballX, inPoss, kickoffShape = false) {
+    const dir = dirOf(m, team), [role, depth, width] = FORMATIONS[team.formation][p.slot];
+    const bx = ballX * dir; // ball in the team's attacking frame
+    let defLine, fwdLine, spread, shift = 0;
+    if (kickoffShape) { defLine = -38; fwdLine = -2; spread = .8; }
+    else if (inPoss) { defLine = clampN(bx - 26, -40, 16); fwdLine = clampN(bx + 14, -6, 46); spread = .92; }
+    else { defLine = clampN(bx - 16, -45, 4); fwdLine = defLine + 30; spread = .62; shift = clampN(m.ball.p[1] * .35, -10, 10); }
+    if (role === 'GK') {
+      const gx = -PITCH.hl + clampN((bx + PITCH.hl) * .12, 1, inPoss ? 18 : 12);
+      return [gx * dir, clampN(m.ball.p[1] * .14, -3, 3)];
+    }
+    let x = defLine + depth * (fwdLine - defLine), y = width * PITCH.hw * spread + shift;
+    if (kickoffShape) x = Math.min(x, -1.5);
+    return [clampN(x, -PITCH.hl + 3, PITCH.hl - 3) * dir, clampN(y, -PITCH.hw + 1.5, PITCH.hw - 1.5)];
+  }
+
+  // ---- ball physics
+  function stepBall(m, dt) {
+    const b = m.ball;
+    if (b.owner) { // at the carrier's feet, a little ahead of them, bobbing with their stride
+      const p = b.owner, sp = hyp(p.vel[0], p.vel[1]), lead = .45 + sp * .05;
+      const want = [p.pos[0] + p.face[0] * lead, p.pos[1] + p.face[1] * lead], ex = want[0] - b.p[0], ey = want[1] - b.p[1], e = hyp(ex, ey), k = e > .25 ? Math.min(1, 9 * dt / e) : 1;
+      b.p = [b.p[0] + ex * k, b.p[1] + ey * k, Math.max(BALL_R, b.p[2] - 6 * dt)]; b.v = [p.vel[0], p.vel[1], 0]; // (taken in: it glides to their feet, no snapping)
+      return;
+    }
+    const v = b.v, sp = hyp(v[0], v[1], v[2]), drag = .0075 * sp;
+    v[0] -= v[0] * drag * dt; v[1] -= v[1] * drag * dt; v[2] -= v[2] * drag * dt + G * dt;
+    if (b.spin) { v[0] += -v[1] * b.spin * dt; v[1] += v[0] * b.spin * dt; b.spin *= 1 - dt * .6; }
+    b.p[0] += v[0] * dt; b.p[1] += v[1] * dt; b.p[2] += v[2] * dt;
+    if (b.p[2] <= BALL_R) { // on the grass: a bounce, or rolling
+      b.p[2] = BALL_R;
+      if (v[2] < -1.2) { v[2] = -v[2] * .52; v[0] *= .86; v[1] *= .86; }
+      else {
+        v[2] = 0; const h = hyp(v[0], v[1]);
+        if (h > 0) { const k = Math.max(0, h - 1.6 * dt) / h; v[0] *= k; v[1] *= k; }
+      }
+    }
+  }
+  // where the ball will be in t seconds, roughly (rolling or flying; no bounces): for interceptions
+  function ballAt(m, t) {
+    const b = m.ball;
+    if (b.owner) return [b.p[0], b.p[1], b.p[2]];
+    const [vx, vy, vz] = b.v, h = hyp(vx, vy);
+    if (b.p[2] > BALL_R + .05 || vz > .5) { // flying: ballistic
+      let z = b.p[2] + vz * t - G * t * t / 2;
+      return [b.p[0] + vx * t * (1 - .004 * h * t), b.p[1] + vy * t * (1 - .004 * h * t), Math.max(BALL_R, z)];
+    }
+    const stop = h / 1.9, tt = Math.min(t, stop), d = h * tt - .95 * tt * tt; // rolling: drag and friction, lumped
+    return h > 0 ? [b.p[0] + vx / h * d, b.p[1] + vy / h * d, BALL_R] : [b.p[0], b.p[1], BALL_R];
+  }
+  // how long a player needs to get to a point
+  const reachTime = (p, x, y) => {
+    const d = hyp(x - p.pos[0], y - p.pos[1]), top = topSpeed(p), acc = 3 + p.attrs.accel * 2.2;
+    const tAcc = top / acc, dAcc = top * tAcc / 2;
+    return d < dAcc ? Math.sqrt(2 * d / acc) : tAcc + (d - dAcc) / top;
+  };
+  const topSpeed = p => (6.6 + p.attrs.pace * 2.4) * (.72 + .28 * p.stamina);
+  // the earliest a player can meet the ball, and where (null if not within 3 s)
+  function intercept(m, p) {
+    for (let t = 0; t <= 3; t += .1) {
+      const q = ballAt(m, t);
+      if (q[2] > 2.2) continue;
+      if (reachTime(p, q[0], q[1]) <= t + .05) return { t, at: q };
+    }
+    return null;
+  }
+
+  // ---- kicks: a pass along the ground or in the air, a shot, a clearance. Errors from skill and pressure
+  function kick(m, p, tx, ty, opts = {}) {
+    const b = m.ball, r = m.r, dx = tx - b.p[0], dy = ty - b.p[1], d = hyp(dx, dy) || 1;
+    const pressure = nearestOpp(m, p).d < 2.5 ? 1 : 0;
+    const skill = opts.shot ? p.attrs.shooting : p.attrs.passing;
+    const err = (opts.shot ? TUNE.shotErr : TUNE.passErr) * (1.25 - skill) * (1 + pressure * .7) * (opts.loft ? 1.4 : 1) * (1 + d / 60);
+    const ang = Math.atan2(dy, dx) + (r() - .5) * 2 * err, spErr = 1 + (r() - .5) * err * 2.2;
+    let h, vz = 0;
+    if (opts.shot) { h = (opts.power || 24) * spErr; vz = opts.vz ?? (r() * 4 + 1); }
+    else if (opts.loft) { const tf = clampN(d / 19, .8, 2.4); h = d / tf * spErr; vz = G * tf / 2 * (opts.flat ? .6 : 1); }
+    else { h = Math.min(28, Math.sqrt(2 * 1.75 * d + 49 + d * d * .012)) * spErr; } // (weighted to arrive at about 7 m/s: rolling friction, and drag on the longer ones)
+    b.owner = null; b.v = [Math.cos(ang) * h, Math.sin(ang) * h, vz]; b.spin = opts.curl || 0;
+    b.lastTouch = p; b.lastKick = { by: p, t: m.t, to: opts.to || null, shot: !!opts.shot, at: [b.p[0], b.p[1]] };
+    p.nextThink = m.t + .5; // (watching it go)
+    if (opts.to) { // the receiver comes to meet it, the way a player shows for the ball
+      const t = opts.to, c = intercept(m, t);
+      t.receive = { at: c ? [c.at[0], c.at[1]] : [tx, ty], until: m.t + (c ? c.t + .6 : 2.5) }; t.target = t.receive.at.slice(); t.urgency = 1; t.job = 'receive'; t.nextThink = m.t;
+    }
+    if (!opts.shot && !opts.clear) { m.stats[p.team.side].passes++; m.pendingPass = { from: p, to: opts.to, t: m.t,  offside: offsideSet(m, p), kind: (opts.loft ? 'loft' : 'ground') + (d > 25 ? 'L' : 'S') + (opts.lead ? '+lead' : '') }; }
+    else m.pendingPass = null;
+  }
+  function nearestOpp(m, p) {
+    let best = null, bd = Infinity;
+    for (const o of onPitch(opp(m, p.team))) { const d = hyp(o.pos[0] - p.pos[0], o.pos[1] - p.pos[1]); if (d < bd) { bd = d; best = o; } }
+    return { p: best, d: bd };
+  }
+  // teammates offside at the moment of a pass: in the opponents' half, ahead of the ball and the second-last defender
+  function offsideSet(m, passer) {
+    const dir = dirOf(m, passer.team), xs = onPitch(opp(m, passer.team)).map(o => o.pos[0] * dir).sort((a, b) => b - a);
+    const line = Math.max(xs[1] ?? 0, m.ball.p[0] * dir, 0), set = new Set();
+    for (const p of onPitch(passer.team)) if (p !== passer && p.pos[0] * dir > line + .3) set.add(p);
+    return set;
+  }
+
+  // ---- the value of having the ball at (x, y) for a team attacking `dir`: low at home, high in front of goal
+  function threat(x, y, dir) {
+    const ax = x * dir, toGoal = hyp(PITCH.hl - ax, y), central = 1 - Math.min(1, Math.abs(y) / PITCH.hw);
+    return clampN((ax + PITCH.hl) / (2 * PITCH.hl), 0, 1) * .55 + Math.exp(-toGoal / 14) * .9 + central * .08;
+  }
+  // a rough expected-goals: distance, the angle the goal mouth subtends, the bodies in the way
+  function xg(m, p, x, y) {
+    const dir = dirOf(m, p.team), gx = PITCH.hl * dir, d = hyp(gx - x, y);
+    if (d > 32) return 0;
+    const a1 = Math.atan2(PITCH.goalHW - y, Math.abs(gx - x)), a2 = Math.atan2(-PITCH.goalHW - y, Math.abs(gx - x)), angle = Math.abs(a1 - a2);
+    let blocked = 0;
+    for (const o of onPitch(opp(m, p.team))) {
+      if (o.role === 'GK') continue;
+      const ox = o.pos[0] - x, oy = o.pos[1] - y, along = (ox * (gx - x) + oy * (-y)) / (d * d);
+      if (along > 0 && along < 1) { const off = Math.abs(ox * (-y) - oy * (gx - x)) / d; if (off < 1.1) blocked += 1 - off / 1.1; }
+    }
+    return clampN(angle * angle * 1.15 + angle * .18, 0, .85) * Math.exp(-blocked * .9) * (.6 + p.attrs.shooting * .7);
+  }
+  // how likely a pass along the ground from the ball to (x, y) is cut out: each opponent's time to the lane against the ball's
+  function passRisk(m, p, x, y, loft) {
+    const bx = m.ball.p[0], by = m.ball.p[1], d = hyp(x - bx, y - by) || 1, speed = loft ? 18 : 8 + d * .1; // (a pass's average pace over its length)
+    let risk = 0;
+    for (const o of onPitch(opp(m, p.team))) {
+      const ox = o.pos[0] - bx, oy = o.pos[1] - by, along = clampN((ox * (x - bx) + oy * (y - by)) / (d * d), 0, 1);
+      if (loft && along < .85) continue; // (over their heads, until it comes down)
+      const cx = bx + (x - bx) * along, cy = by + (y - by) * along, tBall = along * d / speed + .1, tO = reachTime(o, cx, cy) + .2 - (o.role === 'GK' ? .1 : 0);
+      const lane = hyp(o.pos[0] - cx, o.pos[1] - cy);
+      if (tO < tBall) risk = Math.max(risk, clampN((tBall - tO) * 1.4 + .3 - lane * .015, 0, 1));
+    }
+    return risk;
+  }
+
+  // ---- decisions: the player on the ball
+  function decideCarrier(m, p) {
+    const team = p.team, dir = dirOf(m, team), r = m.r, x = p.pos[0], y = p.pos[1], here = threat(x, y, dir);
+    const press = nearestOpp(m, p), opts = [];
+    // a shot
+    const q = xg(m, p, x, y);
+    if (q > .02) opts.push({ kind: 'shot', v: q * 6 * TUNE.shotBias + (q > TUNE.shotXg ? .05 : -.5) + (press.d < 1.8 && q > .05 ? .15 : 0) }); // (with someone closing in: hit it now)
+    // passes: to feet, and into space ahead of a runner
+    for (const t of onPitch(team)) {
+      if (t === p) continue;
+      const d = hyp(t.pos[0] - x, t.pos[1] - y);
+      if (d < 5 || d > 55) continue;
+      for (const lead of t.role === 'GK' ? [0] : [0, 1]) {
+        const tx = clampN(t.pos[0] + (lead ? dir * (6 + t.attrs.pace * 6) : 0), -PITCH.hl + 1, PITCH.hl - 1), ty = clampN(t.pos[1] + (lead ? t.vel[1] * .4 : 0), -PITCH.hw + 1, PITCH.hw - 1);
+        if (lead && (tx * dir < x * dir + 4)) continue;
+        const loft = d > 32 || (lead && d > 20);
+        // the race: does the receiver get there before any defender? (to feet they're already there)
+        const bd = hyp(tx - x, ty - y), tArrive = loft ? clampN(bd / 19, .8, 2.4) : bd / 13, tMate = lead ? reachTime(t, tx, ty) : 0;
+        let tOpp = Infinity; for (const o of onPitch(opp(m, team))) tOpp = Math.min(tOpp, reachTime(o, tx, ty) + .25);
+        const first = Math.max(tArrive, tMate);
+        if (lead && first > tOpp - .15) continue; // (they'd lose it: not worth playing)
+        const race = clampN((tOpp - first) / 1.2, -1, 1);
+        const risk = Math.max(passRisk(m, p, tx, ty, loft), race < 0 ? -race : 0), gain = threat(tx, ty, dir) - here;
+        const open = Math.min(1, nearestOpp(m, { pos: [tx, ty], team }).d / 8);
+        const back = 0, gkPass = t.role === 'GK' ? -.25 : 0;
+        opts.push({ kind: 'pass', t, tx, ty, loft, lead, risk, v: gain * 1.7 + open * .2 - risk * TUNE.passRisk * (1.05 - p.attrs.passing * .4) + back + gkPass - (loft ? .08 : 0) });
+      }
+    }
+    // a carry forward into space
+    const fx = x + dir * 6, space = nearestOpp(m, { pos: [fx, y], team }).d;
+    if (space > TUNE.dribbleSpace * .6 || p.attrs.control > .75) {
+      const fy = y * .92, gain = threat(fx, fy, dir) - here;
+      opts.push({ kind: 'carry', tx: fx, ty: fy, v: gain * 1.35 + Math.min(space, 12) * .018 - (space < 3 ? .3 : 0) + (p.role === 'DF' ? -.05 : 0) });
+    }
+    // out wide in the final third: a cross into the box, to whoever's attacking it
+    if (x * dir > 20 && Math.abs(y) > 11) {
+      const gx = PITCH.hl * dir, inBoxMates = onPitch(team).filter(t => t !== p && Math.abs(t.pos[0] - gx) < 20 && Math.abs(t.pos[1]) < 15);
+      if (inBoxMates.length) {
+        const t = inBoxMates[r() * inBoxMates.length | 0], tx = gx - dir * clampN(Math.abs(t.pos[0] - gx), 5, 13), ty = t.pos[1] * .8;
+        opts.push({ kind: 'cross', t, tx, ty, v: TUNE.crossBase + inBoxMates.length * .07 + (Math.abs(y) > 22 ? .08 : 0) - (press.d < 1.5 ? .1 : 0) });
+      }
+    }
+    // under pressure deep in their own half: clear it
+    const ax = x * dir;
+    if (press.d < 2.2 && ax < -25) opts.push({ kind: 'clear', v: .05 + (r() * .1) });
+    // hold it: shield, turn away from the presser
+    opts.push({ kind: 'hold', v: -.12 - (press.d < 1.6 ? .2 : 0) });
+    // choose: the best, with a little noise (less for the more imaginative)
+    const noise = .16 * (1.15 - p.attrs.vision);
+    let best = null, bv = -Infinity;
+    for (const o of opts) { const v = o.v + (r() - .5) * noise; if (v > bv) { bv = v; best = o; } }
+    act(m, p, best);
+  }
+  function act(m, p, o) {
+    const dir = dirOf(m, p.team), r = m.r;
+    if (o.kind === 'shot') {
+      const gx = PITCH.hl * dir, side = r() < .5 ? -1 : 1, gy = side * PITCH.goalHW * (.45 + r() * .45), d = hyp(gx - p.pos[0], p.pos[1]);
+      m.stats[p.team.side].shots++;
+      const vz = d < 14 ? r() * 3 + .2 : r() * 5 + .6;
+      const xgv = +xg(m, p, p.pos[0], p.pos[1]).toFixed(3);
+      kick(m, p, gx, gy, { shot: true, power: 20 + p.attrs.shooting * 9 + r() * 3, vz, curl: (r() - .5) * .25 });
+      log(m, 'shot', p.team.side, { player: p.name, xg: xgv });
+      const blocker = onPitch(opp(m, p.team)).find(o => o.role !== 'GK' && hyp(o.pos[0] - p.pos[0], o.pos[1] - p.pos[1]) < 3.2 && ((o.pos[0] - p.pos[0]) * (gx - p.pos[0]) + (o.pos[1] - p.pos[1]) * (gy - p.pos[1])) > 0);
+      if (blocker && r() < TUNE.block) { // blocked: it cannons off them, often behind for a corner
+        const b = m.ball; diag(m, 'shot:blocked');
+        b.v = [b.v[0] * (r() < .5 ? .35 : -.25) , (r() - .5) * 14, 1 + r() * 4]; b.lastTouch = blocker; b.lastKick = { by: blocker, t: m.t };
+        log(m, 'block', blocker.team.side, { player: blocker.name });
+      }
+    } else if (o.kind === 'pass') kick(m, p, o.tx, o.ty, { loft: o.loft, to: o.t, lead: o.lead });
+    else if (o.kind === 'cross') { diag(m, 'cross'); kick(m, p, o.tx, o.ty, { loft: true, to: o.t, curl: (r() - .5) * .3 }); }
+    else if (o.kind === 'clear') { kick(m, p, p.pos[0] + dir * 40, p.pos[1] * .5 + (r() - .5) * 30, { loft: true, clear: true }); }
+    else if (o.kind === 'carry') { p.target = [o.tx, o.ty]; p.urgency = .85; p.job = 'carry'; }
+    else { const pr = nearestOpp(m, p).p; p.target = pr ? [p.pos[0] - (pr.pos[0] - p.pos[0]) * .6, p.pos[1] - (pr.pos[1] - p.pos[1]) * .6] : p.pos.slice(); p.urgency = .35; p.job = 'hold'; }
+  }
+
+  // ---- decisions: everyone else
+  function decideOffBall(m, p, ctx) {
+    const team = p.team, dir = dirOf(m, team), b = m.ball, inPoss = ctx.poss === team, carrier = b.owner;
+    p.job = 'shape'; p.urgency = .45;
+    let tgt = slotPos(m, team, p, b.p[0], inPoss);
+    if (p.role === 'GK') {
+      // between the ball and the middle of the goal, off the line as the ball comes nearer
+      const gx = -PITCH.hl * dir, dx = b.p[0] - gx, dy = b.p[1], d = hyp(dx, dy) || 1, out = clampN(d * .12, .6, inPoss ? 16 : 5.5);
+      tgt = inPoss ? tgt : [gx + dx / d * out, dy / d * out];
+      p.target = tgt; p.urgency = .8; return;
+    }
+    if (p.receive && m.t < p.receive.until && !carrier) { p.target = p.receive.at; p.urgency = 1; p.job = 'receive'; return; }
+    p.receive = null;
+    if (ctx.chaser[team.side] === p) { const c = ctx.chase[team.side]; p.target = [c.at[0], c.at[1]]; p.urgency = 1; p.job = 'chase'; return; }
+    if (inPoss && carrier && carrier !== p) {
+      const ax = p.pos[0] * dir, off = ctx.offsideLine[team.side];
+      if (p.role === 'FW' || (p.role === 'MF' && p.slot % 2 === 0)) { // hold the line, and now and then run in behind
+        tgt[0] = Math.min(tgt[0] * dir, off - .8) * dir;
+        if (p.run && m.t < p.run.until) { tgt = p.run.to; p.urgency = 1; p.job = 'run'; }
+        else if (carrier.face[0] * dir > .3 && m.r() < .08 && ax > off - 8) { p.run = { to: [(off + 14) * dir, clampN(p.pos[1] * .7, -25, 25)], until: m.t + 2.4 }; }
+      }
+      // the two nearest offer short options, out of the defenders' shadow
+      if (ctx.support[team.side].includes(p)) {
+        const ang = Math.atan2(p.pos[1] - carrier.pos[1], p.pos[0] - carrier.pos[0]);
+        tgt = [carrier.pos[0] + Math.cos(ang) * 12 + dir * 3, clampN(carrier.pos[1] + Math.sin(ang) * 12, -PITCH.hw + 2, PITCH.hw - 2)];
+        p.job = 'support';
+      }
+    } else if (!inPoss && carrier) {
+      if (ctx.press[team.side][0] === p) { // close them down
+        p.target = [carrier.pos[0] - dir * .6, carrier.pos[1]]; p.urgency = 1; p.job = 'press'; return;
+      }
+      if (ctx.press[team.side][1] === p) { // cover: between the carrier and the goal behind
+        const gx = -PITCH.hl * dir; tgt = [carrier.pos[0] + (gx - carrier.pos[0]) * .18, carrier.pos[1] * .8]; p.urgency = .8; p.job = 'cover';
+      }
+      // in our box: mark the nearest attacker, goal-side
+      if (Math.abs(p.pos[0] - (-PITCH.hl * dir)) < 28 && p.role === 'DF') {
+        const near = onPitch(opp(m, team)).filter(o => o !== carrier && Math.abs(o.pos[0] - (-PITCH.hl * dir)) < 24)
+          .sort((a, c) => hyp(a.pos[0] - p.pos[0], a.pos[1] - p.pos[1]) - hyp(c.pos[0] - p.pos[0], c.pos[1] - p.pos[1]))[0];
+        if (near && hyp(near.pos[0] - p.pos[0], near.pos[1] - p.pos[1]) < 9) { tgt = [near.pos[0] - dir * 1.4, near.pos[1] * .94]; p.job = 'mark'; p.urgency = .8; }
+      }
+    }
+    p.target = tgt;
+  }
+
+  // what the whole pitch looks like this think: who's on the ball, who chases a loose one, who presses, the offside lines
+  function context(m) {
+    const b = m.ball, ctx = { poss: b.owner ? b.owner.team : (b.lastTouch ? b.lastTouch.team : null), chaser: [null, null], chase: [null, null], press: [[], []], support: [[], []], offsideLine: [0, 0] };
+    // a pass on its way: the receiver goes to meet it; a defender only goes for it if they'd get there first, else
+    // they close the receiver down for when it arrives
+    const pp = !b.owner && m.pendingPass, recv = pp?.to && !pp.to.off ? pp.to : null, tRecv = recv ? (intercept(m, recv)?.t ?? Infinity) : Infinity;
+    for (const team of m.teams) {
+      const dir = dirOf(m, team), xs = onPitch(opp(m, team)).map(o => o.pos[0] * dir).sort((a, c) => c - a);
+      ctx.offsideLine[team.side] = Math.max(xs[1] ?? 0, 0, b.p[0] * dir);
+      if (!b.owner) { // the quickest to a loose ball goes for it
+        let best = null, bt = Infinity, bat = null;
+        for (const p of onPitch(team)) { if (p.role === 'GK' && Math.abs(b.p[0] + PITCH.hl * dir) > 20) continue; const c = intercept(m, p); if (c && c.t < bt) { bt = c.t; best = p; bat = c; } }
+        if (recv && team === recv.team) { const c = intercept(m, recv); if (c) { best = recv; bat = c; bt = c.t; } }
+        else if (recv && best && bt > tRecv - .15) { bat = { at: [recv.receive?.at?.[0] ?? recv.pos[0], recv.receive?.at?.[1] ?? recv.pos[1]] }; } // (onto the receiver instead)
+        if (best) { ctx.chaser[team.side] = best; ctx.chase[team.side] = bat; }
+        else { const near = onPitch(team).filter(p => p.role !== 'GK').sort((a, c) => hyp(a.pos[0] - b.p[0], a.pos[1] - b.p[1]) - hyp(c.pos[0] - b.p[0], c.pos[1] - b.p[1]))[0]; ctx.chaser[team.side] = near; ctx.chase[team.side] = { at: ballAt(m, 1) }; }
+      } else if (b.owner.team !== team) {
+        ctx.press[team.side] = onPitch(team).filter(p => p.role !== 'GK').sort((a, c) => reachTime(a, b.p[0], b.p[1]) - reachTime(c, b.p[0], b.p[1])).slice(0, 2);
+      } else {
+        ctx.support[team.side] = onPitch(team).filter(p => p !== b.owner && p.role !== 'GK').sort((a, c) => hyp(a.pos[0] - b.p[0], a.pos[1] - b.p[1]) - hyp(c.pos[0] - b.p[0], c.pos[1] - b.p[1])).slice(0, 2);
+      }
+    }
+    return ctx;
+  }
+
+  // ---- moving: steer for the target at the urgency's pace, accelerating and turning like a person
+  function movePlayer(m, p, dt) {
+    p.target[0] = clampN(p.target[0], -PITCH.hl - 2.5, PITCH.hl + 2.5); p.target[1] = clampN(p.target[1], -PITCH.hw - 2.5, PITCH.hw + 2.5); // (never off chasing a ball that's already out)
+    const dx = p.target[0] - p.pos[0], dy = p.target[1] - p.pos[1], d = hyp(dx, dy);
+    const top = topSpeed(p) * (p.job === 'carry' || p.job === 'hold' ? .82 : 1), want = d < .3 ? 0 : Math.min(top * p.urgency, d * 1.6);
+    const wx = d > 0 ? dx / d * want : 0, wy = d > 0 ? dy / d * want : 0, acc = (3 + p.attrs.accel * 2.2) * dt;
+    const ex = wx - p.vel[0], ey = wy - p.vel[1], e = hyp(ex, ey);
+    if (e > acc) { p.vel[0] += ex / e * acc; p.vel[1] += ey / e * acc; } else { p.vel[0] = wx; p.vel[1] = wy; }
+    p.pos[0] += p.vel[0] * dt; p.pos[1] += p.vel[1] * dt;
+    const sp = hyp(p.vel[0], p.vel[1]);
+    if (sp > .4) { p.face = [p.vel[0] / sp, p.vel[1] / sp]; }
+    else { const bx = m.ball.p[0] - p.pos[0], by = m.ball.p[1] - p.pos[1], bd = hyp(bx, by) || 1; p.face = [bx / bd, by / bd]; }
+    const effort = sp / topSpeed(p);
+    p.stamina = clampN(p.stamina - (effort > .7 ? (effort - .7) * .0026 : -.00045) * dt * clockScale(m) / 7.5, .25, 1); // (over the 90 minutes, whatever the length of play)
+  }
+
+  // ---- the ball loose: who gets it, a keeper's save, a block
+  function looseBall(m) {
+    const b = m.ball, r = m.r;
+    if (b.p[2] > 2.6) return;
+    const pp = m.pendingPass;
+    let best = null, bd = Infinity;
+    for (const team of m.teams) for (const p of onPitch(team)) {
+      const d = hyp(p.pos[0] - b.p[0], p.pos[1] - b.p[1]);
+      const passing = pp && pp.from.team !== p.team && hyp(b.v[0], b.v[1]) > 7, reach = p.role === 'GK' && inBox(m, p.team, b.p[0], b.p[1]) ? TUNE.keeperReach + p.attrs.gk * 1.4 : passing ? .5 : pp && pp.to === p ? 1 : .75;
+      if (d < reach && d < bd) {
+        if (b.lastKick && b.lastKick.by === p && m.t - b.lastKick.t < .3) continue;
+        if (pp && pp.from.team !== p.team && m.t - pp.t < .18) continue; // (it's past a presser on top of the passer before they can react)
+        bd = d; best = p;
+      }
+    }
+    // the receiver it was meant for, there to take it: theirs, unless a marker right on them nicks it
+    if (pp?.to && !pp.to.off && best !== pp.to && hyp(pp.to.pos[0] - b.p[0], pp.to.pos[1] - b.p[1]) < TUNE.recvReach && b.p[2] < 1.4 && r() > .3) best = pp.to;
+    if (!best) return;
+    const sp = hyp(b.v[0], b.v[1], b.v[2]), shot = b.lastKick?.shot && b.lastKick.by.team !== best.team;
+    if (best.role === 'GK' && shot) return keeperSave(m, best, sp);
+    if (b.p[2] > 1.4 && best.role !== 'GK') { diag(m, 'header'); return header(m, best); }
+    const cut = pp && pp.from.team !== best.team && sp > 7, ctrl = best.role === 'GK' && inBox(m, best.team, b.p[0], b.p[1]) ? .92 : clampN(TUNE.control + best.attrs.control * .2 - Math.max(0, sp - 14) * .03 - (b.p[2] > .6 ? .12 : 0) - (cut ? .25 : 0), .15, .97);
+    if (r() < ctrl) gain(m, best);
+    else { diag(m, 'touch:fail'); b.v[0] = b.v[0] * -.25 + (r() - .5) * 4; b.v[1] = b.v[1] * -.25 + (r() - .5) * 4; b.v[2] = Math.abs(b.v[2]) * .3 + r() * 1.5; b.lastTouch = best; b.lastKick = { by: best, t: m.t }; } // (a deflection, a heavy touch)
+  }
+  function gain(m, p) {
+    const b = m.ball, pp = m.pendingPass;
+    if (pp && pp.from.team === p.team && pp.offside?.has(p)) { // offside
+      m.stats[p.team.side].offsides++; log(m, 'offside', p.team.side, { player: p.name });
+      m.pendingPass = null; setRestart(m, 'freekick', 1 - p.team.side, [p.pos[0], p.pos[1]]); return;
+    }
+    if (pp) { if (pp.from.team === p.team) m.stats[p.team.side].passesDone++; diag(m, pp.from.team === p.team ? (pp.to === p ? 'pass:to' : 'pass:mate') : 'pass:cut'); diag(m, (pp.from.team === p.team ? 'ok:' : 'cut:') + pp.kind); m.pendingPass = null; }
+    b.owner = p; b.lastTouch = p; b.v = [0, 0, 0]; p.nextThink = m.t + .12 + m.r() * .1; p.run = null; for (const t of m.teams) for (const q of t.players) q.receive = null;
+  }
+  function header(m, p) {
+    const b = m.ball, r = m.r, dir = dirOf(m, p.team), gx = PITCH.hl * dir, d = hyp(gx - b.p[0], b.p[1]);
+    m.pendingPass = null;
+    if (r() > .35 + p.attrs.heading * .55) { b.v = [b.v[0] * .3 + (r() - .5) * 6, b.v[1] * .3 + (r() - .5) * 6, 2 + r() * 2]; b.lastTouch = p; b.lastKick = { by: p, t: m.t }; return; } // (a glance off them)
+    if (d < 13 && Math.abs(b.p[1]) < 10) { // a header at goal
+      m.stats[p.team.side].shots++; log(m, 'shot', p.team.side, { player: p.name, header: true });
+      const gy = (r() - .5) * PITCH.goalHW * 1.6, h = 10 + p.attrs.heading * 6, ddx = gx - b.p[0], ddy = gy - b.p[1], dd = hyp(ddx, ddy);
+      b.v = [ddx / dd * h, ddy / dd * h, -1 + r() * 3]; b.lastTouch = p; b.lastKick = { by: p, t: m.t, shot: true }; return;
+    }
+    // a defensive header away, or a nod down to a teammate
+    const away = p.pos[0] * dir < 0 ? 1 : -.2;
+    b.v = [dir * (8 + r() * 6) * (away > 0 ? 1 : .4), (r() - .5) * 10, 3 + r() * 3]; b.lastTouch = p; b.lastKick = { by: p, t: m.t };
+  }
+  function keeperSave(m, k, sp) {
+    const b = m.ball, r = m.r, side = k.team.side, chance = clampN(TUNE.keeperBase + k.attrs.gk * .35 - Math.max(0, sp - 20) * .02 - (b.p[2] > 1.8 ? .1 : 0), .2, .95);
+    diag(m, 'keeper:shot'); if (r() < chance) {
+      m.stats[side].saves++; log(m, 'save', side, { player: k.name });
+      if (sp < 21 && r() < .55) { gain(m, k); m.stats[1 - side].onTarget++; return; } // held
+      const dir = dirOf(m, k.team); // parried: out wide, or back out into play
+      if (r() < .55) b.v = [-dir * (4 + r() * 4), (b.p[1] >= 0 ? 1 : -1) * (4 + r() * 4), 2 + r() * 3]; // tipped round the post, or over: a corner
+      else b.v = [dir * (3 + r() * 5), (b.p[1] >= 0 ? 1 : -1) * (5 + r() * 7), 1.5 + r() * 3]; // pushed back out
+      b.lastTouch = k; b.lastKick = { by: k, t: m.t };
+      m.stats[1 - side].onTarget++;
+    }
+  }
+  const inBox = (m, team, x, y) => { const gx = -PITCH.hl * dirOf(m, team); return Math.abs(x - gx) < PITCH.boxD && Math.abs(y) < PITCH.boxHW; };
+
+  // ---- tackles: the presser, once they're close enough
+  function tackle(m, d, c) {
+    const r = m.r, dir = dirOf(m, d.team), behind = (d.pos[0] - c.pos[0]) * dir < 0 && c.face[0] * -dir < .2;
+    const win = clampN(.32 + d.attrs.tackling * .45 - c.attrs.control * .3, .08, .8), foul = TUNE.foulBase + (behind ? .12 : 0) + (1 - d.attrs.tackling) * .08;
+    d.nextTackle = m.t + 1.1 + r();
+    if (r() < foul) return commitFoul(m, d, c);
+    diag(m, 'tackle'); if (r() < win) { diag(m, 'tackle:won');
+      const b = m.ball; b.owner = null; b.lastTouch = d; b.lastKick = { by: d, t: m.t };
+      if (r() < .5) gain(m, d); else { b.v = [(r() - .5) * 8, (r() - .5) * 8, 0]; }
+      c.nextThink = m.t + .5;
+    }
+  }
+  function commitFoul(m, d, c) {
+    const r = m.r, side = d.team.side, at = [c.pos[0], c.pos[1]];
+    m.stats[side].fouls++; log(m, 'foul', side, { player: d.name, on: c.name });
+    // advantage: if the fouled side keeps a good attack going, play on
+    if (r() < .25 && c.team === m.ball.owner?.team && (c.pos[0] * dirOf(m, c.team)) > 10) { log(m, 'advantage', c.team.side); return; }
+    const sev = r();
+    if (sev > .993 || (sev > .95 && d.carded)) { d.carded = 2; d.off = true; d.leaving = [d.pos[0], Math.sign(d.pos[1] || 1) * (PITCH.hw + 5)]; m.stats[side].red++; log(m, 'red', side, { player: d.name }); }
+    else if (sev > .84) { d.carded = 1; m.stats[side].yellow++; log(m, 'yellow', side, { player: d.name }); }
+    m.stoppage[m.period - 1] += .25;
+    if (inBox(m, d.team, at[0], at[1])) { const gx = -PITCH.hl * dirOf(m, d.team); setRestart(m, 'penalty', c.team.side, [gx + Math.sign(-gx) * PITCH.spot, 0]); log(m, 'penalty', c.team.side); }
+    else setRestart(m, 'freekick', c.team.side, at);
+  }
+
+  // ---- out of play, goals, the woodwork
+  function checkBall(m) {
+    const b = m.ball, x = b.p[0], y = b.p[1], z = b.p[2];
+    if (m.pendingPass && (Math.abs(y) > PITCH.hw + BALL_R || Math.abs(x) > PITCH.hl + BALL_R)) diag(m, 'pass:out');
+    if (Math.abs(y) > PITCH.hw + BALL_R) { // over the touchline: a throw to whoever didn't touch it last
+      const side = 1 - (b.lastTouch?.team.side ?? 0);
+      return setRestart(m, 'throwin', side, [clampN(x, -PITCH.hl + 1, PITCH.hl - 1), Math.sign(y) * PITCH.hw]);
+    }
+    if (Math.abs(x) <= PITCH.hl + BALL_R) return;
+    const end = Math.sign(x), inMouth = Math.abs(y) < PITCH.goalHW - BALL_R && z < PITCH.goalH - BALL_R;
+    // the posts and the bar: a ball just inside or outside them rattles back
+    const post = Math.abs(Math.abs(y) - PITCH.goalHW) < .16 && z < PITCH.goalH, bar = Math.abs(z - PITCH.goalH) < .16 && Math.abs(y) < PITCH.goalHW;
+    if ((post || bar) && Math.abs(x) < PITCH.hl + .4) {
+      b.p[0] = end * (PITCH.hl - .2); b.v[0] = -b.v[0] * .6; if (bar) b.v[2] = -Math.abs(b.v[2]) * .5;
+      log(m, 'woodwork', b.lastTouch?.team.side ?? 0, { player: b.lastTouch?.name }); return;
+    }
+    // which team defends this end
+    const defending = m.teams.find(t => -PITCH.hl * dirOf(m, t) === end * PITCH.hl);
+    if (inMouth) return goal(m, 1 - defending.side);
+    if (b.lastKick?.shot) { log(m, 'miss', 1 - defending.side, { player: b.lastKick.by.name }); }
+    if (b.lastTouch?.team === defending) { // a corner
+      m.stats[1 - defending.side].corners++; log(m, 'corner', 1 - defending.side);
+      return setRestart(m, 'corner', 1 - defending.side, [end * PITCH.hl, Math.sign(y || 1) * PITCH.hw]);
+    }
+    return setRestart(m, 'goalkick', defending.side, [end * (PITCH.hl - PITCH.sixD), Math.sign(y || 1) * PITCH.sixHW * .7]);
+  }
+  function goal(m, side) {
+    const scorer = m.ball.lastKick?.by?.team.side === side ? m.ball.lastKick.by : m.ball.lastTouch, og = scorer && scorer.team.side !== side;
+    m.teams[side].score++;
+    if (m.ball.lastKick?.shot || og) m.stats[side].onTarget++;
+    log(m, 'goal', side, { player: scorer?.name, og, score: [m.teams[0].score, m.teams[1].score] });
+    m.stoppage[m.period - 1] += .6;
+    m.phase = 'goal'; m.phaseT = m.t + 6; m.celebrate = { side, scorer: og ? null : scorer }; m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null;
+  }
+
+  // ---- taking a restart: everyone into position, then the taker plays it
+  function restartPositions(m) {
+    const R = m.restart, team = m.teams[R.side], other = opp(m, team), dir = dirOf(m, team);
+    for (const t of m.teams) for (const p of onPitch(t)) {
+      if (p === R.taker) { p.target = [R.at[0] - (R.type === 'penalty' ? dir * 2 : R.type === 'throwin' ? 0 : dir * .6), R.at[1] - (R.type === 'throwin' ? Math.sign(R.at[1]) * .6 : 0)]; p.urgency = .9; continue; }
+      let tgt = slotPos(m, t, p, R.at[0], t === team, R.type === 'kickoff');
+      if (R.type === 'corner' && p.role !== 'GK') { // into the box: the tall ones attack, the defence marks; two stay out
+        const gx = -PITCH.hl * dirOf(m, other), inBoxX = gx + Math.sign(-gx) * (3 + (p.slot % 4) * 2.5);
+        if (t === team ? p.role !== 'DF' || p.slot === 2 || p.slot === 3 : true) tgt = [inBoxX, ((p.slot * 37) % 9 - 4) * 1.9];
+      }
+      if (R.type === 'penalty' && p.role !== 'GK') { const gx = -PITCH.hl * dirOf(m, other); tgt = [gx + Math.sign(-gx) * (19 + (p.slot % 3)), ((p.slot * 7) % 11 - 5) * 3]; }
+      if (R.type === 'freekick' && t === other && p.role !== 'GK') { // ten yards back
+        const dx = tgt[0] - R.at[0], dy = tgt[1] - R.at[1], d = hyp(dx, dy);
+        if (d < 9.15) { tgt = [R.at[0] + (dx / (d || 1)) * 9.2, R.at[1] + (dy / (d || 1)) * 9.2]; }
+      }
+      if (p.role === 'GK' && t === other && (R.type === 'penalty')) tgt = [-PITCH.hl * dirOf(m, t), 0];
+      p.target = tgt; p.urgency = .7;
+    }
+    m.ball.p = [R.at[0], R.at[1], BALL_R]; m.ball.v = [0, 0, 0];
+  }
+  function takeRestart(m) {
+    const R = m.restart, p = R.taker, team = m.teams[R.side], dir = dirOf(m, team), r = m.r;
+    if (hyp(p.pos[0] - R.at[0], p.pos[1] - R.at[1]) > 2.6) { p.pos = [R.at[0] - dir * .5, R.at[1]]; } // (only after a long wait: a last resort)
+    p.vel = [0, 0];
+    m.phase = 'play'; m.restart = null; m.ball.owner = null; m.ball.p = [R.at[0], R.at[1], R.type === 'throwin' ? 1.9 : BALL_R];
+    const mates = onPitch(team).filter(t => t !== p && t.role !== 'GK');
+    const pick = f => mates.filter(f).sort((a, c) => hyp(a.pos[0] - R.at[0], a.pos[1] - R.at[1]) - hyp(c.pos[0] - R.at[0], c.pos[1] - R.at[1]))[0] || mates[0];
+    if (R.type === 'penalty') {
+      const k = onPitch(opp(m, team)).find(o => o.role === 'GK'), aim = r() < .5 ? -1 : 1, dive = r() < .45 ? aim : r() < .5 ? -aim : 0;
+      m.stats[R.side].shots++; log(m, 'shot', R.side, { player: p.name, penalty: true });
+      const scored = dive === aim ? r() < .32 - (k?.attrs.gk ?? .5) * .12 : r() < .93 + p.attrs.shooting * .05;
+      const gx = PITCH.hl * dir;
+      if (scored) { m.ball.lastKick = { by: p, t: m.t, shot: true }; m.ball.lastTouch = p; m.ball.p = [gx + dir * .3, aim * PITCH.goalHW * .6, .5]; m.stats[R.side].onTarget++; return goal(m, R.side); }
+      if (dive === aim && k) { m.stats[1 - R.side].saves++; m.stats[R.side].onTarget++; log(m, 'save', 1 - R.side, { player: k.name, penalty: true }); gain(m, k); return; }
+      log(m, 'miss', R.side, { player: p.name, penalty: true }); return setRestart(m, 'goalkick', 1 - R.side, [gx - dir * PITCH.sixD, 0]);
+    }
+    if (R.type === 'corner') { // a cross into the box: near post, the spot, the far post
+      const gx = PITCH.hl * dir, spot = [[gx - dir * 6, R.at[1] * .12], [gx - dir * 11, 0], [gx - dir * 7, -R.at[1] * .14]][r() * 3 | 0];
+      if (r() < .2) { const t = pick(() => true); return kick(m, p, t.pos[0], t.pos[1], { to: t }); } // (short)
+      return kick(m, p, spot[0], spot[1], { loft: true, curl: (r() - .5) * .3 });
+    }
+    if (R.type === 'freekick') {
+      const gx = PITCH.hl * dir, d = hyp(gx - R.at[0], R.at[1]);
+      if (d < 28 && Math.abs(R.at[1]) < 18 && r() < .55) { // straight at goal, over the wall
+        m.stats[R.side].shots++; log(m, 'shot', R.side, { player: p.name, freekick: true });
+        const gy = (r() < .5 ? -1 : 1) * PITCH.goalHW * (.5 + r() * .4), wall = r() < .28;
+        if (wall) { kick(m, p, gx, gy, { shot: true, power: 22, vz: 3 }); m.ball.v = [-m.ball.v[0] * .2, (r() - .5) * 10, 4]; m.ball.lastKick = { by: p, t: m.t }; return; } // (into the wall)
+        return kick(m, p, gx, gy, { shot: true, power: 23 + p.attrs.shooting * 6, vz: 3 + r() * 1.5, curl: (r() - .5) * .5 });
+      }
+      if (d < 35) { const spot = [gx - dir * (8 + r() * 5), (r() - .5) * 10]; return kick(m, p, spot[0], spot[1], { loft: true }); }
+    }
+    if (R.type === 'goalkick') {
+      if (r() < .45) { const t = pick(c => c.role === 'DF'); return kick(m, p, t.pos[0], t.pos[1], { to: t }); }
+      const t = pick(c => c.role === 'FW' || c.role === 'MF'); return kick(m, p, t.pos[0], t.pos[1], { loft: true, to: t });
+    }
+    if (R.type === 'kickoff') { const t = pick(c => c.role === 'MF'); return kick(m, p, t.pos[0], t.pos[1], { to: t }); }
+    // a throw-in, a free kick in their own half: to the nearest teammate who's free
+    const t = pick(c => nearestOpp(m, c).d > 3);
+    return kick(m, p, t.pos[0], t.pos[1], { to: t, loft: R.type === 'throwin' && hyp(t.pos[0] - R.at[0], t.pos[1] - R.at[1]) > 14 });
+  }
+
+  // ---- substitutions: from the hour, the most tired outfield players
+  function subs(m) {
+    if (m.r() > .004) return;
+    for (const team of m.teams) {
+      if (!team.subsLeft || minute(m) < 58 || m.ball.owner?.team === team) continue;
+      const tired = onPitch(team).filter(p => p.role !== 'GK' && !p.sub).sort((a, c) => a.stamina - c.stamina)[0];
+      const on = team.bench.find(b => !b.used && b.role === tired?.role) || team.bench.find(b => !b.used && b.role !== 'GK');
+      if (!tired || !on || tired.stamina > .7) continue;
+      on.used = true; team.subsLeft--;
+      Object.assign(on, { slot: tired.slot, pos: [tired.pos[0], Math.sign(tired.pos[1] || 1) * (PITCH.hw - .5)], vel: [0, 0], sub: true, team });
+      const k = team.players.indexOf(tired); tired.off = true; team.players[k] = on;
+      log(m, 'sub', team.side, { on: on.name, off: tired.name }); m.stoppage[m.period - 1] += .3;
+    }
+  }
+
+  // ---- one tick
+  function tick(m) {
+    const dt = DT;
+    m.t += dt;
+    const minNow = minute(m), half = m.period === 1 ? 45 : 90;
+    if (m.phase === 'ht') { if (m.t >= m.phaseT) { m.period = 2; for (const t of m.teams) for (const p of onPitch(t)) p.stamina = Math.min(1, p.stamina + .15); kickoff(m, 1); log(m, 'kickoff', 1); } return; }
+    if (m.phase === 'ft') return;
+    if (minNow >= half + Math.round(m.added[m.period - 1] || 0) && m.phase !== 'goal') {
+      if (m.period === 1) { m.phase = 'ht'; m.phaseT = m.t + 4; log(m, 'ht', 0, { score: [m.teams[0].score, m.teams[1].score] }); return; }
+      m.phase = 'ft'; log(m, 'ft', 0, { score: [m.teams[0].score, m.teams[1].score] }); return;
+    }
+    if (minNow >= half - .1 && !m.added[m.period - 1]) m.added[m.period - 1] = clampN(Math.round(1 + m.stoppage[m.period - 1] + m.r() * 2), 1, 7), log(m, 'added', 0, { mins: m.added[m.period - 1] });
+    if (m.phase === 'goal') {
+      for (const t of m.teams) for (const p of onPitch(t)) {
+        const c = m.celebrate;
+        p.target = c.scorer === p ? [Math.sign(p.pos[0] || 1) * (PITCH.hl - 2), Math.sign(p.pos[1] || 1) * (PITCH.hw - 2)] : t.side === c.side && p.role !== 'GK' && c.scorer ? [c.scorer.pos[0] - Math.sign(c.scorer.pos[0]) * 1.5, c.scorer.pos[1]] : slotPos(m, t, p, 0, false, true);
+        p.urgency = c.scorer === p ? 1 : .6; movePlayer(m, p, dt);
+      }
+      if (m.t >= m.phaseT) { kickoff(m, 1 - m.celebrate.side, false); m.celebrate = null; }
+      return;
+    }
+    if (m.phase === 'restart') {
+      restartPositions(m);
+      for (const t of m.teams) for (const p of onPitch(t)) movePlayer(m, p, dt);
+      m.restart.wait -= dt;
+      const R = m.restart, tk = R.taker, there = hyp(tk.pos[0] - tk.target[0], tk.pos[1] - tk.target[1]) < .8;
+      const lined = R.type !== 'kickoff' || m.teams.every(t => onPitch(t).every(p => p.pos[0] * dirOf(m, t) < .6)); // (kick-off: everyone back in their own half)
+      if (R.wait <= 0 && (there && lined || R.wait < -8)) takeRestart(m); // (the taker walks over to it first; nobody's teleported)
+      return;
+    }
+    // play (the overview: who chases, presses, supports, every third tick is plenty)
+    if (!m.ctx || m.ctxN-- <= 0 || m.ctxOwner !== m.ball.owner) { m.ctx = context(m); m.ctxN = 2; m.ctxOwner = m.ball.owner; }
+    const ctx = m.ctx;
+    for (const t of m.teams) for (const p of onPitch(t)) {
+      if (m.ball.owner === p) { if (m.t >= p.nextThink) { p.nextThink = m.t + TUNE.think * (.8 + m.r() * .5); decideCarrier(m, p); } }
+      else if (m.t >= p.nextThink || ctx.chaser[t.side] === p || ctx.press[t.side][0] === p || p.receive) { p.nextThink = m.t + TUNE.think * (.9 + m.r() * .6); decideOffBall(m, p, ctx); }
+    }
+    for (const t of m.teams) for (const p of onPitch(t)) movePlayer(m, p, dt);
+    // tackles: a presser within reach of the carrier, facing them
+    const c = m.ball.owner;
+    if (c) {
+      for (const d of onPitch(opp(m, c.team))) {
+        if (d.role === 'GK' && !inBox(m, d.team, c.pos[0], c.pos[1])) continue;
+        if (hyp(d.pos[0] - c.pos[0], d.pos[1] - c.pos[1]) < TUNE.tackleRange && m.t > (d.nextTackle || 0)) { tackle(m, d, c); break; }
+      }
+      m.stats[c.team.side].poss += dt;
+      // a keeper with it in their hands: out quickly
+      if (c.role === 'GK' && m.t >= c.nextThink) { const dir = dirOf(m, c.team), mates = onPitch(c.team).filter(p => p !== c), t = mates.sort((a, b) => Math.abs(a.pos[1]) - Math.abs(b.pos[1]))[m.r() * 4 | 0] || mates[0]; kick(m, c, t.pos[0], t.pos[1], { to: t, loft: hyp(t.pos[0] - c.pos[0], t.pos[1] - c.pos[1]) > 30 }); }
+    } else if (m.ball.lastTouch) m.stats[m.ball.lastTouch.team.side].poss += dt;
+    stepBall(m, dt);
+    if (!m.ball.owner) looseBall(m);
+    if (m.phase === 'play') checkBall(m);
+    subs(m);
+    // anyone sent off walks to the touchline and down the tunnel
+    for (const t of m.teams) for (const p of t.players) if (p.leaving) { p.target = p.leaving; p.urgency = .3; movePlayer(m, p, dt); if (hyp(p.pos[0] - p.leaving[0], p.pos[1] - p.leaving[1]) < .5) p.leaving = null; }
+    // the referee: a diagonal, fifteen metres off the ball
+    const rx = m.ball.p[0] * .9, ry = clampN(m.ball.p[1] * .5 - 12, -PITCH.hw + 4, PITCH.hw - 4), rd = hyp(rx - m.ref.pos[0], ry - m.ref.pos[1]);
+    if (rd > .5) { const s = Math.min(rd, 6.5 * dt); m.ref.pos[0] += (rx - m.ref.pos[0]) / rd * s; m.ref.pos[1] += (ry - m.ref.pos[1]) / rd * s; m.ref.face = [(rx - m.ref.pos[0]) / rd, (ry - m.ref.pos[1]) / rd]; }
+    // the last twelve seconds, for replays
+    if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.map(p => [p.pos[0], p.pos[1]])) }); if (m.replay.length > 120) m.replay.shift(); }
+  }
+  // run the match on by `seconds` of play (fixed steps; any remainder carries over)
+  function step(m, seconds) {
+    m.acc = (m.acc || 0) + seconds;
+    while (m.acc >= DT && m.phase !== 'ft') { tick(m); m.acc -= DT; }
+    return m;
+  }
+  function simulate(m) { while (m.phase !== 'ft') tick(m); return m; }
+  // a match's result for the league table
+  const result = m => ({ home: m.teams[0].club.id, away: m.teams[1].club.id, score: [m.teams[0].score, m.teams[1].score],
+    scorers: m.events.filter(e => e.kind === 'goal').map(e => ({ side: e.side, player: e.player, min: Math.ceil(e.min), og: e.og })) });
+
+  return { PITCH, CLUBS, FORMATIONS, TUNE, DT, create, step, simulate, tick, minute, dirOf, result, threat, xg, rng, offsideSet };
+})();
 // Authored apartment and walk-up families. Balconies and escapes use the same exposed faces as the windows.
 const RESIDENTIAL_PROFILES = {
   modern: [
@@ -13473,6 +14140,23 @@ function duskSky(up, az, d, k) {
   const at = n + (d < t - n ? 1 : 0);
   return at < DUSK_RAMP.length ? DUSK_RAMP[at] : -1;
 }
+// Fixed world directions projected once per frame. Hashing screen pixels made
+// stars reshuffle whenever the chase camera changed pitch or speed widened FOV.
+const SKY_STARS=Array.from({length:768},(_,id)=>{
+  const az=hash(id,74,1)*Math.PI*2,z=.03+hash(id,74,2)*.96,r=Math.sqrt(1-z*z);
+  return {x:Math.cos(az)*r,y:Math.sin(az)*r,z,seed:hash(id,74,3)};
+});
+let skyStarIndex=new Int16Array(0);
+function prepareSkyStars(){
+  if(skyStarIndex.length!==cols*rows)skyStarIndex=new Int16Array(cols*rows);
+  skyStarIndex.fill(-1);
+  if(night<=.5||overcast>=.4)return;
+  for(let id=0;id<SKY_STARS.length;id++){
+    const star=SKY_STARS[id],d=dx*star.x+dy*star.y;if(d<=0)continue;
+    const x=Math.floor(cols/2+(-dy*star.x+dx*star.y)*projX/d),y=Math.floor(hor-star.z*projY/d);
+    if(x>=0&&x<cols&&y>=0&&y<rows)skyStarIndex[y*cols+x]=id;
+  }
+}
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
@@ -13499,11 +14183,10 @@ function skyCell(i, r, x, rx, ry) {
       }
     }
   }
-  // stars: one cell each (indexed per screen column, but fixed to the world), twinkling
-  const s = hash(Math.floor(az * projX), r - hor, 3);
-  if (night > 0.5 && overcast < 0.4 && s > 0.988) {
-    const tw = 0.6 + 0.4 * Math.sin(T * 3 + s * 1e4);
-    return set(i, s > 0.998 ? '*' : s > 0.994 ? '+' : '.', C([WHITE, WHITE, CYAN, YEL][s * 1e5 & 3], (s > 0.994 ? 13 : 7) * night * tw));
+  const starId=skyStarIndex[i];
+  if(night>.5&&overcast<.4&&starId>=0){
+    const s=SKY_STARS[starId].seed,tw=.6+.4*Math.sin(T*3+s*1e4);
+    return set(i,s>.84?'*':s>.5?'+':'.',C([WHITE,WHITE,CYAN,YEL][s*1e5&3],(s>.5?13:7)*night*tw));
   }
   set(i, ' ', 0);
 }
@@ -18122,6 +18805,7 @@ const STATION_GRID = Array.from({ length: 16 }, (_, y) => Array.from({ length: S
 }).join(''));
 // how high the stairs have lifted you at (x, y)
 const stairRise = (x, y) => {
+  if (room?.def.rise) return room.def.rise(x, y); // (a stadium's stands: stadium.js)
   const s = room && room.def.stairs;
   if (!s || x < s.x0 || x >= s.x1 || y >= s.y1) return 0;
   const progress = clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1);
@@ -26437,6 +27121,7 @@ function render(dt,sceneOnly=false,mask=null) {
   else if(mode==='ferry')eye=ferryGround()+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
+  else if (stadiumView) eye = stadiumView.eye; // (the football on TV: stadium.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
@@ -26446,6 +27131,7 @@ function render(dt,sceneOnly=false,mask=null) {
   tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
+  if(city)prepareSkyStars();
   lookHit = null;
   for (let x = 0; x < cols; x++) {
     if(mask&&!mask.columns[x])continue;
@@ -26878,6 +27564,7 @@ function promptText() {
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
+    if (room.kind === 'stadium') return (stadiumTV ? 'V: back to your seat   ' : (body.seat ? '' : 'C: sit down   ') + 'V: TV view   ') + 'E: leave the ground';
     const hotelPrompt=hotelAmenityPrompt();if(hotelPrompt)return hotelPrompt;
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
@@ -27434,6 +28121,7 @@ function interact() {
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
+    if (room.kind === 'stadium') { body.seat = null; say('You head for the exit.', 2); return leaveRoom(); } // (out early, whenever you like)
     if(hotelAmenityUse())return;
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
@@ -30194,7 +30882,7 @@ function buildPause() {
       </div>
       <h2>skateboard controls</h2>
       <div class="keys">
-        <b>A / D · left stick</b><span>carve and spin in the air; A/D also moves the grind/manual balance mark left/right toward centre</span>
+        <b>A / D · left stick</b><span>carve and spin in the air; A/D also balances grinds; manual balance uses fore/aft pressure, not steering</span>
         <b>right stick · right-drag mouse</b><span>on a grind, left/right balances; forward/back changes nose/tail pressure. In a manual, forward/back adjusts pitch balance. Keep the gauge mark centred.</span>
         <b>W · gamepad A / stick forward</b><span>push (from rest, toward the camera view, regular or fakie); Shift+W or gamepad X: mongo</span>
         <b>mouse · LB + right stick</b><span>orbit freely around the skater through any number of turns; after looking, recenter takes the short way back.</span>
@@ -30204,7 +30892,7 @@ function buildPause() {
         <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. Tap arrows during an air to flip, or use Space plus arrows. Air tricks add no extra jump. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
         <b>hold C · RT at takeoff</b><span>air out of a bowl or ramp onto its deck. Without it, bowl airs favor returning inside. Choose before popping or crossing the coping; spins do not change that flight choice. For a coping boardslide, air out, turn the board across the tube and descend with speed along it.</span>
         <b>Q / E · LT / RT</b><span>hold in the air to grab; RT used for an air-out stays reserved until landing; mouse or right stick picks nose, tail or side. Release before landing.</span>
-        <b>gentle right stick / mouse</b><span>hold back for a manual or forward for a nose manual; keep the balance mark centred. Manuals link combos across flat ground.</span>
+        <b>gentle right stick / mouse</b><span>hold partway back for a manual or partway forward for a nose manual; adjust that same fore/aft pressure to balance. Full deflection loads a pop. Manuals link combos across flat ground.</span>
       </div>
       <h2>controls</h2>
       <div class="keys">
@@ -30496,6 +31184,7 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
+  land.push(['Stadium (inside, a match on)', () => { devFree(); enterStadium(); }]);
   if (SKATEPARK) land.push(['Skatepark', () => { const S = SKATEPARK, x = S.bx * 8 + (S.x0 + S.x1) / 2; devAt(x, S.by * 8 + S.y0 + 0.15, Math.PI / 2); }]); // (at the park's edge, looking across it)
   if (BACKROOMS_SEAM) land.push(['Backrooms entrance', () => devAt(BACKROOMS_SEAM.x - 0.4, BACKROOMS_SEAM.y, 0)]); // (in the lane, facing the seam: walk forward to go through)
   if(FERRY_STOPS.length) {
@@ -30573,7 +31262,8 @@ function devBody() {
       <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog', 'snow'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}${act('snow on the ground', () => { snowCover = 1; })}${act('clear the snow', () => { snowCover = 0; })}</div>
       <div class="grp">season (now ${season()})</div><div class="bar">${SEASONS.map((sn, k) => act(sn, () => { setSeason(k); })).join('')}${act('next season', () => { seasonShift++; })}</div>`;
   }
-  return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
+  return `<div class="grp">football</div><div class="bar">${act('Watch a simulated match (top-down)', () => { closeDev(); openMatchDebug(); })}</div>
+    <div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
     <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { clearInventory(); say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
@@ -30624,6 +31314,368 @@ function openDev() {
 }
 function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = !!wanted.busted; if(!paused)lockMouse(); }
 const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };
+// ===== the Yards ground (STADIUM_PLAN.md): an old-school football ground. Four separate stands round a full-size pitch:
+// the tall main stand down the north side, the east and south stands, and a standing terrace behind the west goal,
+// each with a pitched roof on steel columns; four floodlight pylons in the corners; a scoreboard over the south stand.
+// The match itself is the engine's (match-engine.js), played out by real figures on the grass. Room units: metres,
+// x east along the pitch, y south across it; the floor rises up the stands (stadiumRise, through stairRise).
+const STADIUM = { W: 150, H: 114, cx: 75, cy: 57, hl: 52.5, hw: 34, runoff: 5.5, board: 3.2 };
+// the stands: which side, where the front row is, how many rows, how deep and how high each, along which span
+const STANDS = [
+  { id: 'north', axis: 'y', front: 18.8, out: -1, rows: 20, depth: .85, rise: .46, a0: 14, a1: 136, roof: 13.2, seats: true, home: .7 },
+  { id: 'south', axis: 'y', front: 95.4, out: 1, rows: 16, depth: .85, rise: .42, a0: 20, a1: 130, roof: 11.4, seats: true, home: .55 },
+  { id: 'east', axis: 'x', front: 133.4, out: 1, rows: 14, depth: .85, rise: .4, a0: 22, a1: 92, roof: 10.4, seats: true, home: .2 }, // (the away end)
+  { id: 'west', axis: 'x', front: 16.6, out: -1, rows: 18, depth: .6, rise: .28, a0: 22, a1: 92, roof: 9.4, seats: false, home: .95 }, // (the terrace: standing)
+];
+const standOf = (x, y) => {
+  for (const s of STANDS) {
+    const a = s.axis === 'y' ? x : y, back = (s.axis === 'y' ? y : x) - s.front;
+    const k = Math.floor(back * s.out / s.depth);
+    if (a >= s.a0 && a <= s.a1 && k >= 0 && k < s.rows) return { s, k };
+  }
+  return null;
+};
+// how high the floor is here: up a row of the stand for every row back
+function stadiumRise(x, y) { const at = standOf(x, y); return at ? (at.k + 1) * at.s.rise : 0; }
+const pitchX = x => STADIUM.cx + x, pitchY = y => STADIUM.cy + y; // (the engine's pitch to the room)
+
+// how far a point on the pitch (folded into one quarter: ax, ay >= 0) is from the nearest marking, in metres
+function pitchMarkDist(ax, ay, lx, ly) {
+  const P = MatchEngine.PITCH, seg = (v, c, lo, hi, w) => w < lo ? Math.hypot(Math.abs(v - c), lo - w) : w > hi ? Math.hypot(Math.abs(v - c), w - hi) : Math.abs(v - c);
+  const spotX = P.hl - P.spot, r = Math.hypot(lx, ly), toSpot = Math.hypot(ax - spotX, ay);
+  return Math.min(
+    seg(ax, P.hl, 0, P.hw, ay), seg(ay, P.hw, 0, P.hl, ax), seg(ax, 0, 0, P.hw, ay), // goal line, touchline, halfway
+    Math.abs(r - P.circle), Math.max(0, r - .15), // the centre circle and spot
+    seg(ax, P.hl - P.boxD, 0, P.boxHW, ay), seg(ay, P.boxHW, P.hl - P.boxD, P.hl, ax), // the penalty box
+    seg(ax, P.hl - P.sixD, 0, P.sixHW, ay), seg(ay, P.sixHW, P.hl - P.sixD, P.hl, ax), // the six-yard box
+    ax < P.hl - P.boxD ? Math.abs(toSpot - P.circle) : 1e3, Math.max(0, toSpot - .15), // the arc, the penalty spot
+    Math.abs(Math.hypot(P.hl - ax, P.hw - ay) - 1)); // the corner arcs
+}
+// the pitch: mown in stripes across it, the markings in white, filtered to the cell's footprint; the run-off a darker,
+// worn green; the cinder track by the boards
+ROOM_FLOORS.pitch = (i, f, wx, wy, r, x, L) => {
+  const fp = homeBalconyPavingFootprint(eye * projY / Math.max(.5, r - hor + .5), eye), lx = wx - STADIUM.cx, ly = wy - STADIUM.cy;
+  const P = MatchEngine.PITCH, ax = Math.abs(lx), ay = Math.abs(ly), lw = .12;
+  const inside = ax <= P.hl + .06 && ay <= P.hw + .06;
+  const lit = night > .3 ? .92 : 1; // (evenly lit: by day the sun, after dark the floodlights)
+  if (!inside) { // the run-off and the track
+    const track = ax > P.hl + STADIUM.runoff - 1.4 || ay > P.hw + STADIUM.runoff - 1.4;
+    BG[i] = track ? C(BRICK, 2.6 * lit) : C(GREEN, 2.7 * lit); return set(i, ' ', 0);
+  }
+  const stripe = Math.floor((lx + P.hl) / 5.25) & 1;
+  // the markings: how far this point is from the nearest line, and how much of the cell a 12cm line would cover
+  // its width on screen: across the line, how much grass one character covers (a lot in depth, little sideways), so a
+  // line's always at least a character wide and never more, whichever way it runs
+  const md = (x, y) => pitchMarkDist(Math.abs(x), Math.abs(y), x, y), d = md(lx, ly), e = .05;
+  const gx = (md(lx + e, ly) - md(lx - e, ly)) / (2 * e), gy = (md(lx, ly + e) - md(lx, ly - e)) / (2 * e);
+  const dist = Math.hypot(wx - px, wy - py), fpDep = dist * dist / (eye * projY), fpLat = dist / projX, ca = Math.cos(a), sa = Math.sin(a);
+  const across = Math.max(.01, Math.abs(gx * ca + gy * sa) * fpDep + Math.abs(-gx * sa + gy * ca) * fpLat);
+  const cover = d < .06 ? 1 : clamp(1 - (d - .06) / (across * .7), 0, 1);
+  const wear = ax > P.hl - 7 && ay < 6 ? .35 * (1 - ax / P.hl) : 0; // (the goalmouths, worn)
+  const grass = (stripe ? 4.6 : 3.6) * lit + (hash(Math.floor(wx * 6), Math.floor(wy * 6), 2202) - .5) * .4 * clamp(1 - fp / .1, 0, 1);
+  if (cover > .45) BG[i] = C(WHITE, (9 + cover * 4) * lit); // (the line)
+  else BG[i] = C(wear > .1 && hash(Math.floor(wx * 3), Math.floor(wy * 3), 2201) > .6 ? BRICK : GREEN, grass + cover * 4);
+  return set(i, ' ', 0);
+};
+// the sky over the open ground (and, round the stands' backs, above the outer walls): the floodlights' glow at night
+const stadiumSky = (wx, wy) => night > .5 ? C(BLUE, 1.4) : consSky();
+ROOM_CEILS.sky = (i, r, x, wx, wy) => { BG[i] = stadiumSky(wx, wy); set(i, ' ', 0); };
+// the outer walls: the back of each stand, brick and corrugated sheeting, EXIT signs at the gangways; open sky above
+function stadiumWall(i, u, uStep, z, d, mx, my, L) {
+  set(i, ' ', 0);
+  if (z > 15) { BG[i] = stadiumSky(); return true; }
+  if (z > 11.5) { BG[i] = C(GRAY, (1.6 + L * .12) - (fract(u * 4) < .1 ? .5 : 0)); return true; } // the sheeting, ribbed
+  if (z < 2.4 && Math.abs(fract(u / 24) - .5) < .04) { if (wallText(i, u, uStep, z, d, 'EXIT', Math.floor(u / 24) * 24 + 12, 2.1, .12, .2, C(GREEN, 12), C(GRAY, 1))) return true; }
+  BG[i] = C(BRICK, (1.6 + L * .18) - Math.max(coveGroove(z, .075, .008, d / projY), coveGroove(u + (Math.floor(z / .075) & 1) * .11, .22, .008, uStep)) * .6);
+  return true;
+}
+// a supporter's colours: the home end in the home side's kit, the away end in the away side's
+const STADIUM_KIT = { RED, WHITE, BLUE, GREEN, YEL, BRICK, CYAN, MAG, GRAY };
+const kitCol = (name, lvl) => C(STADIUM_KIT[name] ?? GRAY, lvl);
+
+// the stands as models: a tier of concrete for every row (walked on: its top is the floor), a strip of supporters
+// sitting or standing along each, a roof on columns over the lot, railings at the front
+function standProps(s, r) {
+  const out = [], P = MatchEngine.PITCH, rows = s.rows, along = s.axis === 'y', mid = (s.a0 + s.a1) / 2, half = (s.a1 - s.a0) / 2;
+  const box = (a, b, ha, hb, z0, z1, shade, extra = {}) => along ? { ...BX(a, b, ha, hb, z0, z1, shade), ...extra } : { ...BX(b, a, hb, ha, z0, z1, shade), ...extra };
+  for (let k = 0; k < rows; k++) {
+    const b0 = s.front + s.out * k * s.depth, b1 = b0 + s.out * s.depth, bc = (b0 + b1) / 2, top = (k + 1) * s.rise;
+    out.push(box(mid, bc, half, s.depth / 2, 0, top, (i, t, L) => { // the tier: its tread (a seat back along it on a seated stand), its riser
+      const f = HIT.face, isTop = f === 5, u = along ? HIT.u : HIT.v;
+      if (isTop && s.seats) { const seat = fract(u / .5); BG[i] = C(s.home > .5 ? RED : BLUE, (seat < .15 ? .8 : 1.6) + L * .1); return set(i, ' ', 0), true; }
+      BG[i] = C(GRAY, (isTop ? 2.4 : 1.7 * shadeFace(f)) + L * .15 - (isTop && fract(u / 4) < .02 ? .5 : 0)); return set(i, ' ', 0), true;
+    }, { walk: true }));
+    // the supporters along the row: a seat every half metre, most of them taken, everyone facing the pitch
+    out.push(box(mid, bc + s.out * s.depth * .15, half, s.depth * .3, top, top + (s.seats ? 1.1 : 1.65), (i, t, L) => crowdShade(i, t, L, s, k, along ? HIT.u : HIT.v), { walk: true }));
+    if (s.seats && along) out.push({ x: mid, y: bc, seatRow: { x0: s.a0 + .5, x1: s.a1 - .5, y: bc, fx: 0, fy: -s.out, h: .45 } }); // (a seat anywhere along the row: sit down with C)
+  }
+  // the barrier and the boards at the front, the roof over the back on its columns
+  const back = s.front + s.out * rows * s.depth, roofIn = s.front - s.out * 1.2, roofC = (back + roofIn) / 2, roofH = Math.abs(back - roofIn) / 2;
+  out.push(box(mid, s.front - s.out * .1, half, .06, 0, 1.05, solid(GRAY, { bright: .9 })));
+  out.push(box(mid, roofC, half + .5, roofH, s.roof, s.roof + .35, (i, t, L) => { // the roof: corrugated underneath, lit by a row of lamps
+    const u = along ? HIT.u : HIT.v, lamp = HIT.face === 6 && Math.abs(fract(u / 6) - .5) < .04 && Math.abs((along ? HIT.v : HIT.u)) < roofH * .3;
+    BG[i] = lamp ? C(WHITE, night > .3 ? 13 : 4) : C(GRAY, HIT.face === 6 ? 1.1 - (fract(u * 3) < .15 ? .3 : 0) : 2.2 * shadeFace(HIT.face) + L * .2); return set(i, ' ', 0), true;
+  }));
+  for (const f of [.04, .3, .7, .96]) out.push(box(s.a0 + (s.a1 - s.a0) * f, roofIn + s.out * .2, .12, .12, 0, s.roof, solid(GRAY, { bright: 1.1 }))); // (columns: in somebody's way, but not the halfway line's)
+  return out;
+}
+// the crowd along a row: a head, a shirt in their side's colours, sometimes a scarf; an empty seat here and there;
+// on their feet when their side scores, arms up
+function crowdShade(i, t, L, s, k, u) {
+  const m = stadiumMatch, seat = Math.floor(u / .5), h = hash(seat, k, s.id.length * 31 + 2203), fill = m ? m.crowd : .8;
+  if (h > fill) return false; // (an empty seat: you see it, or the row behind)
+  const sx = s.axis === 'y' ? s.a0 + (s.a1 - s.a0) / 2 + u : 0, sy = s.front + s.out * (k + .5) * s.depth;
+  if (s.axis === 'y' && Math.abs(sx - px) < .8 && Math.abs(sy - py) < .5) return false; // (the seat you're in, and the ones either side, are yours)
+  const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
+  const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, standing = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
+  const zIn = HIT.w - (k + 1) * s.rise, tall = standing ? 1.55 : 1.05, w = fract(u / .5) - .5;
+  if (HIT.face === 5) { // seen from above (the rows below you): the tops of heads, shoulders either side
+    const across = Math.abs((s.axis === 'y' ? HIT.v : HIT.u)) / (s.depth * .3);
+    if (Math.abs(w) > .34 || across > .9) return false;
+    const hair = Math.abs(w) < .13 && across < .5;
+    BG[i] = hair ? C(hash(seat, k, 2209) > .7 ? BRICK : GRAY, hash(seat, k, 2209) > .7 ? 4 : 1.6) : kitCol(kit[hash(seat, k, 2208) > .8 ? 1 : 0], 5 * (.55 + L * .03)); return set(i, ' ', 0), true;
+  }
+  const arms = cheering && zIn > tall && zIn < tall + .45 && Math.abs(Math.abs(w) - .3) < .08 && fract(T * 2 + h * 7) < .8;
+  if (zIn > tall + (arms ? .45 : 0) || Math.abs(w) > .36) return false;
+  if (arms) { BG[i] = C(SKIN, 9 + L * .1); return set(i, ' ', 0), true; }
+  const head = zIn > tall - .24 && Math.abs(w) < .14;
+  if (zIn > tall - .24 && !head) return false;
+  const skin = [[SKIN, 12], [SKIN, 10], [BRICK, 7], [BRICK, 5]][Math.floor(hash(seat, k, 2205) * 4)];
+  if (head) { BG[i] = zIn > tall - .06 && hash(seat, k, 2206) > .4 ? C(GRAY, 2) : C(skin[0], skin[1] * (.55 + L * .03)); return set(i, ' ', 0), true; }
+  const scarf = zIn > tall - .38 && hash(seat, k, 2207) > .6, colour = hash(seat, k, 2208) > .8 ? 1 : 0;
+  BG[i] = kitCol(scarf ? kit[1] : kit[colour], (scarf ? 7 : 5.5) * (.55 + L * .03) - (zIn < .35 ? 1.5 : 0)); return set(i, ' ', 0), true;
+}
+// a floodlight pylon in a corner: a lattice mast and a bank of lamps on top, blazing after dark
+const floodlight = (x, y) => ({ x, y, radius: 4, draw: (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .45, .45, 0, 34), (i, t, L) => { const lat = Math.abs(fract(HIT.w / 1.2 + (HIT.u + HIT.v) * .9) - .5) < .12; BG[i] = C(GRAY, (lat ? 2.6 : 1.4) + L * .15); return set(i, ' ', 0), true; });
+  const ax = STADIUM.cx - x, ay = STADIUM.cy - y, d = Math.hypot(ax, ay), c = ax / d, s = ay / d;
+  drawBox(boxAt(vx + c * .6, vy + s * .6, -s, c, 2.6, .35, 33, 36.4), (i, t, L) => {
+    const front = HIT.face === 4 || HIT.face === 3, lamp = front && Math.abs(fract(HIT.u / .65) - .5) < .38 && Math.abs(fract((HIT.w - 33) / .85) - .5) < .38;
+    BG[i] = lamp ? C(night > .3 ? WHITE : GRAY, night > .3 ? 15 : 5) : C(GRAY, 1.6 + L * .1); return set(i, ' ', 0), true;
+  });
+} });
+// the goals: posts and bar in white, a net behind on its stanchions you can see through
+const goalFrame = end => {
+  const P = MatchEngine.PITCH, gx = pitchX(end * P.hl), y0 = pitchY(-P.goalHW), y1 = pitchY(P.goalHW), white = solid(WHITE, { bright: 1.2 });
+  const post = .06, depth = 2.2, out = [];
+  for (const y of [y0, y1]) out.push(BX(gx + end * post, y, post, post, 0, P.goalH + post, white));
+  out.push(BX(gx + end * post, (y0 + y1) / 2, post, P.goalHW + post, P.goalH, P.goalH + post * 2, white));
+  out.push({ ...BX(gx + end * (depth / 2 + .1), (y0 + y1) / 2, depth / 2, P.goalHW, 0, P.goalH, (i, t, L) => { // the net: a mesh, sagging at the back
+    const a = HIT.face === 3 || HIT.face === 4 ? HIT.u : HIT.v, mesh = Math.abs(fract(a / .12) - .5) > .38 || Math.abs(fract(HIT.w / .12) - .5) > .38;
+    if (!mesh || HIT.face === 1 && end > 0 || HIT.face === 2 && end < 0) return false;
+    BG[i] = C(WHITE, 5 + L * .15); return set(i, ' ', 0), true;
+  }), walk: true });
+  return out;
+};
+// the scoreboard over the south stand: both names, the score and the clock, lit
+const scoreboard = () => ({ x: STADIUM.cx, y: 111.5, radius: 9, draw: (vx, vy) => {
+  const m = stadiumMatch; if (!m) return;
+  const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
+  const clock = m.phase === 'ft' ? 'FT' : m.phase === 'ht' ? 'HT' : String(Math.min(Math.floor(min), half)).padStart(2, '0') + "'";
+  const line1 = `${h.short} ${h.score}-${a.score} ${a.short}`, line2 = clock + (m.phase === 'goal' ? ' GOAL!' : '');
+  for (const e of [-1, 1]) drawBox(boxAt(vx + e * 5, vy + .2, 1, 0, .15, .15, 11.4, 14), solid(GRAY));
+  drawBox(boxAt(vx, vy, 1, 0, 7, .25, 14, 18), (i, t, L) => {
+    if (HIT.face !== 4) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
+    const top = HIT.w > 16, ch = faceText(top ? line1 : line2, i, t, vx, vy, 6.6, top ? 16.3 : 14.4, 1.4);
+    BG[i] = C(GRAY, .4); return set(i, ch && ch !== ' ' ? ch : ' ', m.phase === 'goal' && fract(T * 3) < .5 ? C(YEL, 15) : C(top ? WHITE : YEL, 14)), true;
+  });
+} });
+// the match: the engine stepped on with the clock, the players, the referee and the ball drawn where it puts them
+function stadiumLooks(m) {
+  return m.looks ||= m.teams.map(t => ({
+    out: figLook({ hair: 'short', top: 'tee', bot: 'shorts', tights: true, col: { top: [STADIUM_KIT[t.kit[0]], 9], bot: [STADIUM_KIT[t.kit[1]], 10], tights: [STADIUM_KIT[t.kit[0]], 7], shoe: [GRAY, 1] } }),
+    gk: figLook({ hair: 'short', top: 'long', bot: 'shorts', tights: true, col: { top: [t.side ? ORANGE : GREEN, 8], bot: [GRAY, 2], tights: [GRAY, 2], shoe: [GRAY, 1] } }),
+  }));
+}
+const stadiumRefLook = () => STADIUM_REF ||= figLook({ hair: 'buzz', top: 'tee', bot: 'shorts', tights: true, col: { top: [GRAY, 1.5], bot: [GRAY, 1], tights: [GRAY, 1], shoe: [GRAY, 1], skin: [SKIN, 11] } });
+let STADIUM_REF = null, stadiumMatch = null; // (the match on today: it carries on while you're in the concourse)
+const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () => {
+  const m = stadiumMatch; if (!m) return;
+  const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T;
+  MatchEngine.step(m, dt);
+  // how dangerous it is right now (the crowd's on its feet): the ball near a goal, in play
+  const P = MatchEngine.PITCH, bx = m.ball.p[0];
+  m.danger = m.phase === 'play' ? clamp((Math.abs(bx) - (P.hl - 30)) / 25, 0, 1) * clamp(1 - Math.abs(m.ball.p[1]) / 30, 0, 1) : 0;
+}, draw: () => {
+  const m = stadiumMatch; if (!m) return;
+  const looks = stadiumLooks(m);
+  for (const t of m.teams) for (const p of t.players) {
+    if (p.off && !p.leaving) continue;
+    const x = pitchX(p.pos[0]), y = pitchY(p.pos[1]), sp = Math.hypot(p.vel[0], p.vel[1]);
+    p.stride = (p.stride || 0) + sp * (m.lastDt || .016);
+    const pose = m.phase === 'goal' && m.celebrate?.side === t.side && m.celebrate.scorer === p ? 'wave'
+      : sp > 4.2 ? 'run' + (Math.floor(p.stride / 1.9 * 8) & 7) : sp > .5 ? 'walk' + (Math.floor(p.stride / 1.5 * 8) & 7) : 'stand';
+    if (!inView(x - px, y - py, 1)) continue;
+    drawFigure(x - px, y - py, 0, 1.8, p.face[0], p.face[1], p.role === 'GK' ? looks[t.side].gk : looks[t.side].out, pose, { hold: p, light: night > .3 ? 7 : 0 });
+  }
+  const rx = pitchX(m.ref.pos[0]), ry = pitchY(m.ref.pos[1]);
+  if (inView(rx - px, ry - py, 1)) drawFigure(rx - px, ry - py, 0, 1.78, m.ref.face[0], m.ref.face[1], stadiumRefLook(), 'stand', { hold: m.ref });
+  // the ball, and its shadow on the grass (it's small: never less than a cell, so you can follow it from the stands)
+  const b = m.ball.p, bx = pitchX(b[0]) - px, by = pitchY(b[1]) - py, d = Math.hypot(bx, by), r = Math.max(.11, d * .45 / projY);
+  if (inView(bx, by, 1)) {
+    dot(bx, by, .005, r * .9, (i) => { BG[i] = C(GRAY, .6); return set(i, ' ', 0), true; });
+    dot(bx, by, b[2] - .11, r, (i, t, L) => { BG[i] = C(WHITE, 13); return set(i, ' ', 0), true; });
+  }
+} });
+// the ground's grid: walls round the outside, a gate in the south-east corner
+function stadiumGrid() {
+  const { W, H } = STADIUM, rows = [];
+  for (let y = 0; y < H; y++) {
+    let row = '';
+    for (let x = 0; x < W; x++) row += x === 0 || y === 0 || x === W - 1 || y === H - 1 ? (y === H - 1 && (x === 140 || x === 141) ? 'D' : '#') : '.';
+    rows.push(row);
+  }
+  return rows;
+}
+ROOM_DEFS.stadium = {
+  grid: stadiumGrid(), light: 1, height: 40, vis: 200, floor: 'pitch', ceil: 'sky', sign: false, wall: stadiumWall, rise: stadiumRise, outdoor: true,
+  props: r => {
+    const p = [matchProp(), scoreboard(), ...goalFrame(-1), ...goalFrame(1)];
+    for (const s of STANDS) p.push(...standProps(s, r));
+    for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
+    // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
+    const P = MatchEngine.PITCH, bx = P.hl + STADIUM.board, by = P.hw + STADIUM.board;
+    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'GLYPHPORT', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
+    for (const [e, ax] of [[-1, 'x'], [1, 'x'], [-1, 'y'], [1, 'y']]) {
+      const len = ax === 'x' ? bx : by, cxp = ax === 'x' ? STADIUM.cx : STADIUM.cx + e * bx, cyp = ax === 'x' ? STADIUM.cy + e * by : STADIUM.cy;
+      for (let k = 0, n = Math.round(len * 2 / 12); k < n; k++) {
+        const off = -len + (k + .5) * len * 2 / n, x = ax === 'x' ? cxp + off : cxp, y = ax === 'x' ? cyp : cyp + off, word = ads[(k + (e + 1) * 3 + (ax === 'y' ? 5 : 0)) % ads.length];
+        const col = [RED, BLUE, GREEN, YEL, MAG, CYAN][(k + e + 2) % 6];
+        p.push({ x, y, radius: 6, box: { ...boxAt(x, y, ax === 'x' ? 1 : 0, ax === 'x' ? 0 : 1, len / n - .05, .08, 0, .9) }, draw: (vx, vy) => drawBox(boxAt(vx, vy, ax === 'x' ? 1 : 0, ax === 'x' ? 0 : 1, len / n - .05, .08, 0, .9), (i, t, L) => {
+          if (HIT.face !== 3 && HIT.face !== 4 || HIT.w < .15) { BG[i] = C(GRAY, 1.5); return set(i, ' ', 0), true; }
+          const ch = ax === 'x' ? faceText(word, i, t, vx, vy, len / n - .4, .25, .55) : ' ';
+          BG[i] = C(col, 4 + L * .15); return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 15)), true;
+        }) });
+      }
+    }
+    return p;
+  } };
+// into the ground, and a match on (a new one if there isn't one: the home side the Yards)
+function enterStadium(away) {
+  enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a] }, [139.5, 106.5, -Math.PI * .75]);
+  stadiumTV = false; stadiumCamX = null; // (you walk in seeing it with your own eyes)
+  if (!stadiumMatch || stadiumMatch.phase === 'ft') {
+    const clubs = MatchEngine.CLUBS.filter(c => c.id !== 'yards');
+    stadiumMatch = MatchEngine.create({ home: 'yards', away: away || clubs[Math.random() * clubs.length | 0].id, seed: Math.random() * 1e9 | 0 });
+    stadiumMatch.crowd = .78 + Math.random() * .17;
+  }
+}
+
+// ---- the TV view (V): a camera on the gantry slung under the front of the main stand's roof, panning to follow the
+// ball along the touchline and tilting down to it, through a narrower lens, like the match on the telly
+let stadiumView = null, stadiumCamX = null, stadiumTV = false;
+const stadiumTVOk = () => mode === 'room' && room?.kind === 'stadium' && !!stadiumMatch;
+const stadiumTVOn = () => stadiumTV && stadiumTVOk() && !freecam;
+function stadiumCam(dt) {
+  const m = stadiumMatch, b = m.ball.p, bx = pitchX(b[0]), by = pitchY(b[1]);
+  const want = STADIUM.cx + clamp(b[0] * .82, -44, 44);
+  stadiumCamX = stadiumCamX == null ? want : stadiumCamX + (want - stadiumCamX) * Math.min(1, dt * 1.6);
+  const x = stadiumCamX, y = 19.6, z = 12.4, dx = bx - x, dy = by - y, d = Math.hypot(dx, dy) || 1;
+  const fov = (34 + clamp(d / 60, 0, 1) * 10) * Math.PI / 180; // (tighter on play near the camera's side, wider across)
+  const tilt = Math.atan2(z - Math.max(0, b[2] * .5), d);
+  return { x, y, z, a: Math.atan2(dy, dx), pitch: -projY * Math.tan(tilt) / rows, fov };
+}
+// ===== a top-down view of a simulated match (Dev tools > Other > Watch a match): the engine (match-engine.js) drawn
+// plainly on a canvas, to watch the football itself before there's a stadium round it. Players are discs in their
+// kits with their numbers, the keepers in their own colour; the ball is white with its shadow, further apart the
+// higher it is; the referee in black. The game is paused underneath while it's open.
+const MATCH_DEBUG_KIT = { RED: '#d8352f', WHITE: '#f2f2ee', BLUE: '#2f5bd8', GREEN: '#2e9a4a', YEL: '#e8c62b', BRICK: '#9a3b22', CYAN: '#2fb9d0', MAG: '#c9389c', GRAY: '#8a8d92', BLACK: '#18181a' };
+let matchDebugEl = null, matchDebug = null;
+function openMatchDebug() {
+  if (!matchDebugEl) {
+    matchDebugEl = menuEl('matchdebug', 1100, `<div class="panel" role="dialog" aria-label="Simulated match" style="width:min(980px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto">
+      <style>#matchdebug canvas{position:static;inset:auto;width:100%;height:auto;display:block;border-radius:4px;background:#2f7a3a}
+      #matchdebug .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}#matchdebug select{font:inherit;background:#222;color:#eee;border:1px solid #555;padding:2px 4px}
+      #matchdebug .score{font-size:1.4em;letter-spacing:.04em}#matchdebug .log{font-size:.85em;opacity:.85;min-height:9.5em;white-space:pre-line}
+      #matchdebug .stats{font-size:.85em;opacity:.85;white-space:pre}#matchdebug .tab.on{text-decoration:underline}#matchdebug .tab{background:none;border:0;color:inherit;font:inherit;cursor:pointer;opacity:.8}</style>
+      <div class="row"><span class="score"></span><span style="flex:1"></span><button class="tab" data-md="close">close</button></div>
+      <canvas width="1060" height="700"></canvas>
+      <div class="row"><span>speed</span>${[1, 4, 16, 64].map(s => `<button class="tab" data-md-speed="${s}">${s}x</button>`).join('')}<button class="tab" data-md="pause">pause</button>
+        <span style="flex:1"></span><select data-md-team="0"></select><span>v</span><select data-md-team="1"></select><button class="tab" data-md="new">new match</button></div>
+      <div class="row" style="align-items:flex-start;gap:24px"><div class="log" style="flex:1"></div><div class="stats"></div></div>
+    </div>`);
+    const opts = MatchEngine.CLUBS.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    for (const s of matchDebugEl.querySelectorAll('select')) s.innerHTML = opts;
+    matchDebugEl.querySelector('[data-md-team="1"]').value = 'docks';
+    matchDebugEl.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.md === 'close') return closeMatchDebug();
+      if (b.dataset.md === 'pause') matchDebug.paused = !matchDebug.paused;
+      if (b.dataset.mdSpeed) { matchDebug.speed = +b.dataset.mdSpeed; matchDebug.paused = false; }
+      if (b.dataset.md === 'new') newMatchDebug();
+      matchDebugButtons();
+    });
+    addEventListener('keydown', e => { if (e.key === 'Escape' && matchDebugOpen()) { e.stopPropagation(); closeMatchDebug(); } }, true);
+  }
+  matchDebugEl.style.display = 'flex'; paused = true; releaseMouse?.();
+  if (!matchDebug) newMatchDebug();
+  matchDebugButtons();
+  matchDebug.last = performance.now();
+  requestAnimationFrame(matchDebugFrame);
+}
+function closeMatchDebug() { if (matchDebugEl) matchDebugEl.style.display = 'none'; paused = false; }
+const matchDebugOpen = () => matchDebugEl?.style.display === 'flex';
+function newMatchDebug() {
+  const home = matchDebugEl.querySelector('[data-md-team="0"]').value, away = matchDebugEl.querySelector('[data-md-team="1"]').value;
+  matchDebug = { m: MatchEngine.create({ home, away, seed: Math.random() * 1e9 | 0 }), speed: matchDebug?.speed || 1, paused: false, last: performance.now() };
+}
+function matchDebugButtons() {
+  for (const b of matchDebugEl.querySelectorAll('[data-md-speed]')) b.classList.toggle('on', +b.dataset.mdSpeed === matchDebug.speed && !matchDebug.paused);
+  matchDebugEl.querySelector('[data-md="pause"]').classList.toggle('on', matchDebug.paused);
+}
+function matchDebugFrame(now) {
+  if (!matchDebugOpen()) return;
+  const md = matchDebug, dt = Math.min(.1, (now - md.last) / 1000); md.last = now;
+  if (!md.paused) MatchEngine.step(md.m, dt * md.speed);
+  drawMatchDebug(md.m);
+  requestAnimationFrame(matchDebugFrame);
+}
+function drawMatchDebug(m) {
+  const cv = matchDebugEl.querySelector('canvas'), g = cv.getContext('2d'), P = MatchEngine.PITCH;
+  const pad = 30, sc = (cv.width - pad * 2) / (P.hl * 2), X = x => pad + (x + P.hl) * sc, Y = y => cv.height / 2 + y * sc;
+  // the grass, mown in stripes, and the markings
+  for (let k = 0; k < 20; k++) { g.fillStyle = k & 1 ? '#2c7537' : '#317f3d'; g.fillRect(pad + k * (P.hl * 2 * sc / 20), 0, P.hl * 2 * sc / 20 + 1, cv.height); }
+  g.fillStyle = '#245f2e'; g.fillRect(0, 0, pad, cv.height); g.fillRect(cv.width - pad, 0, pad, cv.height);
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2;
+  g.strokeRect(X(-P.hl), Y(-P.hw), P.hl * 2 * sc, P.hw * 2 * sc);
+  g.beginPath(); g.moveTo(X(0), Y(-P.hw)); g.lineTo(X(0), Y(P.hw)); g.stroke();
+  g.beginPath(); g.arc(X(0), Y(0), P.circle * sc, 0, Math.PI * 2); g.stroke();
+  for (const e of [-1, 1]) {
+    const gx = e * P.hl;
+    g.strokeRect(Math.min(X(gx), X(gx - e * P.boxD)), Y(-P.boxHW), P.boxD * sc, P.boxHW * 2 * sc);
+    g.strokeRect(Math.min(X(gx), X(gx - e * P.sixD)), Y(-P.sixHW), P.sixD * sc, P.sixHW * 2 * sc);
+    g.beginPath(); g.arc(X(gx - e * P.spot), Y(0), 2, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(e < 0 ? X(gx) - 8 : X(gx), Y(-P.goalHW), 8, P.goalHW * 2 * sc); // the goal
+  }
+  // the players
+  const draw = (x, y, fill, ring, label, r = 9) => {
+    g.beginPath(); g.arc(X(x), Y(y), r, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); g.lineWidth = 2; g.strokeStyle = ring; g.stroke();
+    if (label) { g.fillStyle = fill === MATCH_DEBUG_KIT.WHITE || fill === MATCH_DEBUG_KIT.YEL || fill === MATCH_DEBUG_KIT.CYAN ? '#111' : '#fff'; g.font = 'bold 10px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, X(x), Y(y) + .5); }
+  };
+  for (const t of m.teams) for (const p of t.players) {
+    if (p.off && !p.leaving) continue;
+    const [kit, trim] = t.kit, gk = p.role === 'GK';
+    draw(p.pos[0], p.pos[1], gk ? (t.side ? '#e07b1f' : '#7a2fc0') : MATCH_DEBUG_KIT[kit] || '#ccc', p === m.ball.owner ? '#ffe14a' : MATCH_DEBUG_KIT[trim] || '#000', String(p.number));
+    g.beginPath(); g.moveTo(X(p.pos[0]), Y(p.pos[1])); g.lineTo(X(p.pos[0] + p.face[0] * 1.6), Y(p.pos[1] + p.face[1] * 1.6)); g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 2; g.stroke();
+  }
+  draw(m.ref.pos[0], m.ref.pos[1], MATCH_DEBUG_KIT.BLACK, '#e8c62b', '', 7);
+  // the ball: its shadow on the grass, the ball above it by its height
+  const b = m.ball.p;
+  g.beginPath(); g.ellipse(X(b[0]), Y(b[1]), 5, 3, 0, 0, Math.PI * 2); g.fillStyle = 'rgba(0,0,0,.35)'; g.fill();
+  g.beginPath(); g.arc(X(b[0]), Y(b[1]) - b[2] * sc * .6, 4.5 + Math.min(4, b[2] * .8), 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.strokeStyle = '#222'; g.lineWidth = 1.5; g.stroke();
+  // the scoreboard, the commentary, the numbers
+  const [h, a] = m.teams, min = MatchEngine.minute(m), ph = { ht: 'HALF TIME', ft: 'FULL TIME', goal: 'GOAL!' }[m.phase] || (m.phase === 'restart' ? m.restart.type.toUpperCase() : '');
+  const clock = m.phase === 'ft' ? 'FT' : m.phase === 'ht' ? 'HT' : `${Math.floor(Math.min(min, m.period === 1 ? 45 : 90))}'` + (min > (m.period === 1 ? 45 : 90) ? `+${Math.ceil(min - (m.period === 1 ? 45 : 90))}` : '');
+  matchDebugEl.querySelector('.score').textContent = `${h.name} ${h.score} - ${a.score} ${a.name}   ${clock}   ${ph}`;
+  const words = { goal: e => `GOAL! ${e.player}${e.og ? ' (own goal)' : ''} ${e.score.join('-')}`, shot: e => `${e.player} shoots${e.header ? ' (header)' : e.penalty ? ' (penalty)' : e.freekick ? ' (free kick)' : ''}`,
+    save: e => `Saved by ${e.player}`, miss: e => `${e.player}: wide`, block: e => `Blocked by ${e.player}`, woodwork: e => `Off the woodwork! (${e.player})`, corner: () => 'Corner', foul: e => `Foul by ${e.player}`,
+    yellow: e => `Yellow card: ${e.player}`, red: e => `RED CARD: ${e.player}`, offside: e => `Offside: ${e.player}`, penalty: () => 'PENALTY!', sub: e => `Sub: ${e.on} on for ${e.off}`,
+    ht: e => `Half time ${e.score.join('-')}`, ft: e => `Full time ${e.score.join('-')}`, added: e => `${e.mins} minutes added`, kickoff: () => 'Kick-off', advantage: () => 'Advantage played' };
+  matchDebugEl.querySelector('.log').textContent = m.events.slice(-8).reverse().map(e => `${Math.ceil(e.min)}' ${['ht', 'ft', 'added', 'kickoff'].includes(e.kind) ? '   ' : m.teams[e.side]?.short || ''}  ${(words[e.kind] || (() => e.kind))(e)}`).join('\n');
+  const st = m.stats, tot = st[0].poss + st[1].poss || 1, row = (l, k, f = v => v) => `${l.padEnd(11)}${String(f(st[0][k], 0)).padStart(4)}  ${String(f(st[1][k], 1)).padStart(4)}`;
+  matchDebugEl.querySelector('.stats').textContent = [`${''.padEnd(11)}${h.short.padStart(4)}  ${a.short.padStart(4)}`, row('possession', 'poss', v => Math.round(v / tot * 100) + '%'), row('shots', 'shots'), row('on target', 'onTarget'),
+    row('passes', 'passes'), row('completed', 'passesDone'), row('corners', 'corners'), row('fouls', 'fouls'), row('cards', 'yellow')].join('\n');
+}
 // Searchable places are data; the map, list, contacts and waypoints share the same records.
 const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
 const MAP_COLORS={contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
@@ -36626,7 +37678,7 @@ function buildExtraSkateparks() {
       SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-bowl.profile.height*2-.08,y,line:{x,y},
         description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-metre walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
     }else{
-      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:.55});
+      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:1.1});
       mini.spot=mini.spotPark=true;
       skateSpotBox(x-.8,y+.45,.25,.004,.025,'skaterail','metal');
       skateSpotBox(x-.05,y+.45,.3,.1,.02,'manualpad','concrete');
@@ -37090,11 +38142,11 @@ function skateGestureSample(recognizer,airFlick,x,y,t){
 const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHeld && SK_INPUT.mouseGesture.loaded;
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
-  right: [0, 0], mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
+  right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
   padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
-    right: [0, 0], mouse: [0, 0], mouseHeld: false, fired: false });
+    right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, fired: false });
   SK_INPUT.padGesture.reset(); SK_INPUT.mouseGesture.reset();SK_INPUT.padAirFlick.reset();SK_INPUT.mouseAirFlick.reset();
 }
 // A flip in an existing flight changes the board, never its trajectory.
@@ -37133,7 +38185,7 @@ function skateMouseBegin() {
 }
 function skateMouseMove(x, y) {
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
-  SK_INPUT.mouse = [(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
+  SK_INPUT.mouse = SK.manual?[clamp(m[0]+x/60,-1,1),clamp(m[1]+y/60,-1,1)]:[(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
   if (skateGesturePlay(skateGestureSample(SK_INPUT.mouseGesture,SK_INPUT.mouseAirFlick,...SK_INPUT.mouse,T))) SK_INPUT.fired = true;
 }
@@ -37166,6 +38218,7 @@ function skatePollInput(dt,framePad,fixedSteer=false) {
   // camera. This keeps the initial direction identical above 120 render Hz.
   if(typeof skatePushFromRest==='function')skatePushFromRest(!!K.KeyW||SK_INPUT.push,Math.max(SK.v,Math.hypot(...SKB.v)));
   SK_INPUT.right = pad ? skateStick(pad.axes[2], pad.axes[3],dead) : [0, 0];
+  SK_INPUT.manualDepth=pad?skateStick(0,pad.axes[3],dead)[1]:0;
   if (!pad) {SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.reset();}
   else if(typeof controllerSkateLook==='function'&&controllerSkateLook()||skateAir()&&(SK_INPUT.grabL>.25||SK_INPUT.grabR>.25)){SK_INPUT.padGesture.reset();SK_INPUT.padAirFlick.consume();}
   else skateGesturePlay(skateGestureSample(SK_INPUT.padGesture,SK_INPUT.padAirFlick,...SK_INPUT.right,T));
@@ -37377,6 +38430,7 @@ function skateTrick(name, flip, turn, air, nollie = false) {
   return { name, flip, turn, air, t: 0, nollie, duration: flip || turn ? (Math.abs(turn) >= 1 ? .46 : .38) : .08,
     pitch: SKB.pitch, baseRoll: Math.atan2(Math.sin(SKB.roll),Math.cos(SKB.roll)), caughtAt: flip||turn?null:0, grab: null, grabTime: 0, grabPoints: 0 };
 }
+function skateTrickName(tr){return tr?.nollie?(tr.name==='ollie'?'nollie':'nollie '+tr.name):tr?.name||'ollie';}
 function skateBoardAxes(yaw, pitch, roll) {
   const c = Math.cos(yaw), s = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
   return { axis: [c * cp, s * cp, sp], up: [-c * sp * cr - s * sr, -s * sp * cr + c * sr, cp * cr] };
@@ -37432,7 +38486,7 @@ function skateAirBase(dt,pitch,roll) {
   const flight=clamp((vz+Math.sqrt(vz*vz+2*.98*height))/.98,0,1.2);
   const [x,y]=skateAirRoutePoint(worldCoord(px+Math.cos(SK.dir)*SK.v*flight),worldCoord(py+Math.sin(SK.dir)*SK.v*flight));
   let surface=skateSurface(x,y),hit=skateTransitionAt(x,y,surface.h);
-  if(SK.airRoute&&!SK.airRoute.out&&SK.airRoute.o.bowl){
+  if(SK.airRoute&&!SK.airRoute.out){
     // A steep wall can meet the descending board well before a flat-ground
     // flight-time estimate. Predict the first contact on the assisted path.
     if(!pose.landNormal||T-(pose.landT||0)>.05){
@@ -37504,23 +38558,23 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = skateBalanceStick()[1];
+  const depth = SK_INPUT.mouseHeld?SK_INPUT.mouse[1]:(SK_INPUT.manualDepth??skateBalanceStick()[1]);
   const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
   const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
   if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
   const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
-  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 + SK.steer * 3.2 - m.balV * (1.6+Math.abs(SK.steer)*2)) * dt;
-  m.bal += (m.balV+SK.steer*.6+control*.15) * dt;
+  m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - m.balV * 1.6) * dt;
+  m.bal += (m.balV+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }
   if (m.bal > 1) return skateManualEnd(true);
-  SKB.pitch += (m.nose ? -1 : 1) * (.15 + m.bal * .12);
+  SKB.pitch += (m.nose ? -.15 : .15) + m.bal * .12;
   SKB.contact = 'manual';
 }
 // A circular riding profile, extruded along its axis. u is signed arc length
 // from the flat bottom's centre; unlike a heightfield this can include vert.
 const SK_TRANSITIONS = [];
-function skateProfile({ radius = .18, height = .14, extension = 0, flat = .24, width = .42, deck = .06 } = {}) {
+function skateProfile({ radius = .18, height = .14, extension = 0, flat = .24, width = .9, deck = .06 } = {}) {
   const angle = Math.acos(clamp(1 - (height - extension) / radius, 0, 1));
   const curve = radius * angle, limit = flat / 2 + curve + extension;
   const tip = flat / 2 + radius * Math.sin(angle), points = [];
@@ -37590,9 +38644,12 @@ function skateTransitionPlace(C) {
   SKB.v = [o.c * at.tx * C.vs - o.s * C.va, o.s * at.tx * C.vs + o.c * C.va, at.tz * C.vs];
   SK.v = Math.hypot(SKB.v[0], SKB.v[1]);
   if (SK.v > 1e-7) SK.dir = Math.atan2(SKB.v[1], SKB.v[0]);
-  SKB.pitch = Math.atan2(at.tz, at.tx) * Math.sign(Math.cos(a) * o.c + Math.sin(a) * o.s || 1);
-  SKB.roll = 0; SKB.yaw = a; SKB.p = [px, py, z]; SKB.contact = 'transition';
-  SKB.surf = { h: z, n: [-o.c * at.tz, -o.s * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o };
+  const n=[-o.c*at.tz,-o.s*at.tz,at.tx];
+  SKB.pitch=Math.atan2(-(n[0]*Math.cos(a)+n[1]*Math.sin(a)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(a,SKB.pitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
+  const dot=v=>n.reduce((sum,k,i)=>sum+k*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral));SKB.yaw=a;SKB.p=[px,py,z];SKB.contact='transition';
+  SKB.surf = { h:z,n,kind:'transition',material:'concrete',ref:o };
   SKB.fakie = Math.cos(SK.dir - a) < 0;
   body.ground = skateGround(px, py); body.groundMode = mode;
   return at;
@@ -37614,7 +38671,13 @@ function skateTransitionLipVelocity(C,out) {
 // height remain free. The same map predicts the landing plane for catches.
 function skateAirRoutePoint(x,y) {
   const route=SK.airRoute,o=route?.o;
-  if(!o?.bowl||route.out)return [x,y];
+  if(!o||route.out)return [x,y];
+  if(!o.bowl){
+    const dx=rel(x-o.x),dy=rel(y-o.y),u=dx*o.c+dy*o.s,axis=-dx*o.s+dy*o.c;
+    if(Math.abs(axis)>o.hw)return [x,y];
+    const inside=o.profile.tip-.015,limited=clamp(u,-inside,inside);
+    return [worldCoord(o.x+o.c*limited-o.s*axis),worldCoord(o.y+o.s*limited+o.c*axis)];
+  }
   const dx=rel(x-o.x),dy=rel(y-o.y),axis=Math.atan2(dy,dx),radius=Math.hypot(dx,dy);
   const lip=o.pool?skatePoolFloor(o,axis)+o.profile.tip-o.profile.flat/2:o.profile.tip;
   const inside=Math.max(.01,lip-.015);
@@ -37626,9 +38689,9 @@ function skateTransitionAirStep() {
   if(Math.hypot(rel(x-px),rel(y-py))<1e-10)return;
   px=x;py=y;
   const o=SK.airRoute.o,axis=Math.atan2(rel(py-o.y),rel(px-o.x));
-  let tangent=[-Math.sin(axis),Math.cos(axis)];
+  let tangent=o.bowl?[-Math.sin(axis),Math.cos(axis)]:[-o.s,o.c];
   if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,axis).tv,len=Math.hypot(tv[0],tv[1]);tangent=[tv[0]/len,tv[1]/len];}
-  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,outward=[tangent[1],-tangent[0]],out=vx*outward[0]+vy*outward[1];
+  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,sign=o.bowl?1:Math.sign(rel(px-o.x)*o.c+rel(py-o.y)*o.s)||1,outward=[tangent[1]*sign,-tangent[0]*sign],out=vx*outward[0]+vy*outward[1];
   if(out>0){const v=[vx-outward[0]*out,vy-outward[1]*out];SK.v=Math.hypot(...v);if(SK.v>1e-9)SK.dir=Math.atan2(v[1],v[0]);}
 }
 function skateTransitionRelease(C, coping = false) {
@@ -37638,7 +38701,7 @@ function skateTransitionRelease(C, coping = false) {
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
-  if(C.o.bowl&&!out){
+  if(!out){
     const z=SKB.p[2];skateTransitionAirStep();
     SKB.p=[px,py,z];SKB.v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,v[2]];
     body.ground=skateGround(px,py);body.groundMode=mode;body.z=Math.max(.002,(z-body.ground)*10);
@@ -38105,7 +39168,7 @@ function stepSkate(dt,readInput=true) {
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
   if ((!air && SK.v > .1) || air && body.vz <= 0) grindCatch();
-  if (air && body.trick) say(`${body.trick.name.toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
+  if (air && body.trick) say(`${skateTrickName(body.trick).toUpperCase()} · ${body.trick.grab || (body.trick.caughtAt != null ? 'CAUGHT' : 'ROTATING')}`, .5);
   skateBoardSync();
   if (SK.combo && !air && !SK.manual && (T - SK.combo.t > SK_COMBO_GAP || SK.v < SK_STILL)) bankCombo(); // (a combo is tricks back to back on the move: too long between them, or rolling to a stop, and it's banked)
 }
@@ -38150,7 +39213,7 @@ function skateLand() {
   SK.lateTrick=null;
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
   skateAirPose();
-  const surf = skateSurface(px, py), axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
+  const surf = skateSurface(px, py), returnHit=SK.airRoute&&!SK.airRoute.out?skateTransitionAt(px,py,surf.h):null, axes = skateBoardAxes(SKB.yaw, SKB.pitch, SKB.roll);
   const vx = Math.cos(SK.dir) * SK.v, vy = Math.sin(SK.dir) * SK.v;
   const quality = skateLandingQuality({ ...axes, normal: surf.n,
     velocity: [vx, vy, -(vx * surf.n[0] + vy * surf.n[1]) / Math.max(.05, surf.n[2])],
@@ -38161,6 +39224,7 @@ function skateLand() {
   controllerRumble('land',body.impactV||0);
   const sloppy = sideways; // slow enough to ride it out: the board scrubs round to whichever end's nearer the way you're going
   SK.landedAt = T; SK.reverted = false;
+  if(returnHit&&surf.ref===returnHit.o)SKB.fakie=Math.abs(d)>Math.PI/2;
   SK.v *= Math.max(.5, 1 - Math.max(0, (body.impactV || 0) - 4.5) * surf.n[2] * .04);
   if (sloppy && standing) SK.dir = a; // (stood still, you just turn the board under you)
   else if (sloppy) { SK.v *= 0.7; SK.dir = Math.abs(d) > Math.PI / 2 ? a + Math.PI : a; if (actx) sfxSkate('scrape', 0.6); }
@@ -38171,11 +39235,17 @@ function skateLand() {
   const landedVx=Math.cos(SK.dir)*SK.v,landedVy=Math.sin(SK.dir)*SK.v;
   SKB.v=[landedVx,landedVy,-(landedVx*surf.n[0]+landedVy*surf.n[1])/Math.max(.001,surf.n[2])];
   SKB.surf=surf;SK.slide=0;SK.sliding=false;SK.airRoute=null;SK.lipPop=null;SK.pushFakie=null;SK.airSpinV=0;
+  // A frame can cross the wall surface between transition proximity checks.
+  // Re-enter with the real falling velocity instead of flattening it to hv.
+  if(returnHit&&surf.ref===returnHit.o){
+    body.z=.001;body.vz=-(body.impactV||0)*(sloppy?.7:1);
+    enterSkateTransition(returnHit);skateTransitionPlace(SK.transition);
+  }
   if (!tr && SK.offGrind) { SK.offGrind = false; SK.spin = 0; return; } // (rolled off the end of a grind: that was the trick)
   SK.offGrind = false;
-  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
+  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie',displayName=skateTrickName(tr);
   const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
-  const label = (SKB.fakie ? 'FAKIE ' : '') + (tr?.nollie ? 'NOLLIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase() + (tr?.lastGrab ? ' + ' + tr.lastGrab.toUpperCase() : '');
+  const label = (SKB.fakie ? 'FAKIE ' : '') + (sloppy ? 'SLOPPY ' : '') + (side + (displayName !== 'ollie' || !side ? ' ' + displayName : '')).trim().toUpperCase() + (tr?.lastGrab ? ' + ' + tr.lastGrab.toUpperCase() : '');
   const pts = Math.round(((SK_POINTS[name.replace(/^late /, '')] || 50) + (tr?.grabPoints || 0) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60) * (sloppy ? 0.5 : 1));
   if (standing) { // the one trick, scored by itself: a combo needs you moving
     if (SK.combo) bankCombo();
@@ -38262,7 +39332,7 @@ function skateCam(dt) {
     SK.look=look*Math.exp(-dt*2.5);
   }
   if(fresh){SK.camFollowTravel=!!(SK.transition||SK.airRoute);SK.camTravelYaw=a;}
-  if(SK.transition)SK.camFollowTravel=true;
+  if(SK.transition||SK.mongo&&SK.v>.025)SK.camFollowTravel=true;
   if(SK.camFollowTravel&&SK.v>.025)SK.camTravelYaw=SK.dir;
   if(!air&&!SK.transition&&SK.v<.025)SK.camFollowTravel=false;
   const riding=SK.camFollowTravel?(SK.camTravelYaw??a):a;
@@ -50704,7 +51774,7 @@ function saveGame() {
   if (citySaveBackupPending != null && keepCitySaveBackup(citySaveBackupPending)) {
     citySaveBackupPending = null; citySaveBlocked = false;
   }
-  if (citySaveBlocked) return false;
+  if (citySaveBlocked || startingOver) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
   const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
@@ -50807,7 +51877,14 @@ function loadGame() {
   }
   citySaveBlocked = citySaveBackupPending != null;
 }
-function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
+// Start over: nothing may save again on the way out (the timer, or leaving the page as it reloads, used to write the
+// old game straight back, so you kept your money and things), then the save goes and the city starts fresh
+function newGame() {
+  citySaveBlocked = true; citySaveBackupPending = null; startingOver = true;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ }
+  location.reload();
+}
+let startingOver = false;
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
@@ -51092,7 +52169,8 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
+  if (e.code === 'KeyV' && stadiumTVOk()) stadiumTV = !stadiumTV; // (at the football: the TV view, stadium.js)
+  else if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; transitSubwayDeparted(); }
@@ -51443,6 +52521,10 @@ function loop(t) {
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+  } else if (stadiumTVOn()) { // at the football with the TV view on: from the gantry, following the ball (stadium.js)
+    const saved = [px, py, a, pitch], baseFOV = FOV, cam = stadiumCam(dt);
+    try { FOV = cam.fov; stadiumView = { eye: cam.z }; px = cam.x; py = cam.y; a = cam.a; pitch = cam.pitch; render(dt); }
+    finally { [px, py, a, pitch] = saved; stadiumView = null; FOV = baseFOV; }
   } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
     skateFixedRender(camera=>{
       const saved = [px, py, a], [cx, cy, yaw, cz] = camera||skateCam(dt), baseFOV = FOV;
@@ -51505,6 +52587,13 @@ function gotoShop(word) {
   }
   if (!best) return say(`No ${word} in town.`);
   px = worldCoord(best.x); py = worldCoord(best.y); a = best.a; pitch = 0;
+  if (!free(px, py)) { // (a hydrant, a bin, a parked fire engine on that spot: the nearest clear one along the pavement)
+    const tx = Math.abs(Math.sin(best.a)) > .5 ? 1 : 0, ty = 1 - tx, ox = px, oy = py;
+    search: for (let r = .05; r <= .6; r += .05) for (const s of [1, -1]) for (const out of [0, .1, .2]) {
+      const x = worldCoord(ox + tx * r * s - Math.cos(best.a) * out), y = worldCoord(oy + ty * r * s - Math.sin(best.a) * out);
+      if (free(x, y)) { px = x; py = y; break search; }
+    }
+  }
   say(`Outside ${word}. ${openAt(best.sh, tod) ? 'Walk up and press E.' : `Closed, opens at ${best.sh.hours[0]}:00.`}`, 5);
 }
 { const w = new URLSearchParams(location.search).get('goto'); if (w) gotoShop(w.toUpperCase()); }
@@ -51802,7 +52891,11 @@ function controllerActions(){
   const entries=[...touchActions(),...SHEET.filter(([, ,when])=>!when||when()).map(([label,key])=>[label,key]),
     ['Inventory','KeyI'],['Map','KeyM'],['Camera','KeyV']];
   if(mode==='walk'&&nearAircraft()&&!nearAircraft().owned)entries.push(['Buy aircraft','KeyU']);
-  const unique=entries.filter(([label,key],i,a)=>a.findIndex(v=>v[1]===key)===i);
+  // These actions already have dedicated buttons, sticks or triggers.
+  const bound=new Set(['Space','KeyC','KeyE','KeyQ','KeyV','KeyI','KeyM']);
+  if(game)for(const key of ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'])bound.add(key);
+  if(mode==='air')for(const key of ['KeyW','KeyS'])bound.add(key);
+  const unique=entries.filter(([label,key],i,a)=>!bound.has(key)&&a.findIndex(v=>v[1]===key)===i);
   const sheet=CONTROLLER.sheet||=menuEl('controller-actions',1700,'<div class="panel"><h1>Actions</h1><p class="sub">A choose · B back</p><div data-actions></div></div>');
   const list=sheet.querySelector('[data-actions]');list.replaceChildren();
   for(const [label,key] of unique){const b=document.createElement('button');b.className='item';b.textContent=label;
@@ -51810,17 +52903,30 @@ function controllerActions(){
   paused=true;releaseMouse();sheet.style.display='flex';CONTROLLER.focus=0;
 }
 function controllerKeyboard(input){
-  const kb=CONTROLLER.keyboard||=menuEl('controller-keyboard',1900,'<div class="panel" style="width:min(650px,95vw)"><h1>Type</h1><p data-value style="overflow-wrap:anywhere"></p><p class="sub">A type · X erase · Y shift · B done</p><div data-keys style="display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:8px"></div></div>');
+  const kb=CONTROLLER.keyboard||=menuEl('controller-keyboard',1900,'<div class="panel" style="width:min(650px,95vw)"><h1>Type</h1><p data-value style="overflow-wrap:anywhere"></p><p class="sub">A type · X erase · Y shift · B done</p><div data-keys style="display:grid;gap:6px"></div></div>');
   CONTROLLER.textInput=input;CONTROLLER.uppercase=false;
   const grid=kb.querySelector('[data-keys]');grid.replaceChildren();
-  const chars=input.type==='number'?'0123456789.-':'abcdefghijklmnopqrstuvwxyz0123456789 -_.,!?@\'';
+  const numeric=input.type==='number',rows=numeric?['123','456','789','0.-']:['1234567890','qwertyuiop','asdfghjkl','zxcvbnm'," -_.,!?@'"];
+  const columns=numeric?6:20;grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;
   const update=()=>{kb.querySelector('[data-value]').textContent=input.type==='password'?'•'.repeat(input.value.length):input.value||' ';};
-  for(const char of chars){const b=document.createElement('button');b.textContent=char===' '?'space':char;b.dataset.char=char;b.style.minHeight='32px';if(char===' ')b.style.gridColumn='span 2';
-    b.onclick=()=>{if(input.maxLength>=0&&input.value.length>=input.maxLength)return;
-      input.value+=CONTROLLER.uppercase?char.toUpperCase():char;input.dispatchEvent(new Event('input',{bubbles:true}));update();};grid.appendChild(b);}
-  for(const [label,fn]of [['Erase',()=>controllerErase()],['Clear',()=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));update();}],['Done',()=>controllerCloseKeyboard()]]){
-    const b=document.createElement('button');b.textContent=label;b.style.gridColumn='span 2';b.style.minHeight='32px';b.onclick=fn;grid.appendChild(b);}
-  update();kb.style.display='flex';CONTROLLER.focus=0;
+  rows.forEach((row,r)=>{
+    let column=!numeric&&r===2?2:!numeric&&r===3?3:1;
+    for(const char of row){
+      const b=document.createElement('button'),span=char===' '?4:2;
+      b.textContent=char===' '?'space':char;b.dataset.char=char;
+      b.style.cssText=`min-height:44px;min-width:0;padding:4px 0;grid-row:${r+1};grid-column:${column}/span ${span}`;column+=span;
+      b.onclick=()=>{if(input.maxLength>=0&&input.value.length>=input.maxLength)return;
+        input.value+=CONTROLLER.uppercase?char.toUpperCase():char;input.dispatchEvent(new Event('input',{bubbles:true}));update();};grid.appendChild(b);
+    }
+  });
+  for(const [index,[label,fn]]of [['Erase',()=>controllerErase()],['Clear',()=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));update();}],['Done',()=>controllerCloseKeyboard()]].entries()){
+    const b=document.createElement('button');b.textContent=label;
+    const span=numeric?2:index===2?8:6,column=numeric?index*2+1:index*6+1;
+    b.style.cssText=`min-height:44px;min-width:0;padding:4px 0;grid-row:${rows.length+1};grid-column:${column}/span ${span}`;b.onclick=fn;grid.appendChild(b);
+  }
+  update();kb.style.display='flex';CONTROLLER.focus=numeric?0:10;
+  controllerFocus(kb,CONTROLLER.focus);
+
 }
 function controllerErase(){
   const input=CONTROLLER.textInput;if(!input)return;
@@ -51840,7 +52946,7 @@ function controllerMenuBack(root){
   controllerTap('Escape');
 }
 function controllerMenuStep(root,edge,held,left,right,dt){
-  if(CONTROLLER.root!==root){CONTROLLER.root=root;CONTROLLER.focus=0;}
+  if(CONTROLLER.root!==root){CONTROLLER.root=root;if(root!==CONTROLLER.keyboard)CONTROLLER.focus=0;}
   const items=controllerControls(root);if(!items.includes(document.activeElement))controllerFocus(root,CONTROLLER.focus);
   const x=held(15)?1:held(14)?-1:Math.abs(left[0])>.3?Math.sign(left[0]):0;
   const y=held(13)?1:held(12)?-1:Math.abs(left[1])>.3?Math.sign(left[1]):0;
@@ -51857,7 +52963,7 @@ function controllerMenuStep(root,edge,held,left,right,dt){
   }
   if(root===CONTROLLER.keyboard){
     if(edge(2))controllerErase();
-    if(edge(3)){CONTROLLER.uppercase=!CONTROLLER.uppercase;root.querySelectorAll('[data-char]').forEach(b=>b.textContent=CONTROLLER.uppercase?b.dataset.char.toUpperCase():b.dataset.char===' '?'space':b.dataset.char);}
+    if(edge(3)){CONTROLLER.uppercase=!CONTROLLER.uppercase;root.querySelectorAll('[data-char]').forEach(b=>b.textContent=b.dataset.char===' '?'space':CONTROLLER.uppercase?b.dataset.char.toUpperCase():b.dataset.char);}
   }else if(bigMapOpen()){
     if(edge(4))bigMapZoom(.8);if(edge(5))bigMapZoom(1.25);if(edge(2))bigMapCentre();
     if(edge(3))controllerKeyboard(bigMapEl.querySelector('input'));
@@ -51960,8 +53066,9 @@ function controllerTick(dt){
   const motion=CONTROLLER.motion;
   for(const key in motion)motion[key]=0;
   if(skate){
+    if(edge(10)&&!skateAir()){controllerReleaseKeys();controllerTap('KeyQ');return;}
     if(edge(5))controllerTap('KeyE');
-    controllerHint('A / stick forward push · X mongo · B brake · hold stick back: pivot/reverse · right stick tricks · hold RT at takeoff: air out · LB + right stick look · RB interact · Y actions');
+    controllerHint('L3 step off · A / stick forward push · X mongo · B brake · hold stick back: pivot/reverse · right stick tricks · hold RT at takeoff: air out · LB + right stick look · RB interact · Y actions');
   }else{
     if(edge(4))cycleQuickSlot(-1);if(edge(5))cycleQuickSlot(1);
     hold('Space',held(0));hold(vehicle?'KeyS':'KeyC',held(1));hold('KeyE',held(2));
