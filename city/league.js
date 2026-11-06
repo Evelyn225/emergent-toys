@@ -41,6 +41,7 @@ function recordResult(n, home, away, score, scorers = []) {
   H.p++; A.p++; H.gf += h; H.ga += a; A.gf += a; A.ga += h;
   if (h > a) { H.w++; A.l++; H.pts += 3; } else if (h < a) { A.w++; H.l++; A.pts += 3; } else { H.d++; A.d++; H.pts++; A.pts++; }
   league.results.push({ n, home, away, score, scorers: scorers.slice(0, 8) }); if (league.results.length > 40) league.results.shift();
+  settleBets(n, home, away, score); // (stadium-extras.js)
 }
 // a match played elsewhere (or one at the ground nobody watched): a scoreline from the two sides' strength, goals
 // as a Poisson count, the home side a little ahead. Cheap: a full simulation is kept for the match you watch
@@ -88,4 +89,4 @@ const groundPairIndex = n => { const g = groundPair(n); return roundPairs(roundO
 const stadiumPlaySeconds = m => m.minutes * 60 + 4 + 8;
 // the save: the league goes with you
 const leagueSave = () => league;
-function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1 }; }
+function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1, bets: Array.isArray(d.bets) ? d.bets.slice(0, 8) : [], seasonTicket: d.seasonTicket ?? null }; }

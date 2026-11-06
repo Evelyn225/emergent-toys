@@ -7535,6 +7535,7 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
+  scarf: { name: 'club scarf', price: 12, kind: 'gear' }, programme: { name: 'match programme', price: 4, kind: 'gear' }, // (the football: it.of, the club; the fixture: stadium-extras.js)
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   petcat: { name: 'pet cat carrier', price: 80, kind: 'pet' },
   petdog: { name: 'pet dog carrier', price: 80, kind: 'pet' },
@@ -7855,6 +7856,8 @@ function useHeld(near) {
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
     case 'movinglamp': return ['You straighten the amber shade. There is a little chip in the base, and a handwritten label: "Still works. New place has no room."',null];
     case 'yoyo': yoyo.out = !yoyo.out; if (yoyo.out) yoyo.aimX = yoyo.aimY = 0; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Move the mouse to steer and reel it in or out.' : 'You reel it back in.', 'whirr'];
+    case 'scarf': return useScarf(it);
+    case 'programme': return readProgramme(it);
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -7952,6 +7955,8 @@ const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().
 function itemName(it) {
   if (ITEMS[it.id].kind === 'drug') return `${DRUG_QUALITY[it.q] || 'standard'} ${ITEMS[it.id].name}`;
   if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
+  if (it.id === 'scarf' && it.of) return `${clubName(it.of)} scarf`;
+  if (it.id === 'programme' && it.of != null && typeof it.of === 'string') return `programme: ${it.of}`;
   return it.kg ? catchName(it) : ITEMS[it.id].name;
 }
 const dropped = []; // inventory item plus { x, y, at, z }
@@ -27600,6 +27605,7 @@ function promptText() {
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
+    if (room.kind === 'stadium' && nearKiosk() && !stadiumTV) return 'E: the kiosk (pies & pints)';
     if (room.kind === 'stadium') return (stadiumTV ? 'V: back to your seat   ' : (body.seat ? '' : 'C: sit down   ') + 'V: TV view   ') + 'E: leave the ground';
     const hotelPrompt=hotelAmenityPrompt();if(hotelPrompt)return hotelPrompt;
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
@@ -28166,6 +28172,7 @@ function interact() {
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
+    if (room.kind === 'stadium' && nearKiosk()) return openShop('PIES & PINTS', KIOSK_STOCK); // (the kiosk inside the gate: stadium-extras.js)
     if (room.kind === 'stadium') { body.seat = null; say('You head for the exit.', 2); return leaveRoom(); } // (out early, whenever you like)
     if(hotelAmenityUse())return;
     if (room.kind === 'train') return;
@@ -31516,6 +31523,7 @@ function recordResult(n, home, away, score, scorers = []) {
   H.p++; A.p++; H.gf += h; H.ga += a; A.gf += a; A.ga += h;
   if (h > a) { H.w++; A.l++; H.pts += 3; } else if (h < a) { A.w++; H.l++; A.pts += 3; } else { H.d++; A.d++; H.pts++; A.pts++; }
   league.results.push({ n, home, away, score, scorers: scorers.slice(0, 8) }); if (league.results.length > 40) league.results.shift();
+  settleBets(n, home, away, score); // (stadium-extras.js)
 }
 // a match played elsewhere (or one at the ground nobody watched): a scoreline from the two sides' strength, goals
 // as a Poisson count, the home side a little ahead. Cheap: a full simulation is kept for the match you watch
@@ -31563,7 +31571,7 @@ const groundPairIndex = n => { const g = groundPair(n); return roundPairs(roundO
 const stadiumPlaySeconds = m => m.minutes * 60 + 4 + 8;
 // the save: the league goes with you
 const leagueSave = () => league;
-function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1 }; }
+function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1, bets: Array.isArray(d.bets) ? d.bets.slice(0, 8) : [], seasonTicket: d.seasonTicket ?? null }; }
 // ===== the Yards ground (STADIUM_PLAN.md): an old-school football ground. Four separate stands round a full-size pitch:
 // the tall main stand down the north side, the east and south stands, and a standing terrace behind the west goal,
 // each with a pitched roof on steel columns; four floodlight pylons in the corners; a scoreboard over the south stand.
@@ -31799,7 +31807,7 @@ function stadiumGrid() {
 ROOM_DEFS.stadium = {
   grid: stadiumGrid(), light: 1, height: 40, vis: 200, floor: 'pitch', ceil: 'sky', sign: false, wall: stadiumWall, rise: stadiumRise, outdoor: true,
   props: r => {
-    const p = [matchProp(), scoreboard(), bigScreen(), ...goalFrame(-1), ...goalFrame(1)];
+    const p = [matchProp(), scoreboard(), bigScreen(), kioskProp(), ...goalFrame(-1), ...goalFrame(1)];
     for (const s of STANDS) p.push(...standProps(s, r));
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
@@ -31939,12 +31947,14 @@ function openStadiumTickets() {
   const minute = stadiumMatch?.slot === f.n && f.live ? Math.floor(Math.min(90, MatchEngine.minute(stadiumLiveMatch()))) : null;
   showPanel(ticketEl, `<style>#tickets .tbl{display:grid;grid-template-columns:1fr 2.5em 3em 2.5em;gap:4px;font-size:.9em;opacity:.9}#tickets .tbl span:not(:first-child){text-align:right}</style>
     <h1>The Yards Ground</h1><p class="sub">${clubName(f.home)} v ${clubName(f.away)} &middot; ${f.live ? `kicked off${minute != null ? `, ${minute}'` : ''}` : 'kick-off ' + f.when.replace('TODAY ', '')} &middot; you have ${fmt$(money)}</p>
-    ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${fmt$(s.price)}</span></button>`).join('')}
+    ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price && !hasSeasonTicket() ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${hasSeasonTicket() ? 'season ticket' : fmt$(s.price)}</span></button>`).join('')}
+    ${stadiumExtrasHtml(f)}
     <h2>the table</h2><div class="tbl"><span></span><span>P</span><span>GD</span><span>Pts</span></div>${table}
     <p class="hint">E / Esc close</p>`);
   ticketEl.onclick = e => {
+    const x = e.target.closest('button[data-x]'); if (x) { const r = stadiumExtra(f, x.dataset.x); if (r) say(r[1], 4); return openStadiumTickets(); }
     const b = e.target.closest('button[data-sec]'); if (!b) return;
-    const s = STADIUM_SECTIONS[b.dataset.sec]; if (!pay(s.price)) return say('Not enough on you.', 2);
+    const s = STADIUM_SECTIONS[b.dataset.sec]; if (!hasSeasonTicket() && !pay(s.price)) return say('Not enough on you.', 2);
     hidePanel(ticketEl); enterStadium(b.dataset.sec);
     say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
   };
@@ -32102,6 +32112,90 @@ function stadiumCrowdLevel() {
   if (m.phase === 'ft') return .3;
   if (m.phase === 'goal') return 1;
   return .55 + .45 * (m.danger || 0);
+}
+// ===== the extras at the Yards ground (STADIUM_PLAN.md, phase 7): a bet on the match at the ticket window (odds from the
+// two sides' strength, paid at full time), a season ticket (every match this season, any section), a club scarf and a
+// programme from the seller by the turnstiles, and the food kiosk inside the gate.
+const SEASON_TICKET_PRICE = 300, BET_STAKES = [10, 50], KIOSK_STOCK = ['hotdog', 'chips', 'candy', 'soda', 'beer', 'coffee'];
+const KIOSK = { x: 137.5, y: 103.5 }; // (inside the gate, in the corner you come in by)
+// the chances of each result for a fixture, from the same model the results elsewhere use (league.js quickScore)
+function matchOdds(home, away) {
+  const rate = id => MatchEngine.CLUBS.find(c => c.id === id)?.rating ?? .55, dh = rate(home) - rate(away);
+  const lh = clamp(1.75 + dh * 4, .5, 3.6), la = clamp(1.4 - dh * 4, .4, 3.2), pois = (l, k) => { let p = Math.exp(-l); for (let j = 1; j <= k; j++) p *= l / j; return p; };
+  let ph = 0, pd = 0, pa = 0;
+  for (let i = 0; i <= 9; i++) for (let j = 0; j <= 9; j++) { const p = pois(lh, i) * pois(la, j); if (i > j) ph += p; else if (i === j) pd += p; else pa += p; }
+  const margin = .92; // (the house's cut)
+  return { home: +(margin / ph).toFixed(2), draw: +(margin / pd).toFixed(2), away: +(margin / pa).toFixed(2) };
+}
+const hasSeasonTicket = () => league.seasonTicket === league.season;
+function placeBet(f, pick, stake) {
+  league.bets ||= [];
+  if (league.bets.some(b => b.n === f.n)) return [false, 'One bet a match. Yours is on.'];
+  if (f.live) return [false, 'Betting closed at kick-off.'];
+  if (!pay(stake)) return [false, 'Not enough on you.'];
+  const odds = matchOdds(f.home, f.away)[pick];
+  league.bets.push({ n: f.n, home: f.home, away: f.away, pick, stake, odds });
+  return [true, `${fmt$(stake)} on ${pick === 'draw' ? 'the draw' : clubName(pick === 'home' ? f.home : f.away)} at ${odds.toFixed(2)}. Pays ${fmt$(stake * odds)}.`];
+}
+// a result in (league.js recordResult): any bet on it settled
+function settleBets(n, home, away, score) {
+  if (!league.bets?.length) return;
+  for (const b of league.bets.filter(b => b.n === n && b.home === home && b.away === away)) {
+    const won = b.pick === (score[0] > score[1] ? 'home' : score[0] < score[1] ? 'away' : 'draw');
+    if (won) { earn(b.stake * b.odds); say(`Your bet came in: ${clubName(home)} ${score[0]}-${score[1]} ${clubName(away)}. ${fmt$(b.stake * b.odds)} collected.`, 6); }
+    else say(`Your bet's lost: ${clubName(home)} ${score[0]}-${score[1]} ${clubName(away)}.`, 4);
+  }
+  league.bets = league.bets.filter(b => b.n !== n);
+}
+// the scarf: held up, and at the ground the end around you joins in if it's your side's match
+function useScarf(it) {
+  const m = stadiumMatch, there = mode === 'room' && room?.kind === 'stadium' && m, side = there ? m.teams.findIndex(t => t.club.id === it.of) : -1;
+  if (side >= 0) { if (actx) sfxStadium(m.phase === 'play' ? 'chant' : 'cheer', m); return [`You hold your ${clubName(it.of)} scarf up over your head, and the end round you takes up the song.`, null]; }
+  if (there) return ['You hold the scarf up. A few people look at it, and at you, and look away. Wrong club.', null];
+  return [`You hold up your ${clubName(it.of || 'yards')} scarf. Nobody joins in. It's not match day here.`, null];
+}
+// the programme: both sides' line-ups, as named on the day
+function readProgramme(it) {
+  const n = it.uses; // (the programme keeps its fixture's slot in uses: saved with it)
+  const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) && n >= 0 ? stadiumFixtureTeams(n) : null;
+  if (!m) return ['A programme from an old match. You flick through the adverts.', 'page'];
+  const xi = t => t.players.filter(p => !p.off && !p.sub).map(p => p.name).join(', ');
+  return [`${m.teams[0].name}: ${xi(m.teams[0])}.  ${m.teams[1].name}: ${xi(m.teams[1])}.`, 'page'];
+}
+// the teams for fixture n, as the engine would name them (the same seed the match is played with)
+function stadiumFixtureTeams(n) {
+  const [home, away] = groundPair(n);
+  return MatchEngine.create({ home, away, seed: fixtureSeed(n, groundPairIndex(n)) });
+}
+// the kiosk inside the gate: near enough to reach, and what it sells
+const nearKiosk = () => mode === 'room' && room?.kind === 'stadium' && Math.hypot(px - KIOSK.x, py - KIOSK.y) < 1.6;
+const kioskProp = () => ({ x: KIOSK.x, y: KIOSK.y, radius: 2, box: boxAt(KIOSK.x, KIOSK.y, 1, 0, 1.4, .5, 0, 1.1), draw: (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, 1.4, .5, 0, 1.1), (i, t, L) => { BG[i] = C(HIT.face === 5 ? GRAY : RED, (HIT.face === 5 ? 2.4 : 3) + L * .2); return set(i, ' ', 0), true; }); // the counter
+  drawBox(boxAt(vx, vy + .5, 1, 0, 1.5, .05, 2.1, 2.6), (i, t, L) => { // its sign
+    if (HIT.face !== 3 && HIT.face !== 4) { BG[i] = C(GRAY, 1.5); return set(i, ' ', 0), true; }
+    const ch = faceText('PIES & PINTS', i, t, vx, vy + .5, 1.4, 2.2, .32); BG[i] = C(RED, 3); return set(i, ch && ch !== ' ' ? ch : ' ', C(YEL, 15)), true;
+  });
+  for (const e of [-1, 1]) drawBox(boxAt(vx + e * 1.35, vy + .45, 1, 0, .05, .05, 1.1, 2.1), solid(GRAY));
+} });
+
+// the ticket window's extras: the season ticket, a bet on today's match, the scarf seller and the programmes
+function stadiumExtrasHtml(f) {
+  const odds = matchOdds(f.home, f.away), bet = league.bets?.find(b => b.n === f.n);
+  const btn = (x, label, price, off, note = '') => `<button class="item" data-x="${x}" ${off ? 'disabled' : ''}><span>${label}${note ? `<br><small>${note}</small>` : ''}</span><span class="lead"></span><span class="v">${price}</span></button>`;
+  const betRows = bet ? `<p class="sub">Your bet: ${fmt$(bet.stake)} on ${bet.pick === 'draw' ? 'the draw' : clubName(bet.pick === 'home' ? f.home : f.away)} at ${bet.odds.toFixed(2)}.</p>`
+    : f.live ? '<p class="sub">Betting closed at kick-off.</p>'
+    : ['home', 'draw', 'away'].map(k => BET_STAKES.map(st => btn(`bet:${k}:${st}`, `${fmt$(st)} on ${k === 'draw' ? 'the draw' : clubName(k === 'home' ? f.home : f.away)}`, `at ${odds[k].toFixed(2)}`, money < st, st === BET_STAKES[0] ? `pays ${fmt$(st * odds[k])}` : '')).join('')).join('');
+  return `${hasSeasonTicket() ? '<p class="sub">Season ticket holder: any section, every match this season.</p>' : btn('season', 'Season ticket', fmt$(SEASON_TICKET_PRICE), money < SEASON_TICKET_PRICE, 'Every match at the ground this season, any section')}
+    <h2>a bet on it</h2>${betRows}
+    <h2>the seller by the turnstiles</h2>
+    ${[f.home, f.away].map(id => btn(`scarf:${id}`, `${clubName(id)} scarf`, fmt$(ITEMS.scarf.price), money < ITEMS.scarf.price)).join('')}
+    ${btn('programme', `Programme: ${clubShort(f.home)} v ${clubShort(f.away)}`, fmt$(ITEMS.programme.price), money < ITEMS.programme.price, 'Both line-ups (Q to read)')}`;
+}
+function stadiumExtra(f, x) {
+  if (x === 'season') { if (!pay(SEASON_TICKET_PRICE)) return [false, 'Not enough on you.']; league.seasonTicket = league.season; return [true, 'Season ticket. Every match at the Yards this season: walk straight in.']; }
+  if (x.startsWith('bet:')) { const [, pick, st] = x.split(':'); return placeBet(f, pick, +st); }
+  if (x.startsWith('scarf:')) { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.scarf.price)) return [false, 'Not enough on you.']; carryItem({ id: 'scarf', uses: 0, of: x.slice(6) }); return [true, `A ${clubName(x.slice(6))} scarf. Q to hold it up.`]; }
+  if (x === 'programme') { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.programme.price)) return [false, 'Not enough on you.']; carryItem({ id: 'programme', uses: f.n, of: `${clubShort(f.home)} v ${clubShort(f.away)}` }); return [true, 'A programme. Q to read the line-ups.']; }
 }
 // ===== a top-down view of a simulated match (Dev tools > Other > Watch a match): the engine (match-engine.js) drawn
 // plainly on a canvas, to watch the football itself before there's a stadium round it. Players are discs in their
@@ -32975,6 +33069,8 @@ const DROPPED_ART = {
     (c, r) => c === '@' ? C(ORANGE, 10 + fx.vape * 1.7) : c === 'o' ? C(GRAY, 9) : /[A-Z]/.test(c) ? C(YEL, 14) : C(ORANGE, 12)],
   pipe: () => [['  ___', ' (___)', '  | |___', '  |_____|'], (c, r) => r < 2 ? C(BRICK, 12) : C(BRICK, 10)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
+  scarf: it => { const [a, b] = (MatchEngine.CLUBS.find(c => c.id === it?.of)?.kit || ['RED', 'WHITE']).map(k => STADIUM_KIT[k] ?? GRAY); return [['||##==##==##||'], (c, r, k) => C(k % 4 < 2 ? a : b, 13)]; },
+  programme: () => [[' ________', '|YARDS   |', '|[~~~~~~]|', '|________|'], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : c === '~' ? C(GREEN, 12) : C(RED, 13)],
   sharkplush: () => [['        /|', '  ___.-/ |__', '<(________o_>', "      \\/  \\/"], (c, r) => c === 'o' ? C(WHITE, 15) : r === 2 && c === '_' ? C(WHITE, 13) : C(GRAY, 13)],
   snowglobe: () => [['  .-----.', ' / . * . \\', '|  ><>  * |', ' \\ * . . /', "  '-----'", ' [=======]'], (c, r) => r === 5 ? C(BRICK, 13) : c === '>' || c === '<' ? C(ORANGE, 15) : c === '*' || c === '.' ? C(WHITE, 15) : C(CYAN, 12)],
   spraypaint: (it, f) => [['   _', '  [o]', ' .---.', ' |   |', ' |ZAP|', ' |   |', " '---'"], (c, r) => r < 2 ? C(GRAY, 13) : c === 'Z' || c === 'A' || c === 'P' ? C(WHITE, 15) : C([MAG, CYAN, GREEN, ORANGE][it.uses & 3], 13)],
@@ -33362,7 +33458,7 @@ const ITEM_SIZE = {
   onion:.08,tomatoes:.18,garlic:.065,mushrooms:.18,greens:.28,peppers:.18,chilli:.13,
   lemon:.10,rawchicken:.26,mince:.20,bacon:.24,tofu:.14,
   fishstick:.30,fishsandwich:.18,grilledcheese:.16,toast:.14,homeburger:.14,skewers:.30,roastchicken:.32,
-  ball:.22,umbrella:.85,newspaper:.40,flowers:.45,telescope:.27,camera:.12,harmonica:.10,
+  ball:.22,umbrella:.85,newspaper:.40,flowers:.45,telescope:.27,camera:.12,harmonica:.10,scarf:.6,programme:.3,
   jadebangle:.075,jadedragon:.18,sharkplush:.55,plushcat:.30,plushbear:.35,snowglobe:.12,
   sparklers:.28,pipe:.15,ammo:.13,knife:.22,joint:.10,
 
@@ -34403,6 +34499,23 @@ Object.assign(DENSE, {
     if (x < 1.2 && x > -3.6 && y > -3.4 && y < 3.6 && Math.abs(x + 1.2) < hw) return y < -2.8 ? ['=', C(BRICK, 8)] : dLit(0.5 + 0.45 * dCyl(x + 1.2, hw), BRICK, 6);
     if (y > 1.4 && y < 2.6 - (x - 1) * 0.08 && x >= 0.6 && x < 8) return ['=', dCol(BRICK, 0.6 - (y - 1.4) * 0.3, 5)];
     return null;
+  }),
+  scarf: it => { // knitted bars of the club's two colours, its name across the middle, tassels at the ends
+    const [a, b] = (MatchEngine.CLUBS.find(c => c.id === it?.of)?.kit || ['RED', 'WHITE']).map(k => STADIUM_KIT[k] ?? GRAY), word = (MatchEngine.CLUBS.find(c => c.id === it?.of)?.short || 'YAR');
+    return sculptSurface(34, 7, (x, y) => {
+      if (Math.abs(y) > 2.2) return null;
+      if (Math.abs(x) > 10.6) return Math.abs(x) < 11.8 && fract(y * 1.4) < .5 ? ['|', dCol(a, .7)] : null; // (the tassels)
+      const t = dText(x, y, 0, 0, word); if (t) return [t, C(b, 15), true];
+      const bar = Math.floor((x + 10.6) / 2.4) & 1, knit = fract(y * 1.6 + (x * .8 | 0) * .5) < .5;
+      return dLit(.6 + (knit ? .12 : 0) - Math.abs(y) * .05, bar ? b : a, 7);
+    });
+  },
+  programme: it => sculptSurface(26, 14, (x, y) => { // the cover: the ground's name, the fixture, a photo of the pitch
+    if (Math.abs(x) > 7.2 || Math.abs(y) > 6.2) return null;
+    const t = dText(x, y, 0, -4.8, 'YARDS GROUND') || dText(x, y, 0, 4.6, typeof it?.of === 'string' ? it.of.toUpperCase().slice(0, 12) : 'PROGRAMME');
+    if (t) return [t, C(WHITE, 15), true];
+    if (y > -3.6 && y < 3.4 && Math.abs(x) < 6.2) return Math.abs(fract((x + 6.2) / 2.5) - .5) < .02 || Math.abs(y + .1) < .15 ? ['-', C(WHITE, 12)] : dLit(.55 + (Math.floor((x + 6.2) / 1.25) & 1) * .1, GREEN, 6);
+    return dLit(.7 - Math.abs(y) * .02, RED, 6);
   }),
   harmonica: () => sculptSurface(32, 7, (x, y) => { // chrome covers, a row of holes
     if (Math.abs(x) > 9 || Math.abs(y) > 2.6) return null;
@@ -52347,7 +52460,7 @@ function loadGame() {
   // Still load progress if storage is full, but retry the backup before allowing any overwrite.
   if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
   const d = prepared.data;
-  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] || it.id === 'scarf' && MatchEngine.CLUBS.some(c => c.id === it.of) || it.id === 'programme' && typeof it.of === 'string' && it.of.length < 24 ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   loadStreetScenes(d.streetScenes);
