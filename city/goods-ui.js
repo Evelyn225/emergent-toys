@@ -596,7 +596,7 @@ function drawDropped(d, vx, vy, unit) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed && !drugEffects.weed && !drugEffects.neon);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || stadiumTVOn() || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed && !drugEffects.weed && !drugEffects.neon);
 function hotbar() {
   if (!hotbarUp()) return cv.height;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0), width = maxX - 6;

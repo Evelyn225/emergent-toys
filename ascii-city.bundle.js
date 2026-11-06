@@ -27259,7 +27259,7 @@ function render(dt,sceneOnly=false,mask=null) {
     chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
-    drawHeld(dt); // what's in your hand (or mouth, or under your feet)
+    if (!stadiumTVOn()) drawHeld(dt); // what's in your hand (or mouth, or under your feet); not on the TV
   }
   drawTelescope(); // (the eyepiece, in the grid: held-curios.js)
   present();
@@ -27809,7 +27809,7 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  if(!telescopeActive())drawHeldBig();
+  if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -27838,7 +27838,7 @@ function hud() {
   const meters = needMeters(),alert=needsAlert(),alertLines=alert?wrapText(alert.text,maxW):[];
   const alertHeight=alertLines.length?(FS+4)*alertLines.length+8:0;
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14 + alertHeight;
-  hudBottom += drawNavigationCompass(hudBottom);
+  if (!stadiumTVOn()) hudBottom += drawNavigationCompass(hudBottom); // (the TV picture's just the match)
   wantedHud();
   minimap();
   const hotbarTop = hotbar();
@@ -31552,7 +31552,7 @@ function stadiumLiveMatch() {
   const f = stadiumNextFixture();
   if (!stadiumMatch || stadiumMatch.slot !== f.n) {
     stadiumMatch = MatchEngine.create({ home: f.home, away: f.away, seed: fixtureSeed(f.n, groundPairIndex(f.n)) });
-    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.crowd = .8 + hash(f.n, 3, 2321) * .17;
+    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.crowd = .55 + hash(f.n, 3, 2321) * .3; // (a decent gate: plenty of empty seats about)
   }
   const m = stadiumMatch, progress = clamp((nowHour() - f.kick) / MATCH_HOURS, 0, 1);
   if (progress > 0) { const target = progress * stadiumPlaySeconds(m); while (m.t < target && m.phase !== 'ft') MatchEngine.tick(m); }
@@ -31652,7 +31652,7 @@ function standProps(s, r) {
     const b0 = s.front + s.out * k * s.depth, b1 = b0 + s.out * s.depth, bc = (b0 + b1) / 2, top = (k + 1) * s.rise;
     out.push(box(mid, bc, half, s.depth / 2, 0, top, (i, t, L) => { // the tier: its tread (a seat back along it on a seated stand), its riser
       const f = HIT.face, isTop = f === 5, u = along ? HIT.u : HIT.v;
-      if (isTop && s.seats) { const seat = fract(u / .5); BG[i] = C(s.home > .5 ? RED : BLUE, (seat < .15 ? .8 : 1.6) + L * .1); return set(i, ' ', 0), true; }
+      if (isTop && s.seats) { const seat = fract(u / SEAT_PITCH); BG[i] = C(s.home > .5 ? RED : BLUE, (seat < .15 ? .8 : 1.6) + L * .1); return set(i, ' ', 0), true; }
       BG[i] = C(GRAY, (isTop ? 2.4 : 1.7 * shadeFace(f)) + L * .15 - (isTop && fract(u / 4) < .02 ? .5 : 0)); return set(i, ' ', 0), true;
     }, { walk: true }));
     // the supporters along the row: a seat every half metre, most of them taken, everyone facing the pitch
@@ -31671,14 +31671,15 @@ function standProps(s, r) {
 }
 // the crowd along a row: a head, a shirt in their side's colours, sometimes a scarf; an empty seat here and there;
 // on their feet when their side scores, arms up
+const SEAT_PITCH = .65; // (a seat every 65cm along a row: room between neighbours)
 function crowdShade(i, t, L, s, k, u) {
-  const m = stadiumMatch, seat = Math.floor(u / .5), h = hash(seat, k, s.id.length * 31 + 2203), fill = m ? m.crowd : .8;
+  const m = stadiumMatch, seat = Math.floor(u / SEAT_PITCH), h = hash(seat, k, s.id.length * 31 + 2203), fill = m ? m.crowd : .8;
   if (h > fill) return false; // (an empty seat: you see it, or the row behind)
   const sx = s.axis === 'y' ? s.a0 + (s.a1 - s.a0) / 2 + u : 0, sy = s.front + s.out * (k + .5) * s.depth;
   if (s.axis === 'y' && Math.abs(sx - px) < .8 && Math.abs(sy - py) < .5) return false; // (the seat you're in, and the ones either side, are yours)
   const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
   const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, standing = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
-  const zIn = HIT.w - (k + 1) * s.rise, tall = standing ? 1.55 : 1.05, w = fract(u / .5) - .5;
+  const zIn = HIT.w - (k + 1) * s.rise, tall = standing ? 1.55 : 1.05, w = (fract(u / SEAT_PITCH) - .5) * SEAT_PITCH / .5; // (w: across the seat, in half-metres from its middle)
   if (HIT.face === 5) { // seen from above (the rows below you): the tops of heads, shoulders either side
     const across = Math.abs((s.axis === 'y' ? HIT.v : HIT.u)) / (s.depth * .3);
     if (Math.abs(w) > .34 || across > .9) return false;
@@ -31773,10 +31774,16 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
   const rx = pitchX(m.ref.pos[0]), ry = pitchY(m.ref.pos[1]);
   if (!replay && inView(rx - px, ry - py, 1)) drawFigure(rx - px, ry - py, 0, 1.78, m.ref.face[0], m.ref.face[1], stadiumRefLook(), 'stand', { hold: m.ref });
   // the ball, and its shadow on the grass (it's small: never less than a cell, so you can follow it from the stands)
-  const b = replay ? replay.b : m.ball.p, bx = pitchX(b[0]) - px, by = pitchY(b[1]) - py, d = Math.hypot(bx, by), r = Math.max(.11, d * .45 / projY);
+  const b = replay ? replay.b : m.ball.p, bx = pitchX(b[0]) - px, by = pitchY(b[1]) - py, d = Math.hypot(bx, by), tv = stadiumTVOn(), r = Math.max(tv ? .32 : .14, d * (tv ? 1.8 : .8) / projY); // (bigger than life on TV, so you can follow it)
   if (inView(bx, by, 1)) {
-    dot(bx, by, .005, r * .9, (i) => { BG[i] = C(GRAY, .6); return set(i, ' ', 0), true; });
-    dot(bx, by, b[2] - .11, r, (i, t, L) => { BG[i] = C(WHITE, 13); return set(i, ' ', 0), true; });
+    // a box the ball's size, facing you, cut to a disc: its shadow flat on the grass, the ball itself where it is (up in the air too)
+    const fx = bx / (d || 1), fy = by / (d || 1), zc = Math.max(r, b[2]);
+    drawBox(boxAt(bx, by, -fy, fx, r * 1.1, .02, .005, .02), (i) => { if (HIT.face !== 5) return false; if ((HIT.u / (r * 1.1)) ** 2 + (HIT.v / .02) ** 2 > 1.2) return false; BG[i] = C(GRAY, .8); return set(i, ' ', 0), true; });
+    drawBox(boxAt(bx, by, -fy, fx, r, r, zc - r, zc + r), (i) => {
+      const u = HIT.face === 3 || HIT.face === 4 ? HIT.u : HIT.v, w = HIT.w - zc;
+      if (u * u + w * w > r * r) return false;
+      BG[i] = C(WHITE, 14 - (u * u + w * w > r * r * .55 ? 3 : 0)); return set(i, tv && u * u + w * w < r * r * .3 ? 'o' : ' ', C(GRAY, 4)), true; // (lit white, shading at the rim; on TV, a panel)
+    });
   }
 } });
 // the ground's grid: walls round the outside, a gate in the south-east corner
@@ -33397,7 +33404,7 @@ function drawDropped(d, vx, vy, unit) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed && !drugEffects.weed && !drugEffects.neon);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || stadiumTVOn() || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed && !drugEffects.weed && !drugEffects.neon);
 function hotbar() {
   if (!hotbarUp()) return cv.height;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0), width = maxX - 6;

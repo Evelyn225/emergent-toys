@@ -271,7 +271,7 @@ function render(dt,sceneOnly=false,mask=null) {
     chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
-    drawHeld(dt); // what's in your hand (or mouth, or under your feet)
+    if (!stadiumTVOn()) drawHeld(dt); // what's in your hand (or mouth, or under your feet); not on the TV
   }
   drawTelescope(); // (the eyepiece, in the grid: held-curios.js)
   present();

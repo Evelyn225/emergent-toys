@@ -46,3 +46,14 @@ test('the boards keep you off the pitch, and the pitch is marked where the engin
  assert.ok(r.blocked,'the advertising boards are in the way');assert.ok(r.white>30,'the halfway line and centre circle round you');
  assert.ok(r.mark<.01);assert.ok(r.grass>1);
 }));
+
+test('the TV picture is just the match: no hand, no quick slots, and the ball big enough to follow',()=>ground(async p=>{
+ const r=await p.evaluate(()=>{clearInventory();carryItem({id:'soda',uses:1});held=0;
+  let hand=0;const big=drawHeldBig;drawHeldBig=()=>{hand++;};
+  try{stadiumTV=false;hud();const seat={hand,slots:hotbarUp()};hand=0;stadiumTV=true;hud();const tv={hand,slots:hotbarUp()};
+   const cam=stadiumCam(1),d=Math.hypot(pitchX(stadiumMatch.ball.p[0])-cam.x,pitchY(stadiumMatch.ball.p[1])-cam.y);
+   return{seat,tv,ballCells:2*Math.max(.32,d*1.8/projY)*projY/d};}finally{drawHeldBig=big;stadiumTV=false;}});
+ assert.deepEqual(r.seat,{hand:1,slots:true},'in your seat, your soda in your hand');
+ assert.deepEqual(r.tv,{hand:0,slots:false},'on the TV, neither');
+ assert.ok(r.ballCells>=3,'the ball three cells or more across on TV');
+}));

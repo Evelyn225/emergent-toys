@@ -352,7 +352,7 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  if(!telescopeActive())drawHeldBig();
+  if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -381,7 +381,7 @@ function hud() {
   const meters = needMeters(),alert=needsAlert(),alertLines=alert?wrapText(alert.text,maxW):[];
   const alertHeight=alertLines.length?(FS+4)*alertLines.length+8:0;
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14 + alertHeight;
-  hudBottom += drawNavigationCompass(hudBottom);
+  if (!stadiumTVOn()) hudBottom += drawNavigationCompass(hudBottom); // (the TV picture's just the match)
   wantedHud();
   minimap();
   const hotbarTop = hotbar();
