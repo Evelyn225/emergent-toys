@@ -23,7 +23,7 @@ function dBites(x, y, f, R, n = 3) {
   return false;
 }
 const DENSE = {
-  apple: (it, f) => sculpt(26, 13, (x, y) => {
+  apple: (it, f) => foodSculpt(26, 13, (x, y) => {
     const R = 5.2;
     if (Math.abs(x - 0.25 - (y + R) * -0.18) < 0.28 && y < -R * 0.65 && y > -R * 1.2) return ['|', C(BRICK, 11)]; // the stem
     const lx = x - 1.5, ly = y + R * 1.02, lu = lx * 0.8 + ly * 0.6, lv = -lx * 0.6 + ly * 0.8; // the leaf, tilted
@@ -36,7 +36,7 @@ const DENSE = {
     const b = dSphere(x / 1.08, y, R), spec = Math.hypot(x / 1.08 + R * 0.38, y + R * 0.42) < 0.75; // a glint, top left
     return [spec ? '@' : dFill(b), spec ? C(WHITE, 15) : C(RED, 6 + b * 9)];
   }),
-  coffee: (it, f) => sculpt(30, 17, (x, y) => {
+  coffee: (it, f) => foodSculpt(30, 17, (x, y) => {
     const top = -4.6, bot = 7.5, hw = 4.6 - (y - top) / (bot - top) * 1.1; // a paper cup, narrowing to the base
     if (y < top - 0.2) { // the steam: two wisps curling up while it's hot
       if (f <= 0.25 || y < top - 3.6) return null;
@@ -47,18 +47,18 @@ const DENSE = {
       if (Math.abs(x) > hw + 0.35) return null;
       if (y > top + 0.6) return ['=', C(WHITE, 13)];
       if (Math.abs(x) > hw - 0.3) return null;
-      return [Math.abs(x + 0.9) < 0.3 ? 'o' : dRamp(0.4 + 0.5 * dCyl(x, hw)), C(WHITE, 8 + dCyl(x, hw) * 6)];
+      return [' ',C(Math.abs(x+.9)<.3?GRAY:WHITE,Math.abs(x+.9)<.3?3:8+dCyl(x,hw)*6)];
     }
     if (y > bot || Math.abs(x) > hw) return null;
     const b = dCyl(x, hw), band = y > -0.6 && y < 3.2;
     if (band) { // the sleeve: brown card, CAFE printed on it
       const word = 'CAFE', k = Math.floor((x + 1.2) / 0.6);
-      if (Math.abs(y - 1.3) < 0.5 && k >= 0 && k < 4) return [word[k], C(WHITE, 15)];
+      if (Math.abs(y - 1.3) < 0.5 && k >= 0 && k < 4) return [word[k],C(WHITE,15),true];
       return [dFill(b * 0.8), C(BRICK, 6 + b * 8)];
     }
     return [dFill(b), C(WHITE, 7 + b * 8)];
   }),
-  slice: (it, f) => sculpt(26, 14, (x, y) => {
+  slice: (it, f) => foodSculpt(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
     const eaten = (1 - f) * (tip - top - 2.5); // eaten from the crust down (the tip stays in your hand), a bite-shaped edge

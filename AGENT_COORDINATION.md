@@ -10,7 +10,7 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** pass 22's final subway chunk adds a recessed track bed, supported segmented rails, joined platform/tunnel faces and two bogies per car (`codex/subway-track-bogies`). The tunnel clears the whole car; wheels share the rail-head datum. Pass 22 is checked as a first pass after the earlier station, door and cabin work. Next is pass 27, inventory/held objects, then 29–32 and abandoned shopfronts (33). The video-store feature is merged; its after-hours customer correction and the airport return-flight fixture correction are in #442. See `WORLD_QUALITY.md` for validation and timings; skating stays separately tracked.
+- **Codex:** current pass 27 chunk (`codex/held-street-food-drinks`) converts all 54 bought foods/drinks to solid colour, preserving labels, bites, portions, clear glasses and drink levels. Glass rims/sides remain continuous; the sake cup no longer gets bitten away. This follows #444's 44 grocery/cooked-meal models and grip layout; #444 also carries its CI-fixture corrections. Remaining in pass 27: tools/weapons/fishing gear, curios/electronics, and item-specific model/size follow-ups; then 29–32 and abandoned shopfronts (33). See `WORLD_QUALITY.md`; skating stays separately tracked.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. The user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
   authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check
