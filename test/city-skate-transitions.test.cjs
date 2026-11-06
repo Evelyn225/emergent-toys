@@ -57,3 +57,25 @@ test('vert air reaches about 1.5 m above the 3.6 m coping and re-enters',()=>{
  assert.ok(firstAir>0&&t.slice(firstAir+1).some(p=>p.contact==='transition'));
  assert.ok(t.every(p=>p.bail<=0));
 });
+
+test('both half-pipe walls support angled airs and unsteered fakie re-entry',()=>{
+ for(const transition of [{},{radius:.3,height:.36,extension:.06}])for(const yaw of [0,Math.PI,.2,Math.PI+.2]){
+  const run=skateSim([{frames:600}],{transition,speed:transition.extension?1:.8,yaw,dt:1/120,fixed:true});
+  const first=run.findIndex(p=>p.contact==='air');assert.ok(first>0);
+  const landing=run.slice(first+1).find(p=>p.contact==='transition');assert.ok(landing?.fakie,'straight or shallow angled returns remain tail-first');
+  assert.ok(run.every(p=>!p.bail),'both walls re-enter without a landing bail');
+  const air=run.slice(first,run.indexOf(landing));for(const p of air)assert.ok(Math.abs(Math.atan2(Math.sin(p.yaw-yaw),Math.cos(p.yaw-yaw)))<(Math.abs(Math.sin(yaw))<.01?.01:Math.PI/2),'no automatic half turn');
+ }
+});
+
+test('pops on either vert wall retain descending momentum and land fakie',()=>{
+ for(const yaw of [0,Math.PI]){
+  const opts={transition:{radius:.3,height:.36,extension:.06},speed:1,yaw,dt:1/120,fixed:true};
+  const natural=skateSim([{frames:500}],opts),first=natural.findIndex(p=>p.contact==='air');
+  const run=skateSim([{frames:first-12},{frames:6,keys:{Space:1}},{frames:550}],opts),start=run.findIndex(p=>p.contact==='air');
+  const landing=run.slice(start+1).find(p=>p.contact==='transition');
+  assert.ok(landing?.fakie,'a heightfield touchdown must not turn the board around');
+  assert.ok(Math.hypot(...landing.velocity)>.4,'falling speed flows into the wall constraint');
+  assert.ok(run.every(p=>!p.bail));
+ }
+});
