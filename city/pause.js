@@ -102,7 +102,7 @@ function buildPause() {
         <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. Tap arrows during an air to flip, or use Space plus arrows. Air tricks add no extra jump. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
         <b>hold C · RT at takeoff</b><span>air out of a bowl or ramp onto its deck. Without it, bowl airs favor returning inside. Choose before popping or crossing the coping; spins do not change that flight choice. For a coping boardslide, air out, turn the board across the tube and descend with speed along it.</span>
         <b>Q / E · LT / RT</b><span>hold in the air to grab; RT used for an air-out stays reserved until landing; mouse or right stick picks nose, tail or side. Release before landing.</span>
-        <b>gentle right stick / mouse</b><span>hold partway back for a manual or partway forward for a nose manual; adjust that same fore/aft pressure to balance. Full deflection loads a pop. Manuals link combos across flat ground.</span>
+        <b>gentle right stick / mouse</b><span>hold partway back for a manual or partway forward for a nose manual; adjust that same fore/aft pressure to balance. With a mouse, the starting drag centres the balance; use small forward/back movements while holding right-click. Full stick deflection loads a pop. Manuals link combos across flat ground.</span>
       </div>
       <h2>controls</h2>
       <div class="keys">

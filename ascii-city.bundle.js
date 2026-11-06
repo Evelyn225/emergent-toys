@@ -30892,7 +30892,7 @@ function buildPause() {
         <b>Space + arrows · touch Ollie</b><span>simple mode: hold Space and release to pop; arrows pick the flip. On touch, tap or swipe from Ollie. Tap arrows during an air to flip, or use Space plus arrows. Air tricks add no extra jump. A loaded release or flick just after a ramp lip has 120 ms of grace.</span>
         <b>hold C · RT at takeoff</b><span>air out of a bowl or ramp onto its deck. Without it, bowl airs favor returning inside. Choose before popping or crossing the coping; spins do not change that flight choice. For a coping boardslide, air out, turn the board across the tube and descend with speed along it.</span>
         <b>Q / E · LT / RT</b><span>hold in the air to grab; RT used for an air-out stays reserved until landing; mouse or right stick picks nose, tail or side. Release before landing.</span>
-        <b>gentle right stick / mouse</b><span>hold partway back for a manual or partway forward for a nose manual; adjust that same fore/aft pressure to balance. Full deflection loads a pop. Manuals link combos across flat ground.</span>
+        <b>gentle right stick / mouse</b><span>hold partway back for a manual or partway forward for a nose manual; adjust that same fore/aft pressure to balance. With a mouse, the starting drag centres the balance; use small forward/back movements while holding right-click. Full stick deflection loads a pop. Manuals link combos across flat ground.</span>
       </div>
       <h2>controls</h2>
       <div class="keys">
@@ -38182,8 +38182,12 @@ function skateGesturePlay(gesture) {
 function skateMouseBegin() {
   SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
   SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();SK_INPUT.mouseAirFlick.reset();
+  if(SK.manual)SK.manual.mouseDepth=SK.manual.nose?-.35:.35;
 }
 function skateMouseMove(x, y) {
+  // Balance gets a larger physical mouse range; tricks retain the original
+  // virtual-stick samples, including loads, curls and deliberate flip-outs.
+  if(SK.manual&&SK_INPUT.mouseHeld)SK.manual.mouseDepth=clamp((SK.manual.mouseDepth??(SK.manual.nose?-.35:.35))+y/180,-1,1);
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
   SK_INPUT.mouse = SK.manual?[clamp(m[0]+x/60,-1,1),clamp(m[1]+y/60,-1,1)]:[(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
@@ -38558,12 +38562,19 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = SK_INPUT.mouseHeld?SK_INPUT.mouse[1]:(SK_INPUT.manualDepth??skateBalanceStick()[1]);
+  let depth = SK_INPUT.mouseHeld?(SK.manual?.mouseDepth??SK_INPUT.mouse[1]):(SK_INPUT.manualDepth??skateBalanceStick()[1]);
   const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
   const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
-  if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
-  const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
+  if (!SK.manual) {
+    SK.manual={nose:depth<0,t0:T,bal:0,balV:0,mouseDepth:SK_INPUT.mouseHeld?Math.sign(depth)*.35:null};
+    if(SK_INPUT.mouseHeld)depth=SK.manual.mouseDepth;
+  }
+  const m=SK.manual,offset=Math.abs(depth)-.35;
+  // Mouse entry establishes a comfortable neutral point. A small quiet band
+  // absorbs hand jitter without changing stick physics or the gesture stream.
+  const pressure=SK_INPUT.mouseHeld?Math.sign(offset)*Math.max(0,Math.abs(offset)-.02):offset;
+  const control=pressure*6*(m.nose?-1:1);
   m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - m.balV * 1.6) * dt;
   m.bal += (m.balV+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }

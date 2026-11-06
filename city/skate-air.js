@@ -132,12 +132,19 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = SK_INPUT.mouseHeld?SK_INPUT.mouse[1]:(SK_INPUT.manualDepth??skateBalanceStick()[1]);
+  let depth = SK_INPUT.mouseHeld?(SK.manual?.mouseDepth??SK_INPUT.mouse[1]):(SK_INPUT.manualDepth??skateBalanceStick()[1]);
   const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
   const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
-  if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
-  const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
+  if (!SK.manual) {
+    SK.manual={nose:depth<0,t0:T,bal:0,balV:0,mouseDepth:SK_INPUT.mouseHeld?Math.sign(depth)*.35:null};
+    if(SK_INPUT.mouseHeld)depth=SK.manual.mouseDepth;
+  }
+  const m=SK.manual,offset=Math.abs(depth)-.35;
+  // Mouse entry establishes a comfortable neutral point. A small quiet band
+  // absorbs hand jitter without changing stick physics or the gesture stream.
+  const pressure=SK_INPUT.mouseHeld?Math.sign(offset)*Math.max(0,Math.abs(offset)-.02):offset;
+  const control=pressure*6*(m.nose?-1:1);
   m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - m.balV * 1.6) * dt;
   m.bal += (m.balV+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }

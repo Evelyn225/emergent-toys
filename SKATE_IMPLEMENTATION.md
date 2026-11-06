@@ -673,3 +673,32 @@ oblique and night ramp views. Local serial ABAB at 177×66 against exact main
 20 warm-up frames). These local observations show no added cost in this view;
 they are not an FPS guarantee. Other world/stadium work and reserved files remain
 untouched.
+
+## Mouse manual comfort and gesture verification
+
+Mouse manuals now establish neutral balance from the initial gentle drag, rather
+than requiring the hand to find exactly 21 pixels of pressure. Once balancing,
+180 pixels span one pressure unit instead of 60, and a small quiet band ignores
+roughly 3.6 pixels of hand jitter around neutral. The manual's held pressure is
+separate from the original virtual stick: load/flick/curl samples keep their
+original sensitivity and timing, so intentional flip-outs and scoops remain
+available. Controller pressure and manual physics are unchanged. Release the
+right button to leave the manual normally.
+
+Mouse tricks have both paths: loaded/flicked and scooped motions run through the
+same recognizer as the controller; a plain direction drag can use the simple
+release fallback. Direct airborne flicks are also retained. A new native browser
+regression uses the real captured mouse handlers and verifies loaded kickflips,
+half-circle shuvits and three-quarter-circle 360 flips report recognized gestures,
+not the fallback. It separately verifies the simple left-drag fallback still
+works. Gentle 12/21/30-pixel drags in either direction enter balanced manuals and
+release without popping. Simulation scripts hold those manuals with jitter and
+recover a tilted manual with bounded corrections every 125 ms, without false
+tricks. Existing controller/manual, half-pipe, gesture and roof regressions pass.
+
+All 16 focused Node test files and four rebuilt-bundle browser cases pass.
+Isolated mutations restoring the old entry bias or mouse sensitivity fail the
+new native regression. Close, wide, oblique and night manual views were reviewed.
+Local serial ABAB against exact main `fec4cf8` at 177×66: main/branch median
+12.5/14.9 ms, then 13.1/12.9 ms (60 frames after 20 warm-up frames). Mixed local
+results, not an FPS guarantee. Reserved and concurrent world work is untouched.
