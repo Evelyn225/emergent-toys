@@ -169,6 +169,7 @@ function render(dt,sceneOnly=false,mask=null) {
   else if(mode==='ferry')eye=ferryGround()+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
+  else if (stadiumView) eye = stadiumView.eye; // (the football on TV: stadium.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)

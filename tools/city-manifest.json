@@ -136,6 +136,7 @@
     "city/pause.js",
     "city/desktop-updates.js",
     "city/dev.js",
+    "city/stadium.js",
     "city/match-debug.js",
     "city/map-directory.js",
     "city/bigmap.js",

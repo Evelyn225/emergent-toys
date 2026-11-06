@@ -54,6 +54,7 @@ const STATION_GRID = Array.from({ length: 16 }, (_, y) => Array.from({ length: S
 }).join(''));
 // how high the stairs have lifted you at (x, y)
 const stairRise = (x, y) => {
+  if (room?.def.rise) return room.def.rise(x, y); // (a stadium's stands: stadium.js)
   const s = room && room.def.stairs;
   if (!s || x < s.x0 || x >= s.x1 || y >= s.y1) return 0;
   const progress = clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1);
