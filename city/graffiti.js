@@ -271,13 +271,16 @@ function streetTags(k, mx, my, face) {
   if (map[idx(mx + fx_, my + fy)]) return null;
   const key = k * 4 + PAINT_FACE[face];
   if (streetTagCache.has(key)) return streetTagCache.get(key);
+  const abandoned=SHOP[k]?.kind===SHOP_SHUT&&!SHOP[k]?.wilderness;
+  const chance=abandoned?Math.max(th.tags,.72):th.tags;
+  const pals=th.pals.length?th.pals:[[MAG,CYAN,YEL]];
   for (const s of [0, 1]) {
     const h = hash(mx * 5 + fx_ + s * 17, my * 5 + fy, 611);
-    if (h >= th.tags) continue;
+    if (h >= chance) continue;
     const word = STREET_MARKS[hash(mx + s,my,612) * STREET_MARKS.length | 0].replace(/E/g,hash(mx,my + s,613) > .6 ? '3' : 'E').replace(/A/g,hash(mx,my + s,614) > .6 ? '4' : 'A');
     const half = paintGlyphs(word).length * .028 / 2;
     const at = clamp(s ? .78 + hash(mx,my + s,615) * .1 : .12 + hash(mx,my + s,615) * .1,half + .045,1 - half - .045);
-    out.push({ word,half,at,z: .12 + hash(mx + s,my,616) * .12,col: th.pals[hash(mx,my,617) * th.pals.length | 0][s + 1] });
+    out.push({ word,half,at,z: .12 + hash(mx + s,my,616) * .12,col: pals[hash(mx,my,617) * pals.length | 0][s + 1] });
   }
   const result = out.length ? out : null;
   streetTagCache.set(key,result);
