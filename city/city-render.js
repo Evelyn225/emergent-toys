@@ -168,6 +168,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sh?.gas) return gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (gas-render.js)
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
+  if (sty === 26) return stadiumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (the Yards ground: stadium.js)
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -476,6 +477,7 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
 function roofTop(i, wx, wy, h, d) {
   const spill = courierNeonSpill(wx, wy); // (the night route's signs, glowing on the roofs round them)
   const L = Math.max(Math.max(0, 1 - d / vis) * amb * 10, spill ? spill[0] * 11 : 0), mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  if (STY[idx(mx, my)] === 26) return stadiumRoof(i, wx, wy, h, d, L); // (the Yards ground: its stand roofs, the pitch inside: stadium.js)
   if (STY[idx(mx,my)] === 19) { // simple flat mesh pavilion: widely spaced structural rails, quiet netting
     const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
     const rail = fract(u * 2) < .035 || fract(v * 2) < .035;

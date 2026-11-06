@@ -512,7 +512,11 @@ const MatchEngine = (() => {
     if (m.ball.lastKick?.shot || og) m.stats[side].onTarget++;
     log(m, 'goal', side, { player: scorer?.name, og, score: [m.teams[0].score, m.teams[1].score] });
     m.stoppage[m.period - 1] += .6;
-    m.phase = 'goal'; m.phaseT = m.t + 6; m.celebrate = { side, scorer: og ? null : scorer }; m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null;
+    m.phase = 'goal'; m.phaseT = m.t + 6; m.celebrate = { side, scorer: og ? null : scorer };
+    if (scorer && !og) { // the scorer peels away toward the fans in the nearest corner: a burst of fourteen metres or so, then mobbed
+      const cx = Math.sign(scorer.pos[0] || 1) * (PITCH.hl - 2), cy = Math.sign(scorer.pos[1] || 1) * (PITCH.hw - 2), dx = cx - scorer.pos[0], dy = cy - scorer.pos[1], dd = hyp(dx, dy) || 1, run = Math.min(dd, 14);
+      m.celebrate.spot = [scorer.pos[0] + dx / dd * run, scorer.pos[1] + dy / dd * run];
+    } m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null;
   }
 
   // ---- taking a restart: everyone into position, then the taker plays it
@@ -606,8 +610,9 @@ const MatchEngine = (() => {
     if (m.phase === 'goal') {
       for (const t of m.teams) for (const p of onPitch(t)) {
         const c = m.celebrate;
-        p.target = c.scorer === p ? [Math.sign(p.pos[0] || 1) * (PITCH.hl - 2), Math.sign(p.pos[1] || 1) * (PITCH.hw - 2)] : t.side === c.side && p.role !== 'GK' && c.scorer ? [c.scorer.pos[0] - Math.sign(c.scorer.pos[0]) * 1.5, c.scorer.pos[1]] : slotPos(m, t, p, 0, false, true);
-        p.urgency = c.scorer === p ? 1 : .6; movePlayer(m, p, dt);
+        const mate = t.side === c.side && p.role !== 'GK' && c.scorer && c.scorer !== p, ring = (p.slot * 2.4) % (Math.PI * 2); // (round the scorer, each from their own side)
+        p.target = c.scorer === p ? c.spot : mate ? [c.spot[0] + Math.cos(ring) * 1.2, c.spot[1] + Math.sin(ring) * 1.2] : slotPos(m, t, p, 0, false, true);
+        p.urgency = c.scorer === p ? 1 : mate ? .95 : .35; movePlayer(m, p, dt);
       }
       if (m.t >= m.phaseT) { kickoff(m, 1 - m.celebrate.side, false); m.celebrate = null; }
       return;
@@ -650,7 +655,7 @@ const MatchEngine = (() => {
     const rx = m.ball.p[0] * .9, ry = clampN(m.ball.p[1] * .5 - 12, -PITCH.hw + 4, PITCH.hw - 4), rd = hyp(rx - m.ref.pos[0], ry - m.ref.pos[1]);
     if (rd > .5) { const s = Math.min(rd, 6.5 * dt); m.ref.pos[0] += (rx - m.ref.pos[0]) / rd * s; m.ref.pos[1] += (ry - m.ref.pos[1]) / rd * s; m.ref.face = [(rx - m.ref.pos[0]) / rd, (ry - m.ref.pos[1]) / rd]; }
     // the last twelve seconds, for replays
-    if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.map(p => [p.pos[0], p.pos[1]])) }); if (m.replay.length > 120) m.replay.shift(); }
+    if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.filter(p => !p.off).map(p => [p.pos[0], p.pos[1], p.face[0], p.face[1], hyp(p.vel[0], p.vel[1]), t.side, p.role === 'GK' ? 1 : 0, p.number])) }); if (m.replay.length > 80) m.replay.shift(); }
   }
   // run the match on by `seconds` of play (fixed steps; any remainder carries over)
   function step(m, seconds) {

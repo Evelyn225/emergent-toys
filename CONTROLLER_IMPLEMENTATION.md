@@ -161,3 +161,10 @@ Right-mouse forward/back drag follows the same control, with held pressure
 preserved during sideways movement. Grind balance keeps its existing A/D and
 right-stick/mouse left/right controls. Mongo chase follows actual travel even
 while pushing fakie; manual camera orbit remains available.
+
+Mouse manual refinement: hold right-click and drag gently back/forward to start
+a manual/nose manual. That starting drag establishes neutral balance; use small
+fore/aft movements to correct, with three times the physical adjustment range
+and a small jitter allowance. Release right-click to end. Trick sensitivity is
+unchanged: load/flick and scoop motions still share the controller recognizer,
+and simple direction drags retain their release fallback.
