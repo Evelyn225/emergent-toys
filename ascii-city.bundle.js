@@ -31531,9 +31531,29 @@ const ITEM_SIZE = {
   lantern: 0.3, firecrackers: 0.25, orrery: 0.35, boombox: 0.45, movinglamp: 0.45, skateboard: 0.8, rod: 1.4, carbonrod: 1.4,
   oldboot: 0.3, seaweed: 0.35, plasticbag: 0.35, tyre: 0.6, trafficcone: 0.7, flipflop: 0.25, bottlemsg: 0.25,
   hotelmasterpiece: 0.6, hotelharbour: 0.6, hotelstilllife: 0.6,
+  // Plates, bowls, bottles and cartons retain their container size as they empty.
+  hotdog:.22,taco:.18,icecream:.22,noodlebox:.20,croissant:.17,donut:.10,bagel:.11,sandwich:.18,
+  chips:.23,candy:.15,slice:.25,burger:.14,kebab:.28,ramen:.26,pho:.28,dumplings:.25,
+  fries:.18,chicken:.25,sushi:.27,banhmi:.30,padthai:.27,greencurry:.25,mangorice:.22,
+  cottoncandy:.36,corndog:.28,popcorn:.24,yakitori:.28,takoyaki:.24,onigiri:.11,bento:.26,
+  bao:.10,eggwaffle:.22,stinkytofu:.24,ginseng:.18,
+  coffee:.16,latte:.14,tea:.14,soda:.122,energy:.17,water:.24,beer:.22,whiskey:.10,
+  cocktail:.20,milkshake:.24,smoothie:.22,thaitea:.22,herbaltea:.14,bubbletea:.22,
+  lemonade:.22,sake:.12,melonsoda:.22,
+  eggs:.26,bread:.30,butter:.12,cheese:.16,rice:.26,pasta:.25,drynoodles:.24,potatoes:.24,
+  onion:.08,tomatoes:.18,garlic:.065,mushrooms:.18,greens:.28,peppers:.18,chilli:.13,
+  lemon:.10,rawchicken:.26,mince:.20,bacon:.24,tofu:.14,
+  fishstick:.30,fishsandwich:.18,grilledcheese:.16,toast:.14,homeburger:.14,skewers:.30,roastchicken:.32,
+  ball:.22,umbrella:.85,newspaper:.40,flowers:.45,telescope:.27,camera:.12,harmonica:.10,
+  jadebangle:.075,jadedragon:.18,sharkplush:.55,plushcat:.30,plushbear:.35,snowglobe:.12,
+  sparklers:.28,pipe:.15,ammo:.13,knife:.22,joint:.10,
+
 };
 const KIND_SIZE = { food: 0.13, drink: 0.14, ingredient: 0.13, junk: 0.3, toy: 0.15, keys: 0.08, smoke: 0.09, pet: 0.45 };
-const itemSize = d => ITEM_SIZE[d.id] ?? (['fish', 'wish'].includes(ITEMS[d.id]?.kind) ? catchLength(d.kg) : KIND_SIZE[ITEMS[d.id]?.kind] ?? 0.15);
+const itemSize = d => {
+  const I=ITEMS[d.id];
+  return ITEM_SIZE[d.id]??(I?.furniture ? .65 : I?.cooked ? .27 : ['fish','wish'].includes(I?.kind)?catchLength(d.kg):KIND_SIZE[I?.kind]??.15);
+};
 // long things put down lie flat: how much looking down at them shortens their height (a deck, a rod a finger thick,
 // a fish on its side; crabs and squid stay on their legs)
 const LYING = { skateboard: 0.45, rod: 0.16, carbonrod: 0.16 };

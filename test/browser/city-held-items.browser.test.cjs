@@ -235,7 +235,7 @@ test('put down or on display, items are solid pictures at life size, long ones l
   });
   const { size } = r, long = s => Math.max(s.w, s.h);
   for (const s of Object.values(size)) assert.equal(s.solid, true);
-  assert.ok(size.coffee1.h > 0.1 && size.coffee1.h < 0.16 && size.coffee1.w < size.coffee1.h, 'a cup ~13 cm tall: ' + JSON.stringify(size.coffee1));
+  assert.ok(size.coffee1.h > 0.14 && size.coffee1.h < 0.18 && size.coffee1.w < size.coffee1.h, 'a takeaway cup ~16 cm tall: ' + JSON.stringify(size.coffee1));
   assert.ok(Math.abs(size['coffee0.1'].h - size.coffee1.h * 0.1) < 1e-9, 'outdoors in 10 m cells');
   assert.ok(long(size.apple1) > 0.06 && long(size.apple1) < 0.1, 'an apple ~8 cm: ' + JSON.stringify(size.apple1));
   assert.ok(size.skateboard1.w > 0.7 && size.skateboard1.h < 0.3, 'a skateboard lies on its wheels: ' + JSON.stringify(size.skateboard1));
