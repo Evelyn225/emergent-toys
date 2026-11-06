@@ -29243,9 +29243,39 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
     s.start(Math.max(actx.currentTime, when));
   });
 }
-function worldSoundProfile(x,y,z,range=180,reference=14) {
-  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'||!Number.isFinite(eye)?terrainHeight(x0,y0)+.17:eye; // (eye: set by the first render)
-  return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
+// Small position buckets and a short simulation-time lifetime keep
+// stationary loops cheap while moving sources refresh as they round a corner.
+const SOUND_OCCLUSION_CACHE=new Map();
+function worldSoundListener(){
+  const [x,y]=audioWorldPosition(mode,room,px,py);
+  return [x,y,mode==='room'||!Number.isFinite(eye)?terrainHeight(x,y)+.17:eye];
+}
+// A bounded acoustic approximation for large city walls and terrain. Skip the
+// endpoint building cells: the indoor mix already accounts for the listener's
+// own room, and a source can sit on a building. Thin props do not become walls.
+function worldSoundBlocked(x0,y0,z0,x1,y1,z1){
+  if(![x0,y0,z0,x1,y1,z1].every(Number.isFinite))return false;
+  const rx=rel(x1-x0),ry=rel(y1-y0),rz=z1-z0,d=Math.hypot(rx,ry);
+  if(d<.05)return false;
+  const key=[worldReady?1:0,Math.round(x0*20),Math.round(y0*20),Math.round(z0*50),Math.round(x1*20),Math.round(y1*20),Math.round(z1*50)].join('|');
+  const cached=SOUND_OCCLUSION_CACHE.get(key),age=cached?T-cached.t:Infinity;
+  if(age>=0&&age<.15)return cached.blocked;
+  const start=[Math.floor(worldCoord(x0)),Math.floor(worldCoord(y0))],end=[Math.floor(worldCoord(x0+rx)),Math.floor(worldCoord(y0+ry))];
+  const n=Math.min(128,Math.max(2,Math.ceil(d*5)));let blocked=false;
+  for(let k=1;k<n;k++){
+    const f=k/n,x=worldCoord(x0+rx*f),y=worldCoord(y0+ry*f),z=z0+rz*f,cx=Math.floor(x),cy=Math.floor(y);
+    if(terrainHeight(x,y)>z+.015){blocked=true;break;}
+    if((cx===start[0]&&cy===start[1])||(cx===end[0]&&cy===end[1]))continue;
+    if(inWorldGrid(cx,cy)&&CITY.cell(cx,cy)>z+.025){blocked=true;break;}
+  }
+  if(!SOUND_OCCLUSION_CACHE.has(key)&&SOUND_OCCLUSION_CACHE.size>=128)SOUND_OCCLUSION_CACHE.delete(SOUND_OCCLUSION_CACHE.keys().next().value);
+  SOUND_OCCLUSION_CACHE.set(key,{t:T,blocked});return blocked;
+}
+function worldSoundProfile(x,y,z,range=180,reference=14){
+  const [x0,y0,z0]=worldSoundListener(),p=soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
+  p.occluded=p.gain>.001&&worldSoundBlocked(x0,y0,z0,x,y,z);
+  if(p.occluded){p.gain*=.35;p.cutoff=Math.min(p.cutoff,900);}
+  return p;
 }
 // a recording heard from somewhere in the world: later, quieter and duller with distance, panned to its side,
 // muffled indoors. Returns the profile so a caller can place its own layers alongside
@@ -29297,8 +29327,8 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  const [lx,ly]=audioWorldPosition(mode,room,px,py);
-  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - lx), rel(c.y - ly)) < SIREN_R) {
+  const [lx,ly,lz]=worldSoundListener();
+  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x-lx),rel(c.y-ly),roadGroundHeight(c.x,c.y)+.10-lz)<SIREN_R) {
     const recorded = c.kind === 'police';
     if (recorded && !policeSirenBuffer) continue; // try next frame after the shared clip finishes loading
     const o = recorded ? actx.createBufferSource() : actx.createOscillator();
@@ -29311,16 +29341,17 @@ function tickSirens(indoors) {
     sirens.set(c, { o, lp, g, p, recorded, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
-    const rx = rel(c.ex - lx), ry = rel(c.ey - ly), d = Math.hypot(rx, ry) || 0.01;
+    const sx=Number.isFinite(c.ex)?c.ex:c.x,sy=Number.isFinite(c.ey)?c.ey:c.y,sz=roadGroundHeight(sx,sy)+.10;
+    const rx=rel(sx-lx),ry=rel(sy-ly),d=Math.hypot(rx,ry,sz-lz)||.01;
     if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     const doppler = clamp(34 / (34 - vr), 0.5, 2);
     if (v.recorded) v.o.playbackRate.setTargetAtTime(doppler, now, 0.02);
     else v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * doppler, now, 0.02);
     // Recorded audio is normalized to -20 LUFS; oscillators have much higher RMS at gain 1.
-    const level = v.recorded ? 0.8 : 0.16;
-    v.g.gain.setTargetAtTime(level * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
-    v.lp.frequency.setTargetAtTime(indoors ? 700 : 2600 / (1 + d / 30), now, 0.2);
+    const level=v.recorded ? .8 : .16,blocked=worldSoundBlocked(lx,ly,lz,sx,sy,sz);
+    v.g.gain.setTargetAtTime(level * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1)*(blocked?.35:1), now, 0.1);
+    v.lp.frequency.setTargetAtTime(Math.min(indoors?700:2600/(1+d/30),blocked?900:Infinity),now,.2);
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }
 }
@@ -29520,23 +29551,20 @@ function tickGameplayAudio() {
   const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
     (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
   if (heli) helicopters.push(heli);
-  const [earX, earY] = audioWorldPosition(mode, room, px, py);
-  let earZ = terrainHeight(earX, earY);
-  if (mode === 'air' && pilot) earZ = pilot.z;
-  else if (mode === 'roof') earZ = roofH;
-  else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
+  const [earX,earY,earZ]=worldSoundListener();
   for (const craft of helicopters) {
     const aboard = mode === 'air' && pilot === craft, spin = craft === heli ? 1 : craft.rotor;
     const rx = rel(craft.x - earX), ry = rel(craft.y - earY), height = craft.z - earZ;
     const distance = aboard ? 0 : Math.hypot(rx, ry, height);
     if (distance >= 40) continue;
     active.add(craft);
-    const volume = spin ** 2 * (aboard ? .9 : clamp(1 - distance / 40, 0, 1) ** 2) * (mode === 'room' ? .15 : 1);
+    let volume = spin ** 2 * (aboard ? .9 : clamp(1 - distance / 40, 0, 1) ** 2) * (mode === 'room' ? .15 : 1);
     const pan = aboard ? 0 : clamp((-Math.sin(a) * rx + Math.cos(a) * ry) / Math.max(1, distance), -.9, .9);
     let cutoff = 10000 / (1 + distance / 12);
     if (mode === 'room') cutoff = 800;
     else if (aboard) cutoff = 6500;
-    gameplayLoop(craft, 'rotor', volume, pan, .45 + spin * .55, cutoff);
+    if(!aboard&&worldSoundBlocked(earX,earY,earZ,craft.x,craft.y,craft.z)){volume*=.35;cutoff=Math.min(cutoff,900);}
+    gameplayLoop(craft,'rotor',volume,pan,.45+spin*.55,cutoff);
   }
   for (const [owner, voice] of gameplayLoops) if (!active.has(owner)) { stopGameplayVoice(voice); gameplayLoops.delete(owner); }
   for (const voice of gameplayShots) if (!voice.valid()) { stopGameplayVoice(voice); gameplayShots.delete(voice); }

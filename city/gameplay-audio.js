@@ -70,23 +70,20 @@ function tickGameplayAudio() {
   const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
     (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
   if (heli) helicopters.push(heli);
-  const [earX, earY] = audioWorldPosition(mode, room, px, py);
-  let earZ = terrainHeight(earX, earY);
-  if (mode === 'air' && pilot) earZ = pilot.z;
-  else if (mode === 'roof') earZ = roofH;
-  else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
+  const [earX,earY,earZ]=worldSoundListener();
   for (const craft of helicopters) {
     const aboard = mode === 'air' && pilot === craft, spin = craft === heli ? 1 : craft.rotor;
     const rx = rel(craft.x - earX), ry = rel(craft.y - earY), height = craft.z - earZ;
     const distance = aboard ? 0 : Math.hypot(rx, ry, height);
     if (distance >= 40) continue;
     active.add(craft);
-    const volume = spin ** 2 * (aboard ? .9 : clamp(1 - distance / 40, 0, 1) ** 2) * (mode === 'room' ? .15 : 1);
+    let volume = spin ** 2 * (aboard ? .9 : clamp(1 - distance / 40, 0, 1) ** 2) * (mode === 'room' ? .15 : 1);
     const pan = aboard ? 0 : clamp((-Math.sin(a) * rx + Math.cos(a) * ry) / Math.max(1, distance), -.9, .9);
     let cutoff = 10000 / (1 + distance / 12);
     if (mode === 'room') cutoff = 800;
     else if (aboard) cutoff = 6500;
-    gameplayLoop(craft, 'rotor', volume, pan, .45 + spin * .55, cutoff);
+    if(!aboard&&worldSoundBlocked(earX,earY,earZ,craft.x,craft.y,craft.z)){volume*=.35;cutoff=Math.min(cutoff,900);}
+    gameplayLoop(craft,'rotor',volume,pan,.45+spin*.55,cutoff);
   }
   for (const [owner, voice] of gameplayLoops) if (!active.has(owner)) { stopGameplayVoice(voice); gameplayLoops.delete(owner); }
   for (const voice of gameplayShots) if (!voice.valid()) { stopGameplayVoice(voice); gameplayShots.delete(voice); }
