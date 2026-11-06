@@ -666,6 +666,23 @@ Object.assign(DENSE, {
     if (y > 1.4 && y < 2.6 - (x - 1) * 0.08 && x >= 0.6 && x < 8) return ['=', dCol(BRICK, 0.6 - (y - 1.4) * 0.3, 5)];
     return null;
   }),
+  scarf: it => { // knitted bars of the club's two colours, its name across the middle, tassels at the ends
+    const [a, b] = (MatchEngine.CLUBS.find(c => c.id === it?.of)?.kit || ['RED', 'WHITE']).map(k => STADIUM_KIT[k] ?? GRAY), word = (MatchEngine.CLUBS.find(c => c.id === it?.of)?.short || 'YAR');
+    return sculptSurface(34, 7, (x, y) => {
+      if (Math.abs(y) > 2.2) return null;
+      if (Math.abs(x) > 10.6) return Math.abs(x) < 11.8 && fract(y * 1.4) < .5 ? ['|', dCol(a, .7)] : null; // (the tassels)
+      const t = dText(x, y, 0, 0, word); if (t) return [t, C(b, 15), true];
+      const bar = Math.floor((x + 10.6) / 2.4) & 1, knit = fract(y * 1.6 + (x * .8 | 0) * .5) < .5;
+      return dLit(.6 + (knit ? .12 : 0) - Math.abs(y) * .05, bar ? b : a, 7);
+    });
+  },
+  programme: it => sculptSurface(26, 14, (x, y) => { // the cover: the ground's name, the fixture, a photo of the pitch
+    if (Math.abs(x) > 7.2 || Math.abs(y) > 6.2) return null;
+    const t = dText(x, y, 0, -4.8, 'YARDS GROUND') || dText(x, y, 0, 4.6, typeof it?.of === 'string' ? it.of.toUpperCase().slice(0, 12) : 'PROGRAMME');
+    if (t) return [t, C(WHITE, 15), true];
+    if (y > -3.6 && y < 3.4 && Math.abs(x) < 6.2) return Math.abs(fract((x + 6.2) / 2.5) - .5) < .02 || Math.abs(y + .1) < .15 ? ['-', C(WHITE, 12)] : dLit(.55 + (Math.floor((x + 6.2) / 1.25) & 1) * .1, GREEN, 6);
+    return dLit(.7 - Math.abs(y) * .02, RED, 6);
+  }),
   harmonica: () => sculptSurface(32, 7, (x, y) => { // chrome covers, a row of holes
     if (Math.abs(x) > 9 || Math.abs(y) > 2.6) return null;
     if (Math.abs(y) < 0.7) return Math.abs(fract(x * 0.7) - 0.5) < 0.22 ? ['o', C(GRAY, 4)] : ['|', C(BRICK, 11)];

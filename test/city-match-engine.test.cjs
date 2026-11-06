@@ -106,3 +106,22 @@ test('over many matches it looks like football: goals, passing, shots, corners, 
   within('home', .3, .6); // (real football: about 45%)
   within('poss', .4, .6);
 });
+
+test('a cup tie level at full time goes to penalties: five each, then sudden death, until one side is ahead', () => {
+  const r = j(`(() => { const out = []; for (let s = 1; s <= 120 && out.length < 20; s++) {
+    const m = MatchEngine.create({ home: 'yards', away: 'docks', seed: s, knockout: true }); MatchEngine.simulate(m);
+    const res = MatchEngine.result(m), level = res.score[0] === res.score[1];
+    out.push({ level, pens: res.pens, kicks: m.shoot ? m.shoot.kicks.length : 0, taken: m.shoot ? m.shoot.taken : null, kinds: m.events.slice(-2).map(e => e.kind), phase: m.phase }); }
+    return out; })()`);
+  assert.ok(r.some(x => x.level), 'some ties level after ninety minutes');
+  for (const x of r) {
+    assert.equal(x.phase, 'ft');
+    if (!x.level) { assert.equal(x.pens, null); continue; }
+    assert.ok(x.pens && x.pens[0] !== x.pens[1], 'decided on penalties: ' + JSON.stringify(x));
+    assert.deepEqual(x.kinds, ['shootout', 'ft']);
+    const [a, b] = x.taken; assert.ok(Math.abs(a - b) <= 1 && a + b === x.kicks);
+    if (a > 5 || b > 5) assert.equal(a, b, 'sudden death goes in pairs');
+  }
+  const league = j(`(() => { const m = MatchEngine.create({ home: 'yards', away: 'docks', seed: 3 }); MatchEngine.simulate(m); return { pens: MatchEngine.result(m).pens, shoot: !!m.shoot }; })()`);
+  assert.deepEqual(league, { pens: null, shoot: false }, 'a league match can end level');
+});

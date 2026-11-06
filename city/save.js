@@ -30,7 +30,7 @@ function saveGame() {
   if (citySaveBlocked || startingOver) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -60,11 +60,12 @@ function loadGame() {
   // Still load progress if storage is full, but retry the backup before allowing any overwrite.
   if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
   const d = prepared.data;
-  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] || it.id === 'scarf' && MatchEngine.CLUBS.some(c => c.id === it.of) || it.id === 'programme' && typeof it.of === 'string' && it.of.length < 24 ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   loadStreetScenes(d.streetScenes);
   loadFishingCompetition(d.fishingCompetition);
+  leagueLoad(d.league);
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);

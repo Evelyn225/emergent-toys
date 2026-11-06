@@ -114,7 +114,7 @@ const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8)
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
 let KIND = new Array(NB * NB).fill('');
 // superblocks: [x0, y0, x1, y1, kind] - the streets inside are removed
-const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens']];
+const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens'], [17, 7, 18, 7, 'stadium']]; // (the last: the Yards ground, stadium.js)
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const d = DIST[bi(bx, by)], h = hash(bx, by, 7);
   KIND[bi(bx, by)] = d === 'waterfront' ? 'waterfront' : d === 'sea' ? 'sea'
@@ -589,6 +589,19 @@ const MUSEUM = { bx: 14, by: 16 };
 {
   const sh = MUSEUM.sh = { kind: SHOP_LIT, word: 'MUSEUM', neon: WHITE, glyphs: '#', hours: [10, 18], fee: 10, museum: true };
   for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(MUSEUM.bx * 8 + x, MUSEUM.by * 8 + y); map[i] = x >= 4 && x <= 5 && y >= 4 && y <= 5 ? 3.4 : 1.32; STY[i] = 23; SHOP[i] = sh; SEED[i] = 0.5; }
+}
+
+// ---- the Yards ground (stadium.js): two blocks, the street between them gone. A ring of stands 15m high round the
+// pitch (low inside, so you see the grass from the el or the air), the gates on the south front, onto the street.
+// Cell coordinates: x along the pair of blocks, 14 cells (140m), y 6 cells (60m); STY 26
+const STADIUM_SITE = { bx: 17, by: 7 };
+{
+  const sh = STADIUM_SITE.sh = { kind: SHOP_LIT, word: 'THE YARDS GROUND', neon: RED, glyphs: '#', hours: [0, 24], stadium: true };
+  const x0 = STADIUM_SITE.bx * 8 + 2, x1 = STADIUM_SITE.bx * 8 + 15, y0 = STADIUM_SITE.by * 8 + 2, y1 = STADIUM_SITE.by * 8 + 7;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = idx(x, y), ring = x === x0 || x === x1 || y === y0 || y === y1;
+    map[i] = ring ? (y === y0 ? 1.7 : 1.35) : .03; STY[i] = 26; SHOP[i] = sh; SEED[i] = hash(x, y, 2301); // (the main stand, on the north side, the tallest)
+  }
 }
 
 // ---- the Velvet Rope, a strip club in midtown (stripclub.js)

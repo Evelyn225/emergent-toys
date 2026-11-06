@@ -6,13 +6,13 @@ const {pathToFileURL}=require('node:url'),{chromium}=require('playwright');
 let browser;test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
 async function ground(run){const p=await browser.newPage({viewport:{width:1200,height:700}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{
  await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
- await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;tod=15;weather='clear';env(0);render(0);enterStadium('docks');env(0);render(0);});
+ await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;weather='clear';env(0);render(0);const f=stadiumNextFixture();dayNum=Math.floor(f.kick/24);tod=f.kick-dayNum*24+.3;enterStadium('main');body.seat=null;env(0);render(0);});
  await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
 
 test('inside, the match plays on as you watch, and the scoreboard keeps up',()=>ground(async p=>{
  const r=await p.evaluate(()=>{const m0=MatchEngine.minute(stadiumMatch);for(let k=0;k<200;k++){T+=.1;render(0);}
-  return{room:room.kind,before:m0,after:MatchEngine.minute(stadiumMatch),home:stadiumMatch.teams[0].name,away:stadiumMatch.teams[1].name};});
- assert.equal(r.room,'stadium');assert.equal(r.home,'Yards Athletic');assert.equal(r.away,'Docks United');
+  const f=stadiumNextFixture();return{room:room.kind,before:m0,after:MatchEngine.minute(stadiumMatch),home:stadiumMatch.teams[0].club.id,away:stadiumMatch.teams[1].club.id,fh:f.home,fa:f.away};});
+ assert.equal(r.room,'stadium');assert.equal(r.home,r.fh);assert.equal(r.away,r.fa);
  assert.ok(r.after-r.before>2.4,`20 s of play is ${(r.after-r.before).toFixed(1)} match minutes`);
 }));
 
@@ -45,4 +45,26 @@ test('the boards keep you off the pitch, and the pitch is marked where the engin
   return{blocked,white,mark:pitchMarkDist(0,P.hw,0,P.hw),grass:pitchMarkDist(20,20,20,20)};});
  assert.ok(r.blocked,'the advertising boards are in the way');assert.ok(r.white>30,'the halfway line and centre circle round you');
  assert.ok(r.mark<.01);assert.ok(r.grass>1);
+}));
+
+test('the TV picture is just the match: no hand, no quick slots, and the ball big enough to follow',()=>ground(async p=>{
+ const r=await p.evaluate(()=>{clearInventory();carryItem({id:'soda',uses:1});held=0;
+  let hand=0;const big=drawHeldBig;drawHeldBig=()=>{hand++;};
+  try{stadiumTV=false;hud();const seat={hand,slots:hotbarUp()};hand=0;stadiumTV=true;hud();const tv={hand,slots:hotbarUp()};
+   const cam=stadiumCam(1),d=Math.hypot(pitchX(stadiumMatch.ball.p[0])-cam.x,pitchY(stadiumMatch.ball.p[1])-cam.y);
+   return{seat,tv,ballCells:2*Math.max(.32,d*1.8/projY)*projY/d};}finally{drawHeldBig=big;stadiumTV=false;}});
+ assert.deepEqual(r.seat,{hand:1,slots:true},'in your seat, your soda in your hand');
+ assert.deepEqual(r.tv,{hand:0,slots:false},'on the TV, neither');
+ assert.ok(r.ballCells>=3,'the ball three cells or more across on TV');
+}));
+
+test('up close the crowd are people on seats; further off the rows stand in for them, and nobody is drawn twice',()=>ground(async p=>{
+ const r=await p.evaluate(()=>{px=75;py=12.5;a=Math.PI/2;sitDown();a=Math.PI/2;pitch=-.25;env(0);
+  const draw=drawFigure;let figs=0,poses=new Set();drawFigure=(...g)=>{figs++;poses.add(g[7]);return draw(...g);};
+  try{render(0);}finally{drawFigure=draw;}
+  const s=STANDS.find(x=>x.id==='north'),near=crowdNear(s,3,0),far=crowdNear(s,3,40);
+  return{figs,poses:[...poses],near,far};});
+ assert.ok(r.figs>15,'supporters round you drawn as people: '+r.figs);
+ assert.ok(r.poses.some(p=>/^sit/.test(p)),'sat down');
+ assert.equal(r.near,true);assert.equal(r.far,false);
 }));

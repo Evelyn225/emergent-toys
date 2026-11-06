@@ -31,6 +31,44 @@ Yes, as a medium-to-large feature. Most of what it needs exists:
   - **Size:** a full pitch (105 by 68 m) plus stands is about 130 by 100 m, bigger than a city block (80 m). See
     §2.1.
 
+## Progress
+
+- **Phases 1–2 (done, #460):** `city/match-engine.js`, a deterministic headless engine calibrated over hundreds of matches, plus the top-down view in Dev tools > Other.
+- **Phase 3 (done, #461):** `city/stadium.js`, the ground's interior.
+  - Four stands you can climb and sit in, roofs, floodlights, a scoreboard, advertising boards, goals with nets and a marked pitch.
+  - The match is played by figures in kit. V gives the TV view and E leaves.
+- **Phase 4 (this PR):**
+  - **The building:** the ground in the Yards on two blocks with the street between them removed (`world.js` `STADIUM_SITE`, STY 26). Brick at street level with turnstiles and fixture posters, steel cladding with the name, the pitch visible from above, and four floodlight pylons.
+  - **League and tickets:** `city/league.js` runs a double round-robin with fixtures on Wednesday 19:30 and Saturday 15:00. The gates open 90 minutes before kick-off, and tickets are $15 to $40 by section. The match waits for kick-off, the city clock keeps pace with it, and results from the other games come in. The league table is saved.
+  - **Directories:** a map entry and a dev-tools entry.
+- **Phase 5 (atmosphere, `city/stadium-atmosphere.js`):**
+  - **Crowd bed:** the recorded crowd bed follows the match. It murmurs before kick-off and rises with danger.
+  - **Event sounds:** synthesised:
+    - the referee's pea-whistle trill (one for a foul, two for half time, three for full time)
+    - an ooh at shots, groans at misses, applause at saves and substitutions
+    - a roar for home goals, a cheer and a groan for away goals, boos for cards against the home side
+    - the home end clapping and chanting
+  - **Words:** PA and commentary lines for every event, and the score and clock in the top status line.
+- **Phase 6 (replays and celebrations):**
+  - **Big screen:** a 20 m screen beside the scoreboard shows the match top-down.
+  - **Replays:** after every goal, the build-up (from the engine's 8-second buffer) replays at 55% speed. It plays on the big screen (marked REPLAY), and with V on, on TV from a camera low behind that goal.
+  - **TV during celebrations:** the camera follows the scorer, not the ball in the net.
+  - **Celebrations:** the scorer bursts about 14 m toward the corner fans and is mobbed, arms up. The other side stands with hands on heads.
+- **Phase 7 (extras, `city/stadium-extras.js`):**
+  - **Betting:** a bet at the ticket window on home, draw or away, $10 or $50, at odds from the same strength model (with an 8% house margin). Paid out at full time. One bet per match, closed at kick-off.
+  - **Season ticket:** $300, free entry to any section for the season.
+  - **Club scarf:** in its club's colours, held up with Q. At the ground, the fans round you join in.
+  - **Programme:** lists both line-ups when read with Q.
+  - **Kiosk:** a "Pies & Pints" kiosk inside the gate.
+  - **Saving:** the scarf's club and the programme's fixture are kept in the save.
+- **The City Cup (`city/league.js`):**
+  - **Format:** all eight clubs drawn into a knockout every season. Quarter-finals on the Thursday night (19:30) of week 2, semis on the Thursday of week 4, the final on the Sunday afternoon (15:00) of week 6.
+  - **At the ground:** one tie of each round, and always the final. The ground's next fixture is whichever comes first, league or cup (cup ties have negative ids).
+  - **Penalties:** a knockout match level at full time goes to a shootout in the engine (`knockout: true`). Five each, then sudden death, at one end. Conversion is about 72%. The other ties are settled with the quick scoreline and a quick shootout.
+  - **Presentation:** the shootout is on the score line, the scoreboard (PENS 2-1) and the PA, kick by kick. A hush for each run-up, then the crowd reacts. The TV view moves low behind the taker. The ticket window shows the bracket and the holders.
+  - **Rules:** bets on a cup tie are on the ninety minutes. A league that starts mid-cup waits for the next draw. The cup, the holders and the progress are saved.
+- **Close-up crowd:** within 6.5 m, the supporters are real seated figures on tip-up seats. Further off, the strip texture is used.
+
 ## 1. What the player gets
 
 - **Fixtures:** matches on a schedule, for example Saturday 15:00, Wednesday 19:45 under floodlights, and a Sunday

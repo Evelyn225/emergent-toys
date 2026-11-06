@@ -225,7 +225,7 @@ function openControls() {
           <b>Q / E / LT / RT in the air</b><span>Hold to grab. Use the mouse or right stick to choose nose, tail or side. Let go before landing. RT can’t grab if you used it to jump out.</span>
           <b>Manual / nose manual</b><span>Hold the right stick or mouse partway back for a manual, or partway forward for a nose manual. Full deflection loads a jump. Manuals link combos across flat ground.</span>
           <b>Grind balance</b><span>Use A/D to move the balance marker toward the centre. With the right stick or a right-mouse drag, left/right balances and forward/back shifts nose/tail pressure.</span>
-          <b>Manual balance</b><span>Adjust forward/back pressure with the right stick or mouse to keep the balance marker centred. A/D steers; it doesn’t balance a manual.</span>
+          <b>Manual balance</b><span>Adjust forward/back pressure to keep the balance marker centred. With a mouse, the starting drag sets neutral; keep right-click held and move gently forward/back to correct. A/D steers; it doesn’t balance a manual.</span>
       </div></section>
         <footer class="controls-footer">Game paused · Settings are available in the pause menu</footer>
       </div>`);

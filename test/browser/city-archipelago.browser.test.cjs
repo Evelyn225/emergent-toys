@@ -76,7 +76,7 @@ test('the live archipelago preserves all lots on dry land and has connected fini
   const patrol=footCops.every((c,i)=>near(c.x,c.y,...starts[i])>.1&&!seaAt(c.x,c.y));
   return {layout:CITY_LAYOUT_ID,counts:CITY_LAYOUT_CHECKPOINT,wet:wet.slice(0,10),badFaces:badFaces.slice(0,10),roads:streetProblems(),wrap:MAP_WORLD.wrap,repeat:map[idx(px+N,py)],ocean:seaAt(px+N,py),coordinate:worldCoord(800),N,zones,entrance,alias,cops,patrol};
  });
- assert.equal(result.layout,'archipelago-v3');assert.equal(result.counts.places,2770);assert.equal(result.counts.homes,911);assert.equal(result.counts.people,1100);
+ assert.equal(result.layout,'archipelago-v3');assert.equal(result.counts.places,2767); // (2770 before the Yards ground took two blocks: stadium.js)assert.equal(result.counts.homes,911);assert.equal(result.counts.people,1100);
  assert.deepEqual(result.wet,[]);assert.deepEqual(result.badFaces,[]);assert.deepEqual(result.roads,[]);assert.equal(result.wrap,false);assert.equal(result.repeat,0);assert.equal(result.ocean,true);assert.equal(result.coordinate,800);assert.equal(result.N,1024);
  assert.equal(result.zones,true);assert.equal(result.entrance,true);assert.equal(result.alias,false);
  assert.equal(result.cops,true);assert.equal(result.patrol,true);

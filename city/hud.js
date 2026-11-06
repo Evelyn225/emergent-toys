@@ -143,6 +143,7 @@ function promptText() {
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
+    if (room.kind === 'stadium' && nearKiosk() && !stadiumTV) return 'E: the kiosk (pies & pints)';
     if (room.kind === 'stadium') return (stadiumTV ? 'V: back to your seat   ' : (body.seat ? '' : 'C: sit down   ') + 'V: TV view   ') + 'E: leave the ground';
     const hotelPrompt=hotelAmenityPrompt();if(hotelPrompt)return hotelPrompt;
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
@@ -246,6 +247,7 @@ function promptText() {
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) { // (a shop shut for good is just a shuttered wall)
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return '';
+    if (sh.stadium) { const f = stadiumNextFixture(); return f.open ? `E: tickets for ${f.short}${f.live ? ' (on now)' : ', ' + f.when}` : `${f.short}, ${f.when}`; }
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
@@ -351,15 +353,15 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  if(!telescopeActive())drawHeldBig();
+  if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
+  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
-    : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
+    : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
     : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
@@ -377,9 +379,10 @@ function hud() {
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
-  const meters = needMeters();
-  hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
-  hudBottom += drawNavigationCompass(hudBottom);
+  const meters = needMeters(),alert=needsAlert(),alertLines=alert?wrapText(alert.text,maxW):[];
+  const alertHeight=alertLines.length?(FS+4)*alertLines.length+8:0;
+  hudBottom = top + (lines.length + task_.length + 1) * FS + 14 + alertHeight;
+  if (!stadiumTVOn()) hudBottom += drawNavigationCompass(hudBottom); // (the TV picture's just the match)
   wantedHud();
   minimap();
   const hotbarTop = hotbar();
@@ -393,8 +396,15 @@ function hud() {
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
     for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
   }
+  if(alertLines.length){
+    const y=top+FS*(lines.length+1)+10,width=Math.min(maxW+8,Math.max(...alertLines.map(s=>g.measureText(s).width))+12);
+    g.fillStyle=alert.urgent?'#4b1111':'#3d2a08';g.fillRect(0,y,width,alertHeight-2);
+    g.fillStyle=alert.urgent?'#ff7055':'#ffc45c';g.fillRect(0,y,3,alertHeight-2);
+    g.font='bold '+FS+'px monospace';g.fillStyle=alert.urgent?'#ffd4c2':'#ffd56a';
+    alertLines.forEach((s,k)=>g.fillText(s,6,y+4+k*(FS+4)));g.font=FS+'px monospace';
+  }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = top + FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = top + FS * (lines.length + 1) + 10 + alertHeight, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }
