@@ -56,6 +56,7 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'stadium') { out.crowd = 1.9 * (s.stadium || 0); out.city = 0.04; out.restaurant = 0; out.rain = s.rain; } // (the crowd, swelling with the play: stadium-atmosphere.js; and it's open to the sky)
     if (k === 'cathedral') out.cathedral = 0.8;
     if (k === 'pachinko') out.pachinko = 0.75;
     if (k === 'laundry') { out.fluorescent = 0.28; out.washers = 0.7; } // open all night, and somebody's always got a load in

@@ -836,6 +836,8 @@ const FIG_POSES = {
   fold: () => ({ ...FIG_STAND, arms: [[0.3, 0.14, 1.57, -1.15], [0.3, 0.14, 1.57, -1.15]] }), // arms folded
   ease: () => ({ ...FIG_STAND, arms: [[-0.35, 0.12, -0.9, -0.6], [-0.35, 0.12, -0.9, -0.6]] }), // hands behind the back
   wave: () => ({ ...FIG_STAND, arms: [[2.7, 0.5, 3.1, 0.5], FIG_STAND.arms[1]] }), // hailing a cab
+  cheer: () => ({ ...FIG_STAND, arms: [[2.75, 0.45, 3.05, 0.4], [2.75, 0.45, 3.05, 0.4]], lean: -0.12 }), // both arms up: a goal (stadium.js)
+  dejected: () => ({ ...FIG_STAND, arms: [[2.3, 0.75, 3.4, -1.1], [2.3, 0.75, 3.4, -1.1]], lean: 0.12 }), // hands on head: conceded
   aim: () => ({ ...FIG_STAND, arms: [[1.45, -0.28, 1.55, -0.22], [1.45, -0.34, 1.55, -0.3]], gun: true, lean: 0.06 }), // both hands out on a pistol (the police, shooting back: gun.js)
   grass: () => ({ seat: 0, legs: [[1.95, 0.22, 0.8, 0.1], [1.95, 0.22, 0.8, 0.1]], arms: [[0.75, 0.2, 1.7, -0.5], [0.75, 0.2, 1.7, -0.5]], lean: -0.1 }), // on the lawn, hugging her knees
   reach: () => ({ ...FIG_STAND, arms: [[1.0, 0.15, 1.3, 0.05], [1.0, 0.15, 1.3, 0.05]], lean: 0.35 }), // hands in the touch pool
@@ -3825,7 +3827,11 @@ const MatchEngine = (() => {
     if (m.ball.lastKick?.shot || og) m.stats[side].onTarget++;
     log(m, 'goal', side, { player: scorer?.name, og, score: [m.teams[0].score, m.teams[1].score] });
     m.stoppage[m.period - 1] += .6;
-    m.phase = 'goal'; m.phaseT = m.t + 6; m.celebrate = { side, scorer: og ? null : scorer }; m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null;
+    m.phase = 'goal'; m.phaseT = m.t + 6; m.celebrate = { side, scorer: og ? null : scorer };
+    if (scorer && !og) { // the scorer peels away toward the fans in the nearest corner: a burst of fourteen metres or so, then mobbed
+      const cx = Math.sign(scorer.pos[0] || 1) * (PITCH.hl - 2), cy = Math.sign(scorer.pos[1] || 1) * (PITCH.hw - 2), dx = cx - scorer.pos[0], dy = cy - scorer.pos[1], dd = hyp(dx, dy) || 1, run = Math.min(dd, 14);
+      m.celebrate.spot = [scorer.pos[0] + dx / dd * run, scorer.pos[1] + dy / dd * run];
+    } m.ball.owner = null; m.ball.v = [0, 0, 0]; m.pendingPass = null;
   }
 
   // ---- taking a restart: everyone into position, then the taker plays it
@@ -3919,8 +3925,9 @@ const MatchEngine = (() => {
     if (m.phase === 'goal') {
       for (const t of m.teams) for (const p of onPitch(t)) {
         const c = m.celebrate;
-        p.target = c.scorer === p ? [Math.sign(p.pos[0] || 1) * (PITCH.hl - 2), Math.sign(p.pos[1] || 1) * (PITCH.hw - 2)] : t.side === c.side && p.role !== 'GK' && c.scorer ? [c.scorer.pos[0] - Math.sign(c.scorer.pos[0]) * 1.5, c.scorer.pos[1]] : slotPos(m, t, p, 0, false, true);
-        p.urgency = c.scorer === p ? 1 : .6; movePlayer(m, p, dt);
+        const mate = t.side === c.side && p.role !== 'GK' && c.scorer && c.scorer !== p, ring = (p.slot * 2.4) % (Math.PI * 2); // (round the scorer, each from their own side)
+        p.target = c.scorer === p ? c.spot : mate ? [c.spot[0] + Math.cos(ring) * 1.2, c.spot[1] + Math.sin(ring) * 1.2] : slotPos(m, t, p, 0, false, true);
+        p.urgency = c.scorer === p ? 1 : mate ? .95 : .35; movePlayer(m, p, dt);
       }
       if (m.t >= m.phaseT) { kickoff(m, 1 - m.celebrate.side, false); m.celebrate = null; }
       return;
@@ -3963,7 +3970,7 @@ const MatchEngine = (() => {
     const rx = m.ball.p[0] * .9, ry = clampN(m.ball.p[1] * .5 - 12, -PITCH.hw + 4, PITCH.hw - 4), rd = hyp(rx - m.ref.pos[0], ry - m.ref.pos[1]);
     if (rd > .5) { const s = Math.min(rd, 6.5 * dt); m.ref.pos[0] += (rx - m.ref.pos[0]) / rd * s; m.ref.pos[1] += (ry - m.ref.pos[1]) / rd * s; m.ref.face = [(rx - m.ref.pos[0]) / rd, (ry - m.ref.pos[1]) / rd]; }
     // the last twelve seconds, for replays
-    if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.map(p => [p.pos[0], p.pos[1]])) }); if (m.replay.length > 120) m.replay.shift(); }
+    if ((m.t / DT | 0) % 2 === 0) { m.replay.push({ t: m.t, b: m.ball.p.slice(), p: m.teams.flatMap(t => t.players.filter(p => !p.off).map(p => [p.pos[0], p.pos[1], p.face[0], p.face[1], hyp(p.vel[0], p.vel[1]), t.side, p.role === 'GK' ? 1 : 0, p.number])) }); if (m.replay.length > 80) m.replay.shift(); }
   }
   // run the match on by `seconds` of play (fixed steps; any remainder carries over)
   function step(m, seconds) {
@@ -7299,6 +7306,7 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'stadium') { out.crowd = 1.9 * (s.stadium || 0); out.city = 0.04; out.restaurant = 0; out.rain = s.rain; } // (the crowd, swelling with the play: stadium-atmosphere.js; and it's open to the sky)
     if (k === 'cathedral') out.cathedral = 0.8;
     if (k === 'pachinko') out.pachinko = 0.75;
     if (k === 'laundry') { out.fluorescent = 0.28; out.washers = 0.7; } // open all night, and somebody's always got a load in
@@ -27806,7 +27814,7 @@ function hud() {
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
+  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
@@ -30324,7 +30332,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const record = homeRecordAudio(), serenade = courierSerenade();
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+  const mix = audioMix({ stadium: mode === 'room' && room?.kind === 'stadium' ? stadiumCrowdLevel() : 0, mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling() ? Math.max(SK.v / SK_TOP, 0.25) : 0, onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade });
@@ -31710,15 +31718,15 @@ const goalFrame = end => {
   return out;
 };
 // the scoreboard over the south stand: both names, the score and the clock, lit
-const scoreboard = () => ({ x: STADIUM.cx, y: 111.5, radius: 9, draw: (vx, vy) => {
+const scoreboard = () => ({ x: STADIUM.cx - 14, y: 111.5, radius: 9, draw: (vx, vy) => {
   const m = stadiumMatch; if (!m) return;
   const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
   const clock = m.phase === 'ft' ? 'FT' : m.phase === 'ht' ? 'HT' : String(Math.min(Math.floor(min), half)).padStart(2, '0') + "'";
   const line1 = `${h.short} ${h.score}-${a.score} ${a.short}`, line2 = clock + (m.phase === 'goal' ? ' GOAL!' : '');
   for (const e of [-1, 1]) drawBox(boxAt(vx + e * 5, vy + .2, 1, 0, .15, .15, 11.4, 14), solid(GRAY));
-  drawBox(boxAt(vx, vy, 1, 0, 7, .25, 14, 18), (i, t, L) => {
+  drawBox(boxAt(vx, vy, 1, 0, 7, .25, 14, 18.6), (i, t, L) => {
     if (HIT.face !== 4) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
-    const top = HIT.w > 16, ch = faceText(top ? line1 : line2, i, t, vx, vy, 6.6, top ? 16.3 : 14.4, 1.4);
+    const top = HIT.w > 16.3, ch = faceText(top ? line1 : line2, i, t, vx, vy, 6.6, top ? 16.6 : 14.4, 1.7);
     BG[i] = C(GRAY, .4); return set(i, ch && ch !== ' ' ? ch : ' ', m.phase === 'goal' && fract(T * 3) < .5 ? C(YEL, 15) : C(top ? WHITE : YEL, 14)), true;
   });
 } });
@@ -31736,6 +31744,7 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
   const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T; m.lastDt = dt;
   if (m.kick != null && nowHour() < m.kick) return; // (the teams lined up, waiting for kick-off)
   MatchEngine.step(m, dt);
+  stadiumAtmosphere(); // the commentary and the crowd (stadium-atmosphere.js)
   if (m.kick != null && m.phase !== 'ft') { // the city clock at the match's pace: about two hours from kick-off to the final whistle
     const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, 1) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24;
   }
@@ -31744,20 +31753,27 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
   m.danger = m.phase === 'play' ? clamp((Math.abs(bx) - (P.hl - 30)) / 25, 0, 1) * clamp(1 - Math.abs(m.ball.p[1]) / 30, 0, 1) : 0;
 }, draw: () => {
   const m = stadiumMatch; if (!m) return;
-  const looks = stadiumLooks(m);
-  for (const t of m.teams) for (const p of t.players) {
+  const looks = stadiumLooks(m), replay = stadiumTVOn() && stadiumReplayFrame();
+  if (replay) { // the TV's replay: everyone where they were, in slow motion
+    replay.p.forEach(([x0, y0, fx, fy, sp, side, gk], k) => {
+      const x = pitchX(x0), y = pitchY(y0), st = replay.stride[k], pose = sp > 4.2 ? 'run' + (Math.floor(st / 1.9 * 8) & 7) : sp > .5 ? 'walk' + (Math.floor(st / 1.5 * 8) & 7) : 'stand';
+      if (inView(x - px, y - py, 1)) drawFigure(x - px, y - py, 0, 1.8, fx, fy, gk ? looks[side].gk : looks[side].out, pose, { light: night > .3 ? 7 : 0 });
+    });
+  } else for (const t of m.teams) for (const p of t.players) {
     if (p.off && !p.leaving) continue;
     const x = pitchX(p.pos[0]), y = pitchY(p.pos[1]), sp = Math.hypot(p.vel[0], p.vel[1]);
     p.stride = (p.stride || 0) + sp * (m.lastDt || .016);
-    const pose = m.phase === 'goal' && m.celebrate?.side === t.side && m.celebrate.scorer === p ? 'wave'
+    const c = m.phase === 'goal' ? m.celebrate : null, scorer = c?.scorer, mob = c && t.side === c.side && p.role !== 'GK' && scorer && Math.hypot(p.pos[0] - scorer.pos[0], p.pos[1] - scorer.pos[1]) < 4;
+    const pose = c && (scorer === p || mob) && sp < 2.5 ? 'cheer' // (the scorer arms aloft, mobbed by the rest)
+      : c && t.side !== c.side && sp < 1.2 ? 'dejected' // (the other lot, hands on heads)
       : sp > 4.2 ? 'run' + (Math.floor(p.stride / 1.9 * 8) & 7) : sp > .5 ? 'walk' + (Math.floor(p.stride / 1.5 * 8) & 7) : 'stand';
     if (!inView(x - px, y - py, 1)) continue;
     drawFigure(x - px, y - py, 0, 1.8, p.face[0], p.face[1], p.role === 'GK' ? looks[t.side].gk : looks[t.side].out, pose, { hold: p, light: night > .3 ? 7 : 0 });
   }
   const rx = pitchX(m.ref.pos[0]), ry = pitchY(m.ref.pos[1]);
-  if (inView(rx - px, ry - py, 1)) drawFigure(rx - px, ry - py, 0, 1.78, m.ref.face[0], m.ref.face[1], stadiumRefLook(), 'stand', { hold: m.ref });
+  if (!replay && inView(rx - px, ry - py, 1)) drawFigure(rx - px, ry - py, 0, 1.78, m.ref.face[0], m.ref.face[1], stadiumRefLook(), 'stand', { hold: m.ref });
   // the ball, and its shadow on the grass (it's small: never less than a cell, so you can follow it from the stands)
-  const b = m.ball.p, bx = pitchX(b[0]) - px, by = pitchY(b[1]) - py, d = Math.hypot(bx, by), r = Math.max(.11, d * .45 / projY);
+  const b = replay ? replay.b : m.ball.p, bx = pitchX(b[0]) - px, by = pitchY(b[1]) - py, d = Math.hypot(bx, by), r = Math.max(.11, d * .45 / projY);
   if (inView(bx, by, 1)) {
     dot(bx, by, .005, r * .9, (i) => { BG[i] = C(GRAY, .6); return set(i, ' ', 0), true; });
     dot(bx, by, b[2] - .11, r, (i, t, L) => { BG[i] = C(WHITE, 13); return set(i, ' ', 0), true; });
@@ -31776,7 +31792,7 @@ function stadiumGrid() {
 ROOM_DEFS.stadium = {
   grid: stadiumGrid(), light: 1, height: 40, vis: 200, floor: 'pitch', ceil: 'sky', sign: false, wall: stadiumWall, rise: stadiumRise, outdoor: true,
   props: r => {
-    const p = [matchProp(), scoreboard(), ...goalFrame(-1), ...goalFrame(1)];
+    const p = [matchProp(), scoreboard(), bigScreen(), ...goalFrame(-1), ...goalFrame(1)];
     for (const s of STANDS) p.push(...standProps(s, r));
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
@@ -31822,7 +31838,12 @@ let stadiumView = null, stadiumCamX = null, stadiumTV = false;
 const stadiumTVOk = () => mode === 'room' && room?.kind === 'stadium' && !!stadiumMatch;
 const stadiumTVOn = () => stadiumTV && stadiumTVOk() && !freecam;
 function stadiumCam(dt) {
-  const m = stadiumMatch, b = m.ball.p, bx = pitchX(b[0]), by = pitchY(b[1]);
+  const rf = stadiumReplayFrame();
+  if (rf) { // the replay: from behind the goal it went in at, low, the play coming toward you
+    const end = stadiumReplay.end, bx = pitchX(rf.b[0]), by = pitchY(rf.b[1]), x = pitchX(end * (MatchEngine.PITCH.hl + 9)), y = STADIUM.cy + end * 4, z = 4.2, dx = bx - x, dy = by - y, d = Math.hypot(dx, dy) || 1;
+    return { x, y, z, a: Math.atan2(dy, dx), pitch: -projY * Math.tan(Math.atan2(z - Math.max(0, rf.b[2]), d)) / rows, fov: (30 + clamp(d / 50, 0, 1) * 18) * Math.PI / 180 };
+  }
+  const m = stadiumMatch, sc = m.phase === 'goal' && m.celebrate?.scorer, b = sc ? [sc.pos[0], sc.pos[1], 1] : m.ball.p, bx = pitchX(b[0]), by = pitchY(b[1]); // (after a goal, on the scorer, not the ball in the net)
   const want = STADIUM.cx + clamp(b[0] * .82, -44, 44);
   stadiumCamX = stadiumCamX == null ? want : stadiumCamX + (want - stadiumCamX) * Math.min(1, dt * 1.6);
   const x = stadiumCamX, y = 19.6, z = 12.4, dx = bx - x, dy = by - y, d = Math.hypot(dx, dy) || 1;
@@ -31920,6 +31941,160 @@ function openStadiumTickets() {
     hidePanel(ticketEl); enterStadium(b.dataset.sec);
     say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
   };
+}
+
+// ---- replays (phase 6): the build-up to every goal, kept from the engine's last eight seconds (match-engine.js replay),
+// played back slowed down a few seconds after it goes in, once the celebrating's started: on the big screen over the
+// south stand, and with the TV view on, re-staged from a camera behind that goal
+let stadiumReplay = null, stadiumReplayPending = null;
+const STADIUM_REPLAY_SPEED = .55;
+function queueStadiumReplay(m, e) {
+  const frames = m.replay.slice(-56); if (frames.length < 10) return;
+  const last = frames[frames.length - 1].b;
+  stadiumReplayPending = { at: T + 3, frames, end: Math.sign(last[0]) || 1, scorer: e.player, side: e.side };
+}
+function tickStadiumReplay() {
+  if (stadiumReplayPending && T >= stadiumReplayPending.at) { stadiumReplay = { ...stadiumReplayPending, t0: T }; stadiumReplayPending = null; if (stadiumTVOn()) say(`REPLAY: ${stadiumReplay.scorer}`, stadiumReplay.frames.length * .1 / STADIUM_REPLAY_SPEED); }
+  if (stadiumReplay && (T - stadiumReplay.t0) * STADIUM_REPLAY_SPEED > (stadiumReplay.frames.length - 1) * .1) stadiumReplay = null;
+}
+// the frame of the replay now, interpolated, with each player's stride so far (for their running legs)
+function stadiumReplayFrame() {
+  const R = stadiumReplay; if (!R) return null;
+  const f = Math.min(R.frames.length - 1.001, (T - R.t0) * STADIUM_REPLAY_SPEED / .1), k = Math.floor(f), u = f - k, A = R.frames[k], B = R.frames[k + 1] || A;
+  const lerp = (a, b) => a + (b - a) * u;
+  R.stride ||= A.p.map(() => 0);
+  const p = A.p.map((q, j) => { const r = B.p[j] || q; return [lerp(q[0], r[0]), lerp(q[1], r[1]), lerp(q[2], r[2]), lerp(q[3], r[3]), lerp(q[4], r[4]), q[5], q[6], q[7]]; });
+  const dt = R.lastF == null ? 0 : (f - R.lastF) * .1; R.lastF = f;
+  p.forEach((q, j) => { R.stride[j] = (R.stride[j] || 0) + q[4] * dt; });
+  return { p, b: [lerp(A.b[0], B.b[0]), lerp(A.b[1], B.b[1]), lerp(A.b[2], B.b[2])], stride: R.stride };
+}
+// the big screen beside the scoreboard: the match from above (the pitch, both sides in their colours, the ball), and
+// after a goal the replay, REPLAY in the corner
+const bigScreen = () => ({ x: STADIUM.cx + 9, y: 111.5, radius: 12, draw: (vx, vy) => {
+  const m = stadiumMatch; if (!m) return;
+  for (const e of [-1, 1]) drawBox(boxAt(vx + e * 8, vy + .2, 1, 0, .2, .2, 11.4, 12.6), solid(GRAY));
+  const P = MatchEngine.PITCH, hl = 10, z0 = 12.6, z1 = 20.6, R = stadiumReplayFrame();
+  const kit = m.teams.map(t => STADIUM_KIT[t.kit[0]] ?? GRAY), dots = R ? R.p.map(q => [q[0], q[1], q[5]]) : m.teams.flatMap(t => t.players.filter(p => !p.off).map(p => [p.pos[0], p.pos[1], t.side]));
+  const ball = R ? R.b : m.ball.p;
+  drawBox(boxAt(vx, vy, 1, 0, hl, .25, z0, z1), (i, t, L) => {
+    if (HIT.face !== 4) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
+    const u = HIT.u, w = HIT.w, rim = Math.abs(u) > hl - .25 || w < z0 + .25 || w > z1 - .25;
+    if (rim) { BG[i] = C(GRAY, .6); return set(i, ' ', 0), true; }
+    if (R && u > hl - 4.4 && w > z1 - 1.6 && fract(T * 1.2) < .75) { const ch = faceText('REPLAY', i, t, vx + (hl - 2.3), vy, 2, z1 - 1.5, 1.1); if (ch && ch !== ' ') { BG[i] = C(RED, 4); return set(i, ch, C(WHITE, 15)), true; } }
+    const x = (u / (hl - .25)) * (P.hl + 3), y = -((w - (z0 + z1) / 2) / ((z1 - z0) / 2 - .25)) * (P.hw + 3); // (the screen's the pitch, seen from above, north at the top)
+    const near = Math.hypot(x - ball[0], y - ball[1]);
+    if (near < 1.8) { BG[i] = C(WHITE, 15); return set(i, ' ', 0), true; }
+    for (const [dx, dy, side] of dots) if (Math.hypot(x - dx, y - dy) < 2.2) { BG[i] = C(kit[side], 11); return set(i, ' ', 0), true; }
+    const line = pitchMarkDist(Math.abs(x), Math.abs(y), x, y) < .9 && Math.abs(x) <= P.hl + .5 && Math.abs(y) <= P.hw + .5;
+    BG[i] = line ? C(WHITE, 8) : C(GREEN, (Math.floor((x + P.hl) / 5.25) & 1 ? 4.5 : 3.6)); return set(i, ' ', 0), true;
+  });
+} });
+// ===== the atmosphere at the Yards ground (STADIUM_PLAN.md, phase 5): the commentary and the PA on the match's events,
+// the score and clock up top, and the sound of the place. The crowd's bed (audio-mix.js) murmurs before kick-off and
+// rises with every attack that gets near a goal; over it, synthesised here: the referee's pea whistle (a peep for a
+// foul, two for half time, three for full time), an "ooh" at a shot, a groan at a near miss, applause for a save, a
+// roar for a home goal (a smaller cheer and a groan for an away one), boos at a card against the home side, and the
+// home end clapping and chanting their club's name when they're level or ahead.
+let stadiumSeen = 0, stadiumChantT = 0, stadiumSaidT = -9;
+const STADIUM_LINES = {
+  goal: e => e.og ? `OWN GOAL! ${e.player} turns it in. ${scoreText(e)}` : pick([`GOAL! ${e.player}! ${scoreText(e)}`, `GOAL! ${e.player} buries it! ${scoreText(e)}`, `GOAL! ${e.player} finds the net! ${scoreText(e)}`]),
+  shot: e => e.penalty ? `${e.player} steps up...` : e.header ? `${e.player} rises for the header...` : e.freekick ? `${e.player} goes for goal from the free kick...` : pick([`${e.player} shoots...`, `${e.player} lets fly...`, `${e.player} has a go...`]),
+  save: e => e.penalty ? `SAVED! ${e.player} guesses right!` : pick([`Saved by ${e.player}.`, `${e.player} gets down well to save.`, `Good stop from ${e.player}.`]),
+  miss: e => e.penalty ? `${e.player} puts the penalty wide!` : pick([`${e.player}: wide.`, `Over the bar from ${e.player}.`, `${e.player} can't keep it down.`]),
+  woodwork: e => `OFF THE WOODWORK! ${e.player} so close.`,
+  block: e => `Blocked by ${e.player}.`,
+  penalty: e => `PENALTY to ${stadiumMatch.teams[e.side].name}!`,
+  yellow: e => `Yellow card: ${e.player}.`,
+  red: e => `RED CARD! ${e.player} is off.`,
+  sub: e => `Substitution, ${stadiumMatch.teams[e.side].name}: ${e.on} on for ${e.off}.`,
+  offside: e => `Flag's up: ${e.player} offside.`,
+  added: e => `The fourth official's board: ${e.mins} minute${e.mins > 1 ? 's' : ''} added on.`,
+};
+const scoreText = e => { const m = stadiumMatch; return `${m.teams[0].short} ${e.score[0]}-${e.score[1]} ${m.teams[1].short}`; };
+// the line up top: the score and the clock, while you're at the ground
+function stadiumScoreLine() {
+  const m = stadiumMatch; if (!m) return 'The Yards Ground';
+  const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
+  const clock = m.kick != null && nowHour() < m.kick ? `kick-off ${String(Math.floor(m.kick % 24)).padStart(2, '0')}:${String(Math.round(m.kick % 1 * 60)).padStart(2, '0')}`
+    : m.phase === 'ft' ? 'full time' : m.phase === 'ht' ? 'half time' : `${Math.min(Math.floor(min), half)}'${min > half ? '+' + Math.ceil(min - half) : ''}`;
+  return `${h.name} ${h.score}-${a.score} ${a.name}   ${clock}`;
+}
+// every frame at the ground: what's new in the match, told and heard
+function stadiumAtmosphere() {
+  const m = stadiumMatch; if (!m || mode !== 'room' || room?.kind !== 'stadium') return;
+  if (m.events.length < stadiumSeen || m !== stadiumAtmosphere.m) { stadiumAtmosphere.m = m; stadiumSeen = m.events.length; } // (a new match: start from now)
+  if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
+  while (stadiumSeen < m.events.length) stadiumEvent(m, m.events[stadiumSeen++]);
+  tickStadiumReplay();
+  // the home end singing: when they've something to sing about, now and then, not over an attack
+  if (m.phase === 'play' && (stadiumChantT -= 1 / 60) <= 0) {
+    stadiumChantT = 22 + Math.random() * 25;
+    if (m.teams[0].score >= m.teams[1].score && (m.danger || 0) < .3) { sfxStadium('chant', m); if (T - stadiumSaidT > 6) say(`The home end: "${m.teams[0].short === 'YAR' ? 'YARDS! YARDS!' : m.teams[0].name.split(' ')[0].toUpperCase() + '! ' + m.teams[0].name.split(' ')[0].toUpperCase() + '!'}"`, 2.5); }
+  }
+}
+function stadiumEvent(m, e) {
+  const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft'].includes(e.kind);
+  if (e.kind === 'goal') queueStadiumReplay(m, e); // (the build-up, again, in a few seconds: stadium.js)
+  // the PA and the commentary: the big moments always; the rest when nothing else is up
+  let line = null;
+  if (e.kind === 'kickoff') { if (e.period === 1) return; line = 'The second half is under way.'; } // (the first half's is the welcome)
+  else if (e.kind === 'ht') line = `Half time at the Yards: ${m.teams[0].name} ${e.score[0]}, ${m.teams[1].name} ${e.score[1]}.`;
+  else if (e.kind === 'ft') line = `Full time: ${m.teams[0].name} ${e.score[0]}, ${m.teams[1].name} ${e.score[1]}. Thank you for coming, and get home safely.`;
+  else if (STADIUM_LINES[e.kind]) line = STADIUM_LINES[e.kind](e);
+  if (line && (big || e.kind === 'kickoff' || msgT <= 0 || T - stadiumSaidT > 2.5)) { say(line, big ? 5 : 2.8); stadiumSaidT = T; }
+  // and the sound of it
+  const s = { kickoff: 'whistle', foul: 'peep', offside: 'peep', ht: 'whistle2', ft: 'whistle3', shot: 'ooh', save: 'applause', miss: 'groan', woodwork: 'groan',
+    goal: home ? 'roar' : 'awaygoal', yellow: home ? 'boo' : 'cheer', red: home ? 'boo' : 'roarSmall', penalty: home ? 'roarSmall' : 'boo', sub: 'applause', corner: 'swell' }[e.kind];
+  if (s) sfxStadium(s, m);
+  if (e.kind === 'foul' || e.kind === 'penalty' || e.kind === 'yellow' || e.kind === 'red') sfxStadium('peep', m);
+}
+// ---- the sounds. Crowd noise is filtered noise shaped by envelopes (a crowd is mostly breath and vowels); the
+// whistle is a pea whistle's trill: a bright tone wobbling fast as the pea rattles
+function sfxStadium(kind, m) {
+  if (!actx || actx.state !== 'running' || !soundOn) return;
+  const at = actx.currentTime, ref = m ? Math.hypot(STADIUM.cx + m.ref.pos[0] - px, STADIUM.cy + m.ref.pos[1] - py) : 40, wk = clamp(1.4 - ref / 70, .35, 1);
+  const crowd = (len, rise, freq, q, gain, glide = 1) => { // a swell of voices
+    const s = actx.createBufferSource(), f = filt('bandpass', freq, q), f2 = filt('lowpass', freq * 2.4), g = actx.createGain();
+    s.buffer = noiseBuf; s.loop = true;
+    f.frequency.setValueAtTime(freq, at); f.frequency.exponentialRampToValueAtTime(freq * glide, at + len);
+    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + rise); g.gain.setTargetAtTime(gain * .6, at + rise, len * .35); g.gain.exponentialRampToValueAtTime(.0005, at + len);
+    shot(s, f, f2, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + len + .1);
+  };
+  const whistle = (t0, len) => {
+    const o = actx.createOscillator(), lfo = actx.createOscillator(), depth = actx.createGain(), g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = 2950; lfo.frequency.value = 34; depth.gain.value = 140; lfo.connect(depth); depth.connect(o.frequency);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.09 * wk, t0 + .02); g.gain.setValueAtTime(.09 * wk, t0 + len - .04); g.gain.linearRampToValueAtTime(0, t0 + len);
+    shot(o, g, sfxBus); o.start(t0); lfo.start(t0); o.stop(t0 + len + .02); lfo.stop(t0 + len + .02);
+  };
+  if (kind === 'peep') whistle(at, .28);
+  else if (kind === 'whistle') whistle(at, .9);
+  else if (kind === 'whistle2') { whistle(at, .5); whistle(at + .65, .9); }
+  else if (kind === 'whistle3') { whistle(at, .45); whistle(at + .6, .45); whistle(at + 1.2, 1.3); }
+  else if (kind === 'ooh') crowd(1.4, .35, 520, 1.3, .22, 1.3); // (a rising breath in)
+  else if (kind === 'groan') crowd(1.6, .15, 600, 1.1, .2, .6); // (falling away)
+  else if (kind === 'swell') crowd(2.2, 1, 700, .8, .12);
+  else if (kind === 'roar' || kind === 'roarSmall') { const k = kind === 'roar' ? 1 : .55; crowd(5.5 * k + 1, .25, 900, .6, .42 * k); crowd(4.5 * k + 1, .3, 1800, .9, .18 * k); crowd(6 * k, .5, 300, .7, .25 * k); }
+  else if (kind === 'awaygoal') { crowd(2.5, .2, 1100, .9, .12); crowd(2.8, .4, 420, 1, .22, .7); } // (the away end, then the home end's groan)
+  else if (kind === 'boo') crowd(2.4, .4, 260, 2.5, .2);
+  else if (kind === 'cheer') crowd(1.8, .2, 1000, .8, .16);
+  else if (kind === 'applause' || kind === 'chant') { // hands: a patter of tiny bursts, or in time, the chant's rhythm
+    const claps = kind === 'chant' ? [0, .42, 1.1, 1.52, 1.94, 2.4, 2.82, 3.5, 3.92, 4.34] : Array.from({ length: 40 }, () => Math.random() * 2.2);
+    for (const c of claps) for (let n = 0; n < (kind === 'chant' ? 6 : 1); n++) burst(at + c + Math.random() * .03, .05, [filt('bandpass', 1500 + Math.random() * 900, 1.2)], kind === 'chant' ? .05 : .03, (Math.random() - .5) * 1.2);
+    if (kind === 'chant') for (const c of [0, 1.1, 1.94, 3.5]) { // and the voices with them: a vowel, sung, on the beats
+      const o = actx.createOscillator(), f = filt('bandpass', 720, 4), f2 = filt('bandpass', 1150, 5), g = actx.createGain(), mix = actx.createGain();
+      o.type = 'sawtooth'; o.frequency.value = 165 + Math.random() * 10; g.gain.setValueAtTime(0, at + c); g.gain.linearRampToValueAtTime(.05, at + c + .06); g.gain.exponentialRampToValueAtTime(.001, at + c + .55);
+      o.connect(f); o.connect(f2); f.connect(mix); f2.connect(mix); shot(mix, g, sfxBus); o.start(at + c); o.stop(at + c + .6);
+    }
+  }
+}
+// for the mixer: how the crowd sounds right now (audio-mix.js): 0 empty, up to 1 for a goalmouth scramble
+function stadiumCrowdLevel() {
+  const m = stadiumMatch; if (!m) return .2;
+  if (m.kick != null && nowHour() < m.kick) return .45; // (filling up, chatting)
+  if (m.phase === 'ht') return .4;
+  if (m.phase === 'ft') return .3;
+  if (m.phase === 'goal') return 1;
+  return .55 + .45 * (m.danger || 0);
 }
 // ===== a top-down view of a simulated match (Dev tools > Other > Watch a match): the engine (match-engine.js) drawn
 // plainly on a canvas, to watch the football itself before there's a stadium round it. Players are discs in their
