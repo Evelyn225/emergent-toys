@@ -50,7 +50,11 @@ function controllerActions(){
   const entries=[...touchActions(),...SHEET.filter(([, ,when])=>!when||when()).map(([label,key])=>[label,key]),
     ['Inventory','KeyI'],['Map','KeyM'],['Camera','KeyV']];
   if(mode==='walk'&&nearAircraft()&&!nearAircraft().owned)entries.push(['Buy aircraft','KeyU']);
-  const unique=entries.filter(([label,key],i,a)=>a.findIndex(v=>v[1]===key)===i);
+  // These actions already have dedicated buttons, sticks or triggers.
+  const bound=new Set(['Space','KeyC','KeyE','KeyQ','KeyV','KeyI','KeyM']);
+  if(game)for(const key of ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'])bound.add(key);
+  if(mode==='air')for(const key of ['KeyW','KeyS'])bound.add(key);
+  const unique=entries.filter(([label,key],i,a)=>!bound.has(key)&&a.findIndex(v=>v[1]===key)===i);
   const sheet=CONTROLLER.sheet||=menuEl('controller-actions',1700,'<div class="panel"><h1>Actions</h1><p class="sub">A choose · B back</p><div data-actions></div></div>');
   const list=sheet.querySelector('[data-actions]');list.replaceChildren();
   for(const [label,key] of unique){const b=document.createElement('button');b.className='item';b.textContent=label;
@@ -58,17 +62,30 @@ function controllerActions(){
   paused=true;releaseMouse();sheet.style.display='flex';CONTROLLER.focus=0;
 }
 function controllerKeyboard(input){
-  const kb=CONTROLLER.keyboard||=menuEl('controller-keyboard',1900,'<div class="panel" style="width:min(650px,95vw)"><h1>Type</h1><p data-value style="overflow-wrap:anywhere"></p><p class="sub">A type · X erase · Y shift · B done</p><div data-keys style="display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:8px"></div></div>');
+  const kb=CONTROLLER.keyboard||=menuEl('controller-keyboard',1900,'<div class="panel" style="width:min(650px,95vw)"><h1>Type</h1><p data-value style="overflow-wrap:anywhere"></p><p class="sub">A type · X erase · Y shift · B done</p><div data-keys style="display:grid;gap:6px"></div></div>');
   CONTROLLER.textInput=input;CONTROLLER.uppercase=false;
   const grid=kb.querySelector('[data-keys]');grid.replaceChildren();
-  const chars=input.type==='number'?'0123456789.-':'abcdefghijklmnopqrstuvwxyz0123456789 -_.,!?@\'';
+  const numeric=input.type==='number',rows=numeric?['123','456','789','0.-']:['1234567890','qwertyuiop','asdfghjkl','zxcvbnm'," -_.,!?@'"];
+  const columns=numeric?6:20;grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;
   const update=()=>{kb.querySelector('[data-value]').textContent=input.type==='password'?'•'.repeat(input.value.length):input.value||' ';};
-  for(const char of chars){const b=document.createElement('button');b.textContent=char===' '?'space':char;b.dataset.char=char;b.style.minHeight='32px';if(char===' ')b.style.gridColumn='span 2';
-    b.onclick=()=>{if(input.maxLength>=0&&input.value.length>=input.maxLength)return;
-      input.value+=CONTROLLER.uppercase?char.toUpperCase():char;input.dispatchEvent(new Event('input',{bubbles:true}));update();};grid.appendChild(b);}
-  for(const [label,fn]of [['Erase',()=>controllerErase()],['Clear',()=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));update();}],['Done',()=>controllerCloseKeyboard()]]){
-    const b=document.createElement('button');b.textContent=label;b.style.gridColumn='span 2';b.style.minHeight='32px';b.onclick=fn;grid.appendChild(b);}
-  update();kb.style.display='flex';CONTROLLER.focus=0;
+  rows.forEach((row,r)=>{
+    let column=!numeric&&r===2?2:!numeric&&r===3?3:1;
+    for(const char of row){
+      const b=document.createElement('button'),span=char===' '?4:2;
+      b.textContent=char===' '?'space':char;b.dataset.char=char;
+      b.style.cssText=`min-height:44px;min-width:0;padding:4px 0;grid-row:${r+1};grid-column:${column}/span ${span}`;column+=span;
+      b.onclick=()=>{if(input.maxLength>=0&&input.value.length>=input.maxLength)return;
+        input.value+=CONTROLLER.uppercase?char.toUpperCase():char;input.dispatchEvent(new Event('input',{bubbles:true}));update();};grid.appendChild(b);
+    }
+  });
+  for(const [index,[label,fn]]of [['Erase',()=>controllerErase()],['Clear',()=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));update();}],['Done',()=>controllerCloseKeyboard()]].entries()){
+    const b=document.createElement('button');b.textContent=label;
+    const span=numeric?2:index===2?8:6,column=numeric?index*2+1:index*6+1;
+    b.style.cssText=`min-height:44px;min-width:0;padding:4px 0;grid-row:${rows.length+1};grid-column:${column}/span ${span}`;b.onclick=fn;grid.appendChild(b);
+  }
+  update();kb.style.display='flex';CONTROLLER.focus=numeric?0:10;
+  controllerFocus(kb,CONTROLLER.focus);
+
 }
 function controllerErase(){
   const input=CONTROLLER.textInput;if(!input)return;
@@ -88,7 +105,7 @@ function controllerMenuBack(root){
   controllerTap('Escape');
 }
 function controllerMenuStep(root,edge,held,left,right,dt){
-  if(CONTROLLER.root!==root){CONTROLLER.root=root;CONTROLLER.focus=0;}
+  if(CONTROLLER.root!==root){CONTROLLER.root=root;if(root!==CONTROLLER.keyboard)CONTROLLER.focus=0;}
   const items=controllerControls(root);if(!items.includes(document.activeElement))controllerFocus(root,CONTROLLER.focus);
   const x=held(15)?1:held(14)?-1:Math.abs(left[0])>.3?Math.sign(left[0]):0;
   const y=held(13)?1:held(12)?-1:Math.abs(left[1])>.3?Math.sign(left[1]):0;
@@ -105,7 +122,7 @@ function controllerMenuStep(root,edge,held,left,right,dt){
   }
   if(root===CONTROLLER.keyboard){
     if(edge(2))controllerErase();
-    if(edge(3)){CONTROLLER.uppercase=!CONTROLLER.uppercase;root.querySelectorAll('[data-char]').forEach(b=>b.textContent=CONTROLLER.uppercase?b.dataset.char.toUpperCase():b.dataset.char===' '?'space':b.dataset.char);}
+    if(edge(3)){CONTROLLER.uppercase=!CONTROLLER.uppercase;root.querySelectorAll('[data-char]').forEach(b=>b.textContent=b.dataset.char===' '?'space':CONTROLLER.uppercase?b.dataset.char.toUpperCase():b.dataset.char);}
   }else if(bigMapOpen()){
     if(edge(4))bigMapZoom(.8);if(edge(5))bigMapZoom(1.25);if(edge(2))bigMapCentre();
     if(edge(3))controllerKeyboard(bigMapEl.querySelector('input'));
