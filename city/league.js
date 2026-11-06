@@ -77,7 +77,7 @@ function stadiumLiveMatch() {
   const f = stadiumNextFixture();
   if (!stadiumMatch || stadiumMatch.slot !== f.n) {
     stadiumMatch = MatchEngine.create({ home: f.home, away: f.away, seed: fixtureSeed(f.n, groundPairIndex(f.n)) });
-    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.crowd = .8 + hash(f.n, 3, 2321) * .17;
+    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.crowd = .55 + hash(f.n, 3, 2321) * .3; // (a decent gate: plenty of empty seats about)
   }
   const m = stadiumMatch, progress = clamp((nowHour() - f.kick) / MATCH_HOURS, 0, 1);
   if (progress > 0) { const target = progress * stadiumPlaySeconds(m); while (m.t < target && m.phase !== 'ft') MatchEngine.tick(m); }
