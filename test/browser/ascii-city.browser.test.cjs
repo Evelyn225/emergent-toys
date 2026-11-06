@@ -2270,13 +2270,13 @@ test('shut-down shops are anonymous shutters; each district paints its own walls
 
 test('every food and drink shows itself being used up (a level going down, steam going, or bites out of it), in both dropped and held art', () => withPage(async page => {
   const same = await page.evaluate(() => {
-    const out = [];
+    const out = [],signature=([rows,color])=>rows.map((line,r)=>[...line].map((ch,c)=>ch===' '?' ':ch+':'+color(ch,r,c)).join(',')).join('\n');
     for (const id in ITEMS) {
       const I = ITEMS[id];
       if (!(I.kind === 'food' || I.kind === 'drink') || !(I.uses > 1)) continue;
       for (const [name, art] of [['dropped:', DROPPED_ART[id]], ['held:', DENSE[id]]]) {
         if (!art) continue;
-        if (JSON.stringify(art({ id, uses: I.uses }, 1)[0]) === JSON.stringify(art({ id, uses: 1 }, 1 / I.uses)[0])) out.push(name + id);
+        if (signature(art({ id, uses: I.uses }, 1)) === signature(art({ id, uses: 1 }, 1 / I.uses))) out.push(name + id);
       }
     }
     return out;
