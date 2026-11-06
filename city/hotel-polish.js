@@ -41,7 +41,7 @@ ROOM_DEFS.grandhotel.props=r=>[...GRAND_LOBBY_PROPS(r).filter(p=>!(p.box&&p.box.
 function hotelAmenityPrompt(){
  if(mode!=='room'||room.kind!=='hotelroom')return '';
  const spots=room.def.hotelAmenities;if(!spots)return '';
- if(near(px,py,...spots.tv)<1.65)return room.tv?'E: switch off the TV':'E: watch TV';
+ if(near(px,py,...spots.tv)<1.65)return (room.tv?'E: switch off the TV':'E: watch TV')+videoTapePrompt();
  if(spots.stove&&near(px,py,...spots.stove)<1.8)return 'E: cook at the kitchen stove';
  return '';
 }

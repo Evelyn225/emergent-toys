@@ -18,7 +18,7 @@ function controllerButton(pad,index){
   return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0;
 }
 const CONTROLLER={pad:null,id:null,sampleT:-Infinity,keys:new Set(),realKeys:new Set(),buttons:[],blocked:[],
-  context:'',root:null,focus:0,repeat:0,direction:'',time:0,active:false,lastUsed:-Infinity,
+  sprint:false,hint:'',context:'',root:null,focus:0,repeat:0,direction:'',time:0,active:false,lastUsed:-Infinity,
   motion:{forward:0,side:0,steer:0,throttle:0,flightX:0,flightY:0},sheet:null,keyboard:null};
 function controllerAxis(key,axis){return key||CONTROLLER.motion[axis]||0;}
 

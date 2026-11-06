@@ -19,6 +19,7 @@ function controllerKey(code,down){
 }
 function controllerTap(code){controllerKey(code,true);controllerKey(code,false);}
 function controllerReleaseKeys(){
+  CONTROLLER.sprint=false;
   controllerStopRumble();
   for(const code of CONTROLLER.keys)if(!CONTROLLER.realKeys.has(code))controllerKey(code,false);
   CONTROLLER.keys.clear();for(const key in CONTROLLER.motion)CONTROLLER.motion[key]=0;
@@ -30,9 +31,10 @@ function controllerKeys(wanted){
   CONTROLLER.keys=wanted;
 }
 function controllerHint(text){
+  CONTROLLER.hint=text;
   let hint=document.getElementById('controller-hint');
   if(!hint){hint=document.createElement('div');hint.id='controller-hint';hint.style.cssText='position:fixed;bottom:8px;left:8px;right:8px;z-index:2100;pointer-events:none;color:#d2ecea;background:#080b10dd;padding:6px 10px;font:13px monospace;width:fit-content;max-width:calc(100vw - 36px)';document.body.appendChild(hint);}
-  if(hint.textContent!==text)hint.textContent=text;const display=CONTROLLER.active?'block':'none';if(hint.style.display!==display)hint.style.display=display;
+  if(hint.textContent!==text)hint.textContent=text;const display=CONTROLLER.active&&(CONTROLLER.menu||game)?'block':'none';if(hint.style.display!==display)hint.style.display=display;
 }
 function controllerTick(dt){
   dt=Math.max(0,Math.min(.05,dt));CONTROLLER.time+=dt;
@@ -97,7 +99,10 @@ function controllerTick(dt){
   }else{
     if(edge(4))cycleQuickSlot(-1);if(edge(5))cycleQuickSlot(1);
     hold('Space',held(0));hold(vehicle?'KeyS':'KeyC',held(1));hold('KeyE',held(2));
-    hold('ShiftLeft',held(10));
+    const moving=Math.hypot(...left)>.05;
+    if(!moving||vehicle||freecam)CONTROLLER.sprint=false;
+    else if(edge(10))CONTROLLER.sprint=!CONTROLLER.sprint;
+    hold('ShiftLeft',held(10)||CONTROLLER.sprint);
     if(vehicle){
       motion.steer=left[0];motion.throttle=(CONTROLLER.blocked[7]?0:controllerButton(pad,7))-(CONTROLLER.blocked[6]?0:controllerButton(pad,6));
       if(mode==='air'){motion.flightX=left[0];motion.flightY=left[1];}
@@ -108,7 +113,7 @@ function controllerTick(dt){
     }else{
       hold('KeyW',left[1]<-.2);hold('KeyS',left[1]>.2);hold('KeyD',left[0]>.2);hold('KeyA',left[0]<-.2);hold('KeyQ',held(7));
     }
-    controllerHint(vehicle?'Left stick steer / fly · RT power · LT brake / reverse · X enter / exit · A action · Y actions':'Left stick move · right stick look · A jump · X interact · B crouch / sit · RT use · LT aim · Y actions');
+    controllerHint(vehicle?'Left stick steer / fly · RT power · LT brake / reverse · X enter / exit · A action · Y actions':'Left stick move · L3 sprint (click / hold) · right stick look · A jump · X interact · B crouch / sit · RT use · LT aim · Y actions');
   }
   controllerKeys(wanted);
   if(!skate||cameraLook){
