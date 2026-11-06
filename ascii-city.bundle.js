@@ -40716,7 +40716,7 @@ function buildIslandScenery() {
   for(const island of WILD_ISLANDS) {
     const [x0,y0,x1,y1]=island.dock;
     for(let x=x0+.25;x<x1-.5;x+=3)for(const y of [y0+.06,y1-.06]) {
-      islandDetail(x,y,.035,.035,-.025,.12,'timber');
+      const post=islandDetail(x,y,.035,.035,-.025,.12,'timber');post.dockPost=true;ISLAND_OBSTACLES.push(post);
       islandDetail(x,y,.047,.047,.115,.13,'metal');
     }
     // Small cleats sit away from the boarding point and leave the deck open.
@@ -40776,7 +40776,7 @@ function buildIslandScenery() {
 }
 
 function islandTimberShade(model,i,t,L) {
-  const top=HIT.face===5,wood=model.kind==='timber'||model.kind==='deck'||model.kind==='driftwood';
+  const [nx,ny,nz]=islandModelNormal(model),top=nz>.5,wood=model.kind==='timber'||model.kind==='deck'||model.kind==='driftwood';
   let base=wood?BRICK:GRAY;
   if(model.kind==='trim'||model.kind==='sign')base=STONE;
   if(model.kind==='pot')base=BRICK;
@@ -40790,25 +40790,22 @@ function islandTimberShade(model,i,t,L) {
     set(i,worldText(word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/word.length),model.labelH??.04),C(model.ink??BLACK,15));
     return true;
   }
-  let ch=' ';
-  if(wood) {
-    if(top)ch=fract((model.y+HIT.v)*12)<.07?'|':' ';
-    else ch=fract(HIT.w*45)<.09?'=':' ';
-  }
-  else if(model.kind==='metal')ch=top?'=':'|';
-  else if(model.kind==='sign')ch=top?'=':' ';
-  set(i,ch,C(wood?WARM:base,L*.7));
+  const fp=t/projY,fine=coveDetail(t,.08);
+  if(wood){
+    const joint=coveGroove(top?HIT.v:HIT.w,top?1/12:1/45,top?.004:.002,fp);
+    const grain=Math.sin(HIT.v*140+Math.sin(HIT.u*8))*fine*.25;
+    BG[i]=C(base,brightness+grain-joint*1.4);
+  }else if(model.kind==='metal')coveMetal(i,L,nx,ny,nz,base);
+  set(i,' ',0);if(nz>.4)paintSettledSnow(i,model.x+model.c*HIT.u-model.s*HIT.v,model.y+model.s*HIT.u+model.c*HIT.v,L,nz,0,HIT.w);
   return true;
 }
 function islandRockShade(model,i,t,L) {
-  const grain=hash(Math.floor((model.x+HIT.u)*37),Math.floor(HIT.w*59),1916);
-  const fraction=(HIT.w-model.z0)/(model.z1-model.z0);
-  const moss=fraction<.22&&model.seed>.4&&grain>.3;
-  const base=moss?GREEN:GRAY;
-  const streak=model.stack&&fraction>.6&&hash(Math.floor((HIT.u+HIT.v)*19),0,1947)>.82;
-  BG[i]=C(streak?STONE:base,1.1+L*(HIT.face>=6?.28:.16));
-  set(i,streak?'|':model.stack&&fract(HIT.w*9+model.seed)<.045?'_':grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
-  return true;
+  const [nx,ny,nz]=islandModelNormal(model),fine=coveDetail(t,.1),fp=t/projY;
+  const x=model.x+HIT.u,y=model.y+HIT.v,fraction=(HIT.w-model.z0)/(model.z1-model.z0);
+  const moss=fraction<.22&&model.seed>.4&&noise(x*14,y*14,1916)>.5;
+  const joint=coveGroove(HIT.w+Math.sin(x*7)*.003,.045,.003,fp);
+  BG[i]=C(moss?GREEN:GRAY,1.4+L*.27*coveLight(nx,ny,nz)+(noise(x*19,y*19,1916)-.5)*fine*.5-joint*.8);
+  set(i,' ',0);if(nz>.4)paintSettledSnow(i,x,y,L,nz,0,HIT.w);return true;
 }
 // Cormorant Rock's stacks: warped bedding planes with darker partings, vertical joints, lichen low down, the tops
 // crusted white and white runs of guano down the faces from every ledge. Small detail fades with distance
@@ -40837,39 +40834,23 @@ const islandNestShade=m=>(i,t,L)=>{
   BG[i]=C(splash&&fine>.3?WHITE:inner?BRICK:stick?WARM:BRICK,(splash?2.6:inner?.8:1.4+(stick?.5:0)*fine)*(.2+.8*day)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));
   set(i,' ',0);return true;
 };
-function drawIslandShrub(model,vx,vy) {
-  const grass=model.kind==='grass',height=model.z1-model.z0;
-  drawShape(vx,vy,model.z0,model.hl,height,(i,u,z,du,dz,L)=>{
-    const sway=Math.sin(T*1.3+model.seed*12)*.006*z/height,local=(u-sway)/model.hl;
-    if(grass) {
-      if(Math.abs(local)>.8*(1-z/height)||Math.abs(Math.sin(local*12+z*15))<.7)return false;
-      set(i,z>height*.8?'\'':'|',C(YEL,L*.75));return true;
-    }
-    if(local*local+((z-height*.48)/(height*.53))**2>1)return false;
-    const grain=hash(Math.floor(u*75),Math.floor(z*75),Math.floor(model.seed*1000));
-    if(grain>.88)return false;
-    BG[i]=C(GREEN,1.1+L*.18);
-    set(i,grain>.73?'\'':grain<.06&&model.seed>.8?'*':' ',C(grain<.06?WARM:GREEN,L*.85));return true;
-  });
-}
+function drawIslandShrub(model,vx,vy){drawIslandPlantModel(model,vx,vy);}
 function islandRoofShade(roof,i,t,L) {
   if(roof.cabin.id==='cabin-cove')return coveRoofShade(roof,i,t,L);
   if(roof.part==='chimney') {
     landmarkStone(i,HIT.face<2?HIT.v:HIT.u,HIT.w,GRAY,L);
-    if(HIT.w>roof.z1-.035){BG[i]=C(GRAY,1+L*.15);set(i,'=',C(STONE,L*.8));}
+    if(HIT.w>roof.z1-.035){BG[i]=C(GRAY,1+L*.15);set(i,' ',0);}
     return true;
   }
   const end=HIT.face===2||HIT.face===3,cabin=roof.cabin;
   if(end) {
     BG[i]=C(cabin.wood,1.8+L*.2);
-    set(i,fract(HIT.w*32)<.07?'=':' ',C(WARM,L*.6));return true;
+    BG[i]=C(cabin.wood,(BG[i]&15)-coveGroove(HIT.w,1/32,.002,t/projY)*1.2);set(i,' ',0);return true;
   }
   const edge=Math.abs(HIT.v)>roof.hw-.025||HIT.w<roof.z0+.025;
-  const seam=fract(HIT.v*9)<.055;
   BG[i]=C(edge?STONE:cabin.roof,1.2+L*(HIT.face===6?.27:.17));
-  let mark=seam?'/':' ';
-  if(edge)mark='=';
-  set(i,mark,C(edge?STONE:cabin.roof,L*.9));
+  BG[i]=C(edge?STONE:cabin.roof,(BG[i]&15)-coveGroove(HIT.v,1/9,.006,t/projY)*1.3);
+  set(i,' ',0);
   paintSettledSnow(i,roof.x+HIT.u,roof.y+HIT.v,L,.7,0,HIT.w);
   return true;
 }
@@ -40885,16 +40866,16 @@ function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   const door=front&&Math.abs(along-width/2)<.075||terrace&&Math.abs(along-1.5)<.075;
   BG[i]=C(cabin.wood,1.9+light*.19);
   if(front&&cabin.id!=='fern-house'&&wallText(i,along-width/2,uStep,z,d,cabin.room?'SHELTER':'PRIVATE',0,.275,.028,.028,C(STONE,Math.max(light,5)),BG[i]))return;
-  if(corner<.045||z>h-.035){BG[i]=C(STONE,2+light*.2);set(i,z>h-.035?'=':'|',C(STONE,light));return;}
-  if(z<.04){BG[i]=C(GRAY,1.4+light*.2);set(i,fract(wc*9)<.06?'|':' ',C(STONE,light*.5));return;}
+  if(corner<.045||z>h-.035){BG[i]=C(STONE,2+light*.2);set(i,' ',0);return;}
+  if(z<.04){BG[i]=C(GRAY,1.4+light*.2);BG[i]=C(GRAY,(BG[i]&15)-coveGroove(wc,1/9,.006,d/projY));set(i,' ',0);return;}
   if(door&&z<.27) {
     const du=front?along-width/2:along-1.5;
-    if(Math.abs(du)>.06||z>.255){BG[i]=C(STONE,2+light*.2);set(i,z>.255?'_':'|',C(STONE,light));return;}
+    if(Math.abs(du)>.06||z>.255){BG[i]=C(STONE,2+light*.2);set(i,' ',0);return;}
     BG[i]=C(GREEN,1.2+light*.12);
     let mark=' ';
     if(z>.17&&z<.24)mark=':';
     else if(Math.abs(du-.037)<.012&&Math.abs(z-.12)<.012)mark='o';
-    set(i,mark,C(z>.17?WARM:YEL,Math.max(light,night*8)));return;
+    if(mark!== ' ')BG[i]=C(z>.17?WARM:YEL,Math.max(light,night*8));set(i,' ',0);return;
   }
   const bay=width===3?.72:.5,spacing=width===3?1.55:1;
   const du=along-bay-Math.round((along-bay)/spacing)*spacing;
@@ -40902,12 +40883,12 @@ function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
     const frame=Math.abs(du)>.12||z<.13||z>.26||Math.abs(du)<.009||Math.abs(z-.2)<.007;
     if(frame) {
       BG[i]=C(STONE,2+light*.2);
-      set(i,Math.abs(du)<.009?'|':'=',C(STONE,light));return;
+      set(i,' ',0);return;
     }
     BG[i]=C(night>.35?WARM:CYAN,1.2+night*4);
-    set(i,fract(du*4+z*6)<.05?'/':' ',C(WARM,Math.max(light*.65,night*11)));return;
+    set(i,' ',0);return;
   }
-  set(i,fract(z*37)<.075?'=':fract(wc*8)<.025?'|':' ',C(WARM,light*.5));
+  BG[i]=C(cabin.wood,(BG[i]&15)-Math.max(coveGroove(z,1/37,.002,d/projY),coveGroove(wc,1/8,.003,d/projY))*.9);set(i,' ',0);
 }
 function drawFernCascade() {
   if(near(px,py,FERN_FALLS.x,191)>vis+12)return;
@@ -40930,6 +40911,7 @@ function drawWildScenery() {
     const vx=model.x-px,vy=model.y-py;
     if(!inView(vx,vy,model.hl+.2))return;
     if(model.landmark){drawIslandLandmark(model.landmark,vx,vy);return;}
+    if(model.kind==='wire'){const [a,b]=model.ends;rod(a[0]-px,a[1]-py,a[2],b[0]-px,b[1]-py,b[2],.002,GRAY,1);return;}
     if(model.kind==='tidepool'){drawIslandTidePool(model);return;}
     if(model.kind==='cover') {
       if((model.cover==='flower'||model.cover==='fern')&&season()==='winter')return;
@@ -40937,14 +40919,14 @@ function drawWildScenery() {
       return;
     }
     if(model.kind==='net'||model.kind==='cloth'||model.kind==='canvas') {
-      const sway=model.kind==='cloth'?Math.sin(T*1.7+model.seed)*.012:0;
+      const sway=0; // pinned to its supporting line; folds move in the material
       drawBox({...model,x:vx,y:vy+sway},(i,t,L)=>islandFabricShade(model,i,t,L),model.planes?rayMansard:rayBox);return;
     }
     if(model.kind==='shrub'||model.kind==='grass'){drawIslandShrub(model,vx,vy);return;}
     if(model.kind==='stack'){drawBox({...model,x:vx,y:vy},(i,t,L)=>islandStackShade(model,i,t,L),rayMansard);return;}
     if(model.kind==='nest'){if(near(px,py,model.x,model.y)<16)coveLathe(vx,vy,model.z0,model.profile,islandNestShade(model));return;}
     if(model.kind==='lamp') {
-      drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,'o',C(YEL,10+night*5));return true;});return;
+      drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,' ',0);return true;});return;
     }
     drawBox({...model,x:vx,y:vy},(i,t,L)=>model.kind==='rock'?islandRockShade(model,i,t,L):islandTimberShade(model,i,t,L),model.planes?rayMansard:rayBox);
   });
@@ -41127,11 +41109,12 @@ function buildIslandSights() {
   islandWaymark(719,115.35,'TIDE POOLS',.38);
   // Juniper: a modest sheltered garden, washing on the line and sea-facing trees.
   for(const y of [241.7,242.5])for(let x=785;x<787.2;x+=.35)islandCover(x,y,'flower',hash(x,y,1943),.13);
-  for(const x of [785,787.3])islandGroundModel(x,240.6,.025,.025,.3,'timber');
-  const line=islandGroundModel(786.15,240.6,1.15,.006,.29,'metal');line.z0=line.z1-.008;
-  for(let k=0;k<4;k++) {
-    const cloth=islandGroundModel(785.4+k*.48,240.6,.12,.008,.28,'cloth');
-    cloth.z0=cloth.z1-.15;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
+  const posts=[785,787.3].map(x=>islandGroundModel(x,240.6,.025,.025,.3,'timber'));
+  const ends=posts.map(p=>[p.x,p.y,p.z1-.01]);
+  const line=islandDetail(786.15,240.6,1.15,.006,Math.min(...ends.map(p=>p[2]))-.003,Math.max(...ends.map(p=>p[2]))+.003,'wire');line.ends=ends;
+  for(let k=0;k<4;k++){
+    const x=785.4+k*.48,u=(x-ends[0][0])/(ends[1][0]-ends[0][0]),top=ends[0][2]*(1-u)+ends[1][2]*u;
+    const cloth=islandDetail(x,240.6,.12,.008,top-.15,top,'cloth');cloth.wire=line;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
   }
   islandWaymark(787,243.85,'SEA GARDEN',.38);
 }
@@ -41166,7 +41149,7 @@ function islandCoverShade(model,i,u,z,L) {
   if(Math.abs(n)>1||z<0||z>h)return false;
   if(model.cover==='lichen') {
     if(z>h*.18||n*n+((z-h*.08)/(h*.1))**2>1)return false;
-    BG[i]=C(GRAY,2+L*.2);set(i,':',C(YEL,L*.8));return true;
+    BG[i]=C(GRAY,2+L*.2);set(i,' ',0);return true;
   }
   const stem=Math.abs(n-Math.sin(T*.9+model.seed*8)*.045*z/h)<.06;
   if(model.cover==='flower') {
@@ -41175,24 +41158,25 @@ function islandCoverShade(model,i,u,z,L) {
     const petal=((n-centre)/.13)**2+((z/h-head)/.1)**2<1;
     if(!petal&&!stalk)return false;
     const color=petal?([MAG,YEL,WHITE][Math.floor(model.seed*3)%3]):GREEN;
-    BG[i]=C(color,petal?3+L*.35:1+L*.18);set(i,petal?'*':'|',C(color,L*1.1));return true;
+    BG[i]=C(color,petal?3+L*.35:1+L*.18);set(i,' ',0);return true;
   }
   if(model.cover==='rush') {
     if(!stem&&Math.abs(Math.sin(n*14+z*11))<.91)return false;
-    set(i,z>h*.8?'\'':'|',C(YEL,L*.85));return true;
+    BG[i]=C(YEL,1.2+L*.35);set(i,' ',0);return true;
   }
   const leaf=Math.abs(n)<(1-z/h)*.9&&Math.sin(z/h*22+Math.abs(n)*8)>.1&&hash(Math.floor(n*15),Math.floor(z/h*18),Math.floor(model.seed*1000))>.2;
   if(!stem&&!leaf)return false;
-  BG[i]=C(GREEN,1.4+L*.18);set(i,stem?'|':n<0?'/':'\\',C(GREEN,L*.8));return true;
+  BG[i]=C(GREEN,1.4+L*.18);set(i,' ',0);return true;
 }
 function islandFabricShade(model,i,t,L) {
-  if(model.kind==='net') {
-    if(fract((HIT.u+model.hl)*25)>.1&&fract(HIT.w*35)>.1)return false;
-    set(i,'#',C(GREEN,L*.8+2));return true;
+  const fp=t/projY;
+  if(model.kind==='net'){
+    const weave=Math.max(coveGroove(HIT.u+model.hl,1/25,.004,fp),coveGroove(HIT.w,1/35,.003,fp));
+    if(weave<.4)return false;BG[i]=C(GREEN,1.3+L*.35);set(i,' ',0);return true;
   }
-  const base=model.base??STONE;
-  BG[i]=C(base,2+L*.3);
-  set(i,model.kind==='cloth'&&fract(HIT.u*30)<.08?'|':HIT.w<model.z0+.02?'_':' ',C(base,L));return true;
+  const [nx,ny,nz]=islandModelNormal(model),base=model.base??STONE;
+  const hem=coveGroove(HIT.w-model.z0,.15,.003,fp),fold=coveDetail(t,.1)*Math.sin(HIT.u*40+Math.sin(T+(model.seed||0))*.3)*.3;
+  BG[i]=C(base,2+L*.3*coveLight(nx,ny,nz)+fold-hem*.6);set(i,' ',0);return true;
 }
 // A small cached seabird body: folded wings on a perch, raised/lowered wings in flight.
 ANIMAL_BODIES.islandbird=frame=>{
@@ -41427,6 +41411,42 @@ nearSeat=()=>{
  if(mode==='walk'&&!fx.skating){const seat=ISLAND_LANDMARKS.find(g=>g.seat)?.seat;if(seat&&Math.hypot(px-seat.x,py-seat.y)<.15)return seat;}
  return BASE_ISLAND_NEAR_SEAT();
 };
+// Normals follow the actual convex rock or rotated box, rather than stale HIT
+// normals left by an earlier primitive. Small grooves filter in world units.
+function islandModelNormal(m){
+ if(m.planes){const n=m.planes[HIT.face],length=Math.hypot(n[0],n[1],n[2]);return[n[0]/length,n[1]/length,n[2]/length];}
+ const n=HIT.face===1?[1,0,0]:HIT.face===2?[-1,0,0]:HIT.face===3?[0,1,0]:HIT.face===4?[0,-1,0]:HIT.face===5?[0,0,1]:[0,0,-1];
+ return[(m.c??1)*n[0]-(m.s||0)*n[1],(m.s||0)*n[0]+(m.c??1)*n[1],n[2]];
+}
+const ISLAND_SHRUB_MODELS=new WeakMap();
+function drawIslandPlantModel(m,x,y){
+ if(m.kind==='grass'){
+  const height=m.z1-m.z0;
+  drawShape(x,y,m.z0,m.hl,height,(i,u,z,du,dz,L)=>{
+   const n=(u-Math.sin(T*1.3+(m.seed||0)*12)*.006*z/height)/m.hl;
+   if(Math.abs(n)>.8*(1-z/height)||Math.abs(Math.sin(n*12+z*15))<.7)return false;
+   BG[i]=C(seasonIdx()===3?WARM:YEL,1+L*.35);set(i,' ',0);return true;
+  });return;
+ }
+ let parts=ISLAND_SHRUB_MODELS.get(m);
+ if(!parts){
+  const h=m.z1-m.z0;parts=[[-.32,0,.42,.67],[.28,.08,.56,.82],[0,-.18,.67,1]].map(([u,v,z,top])=>{
+   const r=top===1?.64:.58,b=boxAt(u*m.hl,v*m.hw,1,0,m.hl*r,m.hw*r,m.z0+Math.max(0,z-.34)*h,m.z0+top*h);
+   return{role:'foliage',box:b,view:{...b},ray:homeRayEllipsoid,shade:(i,t,L)=>{const height=(HIT.w-m.z0)/h,detail=coveDetail(t,.08)*(Math.sin(HIT.u*65+HIT.w*71)*.15);BG[i]=C(seasonIdx()===2?WARM:GREEN,(1.2+L*.27*coveLight(HIT.nx,HIT.ny,HIT.nz))*(seasonIdx()===3?.75:1)+height*.7+detail);set(i,' ',0);if(HIT.nz>.4)paintSettledSnow(i,m.x+b.x+HIT.u,m.y+b.y+HIT.v,L,HIT.nz,0,HIT.w);return true;}};
+  });
+  const trunk=boxAt(0,0,1,0,m.hl*.055,m.hw*.055,m.z0-.003,m.z0+h*.5);
+  parts.unshift({role:'stem',box:trunk,view:{...trunk},ray:rayBox,shade:(i,t,L)=>{BG[i]=C(BRICK,1+L*.25);set(i,' ',0);return true;}});
+  ISLAND_SHRUB_MODELS.set(m,parts);
+ }
+ for(const p of parts){p.view.x=x+p.box.x;p.view.y=y+p.box.y;drawBox(p.view,p.shade,p.ray);}
+}
+// Only the land marks become tones; creek water, swash, foam and all their
+// timing/height fields return unchanged. The airstrip dash becomes yellow paint.
+const ISLAND_LAND_SURFACE=islandSurface,ISLAND_LAND_SHORE=islandShoreSurface;
+islandSurface=(...args)=>{
+ const s=ISLAND_LAND_SURFACE(...args);if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';}return s;
+};
+islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water)s.ch=' ';return s;};
 // Hotel-only bedside fittings sit on the existing cabinet's measured top.
 // Closed lathe shells leave actual openings around the supported light bulb.
 function HOTEL_BEDSIDE_LAMP(x,y,tier,baseZ=.65) {
