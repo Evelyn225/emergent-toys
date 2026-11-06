@@ -6,13 +6,13 @@ const {pathToFileURL}=require('node:url'),{chromium}=require('playwright');
 let browser;test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
 async function ground(run){const p=await browser.newPage({viewport:{width:1200,height:700}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{
  await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
- await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;tod=15;weather='clear';env(0);render(0);enterStadium('docks');env(0);render(0);});
+ await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;weather='clear';env(0);render(0);const f=stadiumNextFixture();dayNum=Math.floor(f.kick/24);tod=f.kick-dayNum*24+.3;enterStadium('main');body.seat=null;env(0);render(0);});
  await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
 
 test('inside, the match plays on as you watch, and the scoreboard keeps up',()=>ground(async p=>{
  const r=await p.evaluate(()=>{const m0=MatchEngine.minute(stadiumMatch);for(let k=0;k<200;k++){T+=.1;render(0);}
-  return{room:room.kind,before:m0,after:MatchEngine.minute(stadiumMatch),home:stadiumMatch.teams[0].name,away:stadiumMatch.teams[1].name};});
- assert.equal(r.room,'stadium');assert.equal(r.home,'Yards Athletic');assert.equal(r.away,'Docks United');
+  const f=stadiumNextFixture();return{room:room.kind,before:m0,after:MatchEngine.minute(stadiumMatch),home:stadiumMatch.teams[0].club.id,away:stadiumMatch.teams[1].club.id,fh:f.home,fa:f.away};});
+ assert.equal(r.room,'stadium');assert.equal(r.home,r.fh);assert.equal(r.away,r.fa);
  assert.ok(r.after-r.before>2.4,`20 s of play is ${(r.after-r.before).toFixed(1)} match minutes`);
 }));
 

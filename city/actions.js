@@ -343,6 +343,7 @@ function interact() {
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return say('The door is around the front.',2);
+    if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);

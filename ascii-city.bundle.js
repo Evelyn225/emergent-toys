@@ -1587,7 +1587,7 @@ const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8)
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
 let KIND = new Array(NB * NB).fill('');
 // superblocks: [x0, y0, x1, y1, kind] - the streets inside are removed
-const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens']];
+const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens'], [17, 7, 18, 7, 'stadium']]; // (the last: the Yards ground, stadium.js)
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const d = DIST[bi(bx, by)], h = hash(bx, by, 7);
   KIND[bi(bx, by)] = d === 'waterfront' ? 'waterfront' : d === 'sea' ? 'sea'
@@ -2062,6 +2062,19 @@ const MUSEUM = { bx: 14, by: 16 };
 {
   const sh = MUSEUM.sh = { kind: SHOP_LIT, word: 'MUSEUM', neon: WHITE, glyphs: '#', hours: [10, 18], fee: 10, museum: true };
   for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(MUSEUM.bx * 8 + x, MUSEUM.by * 8 + y); map[i] = x >= 4 && x <= 5 && y >= 4 && y <= 5 ? 3.4 : 1.32; STY[i] = 23; SHOP[i] = sh; SEED[i] = 0.5; }
+}
+
+// ---- the Yards ground (stadium.js): two blocks, the street between them gone. A ring of stands 15m high round the
+// pitch (low inside, so you see the grass from the el or the air), the gates on the south front, onto the street.
+// Cell coordinates: x along the pair of blocks, 14 cells (140m), y 6 cells (60m); STY 26
+const STADIUM_SITE = { bx: 17, by: 7 };
+{
+  const sh = STADIUM_SITE.sh = { kind: SHOP_LIT, word: 'THE YARDS GROUND', neon: RED, glyphs: '#', hours: [0, 24], stadium: true };
+  const x0 = STADIUM_SITE.bx * 8 + 2, x1 = STADIUM_SITE.bx * 8 + 15, y0 = STADIUM_SITE.by * 8 + 2, y1 = STADIUM_SITE.by * 8 + 7;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = idx(x, y), ring = x === x0 || x === x1 || y === y0 || y === y1;
+    map[i] = ring ? (y === y0 ? 1.7 : 1.35) : .03; STY[i] = 26; SHOP[i] = sh; SEED[i] = hash(x, y, 2301); // (the main stand, on the north side, the tallest)
+  }
 }
 
 // ---- the Velvet Rope, a strip club in midtown (stripclub.js)
@@ -13452,6 +13465,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sh?.gas) return gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (gas-render.js)
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
+  if (sty === 26) return stadiumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (the Yards ground: stadium.js)
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -13760,6 +13774,7 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
 function roofTop(i, wx, wy, h, d) {
   const spill = courierNeonSpill(wx, wy); // (the night route's signs, glowing on the roofs round them)
   const L = Math.max(Math.max(0, 1 - d / vis) * amb * 10, spill ? spill[0] * 11 : 0), mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  if (STY[idx(mx, my)] === 26) return stadiumRoof(i, wx, wy, h, d, L); // (the Yards ground: its stand roofs, the pitch inside: stadium.js)
   if (STY[idx(mx,my)] === 19) { // simple flat mesh pavilion: widely spaced structural rails, quiet netting
     const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
     const rail = fract(u * 2) < .035 || fract(v * 2) < .035;
@@ -16489,6 +16504,7 @@ function citySprites() {
     if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
   industrialRoofs(); // sawtooth north lights, refrigeration plant, ventilators (industrial-facades.js)
+  stadiumExterior(); // the Yards ground's floodlight pylons (stadium.js)
   shopExteriors(); // barber poles, pharmacy crosses, lanterns, café boards, florists' buckets, bar signs (shop-exteriors.js)
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
@@ -27650,6 +27666,7 @@ function promptText() {
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) { // (a shop shut for good is just a shuttered wall)
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return '';
+    if (sh.stadium) { const f = stadiumNextFixture(); return f.open ? `E: tickets for ${f.short}${f.live ? ' (on now)' : ', ' + f.when}` : `${f.short}, ${f.when}`; }
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
@@ -28286,6 +28303,7 @@ function interact() {
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && SHOP[idx(lookHit.mx, lookHit.my)].kind !== SHOP_SHUT && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return say('The door is around the front.',2);
+    if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
@@ -31167,7 +31185,7 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
-  land.push(['Stadium (inside, a match on)', () => { devFree(); enterStadium(); }]);
+  land.push(['Stadium (the gates)', () => { const b = stadiumBounds(); devAt((b.x0 + b.x1) / 2, b.y1 + .6, -Math.PI / 2); }], ['Stadium (inside, in the main stand)', () => { devFree(); enterStadium('main'); }]);
   if (SKATEPARK) land.push(['Skatepark', () => { const S = SKATEPARK, x = S.bx * 8 + (S.x0 + S.x1) / 2; devAt(x, S.by * 8 + S.y0 + 0.15, Math.PI / 2); }]); // (at the park's edge, looking across it)
   if (BACKROOMS_SEAM) land.push(['Backrooms entrance', () => devAt(BACKROOMS_SEAM.x - 0.4, BACKROOMS_SEAM.y, 0)]); // (in the lane, facing the seam: walk forward to go through)
   if(FERRY_STOPS.length) {
@@ -31297,6 +31315,97 @@ function openDev() {
 }
 function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = !!wanted.busted; if(!paused)lockMouse(); }
 const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };
+// ===== the city league and the fixtures at the Yards ground (STADIUM_PLAN.md, phase 4). Eight clubs (match-engine.js
+// CLUBS) play a double round-robin, a round at every fixture slot: Wednesdays at 19:30 under the floodlights and
+// Saturdays at 15:00. One match of each round is played at the ground (the gates open an hour and a half before
+// kick-off); the other three are played elsewhere and come in as results. A match takes about two hours of city time
+// from kick-off; inside the ground, the city clock keeps pace with the match. The table and the results are saved.
+const LEAGUE_SLOTS = [{ day: 2, tod: 19.5, name: 'WED 19:30' }, { day: 5, tod: 15, name: 'SAT 15:00' }]; // (Mon = 0)
+const MATCH_HOURS = 1.95, GATES_EARLY = 1.5;
+let league = { played: -1, table: {}, results: [], season: 1 }, leagueTickT = 0; // played: the last slot whose results are in
+// slot n: when it kicks off (an absolute hour count from day 0, so slots compare simply)
+const slotHour = n => (Math.floor(n / LEAGUE_SLOTS.length) * 7 + LEAGUE_SLOTS[n % LEAGUE_SLOTS.length].day) * 24 + LEAGUE_SLOTS[n % LEAGUE_SLOTS.length].tod;
+const nowHour = () => dayNum * 24 + tod;
+// the last slot to have kicked off by hour h (-1 before the first)
+function slotAt(h) { let n = Math.max(0, Math.floor(h / (7 * 24)) * LEAGUE_SLOTS.length - 1); while (slotHour(n + 1) <= h) n++; return slotHour(n) <= h ? n : -1; }
+// the round-robin: round r's four pairings, by the circle method; the second half of the season swaps home and away
+function roundPairs(r) {
+  const ids = MatchEngine.CLUBS.map(c => c.id), n = ids.length, k = r % (n - 1), flip = Math.floor(r / (n - 1)) % 2 === 1;
+  const ring = [ids[0], ...ids.slice(1).map((_, j) => ids[1 + (j + k) % (n - 1)])], pairs = [];
+  for (let j = 0; j < n / 2; j++) { let h = ring[j], a = ring[n - 1 - j]; if ((j + k) % 2) [h, a] = [a, h]; if (flip) [h, a] = [a, h]; pairs.push([h, a]); }
+  return pairs;
+}
+const roundOf = n => n % ((MatchEngine.CLUBS.length - 1) * 2);
+// the slot's match at the ground: one of the round's four, turn about (so every club comes to the Yards in a season)
+const groundPair = n => roundPairs(roundOf(n))[Math.floor(n / ((MatchEngine.CLUBS.length - 1) * 2) + n) % 4];
+const clubName = id => MatchEngine.CLUBS.find(c => c.id === id)?.name || id;
+const clubShort = id => MatchEngine.CLUBS.find(c => c.id === id)?.short || id;
+const fixtureSeed = (n, k) => ((n + 1) * 7919 + k * 104729 + league.season * 31) >>> 0;
+// the next fixture at the ground (now, if it's on): { n, when, short, home, away, kick (hours), live, open }
+function stadiumNextFixture() {
+  const h = nowHour(); let n = Math.max(0, slotAt(h));
+  if (slotHour(n) + MATCH_HOURS <= h) n++; // (that one's over: the next)
+  const [home, away] = groundPair(n), kick = slotHour(n), slot = LEAGUE_SLOTS[n % LEAGUE_SLOTS.length];
+  const today = Math.floor(kick / 24) === dayNum, when = (today ? 'TODAY ' + slot.name.slice(4) : slot.name);
+  return { n, home, away, kick, when, short: `${clubShort(home)} v ${clubShort(away)}`, live: h >= kick && h < kick + MATCH_HOURS, open: h >= kick - GATES_EARLY && h < kick + MATCH_HOURS };
+}
+const stadiumGatesOpen = () => stadiumNextFixture().open;
+const stadiumMatchLive = () => stadiumNextFixture().live;
+// a result into the table
+function recordResult(n, home, away, score, scorers = []) {
+  for (const id of [home, away]) league.table[id] ||= { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+  const H = league.table[home], A = league.table[away], [h, a] = score;
+  H.p++; A.p++; H.gf += h; H.ga += a; A.gf += a; A.ga += h;
+  if (h > a) { H.w++; A.l++; H.pts += 3; } else if (h < a) { A.w++; H.l++; A.pts += 3; } else { H.d++; A.d++; H.pts++; A.pts++; }
+  league.results.push({ n, home, away, score, scorers: scorers.slice(0, 8) }); if (league.results.length > 40) league.results.shift();
+}
+// a match played elsewhere (or one at the ground nobody watched): a scoreline from the two sides' strength, goals
+// as a Poisson count, the home side a little ahead. Cheap: a full simulation is kept for the match you watch
+function quickScore(home, away, seed) {
+  const r = MatchEngine.rng(seed), rate = id => MatchEngine.CLUBS.find(c => c.id === id)?.rating ?? .55;
+  const poisson = l => { let k = 0, p = Math.exp(-l), s = p, u = r(); while (u > s && k < 9) { k++; p *= l / k; s += p; } return k; };
+  const dh = rate(home) - rate(away);
+  return [poisson(clamp(1.75 + dh * 4, .5, 3.6)), poisson(clamp(1.4 - dh * 4, .4, 3.2))];
+}
+// bring the league up to date: every slot whose matches are over gets its results (the ground's own match from the
+// one you watched, if you did). A new league starts at the next fixture; a new season after the last round.
+function updateLeague() {
+  const h = nowHour();
+  if (league.played < 0 && !Object.keys(league.table).length) { // (a new league: it starts from here, not from day one)
+    const n = slotAt(h); league.played = n < 0 ? -1 : slotHour(n) + MATCH_HOURS <= h ? n : n - 1;
+    if (league.played < 0 && slotHour(0) + MATCH_HOURS > h) league.played = -1;
+  }
+  for (let guard = 0; guard < 60 && slotHour(league.played + 1) + MATCH_HOURS <= h; guard++) {
+    const n = league.played + 1, pairs = roundPairs(roundOf(n)), ground = groundPair(n);
+    pairs.forEach(([home, away], k) => {
+      const atGround = home === ground[0] && away === ground[1], m = atGround && stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : null;
+      if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const r = MatchEngine.result(m); recordResult(n, home, away, r.score, r.scorers.map(s => s.player)); } // (the one you saw)
+      else recordResult(n, home, away, quickScore(home, away, fixtureSeed(n, k)));
+    });
+    league.played = n;
+    if (roundOf(n + 1) === 0) { league.season++; league.table = {}; } // (a new season: the table starts again)
+  }
+}
+// the table, sorted: points, goal difference, goals scored
+const leagueTable = () => MatchEngine.CLUBS.map(c => ({ id: c.id, name: c.name, short: c.short, ...(league.table[c.id] || { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }) }))
+  .sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf);
+// the match at the ground right now, caught up to the city clock (you walk in at the minute it's reached)
+function stadiumLiveMatch() {
+  const f = stadiumNextFixture();
+  if (!stadiumMatch || stadiumMatch.slot !== f.n) {
+    stadiumMatch = MatchEngine.create({ home: f.home, away: f.away, seed: fixtureSeed(f.n, groundPairIndex(f.n)) });
+    stadiumMatch.slot = f.n; stadiumMatch.kick = f.kick; stadiumMatch.crowd = .8 + hash(f.n, 3, 2321) * .17;
+  }
+  const m = stadiumMatch, progress = clamp((nowHour() - f.kick) / MATCH_HOURS, 0, 1);
+  if (progress > 0) { const target = progress * stadiumPlaySeconds(m); while (m.t < target && m.phase !== 'ft') MatchEngine.tick(m); }
+  return m;
+}
+const groundPairIndex = n => { const g = groundPair(n); return roundPairs(roundOf(n)).findIndex(p => p[0] === g[0] && p[1] === g[1]); };
+// how many seconds of play a whole match takes, half time included (for pacing the city clock to it)
+const stadiumPlaySeconds = m => m.minutes * 60 + 4 + 8;
+// the save: the league goes with you
+const leagueSave = () => league;
+function leagueLoad(d) { if (d && typeof d === 'object' && d.table) league = { played: d.played ?? -1, table: d.table, results: d.results || [], season: d.season || 1 }; }
 // ===== the Yards ground (STADIUM_PLAN.md): an old-school football ground. Four separate stands round a full-size pitch:
 // the tall main stand down the north side, the east and south stands, and a standing terrace behind the west goal,
 // each with a pitched roof on steel columns; four floodlight pylons in the corners; a scoreboard over the south stand.
@@ -31474,8 +31583,12 @@ const stadiumRefLook = () => STADIUM_REF ||= figLook({ hair: 'buzz', top: 'tee',
 let STADIUM_REF = null, stadiumMatch = null; // (the match on today: it carries on while you're in the concourse)
 const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () => {
   const m = stadiumMatch; if (!m) return;
-  const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T;
+  const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T; m.lastDt = dt;
+  if (m.kick != null && nowHour() < m.kick) return; // (the teams lined up, waiting for kick-off)
   MatchEngine.step(m, dt);
+  if (m.kick != null && m.phase !== 'ft') { // the city clock at the match's pace: about two hours from kick-off to the final whistle
+    const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, 1) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24;
+  }
   // how dangerous it is right now (the crowd's on its feet): the ball near a goal, in play
   const P = MatchEngine.PITCH, bx = m.ball.p[0];
   m.danger = m.phase === 'play' ? clamp((Math.abs(bx) - (P.hl - 30)) / 25, 0, 1) * clamp(1 - Math.abs(m.ball.p[1]) / 30, 0, 1) : 0;
@@ -31534,14 +31647,23 @@ ROOM_DEFS.stadium = {
     return p;
   } };
 // into the ground, and a match on (a new one if there isn't one: the home side the Yards)
-function enterStadium(away) {
-  enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a] }, [139.5, 106.5, -Math.PI * .75]);
+// the sections a ticket buys: where you're shown to, and what it costs
+const STADIUM_SECTIONS = {
+  main: { name: 'Main stand, centre', price: 40, stand: 'north', note: 'Covered, on the halfway line: the best view in the house' },
+  south: { name: 'South stand', price: 25, stand: 'south', note: 'Opposite the main stand, under the scoreboard' },
+  terrace: { name: 'West terrace (standing)', price: 15, stand: 'west', note: 'Behind the goal with the home end. Loud' },
+};
+function enterStadium(section = 'main', dev = false) {
+  const sec = STADIUM_SECTIONS[section] || STADIUM_SECTIONS.main, s = STANDS.find(q => q.id === sec.stand);
+  enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a], section }, [139.5, 106.5, -Math.PI * .75]);
   stadiumTV = false; stadiumCamX = null; // (you walk in seeing it with your own eyes)
-  if (!stadiumMatch || stadiumMatch.phase === 'ft') {
-    const clubs = MatchEngine.CLUBS.filter(c => c.id !== 'yards');
-    stadiumMatch = MatchEngine.create({ home: 'yards', away: away || clubs[Math.random() * clubs.length | 0].id, seed: Math.random() * 1e9 | 0 });
-    stadiumMatch.crowd = .78 + Math.random() * .17;
-  }
+  stadiumLiveMatch();
+  // shown to your place: a seat along a row (the main stand near the halfway line), or a spot on the terrace
+  const k = s.seats ? 6 + (Math.random() * 6 | 0) - (6 + (Math.random() * 6 | 0)) % 2 : 7 + (Math.random() * 6 | 0), back = s.front + s.out * (k + .5) * s.depth;
+  const along = section === 'main' ? STADIUM.cx + (Math.random() - .5) * 24 : s.seats ? STADIUM.cx + (Math.random() - .5) * 60 : STADIUM.cy + (Math.random() - .5) * 30;
+  if (s.axis === 'y') { px = along; py = back; a = Math.atan2(-s.out, 0); } else { px = back; py = along; a = Math.atan2(0, -s.out); }
+  pitch = -.12;
+  if (s.seats) body.seat = { x: px, y: py, fx: 0, fy: -s.out, h: .45, from: [px, py] };
 }
 
 // ---- the TV view (V): a camera on the gantry slung under the front of the main stand's roof, panning to follow the
@@ -31557,6 +31679,97 @@ function stadiumCam(dt) {
   const fov = (34 + clamp(d / 60, 0, 1) * 10) * Math.PI / 180; // (tighter on play near the camera's side, wider across)
   const tilt = Math.atan2(z - Math.max(0, b[2] * .5), d);
   return { x, y, z, a: Math.atan2(dy, dx), pitch: -projY * Math.tan(tilt) / rows, fov };
+}
+
+// ---- the ground from the street (world.js STADIUM_SITE: two blocks, a ring of stands round the pitch, STY 26). City units
+// here: 1 = 10m. Outside, brick at street level with the turnstiles along the south front, the poster for the next
+// match by them; corrugated steel cladding above, the ground's name along it in big letters, a red trim at the top.
+// The faces toward the pitch (seen from the el, or the air) are the stands: rows of supporters under the roof's shadow.
+const stadiumBounds = () => { const S = STADIUM_SITE; return { x0: S.bx * 8 + 2, x1: S.bx * 8 + 16, y0: S.by * 8 + 2, y1: S.by * 8 + 8 }; };
+const isStadiumPitchCell = (x, y) => STY[idx(x, y)] === 26 && map[idx(x, y)] < .1;
+function stadiumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), fp = Math.max(uStep, d / projY), B = stadiumBounds();
+  const nx = side ? 0 : (px < mx + .5 ? -1 : 1), ny = side ? (py < my + .5 ? -1 : 1) : 0, inner = isStadiumPitchCell(mx + nx, my + ny);
+  set(i, ' ', 0);
+  if (inner) { // the stands from inside: rows of supporters, the roof's shadow over the back rows, a roof edge on top
+    if (z > h - .05) { BG[i] = C(GRAY, 1.8 + L * .1); return; }
+    const row = Math.floor(z / .045), seat = Math.floor(wc * 20), hsh = hash(row, seat, 2311);
+    const roof = z > h - .45 ? .6 : 1, person = hsh < (stadiumMatch && stadiumMatchLive() ? .85 : .08);
+    BG[i] = person ? C(hash(row, seat, 2312) < .65 ? RED : [WHITE, BLUE, GRAY][row % 3], (2.6 + L * .15) * roof) : C(GRAY, (1.2 + L * .1) * roof - (fract(z / .045) < .2 ? .4 : 0));
+    return;
+  }
+  if (z > h - .04) { BG[i] = C(RED, 3.2 + L * .2); return; } // the trim along the top
+  if (z > .36) { // the cladding: corrugated, with the name painted big along the south and north faces
+    const word = ny > 0 ? 'THE YARDS GROUND' : ny < 0 ? 'YARDS ATHLETIC' : '';
+    if (word && z > .62 && z < .98) { const mid = (B.x0 + B.x1) / 2, cw = .5; if (wallText(i, wc - mid, uStep, z, d, word, 0, .8, cw, .34, C(WHITE, 9 + L * .3), null)) return; }
+    if (z > .5 && z < .58) { BG[i] = C(RED, 2.6 + L * .16); return; } // a band in the home club's red, round the whole ground
+    const panel = Math.max(coveGroove(wc, .1, .004, fp), coveGroove(z, .18, .004, d / projY)); // (the sheets' seams)
+    BG[i] = C(GRAY, 2.5 + L * .16 - panel * .9 - coveGroove(wc, .025, .006, fp) * .35 - (Math.abs(z - .36) < .01 ? .8 : 0)); return;
+  }
+  // street level: brick, the turnstile bays along the south front, a poster between them
+  const bay = ny > 0 ? fract((wc - B.x0) / 1.4) : -1;
+  if (bay >= 0 && bay > .3 && bay < .7 && z < .26) { // a turnstile: a green gate in a dark opening, TURNSTILES over it, a lamp
+    if (z > .2) { const c = Math.floor((wc - B.x0) / 1.4) * 1.4 + B.x0 + .7; if (wallText(i, wc - c, uStep, z, d, stadiumGatesOpen() ? 'TURNSTILES' : 'CLOSED', 0, .23, .03, .04, C(stadiumGatesOpen() ? YEL : GRAY, stadiumGatesOpen() ? 14 : 5), C(GRAY, 1))) return; BG[i] = C(GRAY, 1); return; }
+    const bars = fract(wc * 30) < .3 && z < .17;
+    BG[i] = bars ? C(GREEN, 2.6 + L * .2) : C(GRAY, stadiumGatesOpen() ? 2.4 + night * 3 : .6); return;
+  }
+  if (bay >= 0 && (bay < .2 || bay > .8) && z > .07 && z < .22 && Math.floor((wc - B.x0) / 1.4) % 2 === 0) { // the poster for the next match
+    const c = Math.floor((wc - B.x0) / 1.4) * 1.4 + B.x0 + (bay < .2 ? .07 : 1.33), f = stadiumNextFixture();
+    if (Math.abs(wc - c) < .12) {
+      if (z > .185 && wallText(i, wc - c, uStep, z, d, f ? f.when : 'NO MATCHES', 0, .2, .016, .022, C(WHITE, 14), C(RED, 3))) return;
+      if (z < .185 && z > .1 && f && wallText(i, wc - c, uStep, z, d, f.short.replace(' v ', ' V '), 0, .145, .016, .03, C(YEL, 14), C(RED, 3))) return;
+      BG[i] = C(RED, 3 + L * .15); return;
+    }
+  }
+  BG[i] = C(BRICK, 1.5 + L * .16 - Math.max(coveGroove(z, 1 / 40, .003, fp), coveGroove(wc + (Math.floor(z * 40) & 1) * .05, .1, .003, fp)) * .6);
+}
+// from above: the stands' roofs in grey sheeting with the red trim, and inside them the pitch, mown and marked
+function stadiumRoof(i, wx, wy, h, d, L) {
+  set(i, ' ', 0);
+  const mx = Math.floor(wx), my = Math.floor(wy), fp = d / projY;
+  if (h < .1) {
+    const B = stadiumBounds(), cx = (B.x0 + B.x1) / 2, cy = (B.y0 + B.y1) / 2, lx = (wx - cx) * 10, ly = (wy - cy) * 10 * (68 / 40); // (metres, squeezed to the ground's real proportions)
+    const P = MatchEngine.PITCH, line = pitchMarkDist(Math.abs(lx), Math.abs(ly), lx, ly) < .15 + fp * 6;
+    BG[i] = line && Math.abs(lx) <= P.hl + .2 && Math.abs(ly) <= P.hw + .2 ? C(WHITE, 8 + day * 4) : C(GREEN, (Math.floor((lx + P.hl) / 5.25) & 1 ? 3.6 : 3) * (.6 + day * .4) + (night > .3 && stadiumMatchLive() ? 1.4 : 0));
+    return;
+  }
+  BG[i] = C(GRAY, 1.6 + day * 1.6 - coveGroove(wx, .03, .005, fp) * .4);
+}
+// the floodlight pylons at the inside corners, 38m high, their lamp banks lit for an evening match
+function stadiumExterior() {
+  if (!STADIUM_SITE?.sh) return;
+  const B = stadiumBounds(), lit = night > .3 && stadiumMatchLive();
+  for (const [x, y] of [[B.x0 + 1.15, B.y0 + 1.15], [B.x1 - 1.15, B.y0 + 1.15], [B.x0 + 1.15, B.y1 - 1.15], [B.x1 - 1.15, B.y1 - 1.15]]) {
+    const [vx, vy] = R(x, y);
+    if (Math.hypot(vx, vy) > vis + 2 || !inView(vx, vy, .5)) continue;
+    drawBox(boxAt(vx, vy, 1, 0, .05, .05, 0, 3.6), (i, t, L) => { BG[i] = C(GRAY, 1.6 + L * .15 - (fract(HIT.w * 6 + HIT.u * 8) < .2 ? .5 : 0)); return set(i, ' ', 0), true; });
+    const cx = (B.x0 + B.x1) / 2 - x, cy = (B.y0 + B.y1) / 2 - y, cd = Math.hypot(cx, cy);
+    drawBox(boxAt(vx + cx / cd * .06, vy + cy / cd * .06, -cy / cd, cx / cd, .3, .04, 3.45, 3.85), (i, t, L) => {
+      const lamp = Math.abs(fract(HIT.u / .07) - .5) < .35 && Math.abs(fract((HIT.w - 3.45) / .1) - .5) < .35;
+      BG[i] = lamp ? C(lit ? WHITE : GRAY, lit ? 15 : 4) : C(GRAY, 1.4); return set(i, ' ', 0), true;
+    });
+  }
+}
+
+// ---- the gates: buying a ticket (the next match, its kick-off, the sections and their prices), and the table
+let ticketEl = null;
+function openStadiumTickets() {
+  const f = stadiumNextFixture();
+  if (!f.open) return say(`No match on. Next at the Yards ground: ${clubName(f.home)} v ${clubName(f.away)}, ${f.when}. The gates open an hour and a half before.`, 6);
+  ticketEl ||= panel('tickets');
+  const table = leagueTable().slice(0, 8).map((t, k) => `<div class="tbl"><span>${k + 1}. ${t.name}</span><span>${t.p}</span><span>${t.gf - t.ga >= 0 ? '+' : ''}${t.gf - t.ga}</span><span><b>${t.pts}</b></span></div>`).join('');
+  const minute = stadiumMatch?.slot === f.n && f.live ? Math.floor(Math.min(90, MatchEngine.minute(stadiumLiveMatch()))) : null;
+  showPanel(ticketEl, `<style>#tickets .tbl{display:grid;grid-template-columns:1fr 2.5em 3em 2.5em;gap:4px;font-size:.9em;opacity:.9}#tickets .tbl span:not(:first-child){text-align:right}</style>
+    <h1>The Yards Ground</h1><p class="sub">${clubName(f.home)} v ${clubName(f.away)} &middot; ${f.live ? `kicked off${minute != null ? `, ${minute}'` : ''}` : 'kick-off ' + f.when.replace('TODAY ', '')} &middot; you have ${fmt$(money)}</p>
+    ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${fmt$(s.price)}</span></button>`).join('')}
+    <h2>the table</h2><div class="tbl"><span></span><span>P</span><span>GD</span><span>Pts</span></div>${table}
+    <p class="hint">E / Esc close</p>`);
+  ticketEl.onclick = e => {
+    const b = e.target.closest('button[data-sec]'); if (!b) return;
+    const s = STADIUM_SECTIONS[b.dataset.sec]; if (!pay(s.price)) return say('Not enough on you.', 2);
+    hidePanel(ticketEl); enterStadium(b.dataset.sec);
+    say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
+  };
 }
 // ===== a top-down view of a simulated match (Dev tools > Other > Watch a match): the engine (match-engine.js) drawn
 // plainly on a canvas, to watch the football itself before there's a stadium round it. Players are discs in their
@@ -31711,6 +31924,7 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
   for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
+  if(STADIUM_SITE?.sh){const b=stadiumBounds();add({id:'stadium',name:'The Yards Ground',x:(b.x0+b.x1)/2,y:b.y1+.5,category:'activities',kind:'sight',description:'Football: the city league, Wednesdays 19:30 and Saturdays 15:00. Tickets at the turnstiles on the south side, $15 to $40.'});}
   if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, ledges, a manual pad, mini ramp, bowl and vert ramp on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
   if(typeof SKATE_SPOTS!=='undefined')for(const spot of SKATE_SPOTS)add({...spot,category:'activities',kind:'sight',status:'Skate spot · free · open all hours'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
@@ -50120,7 +50334,7 @@ function assembleArchipelago() {
   moved.add(CAUSEWAY);
 
   const belleRoofs = belleBuildingsB.flat();
-  for (const root of [GRAND_HOTEL,AQUARIUM,CASINO,EXCHANGE,MUSEUM,CLUB,GARDEN,ISLE,LIGHTHOUSE,FOOTBRIDGE,
+  for (const root of [GRAND_HOTEL,AQUARIUM,CASINO,EXCHANGE,MUSEUM,CLUB,STADIUM_SITE,GARDEN,ISLE,LIGHTHOUSE,FOOTBRIDGE,
     FAIR,WHEEL,CAROUSEL,WHEEL_BOARD,MARINA,SERVICES,GAS_STATIONS,BELLE_BUILDINGS,BACKROOMS_SEAM,
     COURIER_DEPOT,COURIER_SURFACES,COURIER_STAIRS,COURIER_LADDERS,COURIER_SCENERY,COURIER_SITE,COURIER_GARDEN,
     COURIER_FOREMAN,COURIER_NICO,COURIER_ARCH,COURIER_ARCADE_SIGN,COURIER_SIGNS,COURIER_RODS,COURIER_LATTICE,COURIER_BULBS,
@@ -51677,7 +51891,7 @@ function saveGame() {
   if (citySaveBlocked) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -51712,6 +51926,7 @@ function loadGame() {
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   loadStreetScenes(d.streetScenes);
   loadFishingCompetition(d.fishingCompetition);
+  leagueLoad(d.league);
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
@@ -52357,6 +52572,7 @@ function loop(t) {
   else if (mode === 'ferry') stepFerryRide(dt);
   if(!skateStepped){stepBody(dt);stepRoof();}stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
+  if ((leagueTickT -= dt) <= 0) { leagueTickT = 2; updateLeague(); } // (results from the matches played: league.js)
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
   fighterNews(stepFighters(mode === 'air' && !wreckCam ? pilot : null, dt)); // (the interceptors after a stolen aircraft: fighters.js, flight.js)
