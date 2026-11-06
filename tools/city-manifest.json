@@ -21,6 +21,7 @@
     "city/landmarks.js",
     "city/pavilions.js",
     "city/shopfronts.js",
+    "city/abandoned-shop-dressing.js",
     "city/shop-exteriors.js",
     "city/traffic.js",
     "city/gas.js",
