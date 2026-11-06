@@ -38,8 +38,11 @@ const MENU_CSS = `
   .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }
   .menu .panel { overflow-x: hidden; }
   .menu .slider { min-width: 0; overflow: hidden; }
-  @media (max-width: 520px) { /* a phone held upright: scroll down, never sideways */
+  @media (max-width: 520px), (pointer: coarse) { /* touch or narrow screens: scroll down, never sideways */
     .menu .panel { padding: 20px 16px; }
+    .menu .item { min-height: 44px; align-items: center; }
+    .menu .item > span:not(.k):not(.v):not(.lead) { min-width: 0; overflow-wrap: anywhere; }
+    .menu .k, .menu .v { flex-shrink: 0; }
     .menu .row { grid-template-columns: 1fr auto; grid-template-areas: 'l v' 'c c'; gap: 2px 12px; margin: 6px 0; }
     .menu .row > :nth-child(1) { grid-area: l; } .menu .row > :nth-child(2) { grid-area: c; } .menu .row > :nth-child(3) { grid-area: v; }
     .menu .slider { font-size: 12px; padding: 4px 0; }
