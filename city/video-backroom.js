@@ -75,8 +75,17 @@ function videoRentalUse(t){
  if(!pay(6))return say('The rental is $6. Even artistic research has a budget.',3);
  carryItem({id:'vhs_afterhours_'+t.index,uses:0});saveGame();say('The clerk silently slides you a plain brown bag. "Due back Tuesday."',4);
 }
+function videoTapeNearby(){
+ if(mode!=='room'||!room)return false;
+ if(homeRecord(room))return homeSpot()==='tv';
+ const tv=room.def.hotelAmenities?.tv;
+ return room.kind==='hotelroom'&&!!tv&&near(px,py,...tv)<1.65;
+}
+function videoTapePrompt(){
+ return videoPlayableTape(heldItem()) ? (room.tv&&room.videoTape===heldItem().id?' · Q: eject tape':' · Q: play VHS') : '';
+}
 function videoTapeUse(it){
- if(mode!=='room'||!homeRecord(room)||homeSpot()!=='tv')return ['A VHS tape. Take it to your TV at home and press Q nearby.',null];
+ if(!videoTapeNearby())return ['A VHS tape. Press Q near a TV at home, or in your hotel or motel room.',null];
  if(room.videoTape===it.id&&room.tv){room.videoTape=null;return ['You eject the tape. Back to regular television.','click'];}
  room.videoTape=it.id;room.tv=true;room.videoTapeStart=T;room.videoMusicAt=-1;videoBackroomTick();
  return [it.id==='vhs'?'The tape clicks in. Mist, pines, a waterfall… FIR CREEK.':'The tape clicks in. A sax-like honk. The entire picture says [ CENSORED ].','click'];
