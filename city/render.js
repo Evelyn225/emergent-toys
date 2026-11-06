@@ -179,6 +179,7 @@ function render(dt,sceneOnly=false,mask=null) {
   tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
+  if(city)prepareSkyStars();
   lookHit = null;
   for (let x = 0; x < cols; x++) {
     if(mask&&!mask.columns[x])continue;

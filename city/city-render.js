@@ -856,6 +856,23 @@ function duskSky(up, az, d, k) {
   const at = n + (d < t - n ? 1 : 0);
   return at < DUSK_RAMP.length ? DUSK_RAMP[at] : -1;
 }
+// Fixed world directions projected once per frame. Hashing screen pixels made
+// stars reshuffle whenever the chase camera changed pitch or speed widened FOV.
+const SKY_STARS=Array.from({length:768},(_,id)=>{
+  const az=hash(id,74,1)*Math.PI*2,z=.03+hash(id,74,2)*.96,r=Math.sqrt(1-z*z);
+  return {x:Math.cos(az)*r,y:Math.sin(az)*r,z,seed:hash(id,74,3)};
+});
+let skyStarIndex=new Int16Array(0);
+function prepareSkyStars(){
+  if(skyStarIndex.length!==cols*rows)skyStarIndex=new Int16Array(cols*rows);
+  skyStarIndex.fill(-1);
+  if(night<=.5||overcast>=.4)return;
+  for(let id=0;id<SKY_STARS.length;id++){
+    const star=SKY_STARS[id],d=dx*star.x+dy*star.y;if(d<=0)continue;
+    const x=Math.floor(cols/2+(-dy*star.x+dx*star.y)*projX/d),y=Math.floor(hor-star.z*projY/d);
+    if(x>=0&&x<cols&&y>=0&&y<rows)skyStarIndex[y*cols+x]=id;
+  }
+}
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
@@ -882,11 +899,10 @@ function skyCell(i, r, x, rx, ry) {
       }
     }
   }
-  // stars: one cell each (indexed per screen column, but fixed to the world), twinkling
-  const s = hash(Math.floor(az * projX), r - hor, 3);
-  if (night > 0.5 && overcast < 0.4 && s > 0.988) {
-    const tw = 0.6 + 0.4 * Math.sin(T * 3 + s * 1e4);
-    return set(i, s > 0.998 ? '*' : s > 0.994 ? '+' : '.', C([WHITE, WHITE, CYAN, YEL][s * 1e5 & 3], (s > 0.994 ? 13 : 7) * night * tw));
+  const starId=skyStarIndex[i];
+  if(night>.5&&overcast<.4&&starId>=0){
+    const s=SKY_STARS[starId].seed,tw=.6+.4*Math.sin(T*3+s*1e4);
+    return set(i,s>.84?'*':s>.5?'+':'.',C([WHITE,WHITE,CYAN,YEL][s*1e5&3],(s>.5?13:7)*night*tw));
   }
   set(i, ' ', 0);
 }

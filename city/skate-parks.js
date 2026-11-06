@@ -27,7 +27,7 @@ function buildExtraSkateparks() {
       SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-bowl.profile.height*2-.08,y,line:{x,y},
         description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-metre walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
     }else{
-      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:.55});
+      const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:1.1});
       mini.spot=mini.spotPark=true;
       skateSpotBox(x-.8,y+.45,.25,.004,.025,'skaterail','metal');
       skateSpotBox(x-.05,y+.45,.3,.1,.02,'manualpad','concrete');

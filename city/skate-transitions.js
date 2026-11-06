@@ -1,7 +1,7 @@
 // A circular riding profile, extruded along its axis. u is signed arc length
 // from the flat bottom's centre; unlike a heightfield this can include vert.
 const SK_TRANSITIONS = [];
-function skateProfile({ radius = .18, height = .14, extension = 0, flat = .24, width = .42, deck = .06 } = {}) {
+function skateProfile({ radius = .18, height = .14, extension = 0, flat = .24, width = .9, deck = .06 } = {}) {
   const angle = Math.acos(clamp(1 - (height - extension) / radius, 0, 1));
   const curve = radius * angle, limit = flat / 2 + curve + extension;
   const tip = flat / 2 + radius * Math.sin(angle), points = [];
@@ -71,9 +71,12 @@ function skateTransitionPlace(C) {
   SKB.v = [o.c * at.tx * C.vs - o.s * C.va, o.s * at.tx * C.vs + o.c * C.va, at.tz * C.vs];
   SK.v = Math.hypot(SKB.v[0], SKB.v[1]);
   if (SK.v > 1e-7) SK.dir = Math.atan2(SKB.v[1], SKB.v[0]);
-  SKB.pitch = Math.atan2(at.tz, at.tx) * Math.sign(Math.cos(a) * o.c + Math.sin(a) * o.s || 1);
-  SKB.roll = 0; SKB.yaw = a; SKB.p = [px, py, z]; SKB.contact = 'transition';
-  SKB.surf = { h: z, n: [-o.c * at.tz, -o.s * at.tz, at.tx], kind: 'transition', material: 'concrete', ref: o };
+  const n=[-o.c*at.tz,-o.s*at.tz,at.tx];
+  SKB.pitch=Math.atan2(-(n[0]*Math.cos(a)+n[1]*Math.sin(a)),Math.max(.001,n[2]));
+  const neutral=skateBoardAxes(a,SKB.pitch,0).up,right=[-Math.sin(a),Math.cos(a),0];
+  const dot=v=>n.reduce((sum,k,i)=>sum+k*v[i],0);
+  SKB.roll=Math.atan2(dot(right),dot(neutral));SKB.yaw=a;SKB.p=[px,py,z];SKB.contact='transition';
+  SKB.surf = { h:z,n,kind:'transition',material:'concrete',ref:o };
   SKB.fakie = Math.cos(SK.dir - a) < 0;
   body.ground = skateGround(px, py); body.groundMode = mode;
   return at;
@@ -95,7 +98,13 @@ function skateTransitionLipVelocity(C,out) {
 // height remain free. The same map predicts the landing plane for catches.
 function skateAirRoutePoint(x,y) {
   const route=SK.airRoute,o=route?.o;
-  if(!o?.bowl||route.out)return [x,y];
+  if(!o||route.out)return [x,y];
+  if(!o.bowl){
+    const dx=rel(x-o.x),dy=rel(y-o.y),u=dx*o.c+dy*o.s,axis=-dx*o.s+dy*o.c;
+    if(Math.abs(axis)>o.hw)return [x,y];
+    const inside=o.profile.tip-.015,limited=clamp(u,-inside,inside);
+    return [worldCoord(o.x+o.c*limited-o.s*axis),worldCoord(o.y+o.s*limited+o.c*axis)];
+  }
   const dx=rel(x-o.x),dy=rel(y-o.y),axis=Math.atan2(dy,dx),radius=Math.hypot(dx,dy);
   const lip=o.pool?skatePoolFloor(o,axis)+o.profile.tip-o.profile.flat/2:o.profile.tip;
   const inside=Math.max(.01,lip-.015);
@@ -107,9 +116,9 @@ function skateTransitionAirStep() {
   if(Math.hypot(rel(x-px),rel(y-py))<1e-10)return;
   px=x;py=y;
   const o=SK.airRoute.o,axis=Math.atan2(rel(py-o.y),rel(px-o.x));
-  let tangent=[-Math.sin(axis),Math.cos(axis)];
+  let tangent=o.bowl?[-Math.sin(axis),Math.cos(axis)]:[-o.s,o.c];
   if(o.pool){const tv=skatePoolFrame(o,o.profile.limit,axis).tv,len=Math.hypot(tv[0],tv[1]);tangent=[tv[0]/len,tv[1]/len];}
-  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,outward=[tangent[1],-tangent[0]],out=vx*outward[0]+vy*outward[1];
+  const vx=Math.cos(SK.dir)*SK.v,vy=Math.sin(SK.dir)*SK.v,sign=o.bowl?1:Math.sign(rel(px-o.x)*o.c+rel(py-o.y)*o.s)||1,outward=[tangent[1]*sign,-tangent[0]*sign],out=vx*outward[0]+vy*outward[1];
   if(out>0){const v=[vx-outward[0]*out,vy-outward[1]*out];SK.v=Math.hypot(...v);if(SK.v>1e-9)SK.dir=Math.atan2(v[1],v[0]);}
 }
 function skateTransitionRelease(C, coping = false) {
@@ -119,7 +128,7 @@ function skateTransitionRelease(C, coping = false) {
   SK.v = Math.hypot(v[0], v[1]); if (SK.v > 1e-7) SK.dir = Math.atan2(v[1], v[0]);
   body.vz = v[2] * 10; body.z = Math.max(.002, body.z);
   SKB.v = v; SKB.contact = 'air'; SK.popT = T;
-  if(C.o.bowl&&!out){
+  if(!out){
     const z=SKB.p[2];skateTransitionAirStep();
     SKB.p=[px,py,z];SKB.v=[Math.cos(SK.dir)*SK.v,Math.sin(SK.dir)*SK.v,v[2]];
     body.ground=skateGround(px,py);body.groundMode=mode;body.z=Math.max(.002,(z-body.ground)*10);
