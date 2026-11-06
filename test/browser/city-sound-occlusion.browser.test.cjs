@@ -1,6 +1,19 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');let browser;test.before(async()=>browser=await chromium.launch({args:['--autoplay-policy=no-user-gesture-required']}));test.after(async()=>browser?.close());
-async function fixture(run,audio=false){const p=await browser.newPage(),errors=[];p.setDefaultTimeout(15000);p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;mode='walk';room=null;T=10;clearWanted();soundOn=true;settings.master=settings.effects=1;let wall,open;
+const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
+const fs=require('node:fs'),http=require('node:http'),{chromium}=require('playwright');
+const root=path.resolve(__dirname,'../..');let server,browser,origin;
+test.before(async()=>{
+ server=http.createServer((req,res)=>{
+  const file=path.resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
+  if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
+  const types={'.html':'text/html','.js':'application/javascript','.wav':'audio/wav','.mp3':'audio/mpeg'};
+  res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream'});fs.createReadStream(file).pipe(res);
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin=`http://127.0.0.1:${server.address().port}`;
+ browser=await chromium.launch({args:['--autoplay-policy=no-user-gesture-required']});
+});
+test.after(async()=>{await browser?.close();server?.closeAllConnections();if(server)await new Promise(resolve=>server.close(resolve));});
+async function fixture(run,audio=false){const p=await browser.newPage(),errors=[];p.setDefaultTimeout(15000);p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(origin+'/ascii-city.html');await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;mode='walk';room=null;T=10;clearWanted();soundOn=true;settings.master=settings.effects=1;let wall,open;
  for(let y=300;y<500&&!wall;y++)for(let x=300;x<500&&!wall;x++)if(map[idx(x,y)]>.6&&!map[idx(x,y-1)]){let end=y,height=0;while(end<y+12&&map[idx(x,end)]>0){height=Math.max(height,map[idx(x,end)]);end++;}if(end<y+12&&free(x+.5,y-.3)&&free(x+.5,end+.3)&&Math.abs(roadGroundHeight(x+.5,y-.3)-roadGroundHeight(x+.5,end+.3))<1e-6)wall={lx:x+.5,ly:y-.3,sx:x+.5,sy:end+.3,height};}
  const distance=wall?wall.sy-wall.ly:2;
  for(let y=300;y<500&&!open;y++)for(let x=300;x<500&&!open;x++){const q=Array.from({length:Math.ceil(distance*5)+1},(_,k)=>[x+.3+k*distance/Math.ceil(distance*5),y+.5]),h=roadGroundHeight(q[0][0],q[0][1]);if(q.every(([x,y])=>ROAD[idx(Math.floor(x),Math.floor(y))]&&!map[idx(Math.floor(x),Math.floor(y))]&&free(x,y)&&Math.abs(roadGroundHeight(x,y)-h)<1e-6))open={lx:q[0][0],ly:q[0][1],sx:q.at(-1)[0],sy:q.at(-1)[1]};}
@@ -18,6 +31,6 @@ test('actual siren gain/filter nodes respond to a building and to listener heigh
  await p.evaluate(()=>{mode='roof';eye=roadGroundHeight(px,py)+20;roofH=eye-.17;tickSirens(false);});await settle(p);const high=await p.evaluate(()=>sirens.get(cars[0]).g.gain.value);assert.ok(clear.gain>blocked.gain*2,JSON.stringify({blocked,clear}));assert.ok(clear.cutoff>blocked.cutoff*1.5);assert.ok(high<clear.gain*.25,JSON.stringify({high,clear}));
 },true));
 test('a recorded abandoned-helicopter rotor is muffled behind a building and clears on an open street',()=>fixture(async p=>{
- await p.waitForFunction(()=>!!gameplayBuffers.rotor,null,{polling:20});await p.evaluate(()=>{const s=acousticScene.wall;px=s.lx;py=s.ly;eye=roadGroundHeight(px,py)+.17;a=0;heli=null;aircraft.length=0;window.acousticRotor=addAircraft('heli',s.sx,s.sy,0,{rotor:1,z:roadGroundHeight(s.sx,s.sy)+.1,state:'abandoned'});tickGameplayAudio();});await settle(p);const blocked=await p.evaluate(()=>{const v=gameplayLoops.get(acousticRotor);return{gain:v.gain.gain.value,cutoff:v.lp.frequency.value,buffer:v.source.buffer===gameplayBuffers.rotor};});
+ await p.waitForFunction(()=>!!gameplayBuffers.rotor,null,{polling:20});assert.match(p.url(),/^http:\/\//);assert.ok(await p.evaluate(()=>gameplayBuffers.rotor.duration>0));await p.evaluate(()=>{const s=acousticScene.wall;px=s.lx;py=s.ly;eye=roadGroundHeight(px,py)+.17;a=0;heli=null;aircraft.length=0;window.acousticRotor=addAircraft('heli',s.sx,s.sy,0,{rotor:1,z:roadGroundHeight(s.sx,s.sy)+.1,state:'abandoned'});tickGameplayAudio();});await settle(p);const blocked=await p.evaluate(()=>{const v=gameplayLoops.get(acousticRotor);return{gain:v.gain.gain.value,cutoff:v.lp.frequency.value,buffer:v.source.buffer===gameplayBuffers.rotor};});
  await p.evaluate(()=>{const s=acousticScene.open;px=s.lx;py=s.ly;eye=roadGroundHeight(px,py)+.17;a=Math.PI/2;Object.assign(acousticRotor,{x:s.sx,y:s.sy,z:roadGroundHeight(s.sx,s.sy)+.1});tickGameplayAudio();});await settle(p);const clear=await p.evaluate(()=>{const v=gameplayLoops.get(acousticRotor);return{gain:v.gain.gain.value,cutoff:v.lp.frequency.value};});assert.equal(blocked.buffer,true);assert.ok(clear.gain>blocked.gain*2,JSON.stringify({blocked,clear}));assert.ok(clear.cutoff>blocked.cutoff*3);
 },true));
