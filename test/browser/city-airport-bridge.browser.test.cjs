@@ -34,3 +34,13 @@ test('dev tools Airport jump lands on the terminal forecourt facing the main doo
  assert.ok(Math.abs(r.x-r.tx)<.01&&r.y>r.road&&r.y<r.wall,'in front of terminal, clear of the road: '+JSON.stringify(r));assert.equal(r.door,0);assert.ok(r.free&&!r.open);assert.ok(Math.abs(r.angle-Math.PI/2)<1e-8);
  await p.keyboard.press('e');assert.equal(await p.evaluate(()=>room?.kind),'terminal');
 }));
+
+test('keys from the previously focused developer control reach gameplay after the panel closes',()=>fixture(async p=>{
+ await p.evaluate(()=>{openDev();devTab='places';devFilter='Airport';renderDev();});
+ const button=p.locator('#dev button.item').filter({hasText:/^Airport$/});await button.evaluate(el=>window.previousDevControl=el);await button.click();
+ assert.equal(await p.evaluate(()=>devOpen()),false);
+ // Native key dispatch can already be queued against the old focused control
+ // when its click hides the panel; it must bubble to the game's key handler.
+ await p.evaluate(()=>previousDevControl.dispatchEvent(new KeyboardEvent('keydown',{key:'e',code:'KeyE',bubbles:true})));
+ assert.equal(await p.evaluate(()=>room?.kind),'terminal');
+}));

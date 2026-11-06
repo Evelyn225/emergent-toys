@@ -30406,6 +30406,7 @@ function openDev() {
       if (k === 'tod' && v >= 0 && v < 24) tod = v;
     });
     devEl.addEventListener('keydown', e => {
+      if(!devOpen())return; // A queued key can still target the control that closed this panel.
       if (e.code === 'Escape' || e.code === 'F2') { e.preventDefault(); return closeDev(); }
       if (e.code === 'Enter' && e.target.classList.contains('search')) { // Enter: the first match
         const b = devEl.querySelector('[data-dev]'); if (b) b.click();
