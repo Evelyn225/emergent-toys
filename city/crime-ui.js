@@ -36,6 +36,7 @@ function wantedHud() {
 let bustedEl = null, finePaid = 0;
 function openBusted() {
   wanted.busted=true;
+  if(body.seat)standUp();
   if(devOpen())closeDev();
   releaseHeldMouse();
   if (bustedEl && bustedEl.style.display === 'flex') return;

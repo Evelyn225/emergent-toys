@@ -9248,8 +9248,17 @@ function roomDoorCell() {
   if (best) return best;
   return nearestRoomCell(px, py)?.map(v => v + 0.5) || null;
 }
+const ROOM_SEAT_APPROACH=new WeakMap();
+function roomPursuitTarget(){
+  if(!body.seat)return [px,py];
+  const cached=ROOM_SEAT_APPROACH.get(body.seat);
+  if(cached?.room===room&&roomOpen(...cached.point))return cached.point;
+  const from=body.seat.from,point=from&&Math.hypot(from[0]-px,from[1]-py)<1.2&&roomOpen(...from)
+    ? from : nearestRoomCell(px,py)||[px,py];
+  ROOM_SEAT_APPROACH.set(body.seat,{room,point});return point;
+}
 function roomPoliceSees(c) {
-  const tx = px, ty = py, targetZ = body.seat ? 0.95 : Math.max(0.42, 1.55 - (body.crouch || 0) * 1.12);
+  const tx = px, ty = py, targetZ = body.seat ? (body.seat.h??.45)+.7 : Math.max(0.42, 1.55 - (body.crouch || 0) * 1.12);
   const vx = tx - c.x, vy = ty - c.y, n = Math.ceil(Math.hypot(vx, vy) * 8);
   if (n > 80) return false;
   for (let k = 1; k < n; k++) {
@@ -9291,7 +9300,7 @@ function roomSearchLead(dt) {
   for (const c of roomCops) {
     if(c.dead){c.sees=false;continue;}
     c.sees = Math.hypot(c.x - px, c.y - py) < 9 && roomPoliceSees(c);
-    if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; c.targetX = px; c.targetY = py; c.searchI = 0; }
+    if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; [c.targetX,c.targetY]=roomPursuitTarget(); c.searchI = 0; }
     else if (Math.hypot(c.x - c.targetX, c.y - c.targetY) < 0.28) {
       c.searchT += dt;
       if (c.searchT > 0.8) {
@@ -9751,9 +9760,12 @@ function stepCrime(dt) {
     if (tail && T > (wanted.toldT || 0)) { wanted.toldT = T + 8; told = true; }
     if (wanted.pitPending) { wanted.pitPending = false; return 'pit'; }
   }
+  // A seated suspect is reached from the walkable approach to their chair.
+  // The chair itself is solid, so officers cannot occupy its centre.
+  const roomTarget=inside?roomPursuitTarget():null;
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && !c.down && near(c.x, c.y, px, py) < 0.22)
-    || inside && roomCops.some(c => !c.dead && c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
+    || inside && roomCops.some(c => !c.dead && c.sees && Math.hypot(c.x-roomTarget[0],c.y-roomTarget[1])<.32 && (!body.seat || Math.hypot(px-roomTarget[0],py-roomTarget[1])<1.5&&roomWalkLine(c.x,c.y,...roomTarget)))
     || onRoof && body.z < 1 && roofCops.some(c => !c.dead && c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
@@ -13165,6 +13177,12 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
     }
   }
 }
+// Shared ordered light falloff: retain material variation as the source tint
+// becomes sparser towards a pool's edge.
+function lightPoolColour(base,level,intensity,row,column,tint=WARM){
+  const threshold=BAYER[(row&3)*4+(column&3)],lit=threshold<intensity*1.15-.08;
+  return C(lit?tint:base,Math.min(15,level*(lit?.8:1)+intensity*(lit?6:3.5)));
+}
 function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
@@ -13306,8 +13324,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       if (surf) { // a lamp's pool: light over the ground, not a disc painted on it. Its texture stays (the level is added to, not
         // replaced), the warm comes in through an ordered dither (thick under the lamp, thinning out to nothing at
         // its edge, so it falls off instead of ending in a ring), and where it dies away a few warm glints of '.' and ',' (those anchored to the ground)
-        const th = BAYER[(r & 3) * 4 + (x & 3)], warm = th < gl * 1.15 - .08; // (ordered on the screen: an even fine pattern near and far)
-        BG[i] = C(warm ? WARM : surf[0], Math.min(15, surf[1] * (warm ? .8 : 1) + gl * (warm ? 6 : 3.5)));
+        const th = BAYER[(r & 3) * 4 + (x & 3)]; // (ordered on the screen: an even fine pattern near and far)
+        BG[i] = lightPoolColour(surf[0],surf[1],gl,r,x);
         if (gl > .06 && gl < .4 && th > .82 + gl * .3 && hash(Math.floor(wx * 34), Math.floor(wy * 34), 771) > .45) { ch = th > .92 ? ',' : '.'; col = C(WARM, 5 + gl * 12); }
       } else if (ch === ' ') ch = '.';
     }
@@ -27915,17 +27933,29 @@ function finishBout(g, quit) {
 // again as the Hornet, in police colours (white, a dark belly, yellow and blue squares down the side), its red and blue
 // lights flashing; and its searchlight, a beam slanting down to a pool of light on the street (or the roof it's on).
 // The rotor thuds, louder the nearer it is.
+let chopperPoolBackground=new Uint8Array(0);
+function drawChopperPool(lx,ly,ground,strength){
+  if(chopperPoolBackground.length!==BG.length)chopperPoolBackground=new Uint8Array(BG.length);
+  chopperPoolBackground.set(BG);
+  // The pool changes illumination, retaining surface detail, lettering and depth.
+  drawBox(boxAt(lx, ly, 1, 0, SPOT_R, SPOT_R, ground + 0.0003, ground + 0.0008), (i, t, L) => {
+    const r = Math.hypot(HIT.u, HIT.v) / SPOT_R, k = (1 - r * r) * strength;
+    const background=chopperPoolBackground[i];
+    if(k<=0||background===NONE)return false;
+    // Only illuminate the existing receiving surface, not scenery beyond it.
+    if(Number.isFinite(ZBG[i])&&Math.abs(ZBG[i]-t)>Math.max(.015,t*.015))return false;
+    const illuminated=lightPoolColour(background>>4,background&15,k,Math.floor(i/cols),i%cols,WHITE);
+    BG[i]=(illuminated&0xf0)|Math.max(background&15,illuminated&15);
+    return false; // light leaves the existing surface's depth and flags intact
+  }, rayCopperDrum);
+}
 function drawChopper() {
   if (!heli) return;
   const vx = rel(heli.x - px), vy = rel(heli.y - py), z = heli.z, hx = Math.cos(heli.h), hy = Math.sin(heli.h);
   if (Math.hypot(vx, vy) > vis + 4) return;
-  const lx = rel(heli.sx - px), ly = rel(heli.sy - py), ground = map[idx(Math.floor(heli.sx), Math.floor(heli.sy))] || 0;
+  const lx = rel(heli.sx - px), ly = rel(heli.sy - py), ground = Math.max(map[idx(Math.floor(heli.sx),Math.floor(heli.sy))]||0,roadGroundHeight(heli.sx,heli.sy));
   const strength = 0.35 + 0.65 * Math.max(night, overcast * 0.6); // (much plainer by night)
-  // the pool of light: brightest in the middle, fading to its edge
-  drawBox(boxAt(lx, ly, 1, 0, SPOT_R, SPOT_R, ground + 0.0003, ground + 0.0008), (i, t, L) => {
-    const r = Math.hypot(HIT.u, HIT.v) / SPOT_R, k = (1 - r * r) * strength;
-    BG[i] = C(WHITE, 3 + k * 9); set(i, k > 0.55 ? ' ' : '.', C(YEL, 6 + k * 8)); FOGS[i] = 0; return true;
-  }, rayCopperDrum);
+  drawChopperPool(lx,ly,ground,strength);
   // the beam: specks of light down the line from the helicopter's belly to the pool, in front of whatever's behind
   const bx = vx + hx * 0.17 * CHOPPER_SIZE, by = vy + hy * 0.17 * CHOPPER_SIZE, bz = z - 0.07 * CHOPPER_SIZE; // (from the lamp under its nose)
   // A widening volume: rings grow from the lamp to the existing circular ground pool.
@@ -35363,6 +35393,7 @@ function wantedHud() {
 let bustedEl = null, finePaid = 0;
 function openBusted() {
   wanted.busted=true;
+  if(body.seat)standUp();
   if(devOpen())closeDev();
   releaseHeldMouse();
   if (bustedEl && bustedEl.style.display === 'flex') return;

@@ -156,8 +156,17 @@ function roomDoorCell() {
   if (best) return best;
   return nearestRoomCell(px, py)?.map(v => v + 0.5) || null;
 }
+const ROOM_SEAT_APPROACH=new WeakMap();
+function roomPursuitTarget(){
+  if(!body.seat)return [px,py];
+  const cached=ROOM_SEAT_APPROACH.get(body.seat);
+  if(cached?.room===room&&roomOpen(...cached.point))return cached.point;
+  const from=body.seat.from,point=from&&Math.hypot(from[0]-px,from[1]-py)<1.2&&roomOpen(...from)
+    ? from : nearestRoomCell(px,py)||[px,py];
+  ROOM_SEAT_APPROACH.set(body.seat,{room,point});return point;
+}
 function roomPoliceSees(c) {
-  const tx = px, ty = py, targetZ = body.seat ? 0.95 : Math.max(0.42, 1.55 - (body.crouch || 0) * 1.12);
+  const tx = px, ty = py, targetZ = body.seat ? (body.seat.h??.45)+.7 : Math.max(0.42, 1.55 - (body.crouch || 0) * 1.12);
   const vx = tx - c.x, vy = ty - c.y, n = Math.ceil(Math.hypot(vx, vy) * 8);
   if (n > 80) return false;
   for (let k = 1; k < n; k++) {
@@ -199,7 +208,7 @@ function roomSearchLead(dt) {
   for (const c of roomCops) {
     if(c.dead){c.sees=false;continue;}
     c.sees = Math.hypot(c.x - px, c.y - py) < 9 && roomPoliceSees(c);
-    if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; c.targetX = px; c.targetY = py; c.searchI = 0; }
+    if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; [c.targetX,c.targetY]=roomPursuitTarget(); c.searchI = 0; }
     else if (Math.hypot(c.x - c.targetX, c.y - c.targetY) < 0.28) {
       c.searchT += dt;
       if (c.searchT > 0.8) {
@@ -659,9 +668,12 @@ function stepCrime(dt) {
     if (tail && T > (wanted.toldT || 0)) { wanted.toldT = T + 8; told = true; }
     if (wanted.pitPending) { wanted.pitPending = false; return 'pit'; }
   }
+  // A seated suspect is reached from the walkable approach to their chair.
+  // The chair itself is solid, so officers cannot occupy its centre.
+  const roomTarget=inside?roomPursuitTarget():null;
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && !c.down && near(c.x, c.y, px, py) < 0.22)
-    || inside && roomCops.some(c => !c.dead && c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
+    || inside && roomCops.some(c => !c.dead && c.sees && Math.hypot(c.x-roomTarget[0],c.y-roomTarget[1])<.32 && (!body.seat || Math.hypot(px-roomTarget[0],py-roomTarget[1])<1.5&&roomWalkLine(c.x,c.y,...roomTarget)))
     || onRoof && body.z < 1 && roofCops.some(c => !c.dead && c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;

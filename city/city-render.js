@@ -637,6 +637,12 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
     }
   }
 }
+// Shared ordered light falloff: retain material variation as the source tint
+// becomes sparser towards a pool's edge.
+function lightPoolColour(base,level,intensity,row,column,tint=WARM){
+  const threshold=BAYER[(row&3)*4+(column&3)],lit=threshold<intensity*1.15-.08;
+  return C(lit?tint:base,Math.min(15,level*(lit?.8:1)+intensity*(lit?6:3.5)));
+}
 function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
@@ -778,8 +784,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       if (surf) { // a lamp's pool: light over the ground, not a disc painted on it. Its texture stays (the level is added to, not
         // replaced), the warm comes in through an ordered dither (thick under the lamp, thinning out to nothing at
         // its edge, so it falls off instead of ending in a ring), and where it dies away a few warm glints of '.' and ',' (those anchored to the ground)
-        const th = BAYER[(r & 3) * 4 + (x & 3)], warm = th < gl * 1.15 - .08; // (ordered on the screen: an even fine pattern near and far)
-        BG[i] = C(warm ? WARM : surf[0], Math.min(15, surf[1] * (warm ? .8 : 1) + gl * (warm ? 6 : 3.5)));
+        const th = BAYER[(r & 3) * 4 + (x & 3)]; // (ordered on the screen: an even fine pattern near and far)
+        BG[i] = lightPoolColour(surf[0],surf[1],gl,r,x);
         if (gl > .06 && gl < .4 && th > .82 + gl * .3 && hash(Math.floor(wx * 34), Math.floor(wy * 34), 771) > .45) { ch = th > .92 ? ',' : '.'; col = C(WARM, 5 + gl * 12); }
       } else if (ch === ' ') ch = '.';
     }
