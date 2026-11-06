@@ -377,8 +377,9 @@ function hud() {
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
-  const meters = needMeters();
-  hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
+  const meters = needMeters(),alert=needsAlert(),alertLines=alert?wrapText(alert.text,maxW):[];
+  const alertHeight=alertLines.length?(FS+4)*alertLines.length+8:0;
+  hudBottom = top + (lines.length + task_.length + 1) * FS + 14 + alertHeight;
   hudBottom += drawNavigationCompass(hudBottom);
   wantedHud();
   minimap();
@@ -393,8 +394,15 @@ function hud() {
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
     for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
   }
+  if(alertLines.length){
+    const y=top+FS*(lines.length+1)+10,width=Math.min(maxW+8,Math.max(...alertLines.map(s=>g.measureText(s).width))+12);
+    g.fillStyle=alert.urgent?'#4b1111':'#3d2a08';g.fillRect(0,y,width,alertHeight-2);
+    g.fillStyle=alert.urgent?'#ff7055':'#ffc45c';g.fillRect(0,y,3,alertHeight-2);
+    g.font='bold '+FS+'px monospace';g.fillStyle=alert.urgent?'#ffd4c2':'#ffd56a';
+    alertLines.forEach((s,k)=>g.fillText(s,6,y+4+k*(FS+4)));g.font=FS+'px monospace';
+  }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = top + FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = top + FS * (lines.length + 1) + 10 + alertHeight, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }
