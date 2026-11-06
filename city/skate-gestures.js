@@ -128,8 +128,12 @@ function skateGesturePlay(gesture) {
 function skateMouseBegin() {
   SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
   SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();SK_INPUT.mouseAirFlick.reset();
+  if(SK.manual)SK.manual.mouseDepth=SK.manual.nose?-.35:.35;
 }
 function skateMouseMove(x, y) {
+  // Balance gets a larger physical mouse range; tricks retain the original
+  // virtual-stick samples, including loads, curls and deliberate flip-outs.
+  if(SK.manual&&SK_INPUT.mouseHeld)SK.manual.mouseDepth=clamp((SK.manual.mouseDepth??(SK.manual.nose?-.35:.35))+y/180,-1,1);
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
   SK_INPUT.mouse = SK.manual?[clamp(m[0]+x/60,-1,1),clamp(m[1]+y/60,-1,1)]:[(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;

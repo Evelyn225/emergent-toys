@@ -27780,7 +27780,7 @@ function hud() {
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
-    : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
+    : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
     : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
@@ -31047,7 +31047,7 @@ function openControls() {
           <b>Q / E / LT / RT in the air</b><span>Hold to grab. Use the mouse or right stick to choose nose, tail or side. Let go before landing. RT can’t grab if you used it to jump out.</span>
           <b>Manual / nose manual</b><span>Hold the right stick or mouse partway back for a manual, or partway forward for a nose manual. Full deflection loads a jump. Manuals link combos across flat ground.</span>
           <b>Grind balance</b><span>Use A/D to move the balance marker toward the centre. With the right stick or a right-mouse drag, left/right balances and forward/back shifts nose/tail pressure.</span>
-          <b>Manual balance</b><span>Adjust forward/back pressure with the right stick or mouse to keep the balance marker centred. A/D steers; it doesn’t balance a manual.</span>
+          <b>Manual balance</b><span>Adjust forward/back pressure to keep the balance marker centred. With a mouse, the starting drag sets neutral; keep right-click held and move gently forward/back to correct. A/D steers; it doesn’t balance a manual.</span>
       </div></section>
         <footer class="controls-footer">Game paused · Settings are available in the pause menu</footer>
       </div>`);
@@ -38295,8 +38295,12 @@ function skateGesturePlay(gesture) {
 function skateMouseBegin() {
   SK_INPUT.mouse = [0, 0]; SK_INPUT.mouseHeld = true; SK_INPUT.mouseT = T;
   SK_INPUT.fired = false; SK_INPUT.mouseGesture.reset();SK_INPUT.mouseAirFlick.reset();
+  if(SK.manual)SK.manual.mouseDepth=SK.manual.nose?-.35:.35;
 }
 function skateMouseMove(x, y) {
+  // Balance gets a larger physical mouse range; tricks retain the original
+  // virtual-stick samples, including loads, curls and deliberate flip-outs.
+  if(SK.manual&&SK_INPUT.mouseHeld)SK.manual.mouseDepth=clamp((SK.manual.mouseDepth??(SK.manual.nose?-.35:.35))+y/180,-1,1);
   const m = SK_INPUT.mouse, r = Math.hypot(m[0] + x / 60, m[1] + y / 60);
   SK_INPUT.mouse = SK.manual?[clamp(m[0]+x/60,-1,1),clamp(m[1]+y/60,-1,1)]:[(m[0] + x / 60) / Math.max(1, r), (m[1] + y / 60) / Math.max(1, r)];
   SK_INPUT.mouseT = T;
@@ -38671,12 +38675,19 @@ function skateManualEnd(scrape = false) {
 }
 function skateManualStep(dt) {
   if (skateAir() || SK.grind || SK.bail > 0) { skateManualEnd(); return; }
-  const depth = SK_INPUT.mouseHeld?SK_INPUT.mouse[1]:(SK_INPUT.manualDepth??skateBalanceStick()[1]);
+  let depth = SK_INPUT.mouseHeld?(SK.manual?.mouseDepth??SK_INPUT.mouse[1]):(SK_INPUT.manualDepth??skateBalanceStick()[1]);
   const depthHeld=SK.manual?Math.abs(depth)>.1&&Math.abs(depth)<.9&&(depth<0)===SK.manual.nose:Math.abs(depth)>.18&&Math.abs(depth)<.55;
   const held = depthHeld && SK.v > .06;
   if (!held) { if (SK.manual) skateManualEnd(); return; }
-  if (!SK.manual) SK.manual = { nose: depth < 0, t0: T, bal: 0, balV: 0 };
-  const m = SK.manual, control = (Math.abs(depth) - .35) * 6 * (m.nose ? -1 : 1);
+  if (!SK.manual) {
+    SK.manual={nose:depth<0,t0:T,bal:0,balV:0,mouseDepth:SK_INPUT.mouseHeld?Math.sign(depth)*.35:null};
+    if(SK_INPUT.mouseHeld)depth=SK.manual.mouseDepth;
+  }
+  const m=SK.manual,offset=Math.abs(depth)-.35;
+  // Mouse entry establishes a comfortable neutral point. A small quiet band
+  // absorbs hand jitter without changing stick physics or the gesture stream.
+  const pressure=SK_INPUT.mouseHeld?Math.sign(offset)*Math.max(0,Math.abs(offset)-.02):offset;
+  const control=pressure*6*(m.nose?-1:1);
   m.balV += (m.bal * 1.1 + control + Math.sin((T - m.t0) * 2.7) * .12 - m.balV * 1.6) * dt;
   m.bal += (m.balV+control*.15) * dt;
   if (m.bal < -1) { SK.manual = null; return skateBail('BAIL! Over the nose.'); }
