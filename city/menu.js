@@ -70,3 +70,35 @@ function asciiBar(f) {
                                               : '<span style="color:rgba(255,255,255,0.14)">░</span>';
   return s;
 }
+
+// Controls reference: quiet typography, explicit bindings and generous spacing.
+{
+  const style = document.createElement('style');
+  style.textContent = `
+    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#111719; border:1px solid #364344; border-radius:12px; box-shadow:0 24px 80px #0009; }
+    #controls .controls-header { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
+    #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
+    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:13px; }
+    #controls .controls-back { width:auto; gap:16px; font-size:12px; padding:10px 12px; border:1px solid #465654; border-radius:5px; }
+    #controls .controls-tabs { display:flex; flex-wrap:wrap; gap:8px; padding:24px 0; border-bottom:1px solid #33403f; }
+    #controls .controls-tabs button { font:inherit; font-size:12px; padding:10px 14px; border:1px solid #3e4c49; border-radius:5px; background:transparent; color:#afbfbb; cursor:pointer; }
+    #controls .controls-tabs button[aria-pressed=true] { background:#b8d9ca; color:#14231c; border-color:#b8d9ca; }
+    #controls button:focus-visible { outline:2px solid #d1f5df; outline-offset:4px; }
+    #controls h2 { margin:24px 0 14px; padding:0; text-transform:none; font-size:16px; color:#e3eee9; }
+    #controls .keys { display:flex; flex-direction:column; gap:0; padding:0; }
+    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:13px; line-height:1.7; }
+    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:5px; padding:5px 10px; line-height:1.5; font-size:12px; width:fit-content; }
+    #controls .control-binding span { color:#b1bdb8; }
+    #controls .controls-footer { margin-top:24px; font-size:11px; color:#81918a; }
+    #controls [hidden] { display:none !important; }
+    @media(max-width:600px) {
+      #controls .controls-panel { padding:20px 16px; }
+      #controls .controls-header { align-items:start; flex-direction:column; gap:16px; }
+      #controls .control-binding { grid-template-columns:1fr; gap:8px; }
+      #controls .controls-tabs { gap:6px; }
+      #controls .controls-tabs button { padding:9px; }
+    }
+  `;
+  document.head.appendChild(style);
+}
