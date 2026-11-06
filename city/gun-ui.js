@@ -112,25 +112,9 @@ function shotDown() {
   passOut('Gunshot wounds. You\'re lucky. The police have your revolver, and would like to talk when you\'re up.');
 }
 
-// ---- the gun in your hand: side-on, muzzle toward the crosshair, the fist round the grip. Drawn in characters and
+// ---- the gun in your hand: side-on, muzzle toward the crosshair, the fist round the grip. Drawn as solid colour cells and
 // turned on the canvas as a piece: up with the kick of a shot, right up to reload with the cylinder swung out
-const REVOLVER = [
-  '                                     _',
-  ' _                                  / )',
-  '[_]__________________________ _____/ /__',
-  '|____________________________|=====|::::\\',
-  ' `---------------------------|-----|:::::\\',
-  '       `===================\'  |=====|::o::|',
-  '                          \\  |-----|:::::\\',
-  '                           \\_|_____|::::::\\',
-  '                              \\ ( \\ \\#######\\',
-  '                               `--`--\'#######\\',
-  '                                      \\#######\\',
-  '                                       \\#######\\',
-  '                                        |#######|',
-  '                                        \\_______/'];
-const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
-const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
+const GUN_GRIP=[43,9];
 const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
 function gunGeom() {
   const aim = gunAim();
@@ -141,30 +125,6 @@ function gunGeom() {
   const hy = Math.round(cv.height - 5.6 * hsz + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
   return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 - aim * 0.06 };
 }
-// the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
-function revolverArt(open, rounds) {
-  const art = REVOLVER.map(l => [...l]), turn = Math.floor(gunView.spin * 2);
-  for (let r = 3; r <= 6; r++) for (let c = 30; c <= 34; c++) art[r][c] = open ? ' ' : (r + turn) & 1 ? '-' : '=';
-  if (gun.kick > 0.45) { // fired: the hammer's down on the frame
-    for (const [r, c] of [[0, 37], [1, 36], [1, 37], [1, 38], [2, 37]]) art[r][c] = ' ';
-    art[2][36] = '_'; art[2][37] = ')';
-  }
-  if (open) { // swung out to the side, its face to you: a round in each chamber as it goes in
-    let k = 0;
-    CYL_FACE.forEach((l, r) => [...l].forEach((ch, c) => { const row = art[8 + r] || (art[8 + r] = []); while (row.length < 22 + c) row.push(' '); row[21 + c] = ch === 'o' ? (k++ < rounds ? '@' : 'o') : ch; }));
-  }
-  return art.map(r => r.join(''));
-}
-function revolverCol(ch, r, c) {
-  if (ch === '@') return C(YEL, 14); // (brass)
-  if (r >= 8 && c >= 20 && c < 30) return C(GRAY, ch === 'o' ? 4 : 11); // (the cylinder, swung out: an empty chamber's dark)
-  if (r >= 8 && c >= 37 || r >= 10) return ch === '#' ? C((r + c) & 1 ? BRICK : WARM, 9 + ((r * 3 + c) % 4)) : C(BRICK, 10); // the walnut grip, chequered
-  if (ch === '=' && r >= 3 && r <= 6 && c >= 30 && c <= 34) return C(CYAN, 13); // the cylinder catching the light
-  if (ch === ':') return C(GRAY, 7);
-  if (ch === 'o') return C(YEL, 11);
-  if (r <= 2 || ch === '[' || ch === ']') return C(WHITE, 14); // the top edge, in the light
-  return C(GRAY, 11 - (r > 4 ? 2 : 0));
-}
 function drawRevolver(it) {
   const G = gunGeom(), dt = clamp(T - gunView.t, 0, 0.05); gunView.t = T;
   gunView.spin += (gun.spin - gunView.spin) * Math.min(1, dt * 14); // (a sixth of a turn a shot, snapping round)
@@ -174,16 +134,15 @@ function drawRevolver(it) {
   g.save();
   g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
   drawBehindHand(0, -G.hsz * .2, G.hsz, () => {
-    artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
+    const [art,col]=revolverPicture(open,rounds);artText(art,gx,gy,G.s,col);
     if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
       artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
         () => C(SKIN, 12));
     }
     if (gun.kick > 0.55) { // the flash, off the end of the barrel
-      const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
-      g.font = big + 'px monospace';
-      const fw = g.measureText('M').width;
-      artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
+      const size=Math.round(G.u*(.8+gun.kick*.5)*.5),[flash,col]=heldMuzzleFlash(gun.kick);
+      g.font=size+'px monospace';const fw=g.measureText('M').width;
+      artText(flash,gx-fw*5,gy+3.5*G.s-size*3.5,size,col);
     }
   });
   g.restore();

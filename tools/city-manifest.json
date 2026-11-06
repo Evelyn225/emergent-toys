@@ -141,6 +141,7 @@
     "city/held-dense-items.js",
     "city/held-food.js",
     "city/held-curios.js",
+    "city/held-tool-models.js",
     "city/held-motion.js",
     "city/fishing-render.js",
     "city/fishing-competition-ui.js",

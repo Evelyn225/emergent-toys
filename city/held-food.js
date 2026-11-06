@@ -1,13 +1,9 @@
 // Groceries have their own full-size pictures; dropped icons stay small. Meals show their food, serving dish,
 // remaining portions and cooking quality, rather than stretching a ground icon into a hand.
-// Surface samples fill cells; only explicitly tagged printing stays as text.
-function foodSculpt(W,H,sample){
-  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
-}
 function heldGroceryPackage(it) {
   const id = it.id, meat = ['rawchicken', 'mince', 'bacon'].includes(id);
   const labels = { rice: 'RICE', pasta: 'PASTA', drynoodles: 'NOODLES', butter: 'BUTTER', tofu: 'TOFU' };
-  return foodSculpt(30, 17, (x, y) => {
+  return sculptSurface(30, 17, (x, y) => {
     if (id === 'eggs') {
       if (Math.abs(x) > 7.8 || y < -5.8 || y > 6.5) return null;
       for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
@@ -46,7 +42,7 @@ function heldGroceryPackage(it) {
 }
 function heldProduce(it) {
   const id = it.id;
-  return foodSculpt(30, 17, (x, y) => {
+  return sculptSurface(30, 17, (x, y) => {
     const oval = (cx, cy, rx, ry, col) => dEll(x, y, cx, cy, rx, ry) < 1 ? dLit(dBall(x, y, cx, cy, rx, ry), col, 8) : null;
     if (id === 'cheese') {
       if (y < -5 || y > 6 || x < -6.5 || x > 6.5 - (y + 5) * .25) return null;
@@ -103,7 +99,7 @@ const HELD_BOWLS = new Set(['fishcurry', 'pomodoro', 'bolognese', 'macncheese', 
 const HELD_HAND_FOOD = { homeburger: 'burger', skewers: 'yakitori', fishstick: 'yakitori' };
 function heldToast(it, f) {
   const toast = it.id === 'toast', fish = it.id === 'fishsandwich', burnt = it.q === 'burnt';
-  return foodSculpt(30, 15, (x, y) => {
+  return sculptSurface(30, 15, (x, y) => {
     const bite = dBites(x, y, f, 7);
     if (bite === true) return null;
     const half = 6.8 + (y < -2 ? Math.sqrt(Math.max(0, 1 - ((y + 2) / 4.5) ** 2)) * 1.4 : 0);
@@ -127,7 +123,7 @@ function heldMeal(it, f) {
     return [art.map(line=>line.replace(/[^ ]/g,'\u0001')), (ch, r, c) => burnt ? C(GRAY, 5 + (r + c) % 3) : col(art[r][c], r, c)];
   }
   const bowl = HELD_BOWLS.has(id), soup = ['fishcurry', 'chickencurry', 'tomatosoup'].includes(id);
-  return foodSculpt(34, 19, (x, y) => {
+  return sculptSurface(34, 19, (x, y) => {
     const steam = dSteam(x, y, -3.3, f, [-3.1, 2.7], 5);
     if (steam && !burnt) return steam;
     const dish = dEll(x, y, 0, 2.6, 9.4, bowl ? 5.5 : 4.6);
