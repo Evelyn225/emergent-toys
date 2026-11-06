@@ -57,3 +57,14 @@ test('the TV picture is just the match: no hand, no quick slots, and the ball bi
  assert.deepEqual(r.tv,{hand:0,slots:false},'on the TV, neither');
  assert.ok(r.ballCells>=3,'the ball three cells or more across on TV');
 }));
+
+test('up close the crowd are people on seats; further off the rows stand in for them, and nobody is drawn twice',()=>ground(async p=>{
+ const r=await p.evaluate(()=>{px=75;py=12.5;a=Math.PI/2;sitDown();a=Math.PI/2;pitch=-.25;env(0);
+  const draw=drawFigure;let figs=0,poses=new Set();drawFigure=(...g)=>{figs++;poses.add(g[7]);return draw(...g);};
+  try{render(0);}finally{drawFigure=draw;}
+  const s=STANDS.find(x=>x.id==='north'),near=crowdNear(s,3,0),far=crowdNear(s,3,40);
+  return{figs,poses:[...poses],near,far};});
+ assert.ok(r.figs>15,'supporters round you drawn as people: '+r.figs);
+ assert.ok(r.poses.some(p=>/^sit/.test(p)),'sat down');
+ assert.equal(r.near,true);assert.equal(r.far,false);
+}));

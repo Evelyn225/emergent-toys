@@ -111,6 +111,7 @@ function crowdShade(i, t, L, s, k, u) {
   if (h > fill) return false; // (an empty seat: you see it, or the row behind)
   const sx = s.axis === 'y' ? s.a0 + (s.a1 - s.a0) / 2 + u : 0, sy = s.front + s.out * (k + .5) * s.depth;
   if (s.axis === 'y' && Math.abs(sx - px) < .8 && Math.abs(sy - py) < .5) return false; // (the seat you're in, and the ones either side, are yours)
+  if (crowdNear(s, k, seat)) return false; // (close by: drawn as people, nearCrowdProp)
   const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
   const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, standing = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
   const zIn = HIT.w - (k + 1) * s.rise, tall = standing ? 1.55 : 1.05, w = (fract(u / SEAT_PITCH) - .5) * SEAT_PITCH / .5; // (w: across the seat, in half-metres from its middle)
@@ -130,6 +131,57 @@ function crowdShade(i, t, L, s, k, u) {
   const scarf = zIn > tall - .38 && hash(seat, k, 2207) > .6, colour = hash(seat, k, 2208) > .8 ? 1 : 0;
   BG[i] = kitCol(scarf ? kit[1] : kit[colour], (scarf ? 7 : 5.5) * (.55 + L * .03) - (zIn < .35 ? 1.5 : 0)); return set(i, ' ', 0), true;
 }
+// the supporters close round you: real people, sat on the row or up on their feet, in their side's colours. Further
+// off the strip above stands in for them (it leaves out these seats, so nobody is drawn twice)
+const CROWD_NEAR = 6.5, CROWD_H = 1.6; // (a touch under full height: sat down, the heads in front sit below your eyes)
+const seatAt = (s, k, seat) => { const a = (s.a0 + s.a1) / 2 + (seat + .5) * SEAT_PITCH, b = s.front + s.out * (k + .5 + .15) * s.depth; return s.axis === 'y' ? [a, b] : [b, a]; };
+const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < CROWD_NEAR * CROWD_NEAR; };
+const crowdLooks = new Map();
+function crowdLook(s, k, seat, kit, side) {
+  const key = `${s.id}:${k}:${seat}:${kit.join()}`;
+  let look = crowdLooks.get(key);
+  if (look) return look;
+  if (crowdLooks.size > 600) crowdLooks.clear();
+  const h = j => hash(seat, k, 2210 + j), of = (a, j) => a[Math.floor(h(j) * a.length)], main = kit[h(1) > .8 ? 1 : 0], other = kit[main === kit[0] ? 1 : 0];
+  const top = of(['tee', 'tee', 'long', 'jacket', 'long'], 2), hat = h(3) < .18 ? 'beanie' : h(3) < .26 ? 'cap' : null;
+  look = figLook({ hair: of(['short', 'short', 'buzz', 'long', 'bob', 'bald', 'pony', 'afro'], 4), hat, top, bot: 'pants', bw: [.95, 1, 1.1, 1.2][Math.floor(h(5) * 4)],
+    col: { hair: of(FIG_HAIRS, 6), skin: of(FIG_SKINS, 7), top: [STADIUM_KIT[main] ?? GRAY, main === 'WHITE' ? 12 : 9], inner: [STADIUM_KIT[other] ?? WHITE, 11],
+           bot: h(8) < .6 ? [BLUE, 5] : [GRAY, 3], hat: [STADIUM_KIT[other] ?? GRAY, 9], hatD: [STADIUM_KIT[other] ?? GRAY, 6], shoe: of(FIG_SHOES, 9) } });
+  crowdLooks.set(key, look);
+  return look;
+}
+// a plastic tip-up seat on its row, facing (fx, fy): the pan they sit on and the back behind them
+function tipUpSeat(rx, ry, z0, fx, fy, col) {
+  const shade = (i, t, L) => { BG[i] = C(col, (HIT.face === 5 ? 4.2 : 3.2 * shadeFace(HIT.face)) + L * .15); return set(i, ' ', 0), true; };
+  drawBox(boxAt(rx + fx * .02, ry + fy * .02, fy ? 1 : 0, fy ? 0 : 1, .25, .2, z0 + .36, z0 + .42), shade);
+  drawBox(boxAt(rx - fx * .21, ry - fy * .21, fy ? 1 : 0, fy ? 0 : 1, .25, .03, z0 + .42, z0 + .82), shade);
+  drawBox(boxAt(rx + fx * .02, ry + fy * .02, fy ? 1 : 0, fy ? 0 : 1, .04, .04, z0, z0 + .36), solid(GRAY));
+}
+const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR + 1, draw: () => {
+  const m = stadiumMatch, fill = m ? m.crowd : .8;
+  for (const s of STANDS) {
+    const along = s.axis === 'y', across = along ? py : px, alongMe = (along ? px : py) - (s.a0 + s.a1) / 2;
+    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - CROWD_NEAR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + CROWD_NEAR / s.depth));
+    const half = (s.a1 - s.a0) / 2 / SEAT_PITCH;
+    for (let k = k0; k <= k1; k++) {
+      const z0 = (k + 1) * s.rise;
+      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - CROWD_NEAR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + CROWD_NEAR) / SEAT_PITCH)); seat++) {
+        if (!crowdNear(s, k, seat)) continue;
+        const [x, y] = seatAt(s, k, seat), rx = x - px, ry = y - py;
+        if (!inView(rx, ry, 1)) continue;
+        if (s.seats) tipUpSeat(rx, ry, z0, along ? 0 : -s.out, along ? -s.out : 0, s.home > .5 ? RED : BLUE);
+        const hs = hash(seat, k, s.id.length * 31 + 2203); if (hs > fill) continue;
+        if (Math.abs(x - px) < .8 && Math.abs(y - py) < .5) continue; // (your seat, and the ones either side)
+        const homeFan = hash(seat, k, 2204) < s.home, side = homeFan ? 0 : 1, team = m?.teams[side], kit = team ? team.kit : ['RED', 'WHITE'];
+        const cheering = m && m.phase === 'goal' && m.celebrate?.side === side, gutted = m && m.phase === 'goal' && m.celebrate && m.celebrate.side !== side;
+        const up = !s.seats || cheering || (m && m.phase === 'play' && m.danger > .6 && homeFan === (m.ball.lastTouch?.team.side === 0));
+        const fx = along ? 0 : -s.out, fy = along ? -s.out : 0, look = crowdLook(s, k, seat, kit, side);
+        const pose = cheering && fract(T * 2 + hs * 7) < .8 ? 'cheer' : gutted && hs < fill * .4 ? 'dejected' : up ? 'stand' : 'sit' + Math.round(.42 / (CROWD_H / FIG_TALL));
+        drawFigure(rx, ry, z0, CROWD_H, fx, fy, look, pose);
+      }
+    }
+  }
+} });
 // a floodlight pylon in a corner: a lattice mast and a bank of lamps on top, blazing after dark
 const floodlight = (x, y) => ({ x, y, radius: 4, draw: (vx, vy) => {
   drawBox(boxAt(vx, vy, 1, 0, .45, .45, 0, 34), (i, t, L) => { const lat = Math.abs(fract(HIT.w / 1.2 + (HIT.u + HIT.v) * .9) - .5) < .12; BG[i] = C(GRAY, (lat ? 2.6 : 1.4) + L * .15); return set(i, ' ', 0), true; });
@@ -233,7 +285,7 @@ function stadiumGrid() {
 ROOM_DEFS.stadium = {
   grid: stadiumGrid(), light: 1, height: 40, vis: 200, floor: 'pitch', ceil: 'sky', sign: false, wall: stadiumWall, rise: stadiumRise, outdoor: true,
   props: r => {
-    const p = [matchProp(), scoreboard(), bigScreen(), kioskProp(), ...goalFrame(-1), ...goalFrame(1)];
+    const p = [matchProp(), scoreboard(), bigScreen(), kioskProp(), nearCrowdProp(), ...goalFrame(-1), ...goalFrame(1)];
     for (const s of STANDS) p.push(...standProps(s, r));
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
