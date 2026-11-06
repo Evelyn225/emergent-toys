@@ -46,13 +46,13 @@ test('buy a rod at the hut, cast with Q, strike on the bite, land it, sell it ba
       const G = rodGeom(), shot = handDrawn;
       const bob = fishProj(rel(fishing.x - px), rel(fishing.y - py), 0.005);
       return { water: fishing.water, dist: Math.hypot(rel(fishing.x - px), rel(fishing.y - py)), hand: shot && shot.id, tipOnScreen: G.tip.x > 0 && G.tip.x < cv.width && G.tip.y > 0 && G.tip.y < cv.height,
-        bobber: bob && CH[Math.floor(bob.r) * cols + Math.floor(bob.c)], prompt: promptText() };
+        bobber: bob && CH[Math.floor(bob.r)*cols+Math.floor(bob.c)]===' '&&[RED,WHITE].includes(BG[Math.floor(bob.r)*cols+Math.floor(bob.c)]>>4), prompt: promptText() };
     });
     assert.equal(out.water, 'sea');
     assert.ok(out.dist > 0.5, `a decent cast: ${out.dist}`);
     assert.equal(out.hand, 'rod');
     assert.ok(out.tipOnScreen);
-    assert.match(out.bobber, /[o@#%*=+]/, 'the bobber, out on the water');
+    assert.equal(out.bobber,true,'the coloured bobber, out on the water');
     assert.match(out.prompt, /Waiting for a bite/);
     // hurry the fish along: it comes in, takes it, and Q strikes
     await page.evaluate(() => { fishing.next = 0; ITEMS.rod.rod.window = 6; paused = false; }); // (a long window: CI's slow)

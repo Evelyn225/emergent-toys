@@ -183,10 +183,11 @@ function fishPut(c, r, depth, ch, col, bg) {
   set(i, ch, col); if (bg !== undefined) BG[i] = bg; FL[i] = 0; FOGS[i] = 0;
   return true;
 }
+const fishSurface=(c,r,depth,col)=>fishPut(c,r,depth,' ',0,col);
 // a line through projected points, hidden where something's in front: walked as one path, one cell a step along
 // whichever way it runs most (so it's never two thick, and where two pieces meet nothing doubles up); steep, '|' or
 // the diagonal by its slope; shallow, '-' along the row and the diagonal where it drops a row
-function fishPath(pts, col) {
+function fishPath(pts,col,surface=false){
   let pc = null, pr = null;
   for (let j = 1; j < pts.length; j++) {
     const p0 = pts[j - 1], p1 = pts[j];
@@ -197,16 +198,16 @@ function fishPath(pts, col) {
       const f = k / n, c = Math.floor(p0.c + dc * f), r = Math.floor(p0.r + dr * f);
       if (c === pc && r === pr) continue;
       const ch = slope < 0.4 ? (steep ? '|' : '-') : steep || pr !== null && r !== pr ? diag : '-';
-      fishPut(c, r, p0.depth + (p1.depth - p0.depth) * f, ch, col); pc = c; pr = r;
+      const depth=p0.depth+(p1.depth-p0.depth)*f;if(surface)fishSurface(c,r,depth,col);else fishPut(c,r,depth,ch,col);pc=c;pr=r;
     }
   }
 }
-const fishSeg = (p0, p1, col) => fishPath([p0, p1], col);
+const fishSeg=(p0,p1,col,surface=false)=>fishPath([p0,p1],col,surface);
 
 // ---- out in the world, after the sprites: the line, the bobber, the rings, the fish coming in, the spray
 function drawFishing() {
   if (!fishingFrom()) return;
-  for (const p of fishFx) { const q = fishProj(rel(p.x - px), rel(p.y - py), p.z); if (q) fishPut(q.c, q.r, q.depth, p.vz > 0 ? '\'' : '.', C(WHITE, 8 + p.life * 6)); }
+  for (const p of fishFx) { const q = fishProj(rel(p.x - px), rel(p.y - py), p.z); if (q) fishSurface(q.c,q.r,q.depth,C(WHITE,8+p.life*6)); }
   const f = fishing;
   if (!heldRod()) return;
   stepRodView();
@@ -227,7 +228,7 @@ function drawFishing() {
     for (let j = 0; j < 7; j++) {
       const q = clamp(f.t / f.dur - j * 0.05, 0, 1), dist = 0.55 * (1 - q) ** 1.1;
       const fxp = bx + Math.cos(f.from) * dist, fyp = by + Math.sin(f.from) * dist, p = fishProj(fxp, fyp, 0.001 + j * 0.0015 * (j & 1));
-      if (p) fishPut(p.c, p.r, p.depth, j === 0 ? '~' : j & 1 ? 'o' : '.', C(j === 0 ? WHITE : CYAN, (j === 0 ? 14 : 12 - j) * lit));
+      if (p) fishSurface(p.c,p.r,p.depth,C(j===0?WHITE:CYAN,(j===0?14:12-j)*lit));
     }
   }
   // the line: off the rod tip, sagging in the slack (lying on the water near the bobber), taut when something's on
@@ -244,27 +245,29 @@ function drawFishing() {
   const p = fishProj(bx, by, bz + 0.004);
   if (!p) return;
   if (f.st === 'bite') { // under: a swirl of white water where it went, spray over it, and a '!' you can't miss
-    fishPut(p.c, p.r, p.depth, '@', C(WHITE, 15), C(CYAN, 3));
-    for (const s of [-1, 1]) fishPut(p.c + s, p.r, p.depth, s < 0 ? '(' : ')', C(WHITE, 13));
+    fishSurface(p.c,p.r,p.depth,C(WHITE,15));
+    for (const s of [-1, 1]) fishSurface(p.c+s,p.r,p.depth,C(CYAN,13));
     if (f.t < 0.6) fishPut(p.c, p.r - 2 - (f.t * 4 | 0) % 2, p.depth * 0.99, '!', C(YEL, 15));
     return;
   }
   const rc = 0.007 * projX / p.depth, rr = 0.007 * projY / p.depth;
-  if (rc < 0.9) { fishPut(p.c, p.r, p.depth, 'o', C(RED, 15), C(WHITE, 1.5)); fishPut(p.c, p.r + 1, p.depth, '-', C(WHITE, 11)); } // (far off: a red dot and its waterline)
+  if (rc < 0.9) { fishSurface(p.c,p.r,p.depth,C(RED,15));fishSurface(p.c,p.r+1,p.depth,C(WHITE,11)); } // (far off: a red dot and its waterline)
   else {
     for (let r = Math.floor(p.r - rr); r <= p.r + rr; r++) for (let c = Math.floor(p.c - rc); c <= p.c + rc; c++) {
       const ex = (c + 0.5 - p.c) / rc, ey = (r + 0.5 - p.r) / rr;
-      if (ex * ex + ey * ey <= 1) { const b = dSphere(ex, ey, 1); fishPut(c, r, p.depth, dFill(b), C(ey < 0 ? RED : WHITE, 6 + b * 9)); }
+      if (ex * ex + ey * ey <= 1) { const b = dSphere(ex, ey, 1); fishSurface(c,r,p.depth,C(ey<0?RED:WHITE,6+b*9)); }
     }
-    fishPut(p.c, p.r - rr - 0.5, p.depth, '|', C(RED, 12)); // (its stick)
+    fishSurface(p.c,p.r-rr-.5,p.depth,C(RED,12)); // (its stick)
   }
   if (f.st === 'reel' && f.catch && f.z > 0.004) { // up out of the water on the end of the line, wriggling
     const d = ITEMS[f.catch.id], q = fishProj(bx, by, Math.max(0.001, f.z - 0.02));
     if (q) {
       fishSeg(p, q, lineCol);
       if (d.kind === 'fish' || d.kind === 'wish') drawLineFish(bx, by, Math.max(0.001, f.z - 0.02), d.col ?? YEL, catchLength(f.catch.kg)); // (the fish itself, wriggling)
-      else { const word = d.kind === 'junk' ? '[#]' : '(*)', n = clamp(Math.round(0.05 * projX / q.depth), 1, word.length), w0 = word.slice(0, n);
-        for (let k = 0; k < w0.length; k++) fishPut(q.c - w0.length / 2 + k, q.r, q.depth * 0.99, w0[k], C(d.kind === 'junk' ? GRAY : YEL, 14)); } // (junk and curios: their pictures)
+      else {
+        const picture=droppedPicture(f.catch),m=itemSize(f.catch)*.1/Math.max(picture.w,picture.h);
+        drawDropped({...f.catch,displayZ:Math.max(0,f.z-picture.h*m)},bx,by,.1);
+      }
     }
   }
 }
@@ -291,7 +294,7 @@ function fishRing(bx, by, R, k, lit) {
   const n = clamp(Math.round(R * projX / p.depth * 5), 8, 64);
   for (let j = 0; j < n; j++) {
     const an = j / n * TAU, q = fishProj(bx + Math.cos(an) * R, by + Math.sin(an) * R, 0.0005);
-    if (q) fishPut(q.c, q.r, q.depth, Math.abs(Math.sin(an + Math.atan2(dy, dx))) > 0.7 ? '-' : '~', C(WHITE, (5 + k * 9) * lit));
+    if (q) fishSurface(q.c,q.r,q.depth,C(WHITE,(5+k*9)*lit));
   }
 }
 
@@ -502,7 +505,7 @@ function drawAnglerLines() {
     const fz = lift * (r.tz - 0.04), fx_ = r.bx + (r.tx - r.bx) * lift * lift, fy_ = r.by + (r.ty - r.by) * lift * lift;
     const top = fishProj(r.tx, r.ty, r.tz), end = fishProj(lift ? fx_ : r.bx, lift ? fy_ : r.by, lift ? fz + 0.015 : (r.under ? 0 : 0.006));
     if (top && end) fishSeg(top, end, C(WHITE, 8 * Math.max(0.5, amb)));
-    if (!lift) { const p = fishProj(r.bx, r.by, r.under ? 0 : 0.003 + Math.sin(T * 2.3 + o.seed) * 0.002); if (p) fishPut(p.c, p.r, p.depth, r.under ? '@' : 'o', C(r.under ? WHITE : RED, 14)); }
+    if (!lift) { const p = fishProj(r.bx, r.by, r.under ? 0 : 0.003 + Math.sin(T * 2.3 + o.seed) * 0.002); if (p) fishSurface(p.c,p.r,p.depth,C(r.under?WHITE:RED,14)); }
     else drawLineFish(fx_, fy_, fz, SILVER_FISH[o.seed % 3], 0.25); // (their catch, coming up the line)
   }
 }
