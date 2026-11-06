@@ -27,7 +27,7 @@ DENSE.joint = () => sculpt(20,27,(x,y)=>{
 });
 DROPPED_ART.joint = () => [['  __',' /==/','/==/',' --'],ch=>C(ch==='='?WHITE:STONE,13)];
 function heldAmmo(it) {
-  return sculpt(32, 18, (x, y) => {
+  return sculptSurface(32, 18, (x, y) => {
     if (Math.abs(x) > 8.4 || y < -6.6 || y > 7.6) return null;
     if (Math.abs(x) > 7.8 || y < -6 || Math.abs(y - 2.3) < .5 || y > 7) return dLit(.65 - x * .025, WARM, 8);
     if (y < 2.3) {
@@ -38,8 +38,8 @@ function heldAmmo(it) {
       }
       return [':', C(BRICK, 5)];
     }
-    const word = dText(x, y, 0, 4, '.38 SPECIAL') || dText(x, y, 0, 6, '24 ROUNDS');
-    return word ? [word, C(RED, 13)] : dLit(.6 - x * .025, WARM, 8);
+    const word = dText(x,y,0,4,'.38 SPECIAL') || dText(x,y,0,6,'24 ROUNDS');
+    return word ? [word,C(RED,13),true] : dLit(.6 - x * .025, WARM, 8);
   });
 }
 DENSE.ammo = heldAmmo;
@@ -127,7 +127,7 @@ DENSE.soggybook = it => {
 function heldPocketknife(it) {
   const phase = heldUsePhase(it), open = phase >= 0 ? Math.sin(phase * Math.PI) : 0;
   const angle = -Math.PI / 2 - (1 - open) * Math.PI, ca = Math.cos(angle), sa = Math.sin(angle);
-  return sculpt(46, 34, (x, y) => {
+  return sculptSurface(46, 34, (x, y) => {
     // Upright handle in the fist, hinge above it. The blade folds into the handle and opens upward.
     if (Math.abs(x) < 1.6 && y > -2.5 && y < 10.8) {
       if (y < -1) return [Math.abs(x) < .5 ? 'o' : '=', C(GRAY, 14)]; // steel bolster and hinge

@@ -77,21 +77,22 @@ test('right click smoothly zooms the gun and world, releases cleanly, and never 
 
 test('the grip is culled against the hand pixels during recoil and reload', () => withGun(async page => {
   const stages = await page.evaluate(() => {
-    const clip = g.clip, text = g.fillText, hand = drawHand;
-    let clips = 0, glyphs = 0, hands = 0;
+    const clip = g.clip, text = g.fillText, rect=g.fillRect, hand = drawHand;
+    let clips = 0, glyphs = 0, surfaces=0, hands = 0;
     g.clip = function (...args) { clips++; return clip.apply(this, args); };
     g.fillText = function (...args) { glyphs++; return text.apply(this, args); };
+    g.fillRect=function(...args){surfaces++;return rect.apply(this,args);};
     drawHand = function (...args) { hands++; return hand(...args); };
     try {
       return [0, .2, .8, 1.4].map(reload => {
         gun.reload = reload; gun.kick = reload ? 0 : .8;
-        clips = glyphs = hands = 0; drawHeldBig();
-        return { clips, glyphs, hands, drawn: handDrawn.id };
+        clips = glyphs = surfaces = hands = 0; drawHeldBig();
+        return { clips, glyphs, surfaces, hands, drawn: handDrawn.id };
       });
-    } finally { g.clip = clip; g.fillText = text; drawHand = hand; }
+    } finally { g.clip = clip; g.fillText = text; g.fillRect=rect; drawHand = hand; }
   });
   for (const stage of stages) {
     assert.equal(stage.clips, 1); assert.equal(stage.hands, 1);
-    assert.ok(stage.glyphs > 100); assert.equal(stage.drawn, 'revolver');
+    assert.ok(stage.glyphs>0&&stage.surfaces>100); assert.equal(stage.drawn, 'revolver');
   }
 }));

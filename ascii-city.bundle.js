@@ -30406,6 +30406,7 @@ function openDev() {
       if (k === 'tod' && v >= 0 && v < 24) tod = v;
     });
     devEl.addEventListener('keydown', e => {
+      if(!devOpen())return; // A queued key can still target the control that closed this panel.
       if (e.code === 'Escape' || e.code === 'F2') { e.preventDefault(); return closeDev(); }
       if (e.code === 'Enter' && e.target.classList.contains('search')) { // Enter: the first match
         const b = devEl.querySelector('[data-dev]'); if (b) b.click();
@@ -31352,21 +31353,20 @@ function drawCanopy(cx, grip, size, bob) {
   const W = cv.width, H = cv.height, u = Math.max(14, H / 36), s = Math.round(u * 0.72); // (the world's own character size, like the items)
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, ribs = 9, hubX = W * 0.56, off = bob * 0.4;
-  charLine(cx, grip, hubX, -s, w, s, PAL[C(GRAY, 13)]); // the shaft
+  heldToolSegment({x:cx,y:grip},{x:hubX,y:-s},u*.12,u*.08,C(GRAY,13));
   for (let c = 0; c * w < W + w; c++) {
     const x = c * w, t = (x - W / 2) / (W * 0.62), seg = (t + 1) / 2 * ribs, k = Math.floor(seg), m = Math.abs(fract(seg) - 0.5);
     const rim = H * (0.34 - t * t * 0.32) - (0.5 - m) * s * 1.4 + off; // scalloped: rises between the ribs
     const rib = m > 0.45, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
     for (let y = 0; y < rim - s; y += s) {
-      if (rib) { g.fillStyle = PAL[C(BLUE, 1)]; g.fillRect(x, y, w + 0.5, s + 0.5); g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
+      if(rib){g.fillStyle=PAL[C(GRAY,8)];g.fillRect(x,y,w+.5,s+.5);continue;}
       // each panel bellies down between its ribs: lighter in the middle and toward the rim (the light comes through)
       const b = clamp((0.35 + 0.45 * Math.cos(m * Math.PI * 1.9)) * (0.55 + 0.45 * y / Math.max(rim, 1)) + (k & 1 ? 0.08 : 0), 0, 1);
-      g.fillStyle = PAL[C(BLUE, 1 + b * 2.5)]; g.fillRect(x, y, w + 0.5, s + 0.5); // the fabric itself: nothing shows through it
-      g.fillStyle = PAL[C(k & 1 ? BLUE : CYAN, 4 + b * 7)];
-      g.fillText(dFill(b), x, y);
+      g.fillStyle = PAL[C(k&1?BLUE:CYAN,4+b*7)]; g.fillRect(x, y, w + 0.5, s + 0.5); // the fabric itself: nothing shows through it
+
     }
-    g.fillStyle = PAL[C(BLUE, 12)]; g.fillText(rib ? 'V' : m < 0.2 ? '_' : '-', x, rim - s); // the rim
-    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText(fract(T * 1.1 + c * 0.37) < 0.08 ? 'o' : '|', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips gathering at the tips and falling
+    g.fillStyle = PAL[C(BLUE, 12)]; g.fillRect(x,rim-s,w+.5,s*.3); // the rim
+    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillRect(x+w*.4,rim+fract(T*1.1+c*.37)*H*.4,Math.max(1,w*.2),s*.5); } // drips gathering at the tips and falling
   }
 }
 // a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
@@ -31535,7 +31535,7 @@ const droppedHere = () => {
 // put down or on display: the held picture (the small one if it has none), cropped to what's drawn and painted solid at
 // life size. ITEM_SIZE: its longer side in metres, by item, else by kind; fish go by their weight
 const ITEM_SIZE = {
-  apple: 0.08, luckycoin: 0.025, oldcoin: 0.03, wishcoins: 0.04, goldring: 0.025, pearl: 0.015, diamond: 0.05, redstring: 0.07, tigerbalm: 0.05,
+  revolver:.32, apple: 0.08, luckycoin: 0.025, oldcoin: 0.03, wishcoins: 0.04, goldring: 0.025, pearl: 0.015, diamond: 0.05, redstring: 0.07, tigerbalm: 0.05,
   key_car_hatch: 0.08, key_car_sports: 0.08, pocketwatch: 0.06, compass: 0.07, divewatch: 0.05, pocketknife: 0.1, fortunecookie: 0.07,
   cigarettes: 0.09, vape: 0.1, yoyo: 0.06, duck: 0.1, cityglobe: 0.12, replicastar: 0.1, trolleywheel: 0.12, tincan: 0.1,
   book: 0.18, soggybook: 0.18, vhs: 0.19, postcard: 0.15, vinyl: 0.31, spraypaint: 0.2, mysterybox: 0.2, dinotoy: 0.2, goldfish: 0.22,
@@ -31547,7 +31547,7 @@ const KIND_SIZE = { food: 0.13, drink: 0.14, ingredient: 0.13, junk: 0.3, toy: 0
 const itemSize = d => ITEM_SIZE[d.id] ?? (['fish', 'wish'].includes(ITEMS[d.id]?.kind) ? catchLength(d.kg) : KIND_SIZE[ITEMS[d.id]?.kind] ?? 0.15);
 // long things put down lie flat: how much looking down at them shortens their height (a deck, a rod a finger thick,
 // a fish on its side; crabs and squid stay on their legs)
-const LYING = { skateboard: 0.45, rod: 0.2, carbonrod: 0.2 };
+const LYING = { skateboard: 0.45, rod: 0.16, carbonrod: 0.16 };
 const lying = d => { const I = ITEMS[d.id]; return LYING[d.id] ?? (['fish', 'wish'].includes(I?.kind) && !I.crab && !I.squid ? 0.45 : 0); };
 const droppedPictures = new Map(); // bounded short-lived pictures, including animated items
 function droppedPicture(d) {
@@ -31830,6 +31830,10 @@ function sculpt(W, H, fn) {
   for (let r = 0; r < H; r++) { const row = []; for (let k = 0; k < W; k++) row.push(fn((k - (W >> 1)) * D_ASPECT, r + 0.5 - H / 2) || null); cells.push(row); }
   return [cells.map(row => row.map(c => c ? c[0] : ' ').join('')), (ch, r, k) => cells[r][k] ? cells[r][k][1] : 0];
 }
+// Surface samples fill cells; only explicitly tagged printing stays as text.
+function sculptSurface(W,H,sample){
+  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
+}
 // light on a surface with normal (nx, ny up-is-negative, nz toward you): from the top left, a little in front
 const dLight = (nx, ny, nz) => clamp(0.15 + 0.85 * Math.max(0, -0.45 * nx - 0.55 * ny + 0.7 * nz), 0, 1);
 const dSphere = (x, y, R) => { const nx = x / R, ny = y / R, q = 1 - nx * nx - ny * ny; return q < 0 ? -1 : dLight(nx, ny, Math.sqrt(q)); };
@@ -31842,7 +31846,7 @@ function dBites(x, y, f, R, n = 3) {
   return false;
 }
 const DENSE = {
-  apple: (it, f) => foodSculpt(26, 13, (x, y) => {
+  apple: (it, f) => sculptSurface(26, 13, (x, y) => {
     const R = 5.2;
     if (Math.abs(x - 0.25 - (y + R) * -0.18) < 0.28 && y < -R * 0.65 && y > -R * 1.2) return ['|', C(BRICK, 11)]; // the stem
     const lx = x - 1.5, ly = y + R * 1.02, lu = lx * 0.8 + ly * 0.6, lv = -lx * 0.6 + ly * 0.8; // the leaf, tilted
@@ -31855,7 +31859,7 @@ const DENSE = {
     const b = dSphere(x / 1.08, y, R), spec = Math.hypot(x / 1.08 + R * 0.38, y + R * 0.42) < 0.75; // a glint, top left
     return [spec ? '@' : dFill(b), spec ? C(WHITE, 15) : C(RED, 6 + b * 9)];
   }),
-  coffee: (it, f) => foodSculpt(30, 17, (x, y) => {
+  coffee: (it, f) => sculptSurface(30, 17, (x, y) => {
     const top = -4.6, bot = 7.5, hw = 4.6 - (y - top) / (bot - top) * 1.1; // a paper cup, narrowing to the base
     if (y < top - 0.2) { // the steam: two wisps curling up while it's hot
       if (f <= 0.25 || y < top - 3.6) return null;
@@ -31877,7 +31881,7 @@ const DENSE = {
     }
     return [dFill(b), C(WHITE, 7 + b * 8)];
   }),
-  slice: (it, f) => foodSculpt(26, 14, (x, y) => {
+  slice: (it, f) => sculptSurface(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
     const eaten = (1 - f) * (tip - top - 2.5); // eaten from the crust down (the tip stays in your hand), a bite-shaped edge
@@ -31913,7 +31917,7 @@ const dLit = (b, col, lo, hi) => [dFill(b), dCol(col, b, lo, hi)];
 const dEll = (x, y, cx, cy, rx, ry) => Math.hypot((x - cx) / rx, (y - cy) / ry); // under 1: inside
 const dBall = (x, y, cx, cy, rx, ry = rx) => dSphere((x - cx) / rx, (y - cy) / ry, 1); // the light on it, -1 outside
 // a word across, centred on (cx, cy), a column a letter
-const dText = (x, y, cx, cy, word) => { if (Math.abs(y - cy) >= 0.5) return null; const k = Math.floor((x - cx) / D_ASPECT + word.length / 2); return k >= 0 && k < word.length && word[k] !== ' ' ? word[k] : null; };
+const dText = (x, y, cx, cy, word) => { if (y < cy - 0.5 || y >= cy + 0.5) return null; const k = Math.floor((x - cx) / D_ASPECT + word.length / 2); return k >= 0 && k < word.length && word[k] !== ' ' ? word[k] : null; };
 // bites marching in from the right, one per use gone: true in a bite, 'rim' along its edge
 function dBitesR(x, y, f, x1, r, cy = 0, n = 3) {
   const gone = Math.round((1 - f) * n);
@@ -31955,7 +31959,7 @@ const dSteam = (x, y, top, f, xs, h = 3.4) => { // wisps curling up from top whi
   return null;
 };
 // A can stays closed around its drink. As it's emptied, the shell shortens and creases under your grip.
-const dCan = (col, word, stripe, deco) => (it, f) => foodSculpt(26, 15, (x, y) => {
+const dCan = (col, word, stripe, deco) => (it, f) => sculptSurface(26, 15, (x, y) => {
   const crush = 1 - f, top = -6.2 + crush * 2.2, bot = 6.5;
   const waist = (y - 1) / 2.5, hw = 4.3 - crush * .85 * Math.exp(-waist * waist);
   if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
@@ -32027,13 +32031,13 @@ Object.assign(DENSE, {
     if (weather === 'clear' && hash(Math.floor(x * 3), Math.floor(y * 3), 990) > 0.96) return ['.', C(WHITE, 12)];
     return [' ', 0];
   }),
-  bubbletea: (it, f) => foodSculpt(24, 17, (x, y) => { // milk tea, tapioca pearls in the bottom, a fat straw
+  bubbletea: (it, f) => sculptSurface(24, 17, (x, y) => { // milk tea, tapioca pearls in the bottom, a fat straw
     const s = dStraw(x, y, 0.8, -1, 2, -8.5, C(MAG, 13)); if (s) return s;
     const g = dGlass(x, y, -4, 8, yy => 3.9 - (yy + 4) * 0.06, f, [WARM, null]);
     if (g && !'|_'.includes(g[0]) && y > 4.6 && hash(Math.floor(x * 1.7), Math.floor(y * 1.2), 991) > 0.35) return ['o', C(BRICK, 9)];
     return g === undefined ? null : g;
   }),
-  bao: (it, f) => foodSculpt(26, 12, (x, y) => { // a steamed bun, pleated on top, bites out of it
+  bao: (it, f) => sculptSurface(26, 12, (x, y) => { // a steamed bun, pleated on top, bites out of it
     const st = dSteam(x, y, -3.6, f, [-1.6, 1.4]); if (st) return st;
     const d = dEll(x, y, 0, 0.8, 5.6, 3.8);
     if (d > 1 || y > 3.6) return null;
@@ -32041,14 +32045,14 @@ Object.assign(DENSE, {
     if (y < -1.2 && Math.abs(fract(Math.atan2(x, y + 3) * 2) - 0.5) < 0.12) return ['~', C(GRAY, 11)]; // the pleats
     return dLit(dBall(x, y, 0, 0.8, 5.6, 3.8), WHITE, 9, 15);
   }),
-  eggwaffle: (it, f) => foodSculpt(28, 12, (x, y) => { // a sheet of golden bubbles
+  eggwaffle: (it, f) => sculptSurface(28, 12, (x, y) => { // a sheet of golden bubbles
     const d = dEll(x, y, 0, 0, 7, 4.2);
     if (d > 1) return null;
     const bite = dBites(x, y, f, 6.5); if (bite === true) return null; if (bite === 'rim') return [':', C(WARM, 13)];
     const bx = fract(x / 1.3 + (Math.floor(y / 1.4) & 1) * 0.5), by_ = fract(y / 1.4), bub = Math.hypot(bx - 0.5, by_ - 0.5) < 0.38;
     return bub ? ['O', C(YEL, 12 + dBall(x, y, 0, 0, 7, 4.2) * 3)] : ['-', C(ORANGE, 9)];
   }),
-  stinkytofu: (it, f) => foodSculpt(22, 17, (x, y) => { // golden cubes on a stick, one fewer a bite, and the smell rising off them
+  stinkytofu: (it, f) => sculptSurface(22, 17, (x, y) => { // golden cubes on a stick, one fewer a bite, and the smell rising off them
     const n = Math.max(1, it.uses), top = 5.2 - n * 2.6;
     if (Math.abs(x) < 0.25 && y > top) return ['|', C(BRICK, 12)];
     for (let k = 0; k < n; k++) { const cy = 3.8 - k * 2.6; if (Math.abs(x) < 1.9 && Math.abs(y - cy) < 1.05) return dLit(0.4 + (1.9 - Math.abs(x + 0.5)) * 0.25, ORANGE, 8); }
@@ -32092,7 +32096,7 @@ Object.assign(DENSE, {
     const glint = Math.abs(x - (fract(T * 0.5) * 14 - 7)) < 0.6;
     return [facet ? (y < -2 ? '_' : x > 0 ? '/' : '\\\\') : glint ? '*' : dFill(0.5 + 0.3 * Math.sin(x + y)), C(glint ? WHITE : CYAN, facet ? 14 : 9 + (x < 0 ? 4 : 0))];
   }),
-  fortunecookie: () => foodSculpt(24, 11, (x, y) => { // folded in a crescent, the slip of paper poking out
+  fortunecookie: () => sculptSurface(24, 11, (x, y) => { // folded in a crescent, the slip of paper poking out
     if (y > -0.6 && y < 0.3 && x > 2.4 && x < 7.4) { const t_ = dText(x, y, 4.9, -0.15, 'LUCK'); return t_ ? [t_,C(RED,12),true] : ['=', C(WHITE, 14)]; }
     const d = dEll(x, y, -0.6, 0.4, 5, 3.4), notch = dEll(x, y, 2.2, 1.2, 2.6, 2);
     if (d > 1 || notch < 1) return null;
@@ -32135,13 +32139,13 @@ Object.assign(DENSE, {
     return dLit(0.45 + (y < -2.5 ? 0.25 : 0) - x * 0.03, WARM, 6, 11); // cardboard
   }),
   // ---- drinks
-  latte: (it, f) => foodSculpt(30, 14, (x, y) => { // a glass mug: espresso under a white head, a handle
+  latte: (it, f) => sculptSurface(30, 14, (x, y) => { // a glass mug: espresso under a white head, a handle
     const handle = dEll(x, y, 4.6, 0.6, 1.6, 2.6);
     if (handle < 1 && handle > 0.62 && x > 3.6) return ['(', C(WHITE, 12)];
     const g = dGlass(x + 0.6, y, -5.5, 6.5, () => 4, f, [BRICK, null], [WHITE, '@']);
     return g === undefined ? null : g;
   }),
-  tea: (it, f) => foodSculpt(30, 15, (x, y) => { // a glass cup of tea on its saucer, steaming
+  tea: (it, f) => sculptSurface(30, 15, (x, y) => { // a glass cup of tea on its saucer, steaming
     const st = dSteam(x, y, -3.6, f, [-1.2, 1.2]); if (st) return st;
     if (y > 5.6 && y < 6.6 && Math.abs(x) < 6) return ['=', dCol(WHITE, 1 - Math.abs(x) / 6, 9)];
     const handle = dEll(x, y, 4.5, 0.8, 1.4, 2.2);
@@ -32151,25 +32155,25 @@ Object.assign(DENSE, {
   }),
   soda: dCan(RED, 'COLA', WHITE, (x, y) => Math.abs(y - 1.4 - Math.sin(x * 1.3) * .7) < .35 ? ['~', C(WHITE, 14)] : null),
   energy: dCan(GREEN, 'ZAP', YEL, (x, y) => Math.abs(x - (y > 1.5 ? 0.5 : -0.2) + (y - 1.5) * 0.25) < 0.4 && y > -0.6 && y < 4.4 ? ['/', C(YEL, 15)] : null), // a lightning bolt
-  water: (it, f) => foodSculpt(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
+  water: (it, f) => sculptSurface(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
     if (y < -7 && Math.abs(x) < 1.3) return dLit(0.4 + 0.5 * dCyl(x, 1.3), BLUE, 8);
     const hw = yy => yy < -5.2 ? 1.1 : yy < -3 ? 1.1 + (yy + 5.2) * 1.1 : 3.5;
     if (y > -1.2 && y < 1.8 && Math.abs(x) < 3.5) { const t = dText(x, y, 0, 0.3, 'AQUA'); return t ? [t,C(BLUE,15),true] : dLit(dCyl(x, 3.5), WHITE, 8); }
     const g = dGlass(x, y, -7, 8, hw, f, [CYAN, null]);
     return g === undefined ? null : g;
   }),
-  beer: (it, f) => foodSculpt(26, 16, (x, y) => { // a pint, wider at the top, a foamy head
+  beer: (it, f) => sculptSurface(26, 16, (x, y) => { // a pint, wider at the top, a foamy head
     const g = dGlass(x, y, -7, 7.5, yy => 4.2 - (yy + 7) * 0.08, f, [YEL, null], [WHITE, '@']);
     return g === undefined ? null : g;
   }),
-  whiskey: (it, f) => foodSculpt(28, 11, (x, y) => { // a tumbler: short, heavy-bottomed, ice in it
+  whiskey: (it, f) => sculptSurface(28, 11, (x, y) => { // a tumbler: short, heavy-bottomed, ice in it
     if (y > 3.6 && Math.abs(x) < 4.8) return ['#', C(WHITE, 9)]; // the thick base
     const lvl = 3.6 - 7.6 * f;
     for (const [ix, iy] of [[-1.5, lvl + 1.1], [1.4, lvl + 0.8]]) if (f > 0.2 && Math.abs(x - ix) < 1 && Math.abs(y - iy) < 0.8) return [Math.abs(x - ix) > 0.7 || Math.abs(y - iy) > 0.5 ? '+' : ' ', C(WHITE, 14)]; // ice cubes
     const g = dGlass(x, y, -5, 4.4, () => 4.8, f, [ORANGE, null]);
     return g === undefined ? null : g;
   }),
-  cocktail: (it, f) => foodSculpt(28, 15, (x, y) => { // a martini glass with an olive on a pick
+  cocktail: (it, f) => sculptSurface(28, 15, (x, y) => { // a martini glass with an olive on a pick
     { const s = dStraw(x, y, 2.6, -7, 0.6, -2.6, C(GRAY, 13)); if (s) return [s[0], C(GRAY, 13)]; } // the pick
     if (dEll(x, y, 1.1, -3.6, 0.8, 0.7) < 1) return ['@', C(GREEN, 13)];
     if (y > 6.4 && Math.abs(x) < 3) return ['=', C(WHITE, 12)];
@@ -32177,26 +32181,26 @@ Object.assign(DENSE, {
     const g = dGlass(x, y, -5.5, 1.6, yy => Math.max(0.5, 5.4 * (1.6 - yy) / 7.1), f, [MAG, null]);
     return g === undefined ? null : g;
   }),
-  milkshake: (it, f) => foodSculpt(26, 18, (x, y) => { // a tall glass, whipped cream, a cherry, a striped straw
+  milkshake: (it, f) => sculptSurface(26, 18, (x, y) => { // a tall glass, whipped cream, a cherry, a striped straw
     const s = dStraw(x, y, 0.8, -3, 3, -8.5, C(RED, 13)); if (s) return s;
     if (f > 0.4 && dEll(x, y, -0.6, -6.6, 0.8, 0.7) < 1) return ['@', C(RED, 15)];
     if (f > 0.4 && y < -4 && y > -6.2 && Math.abs(x) < 3.8 - (y + 6.2) * -0.2 + (y < -5.2 ? -1.2 : 0)) return ['@', dCol(WHITE, dBall(x, y, 0, -4, 3.8, 2.4), 10)];
     const g = dGlass(x, y, -4, 8.5, yy => 3.6 - (yy + 4) * 0.08, f, [MAG, null]);
     return g === undefined ? null : g;
   }),
-  smoothie: (it, f) => foodSculpt(24, 17, (x, y) => { // a clear cup with a domed lid and a fat green straw
+  smoothie: (it, f) => sculptSurface(24, 17, (x, y) => { // a clear cup with a domed lid and a fat green straw
     const s = dStraw(x, y, 0.4, -2, 1.4, -8.5, C(GREEN, 13)); if (s) return s;
     if (y < -3.6 && y > -6 && dEll(x, y, 0, -3.6, 3.9, 2.4) < 1 && dEll(x, y, 0, -3.6, 3.4, 1.9) > 1) return ['-', C(WHITE, 11)];
     const g = dGlass(x, y, -3.6, 8, yy => 3.9 - (yy + 3.6) * 0.07, f, [ORANGE, null]);
     return g === undefined ? null : g;
   }),
-  thaitea: (it, f) => foodSculpt(24, 17, (x, y) => { // orange tea, cream swirling down through it
+  thaitea: (it, f) => sculptSurface(24, 17, (x, y) => { // orange tea, cream swirling down through it
     const s = dStraw(x, y, 0.6, -2, 1.6, -8.5, C(WHITE, 12)); if (s) return s;
     const g = dGlass(x, y, -4, 8, yy => 3.9 - (yy + 4) * 0.07, f, [ORANGE, null]);
     if (g && !'|_=:~'.includes(g[0]) && Math.sin(x * 1.6 + y * 0.9 + T * 0.3) > 0.6 && y > -4 + 12 * (1 - f)) return ['~', C(WARM, 15)];
     return g === undefined ? null : g;
   }),
-  herbaltea: (it, f) => foodSculpt(30, 13, (x, y) => { // green tea in a glass cup, a leaf floating, steam
+  herbaltea: (it, f) => sculptSurface(30, 13, (x, y) => { // green tea in a glass cup, a leaf floating, steam
     const st = dSteam(x, y, -2.6, f, [-1, 1]); if (st) return st;
     const handle = dEll(x, y, 4.6, 1.2, 1.4, 2);
     if (handle < 1 && handle > 0.6 && x > 3.6) return [')', C(WHITE, 12)];
@@ -32204,7 +32208,7 @@ Object.assign(DENSE, {
     if (g && g[0] === '~' && Math.abs(x + 1) < 0.8) return ['%', C(GREEN, 15)];
     return g === undefined ? null : g;
   }),
-  sake: (it,f)=>foodSculpt(20,9,(x,y)=>{
+  sake: (it,f)=>sculptSurface(20,9,(x,y)=>{
     const hw=3.3-Math.max(0,y-1)*.5;
     if(y< -3.5||y>3.6||Math.abs(x)>hw)return null;
     // The ceramic cup stays intact; its liquid recedes inside the rim.
@@ -32216,7 +32220,7 @@ Object.assign(DENSE, {
     if(y< -3)return [' ',C(WHITE,15)];
     return dLit(dCyl(x,hw),WHITE,8);
   }),
-  melonsoda: (it, f) => foodSculpt(24, 18, (x, y) => { // bright green soda, bubbles rising, a scoop of vanilla and a cherry on top
+  melonsoda: (it, f) => sculptSurface(24, 18, (x, y) => { // bright green soda, bubbles rising, a scoop of vanilla and a cherry on top
     const s = dStraw(x, y, 1.6, -2, 3, -8.5, C(GREEN, 12)); if (s) return s;
     if (f > 0.5 && dEll(x, y, 0.4, -7.2, 0.8, 0.7) < 1) return ['@', C(RED, 15)];
     if (f > 0.5 && dEll(x, y, 0, -4.8, 2.8, 2) < 1 && y < -3.6) return dLit(dBall(x, y, 0, -4.8, 2.8, 2), WHITE, 9);
@@ -32224,7 +32228,7 @@ Object.assign(DENSE, {
     if (g && g[0] !== '|' && g[0] !== '_' && g[0] !== '~' && g[0] !== ':' && g[0] !== '=' && hash(Math.floor(x * 3), Math.floor(y + T * 3), 961) > 0.86) return ['o', C(WHITE, 13)];
     return g === undefined ? null : g;
   }),
-  lemonade: (it, f) => foodSculpt(26, 16, (x, y) => { // a jar of lemonade, a slice of lemon on the rim, a straw
+  lemonade: (it, f) => sculptSurface(26, 16, (x, y) => { // a jar of lemonade, a slice of lemon on the rim, a straw
     const s = dStraw(x, y, -0.6, -2, -2, -8, C(RED, 13)); if (s) return s;
     const lw = dEll(x, y, 3.2, -5, 1.8, 1.8);
     if (lw < 1) return [lw > 0.8 ? 'O' : (Math.floor(Math.atan2(y + 5, x - 3.2) * 2.5) & 1) ? '*' : ':', C(YEL, lw > 0.8 ? 12 : 15)];
@@ -32233,7 +32237,7 @@ Object.assign(DENSE, {
     return g === undefined ? null : g;
   }),
   // ---- food
-  hotdog: (it, f) => foodSculpt(32, 9, (x, y) => {
+  hotdog: (it, f) => sculptSurface(32, 9, (x, y) => {
     const bite = dBitesR(x, y, f, 9, 1.6); if (bite === true) return null;
     const saus = dEll(x, y, 0, -0.3, 9.4, 1.15);
     if (saus < 1) {
@@ -32244,7 +32248,7 @@ Object.assign(DENSE, {
     if (bun < 1 && y > -0.6) return bite === 'rim' ? [':', C(WARM, 14)] : dLit(dBall(x, y, 0, 0.6, 8.2, 2.4), ORANGE, 7);
     return null;
   }),
-  taco: (it, f) => foodSculpt(30, 12, (x, y) => {
+  taco: (it, f) => sculptSurface(30, 12, (x, y) => {
     const bite = dBites(x, y, f, 6.5); if (bite === true) return null;
     const r = Math.hypot(x, (y + 1.5) * 1.05);
     if (y > -1.5 && r < 6.6) return bite === 'rim' ? [':', C(YEL, 14)] : [r > 5.9 ? '#' : (Math.floor(x * 2) + Math.floor(y * 2)) % 5 ? dFill(0.6 - (y + 1.5) * 0.06) : '.', dCol(YEL, 0.85 - (y + 1.5) * 0.08)];
@@ -32254,7 +32258,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  icecream: (it, f) => foodSculpt(20, 18, (x, y) => { // two scoops on a waffle cone, eaten from the top
+  icecream: (it, f) => sculptSurface(20, 18, (x, y) => { // two scoops on a waffle cone, eaten from the top
     const bite = dBitesTop(x, y, 0.3 + f * 0.7, -8.6, 7); if (bite === true) return null;
     if (y > 0.4 && Math.abs(x) < 3.2 * (8.6 - y) / 8.2) return [(Math.floor((x + y) * 1.4) & 1) ^ (Math.floor((x - y) * 1.4) & 1) ? '#' : '+', dCol(ORANGE,.8-Math.abs(x)*.12,((Math.floor((x+y)*1.4)&1)^(Math.floor((x-y)*1.4)&1))?6:11)];
     for (const [cy, r, col] of [[-1.4, 3.3, MAG], [-5.6, 2.8, WHITE]]) {
@@ -32262,7 +32266,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  noodlebox: (it, f) => foodSculpt(28, 16, (x, y) => { // a white takeout box, noodles heaped in it, chopsticks
+  noodlebox: (it, f) => sculptSurface(28, 16, (x, y) => { // a white takeout box, noodles heaped in it, chopsticks
     for (const o of [0, 1]) { const s = dStraw(x, y, 4.3 + o, -1, 1.2 + o, -7.6, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; }
     const hw = 4.6 - (y + 1.4) * 0.14;
     if (y > -1.4 && y < 6.8 && Math.abs(x) < hw) {
@@ -32273,7 +32277,7 @@ Object.assign(DENSE, {
     if (y <= -1.4 && y > heap + Math.abs(Math.sin(x * 1.3)) * 0.6 && Math.abs(x) < 4.2) return ['~', dCol(YEL, 0.6 + 0.4 * Math.sin(x * 3 + y * 5), 9)];
     return null;
   }),
-  ramen: (it, f) => foodSculpt(32, 13, (x, y) => { // a red bowl, the broth from above: noodles, an egg, nori; less of it each time
+  ramen: (it, f) => sculptSurface(32, 13, (x, y) => { // a red bowl, the broth from above: noodles, an egg, nori; less of it each time
     for (const o of [0, 1]) { const s = dStraw(x, y, -1, -2.2 - o, 9, -5.8 - o, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; } // chopsticks
     if (y > -0.6 && dEll(x, y, 0, -0.6, 8.2, 6) < 1) { const b = dBall(x, y, 0, -0.6, 8.2, 6.6); return Math.abs(y - 2.4) < 0.4 ? ['=', C(WHITE, 13)] : dLit(b, RED, 6); }
     if (dEll(x, y, 0, -0.6, 7.8, 1.6) < 1) { // the top of the broth
@@ -32284,7 +32288,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  pho: (it, f) => foodSculpt(32, 14, (x, y) => { // a white bowl, beef, herbs and noodles in clear broth
+  pho: (it, f) => sculptSurface(32, 14, (x, y) => { // a white bowl, beef, herbs and noodles in clear broth
     for (const o of [0, 1]) { const s = dStraw(x, y, -1, -2.3 - o, 9, -5.9 - o, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; }
     if (y > -0.6 && dEll(x, y, 0, -0.6, 8.2, 6) < 1) { const b = dBall(x, y, 0, -0.6, 8.2, 6.6); return Math.abs(y - 2.4) < 0.4 ? ['~', C(BLUE, 13)] : dLit(b, WHITE, 7); }
     if (dEll(x, y, 0, -0.6, 7.8, 1.6) < 1) {
@@ -32296,7 +32300,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  banhmi: (it, f) => foodSculpt(32, 9, (x, y) => { // a baguette split and stuffed
+  banhmi: (it, f) => sculptSurface(32, 9, (x, y) => { // a baguette split and stuffed
     const bite = dBitesR(x, y, f, 9.4, 1.7); if (bite === true) return null;
     const d = dEll(x, y, 0, 0.3, 9.6, 2.6);
     if (d > 1) return null;
@@ -32305,7 +32309,7 @@ Object.assign(DENSE, {
     const b = dBall(x, y, 0, 0.3, 9.6, 2.6);
     return Math.abs(fract(x * 0.4 - y * 0.3) - 0.5) < 0.06 && y < 0 ? ['/', C(BRICK, 10)] : dLit(b, ORANGE, 7);
   }),
-  padthai: (it, f) => foodSculpt(30, 12, (x, y) => { // a heap of noodles on a plate, shrimp and peanuts, getting smaller
+  padthai: (it, f) => sculptSurface(30, 12, (x, y) => { // a heap of noodles on a plate, shrimp and peanuts, getting smaller
     if (y > 2.6 && y < 4 && Math.abs(x) < 8.6 - (y - 2.6)) return ['=', dCol(WHITE, 0.8 - Math.abs(x) * 0.05, 9)];
     const h = 1 + 5 * f, d = dEll(x, y, 0, 2.6, 7.2 * (0.55 + 0.45 * f), h);
     if (y <= 2.6 && d < 1) {
@@ -32317,7 +32321,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  greencurry: (it, f) => foodSculpt(30, 12, (x, y) => { // a bowl of green curry: chunks of chicken and veg, fewer each spoonful
+  greencurry: (it, f) => sculptSurface(30, 12, (x, y) => { // a bowl of green curry: chunks of chicken and veg, fewer each spoonful
     if (y > -1 && dEll(x, y, 0, -1, 7.6, 5.6) < 1) return dLit(dBall(x, y, 0, -1, 7.6, 6), WHITE, 7);
     if (dEll(x, y, 0, -1, 7.2, 1.5) < 1) {
       const n = hash(Math.floor(x * 1.6), Math.floor(y * 1.5), 967);
@@ -32328,34 +32332,34 @@ Object.assign(DENSE, {
     if (f > 0.5 && y < -2.4 && y > -4 && Math.abs(x - 1.4 - Math.sin(y * 3) * 0.4) < 0.3) return [',', C(GREEN, 15)]; // a basil sprig
     return null;
   }),
-  mangorice: (it, f) => foodSculpt(30, 11, (x, y) => { // sticky rice, a fan of mango slices on top
+  mangorice: (it, f) => sculptSurface(30, 11, (x, y) => { // sticky rice, a fan of mango slices on top
     if (y > 2.6 && y < 3.8 && Math.abs(x) < 8 - (y - 2.6)) return ['=', C(GREEN, 12)]; // the leaf plate
     const slices = Math.ceil(f * 3);
     for (let k = 0; k < slices; k++) { const cx = -3.6 + k * 3.6, d = dEll(x, y, cx, -1.4, 1.9, 2.6); if (d < 1 && y < 0.4) return dLit(dBall(x, y, cx, -1.4, 1.9, 2.6), YEL, 9); }
     if (y <= 2.6 && dEll(x, y, 0, 2.6, 7, 3.2) < 1) return [hash(Math.floor(x * 3), Math.floor(y * 2), 968) > 0.85 ? '.' : ':', dCol(WHITE, dBall(x, y, 0, 2.6, 7, 3.2), 10)];
     return null;
   }),
-  cottoncandy: (it, f) => foodSculpt(26, 18, (x, y) => { // a pink cloud on a stick, eaten from the top
+  cottoncandy: (it, f) => sculptSurface(26, 18, (x, y) => { // a pink cloud on a stick, eaten from the top
     if (y > 2 && Math.abs(x) < 0.3) return ['|', C(WHITE, 13)];
     if (dBitesTop(x, y, 0.35 + f * 0.65, -8.4, 8) === true) return null;
     const blobs = [[0, -3.2, 4.6], [-3.2, -2.4, 3], [3.2, -2.6, 3], [0, -6.2, 3]];
     for (const [bx, by, r] of blobs) if (Math.hypot(x - bx, y - by) < r * (0.85 + 0.15 * noise(x * 2, y * 2, 969))) return [noise(x * 4, y * 4, 970) > 0.5 ? '@' : '%', C(MAG, 10 + noise(x * 3, y * 3, 971) * 5)];
     return null;
   }),
-  corndog: (it, f) => foodSculpt(20, 17, (x, y) => { // golden batter on a stick, bites from the top
+  corndog: (it, f) => sculptSurface(20, 17, (x, y) => { // golden batter on a stick, bites from the top
     if (y > 3.4 && Math.abs(x) < 0.3) return ['|', C(WARM, 12)];
     const bite = dBitesTop(x, y, f, -8, 7); if (bite === true) return null;
     if (dEll(x, y, 0, -2.4, 2.6, 5.8) < 1) return bite === 'rim' ? ['=', C(RED, 13)] : dLit(dBall(x, y, 0, -2.4, 2.6, 5.8), ORANGE, 7);
     return null;
   }),
-  popcorn: (it, f) => foodSculpt(28, 17, (x, y) => { // a striped bucket, the heap on top going down
+  popcorn: (it, f) => sculptSurface(28, 17, (x, y) => { // a striped bucket, the heap on top going down
     const hw = 4.6 - (y + 2) * 0.12;
     if (y > -2 && y < 8 && Math.abs(x) < hw) { const t = dText(x, y, 0, 2.4, 'POPCORN'); if (t) return [t,C(WHITE,15),true]; return [Math.floor((x + 6) * 1.2) & 1 ? '|' : '#', (Math.floor((x + 6) * 1.2) & 1) ? C(WHITE, 13) : dCol(RED, 0.5 + 0.5 * dCyl(x, hw), 8)]; }
     const top = -2 - 5.5 * f;
     if (y <= -2 && y > top + Math.abs(Math.sin(x * 1.8)) * 1.2 && Math.abs(x) < 4.6) return [hash(Math.floor(x * 2), Math.floor(y), 972) > 0.5 ? 'o' : 'O', C(hash(Math.floor(x * 2), Math.floor(y), 973) > 0.8 ? YEL : WHITE, 14)];
     return null;
   }),
-  fries: (it, f) => foodSculpt(24, 17, (x, y) => { // a red carton of fries, fewer sticking up as they go
+  fries: (it, f) => sculptSurface(24, 17, (x, y) => { // a red carton of fries, fewer sticking up as they go
     const hw = 3.4 + (y > 0 ? 0 : 0) - Math.max(0, y - 0.5) * 0.15;
     if (y > 0 && y < 8 && Math.abs(x) < hw) { const t = dText(x, y, 0, 3.4, 'FRIES'); if (t) return [t,C(YEL,15),true]; return dLit(0.5 + 0.5 * dCyl(x, hw), RED, 7); }
     if (y <= 0 && Math.abs(x) < 3.2) {
@@ -32364,14 +32368,14 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  chicken: (it, f) => foodSculpt(30, 16, (x, y) => { // a striped bucket, drumsticks poking out, one fewer each time
+  chicken: (it, f) => sculptSurface(30, 16, (x, y) => { // a striped bucket, drumsticks poking out, one fewer each time
     const hw = 5 - (y + 1) * 0.12;
     if (y > -1 && y < 7.5 && Math.abs(x) < hw) { const t = dText(x, y, 0, 2.4, 'CHICKEN'); if (t) return [t,C(WHITE,15),true]; return (Math.floor((x + 6) * 0.9) & 1) ? ['#', dCol(RED, 0.5 + 0.5 * dCyl(x, hw), 8)] : dLit(0.6, WHITE, 9); }
     const n = clamp(it.uses, 0, 4);
     for (let k = 0; k < n; k++) { const cx = -3.3 + k * 2.2, cy = -3 - (k & 1) * 0.8; if (dEll(x, y, cx, cy, 1.4, 2) < 1 && y < -0.8) return [noise(x * 4, y * 4, 976) > 0.5 ? '%' : '#', dCol(ORANGE, dBall(x, y, cx, cy, 1.4, 2), 8)]; }
     return null;
   }),
-  croissant: (it, f) => foodSculpt(30, 10, (x, y) => { // a crescent, flaky bands, bites from the right
+  croissant: (it, f) => sculptSurface(30, 10, (x, y) => { // a crescent, flaky bands, bites from the right
     const bite = dBites(x, y, f, 8); if (bite === true) return null;
     const outer = dEll(x, y, 0, 1, 8.6, 4.4), inner = dEll(x, y, 0, 4.2, 5, 3.4);
     if (outer > 1 || inner < 1) return null;
@@ -32379,7 +32383,7 @@ Object.assign(DENSE, {
     const band = Math.abs(fract(x * 0.32 + 0.5) - 0.5) < 0.06;
     return band ? ['(', C(BRICK, 11)] : dLit(dBall(x, y, 0, 1, 8.6, 4.4), ORANGE, 7);
   }),
-  donut: (it, f) => foodSculpt(28, 13, (x, y) => { // pink icing, sprinkles, the hole; bites from the right
+  donut: (it, f) => sculptSurface(28, 13, (x, y) => { // pink icing, sprinkles, the hole; bites from the right
     const bite = dBites(x, y, f, 7); if (bite === true) return null;
     const d = dEll(x, y, 0, 0, 7.4, 5.6);
     if (d > 1 || dEll(x, y, 0, -0.3, 2.2, 1.4) < 1) return null;
@@ -32388,7 +32392,7 @@ Object.assign(DENSE, {
     if (icing && hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 977) > 0.82) return ['-', C(ITEM_COL[hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 978) * 8 | 0], 15)];
     return dLit(dBall(x, y, 0, 0, 7.4, 5.6), icing ? MAG : WARM, 7);
   }),
-  bagel: (it, f) => foodSculpt(28, 13, (x, y) => {
+  bagel: (it, f) => sculptSurface(28, 13, (x, y) => {
     const bite = dBites(x, y, f, 7); if (bite === true) return null;
     const d = dEll(x, y, 0, 0, 7.2, 5.4);
     if (d > 1 || dEll(x, y, 0, -0.2, 1.8, 1.2) < 1) return null;
@@ -32396,7 +32400,7 @@ Object.assign(DENSE, {
     if (y < 0 && hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 979) > 0.88) return ['.', C(WHITE, 15)]; // sesame
     return dLit(dBall(x, y, 0, 0, 7.2, 5.4), WARM, 6);
   }),
-  sandwich: (it, f) => foodSculpt(30, 11, (x, y) => { // bread, lettuce, tomato, cheese, bread
+  sandwich: (it, f) => sculptSurface(30, 11, (x, y) => { // bread, lettuce, tomato, cheese, bread
     const bite = dBites(x, y, f, 7.6); if (bite === true) return null;
     if (Math.abs(x) > 7.8) return null;
     if (y < -1.8 && y > -4.6 + Math.pow(x / 7.8, 2) * 1.2) return dLit(0.4 + 0.55 * (1 - (y + 4.6) / 3), WARM, 8);
@@ -32406,7 +32410,7 @@ Object.assign(DENSE, {
     if (y >= 1.1 && y < 3.6) return dLit(0.75 - (y - 1.1) * 0.15, WARM, 7);
     return null;
   }),
-  chips: (it, f) => foodSculpt(26, 17, (x, y) => { // a crinkly bag, CHIPS on it, chips poking out of the top
+  chips: (it, f) => sculptSurface(26, 17, (x, y) => { // a crinkly bag, CHIPS on it, chips poking out of the top
     const n = Math.ceil(f * 4);
     for (let k = 0; k < n; k++) { const cx = -2.4 + k * 1.6, cy = -6.4 - (k & 1) * 0.7; if (dEll(x, y, cx, cy, 1, 0.8) < 1) return [dEll(x, y, cx, cy, 1, 0.8) > 0.7 ? 'o' : '~', C(YEL, 15)]; }
     if (y < -6 || y > 7.4 || Math.abs(x) > 4.4 - (y < -5.2 ? 0 : 0)) return null;
@@ -32415,7 +32419,7 @@ Object.assign(DENSE, {
     if (dEll(x, y, 0, 2.6, 2, 1.6) < 1) return ['@', C(YEL, 14)];
     return dLit(0.4 + 0.5 * dCyl(x, 4.4) + Math.sin(y * 3) * 0.08, RED, 7);
   }),
-  burger: (it, f) => foodSculpt(30, 12, (x, y) => { // sesame bun, lettuce, cheese, patty, bun
+  burger: (it, f) => sculptSurface(30, 12, (x, y) => { // sesame bun, lettuce, cheese, patty, bun
     const bite = dBites(x, y, f, 7.4); if (bite === true) return null;
     const top = dEll(x, y, 0, -1.4, 7.6, 4.2);
     if (y < -1.4 && top < 1) return hash(Math.floor(x * 2.4), Math.floor(y * 1.6), 980) > 0.86 ? ['.', C(WHITE, 15)] : dLit(dBall(x, y, 0, -1.4, 7.6, 4.2), ORANGE, 7);
@@ -32426,7 +32430,7 @@ Object.assign(DENSE, {
     if (y >= 2.2 && y < 4.4 - Math.pow(x / 7.9, 2) * 1.2) return dLit(0.7 - (y - 2.2) * 0.15, ORANGE, 7);
     return null;
   }),
-  kebab: (it, f) => foodSculpt(24, 16, (x, y) => { // a wrap in paper, meat and salad at the top, eaten down
+  kebab: (it, f) => sculptSurface(24, 16, (x, y) => { // a wrap in paper, meat and salad at the top, eaten down
     const hw = 3.8 - Math.max(0, y - 1) * 0.35;
     if (y > 0.4 && y < 7.6 && Math.abs(x) < hw) return dLit(0.55 + 0.4 * dCyl(x, hw), WHITE, 8);
     const bite = dBitesTop(x, y, 0.3 + f * 0.7, -7.4, 7); if (bite === true) return null;
@@ -32437,7 +32441,7 @@ Object.assign(DENSE, {
     }
     return null;
   }),
-  sushi: it => foodSculpt(32, 9, (x, y) => { // nigiri on a board, one fewer each time
+  sushi: it => sculptSurface(32, 9, (x, y) => { // nigiri on a board, one fewer each time
     if (y > 1.8 && y < 3.4 && Math.abs(x) < 9) return ['=', dCol(BRICK, 0.7 - Math.abs(x) * 0.03, 9)];
     if (y > 3.4 && y < 4.4 && (Math.abs(x - 6) < 0.8 || Math.abs(x + 6) < 0.8)) return ['#', C(BRICK, 9)];
     const p = dPieces(x, clamp(it.uses, 0, 4), -8.4, 4.2);
@@ -32455,13 +32459,13 @@ Object.assign(DENSE, {
     if (y > -0.8 && y < 2.4 && Math.abs(x) < 4.8) return [':', C(GRAY, 5)];
     return dLit(0.3 + 0.2 * (x < -8 || y < -4 ? 1 : 0), GRAY, 3, 8);
   }),
-  dumplings: it => foodSculpt(30, 12, (x, y) => { // a bamboo steamer, dumplings two by two, one fewer each time
+  dumplings: it => sculptSurface(30, 12, (x, y) => { // a bamboo steamer, dumplings two by two, one fewer each time
     if (y > 1.6 && y < 4.6 && Math.abs(x) < 8.4) return [Math.abs(y - 3.1) < 0.4 ? '=' : '#', dCol(WARM, 0.7 - Math.abs(x) * 0.04 - (Math.abs(y - 3.1) < 0.4 ? 0.2 : 0), 8)];
     const n = clamp(it.uses, 0, 4), spots = [[-4.6, -0.4], [-1.5, -0.4], [1.6, -0.4], [4.7, -0.4]].slice(0, n);
     for (const [cx, cy] of spots) { const d = dEll(x, y, cx, cy, 1.8, 2); if (d < 1 && y < 1.6) return y < cy - 1.4 && Math.abs(x - cx) < 0.4 ? ['^', C(WHITE, 11)] : dLit(dBall(x, y, cx, cy, 1.8, 2), WHITE, 9); }
     return null;
   }),
-  mooncake: (it, f) => foodSculpt(26, 12, (x, y) => { // fluted edge, a pattern pressed in the top
+  mooncake: (it, f) => sculptSurface(26, 12, (x, y) => { // fluted edge, a pattern pressed in the top
     const bite = dBites(x, y, f, 6.4); if (bite === true) return null;
     const a = Math.atan2(y, x / 1.1), r = Math.hypot(x / 1.1, y), R = 5.4 * (1 + 0.05 * Math.cos(a * 12));
     if (r > R) return null;
@@ -32470,7 +32474,7 @@ Object.assign(DENSE, {
     if (Math.abs(r - 3.6) < 0.25) return ['o', C(BRICK, 11)];
     return dLit(dSphere(x / 1.1, y, R), ORANGE, 7);
   }),
-  ginseng: (it, f) => foodSculpt(22, 17, (x, y) => { // a forked root, leaves at the top
+  ginseng: (it, f) => sculptSurface(22, 17, (x, y) => { // a forked root, leaves at the top
     const bite = dBitesR(x, y, 0.4 + f * 0.6, 3, 1.4, 1.6, 2); if (bite === true) return null;
     if (y < -4 && Math.abs(x - Math.sin(y) * 0.6) < 2.2 - (y + 8) * -0.1 && y > -8 && noise(x * 3, y * 3, 982) > 0.35) return ['%', C(GREEN, 13)];
     const main = Math.abs(x) < 1.5 - (y + 4) * 0.04 && y > -4 && y < 3;
@@ -32478,7 +32482,7 @@ Object.assign(DENSE, {
     if (main || legs) return bite === 'rim' ? [':', C(WHITE, 14)] : [Math.abs(fract(y * 1.1) - 0.5) < 0.1 ? '-' : dFill(0.6 - x * 0.08), dCol(WARM, 0.75 - x * 0.08, 8)];
     return null;
   }),
-  candy: (it, f) => foodSculpt(30, 7, (x, y) => { // a wrapped bar: the wrapper peeled back as it's eaten, chocolate showing
+  candy: (it, f) => sculptSurface(30, 7, (x, y) => { // a wrapped bar: the wrapper peeled back as it's eaten, chocolate showing
     if (Math.abs(y) > 2.6 || x < -8.4) return null;
     const left = 8.6 - (1 - f) * 6, wrapEnd = left - 4.2;
     if (x > left + Math.sin(y * 3) * 0.3) return null; // bitten off
@@ -32598,12 +32602,12 @@ Object.assign(DENSE, {
     const fl = hash(Math.floor(x * 1.8), Math.floor(y + T * 1.5), 986) > 0.88;
     return fl ? ['*', C(WHITE, 15)] : Math.abs(x + 2.6) < 0.3 && y < -3 ? [':', C(WHITE, 9)] : [' ', 0];
   }),
-  spraypaint: it => sculpt(20, 16, (x, y) => { // a spray can, its colour the one in it, the nozzle on top
+  spraypaint: it => sculptSurface(20, 16, (x, y) => { // a spray can, its colour the one in it, the nozzle on top
     const col = [MAG, CYAN, GREEN, ORANGE][it.uses & 3], hw = 3;
     if (y < -6 && Math.abs(x) < 0.9) return y < -7 ? ['o', C(WHITE, 14)] : ['#', C(GRAY, 13)];
     if (y >= -6 && y < -4.6 && Math.abs(x) < hw - (y < -5.4 ? 1 : 0)) return dLit(0.5 + 0.4 * dCyl(x, hw), GRAY, 8);
     if (y < -4.6 || y > 7.4 || Math.abs(x) > hw) return null;
-    const t = dText(x, y, 0, 0.6, 'ZAP'); if (t) return [t, C(WHITE, 15)];
+    const t = dText(x, y, 0, 0.6, 'ZAP'); if (t) return [t,C(WHITE,15),true];
     return [dCyl(x, hw) > 0.92 ? '|' : dFill(dCyl(x, hw)), dCyl(x, hw) > 0.92 ? C(WHITE, 15) : dCol(col, dCyl(x, hw))];
   }),
   plushcat: () => sculpt(26, 14, (x, y) => { // a lucky cat, one paw up and waving
@@ -32631,14 +32635,14 @@ Object.assign(DENSE, {
     if (dEll(x, y, 0, 3, 3.6, 3.6) < 1) return dLit(dBall(x, y, 0, 3, 3.6), BRICK, 7);
     return null;
   }),
-  yakitori: (it, f) => foodSculpt(26, 16, (x, y) => { // chunks of chicken on a skewer, glazed; one fewer each time
+  yakitori: (it, f) => sculptSurface(26, 16, (x, y) => { // chunks of chicken on a skewer, glazed; one fewer each time
     { const s = dStraw(x, y, 3.3, -7.6, -1.9, 7.6, C(WARM, 12)); if (s) return [s[0], C(WARM, 12)]; } // the skewer
     const n = Math.ceil(f * 3);
     for (let k = 0; k < n; k++) { const cy = 3.6 - k * 3.2, cx = 3.3 - (cy + 7.6) * 5.2 / 15.2, // (on the skewer)
       d = dEll(x, y, cx, cy, 2.4, 1.5); if (d < 1) return [noise(x * 3, y * 3, 987) > 0.6 ? '%' : '#', dCol(BRICK, dBall(x, y, cx, cy, 2.4, 1.5), 7)]; }
     return null;
   }),
-  takoyaki: it => foodSculpt(30, 11, (x, y) => { // a paper boat of takoyaki, sauce and flakes on top, one fewer each time
+  takoyaki: it => sculptSurface(30, 11, (x, y) => { // a paper boat of takoyaki, sauce and flakes on top, one fewer each time
     if (y > 1.2 && y < 4.2 && Math.abs(x) < 8.4 - (y - 1.2) * 0.9) return dLit(0.65 - (y - 1.2) * 0.1, WARM, 8);
     const n = clamp(it.uses, 0, 4);
     for (let k = 0; k < n; k++) { const cx = -5.1 + k * 3.4, cy = 0, d = dEll(x, y, cx, cy, 1.7, 1.7); if (d < 1) {
@@ -32648,14 +32652,14 @@ Object.assign(DENSE, {
     } }
     return null;
   }),
-  onigiri: (it, f) => foodSculpt(26, 14, (x, y) => { // a rice triangle, a band of nori, a pickled plum peeking out
+  onigiri: (it, f) => sculptSurface(26, 14, (x, y) => { // a rice triangle, a band of nori, a pickled plum peeking out
     const bite = dBitesTop(x, y, f, -6.4, 12.4); if (bite === true) return null;
     if (y < -6.4 || y > 6 || Math.abs(x) > (y + 6.4) * 0.68) return null;
     if (y > 2.4 && Math.abs(x) < 3) return ['#', C(GREEN, 4)];
     if (bite === 'rim' && Math.abs(x) < 1.2) return ['@', C(RED, 13)];
     return [hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 989) > 0.8 ? '.' : dFill(0.7 - y * 0.03 - x * 0.03), C(WHITE,(hash(Math.floor(x*2.5),Math.floor(y*1.5),989)>.8?11:15)-(y+6.4)*.15)];
   }),
-  bento: (it, f) => foodSculpt(30, 11, (x, y) => { // a box in four compartments, each emptied in turn
+  bento: (it, f) => sculptSurface(30, 11, (x, y) => { // a box in four compartments, each emptied in turn
     if (Math.abs(x) > 8.4 || Math.abs(y) > 4.4) return null;
     if (Math.abs(x) > 7.8 || Math.abs(y) > 3.8 || Math.abs(x + 2) < 0.3 || Math.abs(x - 3) < 0.3 && y > -3.8 || Math.abs(y) < 0.3 && x > -2) return ['#', C(BRICK, 9)];
     const left = Math.ceil(f * 4), cell = x < -2 ? 0 : y < 0 ? (x < 3 ? 1 : 2) : 3;
@@ -32743,7 +32747,7 @@ Object.assign(DENSE, {
   key_car_sports: dCarKeys,
   // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
   sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
-  umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
+  umbrella: () => sculptSurface(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
     if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];
     if (y < -8.6 && Math.abs(x) < 0.15) return ['|', C(GRAY, 14)];
@@ -32777,14 +32781,10 @@ DENSE.petcat = heldPetCarrier;
 DENSE.petdog = heldPetCarrier;
 // Groceries have their own full-size pictures; dropped icons stay small. Meals show their food, serving dish,
 // remaining portions and cooking quality, rather than stretching a ground icon into a hand.
-// Surface samples fill cells; only explicitly tagged printing stays as text.
-function foodSculpt(W,H,sample){
-  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
-}
 function heldGroceryPackage(it) {
   const id = it.id, meat = ['rawchicken', 'mince', 'bacon'].includes(id);
   const labels = { rice: 'RICE', pasta: 'PASTA', drynoodles: 'NOODLES', butter: 'BUTTER', tofu: 'TOFU' };
-  return foodSculpt(30, 17, (x, y) => {
+  return sculptSurface(30, 17, (x, y) => {
     if (id === 'eggs') {
       if (Math.abs(x) > 7.8 || y < -5.8 || y > 6.5) return null;
       for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
@@ -32823,7 +32823,7 @@ function heldGroceryPackage(it) {
 }
 function heldProduce(it) {
   const id = it.id;
-  return foodSculpt(30, 17, (x, y) => {
+  return sculptSurface(30, 17, (x, y) => {
     const oval = (cx, cy, rx, ry, col) => dEll(x, y, cx, cy, rx, ry) < 1 ? dLit(dBall(x, y, cx, cy, rx, ry), col, 8) : null;
     if (id === 'cheese') {
       if (y < -5 || y > 6 || x < -6.5 || x > 6.5 - (y + 5) * .25) return null;
@@ -32880,7 +32880,7 @@ const HELD_BOWLS = new Set(['fishcurry', 'pomodoro', 'bolognese', 'macncheese', 
 const HELD_HAND_FOOD = { homeburger: 'burger', skewers: 'yakitori', fishstick: 'yakitori' };
 function heldToast(it, f) {
   const toast = it.id === 'toast', fish = it.id === 'fishsandwich', burnt = it.q === 'burnt';
-  return foodSculpt(30, 15, (x, y) => {
+  return sculptSurface(30, 15, (x, y) => {
     const bite = dBites(x, y, f, 7);
     if (bite === true) return null;
     const half = 6.8 + (y < -2 ? Math.sqrt(Math.max(0, 1 - ((y + 2) / 4.5) ** 2)) * 1.4 : 0);
@@ -32904,7 +32904,7 @@ function heldMeal(it, f) {
     return [art.map(line=>line.replace(/[^ ]/g,'\u0001')), (ch, r, c) => burnt ? C(GRAY, 5 + (r + c) % 3) : col(art[r][c], r, c)];
   }
   const bowl = HELD_BOWLS.has(id), soup = ['fishcurry', 'chickencurry', 'tomatosoup'].includes(id);
-  return foodSculpt(34, 19, (x, y) => {
+  return sculptSurface(34, 19, (x, y) => {
     const steam = dSteam(x, y, -3.3, f, [-3.1, 2.7], 5);
     if (steam && !burnt) return steam;
     const dish = dEll(x, y, 0, 2.6, 9.4, bowl ? 5.5 : 4.6);
@@ -32984,7 +32984,7 @@ DENSE.joint = () => sculpt(20,27,(x,y)=>{
 });
 DROPPED_ART.joint = () => [['  __',' /==/','/==/',' --'],ch=>C(ch==='='?WHITE:STONE,13)];
 function heldAmmo(it) {
-  return sculpt(32, 18, (x, y) => {
+  return sculptSurface(32, 18, (x, y) => {
     if (Math.abs(x) > 8.4 || y < -6.6 || y > 7.6) return null;
     if (Math.abs(x) > 7.8 || y < -6 || Math.abs(y - 2.3) < .5 || y > 7) return dLit(.65 - x * .025, WARM, 8);
     if (y < 2.3) {
@@ -32995,8 +32995,8 @@ function heldAmmo(it) {
       }
       return [':', C(BRICK, 5)];
     }
-    const word = dText(x, y, 0, 4, '.38 SPECIAL') || dText(x, y, 0, 6, '24 ROUNDS');
-    return word ? [word, C(RED, 13)] : dLit(.6 - x * .025, WARM, 8);
+    const word = dText(x,y,0,4,'.38 SPECIAL') || dText(x,y,0,6,'24 ROUNDS');
+    return word ? [word,C(RED,13),true] : dLit(.6 - x * .025, WARM, 8);
   });
 }
 DENSE.ammo = heldAmmo;
@@ -33084,7 +33084,7 @@ DENSE.soggybook = it => {
 function heldPocketknife(it) {
   const phase = heldUsePhase(it), open = phase >= 0 ? Math.sin(phase * Math.PI) : 0;
   const angle = -Math.PI / 2 - (1 - open) * Math.PI, ca = Math.cos(angle), sa = Math.sin(angle);
-  return sculpt(46, 34, (x, y) => {
+  return sculptSurface(46, 34, (x, y) => {
     // Upright handle in the fist, hinge above it. The blade folds into the handle and opens upward.
     if (Math.abs(x) < 1.6 && y > -2.5 && y < 10.8) {
       if (y < -1) return [Math.abs(x) < .5 ? 'o' : '=', C(GRAY, 14)]; // steel bolster and hinge
@@ -33206,6 +33206,69 @@ function drawTelescope(){
   for(let k=0;k<text.length;k++){const c=c0+k;if(c>=0&&c<cols)set(r*cols+c,text[k],C(GRAY,11));}
  }
 }
+// Shared solid silhouettes for held tools. Coordinates stay in the existing
+// grip/animation space, so item controls and the hand mask keep their anchors.
+function heldToolSegment(a,b,ra,rb,col){
+  const d=Math.hypot(b.x-a.x,b.y-a.y)||1,nx=-(b.y-a.y)/d,ny=(b.x-a.x)/d;
+  g.fillStyle=PAL[col];g.beginPath();g.moveTo(a.x+nx*ra,a.y+ny*ra);g.lineTo(b.x+nx*rb,b.y+ny*rb);g.lineTo(b.x-nx*rb,b.y-ny*rb);g.lineTo(a.x-nx*ra,a.y-ny*ra);g.closePath();g.fill();
+}
+function heldToolEllipse(x,y,rx,ry,col){g.fillStyle=PAL[col];g.beginPath();g.ellipse(x,y,rx,ry,0,0,TAU);g.fill();}
+function heldToolRing(x,y,rx,ry,wall,col){g.fillStyle=PAL[col];g.beginPath();g.ellipse(x,y,rx,ry,0,0,TAU);g.ellipse(x,y,Math.max(.1,rx-wall),Math.max(.1,ry-wall),0,0,TAU,true);g.fill('evenodd');}
+const REVOLVER_PROFILES={
+  grip:[[37,3],[40,4],[41,7],[46,9],[49,12],[48,14],[43,14],[41,12],[38,9]],
+  frame:[[29,2],[36,2],[38,4],[38,7],[40,8],[37,7.5],[34,7],[31,7],[29,6]],
+  hammer:[[35.5,2.5],[36.4,.5],[37.6,0],[38.3,.5],[37.3,2.7]],
+  crane:[[30.5,6.4],[31.4,7],[27,10.2],[25.7,9.6]]
+};
+function heldToolPolygon(x,y,points){let inside=false;for(let k=0,j=points.length-1;k<points.length;j=k++){const a=points[k],b=points[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;}
+const REVOLVER_PICTURES=new Map();
+function revolverPicture(open,rounds,spin=gunView.spin,kick=gun.kick){
+  rounds=clamp(rounds,0,CYLINDER);const key=[!!open,rounds,Math.floor(spin*2+.5)&1,kick>.45].join('|');if(REVOLVER_PICTURES.has(key))return REVOLVER_PICTURES.get(key);
+  const P=REVOLVER_PROFILES,paint=(base,level)=>[' ',C(base,level)];
+  const picture=sculptSurface(50,16,(xx,yy)=>{
+    const x=xx/D_ASPECT+25.5,y=yy+8;
+    if(open){
+      const r=Math.hypot((x-24.5)/3.6,(y-10.5)/2.8);
+      if(r<1){
+        for(let k=0;k<CYLINDER;k++){const a=-Math.PI/2+k*TAU/CYLINDER,cx=24.5+Math.cos(a)*2.1,cy=10.5+Math.sin(a)*1.6;
+          if(Math.hypot((x-cx)/.65,(y-cy)/.52)<1)return paint(k<rounds?YEL:GRAY,k<rounds?14:2);
+        }
+        return paint(GRAY,r>.83?14:r<.19?7:10);
+      }
+      if(heldToolPolygon(x,y,P.crane))return paint(GRAY,y<8?13:8);
+    }
+    if(heldToolPolygon(x,y,P.grip)){
+      const screw=Math.hypot(x-39.5,(y-5.5)*1.4)<.5;
+      return paint(screw?WHITE:BRICK,screw?14:7+Math.max(0,3-(x-40)*.4)+((Math.floor(x+y*2)&1)?1:0));
+    }
+    if(x>=1&&x<30&&y>=2&&y<4.7)return paint(GRAY,y<3?14:y<4?10:7);
+    if(x<2&&x>=.3&&y>=2.8&&y<4.2)return paint(GRAY,2); // bore
+    if(x>=1&&x<3&&y>=1&&y<2)return paint(GRAY,14); // front sight
+    if(x>=7&&x<29&&y>=4.7&&y<5.6)return paint(GRAY,y<5?12:6); // ejector rod
+    if(heldToolPolygon(x,y,P.hammer)&&kick<=.45)return paint(GRAY,x<37?14:8);
+    if(heldToolPolygon(x,y,P.frame)){
+      if(x>30&&x<35.3&&y>3&&y<6.8){if(open)return null;const flute=(Math.floor(y+spin*2)&1);return paint(CYAN,flute?11:5);}
+      return paint(GRAY,y<3?14:x>36?7:10);
+    }
+    const guard=Math.hypot((x-35.3)/3.1,(y-8.3)/1.6);
+    if(guard<1&&guard>.63)return paint(GRAY,y<8?12:7);
+    if(x>35&&x<36&&y>7&&y<8.8)return paint(GRAY,12); // trigger
+    return null;
+  });
+  if(REVOLVER_PICTURES.size>=32)REVOLVER_PICTURES.delete(REVOLVER_PICTURES.keys().next().value);REVOLVER_PICTURES.set(key,picture);return picture;
+}
+DENSE.revolver=it=>revolverPicture(false,it.uses,0,0);
+function heldMuzzleFlash(k){return sculptSurface(7,7,(x,y)=>{const r=Math.hypot(x/.6,y),a=Math.atan2(y,x/.6),edge=2.5+.8*Math.cos(a*4);return r<edge?[' ',C(r<1.2?WHITE:r<2?YEL:ORANGE,r<1.2?15:14)]:null;});}
+
+function heldRodPicture(it){const carbon=it.id==='carbonrod';return sculptSurface(16,38,(x,y)=>{
+  for(const gy of [-14,-8,-2]){const ring=Math.hypot((x-1.2)/.8,(y-gy)/.8);if(ring<1&&ring>.45)return [' ',C(GRAY,13)];}
+  if(Math.hypot((x-2)/1.6,(y-7)/2)<1)return [' ',C(carbon?BLUE:GREEN,x<2?13:8)];
+  if(y>4.8&&y<6.2&&x>0&&x<2.5)return [' ',C(GRAY,11)];
+  if(y< -18||y>18)return null;
+  const cork=y>10,seat=y>8&&y<=10,width=cork?1:seat?.7:.24+(y+18)*.012;
+  if(Math.abs(x)<width)return [' ',C(cork?WARM:GRAY,cork?13:carbon?8:14)];return null;
+});}
+DENSE.rod=DENSE.carbonrod=heldRodPicture;
 // Item art can change on use, but its hand stays steady.
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
 function heldUsePhase(it) {
@@ -34143,25 +34206,9 @@ function shotDown() {
   passOut('Gunshot wounds. You\'re lucky. The police have your revolver, and would like to talk when you\'re up.');
 }
 
-// ---- the gun in your hand: side-on, muzzle toward the crosshair, the fist round the grip. Drawn in characters and
+// ---- the gun in your hand: side-on, muzzle toward the crosshair, the fist round the grip. Drawn as solid colour cells and
 // turned on the canvas as a piece: up with the kick of a shot, right up to reload with the cylinder swung out
-const REVOLVER = [
-  '                                     _',
-  ' _                                  / )',
-  '[_]__________________________ _____/ /__',
-  '|____________________________|=====|::::\\',
-  ' `---------------------------|-----|:::::\\',
-  '       `===================\'  |=====|::o::|',
-  '                          \\  |-----|:::::\\',
-  '                           \\_|_____|::::::\\',
-  '                              \\ ( \\ \\#######\\',
-  '                               `--`--\'#######\\',
-  '                                      \\#######\\',
-  '                                       \\#######\\',
-  '                                        |#######|',
-  '                                        \\_______/'];
-const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
-const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
+const GUN_GRIP=[43,9];
 const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
 function gunGeom() {
   const aim = gunAim();
@@ -34172,30 +34219,6 @@ function gunGeom() {
   const hy = Math.round(cv.height - 5.6 * hsz + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
   return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 - aim * 0.06 };
 }
-// the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
-function revolverArt(open, rounds) {
-  const art = REVOLVER.map(l => [...l]), turn = Math.floor(gunView.spin * 2);
-  for (let r = 3; r <= 6; r++) for (let c = 30; c <= 34; c++) art[r][c] = open ? ' ' : (r + turn) & 1 ? '-' : '=';
-  if (gun.kick > 0.45) { // fired: the hammer's down on the frame
-    for (const [r, c] of [[0, 37], [1, 36], [1, 37], [1, 38], [2, 37]]) art[r][c] = ' ';
-    art[2][36] = '_'; art[2][37] = ')';
-  }
-  if (open) { // swung out to the side, its face to you: a round in each chamber as it goes in
-    let k = 0;
-    CYL_FACE.forEach((l, r) => [...l].forEach((ch, c) => { const row = art[8 + r] || (art[8 + r] = []); while (row.length < 22 + c) row.push(' '); row[21 + c] = ch === 'o' ? (k++ < rounds ? '@' : 'o') : ch; }));
-  }
-  return art.map(r => r.join(''));
-}
-function revolverCol(ch, r, c) {
-  if (ch === '@') return C(YEL, 14); // (brass)
-  if (r >= 8 && c >= 20 && c < 30) return C(GRAY, ch === 'o' ? 4 : 11); // (the cylinder, swung out: an empty chamber's dark)
-  if (r >= 8 && c >= 37 || r >= 10) return ch === '#' ? C((r + c) & 1 ? BRICK : WARM, 9 + ((r * 3 + c) % 4)) : C(BRICK, 10); // the walnut grip, chequered
-  if (ch === '=' && r >= 3 && r <= 6 && c >= 30 && c <= 34) return C(CYAN, 13); // the cylinder catching the light
-  if (ch === ':') return C(GRAY, 7);
-  if (ch === 'o') return C(YEL, 11);
-  if (r <= 2 || ch === '[' || ch === ']') return C(WHITE, 14); // the top edge, in the light
-  return C(GRAY, 11 - (r > 4 ? 2 : 0));
-}
 function drawRevolver(it) {
   const G = gunGeom(), dt = clamp(T - gunView.t, 0, 0.05); gunView.t = T;
   gunView.spin += (gun.spin - gunView.spin) * Math.min(1, dt * 14); // (a sixth of a turn a shot, snapping round)
@@ -34205,16 +34228,15 @@ function drawRevolver(it) {
   g.save();
   g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
   drawBehindHand(0, -G.hsz * .2, G.hsz, () => {
-    artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
+    const [art,col]=revolverPicture(open,rounds);artText(art,gx,gy,G.s,col);
     if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
       artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
         () => C(SKIN, 12));
     }
     if (gun.kick > 0.55) { // the flash, off the end of the barrel
-      const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
-      g.font = big + 'px monospace';
-      const fw = g.measureText('M').width;
-      artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
+      const size=Math.round(G.u*(.8+gun.kick*.5)*.5),[flash,col]=heldMuzzleFlash(gun.kick);
+      g.font=size+'px monospace';const fw=g.measureText('M').width;
+      artText(flash,gx-fw*5,gy+3.5*G.s-size*3.5,size,col);
     }
   });
   g.restore();

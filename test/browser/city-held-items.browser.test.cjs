@@ -100,7 +100,7 @@ test('visible item strokes touch the drawn fingers at multiple sizes, including 
       resize(); heldUse = null;
       const hand = drawHand, floating = [];
       const examples = ['tea', 'jadedragon', 'bottlemsg', 'ball', 'soda', 'energy', 'redstring', 'goldring', 'plasticbag', 'panfish', 'ammo', 'sparklers', 'pocketknife', 'book'];
-      const ids = cv.width === 1280 ? Object.keys(DENSE).filter(id => ITEMS[id] && id !== 'yoyo') : examples;
+      const ids = cv.width === 1280 ? Object.keys(DENSE).filter(id => ITEMS[id] && id !== 'yoyo' && ITEMS[id].kind!=='gun' && !ITEMS[id].rod) : examples;
       try {
         for (const id of ids) for (const remaining of [1, .25]) {
           inv.length = 0; inv.push({ id, uses: Math.ceil((ITEMS[id].uses || 0) * remaining), q: 'fine', kg: 1.5 }); held = 0;

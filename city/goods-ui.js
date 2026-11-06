@@ -329,21 +329,20 @@ function drawCanopy(cx, grip, size, bob) {
   const W = cv.width, H = cv.height, u = Math.max(14, H / 36), s = Math.round(u * 0.72); // (the world's own character size, like the items)
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, ribs = 9, hubX = W * 0.56, off = bob * 0.4;
-  charLine(cx, grip, hubX, -s, w, s, PAL[C(GRAY, 13)]); // the shaft
+  heldToolSegment({x:cx,y:grip},{x:hubX,y:-s},u*.12,u*.08,C(GRAY,13));
   for (let c = 0; c * w < W + w; c++) {
     const x = c * w, t = (x - W / 2) / (W * 0.62), seg = (t + 1) / 2 * ribs, k = Math.floor(seg), m = Math.abs(fract(seg) - 0.5);
     const rim = H * (0.34 - t * t * 0.32) - (0.5 - m) * s * 1.4 + off; // scalloped: rises between the ribs
     const rib = m > 0.45, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
     for (let y = 0; y < rim - s; y += s) {
-      if (rib) { g.fillStyle = PAL[C(BLUE, 1)]; g.fillRect(x, y, w + 0.5, s + 0.5); g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
+      if(rib){g.fillStyle=PAL[C(GRAY,8)];g.fillRect(x,y,w+.5,s+.5);continue;}
       // each panel bellies down between its ribs: lighter in the middle and toward the rim (the light comes through)
       const b = clamp((0.35 + 0.45 * Math.cos(m * Math.PI * 1.9)) * (0.55 + 0.45 * y / Math.max(rim, 1)) + (k & 1 ? 0.08 : 0), 0, 1);
-      g.fillStyle = PAL[C(BLUE, 1 + b * 2.5)]; g.fillRect(x, y, w + 0.5, s + 0.5); // the fabric itself: nothing shows through it
-      g.fillStyle = PAL[C(k & 1 ? BLUE : CYAN, 4 + b * 7)];
-      g.fillText(dFill(b), x, y);
+      g.fillStyle = PAL[C(k&1?BLUE:CYAN,4+b*7)]; g.fillRect(x, y, w + 0.5, s + 0.5); // the fabric itself: nothing shows through it
+
     }
-    g.fillStyle = PAL[C(BLUE, 12)]; g.fillText(rib ? 'V' : m < 0.2 ? '_' : '-', x, rim - s); // the rim
-    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText(fract(T * 1.1 + c * 0.37) < 0.08 ? 'o' : '|', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips gathering at the tips and falling
+    g.fillStyle = PAL[C(BLUE, 12)]; g.fillRect(x,rim-s,w+.5,s*.3); // the rim
+    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillRect(x+w*.4,rim+fract(T*1.1+c*.37)*H*.4,Math.max(1,w*.2),s*.5); } // drips gathering at the tips and falling
   }
 }
 // a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
@@ -512,7 +511,7 @@ const droppedHere = () => {
 // put down or on display: the held picture (the small one if it has none), cropped to what's drawn and painted solid at
 // life size. ITEM_SIZE: its longer side in metres, by item, else by kind; fish go by their weight
 const ITEM_SIZE = {
-  apple: 0.08, luckycoin: 0.025, oldcoin: 0.03, wishcoins: 0.04, goldring: 0.025, pearl: 0.015, diamond: 0.05, redstring: 0.07, tigerbalm: 0.05,
+  revolver:.32, apple: 0.08, luckycoin: 0.025, oldcoin: 0.03, wishcoins: 0.04, goldring: 0.025, pearl: 0.015, diamond: 0.05, redstring: 0.07, tigerbalm: 0.05,
   key_car_hatch: 0.08, key_car_sports: 0.08, pocketwatch: 0.06, compass: 0.07, divewatch: 0.05, pocketknife: 0.1, fortunecookie: 0.07,
   cigarettes: 0.09, vape: 0.1, yoyo: 0.06, duck: 0.1, cityglobe: 0.12, replicastar: 0.1, trolleywheel: 0.12, tincan: 0.1,
   book: 0.18, soggybook: 0.18, vhs: 0.19, postcard: 0.15, vinyl: 0.31, spraypaint: 0.2, mysterybox: 0.2, dinotoy: 0.2, goldfish: 0.22,
@@ -524,7 +523,7 @@ const KIND_SIZE = { food: 0.13, drink: 0.14, ingredient: 0.13, junk: 0.3, toy: 0
 const itemSize = d => ITEM_SIZE[d.id] ?? (['fish', 'wish'].includes(ITEMS[d.id]?.kind) ? catchLength(d.kg) : KIND_SIZE[ITEMS[d.id]?.kind] ?? 0.15);
 // long things put down lie flat: how much looking down at them shortens their height (a deck, a rod a finger thick,
 // a fish on its side; crabs and squid stay on their legs)
-const LYING = { skateboard: 0.45, rod: 0.2, carbonrod: 0.2 };
+const LYING = { skateboard: 0.45, rod: 0.16, carbonrod: 0.16 };
 const lying = d => { const I = ITEMS[d.id]; return LYING[d.id] ?? (['fish', 'wish'].includes(I?.kind) && !I.crab && !I.squid ? 0.45 : 0); };
 const droppedPictures = new Map(); // bounded short-lived pictures, including animated items
 function droppedPicture(d) {

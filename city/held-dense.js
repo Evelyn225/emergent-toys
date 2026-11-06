@@ -11,6 +11,10 @@ function sculpt(W, H, fn) {
   for (let r = 0; r < H; r++) { const row = []; for (let k = 0; k < W; k++) row.push(fn((k - (W >> 1)) * D_ASPECT, r + 0.5 - H / 2) || null); cells.push(row); }
   return [cells.map(row => row.map(c => c ? c[0] : ' ').join('')), (ch, r, k) => cells[r][k] ? cells[r][k][1] : 0];
 }
+// Surface samples fill cells; only explicitly tagged printing stays as text.
+function sculptSurface(W,H,sample){
+  return sculpt(W,H,(x,y)=>{const cell=sample(x,y);if(cell&&!cell[2])cell[0]='\u0001';return cell;});
+}
 // light on a surface with normal (nx, ny up-is-negative, nz toward you): from the top left, a little in front
 const dLight = (nx, ny, nz) => clamp(0.15 + 0.85 * Math.max(0, -0.45 * nx - 0.55 * ny + 0.7 * nz), 0, 1);
 const dSphere = (x, y, R) => { const nx = x / R, ny = y / R, q = 1 - nx * nx - ny * ny; return q < 0 ? -1 : dLight(nx, ny, Math.sqrt(q)); };
@@ -23,7 +27,7 @@ function dBites(x, y, f, R, n = 3) {
   return false;
 }
 const DENSE = {
-  apple: (it, f) => foodSculpt(26, 13, (x, y) => {
+  apple: (it, f) => sculptSurface(26, 13, (x, y) => {
     const R = 5.2;
     if (Math.abs(x - 0.25 - (y + R) * -0.18) < 0.28 && y < -R * 0.65 && y > -R * 1.2) return ['|', C(BRICK, 11)]; // the stem
     const lx = x - 1.5, ly = y + R * 1.02, lu = lx * 0.8 + ly * 0.6, lv = -lx * 0.6 + ly * 0.8; // the leaf, tilted
@@ -36,7 +40,7 @@ const DENSE = {
     const b = dSphere(x / 1.08, y, R), spec = Math.hypot(x / 1.08 + R * 0.38, y + R * 0.42) < 0.75; // a glint, top left
     return [spec ? '@' : dFill(b), spec ? C(WHITE, 15) : C(RED, 6 + b * 9)];
   }),
-  coffee: (it, f) => foodSculpt(30, 17, (x, y) => {
+  coffee: (it, f) => sculptSurface(30, 17, (x, y) => {
     const top = -4.6, bot = 7.5, hw = 4.6 - (y - top) / (bot - top) * 1.1; // a paper cup, narrowing to the base
     if (y < top - 0.2) { // the steam: two wisps curling up while it's hot
       if (f <= 0.25 || y < top - 3.6) return null;
@@ -58,7 +62,7 @@ const DENSE = {
     }
     return [dFill(b), C(WHITE, 7 + b * 8)];
   }),
-  slice: (it, f) => foodSculpt(26, 14, (x, y) => {
+  slice: (it, f) => sculptSurface(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
     const eaten = (1 - f) * (tip - top - 2.5); // eaten from the crust down (the tip stays in your hand), a bite-shaped edge
