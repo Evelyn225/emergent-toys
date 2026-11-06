@@ -1,0 +1,12 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');let browser;test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
+async function fixture(run){const p=await browser.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;T=10;});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
+test('dropped meals, bottles, groceries, toys and flatpacks have useful life sizes indoors and outdoors, unchanged by bites or sips',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const draw=drawArt,bad=[],sizes={ramen:[.24,.30],roastchicken:[.30,.35],panfish:[.25,.30],water:[.22,.26],coffee:[.15,.18],rice:[.24,.28],bread:[.28,.33],ball:[.21,.23],sharkplush:[.50,.60],umbrella:[.80,.90],jadebangle:[.07,.08],camera:[.11,.14]};
+ const furniture=Object.keys(ITEMS).find(id=>ITEMS[id].furniture);sizes[furniture]=[.5,.8];
+ try{for(const[id,range]of Object.entries(sizes))for(const unit of [1,.1])for(const f of [1,.25]){const d={id,uses:Math.max(1,Math.ceil((ITEMS[id].uses||1)*f)),kg:1.5,at:unit===1?'home':''};let dim;drawArt=(x,y,z,w,h)=>{dim=[w/unit,h/unit];};drawDropped(d,1,1,unit);const longest=Math.max(...dim);if(longest<range[0]||longest>range[1])bad.push([id,unit,f,dim]);}return bad;}finally{drawArt=draw;}});assert.deepEqual(r,[]);
+}));
+test('shelf eligibility uses the same physical envelope: a bottle cannot be squeezed under a low board',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{enterRoom('home',{ret:[100,100,0]},ROOM_DEFS.home.entry);const native=homeShelfSurfaces()[0],s={...native,books:[],ceiling:native.z+.18};const bottle=homeShelfSize({id:'water',uses:3}),apple=homeShelfSize({id:'apple',uses:3}),id=Object.keys(ITEMS).find(id=>ITEMS[id].kind==='fish');return{h:bottle.height,bottleFits:homeShelfFits(s,0,0,bottle,[]),appleFits:homeShelfFits(s,0,0,apple,[]),coin:itemSize({id:'luckycoin'}),fish:[itemSize({id,kg:.2}),itemSize({id,kg:4})]};});
+ assert.ok(r.h>.20&&r.h<.26,JSON.stringify(r));assert.equal(r.bottleFits,false);assert.equal(r.appleFits,true);assert.equal(r.coin,.025);assert.ok(r.fish[1]>r.fish[0]*1.5,JSON.stringify(r));
+}));
