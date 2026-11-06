@@ -54,7 +54,14 @@ Yes, as a medium-to-large feature. Most of what it needs exists:
   - **Replays:** after every goal, the build-up (from the engine's 8-second buffer) replays at 55% speed. It plays on the big screen (marked REPLAY), and with V on, on TV from a camera low behind that goal.
   - **TV during celebrations:** the camera follows the scorer, not the ball in the net.
   - **Celebrations:** the scorer bursts about 14 m toward the corner fans and is mobbed, arms up. The other side stands with hands on heads.
-- **Next:** phase 7 (extras: betting, concessions and scarves, season tickets, cup matches).
+- **Phase 7 (extras, `city/stadium-extras.js`):**
+  - **Betting:** a bet at the ticket window on home, draw or away, $10 or $50, at odds from the same strength model (with an 8% house margin). Paid out at full time. One bet per match, closed at kick-off.
+  - **Season ticket:** $300, free entry to any section for the season.
+  - **Club scarf:** in its club's colours, held up with Q. At the ground, the fans round you join in.
+  - **Programme:** lists both line-ups when read with Q.
+  - **Kiosk:** a "Pies & Pints" kiosk inside the gate.
+  - **Saving:** the scarf's club and the programme's fixture are kept in the save.
+- **Not done:** cup competitions.
 
 ## 1. What the player gets
 

@@ -63,6 +63,7 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
+  scarf: { name: 'club scarf', price: 12, kind: 'gear' }, programme: { name: 'match programme', price: 4, kind: 'gear' }, // (the football: it.of, the club; the fixture: stadium-extras.js)
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   petcat: { name: 'pet cat carrier', price: 80, kind: 'pet' },
   petdog: { name: 'pet dog carrier', price: 80, kind: 'pet' },
@@ -383,6 +384,8 @@ function useHeld(near) {
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
     case 'movinglamp': return ['You straighten the amber shade. There is a little chip in the base, and a handwritten label: "Still works. New place has no room."',null];
     case 'yoyo': yoyo.out = !yoyo.out; if (yoyo.out) yoyo.aimX = yoyo.aimY = 0; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Move the mouse to steer and reel it in or out.' : 'You reel it back in.', 'whirr'];
+    case 'scarf': return useScarf(it);
+    case 'programme': return readProgramme(it);
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -480,6 +483,8 @@ const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().
 function itemName(it) {
   if (ITEMS[it.id].kind === 'drug') return `${DRUG_QUALITY[it.q] || 'standard'} ${ITEMS[it.id].name}`;
   if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
+  if (it.id === 'scarf' && it.of) return `${clubName(it.of)} scarf`;
+  if (it.id === 'programme' && it.of != null && typeof it.of === 'string') return `programme: ${it.of}`;
   return it.kg ? catchName(it) : ITEMS[it.id].name;
 }
 const dropped = []; // inventory item plus { x, y, at, z }

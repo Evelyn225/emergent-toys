@@ -167,6 +167,8 @@ const DROPPED_ART = {
     (c, r) => c === '@' ? C(ORANGE, 10 + fx.vape * 1.7) : c === 'o' ? C(GRAY, 9) : /[A-Z]/.test(c) ? C(YEL, 14) : C(ORANGE, 12)],
   pipe: () => [['  ___', ' (___)', '  | |___', '  |_____|'], (c, r) => r < 2 ? C(BRICK, 12) : C(BRICK, 10)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
+  scarf: it => { const [a, b] = (MatchEngine.CLUBS.find(c => c.id === it?.of)?.kit || ['RED', 'WHITE']).map(k => STADIUM_KIT[k] ?? GRAY); return [['||##==##==##||'], (c, r, k) => C(k % 4 < 2 ? a : b, 13)]; },
+  programme: () => [[' ________', '|YARDS   |', '|[~~~~~~]|', '|________|'], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : c === '~' ? C(GREEN, 12) : C(RED, 13)],
   sharkplush: () => [['        /|', '  ___.-/ |__', '<(________o_>', "      \\/  \\/"], (c, r) => c === 'o' ? C(WHITE, 15) : r === 2 && c === '_' ? C(WHITE, 13) : C(GRAY, 13)],
   snowglobe: () => [['  .-----.', ' / . * . \\', '|  ><>  * |', ' \\ * . . /', "  '-----'", ' [=======]'], (c, r) => r === 5 ? C(BRICK, 13) : c === '>' || c === '<' ? C(ORANGE, 15) : c === '*' || c === '.' ? C(WHITE, 15) : C(CYAN, 12)],
   spraypaint: (it, f) => [['   _', '  [o]', ' .---.', ' |   |', ' |ZAP|', ' |   |', " '---'"], (c, r) => r < 2 ? C(GRAY, 13) : c === 'Z' || c === 'A' || c === 'P' ? C(WHITE, 15) : C([MAG, CYAN, GREEN, ORANGE][it.uses & 3], 13)],
@@ -554,7 +556,7 @@ const ITEM_SIZE = {
   onion:.08,tomatoes:.18,garlic:.065,mushrooms:.18,greens:.28,peppers:.18,chilli:.13,
   lemon:.10,rawchicken:.26,mince:.20,bacon:.24,tofu:.14,
   fishstick:.30,fishsandwich:.18,grilledcheese:.16,toast:.14,homeburger:.14,skewers:.30,roastchicken:.32,
-  ball:.22,umbrella:.85,newspaper:.40,flowers:.45,telescope:.27,camera:.12,harmonica:.10,
+  ball:.22,umbrella:.85,newspaper:.40,flowers:.45,telescope:.27,camera:.12,harmonica:.10,scarf:.6,programme:.3,
   jadebangle:.075,jadedragon:.18,sharkplush:.55,plushcat:.30,plushbear:.35,snowglobe:.12,
   sparklers:.28,pipe:.15,ammo:.13,knife:.22,joint:.10,
 

@@ -139,6 +139,7 @@
     "city/league.js",
     "city/stadium.js",
     "city/stadium-atmosphere.js",
+    "city/stadium-extras.js",
     "city/match-debug.js",
     "city/map-directory.js",
     "city/bigmap.js",

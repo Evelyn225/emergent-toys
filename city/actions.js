@@ -161,6 +161,7 @@ function interact() {
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
+    if (room.kind === 'stadium' && nearKiosk()) return openShop('PIES & PINTS', KIOSK_STOCK); // (the kiosk inside the gate: stadium-extras.js)
     if (room.kind === 'stadium') { body.seat = null; say('You head for the exit.', 2); return leaveRoom(); } // (out early, whenever you like)
     if(hotelAmenityUse())return;
     if (room.kind === 'train') return;

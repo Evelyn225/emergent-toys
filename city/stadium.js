@@ -233,7 +233,7 @@ function stadiumGrid() {
 ROOM_DEFS.stadium = {
   grid: stadiumGrid(), light: 1, height: 40, vis: 200, floor: 'pitch', ceil: 'sky', sign: false, wall: stadiumWall, rise: stadiumRise, outdoor: true,
   props: r => {
-    const p = [matchProp(), scoreboard(), bigScreen(), ...goalFrame(-1), ...goalFrame(1)];
+    const p = [matchProp(), scoreboard(), bigScreen(), kioskProp(), ...goalFrame(-1), ...goalFrame(1)];
     for (const s of STANDS) p.push(...standProps(s, r));
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
@@ -373,12 +373,14 @@ function openStadiumTickets() {
   const minute = stadiumMatch?.slot === f.n && f.live ? Math.floor(Math.min(90, MatchEngine.minute(stadiumLiveMatch()))) : null;
   showPanel(ticketEl, `<style>#tickets .tbl{display:grid;grid-template-columns:1fr 2.5em 3em 2.5em;gap:4px;font-size:.9em;opacity:.9}#tickets .tbl span:not(:first-child){text-align:right}</style>
     <h1>The Yards Ground</h1><p class="sub">${clubName(f.home)} v ${clubName(f.away)} &middot; ${f.live ? `kicked off${minute != null ? `, ${minute}'` : ''}` : 'kick-off ' + f.when.replace('TODAY ', '')} &middot; you have ${fmt$(money)}</p>
-    ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${fmt$(s.price)}</span></button>`).join('')}
+    ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price && !hasSeasonTicket() ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${hasSeasonTicket() ? 'season ticket' : fmt$(s.price)}</span></button>`).join('')}
+    ${stadiumExtrasHtml(f)}
     <h2>the table</h2><div class="tbl"><span></span><span>P</span><span>GD</span><span>Pts</span></div>${table}
     <p class="hint">E / Esc close</p>`);
   ticketEl.onclick = e => {
+    const x = e.target.closest('button[data-x]'); if (x) { const r = stadiumExtra(f, x.dataset.x); if (r) say(r[1], 4); return openStadiumTickets(); }
     const b = e.target.closest('button[data-sec]'); if (!b) return;
-    const s = STADIUM_SECTIONS[b.dataset.sec]; if (!pay(s.price)) return say('Not enough on you.', 2);
+    const s = STADIUM_SECTIONS[b.dataset.sec]; if (!hasSeasonTicket() && !pay(s.price)) return say('Not enough on you.', 2);
     hidePanel(ticketEl); enterStadium(b.dataset.sec);
     say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
   };
