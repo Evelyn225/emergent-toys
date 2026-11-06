@@ -46,32 +46,36 @@ function starAt(s, k, t) {
 }
 function drawFireworks() {
   if (!shells.length) return;
-  const put = (wx, wy, wz, ch, col, glow) => {
+  const put = (wx, wy, wz, col, glow) => {
     const vx = rel(wx - px), vy = rel(wy - py), depth = dx * vx + dy * vy;
     if (depth < 1) return;
     const c = Math.round(cols / 2 + (-dy * vx + dx * vy) * projX / depth), r = Math.round(hor - (wz - eye) * projY / depth);
     if (c < 0 || c >= cols || r < 0 || r >= rows) return;
     const i = r * cols + c;
     if (ZB[i] < depth) return; // behind a building
-    set(i, ch, col); FOGS[i] = 0;
-    if (glow && ZB[i] === Infinity) { BG[i] = glow; FOGB[i] = 0; } // a glow on the sky behind it
+    BG[i]=col;set(i,' ',0);FOGS[i]=FOGB[i]=0;
+    // A dim halo belongs to sky cells beside the bright star, never to a wall.
+    if(glow)for(const [dc,dr]of [[-1,0],[1,0],[0,-1],[0,1]]){
+      const x=c+dc,y=r+dr;if(x<0||x>=cols||y<0||y>=rows)continue;
+      const j=y*cols+x;if(ZB[j]===Infinity&&(BG[j]===NONE||(BG[j]&15)<(glow&15))){BG[j]=glow;set(j,' ',0);FOGS[j]=FOGB[j]=0;}
+    }
   };
   for (const s of shells) {
     const t = T - s.t0;
     if (t < s.rise) { // climbing: a bright head, a trail of sparks behind it
       const f = t / s.rise, z = s.h * (1 - (1 - f) ** 2);
-      put(s.x, s.y, z, '^', C(YEL, 15));
-      for (let k = 1; k < 5; k++) put(s.x + Math.sin(k * 3 + s.seed) * 0.05, s.y, Math.max(0, z - k * 0.5), '.', C(ORANGE, 12 - k * 2));
+      put(s.x,s.y,z,C(YEL,15));
+      for (let k = 1; k < 5; k++) put(s.x + Math.sin(k * 3 + s.seed) * 0.05, s.y, Math.max(0,z-k*.5),C(ORANGE,12-k*2));
       continue;
     }
     const bt = t - s.rise, life = s.kind === 'willow' ? 3.4 : 2.4;
     if (bt > life) continue;
-    const fade = 1 - bt / life, ch = bt < 0.25 ? '@' : fade > 0.6 ? '*' : fade > 0.3 ? '+' : s.kind === 'willow' ? '|' : '.';
-    if (bt < 0.15) put(s.x, s.y, s.h, '#', C(WHITE, 15), C(s.col, 4)); // the burst's flash
+    const fade=1-bt/life;
+    if (bt < 0.15) put(s.x, s.y, s.h,C(WHITE,15), C(s.col, 4)); // the burst's flash
     for (let k = 0; k < s.n; k++) {
       if (s.kind === 'crackle' && bt > 1.2 && hash(k, Math.floor(T * 12), s.seed) > 0.5) continue; // crackling: twinkling on and off
       const [x, y, z] = starAt(s, k, bt);
-      put(x, y, z, ch, C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
+      put(x,y,z,C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
     }
   }
 }

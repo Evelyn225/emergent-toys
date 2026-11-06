@@ -1,7 +1,7 @@
 // ===== smoke and vapour that hangs in the air. Every drag you breathe out leaves a few puffs in front of you, a lit
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
-// hazy. Walk into a cloud and it fogs your view. (The close-up wisps on the screen, goods-ui.js, are as they were.)
+// hazy. Walk into a cloud and it fogs your view. Close wisps use the same colour-only treatment in goods-ui.js.
 const haze = []; // { at: placeKey, kind: 'smoke' | 'vape' | 'steam' | 'engine' | 'soot', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
 let hazeLastTip = 0, hazeDue = 0, hazeWisp = 0;
 const HAZE_WIND = [0.035, 0.012]; // outside, in cells a second (a light breeze)
@@ -82,16 +82,27 @@ function drawHaze() {
     if (dens > 0.3 && hash(i, 7, 994) > 0.35) hazeCell(i, dens * 0.6, insideKind);
   }
 }
-function hazeCell(i, dens, kind) {
-  if (kind === 'soot') { // a burning car's: thick and black
-    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(GRAY, 2 + dens * 3)); if (dens > 0.45) BG[i] = C(GRAY, 0.3 + dens * 0.8); FOGS[i] = 0; return;
+// Quantised palette compositing keeps the scene visible through thin haze.
+// The bounded cache avoids a nearest-palette search for every cloud cell/frame.
+const HAZE_TINTS=new Map();
+function hazeTint(background,target,opacity){
+  const bg=PALRGB[background]?background:C(GRAY,0),alpha=clamp(Math.round(opacity*8),1,8),key=(bg*256+target)*8+alpha-1;
+  if(HAZE_TINTS.has(key))return HAZE_TINTS.get(key);
+  const a=PALRGB[bg],b=PALRGB[target],f=alpha/8,r=a[0]+(b[0]-a[0])*f,g_=a[1]+(b[1]-a[1])*f,bl=a[2]+(b[2]-a[2])*f;
+  let best=0,error=Infinity;
+  for(let k=0;k<PALRGB.length;k++){const p=PALRGB[k],d=(p[0]-r)**2+(p[1]-g_)**2+(p[2]-bl)**2;if(d<error){error=d;best=k;}}
+  if(HAZE_TINTS.size>=8192)HAZE_TINTS.delete(HAZE_TINTS.keys().next().value);
+  HAZE_TINTS.set(key,best);return best;
+}
+function hazeCell(i,dens,kind){
+  let target,opacity;
+  if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
+  else if(kind==='fwsmoke'){
+    const flash=Math.exp(-Math.max(0,T-fwLight.t)*2.5),col=flash>.15?fwLight.col:GRAY;
+    target=C(col,(2+dens*4)*(.5+flash*2));opacity=dens*.65;
+  }else{
+    const vape=kind==='vape',lit=Math.max(vape?.7:.35,amb)*(kind==='steam'?1.25:1);
+    target=C(vape?WARM:GRAY,(8+dens*5)*lit);opacity=dens*(vape?.8:.6);
   }
-  if (kind === 'fwsmoke') { // a firework's: faint against the night, lit up in the colour of each burst after it
-    const flash = Math.exp(-(T - fwLight.t) * 2.5), col = flash > 0.15 ? fwLight.col : GRAY;
-    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(col, (1.2 + dens * 2.5) * (0.5 + flash * 2))); if (dens > 0.55) BG[i] = C(col, dens * (0.25 + flash * 1.2)); FOGS[i] = 0; return;
-  }
-  const vape = kind === 'vape', lit = Math.max(vape ? 0.7 : 0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter; a vape cloud's thick and pale, even at night)
-  set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
-  if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
-  FOGS[i] = 0;
+  BG[i]=hazeTint(BG[i],target,opacity);set(i,' ',0);FOGS[i]=FOGB[i]=0;
 }
