@@ -178,6 +178,7 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
   const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T; m.lastDt = dt;
   if (m.kick != null && nowHour() < m.kick) return; // (the teams lined up, waiting for kick-off)
   MatchEngine.step(m, dt);
+  stadiumAtmosphere(); // the commentary and the crowd (stadium-atmosphere.js)
   if (m.kick != null && m.phase !== 'ft') { // the city clock at the match's pace: about two hours from kick-off to the final whistle
     const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, 1) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24;
   }

@@ -41,7 +41,15 @@ Yes, as a medium-to-large feature. Most of what it needs exists:
   - **The building:** the ground in the Yards on two blocks with the street between them removed (`world.js` `STADIUM_SITE`, STY 26). Brick at street level with turnstiles and fixture posters, steel cladding with the name, the pitch visible from above, and four floodlight pylons.
   - **League and tickets:** `city/league.js` runs a double round-robin with fixtures on Wednesday 19:30 and Saturday 15:00. The gates open 90 minutes before kick-off, and tickets are $15 to $40 by section. The match waits for kick-off, the city clock keeps pace with it, and results from the other games come in. The league table is saved.
   - **Directories:** a map entry and a dev-tools entry.
-- **Next:** phase 5 (atmosphere: crowd sound, chants, whistles, a commentary ticker), then phase 6 (replays) and phase 7 (extras).
+- **Phase 5 (atmosphere, `city/stadium-atmosphere.js`):**
+  - **Crowd bed:** the recorded crowd bed follows the match. It murmurs before kick-off and rises with danger.
+  - **Event sounds:** synthesised:
+    - the referee's pea-whistle trill (one for a foul, two for half time, three for full time)
+    - an ooh at shots, groans at misses, applause at saves and substitutions
+    - a roar for home goals, a cheer and a groan for away goals, boos for cards against the home side
+    - the home end clapping and chanting
+  - **Words:** PA and commentary lines for every event, and the score and clock in the top status line.
+- **Next:** phase 6 (replays on the big screen and the TV view, celebrations), then phase 7 (extras).
 
 ## 1. What the player gets
 

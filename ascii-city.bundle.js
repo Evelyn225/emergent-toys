@@ -7287,6 +7287,7 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'stadium') { out.crowd = 1.9 * (s.stadium || 0); out.city = 0.04; out.restaurant = 0; out.rain = s.rain; } // (the crowd, swelling with the play: stadium-atmosphere.js; and it's open to the sky)
     if (k === 'cathedral') out.cathedral = 0.8;
     if (k === 'pachinko') out.pachinko = 0.75;
     if (k === 'laundry') { out.fluorescent = 0.28; out.washers = 0.7; } // open all night, and somebody's always got a load in
@@ -27777,7 +27778,7 @@ function hud() {
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
+  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
@@ -30287,7 +30288,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const record = homeRecordAudio(), serenade = courierSerenade();
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+  const mix = audioMix({ stadium: mode === 'room' && room?.kind === 'stadium' ? stadiumCrowdLevel() : 0, mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling() ? Math.max(SK.v / SK_TOP, 0.25) : 0, onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade });
@@ -31586,6 +31587,7 @@ const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () =>
   const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T; m.lastDt = dt;
   if (m.kick != null && nowHour() < m.kick) return; // (the teams lined up, waiting for kick-off)
   MatchEngine.step(m, dt);
+  stadiumAtmosphere(); // the commentary and the crowd (stadium-atmosphere.js)
   if (m.kick != null && m.phase !== 'ft') { // the city clock at the match's pace: about two hours from kick-off to the final whistle
     const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, 1) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24;
   }
@@ -31770,6 +31772,111 @@ function openStadiumTickets() {
     hidePanel(ticketEl); enterStadium(b.dataset.sec);
     say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
   };
+}
+// ===== the atmosphere at the Yards ground (STADIUM_PLAN.md, phase 5): the commentary and the PA on the match's events,
+// the score and clock up top, and the sound of the place. The crowd's bed (audio-mix.js) murmurs before kick-off and
+// rises with every attack that gets near a goal; over it, synthesised here: the referee's pea whistle (a peep for a
+// foul, two for half time, three for full time), an "ooh" at a shot, a groan at a near miss, applause for a save, a
+// roar for a home goal (a smaller cheer and a groan for an away one), boos at a card against the home side, and the
+// home end clapping and chanting their club's name when they're level or ahead.
+let stadiumSeen = 0, stadiumChantT = 0, stadiumSaidT = -9;
+const STADIUM_LINES = {
+  goal: e => e.og ? `OWN GOAL! ${e.player} turns it in. ${scoreText(e)}` : pick([`GOAL! ${e.player}! ${scoreText(e)}`, `GOAL! ${e.player} buries it! ${scoreText(e)}`, `GOAL! ${e.player} finds the net! ${scoreText(e)}`]),
+  shot: e => e.penalty ? `${e.player} steps up...` : e.header ? `${e.player} rises for the header...` : e.freekick ? `${e.player} goes for goal from the free kick...` : pick([`${e.player} shoots...`, `${e.player} lets fly...`, `${e.player} has a go...`]),
+  save: e => e.penalty ? `SAVED! ${e.player} guesses right!` : pick([`Saved by ${e.player}.`, `${e.player} gets down well to save.`, `Good stop from ${e.player}.`]),
+  miss: e => e.penalty ? `${e.player} puts the penalty wide!` : pick([`${e.player}: wide.`, `Over the bar from ${e.player}.`, `${e.player} can't keep it down.`]),
+  woodwork: e => `OFF THE WOODWORK! ${e.player} so close.`,
+  block: e => `Blocked by ${e.player}.`,
+  penalty: e => `PENALTY to ${stadiumMatch.teams[e.side].name}!`,
+  yellow: e => `Yellow card: ${e.player}.`,
+  red: e => `RED CARD! ${e.player} is off.`,
+  sub: e => `Substitution, ${stadiumMatch.teams[e.side].name}: ${e.on} on for ${e.off}.`,
+  offside: e => `Flag's up: ${e.player} offside.`,
+  added: e => `The fourth official's board: ${e.mins} minute${e.mins > 1 ? 's' : ''} added on.`,
+};
+const scoreText = e => { const m = stadiumMatch; return `${m.teams[0].short} ${e.score[0]}-${e.score[1]} ${m.teams[1].short}`; };
+// the line up top: the score and the clock, while you're at the ground
+function stadiumScoreLine() {
+  const m = stadiumMatch; if (!m) return 'The Yards Ground';
+  const [h, a] = m.teams, min = MatchEngine.minute(m), half = m.period === 1 ? 45 : 90;
+  const clock = m.kick != null && nowHour() < m.kick ? `kick-off ${String(Math.floor(m.kick % 24)).padStart(2, '0')}:${String(Math.round(m.kick % 1 * 60)).padStart(2, '0')}`
+    : m.phase === 'ft' ? 'full time' : m.phase === 'ht' ? 'half time' : `${Math.min(Math.floor(min), half)}'${min > half ? '+' + Math.ceil(min - half) : ''}`;
+  return `${h.name} ${h.score}-${a.score} ${a.name}   ${clock}`;
+}
+// every frame at the ground: what's new in the match, told and heard
+function stadiumAtmosphere() {
+  const m = stadiumMatch; if (!m || mode !== 'room' || room?.kind !== 'stadium') return;
+  if (m.events.length < stadiumSeen || m !== stadiumAtmosphere.m) { stadiumAtmosphere.m = m; stadiumSeen = m.events.length; } // (a new match: start from now)
+  if (!m.welcomed && m.t > 0) { m.welcomed = true; say(`Welcome to the Yards Ground: ${m.teams[0].name} v ${m.teams[1].name}. And they're under way.`, 5); stadiumSaidT = T; sfxStadium('whistle', m); } // (the real kick-off, at the time on the poster)
+  while (stadiumSeen < m.events.length) stadiumEvent(m, m.events[stadiumSeen++]);
+  // the home end singing: when they've something to sing about, now and then, not over an attack
+  if (m.phase === 'play' && (stadiumChantT -= 1 / 60) <= 0) {
+    stadiumChantT = 22 + Math.random() * 25;
+    if (m.teams[0].score >= m.teams[1].score && (m.danger || 0) < .3) { sfxStadium('chant', m); if (T - stadiumSaidT > 6) say(`The home end: "${m.teams[0].short === 'YAR' ? 'YARDS! YARDS!' : m.teams[0].name.split(' ')[0].toUpperCase() + '! ' + m.teams[0].name.split(' ')[0].toUpperCase() + '!'}"`, 2.5); }
+  }
+}
+function stadiumEvent(m, e) {
+  const home = e.side === 0, big = ['goal', 'red', 'penalty', 'ht', 'ft'].includes(e.kind);
+  // the PA and the commentary: the big moments always; the rest when nothing else is up
+  let line = null;
+  if (e.kind === 'kickoff') { if (e.period === 1) return; line = 'The second half is under way.'; } // (the first half's is the welcome)
+  else if (e.kind === 'ht') line = `Half time at the Yards: ${m.teams[0].name} ${e.score[0]}, ${m.teams[1].name} ${e.score[1]}.`;
+  else if (e.kind === 'ft') line = `Full time: ${m.teams[0].name} ${e.score[0]}, ${m.teams[1].name} ${e.score[1]}. Thank you for coming, and get home safely.`;
+  else if (STADIUM_LINES[e.kind]) line = STADIUM_LINES[e.kind](e);
+  if (line && (big || e.kind === 'kickoff' || msgT <= 0 || T - stadiumSaidT > 2.5)) { say(line, big ? 5 : 2.8); stadiumSaidT = T; }
+  // and the sound of it
+  const s = { kickoff: 'whistle', foul: 'peep', offside: 'peep', ht: 'whistle2', ft: 'whistle3', shot: 'ooh', save: 'applause', miss: 'groan', woodwork: 'groan',
+    goal: home ? 'roar' : 'awaygoal', yellow: home ? 'boo' : 'cheer', red: home ? 'boo' : 'roarSmall', penalty: home ? 'roarSmall' : 'boo', sub: 'applause', corner: 'swell' }[e.kind];
+  if (s) sfxStadium(s, m);
+  if (e.kind === 'foul' || e.kind === 'penalty' || e.kind === 'yellow' || e.kind === 'red') sfxStadium('peep', m);
+}
+// ---- the sounds. Crowd noise is filtered noise shaped by envelopes (a crowd is mostly breath and vowels); the
+// whistle is a pea whistle's trill: a bright tone wobbling fast as the pea rattles
+function sfxStadium(kind, m) {
+  if (!actx || actx.state !== 'running' || !soundOn) return;
+  const at = actx.currentTime, ref = m ? Math.hypot(STADIUM.cx + m.ref.pos[0] - px, STADIUM.cy + m.ref.pos[1] - py) : 40, wk = clamp(1.4 - ref / 70, .35, 1);
+  const crowd = (len, rise, freq, q, gain, glide = 1) => { // a swell of voices
+    const s = actx.createBufferSource(), f = filt('bandpass', freq, q), f2 = filt('lowpass', freq * 2.4), g = actx.createGain();
+    s.buffer = noiseBuf; s.loop = true;
+    f.frequency.setValueAtTime(freq, at); f.frequency.exponentialRampToValueAtTime(freq * glide, at + len);
+    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + rise); g.gain.setTargetAtTime(gain * .6, at + rise, len * .35); g.gain.exponentialRampToValueAtTime(.0005, at + len);
+    shot(s, f, f2, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + len + .1);
+  };
+  const whistle = (t0, len) => {
+    const o = actx.createOscillator(), lfo = actx.createOscillator(), depth = actx.createGain(), g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = 2950; lfo.frequency.value = 34; depth.gain.value = 140; lfo.connect(depth); depth.connect(o.frequency);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.09 * wk, t0 + .02); g.gain.setValueAtTime(.09 * wk, t0 + len - .04); g.gain.linearRampToValueAtTime(0, t0 + len);
+    shot(o, g, sfxBus); o.start(t0); lfo.start(t0); o.stop(t0 + len + .02); lfo.stop(t0 + len + .02);
+  };
+  if (kind === 'peep') whistle(at, .28);
+  else if (kind === 'whistle') whistle(at, .9);
+  else if (kind === 'whistle2') { whistle(at, .5); whistle(at + .65, .9); }
+  else if (kind === 'whistle3') { whistle(at, .45); whistle(at + .6, .45); whistle(at + 1.2, 1.3); }
+  else if (kind === 'ooh') crowd(1.4, .35, 520, 1.3, .22, 1.3); // (a rising breath in)
+  else if (kind === 'groan') crowd(1.6, .15, 600, 1.1, .2, .6); // (falling away)
+  else if (kind === 'swell') crowd(2.2, 1, 700, .8, .12);
+  else if (kind === 'roar' || kind === 'roarSmall') { const k = kind === 'roar' ? 1 : .55; crowd(5.5 * k + 1, .25, 900, .6, .42 * k); crowd(4.5 * k + 1, .3, 1800, .9, .18 * k); crowd(6 * k, .5, 300, .7, .25 * k); }
+  else if (kind === 'awaygoal') { crowd(2.5, .2, 1100, .9, .12); crowd(2.8, .4, 420, 1, .22, .7); } // (the away end, then the home end's groan)
+  else if (kind === 'boo') crowd(2.4, .4, 260, 2.5, .2);
+  else if (kind === 'cheer') crowd(1.8, .2, 1000, .8, .16);
+  else if (kind === 'applause' || kind === 'chant') { // hands: a patter of tiny bursts, or in time, the chant's rhythm
+    const claps = kind === 'chant' ? [0, .42, 1.1, 1.52, 1.94, 2.4, 2.82, 3.5, 3.92, 4.34] : Array.from({ length: 40 }, () => Math.random() * 2.2);
+    for (const c of claps) for (let n = 0; n < (kind === 'chant' ? 6 : 1); n++) burst(at + c + Math.random() * .03, .05, [filt('bandpass', 1500 + Math.random() * 900, 1.2)], kind === 'chant' ? .05 : .03, (Math.random() - .5) * 1.2);
+    if (kind === 'chant') for (const c of [0, 1.1, 1.94, 3.5]) { // and the voices with them: a vowel, sung, on the beats
+      const o = actx.createOscillator(), f = filt('bandpass', 720, 4), f2 = filt('bandpass', 1150, 5), g = actx.createGain(), mix = actx.createGain();
+      o.type = 'sawtooth'; o.frequency.value = 165 + Math.random() * 10; g.gain.setValueAtTime(0, at + c); g.gain.linearRampToValueAtTime(.05, at + c + .06); g.gain.exponentialRampToValueAtTime(.001, at + c + .55);
+      o.connect(f); o.connect(f2); f.connect(mix); f2.connect(mix); shot(mix, g, sfxBus); o.start(at + c); o.stop(at + c + .6);
+    }
+  }
+}
+// for the mixer: how the crowd sounds right now (audio-mix.js): 0 empty, up to 1 for a goalmouth scramble
+function stadiumCrowdLevel() {
+  const m = stadiumMatch; if (!m) return .2;
+  if (m.kick != null && nowHour() < m.kick) return .45; // (filling up, chatting)
+  if (m.phase === 'ht') return .4;
+  if (m.phase === 'ft') return .3;
+  if (m.phase === 'goal') return 1;
+  return .55 + .45 * (m.danger || 0);
 }
 // ===== a top-down view of a simulated match (Dev tools > Other > Watch a match): the engine (match-engine.js) drawn
 // plainly on a canvas, to watch the football itself before there's a stadium round it. Players are discs in their
