@@ -207,7 +207,7 @@ const fishSeg=(p0,p1,col,surface=false)=>fishPath([p0,p1],col,surface);
 // ---- out in the world, after the sprites: the line, the bobber, the rings, the fish coming in, the spray
 function drawFishing() {
   if (!fishingFrom()) return;
-  for (const p of fishFx) { const q = fishProj(rel(p.x - px), rel(p.y - py), p.z); if (q) fishSurface(q.c,q.r,q.depth,C(WHITE,8+p.life*6)); }
+  for (const p of fishFx) { const q = fishProj(rel(p.x - px), rel(p.y - py), p.z); if(q)fishPut(q.c,q.r,q.depth,p.vz>0?"'":'.',C(WHITE,8+p.life*6+(q.depth>1.5?2:0))); }
   const f = fishing;
   if (!heldRod()) return;
   stepRodView();
@@ -228,7 +228,7 @@ function drawFishing() {
     for (let j = 0; j < 7; j++) {
       const q = clamp(f.t / f.dur - j * 0.05, 0, 1), dist = 0.55 * (1 - q) ** 1.1;
       const fxp = bx + Math.cos(f.from) * dist, fyp = by + Math.sin(f.from) * dist, p = fishProj(fxp, fyp, 0.001 + j * 0.0015 * (j & 1));
-      if (p) fishSurface(p.c,p.r,p.depth,C(j===0?WHITE:CYAN,(j===0?14:12-j)*lit));
+      if (p) fishPut(p.c,p.r,p.depth,j===0?'~':j&1?'o':'.',C(j===0?WHITE:CYAN,(j===0?14:12-j)*lit+(p.depth>1.5?3:0)));
     }
   }
   // the line: off the rod tip, sagging in the slack (lying on the water near the bobber), taut when something's on
@@ -245,8 +245,9 @@ function drawFishing() {
   const p = fishProj(bx, by, bz + 0.004);
   if (!p) return;
   if (f.st === 'bite') { // under: a swirl of white water where it went, spray over it, and a '!' you can't miss
-    fishSurface(p.c,p.r,p.depth,C(WHITE,15));
-    for (const s of [-1, 1]) fishSurface(p.c+s,p.r,p.depth,C(CYAN,13));
+    fishPut(p.c,p.r,p.depth,'@',C(WHITE,15),C(CYAN,3));
+    const spread=p.depth>1.5?2:1;
+    for(const s of [-1,1])fishPut(p.c+s*spread,p.r,p.depth,s<0?'(':')',C(WHITE,p.depth>1.5?15:13));
     if (f.t < 0.6) fishPut(p.c, p.r - 2 - (f.t * 4 | 0) % 2, p.depth * 0.99, '!', C(YEL, 15));
     return;
   }
@@ -291,10 +292,12 @@ const catchLength = kg => clamp(0.3 * Math.cbrt((kg || 0.5) / 0.5), 0.12, 1.6); 
 function fishRing(bx, by, R, k, lit) {
   const p = fishProj(bx, by, 0);
   if (!p) return;
+  const boost=clamp((p.depth-.8)/1.7,0,1);
+  R=Math.max(R,(.45+clamp(k,0,1)*.95)*p.depth/projX);
   const n = clamp(Math.round(R * projX / p.depth * 5), 8, 64);
   for (let j = 0; j < n; j++) {
     const an = j / n * TAU, q = fishProj(bx + Math.cos(an) * R, by + Math.sin(an) * R, 0.0005);
-    if (q) fishSurface(q.c,q.r,q.depth,C(WHITE,(5+k*9)*lit));
+    if (q) fishPut(q.c,q.r,q.depth,Math.abs(Math.sin(an+Math.atan2(dy,dx)))>.7?'-':'~',C(WHITE,(5+k*9)*lit+boost*k*4));
   }
 }
 
