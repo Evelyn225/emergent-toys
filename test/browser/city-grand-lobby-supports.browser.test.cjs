@@ -39,9 +39,9 @@ test('Grand lobby columns and chandelier have actual floor/ceiling contacts, clo
   ROOM_CEILS.hotel(0,0,0,2,2);if(CH[0]!==' ')bad.push('phantom painted ceiling light remains');
   return bad;});assert.deepEqual(bad,[]);
 }));
-test('native lobby renders columns and chandelier, blocks only the actual column plinths, permits walking under the lamp and retains check-in access',()=>fixture(async p=>{
+test('native lobby renders columns and chandelier, blocks the actual column plinths, permits walking under the lamp and retains check-in access',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{const bad=[],col=room.props.find(p=>p.hotelColumn),lamp=room.props.find(p=>p.hotelChandelier);if(!col||!lamp)return{bad:['missing fixtures']};
-  for(const [o,x,y,z]of [[col,col.x+3,col.y,2.6],[lamp,12,11,4.6]]){px=x;py=y;a=Math.atan2(o.y-y,o.x-x);pitch=0;render(0);pitch=(z-eye)/Math.hypot(o.x-x,o.y-y)*projY/rows;render(0);const old=[BG.slice(),CH.slice(),COL.slice()],draw=o.draw;let changed=0;o.draw=()=>{};try{render(0);for(let i=0;i<BG.length;i++)if(BG[i]!==old[0][i]||CH[i]!==old[1][i]||COL[i]!==old[2][i])changed++;}finally{o.draw=draw;}if(changed<20||!free(px,py))bad.push('fixture not visible from a clear native view');}
+  for(const [o,x,y,z]of [[col,col.x+3,col.y,2.6],[lamp,13.4,11,4.6]]){px=x;py=y;a=Math.atan2(o.y-y,o.x-x);pitch=0;render(0);pitch=(z-eye)/Math.hypot(o.x-x,o.y-y)*projY/rows;render(0);const old=[BG.slice(),CH.slice(),COL.slice()],draw=o.draw;let changed=0;o.draw=()=>{};try{render(0);for(let i=0;i<BG.length;i++)if(BG[i]!==old[0][i]||CH[i]!==old[1][i]||COL[i]!==old[2][i])changed++;}finally{o.draw=draw;}if(changed<20||!free(px,py))bad.push('fixture not visible from a clear native view');}
   for(const c of room.props.filter(p=>p.hotelColumn))if(free(c.x,c.y)||!free(c.x+.56,c.y))bad.push('column collider missing/too wide');
   px=12;py=7;for(let k=0;k<20;k++)move(0,.1);if(Math.abs(py-9)>1e-8)bad.push('cannot walk under chandelier');
   if(!roomPath(12,15.4,6.5,4.1).length||!free(6.5,4.1))bad.push('check-in route blocked');
