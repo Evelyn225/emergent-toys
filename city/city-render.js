@@ -642,9 +642,11 @@ function floorBaseCell(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
-  const road = worldReady&&(roadBridgeAt(wx,wy)||onCauseway(wx,wy))&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
+  const bridge=worldReady&&(roadBridgeAt(wx,wy)||airportBridgeAt(wx,wy));
+  const road = bridge ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
+  if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
@@ -653,8 +655,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
       surf = gf; soft = true;
-    } else if (onCauseway(wx, wy)) { // the bridge carries the road above the water
-      if(worldReady&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
+    } else if (!worldReady&&onCauseway(wx, wy)) { // legacy flat causeway; built bridges own their road surface
       soft = true; surf = causewayFloor(wx, wy, L, d);
     } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
       const af = airportFloor(i, r, x, wx, wy, L, d);

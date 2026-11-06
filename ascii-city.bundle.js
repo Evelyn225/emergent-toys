@@ -557,7 +557,7 @@ function controllerButton(pad,index){
   return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0;
 }
 const CONTROLLER={pad:null,id:null,sampleT:-Infinity,keys:new Set(),realKeys:new Set(),buttons:[],blocked:[],
-  context:'',root:null,focus:0,repeat:0,direction:'',time:0,active:false,lastUsed:-Infinity,
+  sprint:false,hint:'',context:'',root:null,focus:0,repeat:0,direction:'',time:0,active:false,lastUsed:-Infinity,
   motion:{forward:0,side:0,steer:0,throttle:0,flightX:0,flightY:0},sheet:null,keyboard:null};
 function controllerAxis(key,axis){return key||CONTROLLER.motion[axis]||0;}
 
@@ -13247,9 +13247,11 @@ function floorBaseCell(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
-  const road = worldReady&&(roadBridgeAt(wx,wy)||onCauseway(wx,wy))&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
+  const bridge=worldReady&&(roadBridgeAt(wx,wy)||airportBridgeAt(wx,wy));
+  const road = bridge ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
+  if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
@@ -13258,8 +13260,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       const gf = gardenFloor(i, r, x, wx, wy, L, d);
       if (gf === true) return;
       surf = gf; soft = true;
-    } else if (onCauseway(wx, wy)) { // the bridge carries the road above the water
-      if(worldReady&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
+    } else if (!worldReady&&onCauseway(wx, wy)) { // legacy flat causeway; built bridges own their road surface
       soft = true; surf = causewayFloor(wx, wy, L, d);
     } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
       const af = airportFloor(i, r, x, wx, wy, L, d);
@@ -26866,7 +26867,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: (room.tv ? 'E: telly off' : 'E: telly on') + (videoPlayableTape(heldItem()) ? (room.tv && room.videoTape===heldItem().id ? ' · Q: eject tape' : ' · Q: play VHS') : '') }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: (room.tv ? 'E: telly off' : 'E: telly on') + videoTapePrompt() }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -27072,7 +27073,7 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
+  const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() && SK.manual ? 'MANUAL: A/D moves balance mark left/right | right stick / right-drag mouse forward/back: pitch balance | keep the mark centred'
     : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
@@ -27084,6 +27085,7 @@ function hud() {
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
+  const help=CONTROLLER.active ? (settings.help?CONTROLLER.hint:'') : keyboardHelp;
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
   const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, baseTop = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
@@ -39931,7 +39933,7 @@ ROOM_DEFS.grandhotel.props=r=>[...GRAND_LOBBY_PROPS(r).filter(p=>!(p.box&&p.box.
 function hotelAmenityPrompt(){
  if(mode!=='room'||room.kind!=='hotelroom')return '';
  const spots=room.def.hotelAmenities;if(!spots)return '';
- if(near(px,py,...spots.tv)<1.65)return room.tv?'E: switch off the TV':'E: watch TV';
+ if(near(px,py,...spots.tv)<1.65)return (room.tv?'E: switch off the TV':'E: watch TV')+videoTapePrompt();
  if(spots.stove&&near(px,py,...spots.stove)<1.8)return 'E: cook at the kitchen stove';
  return '';
 }
@@ -48914,8 +48916,17 @@ function videoRentalUse(t){
  if(!pay(6))return say('The rental is $6. Even artistic research has a budget.',3);
  carryItem({id:'vhs_afterhours_'+t.index,uses:0});saveGame();say('The clerk silently slides you a plain brown bag. "Due back Tuesday."',4);
 }
+function videoTapeNearby(){
+ if(mode!=='room'||!room)return false;
+ if(homeRecord(room))return homeSpot()==='tv';
+ const tv=room.def.hotelAmenities?.tv;
+ return room.kind==='hotelroom'&&!!tv&&near(px,py,...tv)<1.65;
+}
+function videoTapePrompt(){
+ return videoPlayableTape(heldItem()) ? (room.tv&&room.videoTape===heldItem().id?' · Q: eject tape':' · Q: play VHS') : '';
+}
 function videoTapeUse(it){
- if(mode!=='room'||!homeRecord(room)||homeSpot()!=='tv')return ['A VHS tape. Take it to your TV at home and press Q nearby.',null];
+ if(!videoTapeNearby())return ['A VHS tape. Press Q near a TV at home, or in your hotel or motel room.',null];
  if(room.videoTape===it.id&&room.tv){room.videoTape=null;return ['You eject the tape. Back to regular television.','click'];}
  room.videoTape=it.id;room.tv=true;room.videoTapeStart=T;room.videoMusicAt=-1;videoBackroomTick();
  return [it.id==='vhs'?'The tape clicks in. Mist, pines, a waterfall… FIR CREEK.':'The tape clicks in. A sax-like honk. The entire picture says [ CENSORED ].','click'];
@@ -51778,6 +51789,7 @@ function controllerKey(code,down){
 }
 function controllerTap(code){controllerKey(code,true);controllerKey(code,false);}
 function controllerReleaseKeys(){
+  CONTROLLER.sprint=false;
   controllerStopRumble();
   for(const code of CONTROLLER.keys)if(!CONTROLLER.realKeys.has(code))controllerKey(code,false);
   CONTROLLER.keys.clear();for(const key in CONTROLLER.motion)CONTROLLER.motion[key]=0;
@@ -51789,9 +51801,10 @@ function controllerKeys(wanted){
   CONTROLLER.keys=wanted;
 }
 function controllerHint(text){
+  CONTROLLER.hint=text;
   let hint=document.getElementById('controller-hint');
   if(!hint){hint=document.createElement('div');hint.id='controller-hint';hint.style.cssText='position:fixed;bottom:8px;left:8px;right:8px;z-index:2100;pointer-events:none;color:#d2ecea;background:#080b10dd;padding:6px 10px;font:13px monospace;width:fit-content;max-width:calc(100vw - 36px)';document.body.appendChild(hint);}
-  if(hint.textContent!==text)hint.textContent=text;const display=CONTROLLER.active?'block':'none';if(hint.style.display!==display)hint.style.display=display;
+  if(hint.textContent!==text)hint.textContent=text;const display=CONTROLLER.active&&(CONTROLLER.menu||game)?'block':'none';if(hint.style.display!==display)hint.style.display=display;
 }
 function controllerTick(dt){
   dt=Math.max(0,Math.min(.05,dt));CONTROLLER.time+=dt;
@@ -51856,7 +51869,10 @@ function controllerTick(dt){
   }else{
     if(edge(4))cycleQuickSlot(-1);if(edge(5))cycleQuickSlot(1);
     hold('Space',held(0));hold(vehicle?'KeyS':'KeyC',held(1));hold('KeyE',held(2));
-    hold('ShiftLeft',held(10));
+    const moving=Math.hypot(...left)>.05;
+    if(!moving||vehicle||freecam)CONTROLLER.sprint=false;
+    else if(edge(10))CONTROLLER.sprint=!CONTROLLER.sprint;
+    hold('ShiftLeft',held(10)||CONTROLLER.sprint);
     if(vehicle){
       motion.steer=left[0];motion.throttle=(CONTROLLER.blocked[7]?0:controllerButton(pad,7))-(CONTROLLER.blocked[6]?0:controllerButton(pad,6));
       if(mode==='air'){motion.flightX=left[0];motion.flightY=left[1];}
@@ -51867,7 +51883,7 @@ function controllerTick(dt){
     }else{
       hold('KeyW',left[1]<-.2);hold('KeyS',left[1]>.2);hold('KeyD',left[0]>.2);hold('KeyA',left[0]<-.2);hold('KeyQ',held(7));
     }
-    controllerHint(vehicle?'Left stick steer / fly · RT power · LT brake / reverse · X enter / exit · A action · Y actions':'Left stick move · right stick look · A jump · X interact · B crouch / sit · RT use · LT aim · Y actions');
+    controllerHint(vehicle?'Left stick steer / fly · RT power · LT brake / reverse · X enter / exit · A action · Y actions':'Left stick move · L3 sprint (click / hold) · right stick look · A jump · X interact · B crouch / sit · RT use · LT aim · Y actions');
   }
   controllerKeys(wanted);
   if(!skate||cameraLook){
