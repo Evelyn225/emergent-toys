@@ -16396,7 +16396,7 @@ function drawCarFire(m, vx, vy, hx, hy) {
   const flame = (i, t, L) => { // ragged: tongues of yellow and orange with the street showing between them
     const hot = hash(i, Math.floor(T * 14), m.id);
     if (hot < 0.3) return false;
-    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i, hot > 0.65 ? '^' : hot > 0.45 ? '(' : ')', C(hot > 0.85 ? WHITE : YEL, 15)), true;
+    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i,' ',0),true;
   };
   for (let k = 0; k < 4; k++) { // four tongues across the bonnet, each leaping and dropping on its own
     const s_ = (k - 1.5) * hw * 0.5, fl = 0.45 + 0.55 * Math.abs(Math.sin(T * (9 + k * 2.3) + k * 1.7)), sway = 0.025 * Math.sin(T * 6 + k * 2);
@@ -27996,7 +27996,7 @@ function damageDash() {
     const h = Math.floor((0.5 + 0.5 * Math.sin(x * 0.7 + T * 11)) * (1 + Math.sin(x * 0.23 - T * 3)) * 2), mid = Math.abs(x - cols / 2) < cols * 0.3;
     if (!mid) continue;
     const b0 = rows - DASH_ROWS - 1; // (just above the bonnet)
-    for (let r = b0; r > b0 - h; r--) { const i = r * cols + x; set(i, r === b0 ? 'W' : '^', C(r === b0 ? ORANGE : YEL, 15)); BG[i] = C(ORANGE, 6 + h); FOGS[i] = FOGB[i] = 0; }
+    for (let r = b0; r > b0 - h; r--) { const i = r * cols + x; BG[i]=C(r===b0?ORANGE:YEL,r===b0?9+h:13);set(i,' ',0); FOGS[i] = FOGB[i] = 0; }
   }
 }
 // ---- the respray
@@ -28935,32 +28935,36 @@ function starAt(s, k, t) {
 }
 function drawFireworks() {
   if (!shells.length) return;
-  const put = (wx, wy, wz, ch, col, glow) => {
+  const put = (wx, wy, wz, col, glow) => {
     const vx = rel(wx - px), vy = rel(wy - py), depth = dx * vx + dy * vy;
     if (depth < 1) return;
     const c = Math.round(cols / 2 + (-dy * vx + dx * vy) * projX / depth), r = Math.round(hor - (wz - eye) * projY / depth);
     if (c < 0 || c >= cols || r < 0 || r >= rows) return;
     const i = r * cols + c;
     if (ZB[i] < depth) return; // behind a building
-    set(i, ch, col); FOGS[i] = 0;
-    if (glow && ZB[i] === Infinity) { BG[i] = glow; FOGB[i] = 0; } // a glow on the sky behind it
+    BG[i]=col;set(i,' ',0);FOGS[i]=FOGB[i]=0;
+    // A dim halo belongs to sky cells beside the bright star, never to a wall.
+    if(glow)for(const [dc,dr]of [[-1,0],[1,0],[0,-1],[0,1]]){
+      const x=c+dc,y=r+dr;if(x<0||x>=cols||y<0||y>=rows)continue;
+      const j=y*cols+x;if(ZB[j]===Infinity&&(BG[j]===NONE||(BG[j]&15)<(glow&15))){BG[j]=glow;set(j,' ',0);FOGS[j]=FOGB[j]=0;}
+    }
   };
   for (const s of shells) {
     const t = T - s.t0;
     if (t < s.rise) { // climbing: a bright head, a trail of sparks behind it
       const f = t / s.rise, z = s.h * (1 - (1 - f) ** 2);
-      put(s.x, s.y, z, '^', C(YEL, 15));
-      for (let k = 1; k < 5; k++) put(s.x + Math.sin(k * 3 + s.seed) * 0.05, s.y, Math.max(0, z - k * 0.5), '.', C(ORANGE, 12 - k * 2));
+      put(s.x,s.y,z,C(YEL,15));
+      for (let k = 1; k < 5; k++) put(s.x + Math.sin(k * 3 + s.seed) * 0.05, s.y, Math.max(0,z-k*.5),C(ORANGE,12-k*2));
       continue;
     }
     const bt = t - s.rise, life = s.kind === 'willow' ? 3.4 : 2.4;
     if (bt > life) continue;
-    const fade = 1 - bt / life, ch = bt < 0.25 ? '@' : fade > 0.6 ? '*' : fade > 0.3 ? '+' : s.kind === 'willow' ? '|' : '.';
-    if (bt < 0.15) put(s.x, s.y, s.h, '#', C(WHITE, 15), C(s.col, 4)); // the burst's flash
+    const fade=1-bt/life;
+    if (bt < 0.15) put(s.x, s.y, s.h,C(WHITE,15), C(s.col, 4)); // the burst's flash
     for (let k = 0; k < s.n; k++) {
       if (s.kind === 'crackle' && bt > 1.2 && hash(k, Math.floor(T * 12), s.seed) > 0.5) continue; // crackling: twinkling on and off
       const [x, y, z] = starAt(s, k, bt);
-      put(x, y, z, ch, C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
+      put(x,y,z,C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
     }
   }
 }
@@ -31370,38 +31374,59 @@ function drawCanopy(cx, grip, size, bob) {
 }
 // a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
 // brighter on a drag, smoke curling off it
-function drawCigarette() {
-  const u = Math.max(14, cv.height / 36), s = Math.round(u * 1.6);
-  g.font = s + 'px monospace';
-  const joint=fx.smokeKind==='joint';
-  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / (joint?55:45));
-  const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : [joint?'|':'#',joint?'=':'#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
-  g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
-  chars.forEach((ch, k) => {
-    const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    let color=C(WHITE,15);
-    if(ember)color=C(cigTip>.3?YEL:ORANGE,fract(T*3)<.5?12+cigTip*3:10+cigTip*5);
-    else if(fx.pipe)color=C(BRICK,12);
-    else if(joint)color=C(STONE,14);
-    else if(k<2)color=C(ORANGE,12);
-    g.fillStyle=PAL[color];
-    const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
-    g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
-  });
-  // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
-  // puffs out a lot more
-  const tx = x0 + (chars.length - 1) * dx + w * 0.3, ty = y0 + (chars.length - 1) * dy - s * 0.3, dt = Math.min(0.05, T - (drawCigarette.t ?? T));
-  drawCigarette.t = T;
-  g.font = FS + 'px monospace';
-  if (Math.random() < dt * (1.5 + cigTip * 25)) smokePuffs.push([tx, ty, 1]);
-  smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
-  for (const p of smokePuffs) {
-    p[1] -= dt * 4 * FS; p[0] += Math.sin(T * 3 + p[1] / FS) * dt * 3 * cw;
-    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
-    g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
-    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
+// Close activity effects use the same coarse cell proportions as the world.
+// Sample shapes into rectangles instead of adding smooth canvas silhouettes.
+function activityPixelGrid(){return [Math.max(2,Math.round(cw*.5)),Math.max(3,Math.round(FS*.5))];}
+function activityPixelEllipse(x,y,rx,ry,col){
+  const [sx,sy]=activityPixelGrid();g.fillStyle=PAL[col];
+  for(let r=Math.floor((y-ry)/sy);r<=Math.floor((y+ry)/sy);r++){
+    const v=((r+.5)*sy-y)/ry;if(Math.abs(v)>1)continue;
+    const half=rx*Math.sqrt(1-v*v),a=Math.ceil((x-half)/sx-.5),b=Math.floor((x+half)/sx-.5);
+    if(b>=a)g.fillRect(a*sx,r*sy,(b-a+1)*sx,sy);
   }
+}
+function activityPixelSegment(a,b,ra,rb,col){
+  const [sx,sy]=activityPixelGrid(),dx_=b.x-a.x,dy_=b.y-a.y,d=dx_*dx_+dy_*dy_||1,R=Math.max(ra,rb);
+  const x0=Math.floor((Math.min(a.x,b.x)-R)/sx),x1=Math.ceil((Math.max(a.x,b.x)+R)/sx);
+  g.fillStyle=PAL[col];
+  for(let r=Math.floor((Math.min(a.y,b.y)-R)/sy);r<=Math.ceil((Math.max(a.y,b.y)+R)/sy);r++){
+    let start=null;for(let c=x0;c<=x1+1;c++){
+      const x=(c+.5)*sx,y=(r+.5)*sy,t=clamp(((x-a.x)*dx_+(y-a.y)*dy_)/d,0,1),rad=ra+(rb-ra)*t;
+      const inside=c<=x1&&(x-a.x-dx_*t)**2+(y-a.y-dy_*t)**2<=rad*rad;
+      if(inside&&start===null)start=c;
+      if(!inside&&start!==null){g.fillRect(start*sx,r*sy,(c-start)*sx,sy);start=null;}
+    }
+  }
+}
+function drawCigarette() {
+  const u=Math.max(14,cv.height/36),s=Math.round(u*1.6),joint=fx.smokeKind==='joint';
+  g.font=s+'px monospace';
+  const w=g.measureText('M').width,len=1+Math.round(6*fx.smoke/(joint?55:45)),x0=cv.width*.5-w,y0=cv.height-s*.9,dx=w*.95,dy=-s*.32;
+  let tx,ty;
+  if(fx.pipe){
+    tx=x0+5*dx;ty=y0+5*dy+s*.4;
+    activityPixelSegment({x:x0,y:y0+s*.5},{x:tx,y:ty+s*.3},s*.08,s*.13,C(BRICK,7));
+    activityPixelEllipse(tx,ty+s*.2,w*.85,s*.55,C(BRICK,10));
+    activityPixelEllipse(tx,ty-s*.2,w*.9,s*.19,C(BRICK,13));
+    activityPixelEllipse(tx,ty-s*.22,w*.66,s*.12,C(GRAY,1));
+    activityPixelEllipse(tx,ty-s*.22,w*.44,s*.07,C(cigTip>.3?YEL:ORANGE,9+cigTip*6));
+    ty-=s*.3;
+  }else{
+    const start={x:x0,y:y0+s*.45},end={x:x0+(len+2)*dx,y:y0+(len+2)*dy+s*.45},filter={x:x0+1.8*dx,y:y0+1.8*dy+s*.45};
+    activityPixelSegment(start,end,s*.14,joint?s*.07:s*.14,C(joint?STONE:WHITE,13));
+    if(!joint)activityPixelSegment(start,filter,s*.14,s*.14,C(ORANGE,11));
+    const ash={x:end.x-dx*.4,y:end.y-dy*.4};activityPixelSegment(ash,end,s*.13,s*.12,C(GRAY,7));
+    activityPixelEllipse(end.x,end.y,s*.09,s*.13,C(cigTip>.3?YEL:ORANGE,10+cigTip*5));
+    tx=end.x;ty=end.y-s*.25;
+  }
+  const dt=clamp(T-(drawCigarette.t??T),0,.05);drawCigarette.t=T;
+  if(Math.random()<dt*(1.5+cigTip*25))smokePuffs.push([tx,ty,1]);
+  smokePuffs=smokePuffs.filter(p=>(p[2]-=dt*.35)>0);
+  g.save();try{for(const p of smokePuffs){
+    p[1]-=dt*4*FS;p[0]+=Math.sin(T*3+p[1]/FS)*dt*3*cw;
+    g.globalAlpha=p[2]*.38;activityPixelEllipse(p[0],p[1],cw*.8,FS*.45,C(GRAY,12));
+    g.globalAlpha=p[2]*.18;activityPixelEllipse(p[0]+cw*.6,p[1]-FS*.3,cw*.8,FS*.35,C(WHITE,14));
+  }}finally{g.restore();}
 }
 // the vape: a message while you hold it in, then on letting go a fat mango cloud, every wisp in its own coloured
 // cell, rolling out from your mouth, spreading and thinning
@@ -31417,6 +31442,7 @@ function drawVapeCloud() {
     }
     say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
     hazeExhale(fx.cloud, 'vape'); // (and it hangs in the air)
+    while(cloudPuffs.length>320)cloudPuffs.shift();
     fx.cloud = 0; if (actx) sfxUse('drag');
   }
   if (!cloudPuffs.length) return;
@@ -31425,8 +31451,9 @@ function drawVapeCloud() {
   for (const p of cloudPuffs) {
     p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
-    g.fillStyle = PAL[C(f > 0.6 ? ORANGE : WARM, 4 + f * 5)]; g.fillRect(x, y, cw, FS);
-    g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
+    g.save();g.globalAlpha=f*.28;
+    activityPixelEllipse(x+cw*.5,y+FS*.5,cw*1.2,FS*.7,C(WARM,12));
+    g.globalAlpha=f*.16;activityPixelEllipse(x+cw*.6,y+FS*.4,cw*.65,FS*.4,C(YEL,14));g.restore();
   }
 }
 // the yo-yo out on its string (see yoyo in goods.js), at the world's own character size: hanging from your hand,
@@ -31484,15 +31511,15 @@ function drawYoyo(x, y) {
   artText(art, p.x - 5.5 * w, p.y - 3.5 * s, s, col);
 }
 // a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down)
-function drawSparks(x, y, size) {
-  g.font = size + 'px monospace';
-  const w = g.measureText('M').width;
-  for (let k = 0; k < 16; k++) {
-    const a_ = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 2.6;
-    g.fillStyle = PAL[C(Math.random() < 0.5 ? YEL : WHITE, 9 + Math.random() * 6)];
-    g.fillText(r < 1.4 ? '*' : Math.random() < 0.5 ? '+' : '.', x - w / 2 + Math.cos(a_) * r * w * 1.6, y + Math.sin(a_) * r * size * 0.9);
+function drawSparks(x,y,size){
+  const [sx,sy]=activityPixelGrid(),point=(x,y,col)=>{g.fillStyle=PAL[col];g.fillRect(Math.floor(x/sx)*sx,Math.floor(y/sy)*sy,sx,sy);};
+  for(let k=0;k<16;k++){
+    const phase=fract(T*(2.1+hash(k,1,879)*2)+hash(k,2,879)),angle=hash(k,3,879)*TAU,r=(.25+phase*3)*size;
+    const px_=x+Math.cos(angle)*r,py_=y+Math.sin(angle)*r*.7+phase*phase*size*.7;
+    point(px_-Math.cos(angle)*size*.2,py_-Math.sin(angle)*size*.15,C(YEL,10-phase*6));
+    point(px_,py_,C(k&1?YEL:WHITE,15-phase*7));
   }
-  g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('@', x - w / 2, y);
+  point(x,y,C(WHITE,15));
 }
 
 // ---- putting things down and picking them up: where you are decides where it lies
@@ -33945,12 +33972,19 @@ function addFishingCompetitionShop() {
 // ring of stones on Lighthouse Island, always burning a little, roaring while there's something over it
 let cookCtx = null; // what's on, and where: { on: 'stove' | 'grill' | 'fire', spot, recipe, pantry }
 const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : null;
-SOLID_SHADE.grill = o => (i, t, L) => {
-  const f = HIT.face, w = HIT.w, lit = cookCtx && cookCtx.spot === o.spot && game && game.g.id === 'cook';
-  if (w < 0.06 && f !== 5) return Math.abs(Math.abs(HIT.u) - o.hl + 0.008) < 0.008 && (f === 3 || f === 4) ? (set(i, '|', C(GRAY, L)), true) : false; // the legs: see-through between
-  if (f === 5) { BG[i] = lit ? C(RED, 2 + Math.sin(T * 7 + HIT.u * 40) * 0.8) : C(GRAY, 0.8); return set(i, fract(HIT.u * 40) < 0.4 ? '#' : lit && hash(Math.floor(HIT.u * 60), Math.floor(T * 6), 1801) > 0.7 ? '*' : '=', C(lit ? ORANGE : GRAY, lit ? 13 : L * 0.7)), true; } // the grate, the coals under it
-  BG[i] = C(GRAY, (0.7 + L * 0.12) * shadeFace(f)); // the kettle: black enamel
-  return set(i, w > 0.094 ? '=' : f === 3 && Math.abs(HIT.u) < 0.012 && w < 0.075 ? 'o' : ' ', C(GRAY, L)), true;
+SOLID_SHADE.grill = o => (i,t,L)=>{
+  const f=HIT.face,w=HIT.w,lit=cookCtx&&cookCtx.spot===o.spot&&game&&game.g.id==='cook';
+  if(w<.06&&f!==5){
+    if(Math.abs(Math.abs(HIT.u)-o.hl+.008)>=.008||f!==3&&f!==4)return false;
+    BG[i]=C(GRAY,L);return set(i,' ',0),true;
+  }
+  if(f===5){
+    const bar=fract(HIT.u*40)<.4;
+    BG[i]=bar?C(GRAY,L*.7):lit?C(ORANGE,9+Math.sin(T*7+HIT.u*40)*2):C(GRAY,1);
+    return set(i,' ',0),true;
+  }
+  const trim=w>.094,knob=f===3&&Math.abs(HIT.u)<.012&&w<.075;
+  BG[i]=C(GRAY,trim||knob?L*.7:(.7+L*.12)*shadeFace(f));return set(i,' ',0),true;
 };
 // the campfire: a ring of round stones, logs leaning in together, flames that face you from whichever side you
 // come at it (licking up in tongues, white-hot at the heart, red at the tips), sparks drifting up out of it, and a warm
@@ -33978,13 +34012,13 @@ function drawCampfires() {
     const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
     if (!o.ring) for (let k = 0; k < 10; k++) { // the stones (a ring the islands built has its own)
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
-      dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
+      dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i,' ',0),true; });
     }
     if (!o.ring) for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
       drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
         const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
-        BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
+        BG[i]=ember?C(ORANGE,10+warm*3):C(BRICK,1+L*.15);return set(i,' ',0),true;
       });
     }
     if(!fireLit(o))continue;
@@ -33993,15 +34027,14 @@ function drawCampfires() {
     drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
       if (z > H) { // above it: sparks drifting up and fading
         const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
-        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) return set(i, cell > 0.997 ? '*' : '.', C(z > H + 0.12 ? ORANGE : YEL, 14 - (z - H) * 25)), true;
+        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) {BG[i]=C(z>H+.12?ORANGE:YEL,14-(z-H)*25);return set(i,' ',0),true;}
         return false;
       }
       const h = z / H, n = noise(u * 55, z * 28 - T * 7, 1817), width = 0.055 * (1 - h) ** 0.7 * (0.75 + 0.5 * n); // tongues licking up, flickering
       const off = Math.abs(u - Math.sin(T * 3 + z * 40) * 0.006 * h);
       if (off > width) return false;
       const core = off / Math.max(width, 1e-4) < 0.45 && h < 0.6;
-      BG[i] = core ? C(YEL, 5 + (1 - h) * 6) : C(h > 0.7 ? RED : ORANGE, 3 + (1 - h) * 6);
-      return set(i, core ? (h < 0.25 ? '@' : '#') : h > 0.75 ? "'" : n > 0.5 ? '^' : 'A', C(core ? WHITE : YEL, 15)), true;
+      BG[i]=C(core?(h<.25?WHITE:YEL):h>.7?RED:ORANGE,core?15:9+(1-h)*4);return set(i,' ',0),true;
     });
   }
 }
@@ -34417,7 +34450,7 @@ function screams(x, y) {
 // ===== smoke and vapour that hangs in the air. Every drag you breathe out leaves a few puffs in front of you, a lit
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
-// hazy. Walk into a cloud and it fogs your view. (The close-up wisps on the screen, goods-ui.js, are as they were.)
+// hazy. Walk into a cloud and it fogs your view. Close wisps use the same colour-only treatment in goods-ui.js.
 const haze = []; // { at: placeKey, kind: 'smoke' | 'vape' | 'steam' | 'engine' | 'soot', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
 let hazeLastTip = 0, hazeDue = 0, hazeWisp = 0;
 const HAZE_WIND = [0.035, 0.012]; // outside, in cells a second (a light breeze)
@@ -34498,18 +34531,29 @@ function drawHaze() {
     if (dens > 0.3 && hash(i, 7, 994) > 0.35) hazeCell(i, dens * 0.6, insideKind);
   }
 }
-function hazeCell(i, dens, kind) {
-  if (kind === 'soot') { // a burning car's: thick and black
-    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(GRAY, 2 + dens * 3)); if (dens > 0.45) BG[i] = C(GRAY, 0.3 + dens * 0.8); FOGS[i] = 0; return;
+// Quantised palette compositing keeps the scene visible through thin haze.
+// The bounded cache avoids a nearest-palette search for every cloud cell/frame.
+const HAZE_TINTS=new Map();
+function hazeTint(background,target,opacity){
+  const bg=PALRGB[background]?background:C(GRAY,0),alpha=clamp(Math.round(opacity*8),1,8),key=(bg*256+target)*8+alpha-1;
+  if(HAZE_TINTS.has(key))return HAZE_TINTS.get(key);
+  const a=PALRGB[bg],b=PALRGB[target],f=alpha/8,r=a[0]+(b[0]-a[0])*f,g_=a[1]+(b[1]-a[1])*f,bl=a[2]+(b[2]-a[2])*f;
+  let best=0,error=Infinity;
+  for(let k=0;k<PALRGB.length;k++){const p=PALRGB[k],d=(p[0]-r)**2+(p[1]-g_)**2+(p[2]-bl)**2;if(d<error){error=d;best=k;}}
+  if(HAZE_TINTS.size>=8192)HAZE_TINTS.delete(HAZE_TINTS.keys().next().value);
+  HAZE_TINTS.set(key,best);return best;
+}
+function hazeCell(i,dens,kind){
+  let target,opacity;
+  if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
+  else if(kind==='fwsmoke'){
+    const flash=Math.exp(-Math.max(0,T-fwLight.t)*2.5),col=flash>.15?fwLight.col:GRAY;
+    target=C(col,(2+dens*4)*(.5+flash*2));opacity=dens*.65;
+  }else{
+    const vape=kind==='vape',lit=Math.max(vape?.7:.35,amb)*(kind==='steam'?1.25:1);
+    target=C(vape?WARM:GRAY,(8+dens*5)*lit);opacity=dens*(vape?.8:.6);
   }
-  if (kind === 'fwsmoke') { // a firework's: faint against the night, lit up in the colour of each burst after it
-    const flash = Math.exp(-(T - fwLight.t) * 2.5), col = flash > 0.15 ? fwLight.col : GRAY;
-    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(col, (1.2 + dens * 2.5) * (0.5 + flash * 2))); if (dens > 0.55) BG[i] = C(col, dens * (0.25 + flash * 1.2)); FOGS[i] = 0; return;
-  }
-  const vape = kind === 'vape', lit = Math.max(vape ? 0.7 : 0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter; a vape cloud's thick and pale, even at night)
-  set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
-  if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
-  FOGS[i] = 0;
+  BG[i]=hazeTint(BG[i],target,opacity);set(i,' ',0);FOGS[i]=FOGB[i]=0;
 }
 // ===== peeing, just for fun: P lets it go wherever you're standing. Like Postal 2, it comes up from the bottom of
 // the screen and you aim it with your eyes: look up and it arcs out further, down and it lands at your feet, gravity

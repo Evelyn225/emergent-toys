@@ -936,7 +936,7 @@ function drawCarFire(m, vx, vy, hx, hy) {
   const flame = (i, t, L) => { // ragged: tongues of yellow and orange with the street showing between them
     const hot = hash(i, Math.floor(T * 14), m.id);
     if (hot < 0.3) return false;
-    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i, hot > 0.65 ? '^' : hot > 0.45 ? '(' : ')', C(hot > 0.85 ? WHITE : YEL, 15)), true;
+    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i,' ',0),true;
   };
   for (let k = 0; k < 4; k++) { // four tongues across the bonnet, each leaping and dropping on its own
     const s_ = (k - 1.5) * hw * 0.5, fl = 0.45 + 0.55 * Math.abs(Math.sin(T * (9 + k * 2.3) + k * 1.7)), sway = 0.025 * Math.sin(T * 6 + k * 2);

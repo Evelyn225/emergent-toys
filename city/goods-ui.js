@@ -347,38 +347,59 @@ function drawCanopy(cx, grip, size, bob) {
 }
 // a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
 // brighter on a drag, smoke curling off it
-function drawCigarette() {
-  const u = Math.max(14, cv.height / 36), s = Math.round(u * 1.6);
-  g.font = s + 'px monospace';
-  const joint=fx.smokeKind==='joint';
-  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / (joint?55:45));
-  const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : [joint?'|':'#',joint?'=':'#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
-  g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
-  chars.forEach((ch, k) => {
-    const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    let color=C(WHITE,15);
-    if(ember)color=C(cigTip>.3?YEL:ORANGE,fract(T*3)<.5?12+cigTip*3:10+cigTip*5);
-    else if(fx.pipe)color=C(BRICK,12);
-    else if(joint)color=C(STONE,14);
-    else if(k<2)color=C(ORANGE,12);
-    g.fillStyle=PAL[color];
-    const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
-    g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
-  });
-  // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
-  // puffs out a lot more
-  const tx = x0 + (chars.length - 1) * dx + w * 0.3, ty = y0 + (chars.length - 1) * dy - s * 0.3, dt = Math.min(0.05, T - (drawCigarette.t ?? T));
-  drawCigarette.t = T;
-  g.font = FS + 'px monospace';
-  if (Math.random() < dt * (1.5 + cigTip * 25)) smokePuffs.push([tx, ty, 1]);
-  smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
-  for (const p of smokePuffs) {
-    p[1] -= dt * 4 * FS; p[0] += Math.sin(T * 3 + p[1] / FS) * dt * 3 * cw;
-    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
-    g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
-    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
+// Close activity effects use the same coarse cell proportions as the world.
+// Sample shapes into rectangles instead of adding smooth canvas silhouettes.
+function activityPixelGrid(){return [Math.max(2,Math.round(cw*.5)),Math.max(3,Math.round(FS*.5))];}
+function activityPixelEllipse(x,y,rx,ry,col){
+  const [sx,sy]=activityPixelGrid();g.fillStyle=PAL[col];
+  for(let r=Math.floor((y-ry)/sy);r<=Math.floor((y+ry)/sy);r++){
+    const v=((r+.5)*sy-y)/ry;if(Math.abs(v)>1)continue;
+    const half=rx*Math.sqrt(1-v*v),a=Math.ceil((x-half)/sx-.5),b=Math.floor((x+half)/sx-.5);
+    if(b>=a)g.fillRect(a*sx,r*sy,(b-a+1)*sx,sy);
   }
+}
+function activityPixelSegment(a,b,ra,rb,col){
+  const [sx,sy]=activityPixelGrid(),dx_=b.x-a.x,dy_=b.y-a.y,d=dx_*dx_+dy_*dy_||1,R=Math.max(ra,rb);
+  const x0=Math.floor((Math.min(a.x,b.x)-R)/sx),x1=Math.ceil((Math.max(a.x,b.x)+R)/sx);
+  g.fillStyle=PAL[col];
+  for(let r=Math.floor((Math.min(a.y,b.y)-R)/sy);r<=Math.ceil((Math.max(a.y,b.y)+R)/sy);r++){
+    let start=null;for(let c=x0;c<=x1+1;c++){
+      const x=(c+.5)*sx,y=(r+.5)*sy,t=clamp(((x-a.x)*dx_+(y-a.y)*dy_)/d,0,1),rad=ra+(rb-ra)*t;
+      const inside=c<=x1&&(x-a.x-dx_*t)**2+(y-a.y-dy_*t)**2<=rad*rad;
+      if(inside&&start===null)start=c;
+      if(!inside&&start!==null){g.fillRect(start*sx,r*sy,(c-start)*sx,sy);start=null;}
+    }
+  }
+}
+function drawCigarette() {
+  const u=Math.max(14,cv.height/36),s=Math.round(u*1.6),joint=fx.smokeKind==='joint';
+  g.font=s+'px monospace';
+  const w=g.measureText('M').width,len=1+Math.round(6*fx.smoke/(joint?55:45)),x0=cv.width*.5-w,y0=cv.height-s*.9,dx=w*.95,dy=-s*.32;
+  let tx,ty;
+  if(fx.pipe){
+    tx=x0+5*dx;ty=y0+5*dy+s*.4;
+    activityPixelSegment({x:x0,y:y0+s*.5},{x:tx,y:ty+s*.3},s*.08,s*.13,C(BRICK,7));
+    activityPixelEllipse(tx,ty+s*.2,w*.85,s*.55,C(BRICK,10));
+    activityPixelEllipse(tx,ty-s*.2,w*.9,s*.19,C(BRICK,13));
+    activityPixelEllipse(tx,ty-s*.22,w*.66,s*.12,C(GRAY,1));
+    activityPixelEllipse(tx,ty-s*.22,w*.44,s*.07,C(cigTip>.3?YEL:ORANGE,9+cigTip*6));
+    ty-=s*.3;
+  }else{
+    const start={x:x0,y:y0+s*.45},end={x:x0+(len+2)*dx,y:y0+(len+2)*dy+s*.45},filter={x:x0+1.8*dx,y:y0+1.8*dy+s*.45};
+    activityPixelSegment(start,end,s*.14,joint?s*.07:s*.14,C(joint?STONE:WHITE,13));
+    if(!joint)activityPixelSegment(start,filter,s*.14,s*.14,C(ORANGE,11));
+    const ash={x:end.x-dx*.4,y:end.y-dy*.4};activityPixelSegment(ash,end,s*.13,s*.12,C(GRAY,7));
+    activityPixelEllipse(end.x,end.y,s*.09,s*.13,C(cigTip>.3?YEL:ORANGE,10+cigTip*5));
+    tx=end.x;ty=end.y-s*.25;
+  }
+  const dt=clamp(T-(drawCigarette.t??T),0,.05);drawCigarette.t=T;
+  if(Math.random()<dt*(1.5+cigTip*25))smokePuffs.push([tx,ty,1]);
+  smokePuffs=smokePuffs.filter(p=>(p[2]-=dt*.35)>0);
+  g.save();try{for(const p of smokePuffs){
+    p[1]-=dt*4*FS;p[0]+=Math.sin(T*3+p[1]/FS)*dt*3*cw;
+    g.globalAlpha=p[2]*.38;activityPixelEllipse(p[0],p[1],cw*.8,FS*.45,C(GRAY,12));
+    g.globalAlpha=p[2]*.18;activityPixelEllipse(p[0]+cw*.6,p[1]-FS*.3,cw*.8,FS*.35,C(WHITE,14));
+  }}finally{g.restore();}
 }
 // the vape: a message while you hold it in, then on letting go a fat mango cloud, every wisp in its own coloured
 // cell, rolling out from your mouth, spreading and thinning
@@ -394,6 +415,7 @@ function drawVapeCloud() {
     }
     say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
     hazeExhale(fx.cloud, 'vape'); // (and it hangs in the air)
+    while(cloudPuffs.length>320)cloudPuffs.shift();
     fx.cloud = 0; if (actx) sfxUse('drag');
   }
   if (!cloudPuffs.length) return;
@@ -402,8 +424,9 @@ function drawVapeCloud() {
   for (const p of cloudPuffs) {
     p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
-    g.fillStyle = PAL[C(f > 0.6 ? ORANGE : WARM, 4 + f * 5)]; g.fillRect(x, y, cw, FS);
-    g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
+    g.save();g.globalAlpha=f*.28;
+    activityPixelEllipse(x+cw*.5,y+FS*.5,cw*1.2,FS*.7,C(WARM,12));
+    g.globalAlpha=f*.16;activityPixelEllipse(x+cw*.6,y+FS*.4,cw*.65,FS*.4,C(YEL,14));g.restore();
   }
 }
 // the yo-yo out on its string (see yoyo in goods.js), at the world's own character size: hanging from your hand,
@@ -461,15 +484,15 @@ function drawYoyo(x, y) {
   artText(art, p.x - 5.5 * w, p.y - 3.5 * s, s, col);
 }
 // a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down)
-function drawSparks(x, y, size) {
-  g.font = size + 'px monospace';
-  const w = g.measureText('M').width;
-  for (let k = 0; k < 16; k++) {
-    const a_ = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 2.6;
-    g.fillStyle = PAL[C(Math.random() < 0.5 ? YEL : WHITE, 9 + Math.random() * 6)];
-    g.fillText(r < 1.4 ? '*' : Math.random() < 0.5 ? '+' : '.', x - w / 2 + Math.cos(a_) * r * w * 1.6, y + Math.sin(a_) * r * size * 0.9);
+function drawSparks(x,y,size){
+  const [sx,sy]=activityPixelGrid(),point=(x,y,col)=>{g.fillStyle=PAL[col];g.fillRect(Math.floor(x/sx)*sx,Math.floor(y/sy)*sy,sx,sy);};
+  for(let k=0;k<16;k++){
+    const phase=fract(T*(2.1+hash(k,1,879)*2)+hash(k,2,879)),angle=hash(k,3,879)*TAU,r=(.25+phase*3)*size;
+    const px_=x+Math.cos(angle)*r,py_=y+Math.sin(angle)*r*.7+phase*phase*size*.7;
+    point(px_-Math.cos(angle)*size*.2,py_-Math.sin(angle)*size*.15,C(YEL,10-phase*6));
+    point(px_,py_,C(k&1?YEL:WHITE,15-phase*7));
   }
-  g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('@', x - w / 2, y);
+  point(x,y,C(WHITE,15));
 }
 
 // ---- putting things down and picking them up: where you are decides where it lies

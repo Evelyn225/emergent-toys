@@ -6,12 +6,19 @@
 // ring of stones on Lighthouse Island, always burning a little, roaring while there's something over it
 let cookCtx = null; // what's on, and where: { on: 'stove' | 'grill' | 'fire', spot, recipe, pantry }
 const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : null;
-SOLID_SHADE.grill = o => (i, t, L) => {
-  const f = HIT.face, w = HIT.w, lit = cookCtx && cookCtx.spot === o.spot && game && game.g.id === 'cook';
-  if (w < 0.06 && f !== 5) return Math.abs(Math.abs(HIT.u) - o.hl + 0.008) < 0.008 && (f === 3 || f === 4) ? (set(i, '|', C(GRAY, L)), true) : false; // the legs: see-through between
-  if (f === 5) { BG[i] = lit ? C(RED, 2 + Math.sin(T * 7 + HIT.u * 40) * 0.8) : C(GRAY, 0.8); return set(i, fract(HIT.u * 40) < 0.4 ? '#' : lit && hash(Math.floor(HIT.u * 60), Math.floor(T * 6), 1801) > 0.7 ? '*' : '=', C(lit ? ORANGE : GRAY, lit ? 13 : L * 0.7)), true; } // the grate, the coals under it
-  BG[i] = C(GRAY, (0.7 + L * 0.12) * shadeFace(f)); // the kettle: black enamel
-  return set(i, w > 0.094 ? '=' : f === 3 && Math.abs(HIT.u) < 0.012 && w < 0.075 ? 'o' : ' ', C(GRAY, L)), true;
+SOLID_SHADE.grill = o => (i,t,L)=>{
+  const f=HIT.face,w=HIT.w,lit=cookCtx&&cookCtx.spot===o.spot&&game&&game.g.id==='cook';
+  if(w<.06&&f!==5){
+    if(Math.abs(Math.abs(HIT.u)-o.hl+.008)>=.008||f!==3&&f!==4)return false;
+    BG[i]=C(GRAY,L);return set(i,' ',0),true;
+  }
+  if(f===5){
+    const bar=fract(HIT.u*40)<.4;
+    BG[i]=bar?C(GRAY,L*.7):lit?C(ORANGE,9+Math.sin(T*7+HIT.u*40)*2):C(GRAY,1);
+    return set(i,' ',0),true;
+  }
+  const trim=w>.094,knob=f===3&&Math.abs(HIT.u)<.012&&w<.075;
+  BG[i]=C(GRAY,trim||knob?L*.7:(.7+L*.12)*shadeFace(f));return set(i,' ',0),true;
 };
 // the campfire: a ring of round stones, logs leaning in together, flames that face you from whichever side you
 // come at it (licking up in tongues, white-hot at the heart, red at the tips), sparks drifting up out of it, and a warm
@@ -39,13 +46,13 @@ function drawCampfires() {
     const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
     if (!o.ring) for (let k = 0; k < 10; k++) { // the stones (a ring the islands built has its own)
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
-      dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
+      dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i,' ',0),true; });
     }
     if (!o.ring) for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
       drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
         const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
-        BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
+        BG[i]=ember?C(ORANGE,10+warm*3):C(BRICK,1+L*.15);return set(i,' ',0),true;
       });
     }
     if(!fireLit(o))continue;
@@ -54,15 +61,14 @@ function drawCampfires() {
     drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
       if (z > H) { // above it: sparks drifting up and fading
         const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
-        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) return set(i, cell > 0.997 ? '*' : '.', C(z > H + 0.12 ? ORANGE : YEL, 14 - (z - H) * 25)), true;
+        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) {BG[i]=C(z>H+.12?ORANGE:YEL,14-(z-H)*25);return set(i,' ',0),true;}
         return false;
       }
       const h = z / H, n = noise(u * 55, z * 28 - T * 7, 1817), width = 0.055 * (1 - h) ** 0.7 * (0.75 + 0.5 * n); // tongues licking up, flickering
       const off = Math.abs(u - Math.sin(T * 3 + z * 40) * 0.006 * h);
       if (off > width) return false;
       const core = off / Math.max(width, 1e-4) < 0.45 && h < 0.6;
-      BG[i] = core ? C(YEL, 5 + (1 - h) * 6) : C(h > 0.7 ? RED : ORANGE, 3 + (1 - h) * 6);
-      return set(i, core ? (h < 0.25 ? '@' : '#') : h > 0.75 ? "'" : n > 0.5 ? '^' : 'A', C(core ? WHITE : YEL, 15)), true;
+      BG[i]=C(core?(h<.25?WHITE:YEL):h>.7?RED:ORANGE,core?15:9+(1-h)*4);return set(i,' ',0),true;
     });
   }
 }
