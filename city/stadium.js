@@ -175,8 +175,12 @@ const stadiumRefLook = () => STADIUM_REF ||= figLook({ hair: 'buzz', top: 'tee',
 let STADIUM_REF = null, stadiumMatch = null; // (the match on today: it carries on while you're in the concourse)
 const matchProp = () => ({ x: STADIUM.cx, y: STADIUM.cy, radius: 80, tick: () => {
   const m = stadiumMatch; if (!m) return;
-  const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T;
+  const dt = clamp(T - (m.lastT ?? T), 0, .25); m.lastT = T; m.lastDt = dt;
+  if (m.kick != null && nowHour() < m.kick) return; // (the teams lined up, waiting for kick-off)
   MatchEngine.step(m, dt);
+  if (m.kick != null && m.phase !== 'ft') { // the city clock at the match's pace: about two hours from kick-off to the final whistle
+    const hr = m.kick + clamp(m.t / stadiumPlaySeconds(m), 0, 1) * MATCH_HOURS; dayNum = Math.floor(hr / 24); tod = hr - dayNum * 24;
+  }
   // how dangerous it is right now (the crowd's on its feet): the ball near a goal, in play
   const P = MatchEngine.PITCH, bx = m.ball.p[0];
   m.danger = m.phase === 'play' ? clamp((Math.abs(bx) - (P.hl - 30)) / 25, 0, 1) * clamp(1 - Math.abs(m.ball.p[1]) / 30, 0, 1) : 0;
@@ -235,14 +239,23 @@ ROOM_DEFS.stadium = {
     return p;
   } };
 // into the ground, and a match on (a new one if there isn't one: the home side the Yards)
-function enterStadium(away) {
-  enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a] }, [139.5, 106.5, -Math.PI * .75]);
+// the sections a ticket buys: where you're shown to, and what it costs
+const STADIUM_SECTIONS = {
+  main: { name: 'Main stand, centre', price: 40, stand: 'north', note: 'Covered, on the halfway line: the best view in the house' },
+  south: { name: 'South stand', price: 25, stand: 'south', note: 'Opposite the main stand, under the scoreboard' },
+  terrace: { name: 'West terrace (standing)', price: 15, stand: 'west', note: 'Behind the goal with the home end. Loud' },
+};
+function enterStadium(section = 'main', dev = false) {
+  const sec = STADIUM_SECTIONS[section] || STADIUM_SECTIONS.main, s = STANDS.find(q => q.id === sec.stand);
+  enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a], section }, [139.5, 106.5, -Math.PI * .75]);
   stadiumTV = false; stadiumCamX = null; // (you walk in seeing it with your own eyes)
-  if (!stadiumMatch || stadiumMatch.phase === 'ft') {
-    const clubs = MatchEngine.CLUBS.filter(c => c.id !== 'yards');
-    stadiumMatch = MatchEngine.create({ home: 'yards', away: away || clubs[Math.random() * clubs.length | 0].id, seed: Math.random() * 1e9 | 0 });
-    stadiumMatch.crowd = .78 + Math.random() * .17;
-  }
+  stadiumLiveMatch();
+  // shown to your place: a seat along a row (the main stand near the halfway line), or a spot on the terrace
+  const k = s.seats ? 6 + (Math.random() * 6 | 0) - (6 + (Math.random() * 6 | 0)) % 2 : 7 + (Math.random() * 6 | 0), back = s.front + s.out * (k + .5) * s.depth;
+  const along = section === 'main' ? STADIUM.cx + (Math.random() - .5) * 24 : s.seats ? STADIUM.cx + (Math.random() - .5) * 60 : STADIUM.cy + (Math.random() - .5) * 30;
+  if (s.axis === 'y') { px = along; py = back; a = Math.atan2(-s.out, 0); } else { px = back; py = along; a = Math.atan2(0, -s.out); }
+  pitch = -.12;
+  if (s.seats) body.seat = { x: px, y: py, fx: 0, fy: -s.out, h: .45, from: [px, py] };
 }
 
 // ---- the TV view (V): a camera on the gantry slung under the front of the main stand's roof, panning to follow the
@@ -258,4 +271,95 @@ function stadiumCam(dt) {
   const fov = (34 + clamp(d / 60, 0, 1) * 10) * Math.PI / 180; // (tighter on play near the camera's side, wider across)
   const tilt = Math.atan2(z - Math.max(0, b[2] * .5), d);
   return { x, y, z, a: Math.atan2(dy, dx), pitch: -projY * Math.tan(tilt) / rows, fov };
+}
+
+// ---- the ground from the street (world.js STADIUM_SITE: two blocks, a ring of stands round the pitch, STY 26). City units
+// here: 1 = 10m. Outside, brick at street level with the turnstiles along the south front, the poster for the next
+// match by them; corrugated steel cladding above, the ground's name along it in big letters, a red trim at the top.
+// The faces toward the pitch (seen from the el, or the air) are the stands: rows of supporters under the roof's shadow.
+const stadiumBounds = () => { const S = STADIUM_SITE; return { x0: S.bx * 8 + 2, x1: S.bx * 8 + 16, y0: S.by * 8 + 2, y1: S.by * 8 + 8 }; };
+const isStadiumPitchCell = (x, y) => STY[idx(x, y)] === 26 && map[idx(x, y)] < .1;
+function stadiumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), fp = Math.max(uStep, d / projY), B = stadiumBounds();
+  const nx = side ? 0 : (px < mx + .5 ? -1 : 1), ny = side ? (py < my + .5 ? -1 : 1) : 0, inner = isStadiumPitchCell(mx + nx, my + ny);
+  set(i, ' ', 0);
+  if (inner) { // the stands from inside: rows of supporters, the roof's shadow over the back rows, a roof edge on top
+    if (z > h - .05) { BG[i] = C(GRAY, 1.8 + L * .1); return; }
+    const row = Math.floor(z / .045), seat = Math.floor(wc * 20), hsh = hash(row, seat, 2311);
+    const roof = z > h - .45 ? .6 : 1, person = hsh < (stadiumMatch && stadiumMatchLive() ? .85 : .08);
+    BG[i] = person ? C(hash(row, seat, 2312) < .65 ? RED : [WHITE, BLUE, GRAY][row % 3], (2.6 + L * .15) * roof) : C(GRAY, (1.2 + L * .1) * roof - (fract(z / .045) < .2 ? .4 : 0));
+    return;
+  }
+  if (z > h - .04) { BG[i] = C(RED, 3.2 + L * .2); return; } // the trim along the top
+  if (z > .36) { // the cladding: corrugated, with the name painted big along the south and north faces
+    const word = ny > 0 ? 'THE YARDS GROUND' : ny < 0 ? 'YARDS ATHLETIC' : '';
+    if (word && z > .62 && z < .98) { const mid = (B.x0 + B.x1) / 2, cw = .5; if (wallText(i, wc - mid, uStep, z, d, word, 0, .8, cw, .34, C(WHITE, 9 + L * .3), null)) return; }
+    if (z > .5 && z < .58) { BG[i] = C(RED, 2.6 + L * .16); return; } // a band in the home club's red, round the whole ground
+    const panel = Math.max(coveGroove(wc, .1, .004, fp), coveGroove(z, .18, .004, d / projY)); // (the sheets' seams)
+    BG[i] = C(GRAY, 2.5 + L * .16 - panel * .9 - coveGroove(wc, .025, .006, fp) * .35 - (Math.abs(z - .36) < .01 ? .8 : 0)); return;
+  }
+  // street level: brick, the turnstile bays along the south front, a poster between them
+  const bay = ny > 0 ? fract((wc - B.x0) / 1.4) : -1;
+  if (bay >= 0 && bay > .3 && bay < .7 && z < .26) { // a turnstile: a green gate in a dark opening, TURNSTILES over it, a lamp
+    if (z > .2) { const c = Math.floor((wc - B.x0) / 1.4) * 1.4 + B.x0 + .7; if (wallText(i, wc - c, uStep, z, d, stadiumGatesOpen() ? 'TURNSTILES' : 'CLOSED', 0, .23, .03, .04, C(stadiumGatesOpen() ? YEL : GRAY, stadiumGatesOpen() ? 14 : 5), C(GRAY, 1))) return; BG[i] = C(GRAY, 1); return; }
+    const bars = fract(wc * 30) < .3 && z < .17;
+    BG[i] = bars ? C(GREEN, 2.6 + L * .2) : C(GRAY, stadiumGatesOpen() ? 2.4 + night * 3 : .6); return;
+  }
+  if (bay >= 0 && (bay < .2 || bay > .8) && z > .07 && z < .22 && Math.floor((wc - B.x0) / 1.4) % 2 === 0) { // the poster for the next match
+    const c = Math.floor((wc - B.x0) / 1.4) * 1.4 + B.x0 + (bay < .2 ? .07 : 1.33), f = stadiumNextFixture();
+    if (Math.abs(wc - c) < .12) {
+      if (z > .185 && wallText(i, wc - c, uStep, z, d, f ? f.when : 'NO MATCHES', 0, .2, .016, .022, C(WHITE, 14), C(RED, 3))) return;
+      if (z < .185 && z > .1 && f && wallText(i, wc - c, uStep, z, d, f.short.replace(' v ', ' V '), 0, .145, .016, .03, C(YEL, 14), C(RED, 3))) return;
+      BG[i] = C(RED, 3 + L * .15); return;
+    }
+  }
+  BG[i] = C(BRICK, 1.5 + L * .16 - Math.max(coveGroove(z, 1 / 40, .003, fp), coveGroove(wc + (Math.floor(z * 40) & 1) * .05, .1, .003, fp)) * .6);
+}
+// from above: the stands' roofs in grey sheeting with the red trim, and inside them the pitch, mown and marked
+function stadiumRoof(i, wx, wy, h, d, L) {
+  set(i, ' ', 0);
+  const mx = Math.floor(wx), my = Math.floor(wy), fp = d / projY;
+  if (h < .1) {
+    const B = stadiumBounds(), cx = (B.x0 + B.x1) / 2, cy = (B.y0 + B.y1) / 2, lx = (wx - cx) * 10, ly = (wy - cy) * 10 * (68 / 40); // (metres, squeezed to the ground's real proportions)
+    const P = MatchEngine.PITCH, line = pitchMarkDist(Math.abs(lx), Math.abs(ly), lx, ly) < .15 + fp * 6;
+    BG[i] = line && Math.abs(lx) <= P.hl + .2 && Math.abs(ly) <= P.hw + .2 ? C(WHITE, 8 + day * 4) : C(GREEN, (Math.floor((lx + P.hl) / 5.25) & 1 ? 3.6 : 3) * (.6 + day * .4) + (night > .3 && stadiumMatchLive() ? 1.4 : 0));
+    return;
+  }
+  BG[i] = C(GRAY, 1.6 + day * 1.6 - coveGroove(wx, .03, .005, fp) * .4);
+}
+// the floodlight pylons at the inside corners, 38m high, their lamp banks lit for an evening match
+function stadiumExterior() {
+  if (!STADIUM_SITE?.sh) return;
+  const B = stadiumBounds(), lit = night > .3 && stadiumMatchLive();
+  for (const [x, y] of [[B.x0 + 1.15, B.y0 + 1.15], [B.x1 - 1.15, B.y0 + 1.15], [B.x0 + 1.15, B.y1 - 1.15], [B.x1 - 1.15, B.y1 - 1.15]]) {
+    const [vx, vy] = R(x, y);
+    if (Math.hypot(vx, vy) > vis + 2 || !inView(vx, vy, .5)) continue;
+    drawBox(boxAt(vx, vy, 1, 0, .05, .05, 0, 3.6), (i, t, L) => { BG[i] = C(GRAY, 1.6 + L * .15 - (fract(HIT.w * 6 + HIT.u * 8) < .2 ? .5 : 0)); return set(i, ' ', 0), true; });
+    const cx = (B.x0 + B.x1) / 2 - x, cy = (B.y0 + B.y1) / 2 - y, cd = Math.hypot(cx, cy);
+    drawBox(boxAt(vx + cx / cd * .06, vy + cy / cd * .06, -cy / cd, cx / cd, .3, .04, 3.45, 3.85), (i, t, L) => {
+      const lamp = Math.abs(fract(HIT.u / .07) - .5) < .35 && Math.abs(fract((HIT.w - 3.45) / .1) - .5) < .35;
+      BG[i] = lamp ? C(lit ? WHITE : GRAY, lit ? 15 : 4) : C(GRAY, 1.4); return set(i, ' ', 0), true;
+    });
+  }
+}
+
+// ---- the gates: buying a ticket (the next match, its kick-off, the sections and their prices), and the table
+let ticketEl = null;
+function openStadiumTickets() {
+  const f = stadiumNextFixture();
+  if (!f.open) return say(`No match on. Next at the Yards ground: ${clubName(f.home)} v ${clubName(f.away)}, ${f.when}. The gates open an hour and a half before.`, 6);
+  ticketEl ||= panel('tickets');
+  const table = leagueTable().slice(0, 8).map((t, k) => `<div class="tbl"><span>${k + 1}. ${t.name}</span><span>${t.p}</span><span>${t.gf - t.ga >= 0 ? '+' : ''}${t.gf - t.ga}</span><span><b>${t.pts}</b></span></div>`).join('');
+  const minute = stadiumMatch?.slot === f.n && f.live ? Math.floor(Math.min(90, MatchEngine.minute(stadiumLiveMatch()))) : null;
+  showPanel(ticketEl, `<style>#tickets .tbl{display:grid;grid-template-columns:1fr 2.5em 3em 2.5em;gap:4px;font-size:.9em;opacity:.9}#tickets .tbl span:not(:first-child){text-align:right}</style>
+    <h1>The Yards Ground</h1><p class="sub">${clubName(f.home)} v ${clubName(f.away)} &middot; ${f.live ? `kicked off${minute != null ? `, ${minute}'` : ''}` : 'kick-off ' + f.when.replace('TODAY ', '')} &middot; you have ${fmt$(money)}</p>
+    ${Object.entries(STADIUM_SECTIONS).map(([id, s]) => `<button class="item" data-sec="${id}" ${money < s.price ? 'disabled' : ''}><span>${s.name}<br><small>${s.note}</small></span><span class="lead"></span><span class="v">${fmt$(s.price)}</span></button>`).join('')}
+    <h2>the table</h2><div class="tbl"><span></span><span>P</span><span>GD</span><span>Pts</span></div>${table}
+    <p class="hint">E / Esc close</p>`);
+  ticketEl.onclick = e => {
+    const b = e.target.closest('button[data-sec]'); if (!b) return;
+    const s = STADIUM_SECTIONS[b.dataset.sec]; if (!pay(s.price)) return say('Not enough on you.', 2);
+    hidePanel(ticketEl); enterStadium(b.dataset.sec);
+    say(`${s.name}. ${stadiumMatchLive() ? 'The match is on.' : 'Kick-off soon.'} V: the TV view, E: leave whenever you like.`, 5);
+  };
 }

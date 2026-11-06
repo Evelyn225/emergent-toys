@@ -207,6 +207,7 @@ function citySprites() {
     if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
   industrialRoofs(); // sawtooth north lights, refrigeration plant, ventilators (industrial-facades.js)
+  stadiumExterior(); // the Yards ground's floodlight pylons (stadium.js)
   shopExteriors(); // barber poles, pharmacy crosses, lanterns, café boards, florists' buckets, bar signs (shop-exteriors.js)
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);

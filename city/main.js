@@ -366,6 +366,7 @@ function loop(t) {
   else if (mode === 'ferry') stepFerryRide(dt);
   if(!skateStepped){stepBody(dt);stepRoof();}stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
+  if ((leagueTickT -= dt) <= 0) { leagueTickT = 2; updateLeague(); } // (results from the matches played: league.js)
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
   fighterNews(stepFighters(mode === 'air' && !wreckCam ? pilot : null, dt)); // (the interceptors after a stolen aircraft: fighters.js, flight.js)
