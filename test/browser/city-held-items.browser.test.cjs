@@ -147,7 +147,7 @@ test('visible item strokes touch the drawn fingers at multiple sizes, including 
   }
 }));
 
-test('only the item is culled behind the hand pixels: scenery shows through and exposed parts survive above, beside and below it', () => withItems(async page => {
+test('solid fingers cover the item while exposed parts survive above, beside and below the hand', () => withItems(async page => {
   const frames = await page.evaluate(() => [0, .9].map(angle => {
     g.clearRect(0, 0, cv.width, cv.height); g.fillStyle = '#20507b'; g.fillRect(0, 0, cv.width, cv.height);
     g.textBaseline = 'top'; g.save(); g.translate(480, 240); g.rotate(angle);
@@ -159,7 +159,7 @@ test('only the item is culled behind the hand pixels: scenery shows through and 
       outside: [[0, -size], [-6 * size, 2 * size], [0, 6 * size]].map(at) };
   }));
   for (const frame of frames) {
-    for (const pixel of frame.inside) assert.deepEqual(pixel, [32, 80, 123, 255], 'the background shows through the unfilled hand');
+    for (const pixel of frame.inside) { assert.equal(pixel[3],255); assert.ok(pixel[0]>pixel[2]&&pixel[0]>100,'solid skin covers the held item'); }
     for (const pixel of frame.outside) assert.deepEqual(pixel, [238, 34, 34, 255], 'the hand does not slice off exposed item pixels');
   }
 }));

@@ -47,7 +47,7 @@ function heldPictureTop(picture, s, hsz) {
   const handEdge = -g.measureText('_').actualBoundingBoxAscent;
   g.font = s + 'px monospace';
   const middle = Math.floor(picture.width / 2), metrics = new Map();
-  let bottom = -Infinity, strokeHeight = s, solidGrip=false;
+  let bottom = -Infinity;
   // Align the actual ink to the fingers. Many characters end well above the bottom of their cell.
   for (let r = Math.max(0, picture.gripRows - 2); r < picture.gripRows; r++) {
     for (let c = Math.max(0, middle - 2); c < Math.min(picture.width, middle + 3); c++) {
@@ -57,15 +57,13 @@ function heldPictureTop(picture, s, hsz) {
       if (!metrics.has(ch)) metrics.set(ch,ch==='\u0001'?{actualBoundingBoxAscent:0,actualBoundingBoxDescent:s+.3}:g.measureText(ch));
       const ink = metrics.get(ch), edge = r * s + ink.actualBoundingBoxDescent;
       if (edge > bottom) {
-        bottom = edge;solidGrip=ch==='\u0001';
-        strokeHeight = ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent;
+        bottom = edge;
       }
     }
   }
   if (!Number.isFinite(bottom)) bottom = picture.gripRows * s;
-  // Text needs clearance for its outline; solid rectangles meet the fingers.
-  // Keep thin text bases such as '_' visible above the hand's dark outline.
-  const clearance = solidGrip?.25:Math.max(strokeHeight < s * .3 ? 2 : 1.5, hsz * .07);
+  // Filled fingers meet both solid cells and the ink of a fine wire.
+  const clearance=.25;
   const top = handEdge - clearance - bottom;
   picture.gripLayout = { s, hsz, top };
   return top;

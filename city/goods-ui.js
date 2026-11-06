@@ -1,6 +1,6 @@
 // ===== goods on screen: the shop menu, the inventory, the hotbar, and what's in your hand (or mouth, or underfoot)
-// ---- in your hand: ASCII art at the bottom right, bobbing as you walk. No backgrounds: every character has a thin
-// dark outline so it reads over anything, and the fingers hide the bottom of whatever you're holding. Things change
+// ---- in your hand: coloured objects at the bottom right, bobbing as you walk.
+// Solid fingers hide the bottom of whatever you're holding. Things change
 // as you use them: glasses empty, food gets bitten, a coffee stops steaming, the pack runs down.
 // DROPPED_ART[id] = (it, f) => [lines, colour(ch, row, col)]; small pictures for items on the ground
 const usesLeft = it => { const m = ITEMS[it.id].uses || 0; return m ? clamp(it.uses / m, 0, 1) : 1; };
@@ -215,7 +215,8 @@ let HAND_ART = [
   '(__________',
   ' (____________.---'];
 const HAND_GRIP = 6;
-const HAND_MASK_COLS = 18, handPixelCache = new Map();
+const HAND_MASK_COLS = 18;
+const handShapeCache = new Map();
 function handGeometry(cx, size) {
   const font = g.font;
   g.font = size + 'px monospace';
@@ -225,67 +226,56 @@ function handGeometry(cx, size) {
   const reach = Math.max(HAND_MASK_COLS, Math.ceil((edgeX - x0) / w) + 1);
   return { w, x0, reach };
 }
-function handPixels(size, w) {
-  const key = size + '|' + w;
-  if (handPixelCache.has(key)) return handPixelCache.get(key);
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(HAND_MASK_COLS * w); canvas.height = Math.ceil((HAND_ART.length + 1) * size);
-  const ctx = canvas.getContext('2d');
-  ctx.font = size + 'px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = '#fff';
-  HAND_ART.forEach((line, r) => {
-    const text = line.endsWith('-') ? line.padEnd(HAND_MASK_COLS, '-') : line;
-    for (let c = 0; c < text.length; c++) if (text[c] !== ' ') ctx.fillText(text[c], c * w, r * size);
-  });
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const upper = new Float32Array(canvas.width).fill(NaN), lower = new Float32Array(canvas.width).fill(NaN);
-  let left = canvas.width, right = 0;
-  for (let x = 0; x < canvas.width; x++) for (let y = 0; y < canvas.height; y++) {
-    if (data[(y * canvas.width + x) * 4 + 3] < 64) continue;
-    if (!Number.isFinite(upper[x])) upper[x] = y;
-    lower[x] = y + 1; left = Math.min(left, x); right = Math.max(right, x);
-  }
-  // Join character spacing along the arm so item pixels cannot leak between adjacent dashes.
-  for (let x = left; x <= right; x++) {
-    if (Number.isFinite(upper[x])) continue;
-    let next = x + 1;
-    while (next <= right && !Number.isFinite(upper[next])) next++;
-    const previous = x - 1;
-    for (let c = x; c < next; c++) {
-      const t = (c - previous) / (next - previous);
-      upper[c] = upper[previous] + (upper[next] - upper[previous]) * t;
-      lower[c] = lower[previous] + (lower[next] - lower[previous]) * t;
+// Visible hand and item mask share this silhouette, including the finger scallops.
+function heldHandShape(reach){
+  if(handShapeCache.has(reach))return handShapeCache.get(reach);
+  const p=new Path2D();
+  p.moveTo(3,0);p.lineTo(10.5,0);
+  p.quadraticCurveTo(12,.05,13,.65);p.lineTo(reach,.65);p.lineTo(reach,4.25);
+  p.lineTo(12,4.25);p.quadraticCurveTo(10.6,4.5,8,4.3);p.lineTo(2,4.3);
+  p.quadraticCurveTo(.8,4.3,.8,3.75);p.quadraticCurveTo(.8,3.2,1.4,3.15);
+  p.quadraticCurveTo(0,3.15,0,2.65);p.quadraticCurveTo(0,2.1,1.2,2.05);
+  p.quadraticCurveTo(.1,2.05,.1,1.5);p.quadraticCurveTo(.1,.95,1.7,.95);
+  p.quadraticCurveTo(1.5,0,3,0);p.closePath();
+  if(handShapeCache.size>=8)handShapeCache.delete(handShapeCache.keys().next().value);
+  handShapeCache.set(reach,p);return p;
+}
+function handTopEdge(ctx,size){
+  const font=ctx.font;ctx.font=size+'px monospace';
+  const edge=-ctx.measureText('_').actualBoundingBoxAscent;ctx.font=font;return edge;
+}
+function paintHeldHand(ctx,x0,top,size,w,reach){
+  ctx.save();ctx.translate(x0,top+handTopEdge(ctx,size));ctx.scale(w,size);
+  ctx.fillStyle=PAL[C(SKIN,10)];ctx.fill(heldHandShape(reach));
+  {
+    // Rounded knuckles, lit finger tops and darker folded undersides.
+    for(const [x,y,len]of [[1.9,.07,8.5],[.35,1.1,10.1],[.25,2.18,10.3],[1.05,3.28,10]]){
+      ctx.beginPath();ctx.moveTo(x+1,y);ctx.lineTo(x+len,y);
+      ctx.quadraticCurveTo(x+len+.4,y+.32,x+len-.2,y+.81);
+      ctx.lineTo(x+1,y+.9);ctx.quadraticCurveTo(x,y+.9,x,y+.45);ctx.quadraticCurveTo(x,y,x+1,y);
+      ctx.fillStyle=PAL[C(SKIN,12)];ctx.fill();
+      ctx.beginPath();ctx.moveTo(x+1,y+.06);ctx.lineTo(x+len-.4,y+.06);ctx.lineTo(x+len-.6,y+.25);ctx.lineTo(x+.8,y+.25);ctx.closePath();
+      ctx.fillStyle=PAL[C(SKIN,13)];ctx.fill();
     }
-    x = next - 1;
+    // The thumb joins the wrist; its crease stays below the item's contact edge.
+    ctx.beginPath();ctx.moveTo(10.5,.35);ctx.quadraticCurveTo(13.5,.5,14,2.7);ctx.quadraticCurveTo(12.1,3.5,10.2,2.55);ctx.quadraticCurveTo(12,1.65,10.5,.35);
+    ctx.fillStyle=PAL[C(SKIN,11)];ctx.fill();
+    ctx.beginPath();ctx.moveTo(3,.17);ctx.lineTo(5.2,.17);ctx.lineTo(5.2,.51);ctx.lineTo(3,.51);ctx.closePath();
+    ctx.fillStyle=PAL[C(SKIN,14)];ctx.fill();
   }
-  const pixels = { upper, lower, left, right };
-  if (handPixelCache.size >= 6) handPixelCache.delete(handPixelCache.keys().next().value);
-  handPixelCache.set(key, pixels);
-  return pixels;
+  ctx.restore();
 }
 function drawBehindHand(cx, top, size, drawItem) {
-  const { w, x0, reach } = handGeometry(cx, size), { upper, lower, left, right } = handPixels(size, w);
-  const visible = new Path2D();
-  visible.rect(-cv.width * 3, -cv.height * 3, cv.width * 6, cv.height * 6);
-  visible.moveTo(x0 + left, top + upper[left]);
-  for (let x = left + 1; x <= right; x++) if (upper[x] !== upper[x - 1]) {
-    visible.lineTo(x0 + x, top + upper[x - 1]); visible.lineTo(x0 + x, top + upper[x]);
-  }
-  visible.lineTo(x0 + reach * w, top + upper[right]);
-  visible.lineTo(x0 + reach * w, top + lower[right]);
-  visible.lineTo(x0 + right + 1, top + lower[right]);
-  for (let x = right - 1; x >= left; x--) if (lower[x] !== lower[x + 1]) {
-    visible.lineTo(x0 + x + 1, top + lower[x + 1]); visible.lineTo(x0 + x + 1, top + lower[x]);
-  }
-  visible.lineTo(x0 + left, top + lower[left]); visible.closePath();
+  const {w,x0,reach}=handGeometry(cx,size),visible=new Path2D();
+  visible.rect(-cv.width*3,-cv.height*3,cv.width*6,cv.height*6);
+  visible.addPath(heldHandShape(reach),new DOMMatrix([w,0,0,size,x0,top+handTopEdge(g,size)]));
   g.save();
   try { g.clip(visible, 'evenodd'); drawItem(); } finally { g.restore(); }
   drawHand(cx, top, size);
 }
 function drawHand(cx, top, size) {
-  const { x0, reach } = handGeometry(cx, size);
-  g.font = size + 'px monospace';
-  const art = HAND_ART.map(line => line.endsWith('-') ? line.padEnd(reach, '-') : line);
-  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
+  const { w,x0,reach } = handGeometry(cx,size);
+  paintHeldHand(g,x0,top,size,w,reach);
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
 function charLine(x0, y0, x1, y1, w, size, col) {

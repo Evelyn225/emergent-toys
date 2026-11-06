@@ -93,6 +93,6 @@ test('the grip is culled against the hand pixels during recoil and reload', () =
   });
   for (const stage of stages) {
     assert.equal(stage.clips, 1); assert.equal(stage.hands, 1);
-    assert.ok(stage.glyphs>0&&stage.surfaces>100); assert.equal(stage.drawn, 'revolver');
+    assert.ok(stage.glyphs===0&&stage.surfaces>100); assert.equal(stage.drawn, 'revolver');
   }
 }));

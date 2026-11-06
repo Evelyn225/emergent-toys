@@ -10,7 +10,7 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** continue autonomously between phases (user instruction, 6 November). Pass 27 tools/weapons is PR #446; curios/electronics/toys and fishing finds are on `codex/held-curios-surfaces`, verified with native browser checks and isolated mutations. Food/drink PRs #444/#445 are merged. Next: hand surfaces and final item-size details, then 29–32 and abandoned shopfronts (33). Merge completed PRs after green CI; browser shards run twice with a 30-minute budget. See `WORLD_QUALITY.md`; skating stays separately tracked.
+- **Codex:** continue autonomously between phases (user instruction, 6 November). Pass 27 tools/weapons is PR #446; curios/electronics/toys and fishing finds are on `codex/held-curios-surfaces`, verified with native browser checks and isolated mutations. Food/drink PRs #444/#445 are merged. Held hand surfaces are on `codex/held-hand-surfaces` (native contact, curved mask and reload wrist verified). Next: final item-size details to close 27, then 29–32 and abandoned shopfronts (33). Merge completed PRs after green CI; browser shards run twice with a 30-minute budget. See `WORLD_QUALITY.md`; skating stays separately tracked.
 - **Claude:** passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. The user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
   authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check

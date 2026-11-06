@@ -134,10 +134,19 @@ function drawRevolver(it) {
   g.save();
   g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
   drawBehindHand(0, -G.hsz * .2, G.hsz, () => {
+    if(open){
+      // The support wrist continues off screen rather than floating beside the cylinder.
+      const tail=new DOMPoint(cv.width*.48,cv.height+G.s*5).matrixTransform(g.getTransform().inverse());
+      heldToolSegment({x:gx+w*24,y:gy+G.s*15.5},tail,G.s*1.15,G.s*2.25,C(SKIN,10));
+    }
     const [art,col]=revolverPicture(open,rounds);artText(art,gx,gy,G.s,col);
     if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
-      artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
-        () => C(SKIN, 12));
+      const [fingers,skin]=sculptSurface(12,7,(x,y)=>{
+        const palm=dEll(x,y,1.3,1.3,2.1,2.2);
+        const finger=[[-1.2,-1.3],[-1.8,.2],[-1.4,1.6]].some(([cx,cy])=>dEll(x,y,cx,cy,1.65,.65)<1);
+        return palm<1||finger?[' ',C(SKIN,y<0?13:11)]:null;
+      });
+      artText(fingers,gx+w*17,gy+G.s*10,G.s,skin);
     }
     if (gun.kick > 0.55) { // the flash, off the end of the barrel
       const size=Math.round(G.u*(.8+gun.kick*.5)*.5),[flash,col]=heldMuzzleFlash(gun.kick);
