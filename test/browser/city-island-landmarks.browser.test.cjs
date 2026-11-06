@@ -16,7 +16,7 @@ test('Cormorant arch has a real clear opening for walking, bullets and aircraft,
   for(const p of g.parts.filter(p=>p.role==='pier'))if(!islandSightBlocked(p.x,p.y,terrainHeight(p.x,p.y),.03))bad.push('walk through pier');
   if(!islandSightBlocked(g.x,g.y,roof,.01)||islandSightHeight(g.x,g.y,roof)<=roof||builtHeight(g.x,g.y,roof)<=roof)bad.push('missing crown collision');
   const clearShot=traceShot(g.x,g.y+.65,under,0,-1,0),roofShot=traceShot(g.x,g.y+.65,roof,0,-1,0);
-  if(clearShot.d<1)bad.push(['shot stopped in opening',clearShot]);if(roofShot.what!=='wall'||roofShot.d<.35||roofShot.d>.45)bad.push(['shot passed through crown',roofShot]);
+  if(clearShot.d<1)bad.push(['shot stopped in opening',clearShot]);const expected=Math.min(...g.parts.map(p=>rayMansard(g.x,g.y+.65,roof,0,-1,0,p)).filter(t=>t>0));if(roofShot.what!=='wall'||Math.abs(roofShot.d-expected)>.001)bad.push(['shot passed through crown',roofShot]);
   px=g.x;py=g.y+.45;for(let k=0;k<45;k++)move(0,-.02);if(Math.abs(py-(g.y-.45))>.02)bad.push('actual walking stopped in opening');return{bad};});assert.deepEqual(r.bad,[]);
 }));
 test('existing landing, house and sight trails stay clear of all new landmark footprints',()=>fixture(async p=>{
@@ -34,4 +34,8 @@ test('native island scenes visibly draw the additions, while winter removes flow
   for(const g of ISLAND_LANDMARKS){const arch=g.id==='cormorant-arch';px=g.x+(arch?1.2:.6);py=g.y+(arch?2.5:1.1);a=Math.atan2(g.y-py,g.x-px);pitch=0;render(0);pitch=(g.ground+(arch?.65:.10)-eye)/Math.hypot(px-g.x,py-g.y)*projY/rows;render(0);const A=BG.slice(),orig=drawIslandLandmark;drawIslandLandmark=(o,...args)=>{if(o!==g)return orig(o,...args);};let changed=0;try{render(0);for(let i=0;i<A.length;i++)if(A[i]!==BG[i])changed++;}finally{drawIslandLandmark=orig;}if(changed<30)bad.push(['not visible through native scenery hook',g.id,changed]);}
   const g=ISLAND_LANDMARKS.find(g=>g.id==='juniper-garden'),oldSeason=seasonIdx(),draw=drawBox,oldSnow=paintSettledSnow;let calls=0,snow=0;try{drawBox=()=>calls++;setSeason(3);drawIslandLandmark(g,0,0);if(calls!==g.parts.filter(p=>!['bloom','stem'].includes(p.role)).length)bad.push('winter flowers remain');paintSettledSnow=()=>snow++;const p=g.parts.find(p=>p.role==='soil'),index=p.planes.findIndex(p=>p[2]>0);Object.assign(HIT,{face:index,u:0,v:0,w:p.z1});p.shade(0,1,8);if(!snow)bad.push('soil ignores snow');}finally{setSeason(oldSeason);drawBox=draw;paintSettledSnow=oldSnow;}
   return bad;});assert.deepEqual(bad,[]);
+}));
+
+test('Cormorant rock arch has asymmetric bedrock shoulders, variable thickness and a faceted front rather than a uniform round gateway',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{if(typeof ISLAND_LANDMARKS==='undefined')return null;const g=ISLAND_LANDMARKS[0],h=x=>islandSightHeight(g.x+x,g.y),depths=g.parts.map(p=>p.hw);return{asymmetry:Math.max(...[.3,.5,.7,.9,1.1].map(x=>Math.abs(h(-x)-h(x)))),front:Math.max(...depths)-Math.min(...depths),width:g.root.hl};});assert.ok(r&&r.asymmetry>.10&&r.front>.06&&r.width>1.3,JSON.stringify(r));
 }));

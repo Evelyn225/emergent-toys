@@ -43,11 +43,23 @@ function islandLandmarkInterval(p,x,y,pad=0){
 function buildIslandArch(){
  const g=islandLandmarkGroup('cormorant-arch',695.8,357.5),sample=[];
  for(const x of [-.8,.8])for(const y of [-.28,.28])sample.push(terrainHeight(g.x+x,g.y+y));
- const spring=Math.max(...sample)+.30;g.spring=spring;
- for(const side of [-1,1]){const x=side*.775,bottom=islandLandmarkFoot(g,x,0,.24,.26);islandLandmarkPrism(g,[[x-.24,bottom],[x+.24,bottom],[x+.175,spring],[x-.175,spring]],-.26,.26,'stone','pier');}
- const outer=[],inner=[];
- for(let k=0;k<=10;k++){const a=k*Math.PI/10,r=.95+(k===0||k===10?0:Math.sin(k*1.9)*.035);outer.push([Math.cos(a)*r,spring+Math.sin(a)*r]);inner.push([Math.cos(a)*.60,spring+Math.sin(a)*.60]);}
- for(let k=0;k<10;k++)islandLandmarkPrism(g,[inner[k],outer[k],outer[k+1],inner[k+1]],-.26,.26,'stone','arch');
+ const base=Math.max(...sample);g.spring=base+.30;
+ // A remnant of bedrock with an eroded, off-centre opening: no matching
+ // columns, ring thickness or semicircular crown. Adjacent facets share edges.
+ const xs=[-1.25,-1.03,-.82,-.58,-.34,-.10,.15,.40,.67,.88,1.08,1.26];
+ const tops=[.20,.62,.94,1.18,1.24,1.13,1.17,1.02,.88,.91,.53,.15];
+ const opening=[null,null,null,.30,.74,.80,.73,.58,.30,null,null,null];
+ const depths=[.16,.24,.32,.28,.27,.24,.31,.29,.36,.26,.22,.12];
+ for(let k=0;k<xs.length-1;k++){
+  const x0=xs[k],x1=xs[k+1],cx=(x0+x1)/2,half=(x1-x0)/2,depth=(depths[k]+depths[k+1])/2;
+  const bottom=islandLandmarkFoot(g,cx,0,half,depth),a=opening[k]===null?bottom:base+opening[k],b=opening[k+1]===null?bottom:base+opening[k+1];
+  const offset=Math.sin(k*2.1)*.035;
+  islandLandmarkPrism(g,[[x0,a],[x1,b],[x1,base+tops[k+1]],[x0,base+tops[k]]],offset-depth,offset+depth,'stone',opening[k]===null&&opening[k+1]===null?'pier':'arch');
+ }
+ for(const [x,y,w,h]of [[-1.18,.30,.23,.17],[.98,-.30,.20,.14]]){
+  const foot=islandLandmarkFoot(g,x,y,w,.20),top=terrainHeight(g.x+x,g.y+y)+h;
+  islandLandmarkPrism(g,[[x-w,foot],[x+w,foot],[x+w*.7,top-.035],[x-w*.25,top],[x-w*.8,top-.055]],y-.20,y+.20,'stone','pier');
+ }
  islandLandmarkFinish(g);
 }
 function buildIslandWreck(){
