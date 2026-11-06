@@ -1,24 +1,24 @@
 // Fishing finds, small treasures and ammunition get full held art as well as their small ground icons.
-DENSE.neon = it => sculpt(28, 23, (x,y) => {
+DENSE.neon = it => sculptSurface(28, 23, (x,y) => {
   if (Math.abs(x)>5.8 || y < -9.5 || y > 9.5) return null;
   if (Math.abs(y)>8.2 || Math.abs(x)>5.1) return ['=',C(GRAY,12)];
   const text=dText(x,y,0,-1,'NEON') || dText(x,y,0,3,`${it.uses} PACKS`);
-  if(text)return[text,C(WHITE,15)];
+  if(text)return[text,C(WHITE,15),true];
   return dLit(.7-x*.035,MAG,7);
 });
 DROPPED_ART.neon = () => [['.------.','| NEON |','| :::: |',"'------'"],ch=>C(/[NEON]/.test(ch)?WHITE:MAG,13)];
-DENSE.weed = it => sculpt(28,25,(x,y)=>{
+DENSE.weed = it => sculptSurface(28,25,(x,y)=>{
   if (Math.abs(x)>6.3 || y < -10.3 || y>10.3) return null;
   if (Math.abs(x)>5.6 || Math.abs(y)>9) return ['=',C(WARM,12)];
   const text=dText(x,y,0,-6.6,'WEED') || dText(x,y,0,6.7,`${it.uses} PACKS`);
-  if(text) return [text,C(WHITE,15)];
+  if(text) return [text,C(WHITE,15),true];
   // A central stalk and three joined leaf pairs behind the clear front of the pouch.
   if(Math.abs(x)<.4&&Math.abs(y)<4.5) return ['|',C(GREEN,15)];
   for(const v of [-2.8,0,2.8]) if(Math.abs(y-v+Math.abs(x)*.6)<.65&&Math.abs(x)<4.6) return [x<0?'\\':'/',C(GREEN,13)];
   return dLit(.65-x*.03,GREEN,4);
 });
 DROPPED_ART.weed = () => [['.------.','| WEED |','| \\|/ |',"'------'"],ch=>C(/[WEED]/.test(ch)?WHITE:GREEN,13)];
-DENSE.joint = () => sculpt(20,27,(x,y)=>{
+DENSE.joint = () => sculptSurface(20,27,(x,y)=>{
   if(y < -11 || y>11) return null;
   const width=1.1+(y+11)*.025;
   if(Math.abs(x)>width)return null;
@@ -47,7 +47,7 @@ DROPPED_ART.ammo = it => [[' .--------.', '| o o o o |', '|.38 BOX  |', " '-----
 
 function heldShellfish(it) {
   const crab = it.id === 'crab', wave = Math.sin(T * 2.4);
-  return sculpt(32, 19, (x, y) => {
+  return sculptSurface(32, 19, (x, y) => {
     if (crab) {
       for (const sg of [-1, 1]) {
         for (let k = 0; k < 3; k++) if (Math.abs(y - (2 + k * 1.7 + sg * x * .15)) < .35 && x * sg > 2.7 && x * sg < 8) return ['/', C(RED, 12)];
@@ -72,7 +72,7 @@ DENSE.crab = DENSE.squid = heldShellfish;
 
 function heldFishingJunk(it) {
   const id = it.id;
-  return sculpt(32, 19, (x, y) => {
+  return sculptSurface(32, 19, (x, y) => {
     if (id === 'oldboot') {
       const cuff = x > -5.6 && x < 1.5 && y > -7.7 && y < 2.5;
       const foot = dEll(x, y, 1.2, 4.5, 7.2, 3.1) < 1;
@@ -85,7 +85,7 @@ function heldFishingJunk(it) {
       if (Math.abs(x) > 5.4 - Math.max(0, 1 - Math.abs(y)) || Math.abs(y) > 6.7) return null;
       if (Math.abs(y) > 5.8) return ['=', C(GRAY, 12)];
       const word = dText(x, y, 0, -.4, 'BEANS');
-      return word ? [word, C(WHITE, 14)] : [Math.abs(y - x * .4 - 2) < .4 ? '/' : '#', C(y < 2.4 ? ORANGE : GRAY, 8 + dCyl(x, 5.4) * 5)];
+      return word ? [word, C(WHITE, 14),true] : [Math.abs(y - x * .4 - 2) < .4 ? '/' : '#', C(y < 2.4 ? ORANGE : GRAY, 8 + dCyl(x, 5.4) * 5)];
     }
     if (id === 'seaweed') {
       for (let k = 0; k < 5; k++) if (Math.abs(x - (k - 2) * 2.2 - Math.sin(y * .5 + T * .9 + k) * .8) < .45 && Math.abs(y) < 7.7 - Math.abs(k - 2)) return [k & 1 ? ')' : '(', C(GREEN, 10 + k)];
@@ -96,7 +96,7 @@ function heldFishingJunk(it) {
       if (y < -4.4 && y > -8 && Math.abs(Math.abs(x) - 3) < .6) return ['|', C(WHITE, 12)];
       if (d > 1) return null;
       const word = dText(x, y, 0, 1, 'THANK YOU');
-      if (word) return [word, C(RED, 13)];
+      if (word) return [word, C(RED, 13),true];
       return d > .85 ? ['|', C(WHITE, 11)] : Math.abs(x + 3.2) < .3 ? [':', C(WHITE, 8)] : null;
     }
     if (id === 'tyre' || id === 'trolleywheel') {
@@ -148,7 +148,7 @@ function heldPocketknife(it) {
 function heldTreasure(it) {
   const id = it.id, phase = heldUsePhase(it), glint = Math.sin(T * 2.3) > .94;
   if (id === 'pocketknife') return heldPocketknife(it);
-  return sculpt(28, 19, (x, y) => {
+  return sculptSurface(28, 19, (x, y) => {
     if (id === 'bottlemsg') {
       const half = y < -4.4 ? 1.4 : y < -1.8 ? 1.4 + (y + 4.4) : 4.2;
       if (y < -8 || y > 8 || Math.abs(x) > half) return null;
@@ -173,7 +173,7 @@ function heldTreasure(it) {
         if (Math.abs(x) > 3 || Math.abs(y) > 3.5) return dLit(.7, GRAY, 10);
         const time = String(Math.floor(tod)).padStart(2, '0') + ':' + String(Math.floor(fract(tod) * 60)).padStart(2, '0');
         const text = dText(x, y, 0, .2, time);
-        return text ? [text, C(CYAN, 15)] : ['.', C(GRAY, 3)];
+        return text ? [text, C(CYAN, 15),true] : ['.', C(GRAY, 3)];
       }
       return null;
     }
@@ -188,7 +188,7 @@ function heldTreasure(it) {
     if (d > .82) return dLit(.6 - x * .035, id === 'compass' ? YEL : GRAY, 9);
     if (id === 'compass') {
       for (const [cx, cy, word] of [[0, -4.1, 'N'], [4.1, .2, 'E'], [0, 4.2, 'S'], [-4.1, .2, 'W']]) {
-        const text = dText(x, y, cx, cy, word); if (text) return [text, C(WHITE, 14)];
+        const text = dText(x, y, cx, cy, word); if (text) return [text, C(WHITE, 14),true];
       }
       const angle = -a + (phase >= 0 ? Math.sin(phase * 10) * .15 * (1 - phase) : 0);
       const along = x * Math.sin(angle) - y * Math.cos(angle), across = x * Math.cos(angle) + y * Math.sin(angle);
@@ -196,13 +196,13 @@ function heldTreasure(it) {
       return ['.', C(GRAY, 3)];
     }
     const stamp = dText(x, y, 0, -1.2, 'KING') || dText(x, y, 0, 2, '1908');
-    return stamp ? [stamp, C(WHITE, 14)] : dLit(.7 - x * .035, GRAY, 8);
+    return stamp ? [stamp, C(WHITE, 14),true] : dLit(.7 - x * .035, GRAY, 8);
   });
 }
 for (const id of ['bottlemsg', 'oldcoin', 'goldring', 'pearl', 'compass', 'divewatch', 'pocketknife', 'wishcoins']) DENSE[id] = heldTreasure;
 
 // The moving-day lamp keeps its pleated amber shade and metal foot in your hand.
-DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
+DENSE.movinglamp = () => sculptSurface(30, 27, (x,y) => {
   if(y < -11 || y > 11)return null;
   if(y < -1){
     const width=3.1+(y+11)*.38;
@@ -219,7 +219,7 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
 // (state.js stretches the view distance): far enough to make out the other islands across the water.
 const TELESCOPE_REACH=5;
 const telescopeActive=()=>(!!fx.telescope&&heldItem()?.id==='telescope'&&handheldMode()||!!fx.lookout&&mode==='walk')&&!freecam; // (yours, or the lookout's: islands-content.js)
-DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
+DENSE.telescope=()=>sculptSurface(36,18,(x,y)=>{
  if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
  if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
  return [Math.abs(x+5)<.5||Math.abs(x-7)<.5?'|':'=',C(YEL,8+Math.max(0,5-Math.abs(y)))];
@@ -236,13 +236,11 @@ function drawTelescope(){
   if(d<R*.88)continue;
   if(d<R){const k=Math.round((d-R*.88)/(R*.12)*3);if(BG[i]!==NONE)BG[i]=(BG[i]&0xF0)|Math.max(0,(BG[i]&15)-k);COL[i]=(COL[i]&0xF0)|Math.max(0,(COL[i]&15)-k);continue;} // (vignette)
   FOGS[i]=FOGB[i]=0;
-  if(d>R+band){BG[i]=NONE;set(i,' ',0);continue;}
-  const th=Math.atan2(dy_,dx_),tx=-Math.sin(th),ty=Math.cos(th),deg=(Math.atan2(ty,tx)*180/Math.PI+360)%180;
-  const along=deg<22.5||deg>157.5?'-':deg>67.5&&deg<112.5?'|':tx*ty<0?'/':'\\',across={'-':'|','|':'-','/':'\\','\\':'/'}[along];
+  if(d>R+band){BG[i]=C(GRAY,0);set(i,' ',0);continue;}
+  const th=Math.atan2(dy_,dx_);
   const shine=.75+.35*Math.cos(th+Math.PI*.75),inner=d<R+lip,outer=d>R+band-edge; // (the light from over your left shoulder)
   const knurl=!inner&&!outer&&fract(th*64/TAU)<.5;
-  BG[i]=C(BRICK,(inner?3:outer?1.2:2)*shine);
-  set(i,inner||outer?along:knurl?across:' ',C(inner?YEL:WARM,(inner?13:outer?7:9)*shine));
+  BG[i]=C(inner?YEL:outer?GRAY:BRICK,(inner?13:outer?7:knurl?8:5)*shine);set(i,' ',0);
  }
  if(!fx.lookout){ // the caption, under the ring (at the lookout the prompt says how to step back)
   const text='6x   Q: lower telescope',r=Math.min(rows-2,Math.floor((cy+R+band)/FS)+1),c0=Math.floor(cols/2-text.length/2);

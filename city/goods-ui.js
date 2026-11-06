@@ -447,11 +447,11 @@ function drawYoyo(x, y) {
   const trail = clamp((Math.abs(yoyo.angV) - 2) / 4, 0, 1);
   if (trail > 0) {
     g.save(); g.globalAlpha = trail;
-    for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * .02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); }
+    for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * .02 * k, len); heldToolEllipse(r.x,r.y,w*.5,s*.5,C(RED,8-k*2)); }
     g.restore();
   }
   const spin = yoyo.spin * .2; // slower visible spokes avoid strobing; contact and recall never reset their phase
-  const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
+  const [art, col] = sculptSurface(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
     if (r < 0.6) return ['@', C(WHITE, 15)];

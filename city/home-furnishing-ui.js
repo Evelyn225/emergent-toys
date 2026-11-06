@@ -235,7 +235,7 @@ ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.
     ...[[3,5],[9,6],[14,5],[3,10],[9,10],[14,10]].map(([x,y],k)=>HOME_PENDANT(x,y,3.4,r,k)),
   ]};
 ROOM_CEILS.idea=(i)=>{BG[i]=C(WHITE,5);set(i,' ',0);};
-DENSE.camera=()=>sculpt(36,20,(x,y)=>{
+DENSE.camera=()=>sculptSurface(36,20,(x,y)=>{
   const dx=Math.max(Math.abs(x)-7,0),dy=Math.max(Math.abs(y)-3.6,0);
   if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?['#',C(GRAY,9)]:null;
   const lens=Math.hypot(x-1.5,y);
@@ -245,7 +245,7 @@ DENSE.camera=()=>sculpt(36,20,(x,y)=>{
 });
 // Flatpacks keep their own silhouette in the bag and in the player's hands.
 function heldFurnitureFlatpack(it) {
-  return sculpt(64,26,(x,y)=>{
+  return sculptSurface(64,26,(x,y)=>{
     const u=x+17,v=y+8;
     if(u<0||u>34)return null;
     const top=-u*.14,edge=top+5;
@@ -254,7 +254,7 @@ function heldFurnitureFlatpack(it) {
     if(tape)return ['#',C(STONE,lid?9:7)];
     if(!lid&&!right&&u>3&&u<12&&v>edge+4&&v<edge+10){
       const icon=(Math.abs(u-7.5)<3.5&&Math.abs(v-edge-7)<.45)||(Math.abs(u-5)<.45&&v>edge+7)||(Math.abs(u-10)<.45&&v>edge+7);
-      return [icon?'|':' ',C(BRICK,7)];
+      return [' ',C(icon?BRICK:WHITE,icon?7:11)];
     }
     if(!lid&&!right&&u>19&&u<24&&v>edge+9&&v<edge+12)return ['|',C(BRICK,3)];
     return ['#',C(WARM,lid?8:right?4:6)];
