@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');
 let browser;test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
-async function fixture(run){const p=await browser.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;mode='walk';room=me=null;body.z=body.vz=body.crouch=0;});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
+async function fixture(run){const p=await browser.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>{requestAnimationFrame=()=>0;HTMLCanvasElement.prototype.requestPointerLock=()=>Promise.resolve();});await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;mode='walk';room=me=null;body.z=body.vz=body.crouch=0;});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
 test('airport access has joined raised bridge decks, navigable water underneath and matching walking/driving heights',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   if(typeof airportBridgeLayout!=='function')return {bad:['flat airport causeway']};
