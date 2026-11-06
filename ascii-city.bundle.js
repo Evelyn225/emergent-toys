@@ -33658,38 +33658,50 @@ function fishRing(bx, by, R, k, lit) {
 }
 
 // ---- over the frame: the rod itself, the reel on it, and the bobber (or your catch) hanging off the tip
-function drawFishingRod(it){
-  const G=rodGeom(),s=Math.round(G.u*.85),carbon=it.id==='carbonrod',guides=[.34,.52,.67,.8,.91],u=G.u;
-  g.font=s+'px monospace';const w=g.measureText('M').width,normal={x:Math.cos(rodView.ang),y:Math.sin(rodView.ang)};
-  const width=t=>t<.15?u*.38:t<.2?u*.25:u*(.13-.09*clamp(t,0,1));
-  for(let k=0;k<72;k++){
-    const t=-.12+1.12*k/72,t1=-.12+1.12*(k+1)/72,p=G.at(t),q=G.at(t1),cork=t<.15,seat=t>=.15&&t<.2,wrap=guides.some(gs=>Math.abs(t-gs)<.012);
-    const base=cork?WARM:seat?GRAY:wrap?(carbon?BLUE:RED):GRAY,level=cork?11:seat?9:wrap?12:carbon?7+t*3:11+t*3;
-    heldToolSegment(p,q,width(t),width(t1),C(base,level));
-    const hi=p=>({x:p.x-normal.x*width(t)*.35,y:p.y-normal.y*width(t)*.35});
-    heldToolSegment(hi(p),hi(q),width(t)*.27,width(t1)*.27,C(cork?WARM:GRAY,cork?14:Math.min(15,level+2)));
+function drawFishingRod(it) {
+  const G = rodGeom(), s = Math.round(G.u * 0.85), carbon = it.id === 'carbonrod';
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width;
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+  const put = (ch, x, y, col) => { g.strokeText(ch, x - w / 2, y - s / 2); g.fillStyle = PAL[col]; g.fillText(ch, x - w / 2, y - s / 2); };
+  const slopeCh = (a_, b_) => { const dxs = (b_.x - a_.x) / w, dys = (b_.y - a_.y) / s; return Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\'; };
+  const n = Math.ceil(G.Lr * 1.12 / (Math.min(w, s) * 0.8)), guides = [0.34, 0.52, 0.67, 0.8, 0.91];
+  g.save(); // the hand's outline covers the butt after the complete rod is drawn
+  for (let k = 0; k <= n; k++) { // butt (cork, in your fist), the reel seat, the blank, thinner and lighter toward the tip
+    const sv = -0.12 + 1.12 * k / n, p = G.at(sv), q = G.at(sv + 0.02);
+    const cork = sv < 0.15, seat = sv >= 0.15 && sv < 0.2, wrap = guides.some(gs => Math.abs(sv - gs) < 0.012);
+    const col = cork ? C(WARM, 13) : seat ? C(GRAY, 12) : wrap ? C(carbon ? BLUE : RED, 13) : carbon ? C(GRAY, 9 + sv * 3) : C(WHITE, 12 + sv * 3);
+    put(cork ? '#' : seat ? '=' : slopeCh(p, q), p.x, p.y, col);
+    if (cork || seat || sv < 0.42) { const o = G.at(sv); if (!cork && !seat) { put(slopeCh(p, q), o.x + w * 0.5 * Math.cos(rodView.ang), o.y + w * 0.5 * Math.sin(rodView.ang), col); continue; } put(cork ? '#' : '=', o.x + w * 0.55 * Math.cos(rodView.ang), o.y + w * 0.55 * Math.sin(rodView.ang), cork ? C(BRICK, 12) : C(GRAY, 9)); } // (thicker down there)
   }
-  const eyes=guides.map(t=>{const p=G.at(t),e={x:p.x+normal.x*w*.55,y:p.y+normal.y*w*.55};heldToolSegment(p,e,Math.max(.7,u*.035),Math.max(.7,u*.035),C(GRAY,10));heldToolRing(e.x,e.y,Math.max(1.8,u*.11),Math.max(2,u*.14),Math.max(.8,u*.04),C(GRAY,13));return e;});
-  const R=G.at(.24),rx=R.x+w*.3,ry=R.y+s*1.55,ph=rodView.spin,spool=carbon?BLUE:GREEN;
-  heldToolSegment(R,{x:rx,y:ry},u*.09,u*.12,C(GRAY,11));
-  heldToolEllipse(rx+u*.12,ry,u*.68,s*.78,C(GRAY,5));
-  heldToolEllipse(rx,ry,u*.58,s*.7,C(spool,9));
-  for(let j=0;j<4;j++){const x=rx-u*.4+((j+fract(ph))*u*.23);g.fillStyle=PAL[C(spool,12)];g.fillRect(x,ry-s*.47,u*.07,s*.94);}
-  for(const side of [-1,1])heldToolEllipse(rx,ry+side*s*.51,u*.7,u*.13,C(GRAY,side<0?14:9));
-  heldToolEllipse(rx,ry,u*.16,u*.17,C(GRAY,13));
-  const hub={x:rx+w*2,y:ry},knob={x:hub.x+Math.cos(ph)*w*.9,y:ry+Math.sin(ph)*s*.7};
-  heldToolSegment({x:rx+u*.2,y:ry},hub,u*.08,u*.08,C(GRAY,10));heldToolSegment(hub,knob,u*.08,u*.065,C(GRAY,13));heldToolEllipse(knob.x,knob.y,u*.17,u*.22,C(WHITE,14));
-  // Only the fishing line remains a run of line characters.
-  const lineSize=Math.max(6,Math.round(s*.45)),wire=(a,b,col=7)=>{g.font=lineSize+'px monospace';charLine(a.x,a.y,b.x,b.y,g.measureText('M').width,lineSize,PAL[C(WHITE,col)]);};
-  wire({x:rx,y:ry-s*.6},eyes[0]);for(let k=1;k<eyes.length;k++)wire(eyes[k-1],eyes[k]);wire(eyes.at(-1),G.tip);
-  const f=fishing,sw=rodView.swing+(f&&f.st==='wind'?f.power*.9:0);
-  if(!f||f.st==='wind'||f.st==='landed'){
-    const len=(f&&f.st==='landed'?2:2.6)*s,ex=G.tip.x+Math.sin(sw)*len,ey=G.tip.y+Math.cos(sw)*len;wire(G.tip,{x:ex,y:ey},11);
-    if(f&&f.st==='landed')drawCatchHanging(f.catch,ex,ey);
-    else{const rx=u*.2,ry=s*.62;heldToolEllipse(ex,ey+s*.3,rx,ry,C(RED,13));g.fillStyle=PAL[C(WHITE,14)];g.beginPath();g.ellipse(ex,ey+s*.3,rx,ry,0,0,Math.PI);g.closePath();g.fill();heldToolSegment({x:ex,y:ey-s*.5},{x:ex,y:ey},Math.max(.6,u*.025),Math.max(.6,u*.025),C(RED,11));}
+  g.font = Math.round(s * 0.7) + 'px monospace';
+  for (const gs of guides) { const p = G.at(gs); put('o', p.x + Math.cos(rodView.ang) * w * 0.45, p.y + Math.sin(rodView.ang) * w * 0.45, C(GRAY, 13)); } // the guides, under the blank
+  g.font = s + 'px monospace'; g.restore();
+  put('.', G.tip.x, G.tip.y, C(carbon ? BLUE : RED, 15));
+  // the reel, hanging under the rod above your fist on its foot: the spool with the line wound on, and the handle going
+  // round (a knob on an arm) as you wind in
+  const R = G.at(0.24), rx = R.x + w * 0.3, ry = R.y + s * 1.55, ph = rodView.spin, spool = carbon ? BLUE : GREEN;
+  put('|', R.x + w * 0.15, R.y + s * 0.6, C(GRAY, 12)); // the foot
+  const g1 = G.at(guides[0]); charLine(rx, ry - s * 0.7, g1.x, g1.y, w, Math.round(s * 0.6), PAL[C(WHITE, 7)]); // the line, up to the first guide
+  g.font = s + 'px monospace'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+  put('.', rx - w, ry - s * 0.8, C(GRAY, 12)); put('-', rx, ry - s * 0.8, C(GRAY, 12)); put('.', rx + w, ry - s * 0.8, C(GRAY, 12));
+  put('(', rx - w, ry, C(GRAY, 13)); put(fishing && fishing.st === 'reel' && fract(ph) < 0.5 ? '=' : '#', rx, ry, C(spool, 13)); put(')', rx + w, ry, C(GRAY, 13));
+  put("'", rx - w, ry + s * 0.75, C(GRAY, 12)); put('-', rx, ry + s * 0.75, C(GRAY, 12)); put("'", rx + w, ry + s * 0.75, C(GRAY, 12));
+  const hx = rx + w * 2 + Math.cos(ph) * w * 0.9, hy = ry + Math.sin(ph) * s * 0.7; // the handle, going round as you wind in
+  put('-', rx + w * 1.6, ry, C(GRAY, 12));
+  put(Math.abs(Math.sin(ph)) > 0.7 ? '|' : Math.cos(ph) * Math.sin(ph) > 0 ? '\\' : '/', (rx + w * 2 + hx) / 2, (ry + hy) / 2, C(GRAY, 12));
+  put('o', hx, hy, C(WHITE, 15));
+  // what hangs off the tip: the bobber, when the line's in; your catch, when you've just landed it
+  const f = fishing, sw = rodView.swing + (f && f.st === 'wind' ? f.power * 0.9 : 0);
+  if (!f || f.st === 'wind' || f.st === 'landed') {
+    const len = (f && f.st === 'landed' ? 2 : 2.6) * s, ex = G.tip.x + Math.sin(sw) * len, ey = G.tip.y + Math.cos(sw) * len;
+    charLine(G.tip.x, G.tip.y, ex, ey, w, s, PAL[C(WHITE, 11)]);
+    g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+    if (f && f.st === 'landed') drawCatchHanging(f.catch, ex, ey);
+    else { put('o', ex, ey, C(RED, 15)); put('o', ex, ey + s * 0.6, C(WHITE, 15)); }
   }
-  if(f&&f.st==='wind'){const k=Math.round(f.power*10);msgText=`Casting [${'#'.repeat(k)}${'-'.repeat(10-k)}]${k>=10?' (as far as it goes)':''}`;msgT=.3;}
-  g.font=FS+'px monospace';
+  if (f && f.st === 'wind') { const k = Math.round(f.power * 10); msgText = `Casting [${'#'.repeat(k)}${'-'.repeat(10 - k)}]${k >= 10 ? ' (as far as it goes)' : ''}`; msgT = 0.3; }
+  g.font = FS + 'px monospace';
 }
 // the catch on the end of the line: its picture, top centre at (x, y), flapping if it's a fish
 function drawCatchHanging(c, x, y) {
