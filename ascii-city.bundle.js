@@ -4853,7 +4853,8 @@ function ghostSign(i, u, uStep, z, d, b, f, sh, u0, base, L) {
   if (wallText(i, u, uStep, z, d, ghostWord(sh), u0, g.zc, g.cwid, g.band, C(base, Math.max(1, lvl * .55)), bg)) return true;
   BG[i] = bg;
   const hole = fp < .012 && (half - Math.abs(du)) < .02 && (half - Math.abs(du)) > .008 && Math.min(top - z, z - bot) < .02 && Math.min(top - z, z - bot) > .008;
-  return set(i, hole ? '.' : ' ', C(GRAY, 1)), true;
+  if(hole)BG[i]=C(GRAY,1);
+  return set(i,' ',0),true;
 }
 
 // ---- left at the step: weeds along the foot of the shutter and in the pavement cracks, and what got dumped there
@@ -4909,7 +4910,7 @@ function drawAbandonedStep(e, vx, vy, d) {
         if (HIT.face === 5 || HIT.face === 6 || blade > .42 - .3 * v) return false;
         const g = 2.6 + L * .3 - v * .5;
         if (fp > .006) { BG[i] = C(GREEN, g * .8); return set(i, ' ', 0), true; } // (far: a dab of green)
-        return set(i, v > .7 ? "'" : lean > .05 ? '/' : lean < -.05 ? '\\' : '|', C(GREEN, Math.max(3, g * 1.6))), true; // (on whatever's behind: the pavement, the steel)
+        BG[i]=C(GREEN,Math.max(3,g*1.6));return set(i,' ',0),true; // (on whatever's behind: the pavement, the steel)
       }
       if (p.kind === 'bag') { // a black bin bag: a rounded lump, sheen on top, the knot
         const r = Math.hypot(HIT.u / p.hl, (HIT.w - p.z0) / (p.z1 - p.z0) * 1.6 - .2);
@@ -4933,7 +4934,7 @@ function drawAbandonedStep(e, vx, vy, d) {
         BG[i] = C(p.k & 1 ? BLUE : RED, (5 + L * .3) * sf); return set(i, ' ', 0), true;
       }
       // a flyer: white paper, a line or two of print
-      BG[i] = C(p.rot > .5 ? YEL : WHITE, 5 + L * .4); return set(i, fp < .002 && Math.abs(fract(HIT.v / .0025) - .5) < .15 ? '-' : ' ', C(GRAY, 3)), true;
+      const print=fp<.002&&Math.abs(fract(HIT.v/.0025)-.5)<.15;BG[i]=print?C(GRAY,3):C(p.rot>.5?YEL:WHITE,5+L*.4);return set(i,' ',0),true;
     });
   }
 }

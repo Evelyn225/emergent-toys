@@ -73,3 +73,9 @@ test('several permanently shut facade families visibly draw rubbish and weeds th
 test('parallel frontage passes never place both ground groups at the same shop',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{const steps=new Set(abandonedStepList().flat().map(e=>e.sh)),ground=abandonedGroundList().flat();return{ground:ground.length,steps:steps.size,overlaps:ground.filter(e=>steps.has(e.sh)).length};});assert.ok(r.ground>30&&r.steps>30,JSON.stringify(r));assert.equal(r.overlaps,0,JSON.stringify(r));
 }));
+test('merged step objects and sign fixing holes are colour surfaces while ghost names remain lettering',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const e=abandonedStepList().flat().find(e=>abandonedStepParts(e).some(p=>p.kind==='bag')),parts=abandonedStepParts(e),draw=drawBox,bad=new Set(),seen=new Set();let k=0;
+  try{drawBox=(box,shade)=>{const q=parts[k++];for(const face of [3,5])for(let u=-9;u<=9;u++)for(const v of [0,.00125])for(const h of [.1,.5,.9]){HIT.face=face;HIT.u=q.hl*u/10;HIT.v=v;HIT.w=q.z0+(q.z1-q.z0)*h;CH[0]='X';if(shade(0,.01,10)){seen.add(q.kind);if(CH[0]!==' ')bad.add(q.kind+':'+CH[0]);}}};drawAbandonedStep(e,0,.2,.2);}finally{drawBox=draw;}
+  const b=ARCH_BUILDINGS.find(b=>b.sh.kind===SHOP_SHUT&&!b.sh.wilderness),f=b.faces.find(f=>f.front&&!f.low),g=architectureSignSpec(b,f,b.sh),half=b.sh.word.length*g.cwid/2+g.edge*2.5,top=g.zc+g.band/2+g.edge;CH[0]='X';const hole=ghostSign(0,half-.014,.0005,top-.014,.05,b,f,b.sh,0,STONE,10);return{bad:[...bad],seen:[...seen],hole,char:CH[0],word:ghostWord(b.sh)};
+ });assert.deepEqual(r.bad,[]);assert.ok(['weed','bag','flyer'].every(k=>r.seen.includes(k)));assert.ok(r.hole);assert.equal(r.char,' ');assert.match(r.word,/[A-Z]/);
+}));
