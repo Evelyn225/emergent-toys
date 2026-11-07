@@ -23,7 +23,7 @@ test('C and RT explicitly air out, RT does not grab, return airs stay inside, an
   const path=GRIND_PATHS.find(p=>p.feature===o),at=grindPathAt(path,path.length*.23),angle=Math.atan2(at.tangent[1],at.tangent[0]);
   for(const own of [false,true]){skateDismount();px=at.p[0];py=at.p[1];a=angle+Math.PI/2;SK.dir=angle+.8;SK.v=.5;SK.lastT=T;body.z=(at.p[2]-skateGround(px,py))*10;body.vz=-.1;body.trick=null;SK.airSource=own?o:null;SK.airRoute=own?{o,out:true}:null;skatePathCatch();if(SK.grind?.name!=='boardslide')bad.push('boardslide rejected '+own);}
   mount();SK.camYaw=Math.PI;SK.transition=null;body.z=body.vz=0;px=SKATEPARK.bx*8+4.3;py=SKATEPARK.by*8+3.4;SKB.v=[0,0,0];SKB.surf=null;SK.v=0;SK.dir=a=0;K.KeyW=1;for(let i=0;i<20;i++){T+=1/120;stepSkate(1/120);stepBody(1/120);}K.KeyW=0;if(SKB.v[0]>=0||!SKB.fakie||Math.abs(a)>.01)bad.push('camera-facing fakie push failed');
-  openPause();const controls=pauseEl.textContent;if(!controls.includes('hold C')||!controls.includes('air out'))bad.push('missing controls');closePause(false);
+  openPause();pauseEl.querySelector('[data-act=controls]').click();controlsEl.querySelector('[data-controls-tab=skate]').click();const section=controlsEl.querySelector('[data-controls-section=skate]'),controls=section.innerText;if(section.hidden||!controls.includes('C / RT before takeoff')||!controls.includes('bowl or ramp onto the deck'))bad.push('missing controls');closeControls();closePause(false);
   return {bad};
  });assert.deepEqual(result.bad,[]);assert.deepEqual(errors,[]);
  }finally{await b.close();}

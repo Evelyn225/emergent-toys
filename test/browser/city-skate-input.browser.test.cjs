@@ -27,14 +27,14 @@ test('mouse and gamepad share gestures; polling, disconnect, pause and controls 
    const polls=calls; // exactly four stepSkate calls above
    body.z=body.vz=0;body.trick=null;skateMouseBegin();skateMouseMove(0,60);
    openPause();const reset=!SK_INPUT.mouseHeld&&SK_INPUT.padGesture.samples.length===0;
-   const controls=pauseEl.textContent;
-   return {steer,disconnected,mouse,played,gamepad,polls,reset,controls};
+   pauseEl.querySelector('[data-act=controls]').click();controlsEl.querySelector('[data-controls-tab=skate]').click();const section=controlsEl.querySelector('[data-controls-section=skate]'),controls=section.innerText;const controlsVisible=!section.hidden;
+   return {steer,disconnected,mouse,played,gamepad,polls,reset,controls,controlsVisible};
   });
   assert.ok(r.steer>0&&r.steer<.5);assert.equal(r.disconnected,true);
   assert.equal(r.mouse.name,'ollie');assert.ok(r.mouse.vz>0);assert.equal(r.played,true);
   assert.equal(r.gamepad.name,r.mouse.name);assert.ok(r.gamepad.vz>0);
   assert.equal(r.polls,4);assert.equal(r.reset,true);
-  assert.match(r.controls,/skateboard controls/);assert.match(r.controls,/right stick/);
+  assert.equal(r.controlsVisible,true);assert.match(r.controls,/Skateboarding/);assert.match(r.controls,/right stick/);
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
