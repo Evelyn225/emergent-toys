@@ -69,15 +69,18 @@ function islandPoolHeight(o,x,y) {
   }
   return top;
 }
-function islandSightHeight(x,y) {
+function islandSightHeight(x,y,z=Infinity) {
   if(!worldReady||x<465)return 0;
   let top=0;
-  for(const o of ISLAND_OBSTACLES)top=Math.max(top,landmarkSurfaceHeight(o,x,y));
+  for(const o of ISLAND_OBSTACLES){
+    if(o.landmarkPart){const range=islandLandmarkInterval(o,x,y);if(range&&z>=range[0]-.001)top=Math.max(top,range[1]);}
+    else top=Math.max(top,landmarkSurfaceHeight(o,x,y));
+  }
   return top;
 }
 function islandSightBlocked(x,y,z=0,pad=.03) {
   if(!worldReady||x<465)return false;
-  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&(o.kind==='tidepool'?Math.hypot(x-o.x,y-o.y)<o.r+.06+pad:Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad));
+  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&(o.landmarkPart?(()=>{const range=islandLandmarkInterval(o,x,y,pad);return range&&z<range[1]&&z+.17>range[0];})():o.kind==='tidepool'?Math.hypot(x-o.x,y-o.y)<o.r+.06+pad:Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad));
 }
 const WILD_FIELDS=new Map();
 const WILD_PATH_FIELDS=new Map();

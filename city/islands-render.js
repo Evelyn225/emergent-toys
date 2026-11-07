@@ -234,6 +234,7 @@ function drawWildScenery() {
   forNear(islandDetailsB,model=>{
     const vx=model.x-px,vy=model.y-py;
     if(!inView(vx,vy,model.hl+.2))return;
+    if(model.landmark){drawIslandLandmark(model.landmark,vx,vy);return;}
     if(model.kind==='tidepool'){drawIslandTidePool(model);return;}
     if(model.kind==='cover') {
       if((model.cover==='flower'||model.cover==='fern')&&season()==='winter')return;

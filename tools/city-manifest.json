@@ -180,6 +180,7 @@
     "city/islands-content.js",
     "city/islands-render.js",
     "city/island-sights.js",
+    "city/island-landmarks.js",
     "city/hotel-bedside-lamps.js",
     "city/hotel-coffee-tables.js",
     "city/hotel-lobby-supports.js",

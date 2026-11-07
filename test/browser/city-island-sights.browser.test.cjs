@@ -74,7 +74,8 @@ test('new sights are reachable on foot, readable, searchable, and preserve local
 test('large island scenery has shared walking, aircraft and shot collision geometry and fitted bases',()=>fixture(async page=>{
   const result=await page.evaluate(()=>{
     const errors=[];
-    for(const o of ISLAND_OBSTACLES) {
+    // Compound arches and shelters have real overhead voids; their interval/shot checks are in city-island-landmarks.
+    for(const o of ISLAND_OBSTACLES.filter(o=>!o.landmarkPart)) {
       const ground=terrainHeight(o.x,o.y),top=landmarkSurfaceHeight(o,o.x,o.y);
       const supported=o.z0<=ground+.001||ISLAND_OBSTACLES.some(other=>other!==o&&other.z1<=o.z0+.001&&Math.abs(landmarkSurfaceHeight(other,o.x,o.y)-o.z0)<.001);
       if(!supported||o.z1<ground)errors.push(['base',o.kind]);
