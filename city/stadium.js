@@ -322,7 +322,7 @@ function enterStadium(section = 'main', dev = false) {
   const sec = STADIUM_SECTIONS[section] || STADIUM_SECTIONS.main, s = STANDS.find(q => q.id === sec.stand);
   enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a], section }, [139.5, 106.5, -Math.PI * .75]);
   stadiumTV = false; stadiumCamX = null; // (you walk in seeing it with your own eyes)
-  stadiumLiveMatch();
+  stadiumLiveMatch().attended = true; // (you were there: it makes the papers, league.js)
   // shown to your place: a seat along a row (the main stand near the halfway line), or a spot on the terrace
   const k = s.seats ? 6 + (Math.random() * 6 | 0) - (6 + (Math.random() * 6 | 0)) % 2 : 7 + (Math.random() * 6 | 0), back = s.front + s.out * (k + .5) * s.depth;
   const along = section === 'main' ? STADIUM.cx + (Math.random() - .5) * 24 : s.seats ? STADIUM.cx + (Math.random() - .5) * 60 : STADIUM.cy + (Math.random() - .5) * 30;
