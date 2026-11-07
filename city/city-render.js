@@ -15,7 +15,7 @@ const LETTER_MIN_COLS = 2, LETTER_MIN_ROWS = 2.5;
 function blockGlyph(text, q, hz, du, dv) {
   let bits = 0;
   for (let b = 0; b < 4; b++) {
-    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
+    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), c0 = text[k], ch = GLYPH5[c0] !== undefined ? c0 : c0?.toUpperCase(); // (no small letters in the block font: No. as NO.)
     if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
   }
   return BLOCK_CELLS[bits];
@@ -277,7 +277,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
   }
   // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
-  const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
+  const inside = (k, col) => d < 3.5 * lodScale() ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   const fpU = Math.max(uStep, d / projY), floorH = 1 / 3, litNow = k => hash(k, fl, sk) > litT - 0.1;

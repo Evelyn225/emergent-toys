@@ -826,7 +826,7 @@ function ballSpin(dt_x, dt_y) { // roll the ball's pattern by however far it's g
 }
 function drawBall() {
   if (!ball) return;
-  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R;
+  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R + outdoorGroundHeight(ball.x, ball.y); // (z: above the ground under it, hills and all)
   const Rm = ballSpin(rel(ball.x - (ball.lx ?? ball.x)), rel(ball.y - (ball.ly ?? ball.y)));
   ball.lx = ball.x; ball.ly = ball.y;
   if (BALL_R * 2 * projX / d < 3) return dot(vx, vy, zc, BALL_R, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i,' ',0),true; });

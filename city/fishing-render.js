@@ -148,6 +148,8 @@ function rodTarget() {
     case 'lure': return [0.74 + (f.t > f.dur * 0.55 ? Math.sin(T * 28) * 0.018 : 0), 0.07, 12]; // a twitch or two as it noses the bait
     case 'bite': return [0.86 + Math.sin(T * 34) * 0.04, 0.32, 20]; // yanked down
     case 'reel': return f.catch ? [0.45 + Math.sin(T * 17) * 0.03, 0.32 + Math.min(0.3, (f.catch.kg || 0.5) * 0.025), 10] : [0.5, 0.08, 10];
+    case 'hooked': return [0.62 + Math.sin(T * 9) * 0.02, 0.2, 10]; // (something heavy on the end, pulling)
+    case 'haul': return [0.45 + Math.sin(T * 13) * 0.04, 0.42, 10]; // (bent double, reeling a person in)
     case 'landed': return [0.32, 0.18 + Math.min(0.2, (f.catch.kg || 0.5) * 0.02), 8];
   }
   return [0.62, 0, 6];
@@ -157,7 +159,7 @@ function stepRodView() {
   const [ang, bend, rate] = rodTarget(), k = Math.min(1, dt * rate);
   const was = rodView.ang;
   rodView.ang += (ang - rodView.ang) * k; rodView.bend += (bend - rodView.bend) * k;
-  if (fishing && fishing.st === 'reel' || fishing && fishing.st === 'wind') rodView.spin += dt * (fishing.st === 'reel' ? 22 : 0);
+  if (fishing && (fishing.st === 'reel' || fishing.st === 'haul' || fishing.st === 'wind')) rodView.spin += dt * (fishing.st === 'wind' ? 0 : fishing.st === 'haul' ? 14 : 22);
   // whatever hangs off the tip swings: pushed by the rod moving, pulled back down
   rodView.swingV += (-rodView.swing * 30 - rodView.swingV * 3 + (rodView.ang - was) / Math.max(dt, 1e-3) * 2.5) * dt;
   rodView.swing = clamp(rodView.swing + rodView.swingV * dt, -1.2, 1.2);
@@ -233,7 +235,7 @@ function drawFishing() {
   }
   // the line: off the rod tip, sagging in the slack (lying on the water near the bobber), taut when something's on
   const G = rodGeom(), tip = unproject(G.tip.x, G.tip.y, 0.06);
-  const sag = f.st === 'bite' || f.st === 'reel' && f.catch ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
+  const sag = f.st === 'bite' || f.st === 'reel' && f.catch || f.st === 'hooked' || f.st === 'haul' ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
   const pts = [];
   const lineCol = f.st === 'bite' && fract(T * 7) < 0.5 ? C(YEL, 15) : C(WHITE, (f.st === 'bite' ? 13 : night > 0.5 ? 7 : 10) * lit); // (taut and twanging on a bite)
   for (let k = 0; k <= 36; k++) {
