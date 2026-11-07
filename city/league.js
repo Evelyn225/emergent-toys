@@ -94,7 +94,7 @@ function playCupRound(S, r) {
   ties.forEach(([home, away], k) => {
     const m = k === ground && stadiumMatch && stadiumMatch.slot === id ? stadiumMatch : null;
     let score, pens = null;
-    if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const res = MatchEngine.result(m); score = res.score; pens = res.pens; }
+    if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const res = MatchEngine.result(m); score = res.score; pens = res.pens; if (m.attended && r < 2) footballNews('match', { home, away, score, pens, scorers: res.scorers, cup: CUP_ROUNDS[r].name }); }
     else { score = quickScore(home, away, cupSeed(S, r, k)); if (score[0] === score[1]) pens = cupPens(cupSeed(S, r, k), home, away); }
     const winner = (pens ? pens[0] > pens[1] : score[0] > score[1]) ? home : away;
     out.push({ home, away, score, pens, winner });
@@ -102,10 +102,17 @@ function playCupRound(S, r) {
     if (k === ground) settleBets(id, home, away, score); // (stadium-extras.js: a bet's on the ninety minutes)
   });
   league.cup.rounds[r] = out;
-  if (r === 2) league.cup.winner = league.cupHolder = out[0].winner;
+  if (r === 2) { league.cup.winner = league.cupHolder = out[0].winner; const f = out[0]; footballNews('cupfinal', { home: f.home, away: f.away, score: f.score, pens: f.pens, winner: f.winner }); }
 }
 const stadiumGatesOpen = () => stadiumNextFixture().open;
 const stadiumMatchLive = () => stadiumNextFixture().live;
+// the football in the papers (notoriety.js): the cup final, the league's champions, a match you were at, and now and
+// then a thrashing somewhere. Filed from the ground (it reads as at the Yards)
+function footballNews(kind, extra) {
+  if (typeof newsEvent !== 'function') return;
+  const B = typeof stadiumBounds === 'function' && STADIUM_SITE?.sh ? stadiumBounds() : null;
+  newsEvent(kind, B ? (B.x0 + B.x1) / 2 : px, B ? (B.y0 + B.y1) / 2 : py, extra);
+}
 // a result into the table
 function recordResult(n, home, away, score, scorers = []) {
   for (const id of [home, away]) league.table[id] ||= { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
@@ -135,11 +142,11 @@ function updateLeague() {
     const n = league.played + 1, pairs = roundPairs(roundOf(n)), ground = groundPair(n);
     pairs.forEach(([home, away], k) => {
       const atGround = home === ground[0] && away === ground[1], m = atGround && stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : null;
-      if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const r = MatchEngine.result(m); recordResult(n, home, away, r.score, r.scorers.map(s => s.player)); } // (the one you saw)
-      else recordResult(n, home, away, quickScore(home, away, fixtureSeed(n, k)));
+      if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const r = MatchEngine.result(m); recordResult(n, home, away, r.score, r.scorers.map(s => s.player)); if (m.attended) footballNews('match', { home, away, score: r.score, scorers: r.scorers }); } // (the one you saw)
+      else { const score = quickScore(home, away, fixtureSeed(n, k)); recordResult(n, home, away, score); if (Math.abs(score[0] - score[1]) >= 4 && hash(n, k, 5011) < .5) footballNews('thrashing', { home, away, score }); }
     });
     league.played = n;
-    if (roundOf(n + 1) === 0) { league.season++; league.table = {}; } // (a new season: the table starts again)
+    if (roundOf(n + 1) === 0) { const top = leagueTable()[0]; if (top?.p) footballNews('champions', { club: top.id, pts: top.pts, season: league.season }); league.season++; league.table = {}; } // (a new season: the table starts again)
   }
   // the cup: every round over by now, in order (a new league starts with the next cup to begin, not one under way)
   const cOver = c => cupKick(Math.floor(c / 3), c % 3) + MATCH_HOURS <= h;

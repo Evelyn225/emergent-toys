@@ -10888,13 +10888,26 @@ const NEWS = {
   murder: (w, n) => n > 1 ? `${inWords(n)} people shot dead in ${w} in one day. Police describe the suspect as armed, and the day as long.` : `A pedestrian was shot dead in ${w}. Police say the suspect is armed, and that this is the main thing to know about them.`,
   roadkill: (w, n) => n > 1 ? `${inWords(n)} pedestrians killed by the same car in ${w}. Police say the driver did not stop, any of the times.` : `A pedestrian was killed by a speeding car in ${w}. The driver did not stop. Police would like a word, and then several more.`,
   copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has cancelled all leave, and most of its patience.`,
+  // the football (league.js): a match you were at, the cup final, the champions, a thrashing
+  match: (w, n, e) => !e.score ? 'Football at the Yards. Both teams turned up.' : footballLine(e) + (e.scorers?.length ? ` ${footballScorers(e)}` : ' Neither side found the net, though both looked.') + ` ${newsPick(e.score[0] * 7 + e.score[1], ['The crowd went home.', 'A decent crowd saw it, and will say so.', 'The pies were described as hot.', 'Fans are already discussing the referee.'])}`,
+  cupfinal: (w, n, e) => { if (!e.score) return 'The City Cup final was played at the Yards. Somebody won it.'; const lose = clubTitle(e.winner === e.home ? e.away : e.home);
+    return `${clubTitle(e.winner)} win the City Cup, ${e.pens ? `on penalties against ${lose} after a ${e.score[0]}-${e.score[1]} draw (${Math.max(...e.pens)}-${Math.min(...e.pens)})` : `beating ${lose} ${Math.max(...e.score)}-${Math.min(...e.score)}`} at the Yards. The trophy is understood to be on its way to a pub.`; },
+  champions: (w, n, e) => !e.club ? 'The league season is over. A team finished top.' : `${clubTitle(e.club)} are league champions, finishing top with ${e.pts} points. Their manager thanked the fans, the players, and the fixture computer.`,
+  thrashing: (w, n, e) => { if (!e.score) return 'A heavy defeat in the league. The losing side has asked for privacy.'; const [h, a] = e.score, win = h > a ? e.home : e.away, lose = h > a ? e.away : e.home; return `${clubTitle(win)} put ${Math.max(h, a)} past ${clubTitle(lose)}. ${possessive(clubTitle(lose))} manager says there were positives, and is looking for them.`; },
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
+// a football result as the back page has it, and who scored
+const footballLine = e => `${e.cup ? e.cup + ': ' : ''}${clubTitle(e.home)} ${e.score[0]}, ${clubTitle(e.away)} ${e.score[1]}${e.pens ? ` (${e.pens[0]}-${e.pens[1]} on penalties)` : ''}, at the Yards.`;
+const footballScorers = e => { const by = s => [...new Set(e.scorers.filter(g => g.side === s && !g.og).map(g => g.player))]; const names = [...by(0), ...by(1)];
+  return names.length ? `Goals from ${names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0]}.` : 'The goals were all own goals, which nobody is proud of.'; };
+const clubTitle = id => typeof clubName === 'function' ? clubName(id) : String(id);
+const possessive = name => name.endsWith('s') ? name + "'" : name + "'s";
+const newsPick = (k, a) => a[Math.abs(k | 0) % a.length];
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
 // police about the suspect when you're well known
 function newsLines(today = false) {
   const from = dayNum - 1, to = today ? dayNum : dayNum - 1;
-  const big = e => (CRIMES[e.kind] ? CRIMES[e.kind].stars : NOTO_EVENT[e.kind] ? 3 : 1) * 10 + Math.min(e.n, 5);
+  const big = e => (CRIMES[e.kind] ? CRIMES[e.kind].stars : NOTO_EVENT[e.kind] ? 3 : e.kind === 'cupfinal' || e.kind === 'champions' ? 2 : 1) * 10 + Math.min(e.n, 5);
   const lines = noto.log.filter(e => e.day >= from && e.day <= to && NEWS[e.kind]).sort((p, q) => big(q) - big(p)).map(e => NEWS[e.kind](e.where, e.n, e));
   if (lines.length && noto.level >= 40) lines.push(noto.lookDay >= dayNum - 1
     ? 'Police say the suspect may since have changed their appearance, and that this does not help.'
@@ -31855,7 +31868,7 @@ function playCupRound(S, r) {
   ties.forEach(([home, away], k) => {
     const m = k === ground && stadiumMatch && stadiumMatch.slot === id ? stadiumMatch : null;
     let score, pens = null;
-    if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const res = MatchEngine.result(m); score = res.score; pens = res.pens; }
+    if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const res = MatchEngine.result(m); score = res.score; pens = res.pens; if (m.attended && r < 2) footballNews('match', { home, away, score, pens, scorers: res.scorers, cup: CUP_ROUNDS[r].name }); }
     else { score = quickScore(home, away, cupSeed(S, r, k)); if (score[0] === score[1]) pens = cupPens(cupSeed(S, r, k), home, away); }
     const winner = (pens ? pens[0] > pens[1] : score[0] > score[1]) ? home : away;
     out.push({ home, away, score, pens, winner });
@@ -31863,10 +31876,17 @@ function playCupRound(S, r) {
     if (k === ground) settleBets(id, home, away, score); // (stadium-extras.js: a bet's on the ninety minutes)
   });
   league.cup.rounds[r] = out;
-  if (r === 2) league.cup.winner = league.cupHolder = out[0].winner;
+  if (r === 2) { league.cup.winner = league.cupHolder = out[0].winner; const f = out[0]; footballNews('cupfinal', { home: f.home, away: f.away, score: f.score, pens: f.pens, winner: f.winner }); }
 }
 const stadiumGatesOpen = () => stadiumNextFixture().open;
 const stadiumMatchLive = () => stadiumNextFixture().live;
+// the football in the papers (notoriety.js): the cup final, the league's champions, a match you were at, and now and
+// then a thrashing somewhere. Filed from the ground (it reads as at the Yards)
+function footballNews(kind, extra) {
+  if (typeof newsEvent !== 'function') return;
+  const B = typeof stadiumBounds === 'function' && STADIUM_SITE?.sh ? stadiumBounds() : null;
+  newsEvent(kind, B ? (B.x0 + B.x1) / 2 : px, B ? (B.y0 + B.y1) / 2 : py, extra);
+}
 // a result into the table
 function recordResult(n, home, away, score, scorers = []) {
   for (const id of [home, away]) league.table[id] ||= { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
@@ -31896,11 +31916,11 @@ function updateLeague() {
     const n = league.played + 1, pairs = roundPairs(roundOf(n)), ground = groundPair(n);
     pairs.forEach(([home, away], k) => {
       const atGround = home === ground[0] && away === ground[1], m = atGround && stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : null;
-      if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const r = MatchEngine.result(m); recordResult(n, home, away, r.score, r.scorers.map(s => s.player)); } // (the one you saw)
-      else recordResult(n, home, away, quickScore(home, away, fixtureSeed(n, k)));
+      if (m) { while (m.phase !== 'ft') MatchEngine.tick(m); const r = MatchEngine.result(m); recordResult(n, home, away, r.score, r.scorers.map(s => s.player)); if (m.attended) footballNews('match', { home, away, score: r.score, scorers: r.scorers }); } // (the one you saw)
+      else { const score = quickScore(home, away, fixtureSeed(n, k)); recordResult(n, home, away, score); if (Math.abs(score[0] - score[1]) >= 4 && hash(n, k, 5011) < .5) footballNews('thrashing', { home, away, score }); }
     });
     league.played = n;
-    if (roundOf(n + 1) === 0) { league.season++; league.table = {}; } // (a new season: the table starts again)
+    if (roundOf(n + 1) === 0) { const top = leagueTable()[0]; if (top?.p) footballNews('champions', { club: top.id, pts: top.pts, season: league.season }); league.season++; league.table = {}; } // (a new season: the table starts again)
   }
   // the cup: every round over by now, in order (a new league starts with the next cup to begin, not one under way)
   const cOver = c => cupKick(Math.floor(c / 3), c % 3) + MATCH_HOURS <= h;
@@ -32252,7 +32272,7 @@ function enterStadium(section = 'main', dev = false) {
   const sec = STADIUM_SECTIONS[section] || STADIUM_SECTIONS.main, s = STANDS.find(q => q.id === sec.stand);
   enterRoom('stadium', { word: 'THE YARDS GROUND', ret: [px, py, a], section }, [139.5, 106.5, -Math.PI * .75]);
   stadiumTV = false; stadiumCamX = null; // (you walk in seeing it with your own eyes)
-  stadiumLiveMatch();
+  stadiumLiveMatch().attended = true; // (you were there: it makes the papers, league.js)
   // shown to your place: a seat along a row (the main stand near the halfway line), or a spot on the terrace
   const k = s.seats ? 6 + (Math.random() * 6 | 0) - (6 + (Math.random() * 6 | 0)) % 2 : 7 + (Math.random() * 6 | 0), back = s.front + s.out * (k + .5) * s.depth;
   const along = section === 'main' ? STADIUM.cx + (Math.random() - .5) * 24 : s.seats ? STADIUM.cx + (Math.random() - .5) * 60 : STADIUM.cy + (Math.random() - .5) * 30;
