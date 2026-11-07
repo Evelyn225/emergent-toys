@@ -182,6 +182,7 @@
     "city/islands-content.js",
     "city/islands-render.js",
     "city/island-sights.js",
+    "city/island-landings.js",
     "city/island-landmarks.js",
     "city/island-materials.js",
     "city/water-weather.js",
