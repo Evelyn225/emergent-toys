@@ -72,6 +72,8 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 32. [ ] Final integration tour: all districts, all interiors, every island and vehicle; saves, interactions, seasonal scenes and measured city/coast/interior performance.
 33. [x] Abandoned shopfronts: shops shut down for good are now anonymous shutters (no sign, no FOR LEASE, no tooltip, not enterable). Give them decayed, aged and abandoned styles (rusted or dented shutters, boarded windows, peeling paint, sun-faded ghost lettering, weeds at the step, flyers and dumped junk) and make them hotspots for graffiti. Done: rusted, flaking and dented shutters, boarded patches and torn paper (brownstones), graffiti hotspots; the old sign as a sun-faded ghost on the wall with lost letters and fixing holes; weeds at the step and dumped bin bags, boxes, crates, flat cardboard, a mattress and flyers at every shut street front.
 
+34. [ ] UI review: menus, map and minigames; hierarchy, contrast, clear states, keyboard/controller focus and responsive desktop/touch layouts. Track chunks and evidence in `UI_REVIEW.md`.
+
 ## Checkpoint
 
 The reported-fix batch is implemented and reviewed in Chromium, including shoreline wash/backwash, Fern kitchen/bathroom/living room, IDEA, placed furniture, night lighting, and the 390px phone menu. Regression coverage includes actual E/Q/F controls, photograph save/reload, packed lamp state, workshop refresh, legacy save migration, reachable island sights, and shared tide-pool collision heights.
