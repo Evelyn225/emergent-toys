@@ -35,7 +35,7 @@ test('a reflection shows only what is beyond the water, never a sign standing in
       };
       return { nearer: mirror(1.5), beyond: mirror(8), sky: mirror(Infinity) };
     });
-    assert.deepEqual(r, { nearer: '~', beyond: '#', sky: '#' });
+    assert.deepEqual(r, { nearer: ' ', beyond: '#', sky: '#' });
     assert.deepEqual(errors, []);
   } finally { await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });

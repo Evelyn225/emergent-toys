@@ -172,7 +172,7 @@ function drawIslandTidePool(p) {
   coveLathe(x,y,0,p.profile,stone);
   drum(x,y,p.waterRadius,water-.003,water,(i,t,L)=>{
     const ripple=Math.sin(HIT.u*80+HIT.v*23+T*.8);
-    BG[i]=C(BLUE,3);set(i,ripple>.985?'~':' ',C(CYAN,9));
+    const crest=ripple>.9?coveDetail(t,.08):0;BG[i]=C(crest>.3?CYAN:BLUE,3+crest*2);set(i,' ',0);
     const u=HIT.u+r*.28,v=HIT.v-r*.2,angle=Math.atan2(v,u),radius=Math.hypot(u,v);
     if(radius<.025+.018*Math.cos(angle*5)){BG[i]=C(ORANGE,5+L*.3);set(i,' ',0);}
     return true;
