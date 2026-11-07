@@ -1276,13 +1276,10 @@ function drawBench(vx,vy,fx,fy,s,base=0) {
 // a subway entrance in 3D: railings round a stairwell cut into the sidewalk (its treads are drawn by floorCell,
 // see SUBWAY_HOLE), green globe lamps at the open end, and the station's name on a sign over the far railing
 function drawStationEntrance(s, vx, vy) {
-  const [hl, hw] = SUBWAY_HOLE, iron = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 5 ? '=' : '|', C(GREEN, L * 0.7)), true; };
-  for (const side of [-1, 1]) drawBox(boxAt(vx, vy + side * hw, 1, 0, hl, 0.004, 0, 0.09), iron); // the long sides
-  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.004, 0, 0.09), iron); // the far end
-  for (const side of [-1, 1]) { // the lamps either side of the way in
-    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.005, 0.005, 0, 0.13), iron);
-    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.014, 0.014, 0.13, 0.158), (i, t, L) => { BG[i] = C(GREEN, 6 + night * 7); return set(i, 'o', C(WHITE, 15)), true; });
-  }
+  const [hl, hw] = SUBWAY_HOLE, iron = (i, t, L) => { BG[i] = C(GREEN, 1.4 + L * .12); return set(i, ' ', 0), true; }; // (cast iron, painted the old subway green)
+  for (const side of [-1, 1]) drawBox(boxAt(vx, vy + side * hw, 1, 0, hl, 0.004, 0, 0.09), subwayRailing(hl)); // the long sides
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.004, 0, 0.09), subwayRailing(hw)); // the far end
+  for (const side of [-1, 1]) subwayLamp(vx - hl, vy + side * hw, iron); // the lamps either side of the way in
   const name = s.name; // the sign: one letter per cell across its face, so it never smears
   drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.006, 0.09, 0.125), (i, t, L) => {
     BG[i] = C(GREEN, 4 + night * 3);
@@ -1293,6 +1290,33 @@ function drawStationEntrance(s, vx, vy) {
   // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
   // block either way
   for (const blade of s.blades) subwayBlade(vx + rel(blade.x-s.x),vy + rel(blade.y-s.y),iron);
+}
+// the railing round a stairwell: a top rail and a mid rail between square posts, thin balusters between them you see
+// the steps through; dark green paint, the top rail worn bright by hands. Far off the balusters thin into a tint
+function subwayRailing(half) {
+  return (i, t, L) => {
+    const u = HIT.u + half, w = HIT.w, fp = t / projY, top = w > .084, mid = Math.abs(w - .046) < .003, foot = w < .006;
+    const post = Math.abs(fract(u / .07) - .5) * .07 > .035 - Math.max(.004, fp * .5) || Math.min(u, 2 * half - u) < .005;
+    const bar = Math.abs(fract(u / .011) - .5) < Math.max(.13, Math.min(.5, fp / .011 * .45));
+    if (!top && !mid && !foot && !post && !bar) return false; // (see through: the steps going down)
+    BG[i] = C(GREEN, (top ? 2.4 + (HIT.face === 5 ? 1.2 : 0) : post ? 1.8 : 1.4) * shadeFace(HIT.face) + L * .14);
+    return set(i, ' ', 0), true;
+  };
+}
+// a globe lamp on its post at the mouth of the stairs: a cast-iron post with a fluted foot, a collar, a frosted green
+// globe glowing from inside (brightest in the middle, a highlight off the glass), a little finial on top
+function subwayLamp(x, y, iron) {
+  drawBox(boxAt(x, y, 1, 0, 0.009, 0.009, 0, 0.012), iron); // the foot
+  drawBox(boxAt(x, y, 1, 0, 0.004, 0.004, 0.012, 0.13), iron); // the post
+  drawBox(boxAt(x, y, 1, 0, 0.007, 0.007, 0.124, 0.131), iron); // the collar
+  const r = 0.0135, zc = 0.1445;
+  drawBox(boxAt(x, y, 1, 0, r, r, zc - r, zc + r), (i, t, L) => {
+    const nx = HIT.u, ny = HIT.v, nz = HIT.w, view = Math.max(0, -(nx * dx + ny * dy)); // (facing you: the glow comes through thickest at the middle)
+    const glow = 4.5 + night * 8 + view * (3 + night * 3), spec = nz > .45 && nz < .75 && (-dy * nx + dx * ny) > .2 && -(nx * dx + ny * dy) > .2; // (a highlight off the glass, up to one side)
+    BG[i] = spec ? C(WHITE, 11 + night * 3) : C(GREEN, Math.min(15, glow));
+    return set(i, ' ', 0), true;
+  }, raySphere);
+  drawBox(boxAt(x, y, 1, 0, 0.002, 0.002, zc + r - .001, zc + r + .006), iron); // the finial
 }
 function subwayBlade(tx, ty, iron) {
   const Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
