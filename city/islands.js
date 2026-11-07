@@ -198,7 +198,7 @@ function islandSurface(x,y) {
   const patch=noise(x*.3,y*.3,1876),edge=wildIslandEdge(x,y,island);
   if(island.id==='fern') {
     const creek=fernCreekDistance(x,y);
-    if(creek<0)return {base:CYAN,background:BLUE,ch:fract(y*5-T*1.8+grain*.4)<.14?'~':' ',color:'#528b9f',tone:1.1,water:true};
+    if(creek<0){const ripple=fract(y*5-T*1.8+grain*.4)<.14;return {base:CYAN,background:ripple?CYAN:BLUE,ch:' ',color:'#528b9f',tone:ripple?1.8:1.1,water:true,night:ripple?2.5:1.8};}
     if(creek<.16+patch*.12)return {base:GRAY,background:GREEN,ch:grain>.97?'.':' ',color:'#64715d',tone:1};
     if(onFernStrip(x,y)) {
       let ch=grain>.85?':':' ';
