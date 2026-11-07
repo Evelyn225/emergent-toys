@@ -247,6 +247,7 @@
     "city/shared-walls.js",
     "city/coast-life.js",
     "city/cabin-cove.js",
+    "city/civic-fronts.js",
     "city/furniture-quality.js",
     "city/bathroom-quality.js",
     "city/home-quality.js",
