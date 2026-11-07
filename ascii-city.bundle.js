@@ -51805,7 +51805,7 @@ const SPARSE_GYM_PROPS = ROOM_DEFS.gym.props;
 ROOM_DEFS.gym.props = r => [...SPARSE_GYM_PROPS(r), ...sparseExtra([
   SPARSE_BENCH_PRESS(6.0, 6.4), SPARSE_BENCH_PRESS(8.4, 6.4), SPARSE_KETTLEBELLS(1.35, 4.6, 4),
   SPARSE_FLAT(6.6, 9.1, .9, .45, (i, t, L) => { BG[i] = C(BLUE, 1.1 + L * .1 - (Math.abs(HIT.u) > .86 ? .4 : 0)); return set(i, ' ', 0), true; }),
-  { ...standing(6.0, 7.3, RED), face: [0, -1] }, { ...sitting(6.6, 9.1, GREEN, .02), face: [0, -1] }, // a spotter, someone stretching on the mat
+  { ...standing(6.0, 7.3, RED), face: [0, -1] }, { ...standing(6.6, 9.1, GREEN), face: [1, 0] }, // a spotter, someone on the mat
 ])];
 'use strict';
 // ---- a second pass over the shops and lobbies that still felt thin: the phone shop, the pawnbroker, the off-licence,
