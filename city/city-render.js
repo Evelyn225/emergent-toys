@@ -94,6 +94,10 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
       if (doorway && architectureShutter(i, z, SHOP[k], L, d, du, -spacing * 0.32, spacing * 0.32, 0, 0.245)) return; // (the shutter's housing fills the arch's head)
       if (doorway) return void doorGlass(i, du, z, openAt(SHOP[k], tod), L, WHITE, fpB);
       const bar = facadeLine(Math.abs(du), .03, fpB);
+      if (bar <= .5 && SHOP[k].kind !== SHOP_APTS && d < SHOP_WINDOW.near * (shopSceneFor(SHOP[k]) ? 1.6 : 1)) { // up close, the shop's display behind the arch (shop-windows.js)
+        const sg = Math.sign(u * wc) || 1, mid = start + (bay + .5) * spacing, ua = sg * (mid - spacing * .32), ub = sg * (mid + spacing * .32);
+        if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), .045, .3, SHOP[k], openAt(SHOP[k], tod), L, sk + bay)) return;
+      }
       BG[i] = bar > .5 ? C(WHITE, 1.8 + L * .25) : C(SHOP[k].kind === SHOP_APTS ? BRICK : CYAN, (1 + night * 2 + day * .5) * (1 - bar * .5));
       return set(i, ' ', 0);
     }
@@ -259,7 +263,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       BG[i] = rim ? C(BRICK, 1.5 + L * .15) : C(ITEM_COL[hash(crate, 2, sk) * 4 | 0], 2 + L * .3); return set(i, ' ', 0);
     }
     const on = hash(Math.floor(u * 2), 3, sk) > 0.25, scene = !!shopSceneFor(sh);
-    if ((on || scene) && d < SHOP_WINDOW.near * (scene ? 1.6 : 1) && z > .07 && z < .25 && (sh.kind !== SHOP_NEON || scene) && sh.kind !== SHOP_APTS && (sty !== 8 || scene)) // up close, the display behind the glass (shop-windows.js), or a restaurant's room (shop-scenes.js)
+    if ((on || scene) && d < SHOP_WINDOW.near * (scene ? 1.6 : 1) && z > .07 && z < .25 && sh.kind !== SHOP_APTS && (sty !== 8 || scene)) // up close, the display behind the glass (shop-windows.js), or a restaurant's room (shop-scenes.js)
       if (shopWindow(i, u, z, Math.floor(u * 2) / 2 + 0.06, Math.floor(u * 2) / 2 + 0.48, 0.07, 0.25, sh, open, L, sk + Math.floor(u * 2))) return;
     // the shopfront itself: this shop's style of joinery, glass, sill and stallriser (shopfront-kit.js)
     return shopfrontBay(i, (fs - 0.08) * 0.5, 0.46, z, 0, 0.32, sh, L, fpG, on && (night > 0.3 || overcast > 0.6), d);
