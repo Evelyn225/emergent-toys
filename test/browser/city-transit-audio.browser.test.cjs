@@ -22,6 +22,7 @@ test.after(async () => { await browser?.close(); server?.closeAllConnections(); 
 async function fixture(run, { startAudio = true, route } = {}) {
   const page = await browser.newPage(), errors = [];
   page.setDefaultTimeout(10000);
+  page.setDefaultNavigationTimeout(30000); // World bootstrap has a separate budget from action/audio checks.
   // Simulation is hand-driven with RAF disabled, so waits must use a wall-clock poll.
   const waitForFunction = page.waitForFunction.bind(page);
   page.waitForFunction = (fn, arg, options = {}) => waitForFunction(fn, arg, { polling: 25, ...options });
