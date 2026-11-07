@@ -139,7 +139,8 @@ const stadiumCheers = m => !m ? -1 : m.phase === 'goal' ? m.celebrate?.side ?? -
 // off the strip above stands in for them (it leaves out these seats, so nobody is drawn twice)
 const CROWD_NEAR = 6.5, CROWD_H = 1.6; // (a touch under full height: sat down, the heads in front sit below your eyes)
 const seatAt = (s, k, seat) => { const a = (s.a0 + s.a1) / 2 + (seat + .5) * SEAT_PITCH, b = s.front + s.out * (k + .5 + .15) * s.depth; return s.axis === 'y' ? [a, b] : [b, a]; };
-const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < CROWD_NEAR * CROWD_NEAR; };
+const crowdNearR = () => CROWD_NEAR * clamp(lodScale(), .6, 1.6); // (Detail distance: how far round you the crowd are people)
+const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < crowdNearR() ** 2; };
 const crowdLooks = new Map();
 function crowdLook(s, k, seat, kit, side) {
   const key = `${s.id}:${k}:${seat}:${kit.join()}`;
@@ -161,15 +162,15 @@ function tipUpSeat(rx, ry, z0, fx, fy, col) {
   drawBox(boxAt(rx - fx * .21, ry - fy * .21, fy ? 1 : 0, fy ? 0 : 1, .25, .03, z0 + .42, z0 + .82), shade);
   drawBox(boxAt(rx + fx * .02, ry + fy * .02, fy ? 1 : 0, fy ? 0 : 1, .04, .04, z0, z0 + .36), solid(GRAY));
 }
-const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR + 1, draw: () => {
-  const m = stadiumMatch, fill = m ? m.crowd : .8;
+const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR * 1.6 + 1, draw: () => {
+  const m = stadiumMatch, fill = m ? m.crowd : .8, NR = crowdNearR();
   for (const s of STANDS) {
     const along = s.axis === 'y', across = along ? py : px, alongMe = (along ? px : py) - (s.a0 + s.a1) / 2;
-    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - CROWD_NEAR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + CROWD_NEAR / s.depth));
+    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - NR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + NR / s.depth));
     const half = (s.a1 - s.a0) / 2 / SEAT_PITCH;
     for (let k = k0; k <= k1; k++) {
       const z0 = (k + 1) * s.rise;
-      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - CROWD_NEAR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + CROWD_NEAR) / SEAT_PITCH)); seat++) {
+      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - NR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + NR) / SEAT_PITCH)); seat++) {
         if (!crowdNear(s, k, seat)) continue;
         const [x, y] = seatAt(s, k, seat), rx = x - px, ry = y - py;
         if (!inView(rx, ry, 1)) continue;

@@ -224,20 +224,37 @@ function drawShots() {
 // pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
+  // every pool near enough, as one wet field: overlapping pools run together into one edge instead of each cutting
+  // the other out (each pool's box shades from all of them, in world coordinates, so they agree on every cell)
+  const near = [];
   for (const b of pools) {
     if((b.at??'')!==(mode==='room'?bloodRoomKey():''))continue;
-    const scale=b.scale||1,ground=b.z??(mode==='room'?0:walkGround(b.x,b.y));
-    const vx = rel(b.x - px), vy = rel(b.y - py);
+    const scale=b.scale||1,vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, ground+.0001, ground+0.0004*scale), (i, t, L) => {
-      const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
-      const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
-      if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
-      const col = dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
-      if(k>.85){BG[i]=C(col,(2.8-dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
-      BG[i] = C(col, (2.6 - k * 0.8 - dry * 1.1) * lv);
-      const glint = dry < 0.4 && k < 0.5 && hash(Math.floor(HIT.u * 160), Math.floor(HIT.v * 160), 4412) > 0.9; // (wet: it catches the light)
+    const age = T - b.t;
+    near.push({ b, vx, vy, scale, ground: b.z??(mode==='room'?0:walkGround(b.x,b.y)), r: scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry: clamp((age - 50) / 130, 0, 1), seed: b.x * 13 + b.y * 7 });
+  }
+  // the field at a point (relative to you): each pool's depth there (1 at its middle, 0 at its ragged edge), joined
+  // as a soft union, so where pools overlap they read as one deeper pool with no seam; past every edge, the nearest
+  // edge (for the spatters). Returns [the pool it's most in, k: 0 deep in .. 1 the edge .. beyond]
+  const field = (x, y) => {
+    let best = null, bk = 9, out = 1, bs = 0;
+    for (const q of near) {
+      const u = x - q.vx, v = y - q.vy; if (Math.abs(u) > q.r * 1.4 || Math.abs(v) > q.r * 1.4) continue;
+      const an = Math.atan2(v, u), edge = q.r * (0.78 + 0.14 * Math.sin(an * 3 + q.seed) + 0.08 * Math.sin(an * 7 + q.seed * 1.7) + 0.05 * Math.sin(an * 13 + q.seed * 0.3)), k = Math.hypot(u, v) / edge;
+      const sq = Math.max(0, 1 - k); out *= 1 - sq;
+      if (sq > bs || !bs && k < bk) { bs = sq; bk = k; best = q; }
+    }
+    return [best, out < 1 ? out : bk]; // (inside: 1 - the union's depth; outside: the nearest edge's k)
+  };
+  for (const p of near) {
+    drawBox(boxAt(p.vx, p.vy, 1, 0, p.r * 1.35, p.r * 1.35, p.ground+.0001, p.ground+0.0004*p.scale), (i, t, L) => {
+      const x = p.vx + HIT.u, y = p.vy + HIT.v, wx = px + x, wy = py + y, [q, k] = field(x, y);
+      if (!q || k > 1.25 || k > 1 && hash(Math.floor(wx * 300), Math.floor(wy * 300), 4411) > 0.35) return false; // (the spatters past the edge; in world terms, so every pool agrees)
+      const col = q.dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
+      if(k>.85){BG[i]=C(col,(2.8-q.dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
+      BG[i] = C(col, (2.6 - k * 0.8 - q.dry * 1.1) * lv);
+      const glint = q.dry < 0.4 && k < 0.5 && hash(Math.floor(wx * 160), Math.floor(wy * 160), 4412) > 0.9; // (wet: it catches the light)
       if(glint)BG[i]=C(RED,5*lv);return set(i,' ',0),true;
     });
   }
