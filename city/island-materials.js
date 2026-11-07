@@ -31,6 +31,12 @@ function drawIslandPlantModel(m,x,y){
 // timing/height fields return unchanged. The airstrip dash becomes yellow paint.
 const ISLAND_LAND_SURFACE=islandSurface,ISLAND_LAND_SHORE=islandShoreSurface;
 islandSurface=(...args)=>{
- const s=ISLAND_LAND_SURFACE(...args);if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';}return s;
+ let s=ISLAND_LAND_SURFACE(...args);
+ if(!s&&onIsland(...args)){
+  const [x,y]=args,edge=isleEdge(x,y),path=Math.abs(rel(x-FOOTBRIDGE.x-rel(y-FOOTBRIDGE.y1)/(LIGHTHOUSE.y-FOOTBRIDGE.y1)*(LIGHTHOUSE.x-FOOTBRIDGE.x))),along=rel(y-FOOTBRIDGE.y1);
+  const rock=edge<.45,trail=!rock&&path<.13&&along>-.5&&rel(y-LIGHTHOUSE.y)<0,patch=noise(x*.8,y*.8,2004),base=rock?GRAY:trail?WARM:GREEN;
+  s={base,background:base,ch:' ',tone:(rock?.85:trail?1.1:.75)+patch*.25};
+ }
+ if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;
 };
-islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water)s.ch=' ';return s;};
+islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water){s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;};

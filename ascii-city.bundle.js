@@ -14053,11 +14053,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       surf = pool > 0 ? [WARM, Math.max(LF * .45, pool * 6) - gap * 1.5] : [BRICK, LF * (e > .88 ? .4 : .55 + board * .22 * clamp(1 - fpF / .03, 0, 1) - gap * .3)];
     } else if (onIsland(wx, wy)) { // the island: rocks round the shore, a gravel path out to the lighthouse, rough grass
       soft = true;
-      const e = isleEdge(wx, wy), path = Math.abs(rel(wx - FOOTBRIDGE.x - (rel(wy - FOOTBRIDGE.y1) / (LIGHTHOUSE.y - FOOTBRIDGE.y1)) * (LIGHTHOUSE.x - FOOTBRIDGE.x)));
-      const onPath = path < 0.13 && rel(wy - FOOTBRIDGE.y1) > -0.5 && rel(wy - LIGHTHOUSE.y) < 0;
-      if (e < 0.45) { ch = hash(Math.floor(wx * 9), Math.floor(wy * 9), 34) > 0.45 ? '%' : 'o'; base = GRAY; k = 1.25; }
-      else if (onPath) { ch = (r * 5 + x) % 3 ? ':' : '.'; base = WARM; k = 1; }
-      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
+      islandTexture=islandSurface(wx,wy);base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
     } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
       { const fpP = homeBalconyPavingFootprint(d, eye), LP = L * roadDark(), gap = coveGroove(wy * 6, 1, .12, fpP * 6), board = hash(mx, Math.floor(wy * 6), 33) - .5; // boards across it, each its own age, the gaps filtered
@@ -41444,9 +41440,15 @@ function drawIslandPlantModel(m,x,y){
 // timing/height fields return unchanged. The airstrip dash becomes yellow paint.
 const ISLAND_LAND_SURFACE=islandSurface,ISLAND_LAND_SHORE=islandShoreSurface;
 islandSurface=(...args)=>{
- const s=ISLAND_LAND_SURFACE(...args);if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';}return s;
+ let s=ISLAND_LAND_SURFACE(...args);
+ if(!s&&onIsland(...args)){
+  const [x,y]=args,edge=isleEdge(x,y),path=Math.abs(rel(x-FOOTBRIDGE.x-rel(y-FOOTBRIDGE.y1)/(LIGHTHOUSE.y-FOOTBRIDGE.y1)*(LIGHTHOUSE.x-FOOTBRIDGE.x))),along=rel(y-FOOTBRIDGE.y1);
+  const rock=edge<.45,trail=!rock&&path<.13&&along>-.5&&rel(y-LIGHTHOUSE.y)<0,patch=noise(x*.8,y*.8,2004),base=rock?GRAY:trail?WARM:GREEN;
+  s={base,background:base,ch:' ',tone:(rock?.85:trail?1.1:.75)+patch*.25};
+ }
+ if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;
 };
-islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water)s.ch=' ';return s;};
+islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water){s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;};
 // Hotel-only bedside fittings sit on the existing cabinet's measured top.
 // Closed lathe shells leave actual openings around the supported light bulb.
 function HOTEL_BEDSIDE_LAMP(x,y,tier,baseZ=.65) {

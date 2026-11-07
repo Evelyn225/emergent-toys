@@ -35,3 +35,22 @@ test('island signs retain complete black labels through the native material pain
 test('dock posts share their visible footprint with walking and aircraft collision while landing centre lanes stay open',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{const posts=ISLAND_DETAILS.filter(o=>o.dockPost),bad=[];if(posts.length<20)return{bad:['dock posts have no collision'],posts:posts.length};for(const post of posts){if(!ISLAND_OBSTACLES.includes(post)||!islandSightBlocked(post.x,post.y,0,.01)||Math.abs(builtHeight(post.x,post.y)-post.z1)>1e-8)bad.push('post collider differs from visible part');}for(const island of WILD_ISLANDS){const [x0,y0,x1,y1]=island.dock;for(let x=x0+.3;x<x1-.1;x+=.1){px=x;py=(y0+y1)/2;if(!free(px,py))bad.push(['blocked landing lane',island.id,x]);}}return{bad,posts:posts.length};});assert.deepEqual(r.bad,[]);assert.ok(r.posts>=20);
 }));
+
+test('lighthouse island rock, grass and path share colour surfaces in both sloped terrain and flat floor rays',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const bad=[],bases=new Set();let count=0;wet=snowCover=lampsOn=0;
+  for(let y=ISLE.y-ISLE.r;y<ISLE.y+ISLE.r;y+=.11)for(let x=ISLE.x-ISLE.r;x<ISLE.x+ISLE.r;x+=.11){
+   if(!onIsland(x,y)||onFootbridge(x,y)||ROAD[idx(x,y)]||map[idx(x,y)])continue;
+   const s=islandSurface(x,y);if(!s){bad.push('missing lighthouse material');continue;}bases.add(s.base);count++;
+   CH[0]='?';BG[0]=NONE;terrainCell(0,x,y,.5,0,0,1);if(CH[0]!==' '||BG[0]===NONE)bad.push('sloped ground glyph');
+   eye=.17;const row=rows-3,d=eye*projY/(row-hor+.5);px=x-d;py=y;CH[0]='?';BG[0]=NONE;floorBaseCell(0,row,0,1,0);if(CH[0]!==' '||BG[0]===NONE)bad.push('flat ground glyph');
+  }return{bad:bad.slice(0,8),count,bases:[...bases]};});assert.deepEqual(r.bad,[]);assert.ok(r.count>100,JSON.stringify(r));assert.equal(r.bases.length,3,JSON.stringify(r));
+}));
+
+test('colour island ground remains faintly visible at night without restoring texture glyphs',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{tod=23;env(0);wet=snowCover=lampsOn=0;const bad=[];
+  for(const [x,y]of [[ISLE.x-.7,ISLE.y-.6],[530,240],[488,394],[785.5,243],[710,113]]){
+   const s=islandSurface(x,y);if(!s||s.water){bad.push(['not dry land',x,y]);continue;}
+   CH[0]='?';BG[0]=NONE;terrainCell(0,x,y,.5,0,0,1);if(CH[0]!==' '||BG[0]===NONE||(BG[0]&15)<1)bad.push(['unlit terrain',x,y]);
+   if(onIsland(x,y)){eye=.17;const row=rows-3,d=eye*projY/(row-hor+.5);px=x-d;py=y;floorBaseCell(0,row,0,1,0);if(CH[0]!==' '||BG[0]===NONE||(BG[0]&15)<1)bad.push('unlit flat island');}
+  }return bad;});assert.deepEqual(bad,[]);
+}));
