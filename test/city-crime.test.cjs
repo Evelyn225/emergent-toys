@@ -14,15 +14,16 @@ function scene() {
   return { ev, step };
 }
 
-test('nobody sees, nothing happens; police too far off, nothing either', () => {
+test('nobody sees, nothing happens; seen and rung in with no police about, a car drives in from further off', () => {
   const { ev, step } = scene();
   assert.strictEqual(ev("crime('hit')"), '', 'no witnesses');
   assert.strictEqual(ev('wanted.stars'), 0);
-  // a passer-by sees it, but there are no police anywhere near to send
+  // a passer-by sees it, and there are no police anywhere near: the call still brings a unit
   ev('people[0].x = px + 2; people[0].y = py; people[0].hidden = false');
   assert.strictEqual(ev("crime('crash')"), 'reported');
   step(8);
-  assert.strictEqual(ev('wanted.stars'), 0, 'reported, but no unit within reach');
+  assert.strictEqual(ev('wanted.stars'), 1, 'reported, and somebody is sent');
+  assert.ok(ev('cars.some(c => c.pursuit)'), 'a car on its way');
 });
 
 test('a cop who sees it: wanted at once, with units on the way; a passer-by calls it in a few seconds later', () => {
@@ -310,4 +311,26 @@ test('someone knocked down: the people about stop and stare, the nearest runs ov
   assert.ok(ev('q[2].x === x2'), 'staring, not walking');
   ev('for (let t = 0; t < 12; t += 0.05) stepPeople(0.05, tod)');
   assert.ok(ev('!v.down && !q[1].help && !q[1].gawk && !q[2].gawk && !(q[1].talk > 0)'), 'up, and everyone on their way');
+});
+
+test('a reported crime is not over before the police get there: the escape clock waits for them (but not forever)', () => {
+  const { ev, step } = scene();
+  ev("addWanted('graffiti', px, py, false)"); // a passer-by rang it in; nobody saw you do it
+  ev('for (const c of cars) if (c.pursuit) { c.x = mod(px + 100, N); c.ex = c.x; c.dest = null; c.pursuit = true; }'); // the units are stuck far off
+  ev('footCops.forEach(c => { c.x = mod(px + 120, N); })');
+  ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store' }");
+  const hold = () => ev('for (const c of cars) if (c.pursuit) { c.x = mod(px + 100, N); c.ex = c.x; }');
+  let r = ''; for (let k = 0; k < 10; k++) { r = step(ev('ESCAPE_T[1]') / 5) || r; hold(); }
+  assert.strictEqual(ev('wanted.stars'), 1, 'still wanted: nobody has come to look yet');
+  assert.notStrictEqual(r, 'lost');
+  for (let k = 0; k < 60 && ev('wanted.stars'); k++) { step(5); hold(); }
+  assert.strictEqual(ev('wanted.stars'), 0, 'they give up in the end');
+});
+
+test('an officer on foot gains on a straight sprint, but a coffee sprint gets you clear', () => {
+  const { ev } = scene();
+  const speeds = ev('[COP_FOOT_SPEED, COP_FOOT_BURST, COP_ROOM_SPEED]');
+  assert.ok(speeds[0] > 0.8 && speeds[0] < 0.8 * 1.25, 'between your sprint and your coffee sprint: ' + speeds[0]);
+  assert.ok(speeds[1] > speeds[0] && speeds[1] < 1.3);
+  assert.ok(speeds[2] > 2.5 && speeds[2] < 2.5 * 1.4, 'indoors, a touch faster than your 2.5');
 });

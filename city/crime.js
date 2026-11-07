@@ -10,6 +10,7 @@
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
+const POLICE_SCENE_R = 6, POLICE_GIVE_UP = 90; // (on the scene: a unit this near where you were last seen; give up after this long regardless)
 const MAX_STARS = 5;
 const ESCAPE_T = [0, 25, 40, 60, 80, 100];   // seconds out of sight to lose them, by stars
 const UNITS = [0, 2, 3, 5, 6, 7];            // patrol cars after you, by stars
@@ -49,8 +50,10 @@ const crimePos = () => mode === 'room' && room && room.ret ? [room.ret[0], room.
 // ---- the police on foot: three on the beat round each police station, corner to corner along the sidewalks. A
 // corner is an intersection (ix, iy) and which of its four corners (qx, qy).
 const footCops = [];
-// Faster than a diagonal sprint, including coffee; airborne momentum and skate tricks remain the player's tools.
-const COP_FOOT_SPEED = 1.5, COP_ROOM_SPEED = 4.6;
+// A street officer runs a little faster than your straight sprint (0.8 cells a second, 29 km/h): about 34 km/h, so
+// they gain on you in a straight line but a coffee, a diagonal sprint or a board will get you clear. Just out of the
+// car they come at you harder for a few seconds. Indoors (metres a second) a touch faster than your 2.5.
+const COP_FOOT_SPEED = .95, COP_FOOT_BURST = 1.15, COP_ROOM_SPEED = 3.2;
 const cornerXY = c => [c.ix * 8 + (c.qx ? 1.88 : 0.12), c.iy * 8 + (c.qy ? 1.88 : 0.12)];
 function stepCorner(c, dir) { // the corner one step along the sidewalk in dir (0 E, 1 S, 2 W, 3 N), or null if there's no sidewalk
   let { ix, iy, qx, qy } = c;
@@ -94,7 +97,7 @@ function chaseStep(c, tx, ty, dt) { // Approach the suspect while avoiding walls
     const side=Math.sign(-rel(c.x-me.x)*me.hy+rel(c.y-me.y)*me.hx)||1;
     tx=me.x-me.hy*side*.2;ty=me.y+me.hx*side*.2;
   }
-  const dx=rel(tx-c.x),dy=rel(ty-c.y),d=Math.hypot(dx,dy),step=Math.min(d,(c.burst>T?COP_FOOT_SPEED*1.1:COP_FOOT_SPEED)*dt);
+  const dx=rel(tx-c.x),dy=rel(ty-c.y),d=Math.hypot(dx,dy),step=Math.min(d,(c.burst>T?COP_FOOT_BURST:COP_FOOT_SPEED)*dt);
   if(d<.015)return;
   const heading=Math.atan2(dy,dx),angles=[0,...[.65,1.25,1.8].flatMap(v=>[v*(c.detourSide||1),-v*(c.detourSide||1)])];
   for(const offset of angles){
@@ -342,6 +345,8 @@ function addWanted(kind, x, y, seen) {
   wanted.stars = Math.min(MAX_STARS, c.least === undefined ? was + c.stars : Math.max(c.stars, was && was + c.least));
   if (c.kills || !wanted.killed) wanted.crime = c.name; // (a shot fired doesn't make a murder sound any better)
   if (c.kills) wanted.killed = true;
+  if (!was) { wanted.onScene = false; wanted.calledT = T; } // (a fresh call: nobody's there yet, and nobody's lost you until they are)
+  if (seen) wanted.onScene = true; // (seen doing it: they're already there)
   wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
   if (seen) observeSuspect(x, y);
@@ -383,14 +388,24 @@ function policeSearchTarget() {
   }
   return [x, y];
 }
+// a lane for a unit coming in: 8 to 16 cells from the scene, somewhere you can't see it appear; further if need be
+const POLICE_NEAR_SPAWN = 20;
+function policeSpawnLane(x, y) {
+  for (let k = 0; k < 40; k++) {
+    const p = randomLane(16, x, y); if (!p) break;
+    const d = near(p.x, p.y, x, y);
+    if (d >= 8 && d <= 18 && !lineOfSight(px, py, p.x, p.y)) return p;
+  }
+  return randomLane(30, x, y);
+}
 // enough patrol cars on the case for the stars: the nearest free ones first, then more from a few blocks off
 function callUnits() {
   const on = cars.filter(c => c.pursuit).length, need = UNITS[wanted.stars] - on;
   const free = cars.filter(c => c.patrol && !c.pursuit && !c.player && !c.returning).sort((a_, b) => near(a_.x, a_.y, wanted.lastX, wanted.lastY) - near(b.x, b.y, wanted.lastX, wanted.lastY));
   for (let k = 0; k < need; k++) {
     let c = free[k];
-    if (!c || near(c.x, c.y, wanted.lastX, wanted.lastY) > DISPATCH_R) { // nobody close: one drives in
-      const p = randomLane(30, wanted.lastX, wanted.lastY);
+    if (!c || near(c.x, c.y, wanted.lastX, wanted.lastY) > POLICE_NEAR_SPAWN) { // nobody close: one drives in, from a block or two off and out of your sight
+      const p = policeSpawnLane(wanted.lastX, wanted.lastY);
       if (!p) continue; // (no streets for miles: out over the bay)
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
@@ -400,7 +415,7 @@ function callUnits() {
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
   wanted.lastVX = wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
-  wanted.toldT = 0; wanted.pitPending = false; wanted.fired = false; wanted.killed = false;
+  wanted.toldT = 0; wanted.pitPending = false; wanted.fired = false; wanted.killed = false; wanted.onScene = false;
   const units = cars.filter(c => c.pursuit);
   const closestCar = (x, y) => units.reduce((best, c) => !best || near(c.x, c.y, x, y) < near(best.x, best.y, x, y) ? c : best, null);
   const exit = searchedRoom?.ret || room?.ret;
@@ -629,7 +644,7 @@ function stepCrime(dt) {
     const r = reports[k];
     if (T < r.t) continue;
     reports.splice(k, 1);
-    if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
+    if (policeNear(r.x, r.y) || randomLane(30, r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened (from further off if nobody's near: a car drives in)
     else if (r.kind !== 'spotted') newsEvent(r.kind, r.x, r.y); // (nobody to send, but it's still in the papers)
   }
   stepReturningPolice(dt);
@@ -644,8 +659,11 @@ function stepCrime(dt) {
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
   const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < copSight() && lineOfSight(c.x, c.y, wx, wy); // (further, the better they know your face)
   wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
+  // they can only lose you once they've got there: until a unit reaches the scene (or sees you) the clock doesn't run,
+  // so a call from across town isn't over before the car turns up. They don't wait forever, though
+  if (!wanted.onScene && (wanted.seen || cars.some(c => c.pursuit && near(c.x, c.y, wanted.lastX, wanted.lastY) < POLICE_SCENE_R) || footCops.some(c => c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < POLICE_SCENE_R) || T - (wanted.calledT ?? -Infinity) > POLICE_GIVE_UP)) wanted.onScene = true;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
-  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { if (wanted.stars >= 2) newsEvent('escape', wanted.lastX, wanted.lastY); clearWanted(); return 'lost'; }
+  else if (wanted.onScene && (wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { if (wanted.stars >= 2) newsEvent('escape', wanted.lastX, wanted.lastY); clearWanted(); return 'lost'; }
   else if ((wanted.searchT -= dt) <= 0) {
     wanted.searchT = 0.35; [wanted.searchX, wanted.searchY] = policeSearchTarget();
   }

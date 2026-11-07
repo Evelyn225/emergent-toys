@@ -82,15 +82,17 @@ test('police follow a known roof entry and never path across a gap', () => {
   assert.equal(ev('policeRoofPath(40.5,82.5,43.5,82.5).length'), 0, 'cannot walk across empty space');
 });
 
-test('an officer gains on a diagonal caffeinated sprint after the initial burst', () => {
+test('an officer gains on a sprint, straight or diagonal (no faster), but a coffee sprint slowly pulls clear', () => {
   const { ev } = loadCity();
-  const gain = ev(`(() => {
+  const run = speed => ev(`(() => {
     for(let y=70;y<83;y++) for(let x=38;x<50;x++) map[idx(x,y)]=0;
-    px=41;py=73;const c={x:39.5,y:71.5,ph:0,burst:0}, initial=near(c.x,c.y,px,py);
-    for(let k=0;k<80;k++) { T+=.05;px+=.05;py+=.05;chaseStep(c,px,py,.05); }
+    px=41;py=73;const c={x:39.5,y:71.5,ph:0,burst:0}, initial=near(c.x,c.y,px,py), step=${speed}*.05/Math.SQRT2;
+    for(let k=0;k<80;k++) { T+=.05;px+=step;py+=step;chaseStep(c,px,py,.05); }
     return initial-near(c.x,c.y,px,py);
   })()`);
-  assert.ok(gain > 0.2, `closed ${gain} cells while the player ran diagonally at full coffee speed`);
+  const sprint = run(0.8), coffee = run(0.8 * 1.25);
+  assert.ok(sprint > 0.2, `closed ${sprint} cells on a diagonal sprint`);
+  assert.ok(coffee < 0, `a coffee sprint gets away: ${coffee}`);
 });
 
 test('a returning cruiser finds a real road from the Gardens and routes around intervening walls', () => {
