@@ -23,10 +23,10 @@ test('the odd slip barely registers; a run of serious crimes gets you known', ()
 });
 const NOTO_KNOWN_VAL = ev => ev('NOTO_KNOWN');
 
-test('a crime a passer-by calls in still makes the papers, even with no unit to send', () => {
+test('a crime a passer-by calls in makes the papers once, and brings a unit even with none nearby', () => {
   const { ev } = scene();
   ev("people[0].x = px + 2; people[0].y = py; people[0].hidden = false; crime('steal'); for (let t = 0; t < 8; t += 0.1) { T += 0.1; stepCrime(0.1); }");
-  assert.strictEqual(ev('wanted.stars'), 0, 'no unit anywhere near');
+  assert.strictEqual(ev('wanted.stars'), 1, 'a car is sent from further off');
   assert.strictEqual(ev("noto.log.filter(e => e.kind === 'steal').length"), 1);
 });
 
