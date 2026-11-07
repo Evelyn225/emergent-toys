@@ -24,7 +24,7 @@ function landingFrame(island) {
   return { id: island.id, at: (along, side) => [lx + fx * along - fy * side, ly + fy * along + fx * side], angle: Math.atan2(fy, fx) };
 }
 // somewhere to stand a thing: on dry land, off the path, clear of the cabins and the dock
-function landingSpot(F, along, side, pad = .15) {
+function landingKitSpot(F, along, side, pad = .15) {
   const [x, y] = F.at(along, side);
   if (seaAt(x, y) || onPier(x, y) || map[idx(x, y)]) return null;
   if (landingPathDistance(F.id, x, y) < LANDING_PATH_CLEAR + pad) return null;
@@ -61,14 +61,14 @@ function landingCrates(x, y, angle) { // two crates, one on the other, and a dru
 }
 function landingBoulders(F, along, side, seed) { // a cluster of three, settled into the ground
   for (let k = 0; k < 3; k++) {
-    const spot = landingSpot(F, along + (k - 1) * .22, side + (k & 1 ? .14 : -.06), .1);
+    const spot = landingKitSpot(F, along + (k - 1) * .22, side + (k & 1 ? .14 : -.06), .1);
     if (spot) islandStone(spot[0], spot[1], .09 + hash(k, seed, 1971) * .1, hash(seed, k, 1972));
   }
 }
 function landingPlanting(F, kind, seed) { // planting both sides of the first stretch of path, denser than along the trail
   for (let k = 0; k < 14; k++) {
     const along = .3 + k * .22, side = (k & 1 ? 1 : -1) * (.5 + hash(k, seed, 1973) * .5);
-    const spot = landingSpot(F, along, side, 0);
+    const spot = landingKitSpot(F, along, side, 0);
     if (spot) islandCover(spot[0], spot[1], kind === 'mixed' ? (hash(k, seed, 1974) > .5 ? 'flower' : 'fern') : kind, hash(seed, k, 1975), .14 + hash(k, 2, seed) * .1);
   }
 }
@@ -104,7 +104,7 @@ function landingGate(F) {
   const fx = Math.cos(F.angle), fy = Math.sin(F.angle); // the two leaves stand open, swung in off the path from their pillars
   for (const e of [-1, 1]) { const gate = islandDetail(gx + c * e * .23 + fx * .13, gy + s * e * .23 + fy * .13, .12, .006, z + .02, z + .13, 'timber', F.angle); if (e < 0) Object.assign(gate, { word: 'PRIVATE', labelZ: z + .07, labelH: .022, ink: BLACK }); }
   islandWaymark(...F.at(1.25, .5), 'HOUSE: PRIVATE', .4);
-  for (const e of [-1, 1]) for (let k = 0; k < 4; k++) { const spot = landingSpot(F, 1.0 + k * .12, e * (.42 + (k & 1) * .06), -.2); if (spot) islandCover(spot[0], spot[1], 'flower', hash(k, e, 1977), .13); }
+  for (const e of [-1, 1]) for (let k = 0; k < 4; k++) { const spot = landingKitSpot(F, 1.0 + k * .12, e * (.42 + (k & 1) * .06), -.2); if (spot) islandCover(spot[0], spot[1], 'flower', hash(k, e, 1977), .13); }
 }
 // Crescent Sands: a striped windbreak on its poles, a lifebuoy on a post
 function landingWindbreak(x, y, angle) {
@@ -123,7 +123,7 @@ function buildIslandLandings() {
   for (const island of WILD_ISLANDS) {
     if (!['fern', 'cabin', 'wood', 'sand'].includes(island.id)) continue;
     const F = landingFrame(island), seed = island.x;
-    const put = (along, side, fn) => { const spot = landingSpot(F, along, side); if (spot) fn(...spot); return spot; };
+    const put = (along, side, fn) => { const spot = landingKitSpot(F, along, side); if (spot) fn(...spot); return spot; };
     put(.35, .55, landingLamp);
     put(.95, -.62, (x, y) => landingBench(x, y, F.angle));
     put(.55, .85, (x, y) => landingCrates(x, y, F.angle));
