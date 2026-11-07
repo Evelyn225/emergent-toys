@@ -92,7 +92,7 @@ function asciiBar(f) {
   const style = document.createElement('style');
   style.textContent = `
     #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#13191b; border:1px solid #465452;border-top:3px solid #a9d9ca; border-radius:0; box-shadow:0 24px 80px #0009; }
-    #controls .controls-header { position:sticky;top:0;z-index:2;background:#13191b;padding-bottom:12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-header { position:sticky;top:-32px;z-index:2;background:#13191b;margin:-32px -32px 0;padding:32px 32px 12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
     #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
     #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
     #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:15px; }
@@ -111,7 +111,7 @@ function asciiBar(f) {
     #controls [hidden] { display:none !important; }
     @media(max-width:600px) {
       #controls .controls-panel { padding:20px 16px; }
-      #controls .controls-header{align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
+      #controls .controls-header{top:-20px;margin:-20px -16px 0;padding:20px 16px 12px;align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
       #controls .control-binding { grid-template-columns:1fr; gap:8px; }
       #controls .controls-tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:16px 0;}#controls .controls-tabs button{flex:0 0 auto;white-space:nowrap;}
       #controls .controls-tabs button { padding:9px; }
