@@ -6573,6 +6573,7 @@ function stepPeople(dt, t, everywhere = false) {
       else if (p.goal && !p.hidden) { const d = Math.hypot(rel(p.x - px), rel(p.y - py)); if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) settle(p); } // (never vanishing in plain view)
       p.simT = T;
     }
+    if (p.hooked) continue; // (on the end of your fishing line: fishing.js moves them)
     if (stepDown(p, dt)) continue; // (knocked down by a car)
     if (p.flee) { stepFlee(p, dt); continue; } // (running from a gunshot)
     if (p.help) { stepHelp(p, dt); continue; } // (gone to them)
@@ -8173,7 +8174,7 @@ const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
 
 // ---- the soccer ball, once kicked: rolls, slows, bounces off walls, sinks in the sea; walk into it to dribble,
 // E to pick it up
-let ball = null; // { x, y, vx, vy, z, vz }
+let ball = null; // { x, y, vx, vy, z (above the ground under it), vz }
 // what stops it: buildings (unless it's sailing over a low one), and everything solid at street level: fences,
 // containers, booths, lamp posts, vending machines
 const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || typeof kerbAt === 'function' && kerbAt(x, y, 0.015,z-.015,.03) || fairBlocked(x, y, 0.015));
@@ -8189,12 +8190,20 @@ function stepBall(dt) {
   ball.vz -= 2 * dt; ball.z += ball.vz * dt;
   if (ball.z < 0) { ball.z = 0; if (Math.abs(ball.vz) > 0.08) { ballSound('bounce', Math.abs(ball.vz) * 4); ball.vz = -ball.vz * 0.5; } else ball.vz = 0; }
   const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
+  const g0 = outdoorGroundHeight(ball.x, ball.y);
+  if (ball.z === 0) { // on a slope (the islands' hills, a ramp): it rolls downhill
+    const e = .02, gx = (outdoorGroundHeight(ball.x + e, ball.y) - outdoorGroundHeight(ball.x - e, ball.y)) / (2 * e), gy = (outdoorGroundHeight(ball.x, ball.y + e) - outdoorGroundHeight(ball.x, ball.y - e)) / (2 * e);
+    if (Math.abs(gx) < 3 && Math.abs(gy) < 3) { ball.vx -= gx * 1.4 * dt; ball.vy -= gy * 1.4 * dt; }
+  }
   const n = Math.max(1, Math.ceil(Math.hypot(ball.vx, ball.vy) * dt / 0.01)); // (small steps: a fence is only 2cm thick)
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
     if (ballBlocked(nx, ny, ball.z)) { const v = Math.abs(ax === 'x' ? ball.vx : ball.vy); if (v > 0.1) ballSound('wall', v); if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
     else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
+  // the ground moved under it: up a rise it rides up onto it; off a drop it's in the air for a moment
+  const g1 = outdoorGroundHeight(ball.x, ball.y);
+  ball.z = Math.max(0, ball.z + g0 - g1);
   if (isWater(ball.x, ball.y) && ball.z === 0) { ballSound('splash', 2); ball = null; return 'lost'; } // into the drink
   // dribbling: walk into it and it rolls on ahead of you (a touch you hear, not one every frame you're against it)
   const dx_ = rel(ball.x - px), dy_ = rel(ball.y - py), d = Math.hypot(dx_, dy_);
@@ -11410,6 +11419,7 @@ function rodUse(near) {
     return [pick(['Fish on!', 'Got it!', 'Something\'s on!']), 'reel'];
   }
   if (f.st === 'lure') { reelIn(); return ['Too soon. Whatever it was bolts.', 'reel']; }
+  if (f.st === 'hooked') { Object.assign(f, { st: 'haul', t: 0 }); f.who.hooked.haul = true; return [pick(['You lean back and start reeling.', 'You put your back into it and wind.']), 'reel']; }
   if (f.st === 'wait' || f.st === 'land') { reelIn(); return ['', 'reel']; }
   return ['', null];
 }
@@ -11449,6 +11459,7 @@ function stepFishing(dt, rnd = Math.random) {
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
     f.x = worldCoord(f.ox + rel(f.tx - f.ox) * q); f.y = worldCoord(f.oy + rel(f.ty - f.oy) * q); f.z = f.oz * (1 - q) + terrainHeight(f.tx, f.ty) * q + arc * 4 * q * (1 - q);
+    if (q > .2 && mode === 'walk') { const who = lureHits(f); if (who) return hookPerson(f, who); } // (somebody in the way)
     if (q >= 1) {
       f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
@@ -11470,7 +11481,49 @@ function stepFishing(dt, rnd = Math.random) {
     if (q > 0.05 && q < 0.65 && f.catch && rnd() < dt * 12) splash(f.x, f.y, 1, 0.2); // (thrashing as it comes)
     if (q >= 1) { if (f.catch) landCatch(f); else fishing = null; }
   } else if (f.st === 'landed') { if (f.t > 1.6) fishing = null; }
+  else if (f.st === 'hooked' || f.st === 'haul') stepHooked(f, dt);
 }
+// ---- the lure in somebody: a cast that passes through a person on the street catches them by the coat. Q reels them
+// in, stumbling toward you however they dig their heels in; at your feet the hook comes out and they let you have it.
+// Leave it a few seconds and they work it loose themselves.
+const HOOK_REACH = .035, HOOK_HAUL = .26; // (cells: the lure within 35 cm of them; hauled in at about 2.5 m/s)
+function lureHits(f) {
+  for (const p of people) {
+    if (p.hidden || p.dead || p.down || p.inside || p.hooked) continue;
+    if (Math.abs(rel(p.x - f.x)) > HOOK_REACH || Math.abs(rel(p.y - f.y)) > HOOK_REACH || Math.hypot(rel(p.x - f.x), rel(p.y - f.y)) > HOOK_REACH) continue;
+    const h = f.z - walkGround(p.x, p.y); if (h < .005 || h > .2) continue; // (over their head, or skimming the ground past their feet)
+    return p;
+  }
+  return null;
+}
+function hookPerson(f, p) {
+  p.hooked = { t: 0, haul: false }; delete p.flee; delete p.gawk; p.talk = 0; p.wait = 0;
+  Object.assign(f, { st: 'hooked', t: 0, who: p, x: p.x, y: p.y, z: walkGround(p.x, p.y) + .11, d: Math.max(f.d, Math.hypot(rel(p.x - px), rel(p.y - py)) + .1) });
+  fishSfx.push('ground');
+  say(pick(['You hook someone by the coat. "OW! Hey!"', 'The lure catches a passer-by in the sleeve. "What the-"', 'Right in the jacket. They yelp and spin round.']) + ' (Q: reel them in)', 3);
+}
+function stepHooked(f, dt) {
+  const p = f.who;
+  if (!p || p.dead || p.hidden || !p.hooked) { fishing = null; return; }
+  p.hooked.t += dt;
+  const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
+  if (f.st === 'hooked' && f.t > 4) { // they work it loose
+    unhook(p); f.x = p.x; f.y = p.y; f.catch = null; reelIn();
+    say(pick(['They work the hook out of their sleeve and glare at you.', '"Unbelievable." They pull it out and walk off.']), 2.5); return;
+  }
+  if (f.st === 'haul') {
+    if (d < .1) { // at your feet: the hook out, and a piece of their mind
+      unhook(p); p.talk = 3; fishing = null; fishSfx.push('reel');
+      say(pick(['"Are you out of your MIND?" They yank the hook out and shove it back at you.', '"I am a PERSON, not a FISH." They tug themselves free.', '"Do that again and I\'m calling the cops." They pull the hook out of their coat.']), 3.5);
+      return;
+    }
+    const step = Math.min(d - .09, HOOK_HAUL * dt * (.7 + .3 * Math.sin(T * 9))), nx = worldCoord(p.x + ex / d * step), ny = worldCoord(p.y + ey / d * step);
+    if (map[idx(Math.floor(nx), Math.floor(ny))] > 0) { unhook(p); f.catch = null; reelIn(); say('The line snags on the corner and they pull free.', 2); return; } // (a wall in the way)
+    p.x = nx; p.y = ny; p.ph = (p.ph || 0) + dt * 5;
+  }
+  f.x = p.x; f.y = p.y; f.z = walkGround(p.x, p.y) + .11;
+}
+function unhook(p) { delete p.hooked; }
 // out of the water and into your bag
 function landCatch(f) {
   const c = f.catch, d = ITEMS[c.id];
@@ -16763,6 +16816,10 @@ function citySprites() {
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
     else if (m.down) drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else if (m.hooked) { // on your line: turned toward you, digging their heels in (or staggering in as you reel)
+      const dx = rel(px - m.x), dy = rel(py - m.y), d = Math.hypot(dx, dy) || 1;
+      drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.hooked.haul ? 'walk' + (Math.floor((m.ph || 0) * 2) & 7) : fract(T * 1.5) < .5 ? 'gasp' : 'stand');
+    }
     else if (m.flee) { drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
@@ -34060,7 +34117,7 @@ function ballSpin(dt_x, dt_y) { // roll the ball's pattern by however far it's g
 }
 function drawBall() {
   if (!ball) return;
-  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R;
+  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R + outdoorGroundHeight(ball.x, ball.y); // (z: above the ground under it, hills and all)
   const Rm = ballSpin(rel(ball.x - (ball.lx ?? ball.x)), rel(ball.y - (ball.ly ?? ball.y)));
   ball.lx = ball.x; ball.ly = ball.y;
   if (BALL_R * 2 * projX / d < 3) return dot(vx, vy, zc, BALL_R, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i,' ',0),true; });
@@ -35788,6 +35845,8 @@ function rodTarget() {
     case 'lure': return [0.74 + (f.t > f.dur * 0.55 ? Math.sin(T * 28) * 0.018 : 0), 0.07, 12]; // a twitch or two as it noses the bait
     case 'bite': return [0.86 + Math.sin(T * 34) * 0.04, 0.32, 20]; // yanked down
     case 'reel': return f.catch ? [0.45 + Math.sin(T * 17) * 0.03, 0.32 + Math.min(0.3, (f.catch.kg || 0.5) * 0.025), 10] : [0.5, 0.08, 10];
+    case 'hooked': return [0.62 + Math.sin(T * 9) * 0.02, 0.2, 10]; // (something heavy on the end, pulling)
+    case 'haul': return [0.45 + Math.sin(T * 13) * 0.04, 0.42, 10]; // (bent double, reeling a person in)
     case 'landed': return [0.32, 0.18 + Math.min(0.2, (f.catch.kg || 0.5) * 0.02), 8];
   }
   return [0.62, 0, 6];
@@ -35797,7 +35856,7 @@ function stepRodView() {
   const [ang, bend, rate] = rodTarget(), k = Math.min(1, dt * rate);
   const was = rodView.ang;
   rodView.ang += (ang - rodView.ang) * k; rodView.bend += (bend - rodView.bend) * k;
-  if (fishing && fishing.st === 'reel' || fishing && fishing.st === 'wind') rodView.spin += dt * (fishing.st === 'reel' ? 22 : 0);
+  if (fishing && (fishing.st === 'reel' || fishing.st === 'haul' || fishing.st === 'wind')) rodView.spin += dt * (fishing.st === 'wind' ? 0 : fishing.st === 'haul' ? 14 : 22);
   // whatever hangs off the tip swings: pushed by the rod moving, pulled back down
   rodView.swingV += (-rodView.swing * 30 - rodView.swingV * 3 + (rodView.ang - was) / Math.max(dt, 1e-3) * 2.5) * dt;
   rodView.swing = clamp(rodView.swing + rodView.swingV * dt, -1.2, 1.2);
@@ -35873,7 +35932,7 @@ function drawFishing() {
   }
   // the line: off the rod tip, sagging in the slack (lying on the water near the bobber), taut when something's on
   const G = rodGeom(), tip = unproject(G.tip.x, G.tip.y, 0.06);
-  const sag = f.st === 'bite' || f.st === 'reel' && f.catch ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
+  const sag = f.st === 'bite' || f.st === 'reel' && f.catch || f.st === 'hooked' || f.st === 'haul' ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
   const pts = [];
   const lineCol = f.st === 'bite' && fract(T * 7) < 0.5 ? C(YEL, 15) : C(WHITE, (f.st === 'bite' ? 13 : night > 0.5 ? 7 : 10) * lit); // (taut and twanging on a bite)
   for (let k = 0; k <= 36; k++) {
@@ -36603,20 +36662,37 @@ function drawShots() {
 // pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
+  // every pool near enough, as one wet field: overlapping pools run together into one edge instead of each cutting
+  // the other out (each pool's box shades from all of them, in world coordinates, so they agree on every cell)
+  const near = [];
   for (const b of pools) {
     if((b.at??'')!==(mode==='room'?bloodRoomKey():''))continue;
-    const scale=b.scale||1,ground=b.z??(mode==='room'?0:walkGround(b.x,b.y));
-    const vx = rel(b.x - px), vy = rel(b.y - py);
+    const scale=b.scale||1,vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, ground+.0001, ground+0.0004*scale), (i, t, L) => {
-      const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
-      const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
-      if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
-      const col = dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
-      if(k>.85){BG[i]=C(col,(2.8-dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
-      BG[i] = C(col, (2.6 - k * 0.8 - dry * 1.1) * lv);
-      const glint = dry < 0.4 && k < 0.5 && hash(Math.floor(HIT.u * 160), Math.floor(HIT.v * 160), 4412) > 0.9; // (wet: it catches the light)
+    const age = T - b.t;
+    near.push({ b, vx, vy, scale, ground: b.z??(mode==='room'?0:walkGround(b.x,b.y)), r: scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry: clamp((age - 50) / 130, 0, 1), seed: b.x * 13 + b.y * 7 });
+  }
+  // the field at a point (relative to you): each pool's depth there (1 at its middle, 0 at its ragged edge), joined
+  // as a soft union, so where pools overlap they read as one deeper pool with no seam; past every edge, the nearest
+  // edge (for the spatters). Returns [the pool it's most in, k: 0 deep in .. 1 the edge .. beyond]
+  const field = (x, y) => {
+    let best = null, bk = 9, out = 1, bs = 0;
+    for (const q of near) {
+      const u = x - q.vx, v = y - q.vy; if (Math.abs(u) > q.r * 1.4 || Math.abs(v) > q.r * 1.4) continue;
+      const an = Math.atan2(v, u), edge = q.r * (0.78 + 0.14 * Math.sin(an * 3 + q.seed) + 0.08 * Math.sin(an * 7 + q.seed * 1.7) + 0.05 * Math.sin(an * 13 + q.seed * 0.3)), k = Math.hypot(u, v) / edge;
+      const sq = Math.max(0, 1 - k); out *= 1 - sq;
+      if (sq > bs || !bs && k < bk) { bs = sq; bk = k; best = q; }
+    }
+    return [best, out < 1 ? out : bk]; // (inside: 1 - the union's depth; outside: the nearest edge's k)
+  };
+  for (const p of near) {
+    drawBox(boxAt(p.vx, p.vy, 1, 0, p.r * 1.35, p.r * 1.35, p.ground+.0001, p.ground+0.0004*p.scale), (i, t, L) => {
+      const x = p.vx + HIT.u, y = p.vy + HIT.v, wx = px + x, wy = py + y, [q, k] = field(x, y);
+      if (!q || k > 1.25 || k > 1 && hash(Math.floor(wx * 300), Math.floor(wy * 300), 4411) > 0.35) return false; // (the spatters past the edge; in world terms, so every pool agrees)
+      const col = q.dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
+      if(k>.85){BG[i]=C(col,(2.8-q.dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
+      BG[i] = C(col, (2.6 - k * 0.8 - q.dry * 1.1) * lv);
+      const glint = q.dry < 0.4 && k < 0.5 && hash(Math.floor(wx * 160), Math.floor(wy * 160), 4412) > 0.9; // (wet: it catches the light)
       if(glint)BG[i]=C(RED,5*lv);return set(i,' ',0),true;
     });
   }
@@ -50703,7 +50779,12 @@ function homeBalconyPaving(i,u,v,L,footprint){
   const p=HOME_BALCONY_PAVING,joint=Math.max(coveGroove(u,p.tile,p.grout,footprint),coveGroove(v,p.tile,p.grout,footprint));
   BG[i]=C(STONE,2.8+L*.22-joint*2.2);set(i,' ',0);return true;
 }
+// While the chase camera is behind a car or a boat, the ground filters no finer than it does at the vehicle itself:
+// otherwise the slab joints, patches and grain show only in the strip between the camera and the car, and draw in
+// along the bottom of the screen as you go (main.js sets it for the chase render)
+let groundFootprintNear=0;
 function homeBalconyPavingFootprint(t,height,unit=1){
+  t=Math.max(t,groundFootprintNear);
   // Row-to-row floor spacing grows faster at grazing angles than distance
   // alone. Account for both screen axes before filtering the metre joints.
   return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit;
@@ -53667,7 +53748,8 @@ function loop(t) {
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
-    px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+    groundFootprintNear = chaseOn ? Math.hypot(cx - saved[0], cy - saved[1]) * .9 : 0; // (the ground as detailed behind the car as at it: home-balcony-deck.js)
+    try { px = cx; py = cy; a = yaw; render(dt); } finally { [px, py, a] = saved; groundFootprintNear = 0; }
   } else if (stadiumTVOn()) { // at the football with the TV view on: from the gantry, following the ball (stadium.js)
     const saved = [px, py, a, pitch], baseFOV = FOV, cam = stadiumCam(dt);
     try { FOV = cam.fov; stadiumView = { eye: cam.z }; px = cam.x; py = cam.y; a = cam.a; pitch = cam.pitch; render(dt); }
