@@ -65,6 +65,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     const g = architectureSignSpec(b, f, sh);
     if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
       g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
+    if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), base, L)) return; // (shut for good: the old sign's shadow)
     if (f.front && sh.kind === SHOP_APTS) {
       const door = local + f.spacing * 0.24, half = f.spacing * 0.125;
       const top = 0.35 - (door / half) ** 2 * 0.018;
@@ -118,6 +119,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     const g = architectureSignSpec(b, f, sh);
     if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
       g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
+    if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + width / 2), stone ? base : GRAY, L)) return; // (shut for good: the old sign's shadow)
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
     if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY, d)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
