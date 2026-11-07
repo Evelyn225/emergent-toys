@@ -1,0 +1,56 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');let browser;
+test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
+async function fixture(run){const p=await browser.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>{requestAnimationFrame=()=>0;HTMLCanvasElement.prototype.requestPointerLock=()=>Promise.resolve();});await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
+test('island timber, metal, stone, cloth, cover and roofs use colour surfaces while lettering stays lettering',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const bad=[];let samples=0;for(const o of ISLAND_DETAILS.filter(o=>!o.landmark&&['timber','deck','driftwood','metal','rock','canvas','cloth','net','sign','cover'].includes(o.kind))){for(const face of [1,2,5,6])for(const t of [.02,.5,4])for(const f of [.02,.37,.73]){Object.assign(HIT,{face:o.planes?Math.min(face,o.planes.length-1):face,u:(f-.5)*o.hl,v:(f-.5)*o.hw,w:o.z0+(o.z1-o.z0)*f,nx:0,ny:0,nz:1});CH[0]='?';BG[0]=NONE;let done;
+ if(o.kind==='cover')done=islandCoverShade(o,0,(f-.5)*o.hl,(o.z1-o.z0)*f,8);else if(['canvas','cloth','net'].includes(o.kind))done=islandFabricShade(o,0,t,8);else if(o.kind==='rock')done=islandRockShade(o,0,t,8);else done=islandTimberShade(o,0,t,8);
+ if(done){samples++;if(CH[0]!==' '||BG[0]===NONE||(BG[0]&15)===0)bad.push([o.kind,face,CH[0]]);}
+ }}
+ for(const roof of ISLAND_ROOFS.filter(o=>o.cabin.id!=='cabin-cove'))for(let face=0;face<roof.planes.length;face++){
+  Object.assign(HIT,{face,u:0,v:roof.hw-.01,w:(roof.z0+roof.z1)/2});CH[0]='?';BG[0]=NONE;islandRoofShade(roof,0,.2,8);samples++;if(CH[0]!==' '||BG[0]===NONE)bad.push(['roof',face,CH[0]]);
+ }
+ const cabin=ISLAND_CABINS.find(c=>c.id==='juniper-house');px=789;py=242;
+ for(const side of [0,1])for(const along of [.01,.5,.94,1,1.06,1.5,1.99])for(const z of [.015,.1,.15,.2,.25,.29]){
+  CH[0]='?';BG[0]=NONE;islandCabinFacade(0,0,.001,z,cabin.h,.2,side,cabin.x0,cabin.y0,1,(side?cabin.x0:cabin.y0)+along);samples++;
+  if(CH[0]!==' '||BG[0]===NONE)bad.push(['private cabin',side,along,z,CH[0]]);
+ }
+ const old=drawBox;let lamps=0;try{drawBox=(b,shade,ray)=>{if(b.kind==='lamp'){CH[0]='?';BG[0]=NONE;shade(0,.2,8);lamps++;if(CH[0]!==' '||BG[0]===NONE)bad.push(['lamp',CH[0]]);}return old(b,shade,ray);};px=538.2;py=245.5;a=0;pitch=0;render(0);}finally{drawBox=old;}
+ if(!lamps)bad.push('missing native porch lamp');return{bad:bad.slice(0,8),samples};});assert.deepEqual(r.bad,[]);assert.ok(r.samples>1000);
+}));
+test('island shrubs draw cached supported solid clumps with real curved depth instead of flat glyph billboards',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{if(typeof ISLAND_SHRUB_MODELS==='undefined')return['flat shrub renderer'];const bad=[],m=ISLAND_DETAILS.find(o=>o.kind==='shrub'),old=drawBox,A=[],B=[];try{drawBox=(b,shade,ray)=>A.push({box:{...b},ref:b,shade,ray});drawIslandShrub(m,0,0);drawBox=(b,shade,ray)=>B.push({box:{...b},ref:b,shade,ray});drawIslandShrub(m,.2,.3);}finally{drawBox=old;}if(A.length!==4)bad.push('missing stem or clumps');for(let k=0;k<A.length;k++){const a=A[k],b=B[k];if(a.ref!==b.ref||a.shade!==b.shade||Math.abs(b.box.x-a.box.x-.2)>1e-8||Math.abs(b.box.y-a.box.y-.3)>1e-8)bad.push('uncached plant');if(k&&a.ray!==homeRayEllipsoid)bad.push('flat foliage');if(k){const t=a.ray(a.box.x-a.box.hl*2,a.box.y,(a.box.z0+a.box.z1)/2,1,0,0,a.box);if(!(t>0)||Math.abs(Math.hypot(HIT.nx,HIT.ny,HIT.nz)-1)>1e-7)bad.push('missing curved surface');}}if(A[0].box.z0>m.z0||A[0].box.z1<Math.min(...A.slice(1).map(p=>p.box.z0)))bad.push('floating plant');return bad;});assert.deepEqual(bad,[]);
+}));
+test('dry island and shore ground are colour and runway dashes remain yellow; water, film and foam fields are preserved',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{if(typeof ISLAND_LAND_SHORE==='undefined')return{bad:['old land glyphs']};const bad=[];let water=0,land=0,line=0;for(const time of [0,1,3,5,7])for(const edge of [-.3,-.1,0,.15,.3,.6,1,2,4,7]){T=time;const a=ISLAND_LAND_SHORE(720,115,edge,true),b=islandShoreSurface(720,115,edge,true);if(a.water){water++;if(JSON.stringify(a)!==JSON.stringify(b))bad.push('water changed');}else{land++;if(b.ch!==' ')bad.push('land glyph');}}for(let x=FERN_STRIP.x0+3;x<FERN_STRIP.x0+8;x+=.1){const a=ISLAND_LAND_SURFACE(x,FERN_STRIP.y),b=islandSurface(x,FERN_STRIP.y);if(a?.ch==='='){line++;if(b.ch!==' '||b.background!==YEL)bad.push('runway marking lost');}}return{bad,water,land,line};});assert.deepEqual(r.bad,[]);assert.ok(r.water>0&&r.land>0&&r.line>0,JSON.stringify(r));
+}));
+test('Juniper washing line remains a line character, tied to both poles, with pinned cloth tops at their actual supports',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const wire=ISLAND_DETAILS.find(o=>o.kind==='wire');if(!wire)return{bad:['old flat metal washing line']};const bad=[];for(const end of wire.ends){const post=ISLAND_DETAILS.find(o=>o.kind==='timber'&&Math.abs(o.x-end[0])<1e-8&&Math.abs(o.y-end[1])<1e-8);if(!post||Math.abs(post.z1-.01-end[2])>1e-8)bad.push('wire detached from pole');}for(const o of ISLAND_DETAILS.filter(o=>o.kind==='cloth'&&o.wire===wire)){const a=wire.ends[0],b=wire.ends[1],u=(o.x-a[0])/(b[0]-a[0]),z=a[2]*(1-u)+b[2]*u;if(Math.abs(o.z1-z)>1e-8)bad.push('cloth detached from wire');}
+  const box=drawBox,rodOld=rod,seen=[];let rods=0;try{rod=(...q)=>{rods++;return rodOld(...q);};drawBox=(b,...q)=>{if(b.kind==='cloth')seen.push([b.x,b.y]);return box(b,...q);};px=786;py=241.6;a=-Math.PI/2;pitch=0;T=1;render(0);const A=seen.slice();seen.length=0;T=4;render(0);if(A.length<2)bad.push('missing native clothes');if(JSON.stringify(A)!==JSON.stringify(seen))bad.push('cloth anchor sways away from wire');}finally{drawBox=box;rod=rodOld;}if(!rods)bad.push('wire not drawn through line renderer');return{bad};});assert.deepEqual(r.bad,[]);
+}));
+test('island signs retain complete black labels through the native material painters',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const bad=[];for(const word of ['CABIN COVE','WOODLAND CAMP','BIRD ROOST','TIDE POOLS','SEA GARDEN']){const m=ISLAND_DETAILS.find(o=>o.word===word);px=m.x-m.s*.6;py=m.y+m.c*.6;a=Math.atan2(m.y-py,m.x-px);pitch=0;const shade=islandTimberShade;let letters=0;try{islandTimberShade=(o,i,t,L)=>{const result=shade(o,i,t,L);if(o===m&&CH[i]!==' '){letters++;if((COL[i]>>4)!==BLACK)bad.push('non-black lettering');}return result;};render(0);}finally{islandTimberShade=shade;}if(!letters)bad.push(['missing label',word]);}return bad;});assert.deepEqual(r,[]);
+}));
+
+test('dock posts share their visible footprint with walking and aircraft collision while landing centre lanes stay open',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const posts=ISLAND_DETAILS.filter(o=>o.dockPost),bad=[];if(posts.length<20)return{bad:['dock posts have no collision'],posts:posts.length};for(const post of posts){if(!ISLAND_OBSTACLES.includes(post)||!islandSightBlocked(post.x,post.y,0,.01)||Math.abs(builtHeight(post.x,post.y)-post.z1)>1e-8)bad.push('post collider differs from visible part');}for(const island of WILD_ISLANDS){const [x0,y0,x1,y1]=island.dock;for(let x=x0+.3;x<x1-.1;x+=.1){px=x;py=(y0+y1)/2;if(!free(px,py))bad.push(['blocked landing lane',island.id,x]);}}return{bad,posts:posts.length};});assert.deepEqual(r.bad,[]);assert.ok(r.posts>=20);
+}));
+
+test('lighthouse island rock, grass and path share colour surfaces in both sloped terrain and flat floor rays',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const bad=[],bases=new Set();let count=0;wet=snowCover=lampsOn=0;
+  for(let y=ISLE.y-ISLE.r;y<ISLE.y+ISLE.r;y+=.11)for(let x=ISLE.x-ISLE.r;x<ISLE.x+ISLE.r;x+=.11){
+   if(!onIsland(x,y)||onFootbridge(x,y)||ROAD[idx(x,y)]||map[idx(x,y)])continue;
+   const s=islandSurface(x,y);if(!s){bad.push('missing lighthouse material');continue;}bases.add(s.base);count++;
+   CH[0]='?';BG[0]=NONE;terrainCell(0,x,y,.5,0,0,1);if(CH[0]!==' '||BG[0]===NONE)bad.push('sloped ground glyph');
+   eye=.17;const row=rows-3,d=eye*projY/(row-hor+.5);px=x-d;py=y;CH[0]='?';BG[0]=NONE;floorBaseCell(0,row,0,1,0);if(CH[0]!==' '||BG[0]===NONE)bad.push('flat ground glyph');
+  }return{bad:bad.slice(0,8),count,bases:[...bases]};});assert.deepEqual(r.bad,[]);assert.ok(r.count>100,JSON.stringify(r));assert.equal(r.bases.length,3,JSON.stringify(r));
+}));
+
+test('colour island ground remains faintly visible at night without restoring texture glyphs',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{tod=23;env(0);wet=snowCover=lampsOn=0;const bad=[];
+  for(const [x,y]of [[ISLE.x-.7,ISLE.y-.6],[530,240],[488,394],[785.5,243],[710,113]]){
+   const s=islandSurface(x,y);if(!s||s.water){bad.push(['not dry land',x,y]);continue;}
+   CH[0]='?';BG[0]=NONE;terrainCell(0,x,y,.5,0,0,1);if(CH[0]!==' '||BG[0]===NONE||(BG[0]&15)<1)bad.push(['unlit terrain',x,y]);
+   if(onIsland(x,y)){eye=.17;const row=rows-3,d=eye*projY/(row-hor+.5);px=x-d;py=y;floorBaseCell(0,row,0,1,0);if(CH[0]!==' '||BG[0]===NONE||(BG[0]&15)<1)bad.push('unlit flat island');}
+  }return bad;});assert.deepEqual(bad,[]);
+}));

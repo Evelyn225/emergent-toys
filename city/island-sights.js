@@ -157,11 +157,12 @@ function buildIslandSights() {
   islandWaymark(719,115.35,'TIDE POOLS',.38);
   // Juniper: a modest sheltered garden, washing on the line and sea-facing trees.
   for(const y of [241.7,242.5])for(let x=785;x<787.2;x+=.35)islandCover(x,y,'flower',hash(x,y,1943),.13);
-  for(const x of [785,787.3])islandGroundModel(x,240.6,.025,.025,.3,'timber');
-  const line=islandGroundModel(786.15,240.6,1.15,.006,.29,'metal');line.z0=line.z1-.008;
-  for(let k=0;k<4;k++) {
-    const cloth=islandGroundModel(785.4+k*.48,240.6,.12,.008,.28,'cloth');
-    cloth.z0=cloth.z1-.15;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
+  const posts=[785,787.3].map(x=>islandGroundModel(x,240.6,.025,.025,.3,'timber'));
+  const ends=posts.map(p=>[p.x,p.y,p.z1-.01]);
+  const line=islandDetail(786.15,240.6,1.15,.006,Math.min(...ends.map(p=>p[2]))-.003,Math.max(...ends.map(p=>p[2]))+.003,'wire');line.ends=ends;
+  for(let k=0;k<4;k++){
+    const x=785.4+k*.48,u=(x-ends[0][0])/(ends[1][0]-ends[0][0]),top=ends[0][2]*(1-u)+ends[1][2]*u;
+    const cloth=islandDetail(x,240.6,.12,.008,top-.15,top,'cloth');cloth.wire=line;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
   }
   islandWaymark(787,243.85,'SEA GARDEN',.38);
 }
@@ -196,7 +197,7 @@ function islandCoverShade(model,i,u,z,L) {
   if(Math.abs(n)>1||z<0||z>h)return false;
   if(model.cover==='lichen') {
     if(z>h*.18||n*n+((z-h*.08)/(h*.1))**2>1)return false;
-    BG[i]=C(GRAY,2+L*.2);set(i,':',C(YEL,L*.8));return true;
+    BG[i]=C(GRAY,2+L*.2);set(i,' ',0);return true;
   }
   const stem=Math.abs(n-Math.sin(T*.9+model.seed*8)*.045*z/h)<.06;
   if(model.cover==='flower') {
@@ -205,24 +206,25 @@ function islandCoverShade(model,i,u,z,L) {
     const petal=((n-centre)/.13)**2+((z/h-head)/.1)**2<1;
     if(!petal&&!stalk)return false;
     const color=petal?([MAG,YEL,WHITE][Math.floor(model.seed*3)%3]):GREEN;
-    BG[i]=C(color,petal?3+L*.35:1+L*.18);set(i,petal?'*':'|',C(color,L*1.1));return true;
+    BG[i]=C(color,petal?3+L*.35:1+L*.18);set(i,' ',0);return true;
   }
   if(model.cover==='rush') {
     if(!stem&&Math.abs(Math.sin(n*14+z*11))<.91)return false;
-    set(i,z>h*.8?'\'':'|',C(YEL,L*.85));return true;
+    BG[i]=C(YEL,1.2+L*.35);set(i,' ',0);return true;
   }
   const leaf=Math.abs(n)<(1-z/h)*.9&&Math.sin(z/h*22+Math.abs(n)*8)>.1&&hash(Math.floor(n*15),Math.floor(z/h*18),Math.floor(model.seed*1000))>.2;
   if(!stem&&!leaf)return false;
-  BG[i]=C(GREEN,1.4+L*.18);set(i,stem?'|':n<0?'/':'\\',C(GREEN,L*.8));return true;
+  BG[i]=C(GREEN,1.4+L*.18);set(i,' ',0);return true;
 }
 function islandFabricShade(model,i,t,L) {
-  if(model.kind==='net') {
-    if(fract((HIT.u+model.hl)*25)>.1&&fract(HIT.w*35)>.1)return false;
-    set(i,'#',C(GREEN,L*.8+2));return true;
+  const fp=t/projY;
+  if(model.kind==='net'){
+    const weave=Math.max(coveGroove(HIT.u+model.hl,1/25,.004,fp),coveGroove(HIT.w,1/35,.003,fp));
+    if(weave<.4)return false;BG[i]=C(GREEN,1.3+L*.35);set(i,' ',0);return true;
   }
-  const base=model.base??STONE;
-  BG[i]=C(base,2+L*.3);
-  set(i,model.kind==='cloth'&&fract(HIT.u*30)<.08?'|':HIT.w<model.z0+.02?'_':' ',C(base,L));return true;
+  const [nx,ny,nz]=islandModelNormal(model),base=model.base??STONE;
+  const hem=coveGroove(HIT.w-model.z0,.15,.003,fp),fold=coveDetail(t,.1)*Math.sin(HIT.u*40+Math.sin(T+(model.seed||0))*.3)*.3;
+  BG[i]=C(base,2+L*.3*coveLight(nx,ny,nz)+fold-hem*.6);set(i,' ',0);return true;
 }
 // A small cached seabird body: folded wings on a perch, raised/lowered wings in flight.
 ANIMAL_BODIES.islandbird=frame=>{
