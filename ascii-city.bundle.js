@@ -9416,6 +9416,8 @@ GAMES.mahjong = (rnd = Math.random) => {
   for (let i = wall.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [wall[i], wall[j]] = [wall[j], wall[i]]; }
   const hands = [0, 1, 2, 3].map(() => wall.splice(0, 13).sort((a, b) => a - b)), rivers = [[], [], [], []];
   let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
+  let helpKey='',helpLines=[];
+  const wrapHelp=text=>{const lines=[];for(const paragraph of text.split('\n')){let line='';for(const word of paragraph.split(' ')){if(line&&line.length+word.length+1>W*2){lines.push(line);line=word;}else line+=(line?' ':'')+word;}if(line)lines.push(line);}return lines;};
   const sortHand = h => h.sort((a, b) => a - b);
   const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
   const draw = p => {
@@ -9501,9 +9503,10 @@ GAMES.mahjong = (rnd = Math.random) => {
     // the help: what you're waiting for, if you're one tile away
     const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
     const w = h13.length === 13 ? mjWaits(h13) : [];
-    text(0, 15, w.length ? `${state === 'you' ? 'Throw that and you' : 'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}` : 'Make 4 sets + a pair. A set: three alike, or a run of 3 in one suit.', C(w.length ? YEL : GRAY, w.length ? 15 : 10));
-    if (state === 'you' && mjWins(hand)) text(0, 16, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
-    if (g.over && g.result) text(0, 17, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
+    const help=w.length?`${state==='you'?'Throw that and you':'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}`:'Make 4 sets + a pair.\nA set: three alike, or a run of 3 in one suit.';
+    if(help!==helpKey){helpKey=help;helpLines=wrapHelp(help);}helpLines.forEach((line,k)=>text(0,15+k,line,C(w.length?YEL:GRAY,w.length?15:10)));
+    if (state === 'you' && mjWins(hand)) text(0, 17, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
+    if (g.over && g.result) text(0, 18, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
   };
   g.status = () => state === 'claim' ? `UP claim it   SPACE let it go (${Math.ceil(wait)}s)` : state === 'you' ? 'LEFT/RIGHT pick   SPACE throw it   UP declare mahjong' : 'Waiting for the others...';
   g.reward = () => g.result ? g.result.winner === 0 ? 20 : g.result.winner < 0 ? MJ_BUYIN : 0 : 0;
@@ -31126,10 +31129,23 @@ const MENU_CSS = `
   .menu .tog { justify-self: start; font: 14px/1 monospace; color: #d9dfda; }
   .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: #a1ada8; }
   .menu .keys b { font-weight: normal; color:#edf0df; }
+  .menu .panel-heading{position:sticky;top:-26px;z-index:2;display:flex;align-items:center;gap:12px;justify-content:space-between;margin:-26px -30px 14px;padding:20px 18px 12px 30px;background:#13191b;border-bottom:1px solid #35423f;}
+  .menu .panel-heading h1{flex:1;min-width:0;margin:0;overflow-wrap:anywhere;}
+  .menu .panel-close{flex:0 0 44px;width:44px;height:44px;font-size:24px;color:#d9dfda;border:1px solid #64756e;background:#1d2925;}
+  .menu .panel-close:hover,.menu .panel-close:focus-visible{background:#30483e;outline:2px solid #b9e7d5;outline-offset:2px;}
+  #cooking .recipe-label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
+  #cooking .recipe-name{font-size:16px;}
+  #cooking .recipe-needs{font-size:14px;line-height:1.5;white-space:normal;overflow-wrap:anywhere;}
+  #cooking .available{color:#bdddc3;}#cooking .missing{color:#adb7b0;}
+  #courier-board .item,#busted .item{display:grid;grid-template-columns:1.4em minmax(0,1fr);align-items:start;gap:4px 10px;}
+  #courier-board .item .k,#busted .item .k{grid-row:1/span 2;}
+  #courier-board .item .lead,#busted .item .lead{display:none;}
+  #courier-board .item .v,#busted .item .v{grid-column:2;font-size:14px;white-space:normal;overflow-wrap:anywhere;color:#cad7cd;}
   .menu .panel { overflow-x: hidden; }
   .menu .slider { min-width: 0; overflow: hidden; }
   @media (max-width: 520px), (pointer: coarse) { /* touch or narrow screens: scroll down, never sideways */
     .menu .panel { padding: 20px 16px; }
+    .menu .panel-heading{top:-20px;margin:-20px -16px 14px;padding:16px 12px 12px 16px;}
     .menu .item { min-height: 44px; align-items: center; }
     .menu .item > span:not(.k):not(.v):not(.lead) { min-width: 0; overflow-wrap: anywhere; }
     .menu .k, .menu .v { flex-shrink: 0; }
@@ -31165,28 +31181,29 @@ function asciiBar(f) {
 {
   const style = document.createElement('style');
   style.textContent = `
-    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#111719; border:1px solid #364344; border-radius:12px; box-shadow:0 24px 80px #0009; }
-    #controls .controls-header { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#13191b; border:1px solid #465452;border-top:3px solid #a9d9ca; border-radius:0; box-shadow:0 24px 80px #0009; }
+    #controls .controls-header { position:sticky;top:0;z-index:2;background:#13191b;padding-bottom:12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
     #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
     #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
-    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:13px; }
-    #controls .controls-back { width:auto; gap:16px; font-size:12px; padding:10px 12px; border:1px solid #465654; border-radius:5px; }
+    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:15px; }
+    #controls .controls-back { width:auto; gap:16px; font-size:14px;min-height:44px; padding:10px 12px; border:1px solid #465654; border-radius:0; }
     #controls .controls-tabs { display:flex; flex-wrap:wrap; gap:8px; padding:24px 0; border-bottom:1px solid #33403f; }
-    #controls .controls-tabs button { font:inherit; font-size:12px; padding:10px 14px; border:1px solid #3e4c49; border-radius:5px; background:transparent; color:#afbfbb; cursor:pointer; }
+    #controls .controls-tabs button { font:inherit; font-size:14px;min-height:44px; padding:10px 14px; border:1px solid #3e4c49; border-radius:0; background:transparent; color:#afbfbb; cursor:pointer; }
     #controls .controls-tabs button[aria-pressed=true] { background:#b8d9ca; color:#14231c; border-color:#b8d9ca; }
     #controls button:focus-visible { outline:2px solid #d1f5df; outline-offset:4px; }
     #controls h2 { margin:24px 0 14px; padding:0; text-transform:none; font-size:16px; color:#e3eee9; }
     #controls .keys { display:flex; flex-direction:column; gap:0; padding:0; }
-    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:13px; line-height:1.7; }
-    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:5px; padding:5px 10px; line-height:1.5; font-size:12px; width:fit-content; }
+    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:15px; line-height:1.6; }
+    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:0; padding:5px 10px; line-height:1.5; font-size:14px; width:fit-content; }
     #controls .control-binding span { color:#b1bdb8; }
-    #controls .controls-footer { margin-top:24px; font-size:11px; color:#81918a; }
+    #controls .controls-footer { margin-top:24px; font-size:13px; color:#81918a; }
+    #controls .controls-back-short{display:none;}
     #controls [hidden] { display:none !important; }
     @media(max-width:600px) {
       #controls .controls-panel { padding:20px 16px; }
-      #controls .controls-header { align-items:start; flex-direction:column; gap:16px; }
+      #controls .controls-header{align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
       #controls .control-binding { grid-template-columns:1fr; gap:8px; }
-      #controls .controls-tabs { gap:6px; }
+      #controls .controls-tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:16px 0;}#controls .controls-tabs button{flex:0 0 auto;white-space:nowrap;}
       #controls .controls-tabs button { padding:9px; }
     }
   `;
@@ -31412,7 +31429,7 @@ function openControls() {
     controlsEl = menuEl('controls', 510, `
       <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
         <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
-        <button class="item controls-back" data-controls-back>← Back to pause <span class="k">Esc</span></button></header>
+        <button class="item controls-back" data-controls-back aria-label="Back to pause"><span class="controls-back-long">← Back to pause</span><span class="controls-back-short">← Back</span><span class="k">Esc</span></button></header>
         <nav class="controls-tabs" aria-label="Control categories">
           <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
           <button data-controls-tab="controller" aria-pressed="false">Controller</button>
@@ -34116,12 +34133,14 @@ function hotbar() {
 let shopEl = null, invEl = null, shopCtx = null, invStyle = false;
 const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
-  el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
+  const pane=el.querySelector('.panel');pane.innerHTML=html;
+  const title=pane.querySelector(':scope > h1');if(title){const heading=document.createElement('header');heading.className='panel-heading';title.before(heading);heading.append(title);if(el.id!=='busted'){const close=document.createElement('button');close.className='panel-close';close.textContent='×';close.tabIndex=-1;close.setAttribute('aria-label','Close '+title.textContent);close.title='E / Esc';close.onclick=e=>{e.stopPropagation();onkeydown({code:'KeyE',repeat:false,preventDefault(){}});};heading.append(close);}}
+  el.style.display='flex';paused=true;
   for (const k in K) K[k] = 0;
-  releaseMouse();
+  releaseMouse();if(TOUCH&&touchEl)showTouch();
 }
-function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
+function hidePanel(el) { if(el&&el.style.display!=='none'){el.style.display='none';paused=false;if(TOUCH&&touchEl)showTouch();} }
+const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl,typeof ticketEl!=='undefined'&&ticketEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -34202,6 +34221,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if(typeof ticketEl!=='undefined'&&ticketEl?.style.display==='flex'){if(e.code==='Escape'||e.code==='KeyE')hidePanel(ticketEl);return true;}
   if(furnishingEl?.style.display==='flex'){if(['Escape','KeyE','KeyF','KeyI'].includes(e.code))hidePanel(furnishingEl);return true;}
   if (fishingCompetitionPanelKey(e)) return true;
   if (workshopPanelKey(e)) return true;
@@ -36532,8 +36552,8 @@ function openCooking(on, pantry = null, spot = null) {
   cookCtx.list = list.map(e => e.r);
   const ready = list.filter(e => e.ms.every(m => m.from)).length;
   const rows_ = list.map(({ r, ms }, k) => {
-    const ok = ms.every(m => m.from), needs = ms.map(m => `<span style="color:${m.from ? '#9d9' : 'rgba(255,255,255,0.3)'}">${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
-    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${r.name}</span><span class="lead"></span><span class="v" style="font-size:0.85em">${needs}</span></button>`;
+    const ok = ms.every(m => m.from), needs = ms.map(m => `<span class="${m.from?'available':'missing'}">${m.from?'':'need '}${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
+    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span class="recipe-label"><span class="recipe-name">${r.name}</span><span class="recipe-needs">${needs}</span></span></button>`;
   }).join('');
   const where = { stove: 'At the stove', grill: 'At the grill', fire: 'At the campfire' }[on];
   showPanel(cookEl, `<h1>${where}</h1><p class="sub">${pantry ? 'From your bag and the fridge' : 'From your bag'} &middot; the grocer's, the market and the deli sell the makings</p>${rows_}
@@ -38259,8 +38279,8 @@ function openWorkshop(tab) {
       <p class="sub"><b>Weed:</b> plant a seed pod on a powered rack. It grows in 75 seconds (50 with grow lamps); tend it once it sprouts for premium quality, then harvest. Unplugging pauses it.</p>
       <p class="sub"><b>Selling:</b> carry packs out and a buyer finds you; stock kept in the closet sometimes draws one too. Q / left click uses a pack yourself.</p>`;
   }
-  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}">${l}</button>`).join('');
-  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:none;border:0;color:inherit;opacity:.55;font:inherit;cursor:pointer;padding:2px 0}#workshop .tab.on{opacity:1;text-decoration:underline}
+  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}" aria-pressed="${workshopTab===k}">${l}</button>`).join('');
+  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:#13191b;border:1px solid #465452;color:#b7c4bb;opacity:1;font:inherit;cursor:pointer;padding:8px 10px;min-height:44px}#workshop .tab.on{opacity:1;text-decoration:none;background:#253732;border-color:#a9d9ca;color:#edf0df}
     #workshop .wsst{margin:8px 0 12px}#workshop .wsrow{display:flex;gap:8px;flex-wrap:wrap}#workshop .wsrow .item{width:auto;flex:1 1 auto}</style>
     <h1>Workshop</h1><p class="sub">${fmt$(money)} &middot; ${w.supplies} refills &middot; ${w.seeds} seed pods &middot; power ${w.powered ? 'on' : 'off'}</p>
     <div class="tabs">${tabs}</div>${body}<p class="hint">E / Esc close</p>`);
@@ -38491,7 +38511,7 @@ function showDrugNegotiation(line='') {
     '<p class="sub">Bring the right stock from your closet. You can keep the rest.</p>'}
     <button class="item" data-drug-leave>Maybe later</button><p class="hint">1 make offer &middot; E / Esc close. Three unreasonable offers end the visit. Visible deals can be reported.</p>`);
   drugSaleEl.querySelector('.panel').style.width='min(480px, calc(100vw - 32px))';
-  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minWidth:'0',width:'100%',boxSizing:'border-box'});
+  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minHeight:'44px',minWidth:'0',width:'100%',boxSizing:'border-box'});
   drugSaleEl.onchange=e=>{
     if(e.target.hasAttribute('data-deal-stock')) {
       context.it=inv[+e.target.value];context.count=Math.min(context.it.uses,visit.remaining);context.price=buyerUnitPrice(visit,context.it);
@@ -51135,12 +51155,19 @@ function homeFloorFinish(i,x,y,L,footprint) {
   }
   return homeFloorWood(i,x,y,L,footprint,tier);
 }
+const HOME_ALBUM_PREVIEWS=new WeakMap();
+function homeAlbumPreview(photo){
+ let url=HOME_ALBUM_PREVIEWS.get(photo);if(url)return url;
+ const canvas=document.createElement('canvas'),w=photo.w,h=photo.h;canvas.width=w*4;canvas.height=h*4;const ctx=canvas.getContext('2d'),chars=Array.from(photo.chars);ctx.font='4px monospace';ctx.textBaseline='top';ctx.textAlign='center';
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const k=y*w+x;ctx.fillStyle=PAL[photo.bg[k]]||'#101416';ctx.fillRect(x*4,y*4,4,4);if(chars[k]&&chars[k]!==' '){ctx.fillStyle=PAL[photo.fg[k]]||'#d9dfda';ctx.fillText(chars[k],x*4+2,y*4,4);}}
+ url=canvas.toDataURL();HOME_ALBUM_PREVIEWS.set(photo,url);return url;
+}
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
   if(furnishingEl)return furnishingEl;
   furnishingEl=panel('furnishings');
   const style=document.createElement('style');
-  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}`;
+  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}#furnishings .album-select{display:flex;align-items:center;gap:10px;min-width:0}#furnishings .album-caption{min-width:0;overflow-wrap:anywhere}#furnishings .album-preview{flex:0 0 96px;width:96px;height:56px;object-fit:contain;image-rendering:pixelated;border:1px solid #465452;box-sizing:border-box}@media(max-width:520px),(pointer:coarse){#furnishings .carry-row>button{min-height:44px;}#furnishings .carry-row:has(.album-select){display:grid;grid-template-columns:minmax(0,1fr) auto;}#furnishings .album-select{grid-column:1/-1;}#furnishings [data-delete-photo]{grid-column:2;}}`;
   document.head.appendChild(style);return furnishingEl;
 }
 const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -51355,7 +51382,7 @@ function takeHomePhoto() {
 }
 function openHomePhotos(part=null) {
   furnishingPanel();
-  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button data-photo="${p.id}">${p.id}: ${homeHtml(p.title)}</button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
+  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button class="album-select" data-photo="${p.id}"><img class="album-preview" src="${homeAlbumPreview(p)}" width="96" height="56" alt="" aria-hidden="true" draggable="false"><span class="album-caption">${p.id}: ${homeHtml(p.title)}</span></button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button class="item" data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
   furnishingEl.onclick=e=>{const button=e.target.closest('button');if(!button)return;if(button.dataset.deletePhoto!=null){homePhotos.photos=homePhotos.photos.filter(p=>p.id!==+button.dataset.deletePhoto);saveGame();return openHomePhotos(part);}if(button.dataset.photo!=null){if(part){part.photo=+button.dataset.photo;saveGame();hidePanel(furnishingEl);}else openHomeFurnishings();}};
 }
 function buildIdeaStore() {
@@ -54309,8 +54336,7 @@ function setSheet(on) { sheetOpen = on; touchEl.querySelector('.sheet').classLis
 let padSig = '';
 function showTouch() {
   touchEl.classList.toggle('minigame',!!game);
-  const pauseUp = typeof pauseEl !== 'undefined' && pauseEl && pauseEl.style.display !== 'none' && paused;
-  touchEl.style.display = pauseUp ? 'none' : 'block'; // (a shop or the bag pauses too, but Close shuts it: keep the buttons)
+  touchEl.style.display=paused?'none':'block'; // Paused panels provide their own close/back actions.
   const busy = !!game || sleep || panelOpen();
   touchEl.querySelector('.bar').style.visibility = busy ? 'hidden' : 'visible';
   if (busy && sheetOpen) setSheet(false);

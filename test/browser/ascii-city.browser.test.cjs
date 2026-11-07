@@ -1040,7 +1040,7 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     assert.ok(await page.evaluate(() => a) > a0, 'looked right');
     await page.tap('#touch button:text-is("Bag")');
     assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
-    await page.tap('#touch .main:text-is("Close")');
+    await page.tap('#inventory .panel-close');
     assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'Close shuts it');
     await page.tap('#touch [data-more]');
     assert.ok(await page.isVisible('#touch .sheet button:text-is("Sound on/off")'), 'the More sheet');

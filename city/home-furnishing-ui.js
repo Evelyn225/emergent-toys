@@ -1,9 +1,16 @@
+const HOME_ALBUM_PREVIEWS=new WeakMap();
+function homeAlbumPreview(photo){
+ let url=HOME_ALBUM_PREVIEWS.get(photo);if(url)return url;
+ const canvas=document.createElement('canvas'),w=photo.w,h=photo.h;canvas.width=w*4;canvas.height=h*4;const ctx=canvas.getContext('2d'),chars=Array.from(photo.chars);ctx.font='4px monospace';ctx.textBaseline='top';ctx.textAlign='center';
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const k=y*w+x;ctx.fillStyle=PAL[photo.bg[k]]||'#101416';ctx.fillRect(x*4,y*4,4,4);if(chars[k]&&chars[k]!==' '){ctx.fillStyle=PAL[photo.fg[k]]||'#d9dfda';ctx.fillText(chars[k],x*4+2,y*4,4);}}
+ url=canvas.toDataURL();HOME_ALBUM_PREVIEWS.set(photo,url);return url;
+}
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
   if(furnishingEl)return furnishingEl;
   furnishingEl=panel('furnishings');
   const style=document.createElement('style');
-  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}`;
+  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}#furnishings .album-select{display:flex;align-items:center;gap:10px;min-width:0}#furnishings .album-caption{min-width:0;overflow-wrap:anywhere}#furnishings .album-preview{flex:0 0 96px;width:96px;height:56px;object-fit:contain;image-rendering:pixelated;border:1px solid #465452;box-sizing:border-box}@media(max-width:520px),(pointer:coarse){#furnishings .carry-row>button{min-height:44px;}#furnishings .carry-row:has(.album-select){display:grid;grid-template-columns:minmax(0,1fr) auto;}#furnishings .album-select{grid-column:1/-1;}#furnishings [data-delete-photo]{grid-column:2;}}`;
   document.head.appendChild(style);return furnishingEl;
 }
 const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -218,7 +225,7 @@ function takeHomePhoto() {
 }
 function openHomePhotos(part=null) {
   furnishingPanel();
-  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button data-photo="${p.id}">${p.id}: ${homeHtml(p.title)}</button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
+  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button class="album-select" data-photo="${p.id}"><img class="album-preview" src="${homeAlbumPreview(p)}" width="96" height="56" alt="" aria-hidden="true" draggable="false"><span class="album-caption">${p.id}: ${homeHtml(p.title)}</span></button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button class="item" data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
   furnishingEl.onclick=e=>{const button=e.target.closest('button');if(!button)return;if(button.dataset.deletePhoto!=null){homePhotos.photos=homePhotos.photos.filter(p=>p.id!==+button.dataset.deletePhoto);saveGame();return openHomePhotos(part);}if(button.dataset.photo!=null){if(part){part.photo=+button.dataset.photo;saveGame();hidePanel(furnishingEl);}else openHomeFurnishings();}};
 }
 function buildIdeaStore() {

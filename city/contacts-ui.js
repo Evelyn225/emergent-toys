@@ -40,7 +40,7 @@ function showDrugNegotiation(line='') {
     '<p class="sub">Bring the right stock from your closet. You can keep the rest.</p>'}
     <button class="item" data-drug-leave>Maybe later</button><p class="hint">1 make offer &middot; E / Esc close. Three unreasonable offers end the visit. Visible deals can be reported.</p>`);
   drugSaleEl.querySelector('.panel').style.width='min(480px, calc(100vw - 32px))';
-  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minWidth:'0',width:'100%',boxSizing:'border-box'});
+  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minHeight:'44px',minWidth:'0',width:'100%',boxSizing:'border-box'});
   drugSaleEl.onchange=e=>{
     if(e.target.hasAttribute('data-deal-stock')) {
       context.it=inv[+e.target.value];context.count=Math.min(context.it.uses,visit.remaining);context.price=buyerUnitPrice(visit,context.it);
