@@ -73,6 +73,18 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 33. [x] Abandoned shopfronts: shops shut down for good are now anonymous shutters (no sign, no FOR LEASE, no tooltip, not enterable). Give them decayed, aged and abandoned styles (rusted or dented shutters, boarded windows, peeling paint, sun-faded ghost lettering, weeds at the step, flyers and dumped junk) and make them hotspots for graffiti. Done: rusted, flaking and dented shutters, boarded patches and torn paper (brownstones), graffiti hotspots; the old sign as a sun-faded ghost on the wall with lost letters and fixing holes; weeds at the step and dumped bin bags, boxes, crates, flat cardboard, a mattress and flyers at every shut street front.
 
 34. [x] UI review: menus, map and minigames; hierarchy, contrast, clear states, keyboard/controller focus and responsive desktop/touch layouts. Track chunks and evidence in `UI_REVIEW.md`.
+35. [x] Subway entrances: the railings either side of every stairwell read as solid blocks of green `o` characters; give them real railings, posts and the globe lamps (from the 2026-11-07 audit).
+36. [x] Shop window displays: only food, clothes, books, screens, bottles and flowers have their own; everything else (pet shop, pawn, tobacco, toys, IDEA, realty, cinema...) shows generic boxes, and hotels and motels shouldn't have a shop display at all.
+37. [ ] Grand Hotel lobby: a large bare beige room with a fountain; furnish it as the city's showpiece (reception, seating, rugs, plants, chandeliers, luggage).
+38. [ ] Car dealership interior: one blocky car in an empty grey room; showroom floor, several cars, desks, brochures, signage.
+39. [ ] IDEA interior: mostly empty grey floor; room sets, aisles, the warehouse, the restaurant.
+40. [ ] Bank interior: tellers in front of a blank wall; the hall, queue ropes, the vault door, desks, clocks.
+41. [ ] Sparse interiors needing a pass: gym, tyres, welding, auto repair, courier office, liquor, pawn, phones, jeweller, hotel and motel lobbies.
+42. [ ] Civic exteriors: the police station front is a flat grey grid; fire station and hospital forecourts are plain red and white slabs (bay markings, doors, parked vehicles).
+43. [ ] Bare island landings: Fern Island, Cabin Cove, Juniper Isle and Crescent Sands are flat ground with a path.
+44. [ ] Dev tools: many shop and landmark teleports land nose-to-wall; five districts teleport to the same waterfront spot.
+45. [ ] Emergency service vehicles: the ones parked outside police, fire and hospital buildings should be real vehicles you can steal; ambulances stealable and drivable, with their own handling (heavy, slow to turn, quick off the line, lights and siren).
+46. [ ] Belle Époque ivy: the vines up the sides of the Belle Époque buildings look flat; give them real stems, leaf clusters with depth and light, seasonal colour.
 
 ## Checkpoint
 
