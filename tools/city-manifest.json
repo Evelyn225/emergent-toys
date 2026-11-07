@@ -159,6 +159,7 @@
     "city/pee.js",
     "city/ambient.js",
     "city/minigame-ui.js",
+    "city/minigame-presentation.js",
     "city/crime-ui.js",
     "city/news-ui.js",
     "city/workshop-ui.js",
