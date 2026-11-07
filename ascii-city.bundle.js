@@ -1150,7 +1150,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
 }
 const figCache = new Map(), figFineCache = new Map(); // (fine sprites are big: only a few kept, for whoever's close)
 // new fine sprites cast a frame, at most: past that, whoever's left waits a frame or two in the ordinary one
-const FIG_FINE_PER_FRAME = 1;
+const FIG_FINE_PER_FRAME = 2;
 let figFineT = -1, figFineN = 0;
 function figSprite(look, view, key, S = 1) {
   const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
@@ -1265,7 +1265,7 @@ function drawFigProp(s, rx, ry) {
   if (key === 'sit' || key === 'sitfold') key += Math.round((s.seatZ ?? 0.45) / unit);
   else if (key === 'stand' && s._moving) key = 'walk' + Math.floor(s._dist / (s.h * 0.85) * 8) % 8; // a stride every 1.5m or so
   const [fx, fy] = s.dead&&s.down?[-s.down.fx,-s.down.fy]:s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
-  drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, s.light && { light: s.light });
+  drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, { light: s.light || 0, hold: s }); // (hold: their view and their close-up sprite stay theirs)
 }
 
 // ---- drawing one. (rx, ry) from you, standing on z0, h tall (standing height, world units), facing (fx, fy) - or
@@ -1315,9 +1315,18 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   let spr;
   const sprite = dz => {
     if (!spr) {
-      const rowsPer = unit / dz;
+      const rowsPer = unit / dz, hold = opts?.hold;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
+      spr = figSprite(look, figView(rx, ry, fx, fy, hold), pose, S);
+      // over this frame's allowance for new close-up sprites, figSprite falls back to a coarser one, which reads as a
+      // different person (another build, the face gone): somebody you're keeping an eye on keeps the close-up one
+      // they had last frame instead (their pose a frame behind), until theirs is ready
+      if (hold) {
+        const got = spr.S || 1, last = hold.figSpr;
+        if (got < S && last && (last.S || 1) === S && hold.figLook === look) spr = last;
+        else if (got === S) { hold.figSpr = spr; hold.figLook = look; }
+        hold.figS = spr.S || 1;
+      }
     }
     return spr;
   };
@@ -4143,7 +4152,10 @@ function residentialDetails(b) {
     f.residential = residentialFaceLayout(b, f);
     const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
     architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
-    if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
+    if (f.front && !f.low) { // the entrance canopy, the building's number along its front board (a number painted on the wall above is hidden by the canopy from the pavement)
+      architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .3, .335, 'entrance-canopy', { ...extra, number: b.sh.kind === SHOP_APTS ? b.sh.word : null });
+      if (b.sh.kind === SHOP_APTS) f.numberOnCanopy = true;
+    }
     if (b.sty === 16) modernApartmentDetails(b, f); else {
       tenementEscapeDetails(b, f);
       const r = f.residential, escapeUnit = Math.max(0, r.units - 2);
@@ -13508,7 +13520,7 @@ const LETTER_MIN_COLS = 2, LETTER_MIN_ROWS = 2.5;
 function blockGlyph(text, q, hz, du, dv) {
   let bits = 0;
   for (let b = 0; b < 4; b++) {
-    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
+    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), c0 = text[k], ch = GLYPH5[c0] !== undefined ? c0 : c0?.toUpperCase(); // (no small letters in the block font: No. as NO.)
     if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
   }
   return BLOCK_CELLS[bits];
@@ -16016,7 +16028,28 @@ function architectureAwningShade(o, i, t, L) {
   BG[i] = C(stripe, HIT.face === 5 ? 1.9 + L * .24 : HIT.face === 6 ? .8 + L * .06 : 1.5 + L * .18);
   return set(i, ' ', 0), true;
 }
+// the building's number on the front board of its entrance canopy, read from the pavement: white block letters on the
+// dark board, the face toward the street only
+function canopyNumber(o, i, t, L) {
+  const sg = Math.sign(o.c * o.ny - o.s * o.nx) || 1; // (which way along the canopy reads left to right, seen from the street)
+  if (HIT.face > 4 || HIT.v * sg < o.hw * .98) return false;
+  const word = o.number, n = word.length, cw = Math.min(.06, (o.hl * 2 - .06) / n), band = (o.z1 - o.z0) * .78, zc = (o.z0 + o.z1) / 2;
+  const q = HIT.u * sg / cw + n / 2, hz = (zc + band / 2 - HIT.w) / band, fp = t / projY, lit = Math.max(L, night * 9);
+  BG[i] = C(GRAY, .9 + L * .08);
+  if (q >= 0 && q < n && hz >= 0 && hz < 1 && cw / fp >= 1.5 && band / fp >= 2.5) { // close: block letters
+    const ch = blockGlyph(word, q, hz, fp / cw, fp / band);
+    return set(i, ch || ' ', C(WHITE, 6 + lit * .55)), true;
+  }
+  // further off the board's a row or two high: the number in plain characters along its middle row, a letter a
+  // column, as long as a letter's at least a column wide
+  if (q >= 0 && q < n && oneCell(HIT.w - zc, fp)) { // (set solid, a letter a column, centred, as the small shop signs are)
+    const k = Math.floor((q - n / 2) * cw * projX / t + n / 2 + .0137);
+    if (k >= 0 && k < n) return set(i, word[k].toUpperCase(), C(WHITE, 7 + lit * .5)), true;
+  }
+  return set(i, ' ', 0), true;
+}
 function architectureDetailShade(o, i, t, L) {
+  if (o.kind === 'entrance-canopy' && o.number && canopyNumber(o, i, t, L)) return true;
   if (o.kind === 'fascia') return architectureFasciaShade(o, i, t, L);
   if (o.kind === 'awning') return architectureAwningShade(o, i, t, L);
   if (o.profile) return residentialDetailShade(o, i, t, L);
@@ -16088,7 +16121,7 @@ const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
   const g = architectureSignSpec(b, f, sh);
-  if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
+  if (z > .28 && architectureSignedFace(f, sh) && !(f.numberOnCanopy && d < 9 * lodScale()) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
     g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
   if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + center), wall, L)) return; // (shut for good: the old sign's shadow)
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
@@ -27994,15 +28027,16 @@ function hud() {
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
-    : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
-    : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
-    : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
-    : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
-    : settings.help && mode==='el'?`WASD walk | mouse / arrows look | C sit / stand | E get off at station | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
+    : settings.help && skatingNow() ? 'SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C at takeoff: air out | S hold: pivot | V: camera'
+    : settings.help && mode === 'boat' ? 'E: tie up (at the jetty) | V: camera'
+    : settings.help && mode === 'sea' ? 'Shift: cruise | S: astern | E: tie up (beside land) | V: camera'
+    : settings.help && mode==='ferry'?`C sit | Space (seated): on to the next island | E café | I bag | 1-8 items | Q use | M map`
+    : settings.help && mode==='el'?`C sit | E: get off at a station | I bag | 1-8 items | Q use | M map`
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
-    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
-    : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
-    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
+    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly | W/S throttle | V: camera | E: get out (stopped)')
+    : settings.help && heldGun() ? 'hold right click: aim | R reload | Esc: pause, all controls'
+    : settings.help && (mode === 'drive' || mode === 'taxi') ? 'Esc: pause, all controls' // (the car's own controls are in the prompt under it)
+    : settings.help ? `I bag | P pee | H hail taxi | M map | Esc: pause, all controls` : 'Esc: pause'; // (the obvious ones, and what E or Q does where you are, are in the prompts: the rest in the pause menu's Controls)
   const help=CONTROLLER.active ? (settings.help?CONTROLLER.hint:'') : keyboardHelp;
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
@@ -39040,7 +39074,13 @@ function skateStick(x = 0, y = 0, dead = .15) {
   const scale = Math.min(1, (r - dead) / (1 - dead)) / r;
   return [x * scale, y * scale];
 }
-function createSkateGesture() {
+// opts: how strict it is. The defaults suit a mouse (a virtual stick moved precisely); a thumbstick gets SKATE_PAD_GESTURE:
+// a pull back that's off-centre still loads, slower flicks still count, a partial push forward still pops, and a scoop
+// needn't go all the way round or snap back right to the middle
+const SKATE_GESTURE_DEFAULT = { loadY: .6, loadX: .45, window: .24, arcWindow: .5, fwdR: .6, fwdY: .35, fwdRatio: .45, release: .25, scoop: 2.3, curl: 1.3, spin: 3.9 };
+const SKATE_PAD_GESTURE = { loadY: .55, loadX: .62, window: .5, arcWindow: .8, fwdR: .5, fwdY: .25, fwdRatio: .35, release: .4, scoop: 2.0, curl: 1.15, spin: 3.4 };
+function createSkateGesture(opts = SKATE_GESTURE_DEFAULT) {
+  const O = { ...SKATE_GESTURE_DEFAULT, ...opts };
   let samples = [], load = null, armed = true, lastTime = -Infinity, firedAt=-Infinity, centred=false;
   const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; firedAt=-Infinity;centred=false; };
   function sample(x, y, t) {
@@ -39056,16 +39096,16 @@ function createSkateGesture() {
       armed=true;
     }
     if (!load) {
-      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
+      if (Math.abs(y) > O.loadY && Math.abs(x) < O.loadX) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
       return null;
     }
     if (radius > .45) {
       for (const p of samples) if (t - p.t <= .12 && t > p.t)
         load.fastest = Math.max(load.fastest, Math.hypot(x - p.x, y - p.y) / .12);
     }
-    if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
+    if (!load.left && y * load.side > O.loadY && Math.abs(x) < O.loadX) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
-    if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
+    if (t - load.t > (Math.abs(load.arc)>.45 ? O.arcWindow : O.window)+1e-6) { load = null; return null; }
     let acrossCentre=false;
     if (radius > .45) {
       load.finish=[x,y];
@@ -39075,14 +39115,14 @@ function createSkateGesture() {
       if (Math.abs(delta) < 1.2) load.arc += delta;else acrossCentre=true;
       load.angle = angle;
     }
-    const arc = Math.abs(load.arc), curled = arc > 1.3;
+    const arc = Math.abs(load.arc), curled = arc > O.curl;
     load.maxArc=Math.max(load.maxArc,arc);
-    const forward = radius>.6&&y*load.side<-.35&&-y*load.side/radius>.45;
-    const quarterFlip=acrossCentre&&arc>.8&&arc<2.3&&forward&&x*Math.sign(load.arc)>.3;
-    const released = radius < .25;
-    const heelScoop=load.maxArc>2.3&&arc>1.6&&arc<3.9&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
-    if (quarterFlip || (!curled && forward) || (curled && released && (arc > 2.3||heelScoop))) {
-      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+    const forward = radius>O.fwdR&&y*load.side<-O.fwdY&&-y*load.side/radius>O.fwdRatio;
+    const quarterFlip=acrossCentre&&arc>.8&&arc<O.scoop&&forward&&x*Math.sign(load.arc)>.3;
+    const released = radius < O.release;
+    const heelScoop=load.maxArc>O.scoop&&arc>1.6&&arc<O.spin&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
+    if (quarterFlip || (!curled && forward) || (curled && released && (arc > O.scoop||heelScoop))) {
+      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > O.spin ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > O.scoop ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
       load = null; armed = false;firedAt=t;centred=false; return result;
     }
@@ -39122,7 +39162,7 @@ const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHel
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
-  padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
+  padGesture: createSkateGesture(SKATE_PAD_GESTURE), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(.5,.3),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, fired: false });

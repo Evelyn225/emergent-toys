@@ -360,7 +360,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
 }
 const figCache = new Map(), figFineCache = new Map(); // (fine sprites are big: only a few kept, for whoever's close)
 // new fine sprites cast a frame, at most: past that, whoever's left waits a frame or two in the ordinary one
-const FIG_FINE_PER_FRAME = 1;
+const FIG_FINE_PER_FRAME = 2;
 let figFineT = -1, figFineN = 0;
 function figSprite(look, view, key, S = 1) {
   const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
@@ -475,7 +475,7 @@ function drawFigProp(s, rx, ry) {
   if (key === 'sit' || key === 'sitfold') key += Math.round((s.seatZ ?? 0.45) / unit);
   else if (key === 'stand' && s._moving) key = 'walk' + Math.floor(s._dist / (s.h * 0.85) * 8) % 8; // a stride every 1.5m or so
   const [fx, fy] = s.dead&&s.down?[-s.down.fx,-s.down.fy]:s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
-  drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, s.light && { light: s.light });
+  drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, { light: s.light || 0, hold: s }); // (hold: their view and their close-up sprite stay theirs)
 }
 
 // ---- drawing one. (rx, ry) from you, standing on z0, h tall (standing height, world units), facing (fx, fy) - or
@@ -525,9 +525,18 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   let spr;
   const sprite = dz => {
     if (!spr) {
-      const rowsPer = unit / dz;
+      const rowsPer = unit / dz, hold = opts?.hold;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
+      spr = figSprite(look, figView(rx, ry, fx, fy, hold), pose, S);
+      // over this frame's allowance for new close-up sprites, figSprite falls back to a coarser one, which reads as a
+      // different person (another build, the face gone): somebody you're keeping an eye on keeps the close-up one
+      // they had last frame instead (their pose a frame behind), until theirs is ready
+      if (hold) {
+        const got = spr.S || 1, last = hold.figSpr;
+        if (got < S && last && (last.S || 1) === S && hold.figLook === look) spr = last;
+        else if (got === S) { hold.figSpr = spr; hold.figLook = look; }
+        hold.figS = spr.S || 1;
+      }
     }
     return spr;
   };

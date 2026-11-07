@@ -103,7 +103,10 @@ function residentialDetails(b) {
     f.residential = residentialFaceLayout(b, f);
     const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
     architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
-    if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
+    if (f.front && !f.low) { // the entrance canopy, the building's number along its front board (a number painted on the wall above is hidden by the canopy from the pavement)
+      architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .3, .335, 'entrance-canopy', { ...extra, number: b.sh.kind === SHOP_APTS ? b.sh.word : null });
+      if (b.sh.kind === SHOP_APTS) f.numberOnCanopy = true;
+    }
     if (b.sty === 16) modernApartmentDetails(b, f); else {
       tenementEscapeDetails(b, f);
       const r = f.residential, escapeUnit = Math.max(0, r.units - 2);
