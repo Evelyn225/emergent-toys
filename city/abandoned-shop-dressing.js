@@ -73,4 +73,5 @@ function abandonedShopDressing(){
   const[vx,vy]=R(e.x,e.y);if(Math.hypot(vx,vy)>SHOP_WINDOW.near*2.5||!inView(vx,vy,.22))return;
   drawAbandonedDressing(e,vx,vy);
  });
+ drawAbandonedGroundDressing();
 }
