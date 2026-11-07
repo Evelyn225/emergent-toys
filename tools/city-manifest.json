@@ -183,6 +183,7 @@
     "city/island-landmarks.js",
     "city/island-materials.js",
     "city/water-weather.js",
+    "city/item-menu-previews.js",
     "city/hotel-bedside-lamps.js",
     "city/hotel-coffee-tables.js",
     "city/hotel-lobby-supports.js",
