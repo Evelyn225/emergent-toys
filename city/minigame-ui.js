@@ -94,14 +94,15 @@ function sfxGame(e) {
 
 // on a phone the buttons keep part of the screen (the bottom, held upright; the right, sideways): px to leave clear
 function gameClear() {
-  if (!TOUCH) return [0, 0];
-  if (innerWidth > innerHeight) return [TOUCH_PAD_W - 30, 0];
-  return [0, game && (game.kind === 'cook' || game.kind === 'workshop') ? 250 : TOUCH_PAD_H];
+  if(!TOUCH)return[0,0];
+  const pad=touchEl?.querySelector('.pad'),r=pad?.getBoundingClientRect();
+  if(r&&r.height>0)return innerWidth>innerHeight?[Math.max(TOUCH_PAD_W-30,innerWidth-r.left+12),0]:[0,innerHeight-r.top+12];
+  return innerWidth>innerHeight?[TOUCH_PAD_W-30,0]:[0,TOUCH_PAD_H];
 }
-// the character size that fits the whole cabinet on screen, never bigger than the detail setting's
-function gameFS(g) {
-  const [cr, cb] = gameClear(), ratio = cw / FS; // (a character's width per px of height, in this font)
-  return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
+function gameFrameColor(g){return game.kind==='arcade'?NEON[ARCADE_GAMES.indexOf(g.id)&3]:game.kind==='crime'||game.kind==='bout'?RED:game.kind==='table'?GREEN:g.id==='serve'||g.id==='cook'?ORANGE:g.id==='tapper'?YEL:CYAN;}
+function gameFS(g,layout=minigamePresentation(g)) {
+  const ratio=cw/FS;
+  return clamp(Math.floor(Math.min(DETAIL[settings.detail],layout.width/((2*g.W+6)*ratio),(innerHeight-layout.bottom-layout.top-layout.foot)/(g.H+4))),5,40);
 }
 // what the screen says to press: on a phone, the buttons' names
 // (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
@@ -121,23 +122,21 @@ function gameText(s, g) {
 }
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
-  const g = game.g, fs = gameFS(g);
+  const g=game.g,layout=minigamePresentation(g),fs=gameFS(g,layout);
   if (fs !== FS) { FS = fs; resize(); } // (put back when the game's done: see loop)
   const n = rows * cols;
   for (let i = 0; i < n; i++) { CH[i] = ' '; COL[i] = 0; BG[i] = C(GRAY, 0); }
   FOGS.fill(0); FOGB.fill(0);
-  const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
-  const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
-  const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' || game.kind === 'bout' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' || g.id === 'cook' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
+  const ac=Math.min(cols-Math.ceil(layout.right/cw),Math.floor(layout.width/cw)),ar=rows-Math.ceil(layout.bottom/FS),top=Math.ceil(layout.top/FS),availableRows=ar-top-Math.ceil(layout.foot/FS);
+  const s=clamp(Math.floor(Math.min((availableRows-4)/g.H,(ac-6)/(2*g.W))),1,3),bw=2*s,bh=s;
+  const gw=g.W*bw,gh=g.H*bh,x0=Math.round(layout.left/cw)+((ac-gw)>>1),y0=top+2+(TOUCH&&innerWidth<=innerHeight?0:Math.max(0,(availableRows-gh-4)>>1)),frame=gameFrameColor(g);
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
-    if (edgeY || edgeX) { set(i, edgeY && edgeX ? '+' : edgeY ? '=' : '|', C(frame, 12)); BG[i] = C(frame, 2); }
+    if (edgeY || edgeX) { set(i,' ',0);BG[i]=C(frame,7); }
     else if (y < y0 || y >= y0 + gh || x < x0 || x >= x0 + gw) BG[i] = C(frame, 1);
     else BG[i] = C(GRAY, 0);
   }
-  putText(y0 - 3, x0 + ((gw - g.title.length * 2) >> 1), g.title.split('').join(' '), C(frame, 15));
   g.draw((x, y, ch, col, bg) => { // one game cell: a block of characters
     if (x < 0 || y < 0 || x >= g.W || y >= g.H) return;
     for (let r = 0; r < bh; r++) for (let c = 0; c < bw; c++) {
@@ -153,36 +152,7 @@ function drawGame() {
        const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);
        lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
      });
-  // the status under the screen, in two lines if it's wider than the cabinet
-  const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
-  const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
-  sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? g.over ? '   E / ESC finish' : '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
-  const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
-  const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
-  putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
-  if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
-    const r = g.reward(), res = g.result, lines = game.kind === 'table'
-      ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
-         r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]
-      : game.kind === 'bout'
-      ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
-         res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
-      : game.kind === 'cook'
-      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E / ESC to finish']]
-      : game.kind === 'workshop'
-      ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
-      : game.kind === 'arcade'
-      ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
-      : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
-    const w = Math.min(ac, Math.max(...lines.map(l => l.length)) + 6), h = lines.length + 2, cx = (ac - w) >> 1, cy = (ar - h) >> 1;
-    for (let y = cy; y < cy + h; y++) for (let x = cx; x < cx + w; x++) {
-      const i = y * cols + x; set(i, ' ', 0); BG[i] = C(GRAY, 1);
-      if (y === cy || y === cy + h - 1) set(i, '-', C(frame, 10));
-    }
-    lines.forEach((l, k) => putText(cy + 1 + k, cx + ((w - l.length) >> 1), l, C(k === 2 ? YEL : WHITE, k === 0 ? 15 : 12)));
-  }
+  placeMinigameFooter((y0+gh+2)*FS+10);
   present();
 }
 

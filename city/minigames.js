@@ -1570,6 +1570,7 @@ GAMES.blackjack = (rnd = Math.random) => {
     text(0, 16, `CASH ${fmt$(money)}`, C(GREEN, 13));
     if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>msg+(you.length?`  YOU ${bjTotal(you)}${doubled?' (doubled)':''} · DEALER ${state==='play'?bjTotal([dealer[0]])+' + ?':bjTotal(dealer)}`:'');
   g.status = () => state === 'play' ? 'UP hit   SPACE stand   DOWN double   E leave' : `SPACE deal (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
   g.reward = () => 0;
   return g;
@@ -1635,6 +1636,7 @@ GAMES.roulette = (rnd = Math.random) => {
     text(0, 15, `CASH ${fmt$(money)}`, C(GREEN, 13));
     if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>RL_BETS[pick_][0]+' · '+msg;
   g.status = () => state === 'spin' ? 'Round it goes...' : `LEFT/RIGHT bet   UP/DOWN stake   SPACE spin (${fmt$(g.bet)})   E leave`;
   g.reward = () => 0;
   return g;
@@ -1705,6 +1707,7 @@ GAMES.slots = (rnd = Math.random) => {
     text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
     if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>msg;
   g.status = () => `SPACE pull (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
   g.reward = () => 0;
   return g;
