@@ -2411,7 +2411,7 @@ function islandSurface(x,y) {
   const patch=noise(x*.3,y*.3,1876),edge=wildIslandEdge(x,y,island);
   if(island.id==='fern') {
     const creek=fernCreekDistance(x,y);
-    if(creek<0)return {base:CYAN,background:BLUE,ch:fract(y*5-T*1.8+grain*.4)<.14?'~':' ',color:'#528b9f',tone:1.1,water:true};
+    if(creek<0){const ripple=fract(y*5-T*1.8+grain*.4)<.14;return {base:CYAN,background:ripple?CYAN:BLUE,ch:' ',color:'#528b9f',tone:ripple?1.8:1.1,water:true,night:ripple?2.5:1.8};}
     if(creek<.16+patch*.12)return {base:GRAY,background:GREEN,ch:grain>.97?'.':' ',color:'#64715d',tone:1};
     if(onFernStrip(x,y)) {
       let ch=grain>.85?':':' ';
@@ -4851,6 +4851,7 @@ function abandonedShopDressing(){
   const[vx,vy]=R(e.x,e.y);if(Math.hypot(vx,vy)>SHOP_WINDOW.near*2.5||!inView(vx,vy,.22))return;
   drawAbandonedDressing(e,vx,vy);
  });
+ drawAbandonedGroundDressing();
 }
 
 // ---- sun-faded ghost lettering: where a shut shop's fascia sign hung, the wall behind it was kept out of the sun for
@@ -4878,7 +4879,8 @@ function ghostSign(i, u, uStep, z, d, b, f, sh, u0, base, L) {
   if (wallText(i, u, uStep, z, d, ghostWord(sh), u0, g.zc, g.cwid, g.band, C(base, Math.max(1, lvl * .55)), bg)) return true;
   BG[i] = bg;
   const hole = fp < .012 && (half - Math.abs(du)) < .02 && (half - Math.abs(du)) > .008 && Math.min(top - z, z - bot) < .02 && Math.min(top - z, z - bot) > .008;
-  return set(i, hole ? '.' : ' ', C(GRAY, 1)), true;
+  if(hole)BG[i]=C(GRAY,1);
+  return set(i,' ',0),true;
 }
 
 // ---- left at the step: weeds along the foot of the shutter and in the pavement cracks, and what got dumped there
@@ -4934,7 +4936,7 @@ function drawAbandonedStep(e, vx, vy, d) {
         if (HIT.face === 5 || HIT.face === 6 || blade > .42 - .3 * v) return false;
         const g = 2.6 + L * .3 - v * .5;
         if (fp > .006) { BG[i] = C(GREEN, g * .8); return set(i, ' ', 0), true; } // (far: a dab of green)
-        return set(i, v > .7 ? "'" : lean > .05 ? '/' : lean < -.05 ? '\\' : '|', C(GREEN, Math.max(3, g * 1.6))), true; // (on whatever's behind: the pavement, the steel)
+        BG[i]=C(GREEN,Math.max(3,g*1.6));return set(i,' ',0),true; // (on whatever's behind: the pavement, the steel)
       }
       if (p.kind === 'bag') { // a black bin bag: a rounded lump, sheen on top, the knot
         const r = Math.hypot(HIT.u / p.hl, (HIT.w - p.z0) / (p.z1 - p.z0) * 1.6 - .2);
@@ -4958,7 +4960,7 @@ function drawAbandonedStep(e, vx, vy, d) {
         BG[i] = C(p.k & 1 ? BLUE : RED, (5 + L * .3) * sf); return set(i, ' ', 0), true;
       }
       // a flyer: white paper, a line or two of print
-      BG[i] = C(p.rot > .5 ? YEL : WHITE, 5 + L * .4); return set(i, fp < .002 && Math.abs(fract(HIT.v / .0025) - .5) < .15 ? '-' : ' ', C(GRAY, 3)), true;
+      const print=fp<.002&&Math.abs(fract(HIT.v/.0025)-.5)<.15;BG[i]=print?C(GRAY,3):C(p.rot>.5?YEL:WHITE,5+L*.4);return set(i,' ',0),true;
     });
   }
 }
@@ -4969,6 +4971,88 @@ function abandonedStepDressing() {
     if (d > SHOP_WINDOW.near * 1.6 || !inView(vx, vy, e.w / 2 + .1)) return;
     drawAbandonedStep(e, vx, vy, d);
   });
+}
+// Low discarded packing and rooted weeds at permanently abandoned shop fronts.
+// Each group fits inside its window bay and the wall-side strip of pavement.
+const ABANDONED_GROUND_PARTS=new WeakMap();
+function abandonedGroundParts(e){
+ let parts=ABANDONED_GROUND_PARTS.get(e);if(parts)return parts;
+ parts=[];
+ const at=(t,n)=>[e.x+e.tx*t+e.nx*n,e.y+e.ty*t+e.ny*n];
+ const add=(kind,t,n,hl,hw,z0,z1,extra={})=>{
+  const[x,y]=at(t,n);const p={kind,t,n,hl,hw,z0,z1,box:boxAt(x,y,e.tx,e.ty,hl,hw,z0,z1),...extra};p.view={...p.box};p.shade=(i,t,L)=>abandonedGroundShade(e,p,i,t,L);parts.push(p);
+ };
+ const[x,y]=at(.12,.035),ground=outdoorGroundHeight(x,y);
+ const flatAt=(x,y,hl,hw,z)=>[-1,1].every(a=>[-1,1].every(b=>Math.abs(outdoorGroundHeight(x+e.tx*hl*a+e.nx*hw*b,y+e.ty*hl*a+e.ny*hw*b)-z)<.0006));
+ const flat=flatAt(...at(.12,.045),.035,.035,ground);
+ if(flat){
+  const z=ground,wall=.0006,hl=.035,hw=.025;
+  add('carton-base',.12,.035,hl,hw,z,z+.0004);
+  for(const s of [-1,1]){
+   add('carton-fold',.12,.035+s*(hw-wall/2),hl,wall/2,z+.0004,z+.0035);
+   add('carton-fold',.12+s*(hl-wall/2),.035,wall/2,hw-wall,z+.0004,z+.0035);
+  }
+  add('carton-flap',.12,.07,hl,.01,z,z+.0004);
+ }
+ for(const[t,n]of [[.20,.05],[.205,.070]]){
+  const[x,y]=at(t,n),z=outdoorGroundHeight(x,y);
+  if(!flatAt(x,y,.013,.009,z))continue;
+  add('litter',t,n,.013,.009,z,z+.00004);
+ }
+ for(const[t,n]of [[-.075,.009],[-.03,.012],[.235,.01]])for(let j=0;j<3;j++){
+  const u=t+(j-1)*.0025,v=n+(j===1?.0015:0),[x,y]=at(u,v),z=outdoorGroundHeight(x,y);
+  const r=.0027+hash(j,e.seed*1e3+t,1851)*.0012,h=.022+hash(j,e.seed*1e3+t,1852)*.013;
+  add('weed',u,v,r,r,z,z+h,{ray:rayFrustum});parts.at(-1).box.r1=parts.at(-1).view.r1=0;
+ }
+ ABANDONED_GROUND_PARTS.set(e,parts);return parts;
+}
+function abandonedGroundShade(e,p,i,t,L){
+ const height=(HIT.w-p.z0)/(p.z1-p.z0),top=HIT.face===5;
+ if(p.kind==='weed'){
+  const sn=seasonIdx(),col=sn===3?BRICK:sn===2?YEL:GREEN;
+  BG[i]=C(col,(1.1+L*.24)*frustumLit()+height*.8);
+ }else if(p.kind==='litter'){
+  if(HIT.u>p.hl*.45&&HIT.v>0||HIT.u< -p.hl*.55&&HIT.v< -p.hw*.3)return false;
+  BG[i]=C(WARM,(1.8+L*.25)*shadeFace(HIT.face));
+ }else{
+  const crease=coveGroove(HIT.u,.018,.0012,t/projY);
+  BG[i]=C(BRICK,((top?2.8:1.4)+L*.25-crease*.8)*shadeFace(HIT.face));
+ }
+ if(top&&p.kind!=='weed'){
+  const wx=p.box.x+e.tx*HIT.u-e.ty*HIT.v,wy=p.box.y+e.ty*HIT.u+e.tx*HIT.v;
+  paintSettledSnow(i,wx,wy,L*.7,1,0,HIT.w);
+ }
+ set(i,' ',0);return true;
+}
+function drawAbandonedGround(e,vx,vy){
+ for(const p of abandonedGroundParts(e)){
+  p.view.x=vx+p.box.x-e.x;p.view.y=vy+p.box.y-e.y;drawBox(p.view,p.shade,p.ray||rayBox);
+ }
+}
+let ABANDONED_GROUND_B=null;
+function abandonedGroundList(){
+ if(ABANDONED_GROUND_B)return ABANDONED_GROUND_B;
+ // The merged step pass owns its shops; extend only the remaining facade families.
+ const covered=new Set(abandonedStepList().flat().map(e=>e.sh));
+ const out=abandonedDressingList().flat().filter(e=>!covered.has(e.sh)).map(e=>({...e,family:'brownstones'})),existing=new Set([...covered,...out.map(e=>e.sh)]),lots=new Map(),buildings=new Map(ARCH_BUILDINGS.map(b=>[b.sh,b]));
+ for(let k=0;k<map.length;k++){const sh=SHOP[k];if(!sh||sh.kind!==SHOP_SHUT||sh.wilderness||!map[k]||existing.has(sh))continue;if(!lots.has(sh))lots.set(sh,[]);lots.get(sh).push(k);}
+ for(const [sh,cells]of lots){
+  const k=cells[0],b=buildings.get(sh)||{sh,x0:k%N,y0:Math.floor(k/N)},faces=architectureFaces(b,cells,Array.from({length:4},()=>Object.create(null)));
+  for(const f of faces){
+   if(f.low||!f.front||f.spacing<.66)continue;
+   const along=f.start+(f.end-f.start)*.25,x=f.side?along:f.line,y=f.side?f.line:along,ownerCell=idx(Math.floor(x-f.nx*.05),Math.floor(y-f.ny*.05));
+   if(SHOP[ownerCell]!==sh||!free(x+f.nx*.14,y+f.ny*.14))continue;
+   out.push({sh,seed:SEED[ownerCell],x,y,tx:f.side?1:0,ty:f.side?0:1,nx:f.nx,ny:f.ny,spacing:f.spacing,family:b.region||'style-'+STY[ownerCell],ownerCell,ownerHeight:map[ownerCell]});
+  }
+ }
+ return ABANDONED_GROUND_B=bucketed(out);
+}
+function drawAbandonedGroundDressing(){
+ forNear(abandonedGroundList(),e=>{
+  if(e.sh.kind!==SHOP_SHUT||e.ownerCell!=null&&(SHOP[e.ownerCell]!==e.sh||map[e.ownerCell]!==e.ownerHeight))return;
+  const[vx,vy]=R(e.x,e.y);if(Math.hypot(vx,vy)>SHOP_WINDOW.near*2.5||!inView(vx,vy,.3))return;
+  drawAbandonedGround(e,vx,vy);
+ });
 }
 // A shop's kind, told from across the street (pass 13 follow-up, the user's ask): a barber's striped pole turning by the
 // door, a pharmacy's green cross out over the pavement, a red paper lantern by a noodle bar's or a sushi bar's door, a
@@ -9346,6 +9430,8 @@ GAMES.mahjong = (rnd = Math.random) => {
   for (let i = wall.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [wall[i], wall[j]] = [wall[j], wall[i]]; }
   const hands = [0, 1, 2, 3].map(() => wall.splice(0, 13).sort((a, b) => a - b)), rivers = [[], [], [], []];
   let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
+  let helpKey='',helpLines=[];
+  const wrapHelp=text=>{const lines=[];for(const paragraph of text.split('\n')){let line='';for(const word of paragraph.split(' ')){if(line&&line.length+word.length+1>W*2){lines.push(line);line=word;}else line+=(line?' ':'')+word;}if(line)lines.push(line);}return lines;};
   const sortHand = h => h.sort((a, b) => a - b);
   const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
   const draw = p => {
@@ -9431,9 +9517,10 @@ GAMES.mahjong = (rnd = Math.random) => {
     // the help: what you're waiting for, if you're one tile away
     const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
     const w = h13.length === 13 ? mjWaits(h13) : [];
-    text(0, 15, w.length ? `${state === 'you' ? 'Throw that and you' : 'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}` : 'Make 4 sets + a pair. A set: three alike, or a run of 3 in one suit.', C(w.length ? YEL : GRAY, w.length ? 15 : 10));
-    if (state === 'you' && mjWins(hand)) text(0, 16, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
-    if (g.over && g.result) text(0, 17, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
+    const help=w.length?`${state==='you'?'Throw that and you':'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}`:'Make 4 sets + a pair.\nA set: three alike, or a run of 3 in one suit.';
+    if(help!==helpKey){helpKey=help;helpLines=wrapHelp(help);}helpLines.forEach((line,k)=>text(0,15+k,line,C(w.length?YEL:GRAY,w.length?15:10)));
+    if (state === 'you' && mjWins(hand)) text(0, 17, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
+    if (g.over && g.result) text(0, 18, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
   };
   g.status = () => state === 'claim' ? `UP claim it   SPACE let it go (${Math.ceil(wait)}s)` : state === 'you' ? 'LEFT/RIGHT pick   SPACE throw it   UP declare mahjong' : 'Waiting for the others...';
   g.reward = () => g.result ? g.result.winner === 0 ? 20 : g.result.winner < 0 ? MJ_BUYIN : 0 : 0;
@@ -9812,6 +9899,7 @@ GAMES.blackjack = (rnd = Math.random) => {
     text(0, 16, `CASH ${fmt$(money)}`, C(GREEN, 13));
     if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>msg+(you.length?`  YOU ${bjTotal(you)}${doubled?' (doubled)':''} · DEALER ${state==='play'?bjTotal([dealer[0]])+' + ?':bjTotal(dealer)}`:'');
   g.status = () => state === 'play' ? 'UP hit   SPACE stand   DOWN double   E leave' : `SPACE deal (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
   g.reward = () => 0;
   return g;
@@ -9877,6 +9965,7 @@ GAMES.roulette = (rnd = Math.random) => {
     text(0, 15, `CASH ${fmt$(money)}`, C(GREEN, 13));
     if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>RL_BETS[pick_][0]+' · '+msg;
   g.status = () => state === 'spin' ? 'Round it goes...' : `LEFT/RIGHT bet   UP/DOWN stake   SPACE spin (${fmt$(g.bet)})   E leave`;
   g.reward = () => 0;
   return g;
@@ -9947,6 +10036,7 @@ GAMES.slots = (rnd = Math.random) => {
     text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
     if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>msg;
   g.status = () => `SPACE pull (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
   g.reward = () => 0;
   return g;
@@ -14197,8 +14287,8 @@ function pondCell(i, r, x, wx, wy, sd, L, freeze = true) {
   return set(i, ' ', 0);
 }
 function floorCell(i, r, x, rx, ry) {
-  floorBaseCell(i, r, x, rx, ry);
-  if (snowCover <= 0 || FL[i] >= 3) return; // open water remains open water
+  const water=floorBaseCell(i, r, x, rx, ry);
+  if (snowCover <= 0 || water || FL[i] >= 3) return; // open water remains open water
   const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
   if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
   const lx = mod(wx, 8), ly = mod(wy, 8);
@@ -14230,7 +14320,8 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
   const level = day * (3.3 + far * 2.4) + night * (1.8 + far * .9) + h * (.4 + day * .5); // (at night dark, but a trough never goes all the way to black)
   BG[i] = C(BLUE, Math.max(0, level));
   const crest = s1 * k1 > .86 && chop > .2 && k1 > .3; // (broken: only where the chop lifts the crest)
-  set(i, crest ? (chop > .45 ? '~' : '-') : ' ', C(day > .3 ? CYAN : BLUE, (day > .3 ? 4 + day * 3 : 2.6) * f));
+  if(crest)BG[i]=C(day>.3?CYAN:BLUE,level+1+day);
+  set(i,' ',0);
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI), up = Math.abs(sunEl), body = sunEl > 0 ? sunAz() : sunAz() + Math.PI;
   const align = Math.cos(Math.atan2(ry, rx) - body), width = .992 - (1 - up) * .03; // (a low sun or moon lays a wider path)
   if (up > .03 && align > width && h > 0) {
@@ -14238,7 +14329,8 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
     if (glint > .22) { // mostly the water brightening, a fleck of light now and then
       const moon = sunEl <= 0;
       BG[i] = C(moon ? BLUE : CYAN, moon ? 2 + glint * 6 : 5 + glint * 8);
-      set(i, glint > .55 ? '-' : ' ', C(moon ? WHITE : YEL, moon ? 6 + glint * 6 : 10 + glint * 5));
+      if(glint>.55)BG[i]=C(moon?WHITE:YEL,moon?4+glint*5:7+glint*5);
+      set(i,' ',0);
     }
   }
 }
@@ -14257,7 +14349,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   const road = bridge ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
-  if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
+  if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return true;}
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
@@ -14295,7 +14387,7 @@ function floorBaseCell(i, r, x, rx, ry) {
         // over water that never retreats.
         if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
           BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
-          set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
+          set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return surface.water;
         }
       }
       seaCell(i, r, x, rx, ry, wx, wy, d, f); FL[i] = 3;
@@ -14307,11 +14399,11 @@ function floorBaseCell(i, r, x, rx, ry) {
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
         const froth = noise(wx * 7, wy * 7 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
-        if (k > 0.18) { set(i, k > 0.5 ? '~' : WAKE_HIT.arm ? '-' : ':', C(WHITE, Math.max(L * 1.5, 5 + k * 10))); BG[i] = C(BLUE, 1 + day * 3 + k * 1.6); FL[i] = 0; }
+        if(k>.18){BG[i]=C(k>.5?WHITE:CYAN,(2+day*3)+k*(3+day*4));set(i,' ',0);FL[i]=0;}
       }
       const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
-      if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
-      return;
+      if(lb>.05){BG[i]=C(WARM,1+lb*7);set(i,' ',0);FL[i]=0;}
+      return true;
     } else if (wildIslandAt(wx,wy)) {
       islandTexture=islandSurface(wx,wy);soft=true;base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
     } else if (worldReady&&naturalCoastAt(wx,wy)) {
@@ -14401,6 +14493,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   set(i, ch, col);
   streetChalkCell(i,wx,wy,L);
+  return islandTexture?.water===true;
 }
 
 // the lighthouse: its lamp turns once every BEAM_P seconds, two beams back to back, lit from dusk to dawn (and in fog)
@@ -14571,7 +14664,7 @@ function reflect() {
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
         const lv = (COL[j] & 15) * 0.55;
         CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
-      } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));
+      }else if(f===2){set(i,' ',0);BG[i]=C(lamp?WARM:BLUE,lamp?Math.max(3+day*3,lamp):3+day*3);}
       if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }
   }
@@ -14580,7 +14673,8 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && shelterRoofAt(px, py, eye); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
+  const cabin=!freecam&&!chaseOn&&((me&&(mode==='drive'||mode==='taxi'))||(pilot&&mode==='air'));
+  const roofed = cabin || mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && (shelterRoofAt(px, py, eye)||waterWeatherCoverAt(px,py,eye)); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
@@ -27282,7 +27376,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
   BG[i] = bgAt(background, brightness * fog * (surface?.water ? 1 : light), depth); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
-  if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
+  if (snowCover > 0 && !surface?.water) paintSettledSnow(i, x, y, L, 1, 0);
 }
 function drawRoadBridges() {
   if(!worldReady)return;
@@ -31075,48 +31169,64 @@ function stepTransitAnnouncements() {
   }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) cancelTransitAnnouncements(); });
-// ===== the look shared by every menu (pause, shops, carrying, storage): W95 text on near-black, no boxes, a caret
-// for the row you're on, sliders drawn as an ASCII density ramp. Injected once, used through the .menu class.
+// Shared pixel-font menus: readable ink, ruled sections and a clear active row.
+// Sliders retain their ASCII density ramp. Injected once through the .menu class.
 const MENU_CSS = `
   @font-face { font-family: 'W95'; src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff'); }
   .menu { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.72);
-          font: 16px/1.4 'W95', monospace; color: rgba(255, 255, 255, 0.6); }
-  .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box;
-                 padding: 26px 30px; background: rgba(6, 6, 8, 0.94); scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+          font: 16px/1.4 'W95', monospace; color: #d9dfda; }
+  .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height:calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box;
+                 padding: 26px 30px; background: #13191b; border:1px solid #465452; border-top:3px solid #a9d9ca; box-shadow:0 16px 56px #0008; scrollbar-width: thin; scrollbar-color:#63716d #13191b; }
   .menu h1 { margin: 0 0 2px; font: inherit; font-size: 32px; line-height: 1.1; color: #fff; letter-spacing: 1px; }
-  .menu .sub { margin: 0 0 14px; color: rgba(255, 255, 255, 0.38); }
-  .menu h2 { display: flex; align-items: center; gap: 10px; margin: 20px 0 6px; font: inherit; color: rgba(255, 255, 255, 0.32); }
-  .menu h2::after { content: ''; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
-  .menu .hint { margin: 18px 0 0; color: rgba(255, 255, 255, 0.3); }
+  .menu .sub { margin: 0 0 14px; color: #a1ada8; }
+  .menu h2 { display: flex; align-items: center; gap: 10px; margin: 20px 0 6px; font: inherit; color: #a9d9ca; letter-spacing:1px; }
+  .menu h2::after { content: ''; flex: 1; height: 1px; background: #35423f; }
+  .menu .hint { margin: 18px 0 0; color: #a1ada8; }
   .menu button, .menu a { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-decoration: none; }
-  .menu .item { position: relative; display: flex; align-items: baseline; gap: 10px; width: 100%; box-sizing: border-box; padding: 2px 0 2px 18px; text-align: left; }
+  .menu .item { position: relative; display: flex; align-items: baseline; gap: 10px; width: 100%; box-sizing: border-box; padding: 7px 6px 7px 22px; min-height:36px; text-align: left; }
   .menu .item::before { content: '>'; position: absolute; left: 2px; opacity: 0; color: #fff; }
-  .menu .item:hover, .menu .item:focus-visible { color: #fff; outline: none; }
+  .menu .item:hover, .menu .item:focus-visible { color:#f5f3e8; background:#253732; outline:none; }
+  .menu .item:focus-visible { box-shadow:inset 2px 0 #b9e7d5; }
   .menu .item:hover::before, .menu .item:focus-visible::before { opacity: 1; }
-  .menu .item[disabled] { opacity: 0.3; cursor: default; }
+  .menu .item[disabled] { opacity:1; color:#8c9993; cursor:default; background:transparent; }
+  .menu .item[disabled] .v { color:#8c9993; }
+  .menu .item[disabled] img { opacity:.45; }
   .menu .item[disabled]::before { opacity: 0; }
-  .menu .k { min-width: 1.4em; text-align: right; color: rgba(255, 255, 255, 0.3); }
+  .menu .k { min-width: 1.4em; text-align: right; color: #a1ada8; }
   .menu .lead { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; color: rgba(255, 255, 255, 0.14); }
   .menu .lead::before { content: '${'. '.repeat(60)}'; }
-  .menu .v { color: rgba(255, 255, 255, 0.85); }
-  .menu .row { display: grid; grid-template-columns: 8.5em 1fr 3.4em; align-items: baseline; gap: 12px; margin: 3px 0; padding-left: 18px; }
+  .menu .v { color:#edf0df; }
+  .menu .row { display: grid; grid-template-columns: 8.5em 1fr 3.4em; align-items: baseline; gap: 12px; margin:7px 0; min-height:28px; padding-left: 18px; }
   .menu .row:hover > span:first-child, .menu .row:focus-within > span:first-child { color: #fff; }
-  .menu .row > span:last-child { text-align: right; color: rgba(255, 255, 255, 0.85); }
+  .menu .row > span:last-child { text-align: right; color:#edf0df; }
   .menu .slider { position: relative; font: 15px/1 monospace; letter-spacing: 0; white-space: pre; }
   .menu .slider input { position: absolute; inset: -4px 0; width: 100%; height: calc(100% + 8px); margin: 0; opacity: 0; cursor: pointer; }
   .menu .slider:focus-within .bar, .menu .slider:hover .bar { filter: brightness(1.5); }
   .menu .opts { display: flex; gap: 14px; }
-  .menu .opt { color: rgba(255, 255, 255, 0.35); }
+  .menu .opt { color:#a1ada8; }
   .menu .opt::before { content: '['; visibility: hidden; } .menu .opt::after { content: ']'; visibility: hidden; }
-  .menu .opt.on { color: #fff; } .menu .opt.on::before, .menu .opt.on::after { visibility: visible; }
-  .menu .opt:hover, .menu .opt:focus-visible, .menu .tog:hover, .menu .tog:focus-visible { color: #fff; outline: none; }
-  .menu .tog { justify-self: start; font: 14px/1 monospace; color: rgba(255, 255, 255, 0.6); }
-  .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: rgba(255, 255, 255, 0.38); }
-  .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }
+  .menu .opt.on { color:#c3ecdb; background:#253732; } .menu .opt.on::before, .menu .opt.on::after { visibility: visible; }
+  .menu .opt:hover, .menu .opt:focus-visible, .menu .tog:hover, .menu .tog:focus-visible { color:#f5f3e8; outline:1px solid #a9d9ca; outline-offset:2px; }
+  .menu .tog { justify-self: start; font: 14px/1 monospace; color: #d9dfda; }
+  .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: #a1ada8; }
+  .menu .keys b { font-weight: normal; color:#edf0df; }
+  .menu .panel-heading{position:sticky;top:-26px;z-index:2;display:flex;align-items:center;gap:12px;justify-content:space-between;margin:-26px -30px 14px;padding:20px 18px 12px 30px;background:#13191b;border-bottom:1px solid #35423f;}
+  .menu .panel-heading h1{flex:1;min-width:0;margin:0;overflow-wrap:anywhere;}
+  .menu .panel-close{flex:0 0 44px;width:44px;height:44px;font-size:24px;color:#d9dfda;border:1px solid #64756e;background:#1d2925;}
+  .menu .panel-close:hover,.menu .panel-close:focus-visible{background:#30483e;outline:2px solid #b9e7d5;outline-offset:2px;}
+  #cooking .recipe-label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
+  #cooking .recipe-name{font-size:16px;}
+  #cooking .recipe-needs{font-size:14px;line-height:1.5;white-space:normal;overflow-wrap:anywhere;}
+  #cooking .available{color:#bdddc3;}#cooking .missing{color:#adb7b0;}
+  #courier-board .item,#busted .item{display:grid;grid-template-columns:1.4em minmax(0,1fr);align-items:start;gap:4px 10px;}
+  #courier-board .item .k,#busted .item .k{grid-row:1/span 2;}
+  #courier-board .item .lead,#busted .item .lead{display:none;}
+  #courier-board .item .v,#busted .item .v{grid-column:2;font-size:14px;white-space:normal;overflow-wrap:anywhere;color:#cad7cd;}
   .menu .panel { overflow-x: hidden; }
   .menu .slider { min-width: 0; overflow: hidden; }
   @media (max-width: 520px), (pointer: coarse) { /* touch or narrow screens: scroll down, never sideways */
     .menu .panel { padding: 20px 16px; }
+    .menu .panel-heading{top:-20px;margin:-20px -16px 14px;padding:16px 12px 12px 16px;}
     .menu .item { min-height: 44px; align-items: center; }
     .menu .item > span:not(.k):not(.v):not(.lead) { min-width: 0; overflow-wrap: anywhere; }
     .menu .k, .menu .v { flex-shrink: 0; }
@@ -31152,28 +31262,29 @@ function asciiBar(f) {
 {
   const style = document.createElement('style');
   style.textContent = `
-    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#111719; border:1px solid #364344; border-radius:12px; box-shadow:0 24px 80px #0009; }
-    #controls .controls-header { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#13191b; border:1px solid #465452;border-top:3px solid #a9d9ca; border-radius:0; box-shadow:0 24px 80px #0009; }
+    #controls .controls-header { position:sticky;top:0;z-index:2;background:#13191b;padding-bottom:12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
     #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
     #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
-    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:13px; }
-    #controls .controls-back { width:auto; gap:16px; font-size:12px; padding:10px 12px; border:1px solid #465654; border-radius:5px; }
+    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:15px; }
+    #controls .controls-back { width:auto; gap:16px; font-size:14px;min-height:44px; padding:10px 12px; border:1px solid #465654; border-radius:0; }
     #controls .controls-tabs { display:flex; flex-wrap:wrap; gap:8px; padding:24px 0; border-bottom:1px solid #33403f; }
-    #controls .controls-tabs button { font:inherit; font-size:12px; padding:10px 14px; border:1px solid #3e4c49; border-radius:5px; background:transparent; color:#afbfbb; cursor:pointer; }
+    #controls .controls-tabs button { font:inherit; font-size:14px;min-height:44px; padding:10px 14px; border:1px solid #3e4c49; border-radius:0; background:transparent; color:#afbfbb; cursor:pointer; }
     #controls .controls-tabs button[aria-pressed=true] { background:#b8d9ca; color:#14231c; border-color:#b8d9ca; }
     #controls button:focus-visible { outline:2px solid #d1f5df; outline-offset:4px; }
     #controls h2 { margin:24px 0 14px; padding:0; text-transform:none; font-size:16px; color:#e3eee9; }
     #controls .keys { display:flex; flex-direction:column; gap:0; padding:0; }
-    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:13px; line-height:1.7; }
-    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:5px; padding:5px 10px; line-height:1.5; font-size:12px; width:fit-content; }
+    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:15px; line-height:1.6; }
+    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:0; padding:5px 10px; line-height:1.5; font-size:14px; width:fit-content; }
     #controls .control-binding span { color:#b1bdb8; }
-    #controls .controls-footer { margin-top:24px; font-size:11px; color:#81918a; }
+    #controls .controls-footer { margin-top:24px; font-size:13px; color:#81918a; }
+    #controls .controls-back-short{display:none;}
     #controls [hidden] { display:none !important; }
     @media(max-width:600px) {
       #controls .controls-panel { padding:20px 16px; }
-      #controls .controls-header { align-items:start; flex-direction:column; gap:16px; }
+      #controls .controls-header{align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
       #controls .control-binding { grid-template-columns:1fr; gap:8px; }
-      #controls .controls-tabs { gap:6px; }
+      #controls .controls-tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:16px 0;}#controls .controls-tabs button{flex:0 0 auto;white-space:nowrap;}
       #controls .controls-tabs button { padding:9px; }
     }
   `;
@@ -31399,7 +31510,7 @@ function openControls() {
     controlsEl = menuEl('controls', 510, `
       <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
         <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
-        <button class="item controls-back" data-controls-back>← Back to pause <span class="k">Esc</span></button></header>
+        <button class="item controls-back" data-controls-back aria-label="Back to pause"><span class="controls-back-long">← Back to pause</span><span class="controls-back-short">← Back</span><span class="k">Esc</span></button></header>
         <nav class="controls-tabs" aria-label="Control categories">
           <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
           <button data-controls-tab="controller" aria-pressed="false">Controller</button>
@@ -32946,8 +33057,8 @@ function mapFilteredPlaces() {
   const results=BIGMAP.places.filter(p=>(BIGMAP.category==='all'?(p.category!=='area'||q):p.category===BIGMAP.category)&&
     (!q||`${p.name} ${p.description} ${p.category}`.toLowerCase().includes(q)))
     .sort((a,b)=>{
-      if(!q&&a.id==='supplier')return -1;if(!q&&b.id==='supplier')return 1;
-      if(a.x===null)return -1;if(b.x===null)return 1;
+      const av=a.virtual||a.x===null,bv=b.virtual||b.x===null;
+      if(av!==bv)return av?1:-1;if(av)return a.name.localeCompare(b.name);
       return mapDistance(origin,a)-mapDistance(origin,b)||a.name.localeCompare(b.name);
     });
   mapPlaceCache={places:BIGMAP.places,key,results};return results;
@@ -33099,54 +33210,61 @@ const BIGMAP = { cx: 0, cy: 0, z: 4, pts: new Map(), pinch: null, keys: {}, foun
   category:'all',query:'',selected:null,places:[],limit:30,points:[],returnPaused:false,tap:null };
 const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
 function bigMapViewport() {
-  const W=bigMapCv.clientWidth,H=bigMapCv.clientHeight,visible=!bigMapEl.querySelector('.directory').hidden;
-  if(!visible)return {x:0,y:0,w:W,h:H};
-  if(W>700)return {x:332,y:110,w:W-344,h:H-140};
-  return {x:12,y:110,w:W-24,h:Math.max(80,H*.58-134)};
+  const W=bigMapCv.clientWidth,H=bigMapCv.clientHeight,bar=bigMapEl.querySelector('.bar').getBoundingClientRect(),directory=bigMapEl.querySelector('.directory');
+  let x=12,y=bar.bottom+12,right=W-12,bottom=H-32;
+  if(!directory.hidden){const d=directory.getBoundingClientRect();if(d.top<H/2&&d.right<W*.65)x=d.right+16;else bottom=d.top-12;}
+  return{x,y,w:Math.max(80,right-x),h:Math.max(80,bottom-y)};
 }
+function bigMapOrigin(){const v=bigMapViewport();return{x:v.x+v.w/2,y:v.y+v.h/2};}
+
 const bigMapMinZ = () => {const v=bigMapViewport();return Math.min(v.w/MAP_WORLD.width,v.h/MAP_WORLD.height)*.9;};
 const BIGMAP_CSS = `
   #bigmap { background: #080b10; color:#d3d8df; }
   #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   #bigmap canvas.drag { cursor: grabbing; }
-  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left:332px; right:12px; max-width:520px; display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:6px; }
-  #bigmap .bar button { flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.94); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left:332px; right:12px; max-width:520px; display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px; }
+  #bigmap .bar button { min-height:44px;box-sizing:border-box; flex: 0 0 auto; min-width: 44px; height: 44px; padding: 0 10px; background:#13191b;border:1px solid #465452; color: #fff; }
   #bigmap .tools { grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap; }
   #bigmap .bar button:hover { border-color: #fff; }
-  #bigmap .bar input { min-width: 0; width:100%; box-sizing:border-box;height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.94); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
+  #bigmap .bar [aria-expanded=true]{background:#253732;border-color:#a9d9ca;}
+  #bigmap .bar input { min-width: 0; width:100%; box-sizing:border-box;height: 44px; padding: 0 10px; background:#13191b;border:1px solid #465452; color: #fff; font: inherit; outline: none; }
   #bigmap .bar input:focus { border-color: #fff; }
   #bigmap .tip { position:absolute;z-index:2;right:12px;bottom:10px;max-width:calc(100% - 350px);text-align:right;color:#a7b2bf;background:#080b10dd;padding:8px 10px;pointer-events:none;font-size:12px; }
-  #bigmap .directory {position:absolute;z-index:2;left:12px;top:12px;bottom:12px;width:304px;box-sizing:border-box;display:flex;flex-direction:column;padding:18px;background:rgba(9,12,17,.97);border:1px solid #35404a; }
+  #bigmap .directory {position:absolute;z-index:2;left:12px;top:12px;bottom:12px;width:304px;box-sizing:border-box;display:flex;flex-direction:column;padding:18px;background:#13191b;border:1px solid #465452;border-top:3px solid #a9d9ca; }
   #bigmap .directory[hidden] {display:none;}
+  #bigmap .directory-heading{display:flex;gap:8px;align-items:start;justify-content:space-between;}
+  #bigmap .contact-shortcut{border:1px solid #465452;min-width:44px;min-height:44px;padding:0 8px;color:#efda9d;}
+  #bigmap:has(.directory[hidden]) .bar{left:12px;}
   #bigmap .directory h1 {font-size:26px;letter-spacing:1px;color:#f1f3ec;line-height:1;margin:0 0 6px;}
-  #bigmap .directory .subtitle {font-size:12px;letter-spacing:2px;color:#84c9c7;margin-bottom:16px;}
+  #bigmap .directory-heading .results-count{margin:6px 0 12px;}
+  #bigmap .directory .subtitle {font-size:12px;letter-spacing:2px;color:#84c9c7;margin-bottom:4px;}
   #bigmap .route-status {padding:9px 0;border-top:1px solid #344b50;border-bottom:1px solid #344b50;display:flex;gap:8px;align-items:center;margin:6px 0 10px;font-size:12px;color:#a9e4df;}
   #bigmap .route-status[hidden] {display:none;}
   #bigmap .route-status span {flex:1;min-width:0;overflow-wrap:anywhere;}
-  #bigmap .route-status button {padding:6px;border:1px solid #40545d;color:#b6c5ca;}
+  #bigmap .route-status button {min-width:44px;min-height:44px;padding:6px;border:1px solid #40545d;color:#b6c5ca;}
   #bigmap .filters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}
-  #bigmap .filters button {text-align:left;padding:6px 8px;border:1px solid #28313b;font-size:13px;}
+  #bigmap .filters button {text-align:left;padding:6px 8px;border:1px solid #35433f;font-size:13px;min-width:44px;min-height:44px;box-sizing:border-box;}
   #bigmap .filters [aria-pressed="true"] {background:#163437;border-color:#7bc5c3;color:#c4ffff;}
   #bigmap .results-count {font-size:12px;color:#8694a2;margin:12px 0 8px;}
   #bigmap .places {overflow:auto;min-height:0;flex:1;scrollbar-width:thin;}
-  #bigmap .place-row {display:flex;width:100%;gap:8px;align-items:center;text-align:left;padding:10px 2px;border-bottom:1px solid #202730;box-sizing:border-box;}
+  #bigmap .place-row {display:flex;width:100%;gap:8px;align-items:center;text-align:left;padding:12px 6px;min-height:52px;border-bottom:1px solid #35423f;box-sizing:border-box;}
   #bigmap .place-row>span:first-child {min-width:0;flex:1;}
   #bigmap .place-row b {font-weight:normal;display:block;overflow-wrap:anywhere;}
   #bigmap .place-row small {display:block;color:#8c98a5;font-size:12px;}
-  #bigmap .place-row.selected {background:#183137;}
+  #bigmap .place-row.selected,#bigmap .place-row:hover{background:#253732;}
   #bigmap .distance {font-size:12px;color:#b5c0cb;white-space:nowrap;}
   #bigmap .empty {color:#9ba5b0;font-size:13px;}
   #bigmap .more-places {padding:12px 0;color:#9bdbd8;}
   #bigmap .place-detail {border-bottom:1px solid #46535f;padding:8px 0 14px;margin-bottom:4px;flex:0 1 auto;overflow:auto;}
   #bigmap .place-detail[hidden] {display:none;}
   #bigmap .detail-head {display:flex;align-items:center;justify-content:space-between;color:#8fbbbd;font-size:12px;}
-  #bigmap .detail-head button {padding:0 6px;font-size:24px;color:#fff;}
+  #bigmap .detail-head button {min-width:44px;min-height:44px;padding:0 6px;font-size:24px;color:#fff;}
   #bigmap .place-detail h2 {display:block;color:#f1f2e7;font-size:20px;margin:4px 0 8px;line-height:1.15;}
   #bigmap .place-detail h2::after {display:none;}
   #bigmap .place-detail p {font-size:13px;line-height:1.35;margin:6px 0;color:#adb7c2;}
   #bigmap .place-status {color:#b8d2b6!important;}
   #bigmap .detail-actions {display:grid;gap:6px;margin-top:12px;}
-  #bigmap .detail-actions button {text-align:left;padding:8px;border:1px solid #58676f;color:#b3eeeb;font-size:13px;}
+  #bigmap .detail-actions button {min-height:44px;text-align:left;padding:8px;border:1px solid #58676f;color:#b3eeeb;font-size:13px;}
   #bigmap .detail-actions button:disabled {opacity:.4;cursor:default;}
   #bigmap button:focus-visible {outline:2px solid #93ece4;outline-offset:2px;}
   @media(max-width:700px) {
@@ -33154,20 +33272,26 @@ const BIGMAP_CSS = `
     #bigmap .directory {top:auto;bottom:12px;left:12px;right:12px;width:auto;height:42vh;max-height:380px;padding:12px;}
     #bigmap .directory h1 {font-size:21px;}
     #bigmap .directory .subtitle {display:none;}
-    #bigmap .filters {grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-top:8px;}
-    #bigmap .filters button {font-size:11px;padding:6px 3px;}
+    #bigmap .directory-heading .results-count{margin:4px 0 0;}
+    #bigmap .filters {display:flex;overflow-x:auto;flex-shrink:0;gap:6px;margin-top:8px;padding-bottom:4px;scrollbar-width:thin;}
+    #bigmap .filters button {font-size:13px;padding:8px 12px;white-space:nowrap;flex:0 0 auto;}
     #bigmap .has-selection .filters,#bigmap .has-selection .places,#bigmap .has-selection .results-count {display:none;}
     #bigmap .place-detail {min-height:0;margin:6px 0 0;border:0;}
     #bigmap .tip {bottom:calc(42vh + 24px);max-width:calc(100% - 24px);font-size:10px;}
     #bigmap .directory[hidden]~.tip {bottom:12px;}
-  }`;
+  }
+  @media(min-width:701px) and (max-height:500px){#bigmap .directory{padding:12px;}#bigmap .directory .subtitle{display:none;}#bigmap .filters{display:flex;overflow-x:auto;flex-shrink:0;padding-bottom:4px;}#bigmap .filters button{flex:0 0 auto;white-space:nowrap;padding:8px 12px;}#bigmap .directory h1{font-size:22px;}}`;
+
+// The full-screen map has a quieter paper/ink palette; the world minimap keeps its existing colours.
+const BIGMAP_INKS=new Map([[MAP_COL.sea,'#183443'],['#2a5a30','#304539'],['#24662e','#354e3b'],['#16161c','#111a1e'],['#a18e57','#8f805c']]);
+function bigMapTileInk(color){let ink=BIGMAP_INKS.get(color);if(ink)return ink;const rgb=/^rgb\((\d+),(\d+),(\d+)\)$/.exec(color);ink=rgb?`rgb(${Math.round(rgb[1]*.78)},${Math.round(rgb[2]*.85)},${Math.round(rgb[3]*.84)})`:color;BIGMAP_INKS.set(color,ink);return ink;}
 
 // the city drawn once, a pixel a cell, then scaled up crisp
 function bigMapRender() {
   const c = bigMapSheet || (bigMapSheet = document.createElement('canvas'));
   c.width = MAP_WORLD.width;c.height=MAP_WORLD.height;
   const x = c.getContext('2d');
-  for (let my = 0; my < MAP_WORLD.height; my++) for (let mx = 0; mx < MAP_WORLD.width; mx++) { x.fillStyle = mapTile(mx, my); x.fillRect(mx, my, 1, 1); }
+  for (let my = 0; my < MAP_WORLD.height; my++) for (let mx = 0; mx < MAP_WORLD.width; mx++) { x.fillStyle = bigMapTileInk(mapTile(mx, my)); x.fillRect(mx, my, 1, 1); }
 }
 // what's named on the map: [x, y, text, colour, kind]. kind: 'area' (always), 'place' (always), 'shop' (zoomed in)
 function bigMapLabels() {
@@ -33188,7 +33312,7 @@ function bigMapLabels() {
   for (const s of EL_STATIONS) out.push([s.x, EL_Y - 0.4, s.name, '#f96', 'place']);
   const seen = new Set();
   for (let k = 0; k < N * N; k++) {
-    const sh = SHOP[k]; if (!sh || !sh.word || sh.kind === SHOP_APTS || seen.has(sh)) continue;
+    const sh = SHOP[k]; if (!sh || !sh.word || sh.kind === SHOP_APTS || sh.kind === SHOP_SHUT || seen.has(sh)) continue;
     seen.add(sh); out.push([k % N + 0.5, Math.floor(k / N) + 0.5, sh.word, '#ccd', 'shop']);
   }
   return out;
@@ -33200,12 +33324,12 @@ function bigMapDraw() {
   const cv_ = bigMapCv, dpr = devicePixelRatio || 1, W = cv_.clientWidth, H = cv_.clientHeight;
   if (cv_.width !== Math.round(W * dpr) || cv_.height !== Math.round(H * dpr)) { cv_.width = Math.round(W * dpr); cv_.height = Math.round(H * dpr); }
   BIGMAP.z = clamp(BIGMAP.z, bigMapMinZ(), BIGMAP_Z); // (the window may have changed)
-  const x = cv_.getContext('2d'), z = BIGMAP.z, now = performance.now() / 1000; // (T is frozen under the pause menu)
+  const x = cv_.getContext('2d'), z = BIGMAP.z, now = performance.now() / 1000,origin=bigMapOrigin(); // (T is frozen under the pause menu)
   x.setTransform(dpr, 0, 0, dpr, 0, 0); x.imageSmoothingEnabled = false;
   x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
   // world (wx, wy) -> screen, taking the copy of the (wrapping) city nearest the middle of the view
-  const sx = wx => W / 2 + mapDifference(wx - BIGMAP.cx,MAP_WORLD.width) * z, sy = wy => H / 2 + mapDifference(wy - BIGMAP.cy,MAP_WORLD.height) * z;
-  const ox = W / 2 - BIGMAP.cx * z, oy = H / 2 - BIGMAP.cy * z, SW = MAP_WORLD.width*z,SH=MAP_WORLD.height*z;
+  const sx = wx => origin.x + mapDifference(wx - BIGMAP.cx,MAP_WORLD.width) * z, sy = wy => origin.y + mapDifference(wy - BIGMAP.cy,MAP_WORLD.height) * z;
+  const ox = origin.x - BIGMAP.cx * z, oy = origin.y - BIGMAP.cy * z, SW = MAP_WORLD.width*z,SH=MAP_WORLD.height*z;
   if(MAP_WORLD.wrap) {
     for (let tx = Math.floor(-ox / SW) - 1; tx * SW + ox < W; tx++) for (let ty = Math.floor(-oy / SH) - 1; ty * SH + oy < H; ty++)
       x.drawImage(bigMapSheet, ox + tx * SW, oy + ty * SH, SW, SH);
@@ -33222,8 +33346,8 @@ function bigMapDraw() {
   }
   if (z >= 10) { // the street grid gets block lines once there's room
     x.strokeStyle = 'rgba(255,255,255,0.05)'; x.lineWidth = 1;
-    for (let gx = Math.floor((BIGMAP.cx - W / 2 / z) / 8) * 8; gx < BIGMAP.cx + W / 2 / z; gx += 8) { const p = W / 2 + (gx - BIGMAP.cx) * z; x.beginPath(); x.moveTo(p, 0); x.lineTo(p, H); x.stroke(); }
-    for (let gy = Math.floor((BIGMAP.cy - H / 2 / z) / 8) * 8; gy < BIGMAP.cy + H / 2 / z; gy += 8) { const p = H / 2 + (gy - BIGMAP.cy) * z; x.beginPath(); x.moveTo(0, p); x.lineTo(W, p); x.stroke(); }
+    for (let gx = Math.floor((BIGMAP.cx - W / 2 / z) / 8) * 8; gx < BIGMAP.cx + W / 2 / z; gx += 8) { const p = origin.x + (gx - BIGMAP.cx) * z; x.beginPath(); x.moveTo(p, 0); x.lineTo(p, H); x.stroke(); }
+    for (let gy = Math.floor((BIGMAP.cy - H / 2 / z) / 8) * 8; gy < BIGMAP.cy + H / 2 / z; gy += 8) { const p = origin.y + (gy - BIGMAP.cy) * z; x.beginPath(); x.moveTo(0, p); x.lineTo(W, p); x.stroke(); }
   }
   const onScreen = (X, Y, m = 40) => X > -m && Y > -m && X < W + m && Y < H + m;
   const dot = (wx, wy, ch, col, size = 12) => {
@@ -33274,7 +33398,7 @@ function bigMapDraw() {
   const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
   for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);
-  BIGMAP.points=[];
+  BIGMAP.points=[];const labelledPlaces=new Set();
   const visible=mapFilteredPlaces();
   for(const p of visible) {
     if(p.x===null||p.virtual||p.category==='area'||p.kind==='shop'&&z<10&&p.id!==BIGMAP.selected)continue;
@@ -33282,46 +33406,48 @@ function bigMapDraw() {
     BIGMAP.points.push({id:p.id,x:X,y:Y});
     const selected=p.id===BIGMAP.selected;
     x.fillStyle=p.color;x.strokeStyle='#080b10';x.lineWidth=2;x.beginPath();x.arc(X,Y,selected?7:4,0,Math.PI*2);x.fill();x.stroke();
-    if(selected||p.category==='contacts')label(p.x,p.y-1.8,p.name,p.color,13,true,selected);
+    if(selected||p.category==='contacts'){label(p.x,p.y-1.8,p.name,p.color,13,true,selected);labelledPlaces.add(p.name);}
   }
   if(mapWaypoint) {
     dot(mapWaypoint.x,mapWaypoint.y,'X','#8de5df',18);
-    if(mapWaypoint.id!==BIGMAP.selected)label(mapWaypoint.x,mapWaypoint.y-1.8,mapWaypoint.name,'#8de5df',13,true,true);
+    if(mapWaypoint.id!==BIGMAP.selected){label(mapWaypoint.x,mapWaypoint.y-1.8,mapWaypoint.name,'#8de5df',13,true,true);labelledPlaces.add(mapWaypoint.name);}
   }
+  const toggle=bigMapEl.querySelector('[data-map=places]'),expanded=String(!bigMapEl.querySelector('.directory').hidden);if(toggle.getAttribute('aria-expanded')!==expanded)toggle.setAttribute('aria-expanded',expanded);
   const f = BIGMAP.found;
   if (f && now - f.t < 6 && onScreen(sx(f.x), sy(f.y))) {
     x.strokeStyle = '#4ff'; x.lineWidth = 2; x.globalAlpha = 1 - (now - f.t) / 6;
     x.beginPath(); x.arc(sx(f.x), sy(f.y), 14 + 6 * Math.sin(now * 6), 0, Math.PI * 2); x.stroke(); x.globalAlpha = 1;
   }
-  const big = clamp(z * 1.4, 12, 22), mid = clamp(z * 1.1, 10, 14), small = clamp(z * 0.55, 9, 13);
+  const big = clamp(z * 1.4, 12, 22), mid = clamp(z * 1.1, 10, 14), small = clamp(z * 0.55, 11, 13);
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'area') label(lx, ly, z < 7 ? t.toUpperCase() : t, col, big, true);
-  for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'place' && z >= 6) label(lx, ly, t, col, mid, false);
+  for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'place' && z >= 6&&!labelledPlaces.has(t)) label(lx, ly, t, col, mid, false);
   if (z >= 14) for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'shop') label(lx, ly, t, col, small, false);
   x.font='12px monospace';x.fillStyle='#a6babf';x.textAlign='right';x.fillText('N ↑',W-18,128);
   const scale=100; x.strokeStyle='#a6babf';x.lineWidth=1;x.beginPath();x.moveTo(W-18-scale,148);x.lineTo(W-18,148);x.stroke();x.fillText(mapMetres(scale/z*10),W-18,163);
-  bigMapEl.querySelector('.tip').textContent=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${mapRouteLabel()}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
+  const tip=bigMapEl.querySelector('.tip'),tipText=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${mapRouteLabel()}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
+  if(tip.textContent!==tipText)tip.textContent=tipText;
   x.textAlign = 'left'; x.textBaseline = 'alphabetic';
 }
 
 function bigMapZoom(f, X, Y) { // zoom by f about screen point (X, Y): the spot under it stays put
-  const W = bigMapCv.clientWidth, H = bigMapCv.clientHeight, z0 = BIGMAP.z, z1 = clamp(z0 * f, bigMapMinZ(), BIGMAP_Z);
-  if (X === undefined) { X = W / 2; Y = H / 2; }
-  BIGMAP.cx = mapCoordinate(BIGMAP.cx + (X - W / 2) * (1 / z0 - 1 / z1),MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy + (Y - H / 2) * (1 / z0 - 1 / z1),MAP_WORLD.height);
+  const origin=bigMapOrigin(),z0 = BIGMAP.z, z1 = clamp(z0 * f, bigMapMinZ(), BIGMAP_Z);
+  if (X === undefined) { X=origin.x;Y=origin.y; }
+  BIGMAP.cx = mapCoordinate(BIGMAP.cx + (X-origin.x) * (1 / z0 - 1 / z1),MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy + (Y-origin.y) * (1 / z0 - 1 / z1),MAP_WORLD.height);
   BIGMAP.z = z1;
 }
 function bigMapPan(dx, dy) { BIGMAP.cx = mapCoordinate(BIGMAP.cx - dx / BIGMAP.z,MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy - dy / BIGMAP.z,MAP_WORLD.height); }
 function bigMapCentre() { const p=mapPlayerLocation();BIGMAP.cx = p.x; BIGMAP.cy = p.y; }
 function bigMapFit() {
-  const v=bigMapViewport();BIGMAP.z=bigMapMinZ();
-  BIGMAP.cx=MAP_WORLD.width/2-(v.x+v.w/2-bigMapCv.clientWidth/2)/BIGMAP.z;
-  BIGMAP.cy=MAP_WORLD.height/2-(v.y+v.h/2-bigMapCv.clientHeight/2)/BIGMAP.z;
+  BIGMAP.z=bigMapMinZ();BIGMAP.cx=MAP_WORLD.width/2;BIGMAP.cy=MAP_WORLD.height/2;
 }
+
 function bigMapPick(X,Y) {
   const hit=BIGMAP.points.filter(p=>Math.hypot(p.x-X,p.y-Y)<14).sort((a,b)=>Math.hypot(a.x-X,a.y-Y)-Math.hypot(b.x-X,b.y-Y))[0];
   if(hit)return selectMapPlace(hit.id,false);
+  const origin=bigMapOrigin();
   const p={id:'pin',name:'Dropped pin',category:'activities',kind:'pin',color:MAP_COLORS.activities,
-    x:mapCoordinate(BIGMAP.cx+(X-bigMapCv.clientWidth/2)/BIGMAP.z,MAP_WORLD.width),
-    y:mapCoordinate(BIGMAP.cy+(Y-bigMapCv.clientHeight/2)/BIGMAP.z,MAP_WORLD.height),description:'A place you marked. Walking routes stop at the nearest clear street approach.'};
+    x:mapCoordinate(BIGMAP.cx+(X-origin.x)/BIGMAP.z,MAP_WORLD.width),
+    y:mapCoordinate(BIGMAP.cy+(Y-origin.y)/BIGMAP.z,MAP_WORLD.height),description:'A place you marked. Walking routes stop at the nearest clear street approach.'};
   const sh=SHOP[idx(Math.floor(p.x),Math.floor(p.y))],place=sh&&mapFilteredPlaces().find(place=>place.shop===sh);
   if(place)return selectMapPlace(place.id,false);
   BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);setMapWaypoint(p);
@@ -33333,9 +33459,9 @@ function openBigMap() {
   if (!bigMapEl) {
     const st = document.createElement('style'); st.textContent = BIGMAP_CSS; document.head.appendChild(st);
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
-      <div class="bar"><input type="search" placeholder="Find Mara, food, a place..." aria-label="Find a place"><button data-map="close" aria-label="Close map">×</button>
-      <div class="tools"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">−</button><button data-map="me">You</button><button data-map="fit">City</button><button data-map="supplier">Supplier</button><button data-map="places">Places</button></div></div>
-      <aside class="directory" aria-label="City directory"><h1>GLYPHPORT</h1><div class="subtitle">CITY DIRECTORY / WALKING GUIDE</div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="results-count"></div><div class="places"></div></aside>
+      <div class="bar"><input type="search" placeholder="Search places or contacts" aria-label="Find a place"><button data-map="close" aria-label="Close map">×</button>
+      <div class="tools"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">−</button><button data-map="me">You</button><button data-map="fit">City</button><button data-map="places" aria-controls="map-directory" aria-expanded="true">Places</button></div></div>
+      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>GLYPHPORT</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
       <div class="tip"></div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
     const q = bigMapEl.querySelector('input');
@@ -34088,23 +34214,26 @@ function hotbar() {
 let shopEl = null, invEl = null, shopCtx = null, invStyle = false;
 const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
-  el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
+  const pane=el.querySelector('.panel');pane.innerHTML=html;
+  const title=pane.querySelector(':scope > h1');if(title){const heading=document.createElement('header');heading.className='panel-heading';title.before(heading);heading.append(title);if(el.id!=='busted'){const close=document.createElement('button');close.className='panel-close';close.textContent='×';close.tabIndex=-1;close.setAttribute('aria-label','Close '+title.textContent);close.title='E / Esc';close.onclick=e=>{e.stopPropagation();onkeydown({code:'KeyE',repeat:false,preventDefault(){}});};heading.append(close);}}
+  el.style.display='flex';paused=true;
   for (const k in K) K[k] = 0;
-  releaseMouse();
+  releaseMouse();if(TOUCH&&touchEl)showTouch();
 }
-function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
+function hidePanel(el) { if(el&&el.style.display!=='none'){el.style.display='none';paused=false;if(TOUCH&&touchEl)showTouch();} }
+const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl,typeof ticketEl!=='undefined'&&ticketEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k < 9 ? k + 1 : ''}</span><span data-preview-id="${id}"></span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
-    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${itemName(it)}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span data-preview-slot="${k}"></span><span>${itemName(it)}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
   const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
     ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${Math.min(9, stock.length)} buy &middot; click any item${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
+  populateItemMenuPreviews(shopEl);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
   if(title==='BAIT & TACKLE')addFishingCompetitionShop();
 }
@@ -34133,10 +34262,11 @@ function openInventory() {
   const canDrop = placeKey() !== null;
   const rows_ = inv.length ? inv.map((it, k) => {
     const slot = quickSlots.indexOf(k), name = itemName(it);
-    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label>${canDrop ? `<button class="drop" data-drop="${k}" aria-label="Drop ${name}">drop</button>` : ''}</div>`;
+    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span data-preview-slot="${k}"></span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label>${canDrop ? `<button class="drop" data-drop="${k}" aria-label="Drop ${name}">drop</button>` : ''}</div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
   showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; ${placeKey()!==null?'X drop &middot; ':''}I / Esc close</p>`);
+  populateItemMenuPreviews(invEl);
   invEl.onclick = e => {
     const d = e.target.closest('[data-drop]'); if (d) { dropSlot(+d.dataset.drop); return openInventory(); }
     const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); }
@@ -34172,6 +34302,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if(typeof ticketEl!=='undefined'&&ticketEl?.style.display==='flex'){if(e.code==='Escape'||e.code==='KeyE')hidePanel(ticketEl);return true;}
   if(furnishingEl?.style.display==='flex'){if(['Escape','KeyE','KeyF','KeyI'].includes(e.code))hidePanel(furnishingEl);return true;}
   if (fishingCompetitionPanelKey(e)) return true;
   if (workshopPanelKey(e)) return true;
@@ -36502,8 +36633,8 @@ function openCooking(on, pantry = null, spot = null) {
   cookCtx.list = list.map(e => e.r);
   const ready = list.filter(e => e.ms.every(m => m.from)).length;
   const rows_ = list.map(({ r, ms }, k) => {
-    const ok = ms.every(m => m.from), needs = ms.map(m => `<span style="color:${m.from ? '#9d9' : 'rgba(255,255,255,0.3)'}">${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
-    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${r.name}</span><span class="lead"></span><span class="v" style="font-size:0.85em">${needs}</span></button>`;
+    const ok = ms.every(m => m.from), needs = ms.map(m => `<span class="${m.from?'available':'missing'}">${m.from?'':'need '}${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
+    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span class="recipe-label"><span class="recipe-name">${r.name}</span><span class="recipe-needs">${needs}</span></span></button>`;
   }).join('');
   const where = { stove: 'At the stove', grill: 'At the grill', fire: 'At the campfire' }[on];
   showPanel(cookEl, `<h1>${where}</h1><p class="sub">${pantry ? 'From your bag and the fridge' : 'From your bag'} &middot; the grocer's, the market and the deli sell the makings</p>${rows_}
@@ -37641,14 +37772,15 @@ function sfxGame(e) {
 
 // on a phone the buttons keep part of the screen (the bottom, held upright; the right, sideways): px to leave clear
 function gameClear() {
-  if (!TOUCH) return [0, 0];
-  if (innerWidth > innerHeight) return [TOUCH_PAD_W - 30, 0];
-  return [0, game && (game.kind === 'cook' || game.kind === 'workshop') ? 250 : TOUCH_PAD_H];
+  if(!TOUCH)return[0,0];
+  const pad=touchEl?.querySelector('.pad'),r=pad?.getBoundingClientRect();
+  if(r&&r.height>0)return innerWidth>innerHeight?[Math.max(TOUCH_PAD_W-30,innerWidth-r.left+12),0]:[0,innerHeight-r.top+12];
+  return innerWidth>innerHeight?[TOUCH_PAD_W-30,0]:[0,TOUCH_PAD_H];
 }
-// the character size that fits the whole cabinet on screen, never bigger than the detail setting's
-function gameFS(g) {
-  const [cr, cb] = gameClear(), ratio = cw / FS; // (a character's width per px of height, in this font)
-  return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
+function gameFrameColor(g){return game.kind==='arcade'?NEON[ARCADE_GAMES.indexOf(g.id)&3]:game.kind==='crime'||game.kind==='bout'?RED:game.kind==='table'?GREEN:g.id==='serve'||g.id==='cook'?ORANGE:g.id==='tapper'?YEL:CYAN;}
+function gameFS(g,layout=minigamePresentation(g)) {
+  const ratio=cw/FS;
+  return clamp(Math.floor(Math.min(DETAIL[settings.detail],layout.width/((2*g.W+6)*ratio),(innerHeight-layout.bottom-layout.top-layout.foot)/(g.H+4))),5,40);
 }
 // what the screen says to press: on a phone, the buttons' names
 // (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
@@ -37668,23 +37800,21 @@ function gameText(s, g) {
 }
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
-  const g = game.g, fs = gameFS(g);
+  const g=game.g,layout=minigamePresentation(g),fs=gameFS(g,layout);
   if (fs !== FS) { FS = fs; resize(); } // (put back when the game's done: see loop)
   const n = rows * cols;
   for (let i = 0; i < n; i++) { CH[i] = ' '; COL[i] = 0; BG[i] = C(GRAY, 0); }
   FOGS.fill(0); FOGB.fill(0);
-  const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
-  const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
-  const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' || game.kind === 'bout' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' || g.id === 'cook' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
+  const ac=Math.min(cols-Math.ceil(layout.right/cw),Math.floor(layout.width/cw)),ar=rows-Math.ceil(layout.bottom/FS),top=Math.ceil(layout.top/FS),availableRows=ar-top-Math.ceil(layout.foot/FS);
+  const s=clamp(Math.floor(Math.min((availableRows-4)/g.H,(ac-6)/(2*g.W))),1,3),bw=2*s,bh=s;
+  const gw=g.W*bw,gh=g.H*bh,x0=Math.round(layout.left/cw)+((ac-gw)>>1),y0=top+2+(TOUCH&&innerWidth<=innerHeight?0:Math.max(0,(availableRows-gh-4)>>1)),frame=gameFrameColor(g);
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
-    if (edgeY || edgeX) { set(i, edgeY && edgeX ? '+' : edgeY ? '=' : '|', C(frame, 12)); BG[i] = C(frame, 2); }
+    if (edgeY || edgeX) { set(i,' ',0);BG[i]=C(frame,7); }
     else if (y < y0 || y >= y0 + gh || x < x0 || x >= x0 + gw) BG[i] = C(frame, 1);
     else BG[i] = C(GRAY, 0);
   }
-  putText(y0 - 3, x0 + ((gw - g.title.length * 2) >> 1), g.title.split('').join(' '), C(frame, 15));
   g.draw((x, y, ch, col, bg) => { // one game cell: a block of characters
     if (x < 0 || y < 0 || x >= g.W || y >= g.H) return;
     for (let r = 0; r < bh; r++) for (let c = 0; c < bw; c++) {
@@ -37700,36 +37830,7 @@ function drawGame() {
        const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);
        lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
      });
-  // the status under the screen, in two lines if it's wider than the cabinet
-  const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
-  const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
-  sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? g.over ? '   E / ESC finish' : '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
-  const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
-  const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
-  putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
-  if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
-    const r = g.reward(), res = g.result, lines = game.kind === 'table'
-      ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
-         r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]
-      : game.kind === 'bout'
-      ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
-         res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
-      : game.kind === 'cook'
-      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E / ESC to finish']]
-      : game.kind === 'workshop'
-      ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
-      : game.kind === 'arcade'
-      ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
-      : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
-    const w = Math.min(ac, Math.max(...lines.map(l => l.length)) + 6), h = lines.length + 2, cx = (ac - w) >> 1, cy = (ar - h) >> 1;
-    for (let y = cy; y < cy + h; y++) for (let x = cx; x < cx + w; x++) {
-      const i = y * cols + x; set(i, ' ', 0); BG[i] = C(GRAY, 1);
-      if (y === cy || y === cy + h - 1) set(i, '-', C(frame, 10));
-    }
-    lines.forEach((l, k) => putText(cy + 1 + k, cx + ((w - l.length) >> 1), l, C(k === 2 ? YEL : WHITE, k === 0 ? 15 : 12)));
-  }
+  placeMinigameFooter((y0+gh+2)*FS+10);
   present();
 }
 
@@ -37754,6 +37855,91 @@ function prizeKey(e) {
   else if (n && PRIZES[n[1] - 1]) { say(claimPrize(PRIZES[n[1] - 1][0])[1], 3); openPrizes(); }
   return true;
 }
+// A readable interface around the original character-grid games. The playfield
+// remains pixel/ASCII art; interface type no longer shrinks with its cells.
+let MINIGAME_UI=null;
+function hideMinigamePresentation(){if(MINIGAME_UI&&!MINIGAME_UI.el.hidden){MINIGAME_UI.el.hidden=true;MINIGAME_UI.key=null;if(TOUCH&&touchEl)showTouch();}}
+function minigameInterfaceText(text,g){
+ if(CONTROLLER.active)return text.replace(/HOLD SPACE/g,'HOLD A').replace(/SPACE/g,'A').replace(/UP\/DOWN|LEFT\/RIGHT|ARROWS/g,'D-PAD').replace(/\bUP\b/g,'D-PAD UP / X').replace(/\bDOWN\b/g,'D-PAD DOWN').replace(/E leave/g,'B leave');
+ const translated=gameText(text,g);return TOUCH?translated.replace(/\s+E leave\b/g,''):translated;
+}
+function minigamePresentation(g){
+ if(!MINIGAME_UI){
+  menuStyle();const style=document.createElement('style');style.textContent=`
+   #minigame-hud{position:fixed;inset:0;z-index:350;pointer-events:none;font:16px/1.4 W95,monospace;color:#e6eae0;--game-accent:#a9d9ca;}
+   #minigame-hud[hidden],#minigame-hud [hidden]{display:none!important;}
+   #minigame-hud header,#minigame-hud footer,#minigame-hud .game-result{position:absolute;box-sizing:border-box;background:#13191b;border:1px solid #465452;padding:12px 16px;}
+   #minigame-hud header{border-top:3px solid var(--game-accent);}
+   #minigame-hud .game-kind{margin:0 0 3px;font-size:12px;letter-spacing:1px;color:#b9c9c0;}
+   #minigame-hud h1{margin:0;font:24px/1.15 W95,monospace;color:#f2f2e7;overflow-wrap:anywhere;}
+   #minigame-hud footer{display:flex;gap:16px;align-items:center;}
+   #minigame-hud .game-readout{flex:1;min-width:0;}
+   #minigame-hud .game-status{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px;}
+   #minigame-hud .game-summary{margin:0 0 6px;color:#edda94;overflow-wrap:anywhere;}
+   #minigame-hud .game-earned{margin:6px 0 0;color:#a6b5ad;font-size:14px;}
+   #minigame-hud button{pointer-events:auto;cursor:pointer;font:16px/1.3 W95,monospace;color:#e6eae0;border:1px solid #64756e;background:#1d2925;padding:9px 14px;min-height:44px;min-width:44px;}
+   #minigame-hud button:hover,#minigame-hud button:focus-visible{background:#30483e;outline:2px solid #b9e7d5;outline-offset:2px;}
+   #minigame-hud .game-result-space{position:absolute;display:flex;align-items:center;justify-content:center;background:#090d10cc;padding:12px;box-sizing:border-box;}
+   #minigame-hud .game-result{position:relative;width:min(460px,100%);max-height:100%;overflow:auto;pointer-events:auto;border-top:3px solid var(--game-accent);padding:24px;}
+   #minigame-hud .game-result h2{font:28px/1.1 W95,monospace;margin:0 0 12px;color:#f2f2e7;overflow-wrap:anywhere;}
+   #minigame-hud .game-result p{margin:8px 0;overflow-wrap:anywhere;}
+   #minigame-hud .game-reward{color:#edda94;font-size:20px;}
+   #minigame-hud .game-result-space[data-kind=cook] .game-reward,#minigame-hud .game-result-space[data-kind=workshop] .game-reward{font-size:16px;color:#b3c0b7;}
+   #minigame-hud .game-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+   #minigame-hud .game-actions button{flex:1;white-space:normal;}
+   #touch.minigame .pad button{border-radius:0;}
+   @media(orientation:portrait){#touch.minigame .pad{left:12px;right:12px;align-items:stretch;}#touch.minigame .pops{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}#touch.minigame .pops button{width:100%;min-width:0;white-space:normal;padding:0 6px;}#touch.minigame .row{justify-content:flex-end;}#touch.minigame .main{height:52px;}}
+   @media(max-height:500px){#minigame-hud header{padding:8px 12px;}#minigame-hud .game-kind{display:none;}#minigame-hud h1{font-size:20px;}}
+   @media(max-width:520px){#minigame-hud header,#minigame-hud footer{padding:10px 12px;}#minigame-hud .game-result{padding:18px;}#minigame-hud h1{font-size:22px;}}
+  `;document.head.appendChild(style);
+  const el=document.createElement('div');el.id='minigame-hud';el.hidden=true;
+  el.innerHTML='<header><p class="game-kind"></p><h1></h1></header><footer><div class="game-readout"><p class="game-summary" hidden></p><p class="game-status"></p><p class="game-earned"></p></div><button data-game-action="leave">Leave</button></footer><div class="game-result-space" hidden><section class="game-result" role="status"><h2></h2><p class="game-outcome"></p><p class="game-reward"></p><div class="game-actions"><button data-game-action="again"></button><button data-game-action="finish">Finish</button></div></section></div>';
+  document.body.appendChild(el);
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-game-action]');if(!b||!game)return;gameKey({code:b.dataset.gameAction==='again'?'Space':'KeyE',preventDefault(){}});if(game)minigamePresentation(game.g);else hideMinigamePresentation();});
+  el.addEventListener('keydown',e=>{if(e.target.closest('button')&&(e.code==='Enter'||e.code==='Space')){e.preventDefault();e.stopPropagation();e.target.click();}});
+  MINIGAME_UI={el,header:el.querySelector('header'),footer:el.querySelector('footer'),result:el.querySelector('.game-result-space'),key:null,layout:null};
+  document.fonts.ready.then(()=>{if(MINIGAME_UI)MINIGAME_UI.key=null;});
+ }
+ const ui=MINIGAME_UI;if(TOUCH){const touchState=[g.over,['casino','table'].includes(game.kind)?g.state?.():'',game.kind==='market'?g.lot():''].join('/');if(ui.touchGame!==game||ui.touchState!==touchState){showTouch();ui.touchGame=game;ui.touchState=touchState;}}
+ const [right,touchBottom]=gameClear(),controllerHintEl=document.getElementById('controller-hint'),bottom=Math.max(touchBottom,CONTROLLER.active?(controllerHintEl?.offsetHeight||32)+16:0),available=innerWidth-right,width=Math.min(1120,available-24),left=(available-width)/2;
+ const result=g.over&&!['crime','show'].includes(game.kind),status=minigameInterfaceText(g.status(),g),summary=g.readout?.()||'';
+ const pending=game.kind==='arcade'&&!game.paid&&!g.prize?g.reward():0,earning=game.kind==='shift'&&!game.paid?g.reward():0;
+ const earned=game.kind==='arcade'?`TICKETS ${tickets+pending}${pending?` (+${pending} this game)`:''}  ·  ${fmt$(money)}`:game.kind==='shift'?`${fmt$(money+earning)}  ·  ${fmt$(earning)} earned this shift`:game.kind==='crime'?'':game.kind==='casino'?`BALANCE ${fmt$(money)} · BET ${fmt$(g.bet)}`:fmt$(money);
+ const lines=result?gameResultLines(g).slice(0,3):[],key=JSON.stringify([innerWidth,innerHeight,right,bottom,width,g.title,game.kind,status,summary,earned,result,lines,TOUCH,CONTROLLER.active]);
+ if(ui.key!==key||ui.game!==game){
+  ui.el.hidden=false;ui.key=key;ui.game=game;ui.el.style.setProperty('--game-accent',PAL[C(gameFrameColor(g),12)]);
+  const setText=(sel,text)=>{const el=ui.el.querySelector(sel);if(el.textContent!==text)el.textContent=text;};
+  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'GLYPHPORT'));
+  setText('h1',g.title);setText('.game-summary',summary);ui.el.querySelector('.game-summary').hidden=!summary;setText('.game-status',status);setText('.game-earned',earned);
+  ui.footer.hidden=result;ui.result.hidden=!result;ui.result.dataset.kind=game.kind;ui.el.querySelector('footer button').hidden=TOUCH;setText('footer button',({cook:'Stop cooking',workshop:'Stop machine',shift:'Clock off',crime:'Back off',bout:'Towel'}[game.kind]||'Leave')+(CONTROLLER.active?' · B':' · E / Esc'));ui.el.querySelector('.game-actions').hidden=TOUCH;
+  for(const el of [ui.header,ui.footer,ui.result]){el.style.left=left+'px';el.style.width=width+'px';}
+  ui.footer.style.top='';ui.header.style.top='calc(12px + env(safe-area-inset-top))';ui.footer.style.bottom=(bottom+12)+'px';
+  if(result){setText('.game-result h2',lines[0]||'Finished');setText('.game-outcome',lines[1]||'');setText('.game-reward',lines[2]||'');const again=ui.el.querySelector('[data-game-action=again]');again.hidden=!['arcade','table'].includes(game.kind);again.textContent=game.kind==='table'?`Another hand · ${fmt$(MJ_BUYIN)}`:`Play again · ${fmt$(CREDIT)}`;setText('[data-game-action=finish]',game.kind==='arcade'||game.kind==='table'?'Leave':'Finish');}
+  const top=ui.header.getBoundingClientRect().bottom+10,foot=result?0:ui.footer.getBoundingClientRect().height+20;
+  ui.result.style.top=top+'px';ui.result.style.bottom=(bottom+12)+'px';
+  ui.layout={top,foot,bottom,right,width,left};
+ }
+ return ui.layout;
+}
+
+function gameResultLines(g){
+ const r=g.reward(),res=g.result;return game.kind === 'table'
+      ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
+         r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]
+      : game.kind === 'bout'
+      ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
+         res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
+      : game.kind === 'cook'
+      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E / ESC to finish']]
+      : game.kind === 'workshop'
+      ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
+      : game.kind === 'arcade'
+      ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
+      : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
+}
+
+// In portrait the status belongs beside the playfield, leaving the lower gap for thumbs.
+function placeMinigameFooter(top){if(!TOUCH||innerWidth>innerHeight||game.g.over)return;const footer=MINIGAME_UI.footer,value=top+'px';if(footer.style.top!==value){footer.style.top=value;footer.style.bottom='auto';}}
 // ===== crime on screen and at the keys: the wanted stars, getting busted (a fine, or jail), and the crimes you do on
 // purpose: G picks a pocket (on the street, from behind) or shoplifts (in a shop with someone behind the counter),
 // L picks the lock of a shop that's shut for the night. The rules are in crime.js, the minigames in minigames.js.
@@ -38174,8 +38360,8 @@ function openWorkshop(tab) {
       <p class="sub"><b>Weed:</b> plant a seed pod on a powered rack. It grows in 75 seconds (50 with grow lamps); tend it once it sprouts for premium quality, then harvest. Unplugging pauses it.</p>
       <p class="sub"><b>Selling:</b> carry packs out and a buyer finds you; stock kept in the closet sometimes draws one too. Q / left click uses a pack yourself.</p>`;
   }
-  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}">${l}</button>`).join('');
-  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:none;border:0;color:inherit;opacity:.55;font:inherit;cursor:pointer;padding:2px 0}#workshop .tab.on{opacity:1;text-decoration:underline}
+  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}" aria-pressed="${workshopTab===k}">${l}</button>`).join('');
+  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:#13191b;border:1px solid #465452;color:#b7c4bb;opacity:1;font:inherit;cursor:pointer;padding:8px 10px;min-height:44px}#workshop .tab.on{opacity:1;text-decoration:none;background:#253732;border-color:#a9d9ca;color:#edf0df}
     #workshop .wsst{margin:8px 0 12px}#workshop .wsrow{display:flex;gap:8px;flex-wrap:wrap}#workshop .wsrow .item{width:auto;flex:1 1 auto}</style>
     <h1>Workshop</h1><p class="sub">${fmt$(money)} &middot; ${w.supplies} refills &middot; ${w.seeds} seed pods &middot; power ${w.powered ? 'on' : 'off'}</p>
     <div class="tabs">${tabs}</div>${body}<p class="hint">E / Esc close</p>`);
@@ -38406,7 +38592,7 @@ function showDrugNegotiation(line='') {
     '<p class="sub">Bring the right stock from your closet. You can keep the rest.</p>'}
     <button class="item" data-drug-leave>Maybe later</button><p class="hint">1 make offer &middot; E / Esc close. Three unreasonable offers end the visit. Visible deals can be reported.</p>`);
   drugSaleEl.querySelector('.panel').style.width='min(480px, calc(100vw - 32px))';
-  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minWidth:'0',width:'100%',boxSizing:'border-box'});
+  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minHeight:'44px',minWidth:'0',width:'100%',boxSizing:'border-box'});
   drugSaleEl.onchange=e=>{
     if(e.target.hasAttribute('data-deal-stock')) {
       context.it=inv[+e.target.value];context.count=Math.min(context.it.uses,visit.remaining);context.price=buyerUnitPrice(visit,context.it);
@@ -41249,13 +41435,7 @@ function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
 }
 function drawFernCascade() {
   if(near(px,py,FERN_FALLS.x,191)>vis+12)return;
-  for(const sheet of FERN_CASCADE) {
-    drawBox({...sheet,x:sheet.x-px,y:sheet.y-py},(i,t,L)=>{
-      const worldY=sheet.y+HIT.v,flow=fract(worldY*11-T*2.4+Math.sin(HIT.u*31)*.25);
-      BG[i]=C(BLUE,1.5+day*2);
-      set(i,flow<.22?'~':flow>.92?':':' ',C(flow<.22?WHITE:CYAN,Math.max(4,L)));return true;
-    },rayMansard);
-  }
+  for(const sheet of FERN_CASCADE)drawWaterCascadeSheet(sheet);
   for(let k=0;k<9;k++) {
     const p=fract(T*.65+k*.113),x=FERN_FALLS.x+(hash(k,2,1917)-.5)*.6;
     const y=193.2+p*.25,z=terrainHeight(x,y)+.015+Math.sin(p*Math.PI)*.065;
@@ -41481,7 +41661,7 @@ function drawIslandTidePool(p) {
   coveLathe(x,y,0,p.profile,stone);
   drum(x,y,p.waterRadius,water-.003,water,(i,t,L)=>{
     const ripple=Math.sin(HIT.u*80+HIT.v*23+T*.8);
-    BG[i]=C(BLUE,3);set(i,ripple>.985?'~':' ',C(CYAN,9));
+    const crest=ripple>.9?coveDetail(t,.08):0;BG[i]=C(crest>.3?CYAN:BLUE,3+crest*2);set(i,' ',0);
     const u=HIT.u+r*.28,v=HIT.v-r*.2,angle=Math.atan2(v,u),radius=Math.hypot(u,v);
     if(radius<.025+.018*Math.cos(angle*5)){BG[i]=C(ORANGE,5+L*.3);set(i,' ',0);}
     return true;
@@ -41810,6 +41990,64 @@ islandSurface=(...args)=>{
  if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;
 };
 islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water){s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;};
+// Prepared flowing sheets keep their real terrain-fitted planes and depth.
+const WATER_CASCADE_MODELS=new WeakMap();
+function drawWaterCascadeSheet(sheet){
+ let model=WATER_CASCADE_MODELS.get(sheet);
+ if(!model){
+  model={view:{...sheet,planeData:roofPlaneData(sheet.planes)},shade:(i,t,L)=>{
+   const y=sheet.y+HIT.v,fp=t/projY,normal=sheet.planes[4],length=Math.hypot(normal[0],normal[1],normal[2]);
+   const front=coveGroove(y-T*(2.4/11)+Math.sin(HIT.u*31)*(.25/11),1/11,.018,fp);
+   const light=coveLight(0,normal[1]/length,normal[2]/length),foam=front;
+   BG[i]=C(foam>.65?WHITE:foam>.25?CYAN:BLUE,1.5+day*2+L*.2*light+foam*(2+day*3));set(i,' ',0);return true;
+  }};
+  WATER_CASCADE_MODELS.set(sheet,model);
+ }
+ model.view.x=sheet.x-px;model.view.y=sheet.y-py;drawBox(model.view,model.shade,rayMansard);
+}
+// Precipitation and settled snow use the same actual overhead geometry. The
+// convex interval preserves the arch's opening; its top still catches snow.
+const WATER_WEATHER_BOUNDS=[Math.min(...WILD_ISLANDS.map(i=>i.x-i.rx-2)),Math.min(...WILD_ISLANDS.map(i=>i.y-i.ry-2)),Math.max(...WILD_ISLANDS.map(i=>i.x+i.rx+2)),Math.max(...WILD_ISLANDS.map(i=>i.y+i.ry+2))];
+function waterWeatherCoverAt(x,y,z){
+ if(x<WATER_WEATHER_BOUNDS[0]||y<WATER_WEATHER_BOUNDS[1]||x>WATER_WEATHER_BOUNDS[2]||y>WATER_WEATHER_BOUNDS[3])return false;
+ if(islandRoofHeight(x,y)>z+.02)return true;
+ for(const g of ISLAND_LANDMARKS){
+  const root=g.root;if(Math.abs(x-g.x)>root.hl||Math.abs(y-g.y)>root.hw||root.z1<=z+.02)continue;
+  for(const p of g.parts){if(p.z1<=z+.02)continue;const span=islandLandmarkInterval(p,x,y);if(span&&span[1]>z+.02)return true;}
+ }
+ return false;
+}
+const WATER_WEATHER_SNOW=snowExposed;
+snowExposed=(x,y,z=0)=>WATER_WEATHER_SNOW(x,y,z)&&!waterWeatherCoverAt(x,y,z);
+// Static menu pictures reuse the game's item samples. They never run held
+// animations or add controls; the adjacent item name remains the readable label.
+const ITEM_MENU_PICTURES=new Map(),ITEM_MENU_PICTURE_LIMIT=192;
+function itemMenuPicture(it){
+ const def=ITEMS[it.id];if(!def||['car','home','look','tattoo'].includes(def.kind))return null;
+ const key=JSON.stringify([it,Math.floor(tod*60)]);let picture=ITEM_MENU_PICTURES.get(key);if(picture)return picture;
+ const [art,col]=(DENSE[it.id]||droppedArt)(it,usesLeft(it)),cells=[];
+ let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+ for(let r=0;r<art.length;r++)for(let c=0;c<art[r].length;c++){const ch=art[r][c];if(ch===' ')continue;const ink=col(ch,r,c);if(!ink)continue;cells.push([c,r,ch,ink]);x0=Math.min(x0,c);y0=Math.min(y0,r);x1=Math.max(x1,c);y1=Math.max(y1,r);}
+ if(!cells.length)return null;
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+ const ctx=canvas.getContext('2d'),aspect=DENSE[it.id]?D_ASPECT:.5,scale=Math.min(120/((x1-x0+1)*aspect),120/(y1-y0+1)),w=scale*aspect;
+ const left=(128-(x1-x0+1)*w)/2,top=(128-(y1-y0+1)*scale)/2;
+ ctx.font=scale+'px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+ for(const[c,r,ch,ink]of cells){const x=left+(c-x0)*w,y=top+(r-y0)*scale;ctx.fillStyle=PAL[ink];if(ch==='\u0001')ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(x+w)-Math.round(x)),Math.max(1,Math.round(y+scale)-Math.round(y)));else ctx.fillText(ch,x+w/2,y+scale/2,w);}
+ picture={src:canvas.toDataURL(),width:x1-x0+1,height:y1-y0+1};
+ if(ITEM_MENU_PICTURES.size>=ITEM_MENU_PICTURE_LIMIT)ITEM_MENU_PICTURES.delete(ITEM_MENU_PICTURES.keys().next().value);
+ ITEM_MENU_PICTURES.set(key,picture);return picture;
+}
+function populateItemMenuPreviews(el){
+ for(const cell of el.querySelectorAll('[data-preview-id],[data-preview-slot]')){
+  const id=cell.dataset.previewId,it=id?{id,uses:ITEMS[id].uses||0}:inv[+cell.dataset.previewSlot],picture=it&&itemMenuPicture(it);
+  if(!picture){cell.remove();continue;}
+  const img=document.createElement('img');img.src=picture.src;img.alt='';img.width=img.height=48;img.draggable=false;cell.className='item-picture';cell.setAttribute('aria-hidden','true');cell.replaceChildren(img);
+ }
+}
+{
+ const style=document.createElement('style');style.textContent='#inventory .panel{width:min(620px,calc(100vw - 32px))}#shop .panel{width:min(520px,calc(100vw - 32px))}.menu .item:has(.item-picture){align-items:center;gap:8px}.menu .item-picture{display:inline-flex;align-items:center;justify-content:center;flex:0 0 48px;width:48px;height:48px;margin:2px 2px 2px 0;pointer-events:none}.menu .item-picture img{display:block;width:48px;height:48px;object-fit:contain;image-rendering:pixelated}.menu .item:has(.item-picture)>span:not(.k):not(.lead):not(.v):not(.item-picture){min-width:0;overflow-wrap:anywhere;text-align:left}';document.head.appendChild(style);
+}
 // Hotel-only bedside fittings sit on the existing cabinet's measured top.
 // Closed lathe shells leave actual openings around the supported light bulb.
 function HOTEL_BEDSIDE_LAMP(x,y,tier,baseZ=.65) {
@@ -51002,12 +51240,19 @@ function homeFloorFinish(i,x,y,L,footprint) {
   }
   return homeFloorWood(i,x,y,L,footprint,tier);
 }
+const HOME_ALBUM_PREVIEWS=new WeakMap();
+function homeAlbumPreview(photo){
+ let url=HOME_ALBUM_PREVIEWS.get(photo);if(url)return url;
+ const canvas=document.createElement('canvas'),w=photo.w,h=photo.h;canvas.width=w*4;canvas.height=h*4;const ctx=canvas.getContext('2d'),chars=Array.from(photo.chars);ctx.font='4px monospace';ctx.textBaseline='top';ctx.textAlign='center';
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const k=y*w+x;ctx.fillStyle=PAL[photo.bg[k]]||'#101416';ctx.fillRect(x*4,y*4,4,4);if(chars[k]&&chars[k]!==' '){ctx.fillStyle=PAL[photo.fg[k]]||'#d9dfda';ctx.fillText(chars[k],x*4+2,y*4,4);}}
+ url=canvas.toDataURL();HOME_ALBUM_PREVIEWS.set(photo,url);return url;
+}
 let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
 function furnishingPanel() {
   if(furnishingEl)return furnishingEl;
   furnishingEl=panel('furnishings');
   const style=document.createElement('style');
-  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}`;
+  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}#furnishings .album-select{display:flex;align-items:center;gap:10px;min-width:0}#furnishings .album-caption{min-width:0;overflow-wrap:anywhere}#furnishings .album-preview{flex:0 0 96px;width:96px;height:56px;object-fit:contain;image-rendering:pixelated;border:1px solid #465452;box-sizing:border-box}@media(max-width:520px),(pointer:coarse){#furnishings .carry-row>button{min-height:44px;}#furnishings .carry-row:has(.album-select){display:grid;grid-template-columns:minmax(0,1fr) auto;}#furnishings .album-select{grid-column:1/-1;}#furnishings [data-delete-photo]{grid-column:2;}}`;
   document.head.appendChild(style);return furnishingEl;
 }
 const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -51222,7 +51467,7 @@ function takeHomePhoto() {
 }
 function openHomePhotos(part=null) {
   furnishingPanel();
-  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button data-photo="${p.id}">${p.id}: ${homeHtml(p.title)}</button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
+  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button class="album-select" data-photo="${p.id}"><img class="album-preview" src="${homeAlbumPreview(p)}" width="96" height="56" alt="" aria-hidden="true" draggable="false"><span class="album-caption">${p.id}: ${homeHtml(p.title)}</span></button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button class="item" data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
   furnishingEl.onclick=e=>{const button=e.target.closest('button');if(!button)return;if(button.dataset.deletePhoto!=null){homePhotos.photos=homePhotos.photos.filter(p=>p.id!==+button.dataset.deletePhoto);saveGame();return openHomePhotos(part);}if(button.dataset.photo!=null){if(part){part.photo=+button.dataset.photo;saveGame();hidePanel(furnishingEl);}else openHomeFurnishings();}};
 }
 function buildIdeaStore() {
@@ -53799,6 +54044,7 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  if(!game)hideMinigamePresentation();
   controllerTick(clamp((t-t0)/1000,0,.05));
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
@@ -53815,7 +54061,7 @@ function loop(t) {
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { skateFixedReset(); // a cabinet or a shift has the screen; the world carries on behind it
-    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
+    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); else hideMinigamePresentation(); audioTick(dt);
     requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
@@ -54174,8 +54420,8 @@ function buildTouch() {
 function setSheet(on) { sheetOpen = on; touchEl.querySelector('.sheet').classList.toggle('open', on); touchEl.querySelector('[data-more]').classList.toggle('on', on); }
 let padSig = '';
 function showTouch() {
-  const pauseUp = typeof pauseEl !== 'undefined' && pauseEl && pauseEl.style.display !== 'none' && paused;
-  touchEl.style.display = pauseUp ? 'none' : 'block'; // (a shop or the bag pauses too, but Close shuts it: keep the buttons)
+  touchEl.classList.toggle('minigame',!!game);
+  touchEl.style.display=paused?'none':'block'; // Paused panels provide their own close/back actions.
   const busy = !!game || sleep || panelOpen();
   touchEl.querySelector('.bar').style.visibility = busy ? 'hidden' : 'visible';
   if (busy && sheetOpen) setSheet(false);

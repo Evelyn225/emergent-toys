@@ -98,8 +98,8 @@ function mapFilteredPlaces() {
   const results=BIGMAP.places.filter(p=>(BIGMAP.category==='all'?(p.category!=='area'||q):p.category===BIGMAP.category)&&
     (!q||`${p.name} ${p.description} ${p.category}`.toLowerCase().includes(q)))
     .sort((a,b)=>{
-      if(!q&&a.id==='supplier')return -1;if(!q&&b.id==='supplier')return 1;
-      if(a.x===null)return -1;if(b.x===null)return 1;
+      const av=a.virtual||a.x===null,bv=b.virtual||b.x===null;
+      if(av!==bv)return av?1:-1;if(av)return a.name.localeCompare(b.name);
       return mapDistance(origin,a)-mapDistance(origin,b)||a.name.localeCompare(b.name);
     });
   mapPlaceCache={places:BIGMAP.places,key,results};return results;

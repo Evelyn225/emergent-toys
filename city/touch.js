@@ -177,8 +177,8 @@ function buildTouch() {
 function setSheet(on) { sheetOpen = on; touchEl.querySelector('.sheet').classList.toggle('open', on); touchEl.querySelector('[data-more]').classList.toggle('on', on); }
 let padSig = '';
 function showTouch() {
-  const pauseUp = typeof pauseEl !== 'undefined' && pauseEl && pauseEl.style.display !== 'none' && paused;
-  touchEl.style.display = pauseUp ? 'none' : 'block'; // (a shop or the bag pauses too, but Close shuts it: keep the buttons)
+  touchEl.classList.toggle('minigame',!!game);
+  touchEl.style.display=paused?'none':'block'; // Paused panels provide their own close/back actions.
   const busy = !!game || sleep || panelOpen();
   touchEl.querySelector('.bar').style.visibility = busy ? 'hidden' : 'visible';
   if (busy && sheetOpen) setSheet(false);

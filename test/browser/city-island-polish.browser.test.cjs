@@ -45,7 +45,7 @@ test('the cascade joins its terrain bed and animates visible water instead of a 
     let recording=false,water=new Map();
     drawFernCascade=()=>{recording=true;originalCascade();recording=false;};
     drawBox=(box,shade,ray)=>originalBox(box,(i,t,L)=>{
-      const painted=shade(i,t,L);if(recording&&painted)water.set(i,CH[i]);return painted;
+      const painted=shade(i,t,L);if(recording&&painted)water.set(i,[CH[i],BG[i]].join('/'));return painted;
     },ray);
     px=628.6;py=190.4;a=Math.PI;pitch=.08;freecam=null;
     T=8;render(0);const first=water;water=new Map();T=8.23;render(0);

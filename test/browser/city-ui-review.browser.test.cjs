@@ -1,0 +1,15 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
+const{pathToFileURL}=require('node:url'),{chromium}=require('playwright');let browser;
+test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
+async function city(run,viewport={width:1170,height:800}){const p=await browser.newPage({viewport}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>{requestAnimationFrame=()=>0;HTMLCanvasElement.prototype.requestPointerLock=()=>Promise.resolve();});await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{tod=14;env(0);render(0);paused=false;money=250;});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
+test('shared menus keep descriptions, section names and hints readable on the actual panel',()=>city(async p=>{
+ await p.evaluate(()=>{openPause();openPrizes();});const r=await p.evaluate(()=>{const lum=c=>{const v=c.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return v[0]*.2126+v[1]*.7152+v[2]*.0722;},bad=[];for(const sel of ['#pause .sub','#pause h2','#prizes .hint']){const el=document.querySelector(sel),fg=getComputedStyle(el).color.match(/[\d.]+/g).map(Number),bg=getComputedStyle(el.closest('.panel')).backgroundColor.match(/[\d.]+/g).map(Number),alpha=fg[3]??1,color=fg.slice(0,3).map((c,k)=>c*alpha+bg[k]*(1-alpha)),a=lum('rgb('+color+')'),b=lum('rgb('+bg.slice(0,3)+')'),contrast=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);if(contrast<4.5)bad.push({sel,contrast});}return bad;});assert.deepEqual(r,[]);
+}));
+test('desktop menu rows have room to read and keyboard focus has a full-row indicator',()=>city(async p=>{
+ await p.evaluate(()=>openPause());const resume=p.locator('#pause [data-act="resume"]');await resume.focus();const r=await resume.evaluate(el=>{const c=getComputedStyle(el),b=getComputedStyle(el.closest('.panel'));return{height:el.getBoundingClientRect().height,focus:el.matches(':focus-visible'),background:c.backgroundColor,indicator:c.boxShadow,border:parseFloat(b.borderTopWidth),font:c.fontFamily};});assert.ok(r.height>=36&&r.focus,JSON.stringify(r));assert.notEqual(r.background,'rgba(0, 0, 0, 0)');assert.notEqual(r.indicator,'none');assert.ok(r.border>=1&&r.font.includes('W95'));
+ await p.keyboard.press('Enter');assert.equal(await p.evaluate(()=>paused),false);
+}));
+test('disabled purchase prices remain readable and cannot spend money',()=>city(async p=>{
+ await p.evaluate(()=>{money=0;openShop('RECORDS',['f_recordplayer','vinyl']);});const r=await p.locator('#shop [data-buy="f_recordplayer"]').evaluate(el=>({disabled:el.disabled,opacity:+getComputedStyle(el).opacity,price:getComputedStyle(el.querySelector('.v')).color,text:el.textContent}));assert.ok(r.disabled&&r.opacity>=.7,JSON.stringify(r));assert.match(r.text,/180/);await p.evaluate(()=>shopEl.querySelector('[data-buy]').click());assert.equal(await p.evaluate(()=>money),0);
+}));

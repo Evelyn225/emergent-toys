@@ -1104,6 +1104,8 @@ GAMES.mahjong = (rnd = Math.random) => {
   for (let i = wall.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [wall[i], wall[j]] = [wall[j], wall[i]]; }
   const hands = [0, 1, 2, 3].map(() => wall.splice(0, 13).sort((a, b) => a - b)), rivers = [[], [], [], []];
   let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
+  let helpKey='',helpLines=[];
+  const wrapHelp=text=>{const lines=[];for(const paragraph of text.split('\n')){let line='';for(const word of paragraph.split(' ')){if(line&&line.length+word.length+1>W*2){lines.push(line);line=word;}else line+=(line?' ':'')+word;}if(line)lines.push(line);}return lines;};
   const sortHand = h => h.sort((a, b) => a - b);
   const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
   const draw = p => {
@@ -1189,9 +1191,10 @@ GAMES.mahjong = (rnd = Math.random) => {
     // the help: what you're waiting for, if you're one tile away
     const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
     const w = h13.length === 13 ? mjWaits(h13) : [];
-    text(0, 15, w.length ? `${state === 'you' ? 'Throw that and you' : 'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}` : 'Make 4 sets + a pair. A set: three alike, or a run of 3 in one suit.', C(w.length ? YEL : GRAY, w.length ? 15 : 10));
-    if (state === 'you' && mjWins(hand)) text(0, 16, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
-    if (g.over && g.result) text(0, 17, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
+    const help=w.length?`${state==='you'?'Throw that and you':'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}`:'Make 4 sets + a pair.\nA set: three alike, or a run of 3 in one suit.';
+    if(help!==helpKey){helpKey=help;helpLines=wrapHelp(help);}helpLines.forEach((line,k)=>text(0,15+k,line,C(w.length?YEL:GRAY,w.length?15:10)));
+    if (state === 'you' && mjWins(hand)) text(0, 17, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
+    if (g.over && g.result) text(0, 18, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
   };
   g.status = () => state === 'claim' ? `UP claim it   SPACE let it go (${Math.ceil(wait)}s)` : state === 'you' ? 'LEFT/RIGHT pick   SPACE throw it   UP declare mahjong' : 'Waiting for the others...';
   g.reward = () => g.result ? g.result.winner === 0 ? 20 : g.result.winner < 0 ? MJ_BUYIN : 0 : 0;
@@ -1570,6 +1573,7 @@ GAMES.blackjack = (rnd = Math.random) => {
     text(0, 16, `CASH ${fmt$(money)}`, C(GREEN, 13));
     if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>msg+(you.length?`  YOU ${bjTotal(you)}${doubled?' (doubled)':''} · DEALER ${state==='play'?bjTotal([dealer[0]])+' + ?':bjTotal(dealer)}`:'');
   g.status = () => state === 'play' ? 'UP hit   SPACE stand   DOWN double   E leave' : `SPACE deal (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
   g.reward = () => 0;
   return g;
@@ -1635,6 +1639,7 @@ GAMES.roulette = (rnd = Math.random) => {
     text(0, 15, `CASH ${fmt$(money)}`, C(GREEN, 13));
     if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>RL_BETS[pick_][0]+' · '+msg;
   g.status = () => state === 'spin' ? 'Round it goes...' : `LEFT/RIGHT bet   UP/DOWN stake   SPACE spin (${fmt$(g.bet)})   E leave`;
   g.reward = () => 0;
   return g;
@@ -1705,6 +1710,7 @@ GAMES.slots = (rnd = Math.random) => {
     text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
     if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
   };
+  g.readout=()=>msg;
   g.status = () => `SPACE pull (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
   g.reward = () => 0;
   return g;

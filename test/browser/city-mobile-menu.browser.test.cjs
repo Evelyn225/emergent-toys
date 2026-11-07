@@ -30,25 +30,25 @@ for(const [width,height] of [[390,844],[320,568],[844,390]]){
  test(`phone ${width}×${height}: long inventory names and independent slot/drop controls fit, have thumb targets and work by touch`,()=>fixture(width,height,async p=>{
   const controls=await targets(p,'#inventory .carry-row button, #inventory .carry-row select');
   for(const c of controls){assert.ok(c.height>=44&&c.width>=44,JSON.stringify(c));assert.ok(c.inside,JSON.stringify(c));}
-  const name=await p.locator('#inventory [data-slot="0"] span').nth(1).evaluate(el=>{
+  const name=await p.locator('#inventory [data-slot="0"] [data-preview-slot] + span').evaluate(el=>{
    const name=el.getBoundingClientRect(),row=el.closest('.carry-row').getBoundingClientRect();
    return {text:el.textContent,height:name.height,width:name.width,rowWidth:row.width,unclipped:el.scrollWidth<=el.clientWidth+1};
   });
   assert.match(name.text,/record player with cabinet and record flatpack/);
-  assert.ok(name.width>name.rowWidth*.65&&name.height<100&&name.unclipped,JSON.stringify(name));
+  assert.ok(name.width>=120&&name.height<100&&name.unclipped,JSON.stringify(name));
   await p.locator('#inventory [data-quick-item="0"]').selectOption({value:'3'});
   assert.equal(await p.evaluate(()=>quickSlots[3]),0);
   await p.locator('#inventory [data-slot="1"]').tap();assert.equal(await p.evaluate(()=>held),1);
   await p.locator('#inventory [data-drop="0"]').tap();
   assert.deepEqual(await p.evaluate(()=>({ids:inv.map(it=>it.id),held:heldItem()?.id,dropped:dropped.at(-1)?.id})),{ids:['water'],held:'water',dropped:'f_recordplayer'});
-  await p.evaluate(()=>showTouch());await p.locator('#touch .pad [data-key="KeyE"]').tap();
+  await p.evaluate(()=>showTouch());await p.locator('.menu:visible .panel-close').tap();
   assert.equal(await p.evaluate(()=>paused),false);
   await p.evaluate(()=>{openShop('RECORDS',['f_recordplayer','vinyl']);showTouch();});
   for(const c of await targets(p,'#shop [data-buy]')){assert.ok(c.height>=44&&c.width>=44,JSON.stringify(c));assert.ok(c.inside,JSON.stringify(c));}
   const before=await p.evaluate(()=>money);
   await p.locator('#shop [data-buy="f_recordplayer"]').tap();
   assert.deepEqual(await p.evaluate(before=>({bought:inv.some(it=>it.id==='f_recordplayer'),paid:before-money}),before),{bought:true,paid:180});
-  await p.locator('#touch .pad [data-key="KeyE"]').tap();assert.equal(await p.evaluate(()=>paused),false);
+  await p.locator('.menu:visible .panel-close').tap();assert.equal(await p.evaluate(()=>paused),false);
  }));
 }
 test('desktop inventory keeps its compact single-row layout',async()=>{

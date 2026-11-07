@@ -151,7 +151,7 @@ function openControls() {
     controlsEl = menuEl('controls', 510, `
       <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
         <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
-        <button class="item controls-back" data-controls-back>← Back to pause <span class="k">Esc</span></button></header>
+        <button class="item controls-back" data-controls-back aria-label="Back to pause"><span class="controls-back-long">← Back to pause</span><span class="controls-back-short">← Back</span><span class="k">Esc</span></button></header>
         <nav class="controls-tabs" aria-label="Control categories">
           <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
           <button data-controls-tab="controller" aria-pressed="false">Controller</button>
