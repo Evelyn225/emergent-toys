@@ -323,6 +323,7 @@ function stepPeople(dt, t, everywhere = false) {
       else if (p.goal && !p.hidden) { const d = Math.hypot(rel(p.x - px), rel(p.y - py)); if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) settle(p); } // (never vanishing in plain view)
       p.simT = T;
     }
+    if (p.hooked) continue; // (on the end of your fishing line: fishing.js moves them)
     if (stepDown(p, dt)) continue; // (knocked down by a car)
     if (p.flee) { stepFlee(p, dt); continue; } // (running from a gunshot)
     if (p.help) { stepHelp(p, dt); continue; } // (gone to them)

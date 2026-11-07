@@ -7,7 +7,13 @@ function skateStick(x = 0, y = 0, dead = .15) {
   const scale = Math.min(1, (r - dead) / (1 - dead)) / r;
   return [x * scale, y * scale];
 }
-function createSkateGesture() {
+// opts: how strict it is. The defaults suit a mouse (a virtual stick moved precisely); a thumbstick gets SKATE_PAD_GESTURE:
+// a pull back that's off-centre still loads, slower flicks still count, a partial push forward still pops, and a scoop
+// needn't go all the way round or snap back right to the middle
+const SKATE_GESTURE_DEFAULT = { loadY: .6, loadX: .45, window: .24, arcWindow: .5, fwdR: .6, fwdY: .35, fwdRatio: .45, release: .25, scoop: 2.3, curl: 1.3, spin: 3.9 };
+const SKATE_PAD_GESTURE = { loadY: .55, loadX: .62, window: .5, arcWindow: .8, fwdR: .5, fwdY: .25, fwdRatio: .35, release: .4, scoop: 2.0, curl: 1.15, spin: 3.4 };
+function createSkateGesture(opts = SKATE_GESTURE_DEFAULT) {
+  const O = { ...SKATE_GESTURE_DEFAULT, ...opts };
   let samples = [], load = null, armed = true, lastTime = -Infinity, firedAt=-Infinity, centred=false;
   const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; firedAt=-Infinity;centred=false; };
   function sample(x, y, t) {
@@ -23,16 +29,16 @@ function createSkateGesture() {
       armed=true;
     }
     if (!load) {
-      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
+      if (Math.abs(y) > O.loadY && Math.abs(x) < O.loadX) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
       return null;
     }
     if (radius > .45) {
       for (const p of samples) if (t - p.t <= .12 && t > p.t)
         load.fastest = Math.max(load.fastest, Math.hypot(x - p.x, y - p.y) / .12);
     }
-    if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
+    if (!load.left && y * load.side > O.loadY && Math.abs(x) < O.loadX) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
-    if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
+    if (t - load.t > (Math.abs(load.arc)>.45 ? O.arcWindow : O.window)+1e-6) { load = null; return null; }
     let acrossCentre=false;
     if (radius > .45) {
       load.finish=[x,y];
@@ -42,14 +48,14 @@ function createSkateGesture() {
       if (Math.abs(delta) < 1.2) load.arc += delta;else acrossCentre=true;
       load.angle = angle;
     }
-    const arc = Math.abs(load.arc), curled = arc > 1.3;
+    const arc = Math.abs(load.arc), curled = arc > O.curl;
     load.maxArc=Math.max(load.maxArc,arc);
-    const forward = radius>.6&&y*load.side<-.35&&-y*load.side/radius>.45;
-    const quarterFlip=acrossCentre&&arc>.8&&arc<2.3&&forward&&x*Math.sign(load.arc)>.3;
-    const released = radius < .25;
-    const heelScoop=load.maxArc>2.3&&arc>1.6&&arc<3.9&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
-    if (quarterFlip || (!curled && forward) || (curled && released && (arc > 2.3||heelScoop))) {
-      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+    const forward = radius>O.fwdR&&y*load.side<-O.fwdY&&-y*load.side/radius>O.fwdRatio;
+    const quarterFlip=acrossCentre&&arc>.8&&arc<O.scoop&&forward&&x*Math.sign(load.arc)>.3;
+    const released = radius < O.release;
+    const heelScoop=load.maxArc>O.scoop&&arc>1.6&&arc<O.spin&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
+    if (quarterFlip || (!curled && forward) || (curled && released && (arc > O.scoop||heelScoop))) {
+      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > O.spin ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > O.scoop ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
       load = null; armed = false;firedAt=t;centred=false; return result;
     }
@@ -89,7 +95,7 @@ const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHel
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
-  padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
+  padGesture: createSkateGesture(SKATE_PAD_GESTURE), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(.5,.3),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, fired: false });

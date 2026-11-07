@@ -320,7 +320,7 @@ function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (tagCell(i, q, r, t, L)) return true;
   }
   if(SHOP[k]?.islandCabin==='cabin-cove')return false; // retain player paint above, leave this remote timber shelter free of generated street tags
-  if (z < 0.33 && d < 6) { // the quick tags low down
+  if (z < 0.33 && d < 6 * lodScale()) { // the quick tags low down
     const st = streetTags(k, mx, my, face);
     if (st) for (const t of st) {
       const lu = flip > 0 ? fract(wc) : 1 - fract(wc), u0 = u + (t.at - lu); // (the tag's centre, in u)
