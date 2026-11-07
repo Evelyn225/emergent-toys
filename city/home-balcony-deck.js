@@ -5,10 +5,15 @@ function homeBalconyPaving(i,u,v,L,footprint){
   const p=HOME_BALCONY_PAVING,joint=Math.max(coveGroove(u,p.tile,p.grout,footprint),coveGroove(v,p.tile,p.grout,footprint));
   BG[i]=C(STONE,2.8+L*.22-joint*2.2);set(i,' ',0);return true;
 }
+// While the chase camera is behind a car or a boat, the ground filters no finer than it does at the vehicle itself:
+// otherwise the slab joints, patches and grain show only in the strip between the camera and the car, and draw in
+// along the bottom of the screen as you go (main.js sets it for the chase render)
+let groundFootprintNear=0;
 function homeBalconyPavingFootprint(t,height,unit=1){
+  t=Math.max(t,groundFootprintNear);
   // Row-to-row floor spacing grows faster at grazing angles than distance
   // alone. Account for both screen axes before filtering the metre joints.
-  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit;
+  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit/lodScale(); // (Detail distance: finer joints further off)
 }
 const homeBalconyDeckModels=new WeakMap();
 function homeBalconyDeckModel(home,b){

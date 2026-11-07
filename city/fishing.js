@@ -138,6 +138,7 @@ function rodUse(near) {
     return [pick(['Fish on!', 'Got it!', 'Something\'s on!']), 'reel'];
   }
   if (f.st === 'lure') { reelIn(); return ['Too soon. Whatever it was bolts.', 'reel']; }
+  if (f.st === 'hooked') { Object.assign(f, { st: 'haul', t: 0 }); f.who.hooked.haul = true; return [pick(['You lean back and start reeling.', 'You put your back into it and wind.']), 'reel']; }
   if (f.st === 'wait' || f.st === 'land') { reelIn(); return ['', 'reel']; }
   return ['', null];
 }
@@ -177,6 +178,7 @@ function stepFishing(dt, rnd = Math.random) {
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
     f.x = worldCoord(f.ox + rel(f.tx - f.ox) * q); f.y = worldCoord(f.oy + rel(f.ty - f.oy) * q); f.z = f.oz * (1 - q) + terrainHeight(f.tx, f.ty) * q + arc * 4 * q * (1 - q);
+    if (q > .2 && mode === 'walk') { const who = lureHits(f); if (who) return hookPerson(f, who); } // (somebody in the way)
     if (q >= 1) {
       f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
@@ -198,7 +200,49 @@ function stepFishing(dt, rnd = Math.random) {
     if (q > 0.05 && q < 0.65 && f.catch && rnd() < dt * 12) splash(f.x, f.y, 1, 0.2); // (thrashing as it comes)
     if (q >= 1) { if (f.catch) landCatch(f); else fishing = null; }
   } else if (f.st === 'landed') { if (f.t > 1.6) fishing = null; }
+  else if (f.st === 'hooked' || f.st === 'haul') stepHooked(f, dt);
 }
+// ---- the lure in somebody: a cast that passes through a person on the street catches them by the coat. Q reels them
+// in, stumbling toward you however they dig their heels in; at your feet the hook comes out and they let you have it.
+// Leave it a few seconds and they work it loose themselves.
+const HOOK_REACH = .035, HOOK_HAUL = .26; // (cells: the lure within 35 cm of them; hauled in at about 2.5 m/s)
+function lureHits(f) {
+  for (const p of people) {
+    if (p.hidden || p.dead || p.down || p.inside || p.hooked) continue;
+    if (Math.abs(rel(p.x - f.x)) > HOOK_REACH || Math.abs(rel(p.y - f.y)) > HOOK_REACH || Math.hypot(rel(p.x - f.x), rel(p.y - f.y)) > HOOK_REACH) continue;
+    const h = f.z - walkGround(p.x, p.y); if (h < .005 || h > .2) continue; // (over their head, or skimming the ground past their feet)
+    return p;
+  }
+  return null;
+}
+function hookPerson(f, p) {
+  p.hooked = { t: 0, haul: false }; delete p.flee; delete p.gawk; p.talk = 0; p.wait = 0;
+  Object.assign(f, { st: 'hooked', t: 0, who: p, x: p.x, y: p.y, z: walkGround(p.x, p.y) + .11, d: Math.max(f.d, Math.hypot(rel(p.x - px), rel(p.y - py)) + .1) });
+  fishSfx.push('ground');
+  say(pick(['You hook someone by the coat. "OW! Hey!"', 'The lure catches a passer-by in the sleeve. "What the-"', 'Right in the jacket. They yelp and spin round.']) + ' (Q: reel them in)', 3);
+}
+function stepHooked(f, dt) {
+  const p = f.who;
+  if (!p || p.dead || p.hidden || !p.hooked) { fishing = null; return; }
+  p.hooked.t += dt;
+  const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
+  if (f.st === 'hooked' && f.t > 4) { // they work it loose
+    unhook(p); f.x = p.x; f.y = p.y; f.catch = null; reelIn();
+    say(pick(['They work the hook out of their sleeve and glare at you.', '"Unbelievable." They pull it out and walk off.']), 2.5); return;
+  }
+  if (f.st === 'haul') {
+    if (d < .1) { // at your feet: the hook out, and a piece of their mind
+      unhook(p); p.talk = 3; fishing = null; fishSfx.push('reel');
+      say(pick(['"Are you out of your MIND?" They yank the hook out and shove it back at you.', '"I am a PERSON, not a FISH." They tug themselves free.', '"Do that again and I\'m calling the cops." They pull the hook out of their coat.']), 3.5);
+      return;
+    }
+    const step = Math.min(d - .09, HOOK_HAUL * dt * (.7 + .3 * Math.sin(T * 9))), nx = worldCoord(p.x + ex / d * step), ny = worldCoord(p.y + ey / d * step);
+    if (map[idx(Math.floor(nx), Math.floor(ny))] > 0) { unhook(p); f.catch = null; reelIn(); say('The line snags on the corner and they pull free.', 2); return; } // (a wall in the way)
+    p.x = nx; p.y = ny; p.ph = (p.ph || 0) + dt * 5;
+  }
+  f.x = p.x; f.y = p.y; f.z = walkGround(p.x, p.y) + .11;
+}
+function unhook(p) { delete p.hooked; }
 // out of the water and into your bag
 function landCatch(f) {
   const c = f.catch, d = ITEMS[c.id];
