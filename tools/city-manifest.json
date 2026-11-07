@@ -313,6 +313,8 @@
     "city/home-balcony-deck.js",
     "city/home-floors.js",
     "city/home-furnishing-ui.js",
+    "city/workshop-dressing.js",
+    "city/shop-lobby-dressing.js",
     "city/room-fixtures.js",
     "city/video-backroom.js",
     "city/world-bootstrap.js",
