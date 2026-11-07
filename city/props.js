@@ -411,6 +411,20 @@ const GRILLS = [];
 for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, o.on === 'fire' ? 0.07 : 0.04, 0, o.on === 'fire' ? 0.11 : 0.1, o.on === 'fire' ? 'campfire' : 'grill', 0), Object.assign(solids[solids.length - 1], { spot: o });
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
+// is (x, y) up against a bench (grown by pad)? Its seat and back, 1.5 m long and about half a metre deep, 45 cm up:
+// you walk round it, and jump (or ollie) over it; feet over its seat clear it. Sitting on one is moves.js's business
+const BENCH_HL = .078, BENCH_HW = .026, BENCH_TOP = .045;
+function benchAt(x, y, pad, feet = -Infinity) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const b of benchesB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)] || []) {
+    const qx = rel(x - b.x), qy = rel(y - b.y);
+    if (Math.abs(qx) > .2 || Math.abs(qy) > .2) continue;
+    const u = -qx * b.fy + qy * b.fx, v = qx * b.fx + qy * b.fy; // (along the seat; across it, toward where you sit facing)
+    if (Math.abs(u) >= BENCH_HL + pad || Math.abs(v) >= BENCH_HW + pad) continue;
+    if (feet >= terrainHeight(b.x, b.y) + BENCH_TOP - .004) continue;
+    return true;
+  }
+  return false;
+}
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {

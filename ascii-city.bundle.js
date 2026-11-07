@@ -3125,6 +3125,20 @@ const GRILLS = [];
 for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, o.on === 'fire' ? 0.07 : 0.04, 0, o.on === 'fire' ? 0.11 : 0.1, o.on === 'fire' ? 'campfire' : 'grill', 0), Object.assign(solids[solids.length - 1], { spot: o });
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
+// is (x, y) up against a bench (grown by pad)? Its seat and back, 1.5 m long and about half a metre deep, 45 cm up:
+// you walk round it, and jump (or ollie) over it; feet over its seat clear it. Sitting on one is moves.js's business
+const BENCH_HL = .078, BENCH_HW = .026, BENCH_TOP = .045;
+function benchAt(x, y, pad, feet = -Infinity) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const b of benchesB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)] || []) {
+    const qx = rel(x - b.x), qy = rel(y - b.y);
+    if (Math.abs(qx) > .2 || Math.abs(qy) > .2) continue;
+    const u = -qx * b.fy + qy * b.fx, v = qx * b.fx + qy * b.fy; // (along the seat; across it, toward where you sit facing)
+    if (Math.abs(u) >= BENCH_HL + pad || Math.abs(v) >= BENCH_HW + pad) continue;
+    if (feet >= terrainHeight(b.x, b.y) + BENCH_TOP - .004) continue;
+    return true;
+  }
+  return false;
+}
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
@@ -14328,7 +14342,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       const stain = noise(wx * 3, wy * 3, 98) > .7 ? .1 : 0, crack = clamp(1 - fpG / .01, 0, 1) * (Math.abs(noise(wx * 6, wy * 6, 99) - .5) < .015 ? .08 : 0);
       surf = line > .5 ? [YEL, LG * .45] : [GRAY, LG * (.36 - stain - crack)];
     } else if (kind === 'park' && (inSkatepark(wx, wy) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(wx,wy))) { // the skatepark's concrete (skatepark-render.js)
-      soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
+      soft = true; const [, sb, sk] = skateparkFloor(wx, wy, r, x, d); surf = [sb, L * roadDark() * sk * .19]; // (a built surface: its joints, cure and wear in the colour, as the pavement's)
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -18307,11 +18321,28 @@ function fairSprites() {
 // ===== the skatepark drawn (skatepark.js builds it): steel flat bars on posts, granite ledges with steel coping, a
 // concrete manual pad, and the park's smooth concrete with its saw-cut joints. Fine detail fades with distance
 const SK_STEEL = (L, top) => C(GRAY, (top ? 4.2 : 2.6) + L * .35);
-// a flat bar: the round bar along the top, square posts 30 cm in from each end, nothing in between
+// a park's surfaces wear where people ride: thin dark wheel streaks running the way you go (along: that direction, a
+// unit vector in world x/y), denser where it's ridden most (k: 0..1). 0 for none, up to 1 for a fresh dark one; filtered
+// out once a cell's wider than a mark
+function skWheelMarks(wx, wy, ax, ay, k, foot) {
+  if (foot > .03 || k <= 0) return 0;
+  const along = wx * ax + wy * ay, across = -wx * ay + wy * ax, w = Math.max(.006, foot);
+  const lane = Math.floor(across / w), streak = hash(lane, Math.floor(along / .12 + hash(lane, 3, 2111) * 9), 2112);
+  return streak > 1 - k * .2 ? (1 - clamp((foot - .01) / .02, 0, 1)) * (.45 + .45 * hash(lane, 7, 2113)) * (.006 / w) ** .5 : 0;
+}
+// a world point on a solid's face, from its local u/v (o.c, o.s: its axis)
+const skWorld = (o, u, v) => [o.x + u * o.c - v * o.s, o.y + u * o.s + v * o.c];
+// painted steel that the boards have scraped back to bare metal along the top; the paint picked per bar
+const SK_PAINT = [YEL, RED, GRAY, BLUE, YEL];
+// a flat bar: the round bar along the top, square posts 30 cm in from each end, nothing in between. Painted (yellow,
+// red, black or blue); the bar's top ground back to bright steel by the grinds, the paint chipped at its ends
 SOLID_SHADE.skaterail = o => (i, t, L) => {
   const w = HIT.w, bar = w > o.z1 - .005, post = Math.abs(Math.abs(HIT.u) - (o.hl - .03)) < .004;
   if (!bar && !post) return false; // (see-through under the bar)
-  BG[i] = SK_STEEL(L, bar && HIT.face === 5); return set(i, ' ', 0), true;
+  const paint = SK_PAINT[Math.floor(hash(Math.floor(o.x * 10), Math.floor(o.y * 10), 2114) * SK_PAINT.length)], dark = paint === GRAY;
+  const scraped = bar && (HIT.face === 5 || w > o.z1 - .0015) && Math.abs(HIT.u) < o.hl - .02, chip = hash(Math.floor(HIT.u * 300), Math.floor(w * 300), 2115) > .9;
+  if (scraped || chip && bar) { BG[i] = SK_STEEL(L, true); return set(i, ' ', 0), true; }
+  BG[i] = C(paint, (dark ? 1.2 : 3.4) * shadeFace(HIT.face) + L * (dark ? .1 : .3) - (post && w < .006 ? 1 : 0)); return set(i, ' ', 0), true; // (rust at the feet)
 };
 // granite: a speckled pale grey block, darker low down where boards scuff it; steel coping along the top edges
 SOLID_SHADE.skateledge = o => (i, t, L) => {
@@ -18319,7 +18350,12 @@ SOLID_SHADE.skateledge = o => (i, t, L) => {
   if (edge) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
   const fine = coveDetail(t, .05), fleck = hash(Math.floor((o.x + HIT.u) * 160), Math.floor(HIT.w * 160 + HIT.v * 160), 2101) * fine;
   const scuff = !top && HIT.w < o.z1 * .45 ? .5 : 0;
-  BG[i] = C(o.material === 'wood' ? BRICK : STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8); return set(i, ' ', 0), true;
+  // wax: a dark glossy band along the top and face just under the coping where the trucks bite, patchy along its length
+  const fromEdge = top ? o.hw - Math.abs(HIT.v) : o.z1 - HIT.w, waxed = fromEdge < .016 && noise((o.x + HIT.u) * 40, o.y * 40, 2116) > .35;
+  // and the corners knocked off over the years
+  const chipped = !top && Math.abs(HIT.u) > o.hl - .01 && fromEdge < .012 && hash(Math.floor(HIT.w * 400), Math.sign(HIT.u) + 3, 2117) > .5;
+  if (chipped) { BG[i] = C(STONE, 2.2 * shadeFace(f) + L * .2); return set(i, fine > .5 ? '.' : ' ', C(GRAY, 6)), true; }
+  BG[i] = C(o.material === 'wood' ? BRICK : STONE, (top ? 4.2 : 3.2 - scuff) * shadeFace(f) + L * .25 + (fleck - .5) * .8 - (waxed ? 1.1 : 0)); return set(i, ' ', 0), true;
 };
 // the manual pad: poured concrete, steel angle on its long edges, a joint across the middle
 SOLID_SHADE.manualpad = o => (i, t, L) => {
@@ -18353,13 +18389,43 @@ SOLID_SHADE.skateramp = o => (i, t, L) => {
   const f = HIT.face, slope = f === 7 || f === 8, top = f === 5 || slope, h = rampHeight(o, HIT.u);
   const coping = top && (o.ramp === 'kicker' ? HIT.u > o.hl - .01 : f === 5 && o.hw - Math.abs(HIT.v) < .006) || !top && Math.abs(HIT.w - h) < .004 && (f === 3 || f === 4) && (o.ramp !== 'kicker' || HIT.u > o.hl - .01);
   if (coping) { BG[i] = SK_STEEL(L, top); return set(i, ' ', 0), true; }
-  BG[i] = C(GRAY, (slope ? (f === 7 ? 4.6 : 3.6) : top ? 4.3 : 2.8 * shadeFace(f)) + L * .25); return set(i, ' ', 0), true;
+  const foot = t / projY, [wx, wy] = skWorld(o, HIT.u, HIT.v);
+  if (slope || top) { // up and down the slopes: rubber streaks, thickest down the middle where the lines are; the deck pale and polished at the lip
+    const mid = 1 - Math.abs(HIT.v) / o.hw, marks = slope ? skWheelMarks(wx, wy, o.c, o.s, .5 + mid * .5, foot) : 0;
+    const polish = !slope && o.ramp !== 'kicker' && o.hw - Math.abs(HIT.v) < .02 ? .35 : 0, mottle = (noise(wx * 30, wy * 30, 2118) - .5) * .5 * coveDetail(t, .08);
+    BG[i] = C(GRAY, (slope ? (f === 7 ? 4.6 : 3.6) : 4.3) + L * .25 - marks * 2.2 + polish + mottle); return set(i, ' ', 0), true;
+  }
+  // the sides: concrete, rust bleeding down from the coping in streaks, and on some of them somebody's tag
+  const drip = hash(Math.floor(HIT.u * 160 + o.x * 7), 1, 2119), rust = (f === 3 || f === 4) && drip > .86 && h - HIT.w < .012 + drip * .03; // (thin, ragged runs from under the coping)
+  const tag = skSideTag(o, i, f, HIT.u, HIT.w, h, t, L);
+  if (tag) return true;
+  BG[i] = C(rust ? BRICK : GRAY, (rust ? 2.2 : 2.8) * shadeFace(f) + L * .25); return set(i, ' ', 0), true;
 };
+// a tag on a ramp's side wall (about one in three of them): a word in a spray colour, outlined, low down where a
+// writer could reach; the same on every visit
+const SK_TAGS = ['SK8', 'RAD', 'ZOO', 'GNAR', 'OLLIE', 'DOGTOWN', 'SHRED', 'YARDS'];
+function skSideTag(o, i, f, u, w, h, t, L) {
+  if (f !== 3 && f !== 4) return false;
+  const seed = hash(Math.floor(o.x * 10), Math.floor(o.y * 10) + f, 2120);
+  if (seed > .38) return false;
+  const word = SK_TAGS[Math.floor(seed * 100) % SK_TAGS.length], cw = Math.min(.035, o.hl * 1.2 / word.length), zc = Math.min(h * .55, .08), band = Math.min(.045, h * .6);
+  if (band < .012 || Math.abs(w - zc) > band / 2) return false;
+  const q = (f === 3 ? u : -u) / cw + word.length / 2; if (q < 0 || q >= word.length) return false;
+  const col = [MAG, CYAN, GREEN, ORANGE, RED][Math.floor(seed * 1000) % 5], hz = (zc + band / 2 - w) / band, foot = t / projY;
+  if (cw / foot >= 1.5 && band / foot >= 2.5) { const ch = blockGlyph(word, q, hz, foot / cw, foot / band); BG[i] = C(GRAY, 2.6 + L * .25); return set(i, ch || ' ', C(col, 12)), true; }
+  BG[i] = C(col, 4 + L * .2); return set(i, ' ', 0), true; // (far off: a smear of its colour)
+}
 // the park's concrete (floorBaseCell): smooth, pale, saw-cut every 3 m, a few dark scuffs and wax marks
 function skateparkFloor(wx, wy, r, x, d) {
   const foot = d / projY, joint = Math.max(coveGroove(wx, .3, .004, foot), coveGroove(wy, .3, .004, foot));
   const scuff = noise(wx * 9, wy * 9, 2102) > .78 ? .8 : 1;
-  return [' ', GRAY, (2.3 - joint * .7) * scuff];
+  // each 3 m slab cured a shade different; wheel streaks crossing it the ways people push between the features (one
+  // way more than the other); a hairline crack across the odd slab; flecks of aggregate up close
+  const sx = Math.floor(wx / .3), sy = Math.floor(wy / .3), cure = (hash(sx, sy, 2121) - .5) * .18;
+  const ang = hash(sx >> 1, sy >> 1, 2122) * Math.PI, marks = Math.max(skWheelMarks(wx, wy, Math.cos(ang), Math.sin(ang), .3, foot), skWheelMarks(wx, wy, -Math.sin(ang), Math.cos(ang), .15, foot) * .7);
+  const crack = hash(sx, sy, 2123) > .86 && foot < .006 && Math.abs(fract(wx / .3) - .5 - (fract(wy / .3) - .5) * (hash(sx, sy, 2124) - .5) * 1.4 - Math.sin(wy * 60) * .02) < .006;
+  const fleck = foot < .003 && hash(Math.floor(wx * 400), Math.floor(wy * 400), 2125) > .93;
+  return [fleck ? '.' : ' ', GRAY, (2.3 - joint * .7 + cure - marks * .6 - (crack ? .45 : 0)) * scuff];
 }
 // Non-convex profile ray: test every extruded segment and keep the nearest.
 // Box culling in drawBox bounds this work to the ramp's projected rectangle.
@@ -18411,10 +18477,25 @@ function rayProfile(ox, oy, oz, rx, ry, rz, b) {
 }
 SOLID_SHADE.skateprofile = o => (i, t, L) => {
   if (HIT.face === 9) { BG[i] = SK_STEEL(L, true); return set(i, ' ', 0), true; }
-  const curved = HIT.face === 7, light = curved ? .45 + .55 * Math.max(0, HIT.nz) : .5;
+  const curved = HIT.face === 7, light = curved ? .45 + .55 * Math.max(0, HIT.nz) : .5, foot = t / projY;
   const seam = !o.bowl && curved ? coveGroove(HIT.v, .3, .001, t / projX) : 0;
-  BG[i] = C(GRAY, (3.5 + L * .32) * light * (1 - seam * .18));
-  return set(i, ' ', 0), true;
+  let wear = 0, ch = ' ';
+  if (curved) { // the transition: rubber streaks up and down it, thickest across the middle where the lines go; at the top a band
+    // polished by trucks just under the coping, and on the flat deck a strip of diamond-plate steel along the edge
+    const [wx, wy] = skWorld(o, HIT.u, HIT.v), mid = 1 - Math.abs(HIT.v) / o.hw, p = o.profile, height = HIT.w - o.z0;
+    wear = skWheelMarks(wx, wy, o.c, o.s, .35 + mid * .65, foot) * 1.1 - (p && height > p.height - .03 && Math.abs(HIT.u) <= p.tip ? .35 : 0);
+    if (p && Math.abs(HIT.u) > p.tip && Math.abs(HIT.u) < p.tip + .025) { // (the deck plate)
+      const diamond = foot < .004 && Math.abs(fract((HIT.u + HIT.v) * 120) - .5) < .12 && Math.abs(fract((HIT.u - HIT.v) * 120) - .5) < .12;
+      BG[i] = C(GRAY, 2.6 + L * .3 + (diamond ? .8 : 0)); return set(i, ' ', 0), true;
+    }
+  } else if (!o.bowl && (HIT.face === 3 || HIT.face === 4)) { // its side walls: rust down from the coping, and some carry a tag
+    const p = o.profile, h = p ? skateProfileHeight({ profile: p, z0: 0 }, HIT.u) : 0;
+    if (p && skSideTag({ ...o, hl: p.tip + p.deck }, i, HIT.face, HIT.u, HIT.w - o.z0, h, t, L)) return true;
+    const drip = hash(Math.floor(HIT.u * 160 + o.x * 7), 2, 2119);
+    if (p && drip > .86 && h - (HIT.w - o.z0) < .012 + drip * .03) { BG[i] = C(BRICK, 2.1 + L * .2); return set(i, ' ', 0), true; } // (thin runs of rust from under the coping)
+  }
+  BG[i] = C(GRAY, (3.5 + L * .32) * light * (1 - seam * .18) - wear * 2);
+  return set(i, ch, 0), true;
 };
 // Cache the revolved faces once. The hot ray loop allocates no roots, vectors
 // or closures, and rejects each face by its radial/height interval.
@@ -38513,12 +38594,16 @@ function sitDown() {
 function standUp() { // back where you sat down from (it was walkable)
   [px, py] = body.seat.from; body.seat = null;
 }
+const STEP_DOWN = .025; // (cells: a drop deeper than 25 cm in one step is an edge you fall off, not a step down)
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
   const ground = mode === 'walk' ? walkGround(px, py) : 0;
   if (typeof skateGrinding === 'function' && (skateGrinding() || SK.transition) && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
   const wasAir = body.z > 0 || body.vz > 0; // (in the air coming into this frame: you land this frame or later, never get skipped)
   if (body.groundMode === mode && wasAir) body.z += ((body.ground || 0) - ground) * 10;
+  // walked off an edge (a ramp's deck, a wall, a drop in the rocks): the ground falls away by more than a step, so you
+  // fall from where you were instead of being set down on it. A kerb, a stair, a slope you walk down: your feet follow
+  else if (body.groundMode === mode && mode === 'walk' && !skatingNow() && !body.seat && (body.ground || 0) - ground > STEP_DOWN) { body.z = ((body.ground || 0) - ground) * 10; body.vz = 0; body.peak = body.z; }
   if (body.vz > 0 && body.z < 0) body.z = 0; // (still going up: rising ground under you can't land you, it lifts you with it)
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
@@ -53562,7 +53647,7 @@ const free = (x, y) => {
   } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !(skatingNow()&&skateBowlEntryBlocked(x,y,walkGround(px,py)+body.z/10)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !(skatingNow()&&skateBowlEntryBlocked(x,y,walkGround(px,py)+body.z/10)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !(mode === 'walk' && benchAt(x, y, 0.02, walkGround(px, py) + body.z / 10)) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03, skatingNow() ? walkGround(px,py)+body.z/10 : -Infinity) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 // Blocked by an edge that isn't square to the grid (a curving shoreline, a round planter): feel round you for which way the
