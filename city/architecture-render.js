@@ -187,7 +187,28 @@ function architectureAwningShade(o, i, t, L) {
   BG[i] = C(stripe, HIT.face === 5 ? 1.9 + L * .24 : HIT.face === 6 ? .8 + L * .06 : 1.5 + L * .18);
   return set(i, ' ', 0), true;
 }
+// the building's number on the front board of its entrance canopy, read from the pavement: white block letters on the
+// dark board, the face toward the street only
+function canopyNumber(o, i, t, L) {
+  const sg = Math.sign(o.c * o.ny - o.s * o.nx) || 1; // (which way along the canopy reads left to right, seen from the street)
+  if (HIT.face > 4 || HIT.v * sg < o.hw * .98) return false;
+  const word = o.number, n = word.length, cw = Math.min(.06, (o.hl * 2 - .06) / n), band = (o.z1 - o.z0) * .78, zc = (o.z0 + o.z1) / 2;
+  const q = HIT.u * sg / cw + n / 2, hz = (zc + band / 2 - HIT.w) / band, fp = t / projY, lit = Math.max(L, night * 9);
+  BG[i] = C(GRAY, .9 + L * .08);
+  if (q >= 0 && q < n && hz >= 0 && hz < 1 && cw / fp >= 1.5 && band / fp >= 2.5) { // close: block letters
+    const ch = blockGlyph(word, q, hz, fp / cw, fp / band);
+    return set(i, ch || ' ', C(WHITE, 6 + lit * .55)), true;
+  }
+  // further off the board's a row or two high: the number in plain characters along its middle row, a letter a
+  // column, as long as a letter's at least a column wide
+  if (q >= 0 && q < n && oneCell(HIT.w - zc, fp)) { // (set solid, a letter a column, centred, as the small shop signs are)
+    const k = Math.floor((q - n / 2) * cw * projX / t + n / 2 + .0137);
+    if (k >= 0 && k < n) return set(i, word[k].toUpperCase(), C(WHITE, 7 + lit * .5)), true;
+  }
+  return set(i, ' ', 0), true;
+}
 function architectureDetailShade(o, i, t, L) {
+  if (o.kind === 'entrance-canopy' && o.number && canopyNumber(o, i, t, L)) return true;
   if (o.kind === 'fascia') return architectureFasciaShade(o, i, t, L);
   if (o.kind === 'awning') return architectureAwningShade(o, i, t, L);
   if (o.profile) return residentialDetailShade(o, i, t, L);
