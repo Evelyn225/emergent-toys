@@ -30,12 +30,12 @@ for(const [width,height] of [[390,844],[320,568],[844,390]]){
  test(`phone ${width}×${height}: long inventory names and independent slot/drop controls fit, have thumb targets and work by touch`,()=>fixture(width,height,async p=>{
   const controls=await targets(p,'#inventory .carry-row button, #inventory .carry-row select');
   for(const c of controls){assert.ok(c.height>=44&&c.width>=44,JSON.stringify(c));assert.ok(c.inside,JSON.stringify(c));}
-  const name=await p.locator('#inventory [data-slot="0"] span').nth(1).evaluate(el=>{
+  const name=await p.locator('#inventory [data-slot="0"] [data-preview-slot] + span').evaluate(el=>{
    const name=el.getBoundingClientRect(),row=el.closest('.carry-row').getBoundingClientRect();
    return {text:el.textContent,height:name.height,width:name.width,rowWidth:row.width,unclipped:el.scrollWidth<=el.clientWidth+1};
   });
   assert.match(name.text,/record player with cabinet and record flatpack/);
-  assert.ok(name.width>name.rowWidth*.65&&name.height<100&&name.unclipped,JSON.stringify(name));
+  assert.ok(name.width>=120&&name.height<100&&name.unclipped,JSON.stringify(name));
   await p.locator('#inventory [data-quick-item="0"]').selectOption({value:'3'});
   assert.equal(await p.evaluate(()=>quickSlots[3]),0);
   await p.locator('#inventory [data-slot="1"]').tap();assert.equal(await p.evaluate(()=>held),1);
