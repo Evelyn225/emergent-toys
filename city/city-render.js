@@ -217,7 +217,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     if (sh.aqua) return aquaFront(i, u, uStep, z, d, side, L);
     if (sty === 17 && sh.kind !== SHOP_APTS) return shotengaiFront(i, u, z, sh, sk, open, L, night * fog * 14, fpG);
-    if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
+    if (sh.base) { const lit = Math.max(L, night * fog * 14); if (civicFront(i, u, uStep, z, d, side, mx, my, wc, sh, L, lit)) return; return serviceFront(i, u, z, sh.base, L, lit); } // (civic-fronts.js)
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
       if (fd > 0.12 && fd < 0.88 && z < 0.3) {
@@ -770,7 +770,7 @@ function floorBaseCell(i, r, x, rx, ry) {
     if (mh) { set(i, mh[0], mh[1]); BG[i] = mh[2]; return; }
     const gr = streetGrateCell(wx, wy, L, d, road, bx, by); // a gully, tree or vent grate (street-drains.js)
     if (gr) { set(i, gr[0], gr[1]); BG[i] = gr[2]; return; }
-    surf = roadSurface(wx, wy, road, lx, ly, bx, by, d, L); // (null on a bridge: its plates and railings below)
+    surf = civicApron(wx, wy, L, d) || roadSurface(wx, wy, road, lx, ly, bx, by, d, L); // (null on a bridge: its plates and railings below; a service's kept-clear bay: civic-fronts.js)
     if (surf) ;
     else if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
     else if (e < 0.3 || e > 1.7) { ch = bridge ? '=' : ','; k = 1.3; } // sidewalk (on a bridge, a walkway of plates)
