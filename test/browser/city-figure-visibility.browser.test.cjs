@@ -137,7 +137,7 @@ test('invisible figures leave fine detail for visible people and its budget rene
       return { scales, frozen: T === time, fineSprites: figFineCache.size };
     } finally { CITY.sprites = originalSprites; figSprite = originalFigureSprite; }
   });
-  assert.deepEqual(result.scales, [4, 1, 4, 1]);
-  assert.equal(result.fineSprites, 2);
+  assert.deepEqual(result.scales, [4, 4, 4, 4]); // (two new close-up sprites a frame: both visible poses get theirs, each frame)
+  assert.equal(result.fineSprites, 4);
   assert.equal(result.frozen, true);
 }));

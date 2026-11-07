@@ -64,7 +64,7 @@ function parkShrubAt(x,y,pad,z=null,height=Infinity){
     if(plantingFootprint(o,rel(x-o.x),rel(y-o.y),pad,lo,lo+height))return o;
   }return null;
 }
-function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
+function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR*lodScale());});}
 for(const edge of [CURB,2-CURB])alongStreets(4.5,edge,(x,y,ax,ay,bx,by)=>{
   const district=districtAt(x-ax*.5,y-ay*.5);
   if(!['midtown','brownstones','chinatown'].includes(district)||hash(bx,by,edge<1?1961:1962)>.32)return;
