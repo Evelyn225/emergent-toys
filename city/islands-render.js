@@ -197,13 +197,7 @@ function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
 }
 function drawFernCascade() {
   if(near(px,py,FERN_FALLS.x,191)>vis+12)return;
-  for(const sheet of FERN_CASCADE) {
-    drawBox({...sheet,x:sheet.x-px,y:sheet.y-py},(i,t,L)=>{
-      const worldY=sheet.y+HIT.v,flow=fract(worldY*11-T*2.4+Math.sin(HIT.u*31)*.25);
-      BG[i]=C(BLUE,1.5+day*2);
-      set(i,flow<.22?'~':flow>.92?':':' ',C(flow<.22?WHITE:CYAN,Math.max(4,L)));return true;
-    },rayMansard);
-  }
+  for(const sheet of FERN_CASCADE)drawWaterCascadeSheet(sheet);
   for(let k=0;k<9;k++) {
     const p=fract(T*.65+k*.113),x=FERN_FALLS.x+(hash(k,2,1917)-.5)*.6;
     const y=193.2+p*.25,z=terrainHeight(x,y)+.015+Math.sin(p*Math.PI)*.065;

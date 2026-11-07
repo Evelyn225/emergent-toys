@@ -2411,7 +2411,7 @@ function islandSurface(x,y) {
   const patch=noise(x*.3,y*.3,1876),edge=wildIslandEdge(x,y,island);
   if(island.id==='fern') {
     const creek=fernCreekDistance(x,y);
-    if(creek<0)return {base:CYAN,background:BLUE,ch:fract(y*5-T*1.8+grain*.4)<.14?'~':' ',color:'#528b9f',tone:1.1,water:true};
+    if(creek<0){const ripple=fract(y*5-T*1.8+grain*.4)<.14;return {base:CYAN,background:ripple?CYAN:BLUE,ch:' ',color:'#528b9f',tone:ripple?1.8:1.1,water:true,night:ripple?2.5:1.8};}
     if(creek<.16+patch*.12)return {base:GRAY,background:GREEN,ch:grain>.97?'.':' ',color:'#64715d',tone:1};
     if(onFernStrip(x,y)) {
       let ch=grain>.85?':':' ';
@@ -14183,8 +14183,8 @@ function pondCell(i, r, x, wx, wy, sd, L, freeze = true) {
   return set(i, ' ', 0);
 }
 function floorCell(i, r, x, rx, ry) {
-  floorBaseCell(i, r, x, rx, ry);
-  if (snowCover <= 0 || FL[i] >= 3) return; // open water remains open water
+  const water=floorBaseCell(i, r, x, rx, ry);
+  if (snowCover <= 0 || water || FL[i] >= 3) return; // open water remains open water
   const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
   if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
   const lx = mod(wx, 8), ly = mod(wy, 8);
@@ -14216,7 +14216,8 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
   const level = day * (3.3 + far * 2.4) + night * (1.8 + far * .9) + h * (.4 + day * .5); // (at night dark, but a trough never goes all the way to black)
   BG[i] = C(BLUE, Math.max(0, level));
   const crest = s1 * k1 > .86 && chop > .2 && k1 > .3; // (broken: only where the chop lifts the crest)
-  set(i, crest ? (chop > .45 ? '~' : '-') : ' ', C(day > .3 ? CYAN : BLUE, (day > .3 ? 4 + day * 3 : 2.6) * f));
+  if(crest)BG[i]=C(day>.3?CYAN:BLUE,level+1+day);
+  set(i,' ',0);
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI), up = Math.abs(sunEl), body = sunEl > 0 ? sunAz() : sunAz() + Math.PI;
   const align = Math.cos(Math.atan2(ry, rx) - body), width = .992 - (1 - up) * .03; // (a low sun or moon lays a wider path)
   if (up > .03 && align > width && h > 0) {
@@ -14224,7 +14225,8 @@ function seaCell(i, r, x, rx, ry, wx, wy, d, f) {
     if (glint > .22) { // mostly the water brightening, a fleck of light now and then
       const moon = sunEl <= 0;
       BG[i] = C(moon ? BLUE : CYAN, moon ? 2 + glint * 6 : 5 + glint * 8);
-      set(i, glint > .55 ? '-' : ' ', C(moon ? WHITE : YEL, moon ? 6 + glint * 6 : 10 + glint * 5));
+      if(glint>.55)BG[i]=C(moon?WHITE:YEL,moon?4+glint*5:7+glint*5);
+      set(i,' ',0);
     }
   }
 }
@@ -14243,7 +14245,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   const road = bridge ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
-  if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return;}
+  if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return true;}
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
@@ -14281,7 +14283,7 @@ function floorBaseCell(i, r, x, rx, ry) {
         // over water that never retreats.
         if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
           BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
-          set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
+          set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return surface.water;
         }
       }
       seaCell(i, r, x, rx, ry, wx, wy, d, f); FL[i] = 3;
@@ -14293,11 +14295,11 @@ function floorBaseCell(i, r, x, rx, ry) {
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
         const froth = noise(wx * 7, wy * 7 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
-        if (k > 0.18) { set(i, k > 0.5 ? '~' : WAKE_HIT.arm ? '-' : ':', C(WHITE, Math.max(L * 1.5, 5 + k * 10))); BG[i] = C(BLUE, 1 + day * 3 + k * 1.6); FL[i] = 0; }
+        if(k>.18){BG[i]=C(k>.5?WHITE:CYAN,(2+day*3)+k*(3+day*4));set(i,' ',0);FL[i]=0;}
       }
       const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
-      if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
-      return;
+      if(lb>.05){BG[i]=C(WARM,1+lb*7);set(i,' ',0);FL[i]=0;}
+      return true;
     } else if (wildIslandAt(wx,wy)) {
       islandTexture=islandSurface(wx,wy);soft=true;base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
     } else if (worldReady&&naturalCoastAt(wx,wy)) {
@@ -14387,6 +14389,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   set(i, ch, col);
   streetChalkCell(i,wx,wy,L);
+  return islandTexture?.water===true;
 }
 
 // the lighthouse: its lamp turns once every BEAM_P seconds, two beams back to back, lit from dusk to dawn (and in fog)
@@ -14557,7 +14560,7 @@ function reflect() {
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
         const lv = (COL[j] & 15) * 0.55;
         CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
-      } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));
+      }else if(f===2){set(i,' ',0);BG[i]=C(lamp?WARM:BLUE,lamp?Math.max(3+day*3,lamp):3+day*3);}
       if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }
   }
@@ -14566,7 +14569,7 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && shelterRoofAt(px, py, eye); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
+  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && (shelterRoofAt(px, py, eye)||waterWeatherCoverAt(px,py,eye)); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
@@ -27201,7 +27204,7 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
   BG[i] = bgAt(background, brightness * fog * (surface?.water ? 1 : light), depth); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
-  if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
+  if (snowCover > 0 && !surface?.water) paintSettledSnow(i, x, y, L, 1, 0);
 }
 function drawRoadBridges() {
   if(!worldReady)return;
@@ -41164,13 +41167,7 @@ function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
 }
 function drawFernCascade() {
   if(near(px,py,FERN_FALLS.x,191)>vis+12)return;
-  for(const sheet of FERN_CASCADE) {
-    drawBox({...sheet,x:sheet.x-px,y:sheet.y-py},(i,t,L)=>{
-      const worldY=sheet.y+HIT.v,flow=fract(worldY*11-T*2.4+Math.sin(HIT.u*31)*.25);
-      BG[i]=C(BLUE,1.5+day*2);
-      set(i,flow<.22?'~':flow>.92?':':' ',C(flow<.22?WHITE:CYAN,Math.max(4,L)));return true;
-    },rayMansard);
-  }
+  for(const sheet of FERN_CASCADE)drawWaterCascadeSheet(sheet);
   for(let k=0;k<9;k++) {
     const p=fract(T*.65+k*.113),x=FERN_FALLS.x+(hash(k,2,1917)-.5)*.6;
     const y=193.2+p*.25,z=terrainHeight(x,y)+.015+Math.sin(p*Math.PI)*.065;
@@ -41396,7 +41393,7 @@ function drawIslandTidePool(p) {
   coveLathe(x,y,0,p.profile,stone);
   drum(x,y,p.waterRadius,water-.003,water,(i,t,L)=>{
     const ripple=Math.sin(HIT.u*80+HIT.v*23+T*.8);
-    BG[i]=C(BLUE,3);set(i,ripple>.985?'~':' ',C(CYAN,9));
+    const crest=ripple>.9?coveDetail(t,.08):0;BG[i]=C(crest>.3?CYAN:BLUE,3+crest*2);set(i,' ',0);
     const u=HIT.u+r*.28,v=HIT.v-r*.2,angle=Math.atan2(v,u),radius=Math.hypot(u,v);
     if(radius<.025+.018*Math.cos(angle*5)){BG[i]=C(ORANGE,5+L*.3);set(i,' ',0);}
     return true;
@@ -41725,6 +41722,35 @@ islandSurface=(...args)=>{
  if(s&&!s.water){if(s.ch==='='){s.background=YEL;s.lift=3;s.tone=1.2;}s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;
 };
 islandShoreSurface=(...args)=>{const s=ISLAND_LAND_SHORE(...args);if(!s.water){s.ch=' ';s.night=Math.max(s.night||0,1.3);}return s;};
+// Prepared flowing sheets keep their real terrain-fitted planes and depth.
+const WATER_CASCADE_MODELS=new WeakMap();
+function drawWaterCascadeSheet(sheet){
+ let model=WATER_CASCADE_MODELS.get(sheet);
+ if(!model){
+  model={view:{...sheet,planeData:roofPlaneData(sheet.planes)},shade:(i,t,L)=>{
+   const y=sheet.y+HIT.v,fp=t/projY,normal=sheet.planes[4],length=Math.hypot(normal[0],normal[1],normal[2]);
+   const front=coveGroove(y-T*(2.4/11)+Math.sin(HIT.u*31)*(.25/11),1/11,.018,fp);
+   const light=coveLight(0,normal[1]/length,normal[2]/length),foam=front;
+   BG[i]=C(foam>.65?WHITE:foam>.25?CYAN:BLUE,1.5+day*2+L*.2*light+foam*(2+day*3));set(i,' ',0);return true;
+  }};
+  WATER_CASCADE_MODELS.set(sheet,model);
+ }
+ model.view.x=sheet.x-px;model.view.y=sheet.y-py;drawBox(model.view,model.shade,rayMansard);
+}
+// Precipitation and settled snow use the same actual overhead geometry. The
+// convex interval preserves the arch's opening; its top still catches snow.
+const WATER_WEATHER_BOUNDS=[Math.min(...WILD_ISLANDS.map(i=>i.x-i.rx-2)),Math.min(...WILD_ISLANDS.map(i=>i.y-i.ry-2)),Math.max(...WILD_ISLANDS.map(i=>i.x+i.rx+2)),Math.max(...WILD_ISLANDS.map(i=>i.y+i.ry+2))];
+function waterWeatherCoverAt(x,y,z){
+ if(x<WATER_WEATHER_BOUNDS[0]||y<WATER_WEATHER_BOUNDS[1]||x>WATER_WEATHER_BOUNDS[2]||y>WATER_WEATHER_BOUNDS[3])return false;
+ if(islandRoofHeight(x,y)>z+.02)return true;
+ for(const g of ISLAND_LANDMARKS){
+  const root=g.root;if(Math.abs(x-g.x)>root.hl||Math.abs(y-g.y)>root.hw||root.z1<=z+.02)continue;
+  for(const p of g.parts){if(p.z1<=z+.02)continue;const span=islandLandmarkInterval(p,x,y);if(span&&span[1]>z+.02)return true;}
+ }
+ return false;
+}
+const WATER_WEATHER_SNOW=snowExposed;
+snowExposed=(x,y,z=0)=>WATER_WEATHER_SNOW(x,y,z)&&!waterWeatherCoverAt(x,y,z);
 // Hotel-only bedside fittings sit on the existing cabinet's measured top.
 // Closed lathe shells leave actual openings around the supported light bulb.
 function HOTEL_BEDSIDE_LAMP(x,y,tier,baseZ=.65) {
