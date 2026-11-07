@@ -80,7 +80,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
     } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE, d)) return; // (where the walk-ups have theirs)
     else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L, d, local, -f.spacing * 0.39, f.spacing * 0.39, 0.04, 0.34)) return;
-      if (d < SHOP_WINDOW.near * (shopSceneFor(sh) ? 1.6 : 1) && z < 0.3 && Math.abs(local) >= f.spacing * 0.03 && (sh.kind !== SHOP_NEON || shopSceneFor(sh))) { // up close, the display behind the glass (shop-windows.js)
+      if (d < SHOP_WINDOW.near * (shopSceneFor(sh) ? 1.6 : 1) && z < 0.3 && Math.abs(local) >= f.spacing * 0.03) { // up close, the display behind the glass (shop-windows.js)
         const e = Math.sign(local), sg = Math.sign(u * wc) || 1, ua = sg * (f.start + center + e * f.spacing * 0.03), ub = sg * (f.start + center + e * f.spacing * 0.39);
         if (shopWindow(i, u, z, Math.min(ua, ub), Math.max(ua, ub), 0.04, 0.3, sh, openAt(sh, tod), L, sk + unit * 2 + (e > 0 ? 1 : 0))) return;
       }
