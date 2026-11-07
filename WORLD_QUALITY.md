@@ -79,7 +79,7 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 38. [x] Car dealership interior: one blocky car in an empty grey room; showroom floor, several cars, desks, brochures, signage.
 39. [x] IDEA interior: mostly empty grey floor; room sets, aisles, the warehouse, the restaurant.
 40. [x] Bank interior: tellers in front of a blank wall; the hall, queue ropes, the vault door, desks, clocks.
-41. [ ] Sparse interiors needing a pass: gym, tyres, welding, auto repair, courier office, liquor, pawn, phones, jeweller, hotel and motel lobbies.
+41. [x] Sparse interiors needing a pass: gym, tyres, welding, auto repair, courier office, liquor, pawn, phones, jeweller, hotel and motel lobbies.
 42. [ ] Civic exteriors: the police station front is a flat grey grid; fire station and hospital forecourts are plain red and white slabs (bay markings, doors, parked vehicles).
 43. [ ] Bare island landings: Fern Island, Cabin Cove, Juniper Isle and Crescent Sands are flat ground with a path.
 44. [ ] Dev tools: many shop and landmark teleports land nose-to-wall; five districts teleport to the same waterfront spot.
