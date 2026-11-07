@@ -1150,7 +1150,7 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
 }
 const figCache = new Map(), figFineCache = new Map(); // (fine sprites are big: only a few kept, for whoever's close)
 // new fine sprites cast a frame, at most: past that, whoever's left waits a frame or two in the ordinary one
-const FIG_FINE_PER_FRAME = 1;
+const FIG_FINE_PER_FRAME = 2;
 let figFineT = -1, figFineN = 0;
 function figSprite(look, view, key, S = 1) {
   const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
@@ -1265,7 +1265,7 @@ function drawFigProp(s, rx, ry) {
   if (key === 'sit' || key === 'sitfold') key += Math.round((s.seatZ ?? 0.45) / unit);
   else if (key === 'stand' && s._moving) key = 'walk' + Math.floor(s._dist / (s.h * 0.85) * 8) % 8; // a stride every 1.5m or so
   const [fx, fy] = s.dead&&s.down?[-s.down.fx,-s.down.fy]:s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
-  drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, s.light && { light: s.light });
+  drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, { light: s.light || 0, hold: s }); // (hold: their view and their close-up sprite stay theirs)
 }
 
 // ---- drawing one. (rx, ry) from you, standing on z0, h tall (standing height, world units), facing (fx, fy) - or
@@ -1315,9 +1315,18 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   let spr;
   const sprite = dz => {
     if (!spr) {
-      const rowsPer = unit / dz;
+      const rowsPer = unit / dz, hold = opts?.hold;
       const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy, opts?.hold), pose, S);
+      spr = figSprite(look, figView(rx, ry, fx, fy, hold), pose, S);
+      // over this frame's allowance for new close-up sprites, figSprite falls back to a coarser one, which reads as a
+      // different person (another build, the face gone): somebody you're keeping an eye on keeps the close-up one
+      // they had last frame instead (their pose a frame behind), until theirs is ready
+      if (hold) {
+        const got = spr.S || 1, last = hold.figSpr;
+        if (got < S && last && (last.S || 1) === S && hold.figLook === look) spr = last;
+        else if (got === S) { hold.figSpr = spr; hold.figLook = look; }
+        hold.figS = spr.S || 1;
+      }
     }
     return spr;
   };
@@ -4143,7 +4152,10 @@ function residentialDetails(b) {
     f.residential = residentialFaceLayout(b, f);
     const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
     architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
-    if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
+    if (f.front && !f.low) { // the entrance canopy, the building's number along its front board (a number painted on the wall above is hidden by the canopy from the pavement)
+      architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .3, .325, 'entrance-canopy', { ...extra, number: b.sh.kind === SHOP_APTS ? b.sh.word : null });
+      if (b.sh.kind === SHOP_APTS) f.numberOnCanopy = true;
+    }
     if (b.sty === 16) modernApartmentDetails(b, f); else {
       tenementEscapeDetails(b, f);
       const r = f.residential, escapeUnit = Math.max(0, r.units - 2);
@@ -4900,8 +4912,8 @@ function abandonedStepParts(e) {
 }
 function drawAbandonedStep(e, vx, vy, d) {
   for (const p of abandonedStepParts(e)) {
-    if (p.kind === 'flyer' && d > 2) continue;
-    if (p.kind === 'weed' && d > 3.5) continue;
+    if (p.kind === 'flyer' && d > 2 * lodScale()) continue;
+    if (p.kind === 'weed' && d > 3.5 * lodScale()) continue;
     const box = { ...p.box, x: vx + (p.box.x - e.x), y: vy + (p.box.y - e.y) };
     drawBox(box, (i, t, L) => {
       const top = HIT.face === 5, sf = shadeFace(HIT.face), fp = t / projY;
@@ -6657,6 +6669,7 @@ function stepPeople(dt, t, everywhere = false) {
       else if (p.goal && !p.hidden) { const d = Math.hypot(rel(p.x - px), rel(p.y - py)); if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) settle(p); } // (never vanishing in plain view)
       p.simT = T;
     }
+    if (p.hooked) continue; // (on the end of your fishing line: fishing.js moves them)
     if (stepDown(p, dt)) continue; // (knocked down by a car)
     if (p.flee) { stepFlee(p, dt); continue; } // (running from a gunshot)
     if (p.help) { stepHelp(p, dt); continue; } // (gone to them)
@@ -8257,7 +8270,7 @@ const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
 
 // ---- the soccer ball, once kicked: rolls, slows, bounces off walls, sinks in the sea; walk into it to dribble,
 // E to pick it up
-let ball = null; // { x, y, vx, vy, z, vz }
+let ball = null; // { x, y, vx, vy, z (above the ground under it), vz }
 // what stops it: buildings (unless it's sailing over a low one), and everything solid at street level: fences,
 // containers, booths, lamp posts, vending machines
 const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || typeof kerbAt === 'function' && kerbAt(x, y, 0.015,z-.015,.03) || fairBlocked(x, y, 0.015));
@@ -8273,12 +8286,20 @@ function stepBall(dt) {
   ball.vz -= 2 * dt; ball.z += ball.vz * dt;
   if (ball.z < 0) { ball.z = 0; if (Math.abs(ball.vz) > 0.08) { ballSound('bounce', Math.abs(ball.vz) * 4); ball.vz = -ball.vz * 0.5; } else ball.vz = 0; }
   const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
+  const g0 = outdoorGroundHeight(ball.x, ball.y);
+  if (ball.z === 0) { // on a slope (the islands' hills, a ramp): it rolls downhill
+    const e = .02, gx = (outdoorGroundHeight(ball.x + e, ball.y) - outdoorGroundHeight(ball.x - e, ball.y)) / (2 * e), gy = (outdoorGroundHeight(ball.x, ball.y + e) - outdoorGroundHeight(ball.x, ball.y - e)) / (2 * e);
+    if (Math.abs(gx) < 3 && Math.abs(gy) < 3) { ball.vx -= gx * 1.4 * dt; ball.vy -= gy * 1.4 * dt; }
+  }
   const n = Math.max(1, Math.ceil(Math.hypot(ball.vx, ball.vy) * dt / 0.01)); // (small steps: a fence is only 2cm thick)
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
     if (ballBlocked(nx, ny, ball.z)) { const v = Math.abs(ax === 'x' ? ball.vx : ball.vy); if (v > 0.1) ballSound('wall', v); if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
     else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
+  // the ground moved under it: up a rise it rides up onto it; off a drop it's in the air for a moment
+  const g1 = outdoorGroundHeight(ball.x, ball.y);
+  ball.z = Math.max(0, ball.z + g0 - g1);
   if (isWater(ball.x, ball.y) && ball.z === 0) { ballSound('splash', 2); ball = null; return 'lost'; } // into the drink
   // dribbling: walk into it and it rolls on ahead of you (a touch you hear, not one every frame you're against it)
   const dx_ = rel(ball.x - px), dy_ = rel(ball.y - py), d = Math.hypot(dx_, dy_);
@@ -11494,6 +11515,7 @@ function rodUse(near) {
     return [pick(['Fish on!', 'Got it!', 'Something\'s on!']), 'reel'];
   }
   if (f.st === 'lure') { reelIn(); return ['Too soon. Whatever it was bolts.', 'reel']; }
+  if (f.st === 'hooked') { Object.assign(f, { st: 'haul', t: 0 }); f.who.hooked.haul = true; return [pick(['You lean back and start reeling.', 'You put your back into it and wind.']), 'reel']; }
   if (f.st === 'wait' || f.st === 'land') { reelIn(); return ['', 'reel']; }
   return ['', null];
 }
@@ -11533,6 +11555,7 @@ function stepFishing(dt, rnd = Math.random) {
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
     f.x = worldCoord(f.ox + rel(f.tx - f.ox) * q); f.y = worldCoord(f.oy + rel(f.ty - f.oy) * q); f.z = f.oz * (1 - q) + terrainHeight(f.tx, f.ty) * q + arc * 4 * q * (1 - q);
+    if (q > .2 && mode === 'walk') { const who = lureHits(f); if (who) return hookPerson(f, who); } // (somebody in the way)
     if (q >= 1) {
       f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
@@ -11554,7 +11577,49 @@ function stepFishing(dt, rnd = Math.random) {
     if (q > 0.05 && q < 0.65 && f.catch && rnd() < dt * 12) splash(f.x, f.y, 1, 0.2); // (thrashing as it comes)
     if (q >= 1) { if (f.catch) landCatch(f); else fishing = null; }
   } else if (f.st === 'landed') { if (f.t > 1.6) fishing = null; }
+  else if (f.st === 'hooked' || f.st === 'haul') stepHooked(f, dt);
 }
+// ---- the lure in somebody: a cast that passes through a person on the street catches them by the coat. Q reels them
+// in, stumbling toward you however they dig their heels in; at your feet the hook comes out and they let you have it.
+// Leave it a few seconds and they work it loose themselves.
+const HOOK_REACH = .035, HOOK_HAUL = .26; // (cells: the lure within 35 cm of them; hauled in at about 2.5 m/s)
+function lureHits(f) {
+  for (const p of people) {
+    if (p.hidden || p.dead || p.down || p.inside || p.hooked) continue;
+    if (Math.abs(rel(p.x - f.x)) > HOOK_REACH || Math.abs(rel(p.y - f.y)) > HOOK_REACH || Math.hypot(rel(p.x - f.x), rel(p.y - f.y)) > HOOK_REACH) continue;
+    const h = f.z - walkGround(p.x, p.y); if (h < .005 || h > .2) continue; // (over their head, or skimming the ground past their feet)
+    return p;
+  }
+  return null;
+}
+function hookPerson(f, p) {
+  p.hooked = { t: 0, haul: false }; delete p.flee; delete p.gawk; p.talk = 0; p.wait = 0;
+  Object.assign(f, { st: 'hooked', t: 0, who: p, x: p.x, y: p.y, z: walkGround(p.x, p.y) + .11, d: Math.max(f.d, Math.hypot(rel(p.x - px), rel(p.y - py)) + .1) });
+  fishSfx.push('ground');
+  say(pick(['You hook someone by the coat. "OW! Hey!"', 'The lure catches a passer-by in the sleeve. "What the-"', 'Right in the jacket. They yelp and spin round.']) + ' (Q: reel them in)', 3);
+}
+function stepHooked(f, dt) {
+  const p = f.who;
+  if (!p || p.dead || p.hidden || !p.hooked) { fishing = null; return; }
+  p.hooked.t += dt;
+  const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
+  if (f.st === 'hooked' && f.t > 4) { // they work it loose
+    unhook(p); f.x = p.x; f.y = p.y; f.catch = null; reelIn();
+    say(pick(['They work the hook out of their sleeve and glare at you.', '"Unbelievable." They pull it out and walk off.']), 2.5); return;
+  }
+  if (f.st === 'haul') {
+    if (d < .1) { // at your feet: the hook out, and a piece of their mind
+      unhook(p); p.talk = 3; fishing = null; fishSfx.push('reel');
+      say(pick(['"Are you out of your MIND?" They yank the hook out and shove it back at you.', '"I am a PERSON, not a FISH." They tug themselves free.', '"Do that again and I\'m calling the cops." They pull the hook out of their coat.']), 3.5);
+      return;
+    }
+    const step = Math.min(d - .09, HOOK_HAUL * dt * (.7 + .3 * Math.sin(T * 9))), nx = worldCoord(p.x + ex / d * step), ny = worldCoord(p.y + ey / d * step);
+    if (map[idx(Math.floor(nx), Math.floor(ny))] > 0) { unhook(p); f.catch = null; reelIn(); say('The line snags on the corner and they pull free.', 2); return; } // (a wall in the way)
+    p.x = nx; p.y = ny; p.ph = (p.ph || 0) + dt * 5;
+  }
+  f.x = p.x; f.y = p.y; f.z = walkGround(p.x, p.y) + .11;
+}
+function unhook(p) { delete p.hooked; }
 // out of the water and into your bag
 function landCatch(f) {
   const c = f.catch, d = ITEMS[c.id];
@@ -13592,7 +13657,7 @@ const LETTER_MIN_COLS = 2, LETTER_MIN_ROWS = 2.5;
 function blockGlyph(text, q, hz, du, dv) {
   let bits = 0;
   for (let b = 0; b < 4; b++) {
-    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), ch = text[k];
+    const qq = q + (b & 1 ? du : -du) / 4, hh = hz + (b & 2 ? dv : -dv) / 4, k = Math.floor(qq), c0 = text[k], ch = GLYPH5[c0] !== undefined ? c0 : c0?.toUpperCase(); // (no small letters in the block font: No. as NO.)
     if (GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor((qq - k) * 4), Math.floor(hh * 5))) bits |= 1 << b;
   }
   return BLOCK_CELLS[bits];
@@ -13854,7 +13919,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
   }
   // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
-  const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
+  const inside = (k, col) => d < 3.5 * lodScale() ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   const fpU = Math.max(uStep, d / projY), floorH = 1 / 3, litNow = k => hash(k, fl, sk) > litT - 0.1;
@@ -15777,7 +15842,7 @@ function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (tagCell(i, q, r, t, L)) return true;
   }
   if(SHOP[k]?.islandCabin==='cabin-cove')return false; // retain player paint above, leave this remote timber shelter free of generated street tags
-  if (z < 0.33 && d < 6) { // the quick tags low down
+  if (z < 0.33 && d < 6 * lodScale()) { // the quick tags low down
     const st = streetTags(k, mx, my, face);
     if (st) for (const t of st) {
       const lu = flip > 0 ? fract(wc) : 1 - fract(wc), u0 = u + (t.at - lu); // (the tag's centre, in u)
@@ -16104,7 +16169,28 @@ function architectureAwningShade(o, i, t, L) {
   BG[i] = C(stripe, HIT.face === 5 ? 1.9 + L * .24 : HIT.face === 6 ? .8 + L * .06 : 1.5 + L * .18);
   return set(i, ' ', 0), true;
 }
+// the building's number on the front board of its entrance canopy, read from the pavement: white block letters on the
+// dark board, the face toward the street only
+function canopyNumber(o, i, t, L) {
+  const sg = Math.sign(o.c * o.ny - o.s * o.nx) || 1; // (which way along the canopy reads left to right, seen from the street)
+  if (HIT.face > 4 || HIT.v * sg < o.hw * .98) return false;
+  const word = o.number, n = word.length, cw = Math.min(.06, (o.hl * 2 - .06) / n), band = (o.z1 - o.z0) * .78, zc = (o.z0 + o.z1) / 2;
+  const q = HIT.u * sg / cw + n / 2, hz = (zc + band / 2 - HIT.w) / band, fp = t / projY, lit = Math.max(L, night * 9);
+  BG[i] = C(GRAY, .9 + L * .08);
+  if (q >= 0 && q < n && hz >= 0 && hz < 1 && cw / fp >= 1.5 && band / fp >= 2.5) { // close: block letters
+    const ch = blockGlyph(word, q, hz, fp / cw, fp / band);
+    return set(i, ch || ' ', C(WHITE, 6 + lit * .55)), true;
+  }
+  // further off the board's a row or two high: the number in plain characters along its middle row, a letter a
+  // column, as long as a letter's at least a column wide
+  if (q >= 0 && q < n && oneCell(HIT.w - zc, fp)) { // (set solid, a letter a column, centred, as the small shop signs are)
+    const k = Math.floor((q - n / 2) * cw * projX / t + n / 2 + .0137);
+    if (k >= 0 && k < n) return set(i, word[k].toUpperCase(), C(WHITE, 7 + lit * .5)), true;
+  }
+  return set(i, ' ', 0), true;
+}
 function architectureDetailShade(o, i, t, L) {
+  if (o.kind === 'entrance-canopy' && o.number && canopyNumber(o, i, t, L)) return true;
   if (o.kind === 'fascia') return architectureFasciaShade(o, i, t, L);
   if (o.kind === 'awning') return architectureAwningShade(o, i, t, L);
   if (o.profile) return residentialDetailShade(o, i, t, L);
@@ -16176,7 +16262,7 @@ const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
   const g = architectureSignSpec(b, f, sh);
-  if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
+  if (z > .28 && architectureSignedFace(f, sh) && !(f.numberOnCanopy && d < 9 * lodScale()) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), g.zc,
     g.cwid, g.band, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return; // (up close, the fascia board carries it)
   if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + center), wall, L)) return; // (shut for good: the old sign's shadow)
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
@@ -16851,6 +16937,10 @@ function citySprites() {
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
     else if (m.down) drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else if (m.hooked) { // on your line: turned toward you, digging their heels in (or staggering in as you reel)
+      const dx = rel(px - m.x), dy = rel(py - m.y), d = Math.hypot(dx, dy) || 1;
+      drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.hooked.haul ? 'walk' + (Math.floor((m.ph || 0) * 2) & 7) : fract(T * 1.5) < .5 ? 'gasp' : 'stand');
+    }
     else if (m.flee) { drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
@@ -17122,7 +17212,7 @@ const EL_COL = 0.022, EL_PANEL = 0.07;
 function drawElPillar(p) {
   const [vx, vy] = R(p.x, p.y), d = Math.hypot(vx, vy);
   if (d > vis + 1) return;
-  if (d > 9) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
+  if (d > 9 * lodScale()) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
   drawBox(boxAt(vx, vy, 1, 0, 0.04, 0.04, 0, 0.025), (i, t, L) => {
     BG[i] = C(STONE, (1.2 + L * 0.25) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; // the footing
   });
@@ -17159,7 +17249,7 @@ function drawElStairs(st) {
   const [ox, oy] = R(st.ox, st.oy), at = (u, v) => [ox + c * (st.off + u) + fx * v, oy + s * (st.off + u) + fy * v];
   const [mx, my] = at(0, 0.3), d = Math.hypot(mx, my);
   if (d > vis + 2) return;
-  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
+  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12 * lodScale();
   for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
     const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
     if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); elSteelRod(ax, ay, za, bx, by, zb, 0.03); continue; }
@@ -17250,7 +17340,7 @@ const postRod = (ax, ay, az, bx, by, bz, r, col = GRAY) => drawRod(ax, ay, az, b
 function drawParkLamp(vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.3, lit = lampsOn > 0.3;
   if (d > vis) return;
-  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
+  if (d < 6 * lodScale()) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
   postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.024, 0.022, (i, t, L) => {
     BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(WHITE, 1.5 + L * 0.2);
@@ -17269,7 +17359,7 @@ const FAIR_BULBS = [YEL, RED, CYAN, MAG];
 function drawFairPost(o, vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.36, col = FAIR_BULBS[(Math.floor(T * 2) + Math.round(o.y)) & 3];
   if (d > vis) return;
-  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
+  if (d < 6 * lodScale()) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
   postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.016, 0.016, (i, t, L) => {
     BG[i] = C(col, 2 + night * 9 + L * 0.15);
@@ -17311,13 +17401,13 @@ function drawBike(o, vx, vy) {
   const at = (u, w = 0) => [vx + c * u - s * w, vy + s * u + c * w];
   const bar = (u0, z0, u1, z1, rr = 0.004, w0 = 0, w1 = 0) => { const [ax, ay] = at(u0, w0), [bx, by] = at(u1, w1); tube(ax, ay, z0, bx, by, z1, rr, col, 1.6, 0.5); };
   for (const hu of [-BIKE.hub, BIKE.hub]) { // the wheels: a tyre round in pieces, spokes up close
-    const segs = d < 7 ? 10 : 5;
+    const segs = d < 7 * lodScale() ? 10 : 5;
     for (let k = 0; k < segs; k++) {
       const a0 = k / segs * Math.PI * 2, a1 = (k + 1) / segs * Math.PI * 2;
       const [ax, ay] = at(hu + Math.cos(a0) * r), [bx, by] = at(hu + Math.cos(a1) * r);
       tube(ax, ay, r + Math.sin(a0) * r, bx, by, r + Math.sin(a1) * r, 0.005, GRAY, 0.5, 0.6);
     }
-    if (d < 4) for (const a of [0.4, 1.97]) {
+    if (d < 4 * lodScale()) for (const a of [0.4, 1.97]) {
       const [ax, ay] = at(hu - Math.cos(a) * r), [bx, by] = at(hu + Math.cos(a) * r);
       rod(ax, ay, r - Math.sin(a) * r, bx, by, r + Math.sin(a) * r, 0.001, GRAY, 0.6);
     }
@@ -18669,12 +18759,12 @@ function drawPoleSpans() {
   forNear(poleSpansB, sp => {
     const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
     if (d > Math.min(vis, POLE_WIRE_VIS * lodScale()) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
-    const n = d < 3 ? 12 : d < 6 ? 6 : 3;
+    const n = d < 3 * lodScale() ? 12 : d < 6 * lodScale() ? 6 : 3;
     poleSpanModel(sp,n).draw(ax,ay,0);
   });
 }
 const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR*lodScale());});drawPoleSpans();}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
 // stock, the control column (display, keypad, coin and note slots, the coin
@@ -28082,15 +28172,16 @@ function hud() {
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
-    : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
-    : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
-    : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
-    : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
-    : settings.help && mode==='el'?`WASD walk | mouse / arrows look | C sit / stand | E get off at station | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
+    : settings.help && skatingNow() ? 'SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C at takeoff: air out | S hold: pivot | V: camera'
+    : settings.help && mode === 'boat' ? 'E: tie up (at the jetty) | V: camera'
+    : settings.help && mode === 'sea' ? 'Shift: cruise | S: astern | E: tie up (beside land) | V: camera'
+    : settings.help && mode==='ferry'?`C sit | Space (seated): on to the next island | E café | I bag | 1-8 items | Q use | M map`
+    : settings.help && mode==='el'?`C sit | E: get off at a station | I bag | 1-8 items | Q use | M map`
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
-    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
-    : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
-    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
+    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly | W/S throttle | V: camera | E: get out (stopped)')
+    : settings.help && heldGun() ? 'hold right click: aim | R reload | Esc: pause, all controls'
+    : settings.help && (mode === 'drive' || mode === 'taxi') ? 'Esc: pause, all controls' // (the car's own controls are in the prompt under it)
+    : settings.help ? `I bag | P pee | H hail taxi | M map | Esc: pause, all controls` : 'Esc: pause'; // (the obvious ones, and what E or Q does where you are, are in the prompts: the rest in the pause menu's Controls)
   const help=CONTROLLER.active ? (settings.help?CONTROLLER.hint:'') : keyboardHelp;
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
@@ -32051,7 +32142,8 @@ const stadiumCheers = m => !m ? -1 : m.phase === 'goal' ? m.celebrate?.side ?? -
 // off the strip above stands in for them (it leaves out these seats, so nobody is drawn twice)
 const CROWD_NEAR = 6.5, CROWD_H = 1.6; // (a touch under full height: sat down, the heads in front sit below your eyes)
 const seatAt = (s, k, seat) => { const a = (s.a0 + s.a1) / 2 + (seat + .5) * SEAT_PITCH, b = s.front + s.out * (k + .5 + .15) * s.depth; return s.axis === 'y' ? [a, b] : [b, a]; };
-const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < CROWD_NEAR * CROWD_NEAR; };
+const crowdNearR = () => CROWD_NEAR * clamp(lodScale(), .6, 1.6); // (Detail distance: how far round you the crowd are people)
+const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < crowdNearR() ** 2; };
 const crowdLooks = new Map();
 function crowdLook(s, k, seat, kit, side) {
   const key = `${s.id}:${k}:${seat}:${kit.join()}`;
@@ -32073,15 +32165,15 @@ function tipUpSeat(rx, ry, z0, fx, fy, col) {
   drawBox(boxAt(rx - fx * .21, ry - fy * .21, fy ? 1 : 0, fy ? 0 : 1, .25, .03, z0 + .42, z0 + .82), shade);
   drawBox(boxAt(rx + fx * .02, ry + fy * .02, fy ? 1 : 0, fy ? 0 : 1, .04, .04, z0, z0 + .36), solid(GRAY));
 }
-const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR + 1, draw: () => {
-  const m = stadiumMatch, fill = m ? m.crowd : .8;
+const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR * 1.6 + 1, draw: () => {
+  const m = stadiumMatch, fill = m ? m.crowd : .8, NR = crowdNearR();
   for (const s of STANDS) {
     const along = s.axis === 'y', across = along ? py : px, alongMe = (along ? px : py) - (s.a0 + s.a1) / 2;
-    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - CROWD_NEAR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + CROWD_NEAR / s.depth));
+    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - NR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + NR / s.depth));
     const half = (s.a1 - s.a0) / 2 / SEAT_PITCH;
     for (let k = k0; k <= k1; k++) {
       const z0 = (k + 1) * s.rise;
-      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - CROWD_NEAR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + CROWD_NEAR) / SEAT_PITCH)); seat++) {
+      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - NR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + NR) / SEAT_PITCH)); seat++) {
         if (!crowdNear(s, k, seat)) continue;
         const [x, y] = seatAt(s, k, seat), rx = x - px, ry = y - py;
         if (!inView(rx, ry, 1)) continue;
@@ -34168,7 +34260,7 @@ function ballSpin(dt_x, dt_y) { // roll the ball's pattern by however far it's g
 }
 function drawBall() {
   if (!ball) return;
-  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R;
+  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R + outdoorGroundHeight(ball.x, ball.y); // (z: above the ground under it, hills and all)
   const Rm = ballSpin(rel(ball.x - (ball.lx ?? ball.x)), rel(ball.y - (ball.ly ?? ball.y)));
   ball.lx = ball.x; ball.ly = ball.y;
   if (BALL_R * 2 * projX / d < 3) return dot(vx, vy, zc, BALL_R, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i,' ',0),true; });
@@ -35896,6 +35988,8 @@ function rodTarget() {
     case 'lure': return [0.74 + (f.t > f.dur * 0.55 ? Math.sin(T * 28) * 0.018 : 0), 0.07, 12]; // a twitch or two as it noses the bait
     case 'bite': return [0.86 + Math.sin(T * 34) * 0.04, 0.32, 20]; // yanked down
     case 'reel': return f.catch ? [0.45 + Math.sin(T * 17) * 0.03, 0.32 + Math.min(0.3, (f.catch.kg || 0.5) * 0.025), 10] : [0.5, 0.08, 10];
+    case 'hooked': return [0.62 + Math.sin(T * 9) * 0.02, 0.2, 10]; // (something heavy on the end, pulling)
+    case 'haul': return [0.45 + Math.sin(T * 13) * 0.04, 0.42, 10]; // (bent double, reeling a person in)
     case 'landed': return [0.32, 0.18 + Math.min(0.2, (f.catch.kg || 0.5) * 0.02), 8];
   }
   return [0.62, 0, 6];
@@ -35905,7 +35999,7 @@ function stepRodView() {
   const [ang, bend, rate] = rodTarget(), k = Math.min(1, dt * rate);
   const was = rodView.ang;
   rodView.ang += (ang - rodView.ang) * k; rodView.bend += (bend - rodView.bend) * k;
-  if (fishing && fishing.st === 'reel' || fishing && fishing.st === 'wind') rodView.spin += dt * (fishing.st === 'reel' ? 22 : 0);
+  if (fishing && (fishing.st === 'reel' || fishing.st === 'haul' || fishing.st === 'wind')) rodView.spin += dt * (fishing.st === 'wind' ? 0 : fishing.st === 'haul' ? 14 : 22);
   // whatever hangs off the tip swings: pushed by the rod moving, pulled back down
   rodView.swingV += (-rodView.swing * 30 - rodView.swingV * 3 + (rodView.ang - was) / Math.max(dt, 1e-3) * 2.5) * dt;
   rodView.swing = clamp(rodView.swing + rodView.swingV * dt, -1.2, 1.2);
@@ -35981,7 +36075,7 @@ function drawFishing() {
   }
   // the line: off the rod tip, sagging in the slack (lying on the water near the bobber), taut when something's on
   const G = rodGeom(), tip = unproject(G.tip.x, G.tip.y, 0.06);
-  const sag = f.st === 'bite' || f.st === 'reel' && f.catch ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
+  const sag = f.st === 'bite' || f.st === 'reel' && f.catch || f.st === 'hooked' || f.st === 'haul' ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
   const pts = [];
   const lineCol = f.st === 'bite' && fract(T * 7) < 0.5 ? C(YEL, 15) : C(WHITE, (f.st === 'bite' ? 13 : night > 0.5 ? 7 : 10) * lit); // (taut and twanging on a bite)
   for (let k = 0; k <= 36; k++) {
@@ -36711,20 +36805,37 @@ function drawShots() {
 // pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
+  // every pool near enough, as one wet field: overlapping pools run together into one edge instead of each cutting
+  // the other out (each pool's box shades from all of them, in world coordinates, so they agree on every cell)
+  const near = [];
   for (const b of pools) {
     if((b.at??'')!==(mode==='room'?bloodRoomKey():''))continue;
-    const scale=b.scale||1,ground=b.z??(mode==='room'?0:walkGround(b.x,b.y));
-    const vx = rel(b.x - px), vy = rel(b.y - py);
+    const scale=b.scale||1,vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, ground+.0001, ground+0.0004*scale), (i, t, L) => {
-      const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
-      const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
-      if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
-      const col = dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
-      if(k>.85){BG[i]=C(col,(2.8-dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
-      BG[i] = C(col, (2.6 - k * 0.8 - dry * 1.1) * lv);
-      const glint = dry < 0.4 && k < 0.5 && hash(Math.floor(HIT.u * 160), Math.floor(HIT.v * 160), 4412) > 0.9; // (wet: it catches the light)
+    const age = T - b.t;
+    near.push({ b, vx, vy, scale, ground: b.z??(mode==='room'?0:walkGround(b.x,b.y)), r: scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry: clamp((age - 50) / 130, 0, 1), seed: b.x * 13 + b.y * 7 });
+  }
+  // the field at a point (relative to you): each pool's depth there (1 at its middle, 0 at its ragged edge), joined
+  // as a soft union, so where pools overlap they read as one deeper pool with no seam; past every edge, the nearest
+  // edge (for the spatters). Returns [the pool it's most in, k: 0 deep in .. 1 the edge .. beyond]
+  const field = (x, y) => {
+    let best = null, bk = 9, out = 1, bs = 0;
+    for (const q of near) {
+      const u = x - q.vx, v = y - q.vy; if (Math.abs(u) > q.r * 1.4 || Math.abs(v) > q.r * 1.4) continue;
+      const an = Math.atan2(v, u), edge = q.r * (0.78 + 0.14 * Math.sin(an * 3 + q.seed) + 0.08 * Math.sin(an * 7 + q.seed * 1.7) + 0.05 * Math.sin(an * 13 + q.seed * 0.3)), k = Math.hypot(u, v) / edge;
+      const sq = Math.max(0, 1 - k); out *= 1 - sq;
+      if (sq > bs || !bs && k < bk) { bs = sq; bk = k; best = q; }
+    }
+    return [best, out < 1 ? out : bk]; // (inside: 1 - the union's depth; outside: the nearest edge's k)
+  };
+  for (const p of near) {
+    drawBox(boxAt(p.vx, p.vy, 1, 0, p.r * 1.35, p.r * 1.35, p.ground+.0001, p.ground+0.0004*p.scale), (i, t, L) => {
+      const x = p.vx + HIT.u, y = p.vy + HIT.v, wx = px + x, wy = py + y, [q, k] = field(x, y);
+      if (!q || k > 1.25 || k > 1 && hash(Math.floor(wx * 300), Math.floor(wy * 300), 4411) > 0.35) return false; // (the spatters past the edge; in world terms, so every pool agrees)
+      const col = q.dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
+      if(k>.85){BG[i]=C(col,(2.8-q.dry*1.1)*lv);return set(i,' ',0),true;} // (the soaked-in edge, and the spatters past it)
+      BG[i] = C(col, (2.6 - k * 0.8 - q.dry * 1.1) * lv);
+      const glint = q.dry < 0.4 && k < 0.5 && hash(Math.floor(wx * 160), Math.floor(wy * 160), 4412) > 0.9; // (wet: it catches the light)
       if(glint)BG[i]=C(RED,5*lv);return set(i,' ',0),true;
     });
   }
@@ -39148,7 +39259,13 @@ function skateStick(x = 0, y = 0, dead = .15) {
   const scale = Math.min(1, (r - dead) / (1 - dead)) / r;
   return [x * scale, y * scale];
 }
-function createSkateGesture() {
+// opts: how strict it is. The defaults suit a mouse (a virtual stick moved precisely); a thumbstick gets SKATE_PAD_GESTURE:
+// a pull back that's off-centre still loads, slower flicks still count, a partial push forward still pops, and a scoop
+// needn't go all the way round or snap back right to the middle
+const SKATE_GESTURE_DEFAULT = { loadY: .6, loadX: .45, window: .24, arcWindow: .5, fwdR: .6, fwdY: .35, fwdRatio: .45, release: .25, scoop: 2.3, curl: 1.3, spin: 3.9 };
+const SKATE_PAD_GESTURE = { loadY: .55, loadX: .62, window: .5, arcWindow: .8, fwdR: .5, fwdY: .25, fwdRatio: .35, release: .4, scoop: 2.0, curl: 1.15, spin: 3.4 };
+function createSkateGesture(opts = SKATE_GESTURE_DEFAULT) {
+  const O = { ...SKATE_GESTURE_DEFAULT, ...opts };
   let samples = [], load = null, armed = true, lastTime = -Infinity, firedAt=-Infinity, centred=false;
   const reset = () => { samples = []; load = null; armed = true; lastTime = -Infinity; firedAt=-Infinity;centred=false; };
   function sample(x, y, t) {
@@ -39164,16 +39281,16 @@ function createSkateGesture() {
       armed=true;
     }
     if (!load) {
-      if (Math.abs(y) > .6 && Math.abs(x) < .45) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
+      if (Math.abs(y) > O.loadY && Math.abs(x) < O.loadX) load = { side: Math.sign(y), t, arc: 0, angle: Math.atan2(y, x), left: false, fastest: 0, maxArc:0, finish:[x,y] };
       return null;
     }
     if (radius > .45) {
       for (const p of samples) if (t - p.t <= .12 && t > p.t)
         load.fastest = Math.max(load.fastest, Math.hypot(x - p.x, y - p.y) / .12);
     }
-    if (!load.left && y * load.side > .6 && Math.abs(x) < .45) { load.t = t; load.angle = Math.atan2(y, x); return null; }
+    if (!load.left && y * load.side > O.loadY && Math.abs(x) < O.loadX) { load.t = t; load.angle = Math.atan2(y, x); return null; }
     load.left = true;
-    if (t - load.t > (Math.abs(load.arc)>.45 ? .5 : .24)+1e-6) { load = null; return null; }
+    if (t - load.t > (Math.abs(load.arc)>.45 ? O.arcWindow : O.window)+1e-6) { load = null; return null; }
     let acrossCentre=false;
     if (radius > .45) {
       load.finish=[x,y];
@@ -39183,14 +39300,14 @@ function createSkateGesture() {
       if (Math.abs(delta) < 1.2) load.arc += delta;else acrossCentre=true;
       load.angle = angle;
     }
-    const arc = Math.abs(load.arc), curled = arc > 1.3;
+    const arc = Math.abs(load.arc), curled = arc > O.curl;
     load.maxArc=Math.max(load.maxArc,arc);
-    const forward = radius>.6&&y*load.side<-.35&&-y*load.side/radius>.45;
-    const quarterFlip=acrossCentre&&arc>.8&&arc<2.3&&forward&&x*Math.sign(load.arc)>.3;
-    const released = radius < .25;
-    const heelScoop=load.maxArc>2.3&&arc>1.6&&arc<3.9&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
-    if (quarterFlip || (!curled && forward) || (curled && released && (arc > 2.3||heelScoop))) {
-      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > 3.9 ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > 2.3 ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
+    const forward = radius>O.fwdR&&y*load.side<-O.fwdY&&-y*load.side/radius>O.fwdRatio;
+    const quarterFlip=acrossCentre&&arc>.8&&arc<O.scoop&&forward&&x*Math.sign(load.arc)>.3;
+    const released = radius < O.release;
+    const heelScoop=load.maxArc>O.scoop&&arc>1.6&&arc<O.spin&&load.arc<0&&load.finish[0]>.35&&load.finish[1]*load.side<-.25;
+    if (quarterFlip || (!curled && forward) || (curled && released && (arc > O.scoop||heelScoop))) {
+      const key = quarterFlip ? load.arc>0?'WA':'WD' : arc > O.spin ? (load.arc > 0 ? 'AS' : '360S') : heelScoop?'DS':arc > O.scoop ? 'S' : x < -.3 ? 'A' : x > .3 ? 'D' : '';
       const result = { key, nollie: load.side < 0, strength: .7 + .45 * Math.min(1, load.fastest / (2 / .12)) };
       load = null; armed = false;firedAt=t;centred=false; return result;
     }
@@ -39230,7 +39347,7 @@ const skateGestureLoaded = () => SK_INPUT.padGesture.loaded || SK_INPUT.mouseHel
 
 const SK_INPUT = { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
   right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, mouseT: -9, fired: false,
-  padGesture: createSkateGesture(), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(),mouseAirFlick:createSkateAirFlick(1/3,.4) };
+  padGesture: createSkateGesture(SKATE_PAD_GESTURE), mouseGesture: createSkateGesture(),padAirFlick:createSkateAirFlick(.5,.3),mouseAirFlick:createSkateAirFlick(1/3,.4) };
 function skateInputReset() {
   Object.assign(SK_INPUT, { steer: 0, steerTarget: 0, padActive: false, push: false, mongo: false, brake: false, back: false, forward: false, airOut: false, grabL: 0, grabR: 0,
     right: [0, 0], manualDepth:0, mouse: [0, 0], mouseHeld: false, fired: false });
@@ -50863,10 +50980,15 @@ function homeBalconyPaving(i,u,v,L,footprint){
   const p=HOME_BALCONY_PAVING,joint=Math.max(coveGroove(u,p.tile,p.grout,footprint),coveGroove(v,p.tile,p.grout,footprint));
   BG[i]=C(STONE,2.8+L*.22-joint*2.2);set(i,' ',0);return true;
 }
+// While the chase camera is behind a car or a boat, the ground filters no finer than it does at the vehicle itself:
+// otherwise the slab joints, patches and grain show only in the strip between the camera and the car, and draw in
+// along the bottom of the screen as you go (main.js sets it for the chase render)
+let groundFootprintNear=0;
 function homeBalconyPavingFootprint(t,height,unit=1){
+  t=Math.max(t,groundFootprintNear);
   // Row-to-row floor spacing grows faster at grazing angles than distance
   // alone. Account for both screen axes before filtering the metre joints.
-  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit;
+  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit/lodScale(); // (Detail distance: finer joints further off)
 }
 const homeBalconyDeckModels=new WeakMap();
 function homeBalconyDeckModel(home,b){
@@ -52665,7 +52787,7 @@ function parkShrubAt(x,y,pad,z=null,height=Infinity){
     if(plantingFootprint(o,rel(x-o.x),rel(y-o.y),pad,lo,lo+height))return o;
   }return null;
 }
-function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
+function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR*lodScale());});}
 for(const edge of [CURB,2-CURB])alongStreets(4.5,edge,(x,y,ax,ay,bx,by)=>{
   const district=districtAt(x-ax*.5,y-ay*.5);
   if(!['midtown','brownstones','chinatown'].includes(district)||hash(bx,by,edge<1?1961:1962)>.32)return;
@@ -53827,7 +53949,8 @@ function loop(t) {
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
-    px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+    groundFootprintNear = chaseOn ? Math.hypot(cx - saved[0], cy - saved[1]) * .9 : 0; // (the ground as detailed behind the car as at it: home-balcony-deck.js)
+    try { px = cx; py = cy; a = yaw; render(dt); } finally { [px, py, a] = saved; groundFootprintNear = 0; }
   } else if (stadiumTVOn()) { // at the football with the TV view on: from the gantry, following the ball (stadium.js)
     const saved = [px, py, a, pitch], baseFOV = FOV, cam = stadiumCam(dt);
     try { FOV = cam.fov; stadiumView = { eye: cam.z }; px = cam.x; py = cam.y; a = cam.a; pitch = cam.pitch; render(dt); }

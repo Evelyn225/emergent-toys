@@ -362,15 +362,16 @@ function hud() {
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
     : settings.help && skatingNow() && SK.manual ? 'MANUAL: right stick forward/back: balance | mouse: hold right-click, move gently forward/back | A/D steer'
-    : settings.help && skatingNow() ? 'W push | S brake, hold: pivot + reverse | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C / RT at takeoff: air out | mouse: look | V: camera'
-    : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
-    : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
-    : settings.help && mode==='ferry'?`WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
-    : settings.help && mode==='el'?`WASD walk | mouse / arrows look | C sit / stand | E get off at station | I bag | 1-8 items | left click / Q use${heldGun()?' | right click aim | R reload':''} | M map`
+    : settings.help && skatingNow() ? 'SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | hold C at takeoff: air out | S hold: pivot | V: camera'
+    : settings.help && mode === 'boat' ? 'E: tie up (at the jetty) | V: camera'
+    : settings.help && mode === 'sea' ? 'Shift: cruise | S: astern | E: tie up (beside land) | V: camera'
+    : settings.help && mode==='ferry'?`C sit | Space (seated): on to the next island | E café | I bag | 1-8 items | Q use | M map`
+    : settings.help && mode==='el'?`C sit | E: get off at a station | I bag | 1-8 items | Q use | M map`
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
-    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
-    : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
-    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
+    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly | W/S throttle | V: camera | E: get out (stopped)')
+    : settings.help && heldGun() ? 'hold right click: aim | R reload | Esc: pause, all controls'
+    : settings.help && (mode === 'drive' || mode === 'taxi') ? 'Esc: pause, all controls' // (the car's own controls are in the prompt under it)
+    : settings.help ? `I bag | P pee | H hail taxi | M map | Esc: pause, all controls` : 'Esc: pause'; // (the obvious ones, and what E or Q does where you are, are in the prompts: the rest in the pause menu's Controls)
   const help=CONTROLLER.active ? (settings.help?CONTROLLER.hint:'') : keyboardHelp;
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them

@@ -530,7 +530,7 @@ const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
 
 // ---- the soccer ball, once kicked: rolls, slows, bounces off walls, sinks in the sea; walk into it to dribble,
 // E to pick it up
-let ball = null; // { x, y, vx, vy, z, vz }
+let ball = null; // { x, y, vx, vy, z (above the ground under it), vz }
 // what stops it: buildings (unless it's sailing over a low one), and everything solid at street level: fences,
 // containers, booths, lamp posts, vending machines
 const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || typeof kerbAt === 'function' && kerbAt(x, y, 0.015,z-.015,.03) || fairBlocked(x, y, 0.015));
@@ -546,12 +546,20 @@ function stepBall(dt) {
   ball.vz -= 2 * dt; ball.z += ball.vz * dt;
   if (ball.z < 0) { ball.z = 0; if (Math.abs(ball.vz) > 0.08) { ballSound('bounce', Math.abs(ball.vz) * 4); ball.vz = -ball.vz * 0.5; } else ball.vz = 0; }
   const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
+  const g0 = outdoorGroundHeight(ball.x, ball.y);
+  if (ball.z === 0) { // on a slope (the islands' hills, a ramp): it rolls downhill
+    const e = .02, gx = (outdoorGroundHeight(ball.x + e, ball.y) - outdoorGroundHeight(ball.x - e, ball.y)) / (2 * e), gy = (outdoorGroundHeight(ball.x, ball.y + e) - outdoorGroundHeight(ball.x, ball.y - e)) / (2 * e);
+    if (Math.abs(gx) < 3 && Math.abs(gy) < 3) { ball.vx -= gx * 1.4 * dt; ball.vy -= gy * 1.4 * dt; }
+  }
   const n = Math.max(1, Math.ceil(Math.hypot(ball.vx, ball.vy) * dt / 0.01)); // (small steps: a fence is only 2cm thick)
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
     if (ballBlocked(nx, ny, ball.z)) { const v = Math.abs(ax === 'x' ? ball.vx : ball.vy); if (v > 0.1) ballSound('wall', v); if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
     else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
+  // the ground moved under it: up a rise it rides up onto it; off a drop it's in the air for a moment
+  const g1 = outdoorGroundHeight(ball.x, ball.y);
+  ball.z = Math.max(0, ball.z + g0 - g1);
   if (isWater(ball.x, ball.y) && ball.z === 0) { ballSound('splash', 2); ball = null; return 'lost'; } // into the drink
   // dribbling: walk into it and it rolls on ahead of you (a touch you hear, not one every frame you're against it)
   const dx_ = rel(ball.x - px), dy_ = rel(ball.y - py), d = Math.hypot(dx_, dy_);
