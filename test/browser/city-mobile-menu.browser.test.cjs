@@ -41,14 +41,14 @@ for(const [width,height] of [[390,844],[320,568],[844,390]]){
   await p.locator('#inventory [data-slot="1"]').tap();assert.equal(await p.evaluate(()=>held),1);
   await p.locator('#inventory [data-drop="0"]').tap();
   assert.deepEqual(await p.evaluate(()=>({ids:inv.map(it=>it.id),held:heldItem()?.id,dropped:dropped.at(-1)?.id})),{ids:['water'],held:'water',dropped:'f_recordplayer'});
-  await p.evaluate(()=>showTouch());await p.locator('#touch .pad [data-key="KeyE"]').tap();
+  await p.evaluate(()=>showTouch());await p.locator('.menu:visible .panel-close').tap();
   assert.equal(await p.evaluate(()=>paused),false);
   await p.evaluate(()=>{openShop('RECORDS',['f_recordplayer','vinyl']);showTouch();});
   for(const c of await targets(p,'#shop [data-buy]')){assert.ok(c.height>=44&&c.width>=44,JSON.stringify(c));assert.ok(c.inside,JSON.stringify(c));}
   const before=await p.evaluate(()=>money);
   await p.locator('#shop [data-buy="f_recordplayer"]').tap();
   assert.deepEqual(await p.evaluate(before=>({bought:inv.some(it=>it.id==='f_recordplayer'),paid:before-money}),before),{bought:true,paid:180});
-  await p.locator('#touch .pad [data-key="KeyE"]').tap();assert.equal(await p.evaluate(()=>paused),false);
+  await p.locator('.menu:visible .panel-close').tap();assert.equal(await p.evaluate(()=>paused),false);
  }));
 }
 test('desktop inventory keeps its compact single-row layout',async()=>{

@@ -86,8 +86,8 @@ function openCooking(on, pantry = null, spot = null) {
   cookCtx.list = list.map(e => e.r);
   const ready = list.filter(e => e.ms.every(m => m.from)).length;
   const rows_ = list.map(({ r, ms }, k) => {
-    const ok = ms.every(m => m.from), needs = ms.map(m => `<span style="color:${m.from ? '#9d9' : 'rgba(255,255,255,0.3)'}">${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
-    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${r.name}</span><span class="lead"></span><span class="v" style="font-size:0.85em">${needs}</span></button>`;
+    const ok = ms.every(m => m.from), needs = ms.map(m => `<span class="${m.from?'available':'missing'}">${m.from?'':'need '}${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
+    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span class="recipe-label"><span class="recipe-name">${r.name}</span><span class="recipe-needs">${needs}</span></span></button>`;
   }).join('');
   const where = { stove: 'At the stove', grill: 'At the grill', fire: 'At the campfire' }[on];
   showPanel(cookEl, `<h1>${where}</h1><p class="sub">${pantry ? 'From your bag and the fridge' : 'From your bag'} &middot; the grocer's, the market and the deli sell the makings</p>${rows_}

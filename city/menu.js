@@ -39,10 +39,23 @@ const MENU_CSS = `
   .menu .tog { justify-self: start; font: 14px/1 monospace; color: #d9dfda; }
   .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: #a1ada8; }
   .menu .keys b { font-weight: normal; color:#edf0df; }
+  .menu .panel-heading{position:sticky;top:-26px;z-index:2;display:flex;align-items:center;gap:12px;justify-content:space-between;margin:-26px -30px 14px;padding:20px 18px 12px 30px;background:#13191b;border-bottom:1px solid #35423f;}
+  .menu .panel-heading h1{flex:1;min-width:0;margin:0;overflow-wrap:anywhere;}
+  .menu .panel-close{flex:0 0 44px;width:44px;height:44px;font-size:24px;color:#d9dfda;border:1px solid #64756e;background:#1d2925;}
+  .menu .panel-close:hover,.menu .panel-close:focus-visible{background:#30483e;outline:2px solid #b9e7d5;outline-offset:2px;}
+  #cooking .recipe-label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
+  #cooking .recipe-name{font-size:16px;}
+  #cooking .recipe-needs{font-size:14px;line-height:1.5;white-space:normal;overflow-wrap:anywhere;}
+  #cooking .available{color:#bdddc3;}#cooking .missing{color:#adb7b0;}
+  #courier-board .item,#busted .item{display:grid;grid-template-columns:1.4em minmax(0,1fr);align-items:start;gap:4px 10px;}
+  #courier-board .item .k,#busted .item .k{grid-row:1/span 2;}
+  #courier-board .item .lead,#busted .item .lead{display:none;}
+  #courier-board .item .v,#busted .item .v{grid-column:2;font-size:14px;white-space:normal;overflow-wrap:anywhere;color:#cad7cd;}
   .menu .panel { overflow-x: hidden; }
   .menu .slider { min-width: 0; overflow: hidden; }
   @media (max-width: 520px), (pointer: coarse) { /* touch or narrow screens: scroll down, never sideways */
     .menu .panel { padding: 20px 16px; }
+    .menu .panel-heading{top:-20px;margin:-20px -16px 14px;padding:16px 12px 12px 16px;}
     .menu .item { min-height: 44px; align-items: center; }
     .menu .item > span:not(.k):not(.v):not(.lead) { min-width: 0; overflow-wrap: anywhere; }
     .menu .k, .menu .v { flex-shrink: 0; }
@@ -78,28 +91,29 @@ function asciiBar(f) {
 {
   const style = document.createElement('style');
   style.textContent = `
-    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#111719; border:1px solid #364344; border-radius:12px; box-shadow:0 24px 80px #0009; }
-    #controls .controls-header { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#13191b; border:1px solid #465452;border-top:3px solid #a9d9ca; border-radius:0; box-shadow:0 24px 80px #0009; }
+    #controls .controls-header { position:sticky;top:0;z-index:2;background:#13191b;padding-bottom:12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
     #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
     #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
-    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:13px; }
-    #controls .controls-back { width:auto; gap:16px; font-size:12px; padding:10px 12px; border:1px solid #465654; border-radius:5px; }
+    #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:15px; }
+    #controls .controls-back { width:auto; gap:16px; font-size:14px;min-height:44px; padding:10px 12px; border:1px solid #465654; border-radius:0; }
     #controls .controls-tabs { display:flex; flex-wrap:wrap; gap:8px; padding:24px 0; border-bottom:1px solid #33403f; }
-    #controls .controls-tabs button { font:inherit; font-size:12px; padding:10px 14px; border:1px solid #3e4c49; border-radius:5px; background:transparent; color:#afbfbb; cursor:pointer; }
+    #controls .controls-tabs button { font:inherit; font-size:14px;min-height:44px; padding:10px 14px; border:1px solid #3e4c49; border-radius:0; background:transparent; color:#afbfbb; cursor:pointer; }
     #controls .controls-tabs button[aria-pressed=true] { background:#b8d9ca; color:#14231c; border-color:#b8d9ca; }
     #controls button:focus-visible { outline:2px solid #d1f5df; outline-offset:4px; }
     #controls h2 { margin:24px 0 14px; padding:0; text-transform:none; font-size:16px; color:#e3eee9; }
     #controls .keys { display:flex; flex-direction:column; gap:0; padding:0; }
-    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:13px; line-height:1.7; }
-    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:5px; padding:5px 10px; line-height:1.5; font-size:12px; width:fit-content; }
+    #controls .control-binding { display:grid; grid-template-columns:minmax(150px, .8fr) 2fr; gap:24px; padding:15px 0; border-bottom:1px solid #273331; align-items:start; font-size:15px; line-height:1.6; }
+    #controls .control-binding b { color:#dcebe4; background:#1d2927; border:1px solid #3c4b46; border-bottom-width:3px; border-radius:0; padding:5px 10px; line-height:1.5; font-size:14px; width:fit-content; }
     #controls .control-binding span { color:#b1bdb8; }
-    #controls .controls-footer { margin-top:24px; font-size:11px; color:#81918a; }
+    #controls .controls-footer { margin-top:24px; font-size:13px; color:#81918a; }
+    #controls .controls-back-short{display:none;}
     #controls [hidden] { display:none !important; }
     @media(max-width:600px) {
       #controls .controls-panel { padding:20px 16px; }
-      #controls .controls-header { align-items:start; flex-direction:column; gap:16px; }
+      #controls .controls-header{align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
       #controls .control-binding { grid-template-columns:1fr; gap:8px; }
-      #controls .controls-tabs { gap:6px; }
+      #controls .controls-tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:16px 0;}#controls .controls-tabs button{flex:0 0 auto;white-space:nowrap;}
       #controls .controls-tabs button { padding:9px; }
     }
   `;

@@ -638,12 +638,14 @@ function hotbar() {
 let shopEl = null, invEl = null, shopCtx = null, invStyle = false;
 const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
-  el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
+  const pane=el.querySelector('.panel');pane.innerHTML=html;
+  const title=pane.querySelector(':scope > h1');if(title){const heading=document.createElement('header');heading.className='panel-heading';title.before(heading);heading.append(title);if(el.id!=='busted'){const close=document.createElement('button');close.className='panel-close';close.textContent='×';close.tabIndex=-1;close.setAttribute('aria-label','Close '+title.textContent);close.title='E / Esc';close.onclick=e=>{e.stopPropagation();onkeydown({code:'KeyE',repeat:false,preventDefault(){}});};heading.append(close);}}
+  el.style.display='flex';paused=true;
   for (const k in K) K[k] = 0;
-  releaseMouse();
+  releaseMouse();if(TOUCH&&touchEl)showTouch();
 }
-function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
+function hidePanel(el) { if(el&&el.style.display!=='none'){el.style.display='none';paused=false;if(TOUCH&&touchEl)showTouch();} }
+const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl,typeof ticketEl!=='undefined'&&ticketEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -724,6 +726,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if(typeof ticketEl!=='undefined'&&ticketEl?.style.display==='flex'){if(e.code==='Escape'||e.code==='KeyE')hidePanel(ticketEl);return true;}
   if(furnishingEl?.style.display==='flex'){if(['Escape','KeyE','KeyF','KeyI'].includes(e.code))hidePanel(furnishingEl);return true;}
   if (fishingCompetitionPanelKey(e)) return true;
   if (workshopPanelKey(e)) return true;

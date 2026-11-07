@@ -145,8 +145,8 @@ function openWorkshop(tab) {
       <p class="sub"><b>Weed:</b> plant a seed pod on a powered rack. It grows in 75 seconds (50 with grow lamps); tend it once it sprouts for premium quality, then harvest. Unplugging pauses it.</p>
       <p class="sub"><b>Selling:</b> carry packs out and a buyer finds you; stock kept in the closet sometimes draws one too. Q / left click uses a pack yourself.</p>`;
   }
-  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}">${l}</button>`).join('');
-  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:none;border:0;color:inherit;opacity:.55;font:inherit;cursor:pointer;padding:2px 0}#workshop .tab.on{opacity:1;text-decoration:underline}
+  const tabs = [['work', 'Workshop'], ['buy', 'Buy'], ['help', 'How it works']].map(([k, l]) => `<button class="tab ${workshopTab === k ? 'on' : ''}" data-wstab="${k}" aria-pressed="${workshopTab===k}">${l}</button>`).join('');
+  showPanel(workshopEl, `<style>#workshop .tabs{display:flex;gap:4px 14px;margin:4px 0 10px;flex-wrap:wrap}#workshop .tab{background:#13191b;border:1px solid #465452;color:#b7c4bb;opacity:1;font:inherit;cursor:pointer;padding:8px 10px;min-height:44px}#workshop .tab.on{opacity:1;text-decoration:none;background:#253732;border-color:#a9d9ca;color:#edf0df}
     #workshop .wsst{margin:8px 0 12px}#workshop .wsrow{display:flex;gap:8px;flex-wrap:wrap}#workshop .wsrow .item{width:auto;flex:1 1 auto}</style>
     <h1>Workshop</h1><p class="sub">${fmt$(money)} &middot; ${w.supplies} refills &middot; ${w.seeds} seed pods &middot; power ${w.powered ? 'on' : 'off'}</p>
     <div class="tabs">${tabs}</div>${body}<p class="hint">E / Esc close</p>`);
