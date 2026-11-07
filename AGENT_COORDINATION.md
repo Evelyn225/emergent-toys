@@ -10,7 +10,7 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
 
 ## Who is doing what
 
-- **Codex:** numbered world-quality first passes are implemented through final integration. Coast/islands #472/#477 are merged; main's #478 ghost-sign/step pass is integrated. Pending stack: water/weather #479 → inventory/shop previews #480 → abandoned-ground extension #481 → final tour/cabin weather #482. Merge in order only after each current full CI head is green; do not force-push. The extension leaves main's dressed shops alone and covers 51 other sites. Final coverage and native/timing evidence are in `WORLD_QUALITY.md`. Keep the user's original ASCII hand/rod, yo-yo orientation and restored light fishing splashes. Skating remains separate.
+- **Codex:** numbered world-quality first passes are implemented through final integration. Coast/islands #472/#477 are merged; main's #478 ghost-sign/step pass is integrated. Pending stack: water/weather #479 → inventory/shop previews #480 → abandoned-ground extension #481 → final tour/cabin weather #482. Merge in order only after each current full CI head is green; do not force-push. The extension leaves main's dressed shops alone and covers 51 other sites. Final coverage and native/timing evidence are in `WORLD_QUALITY.md`. Keep the user's original ASCII hand/rod, yo-yo orientation and restored light fishing splashes. Skating remains separate. UI review (new pass34) is now active; use `UI_REVIEW.md` for shared menus, map, minigames, specialist panels and final input/layout coverage.
 
 - **Skating follow-up (Codex):** #467 is merged. `codex/skate-mouse-manual`
   tunes mouse-only manual entry/range and verifies real mouse motion gestures
