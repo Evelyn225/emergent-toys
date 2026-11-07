@@ -60,7 +60,8 @@ test('clicks pick places or drop pins, while dragging and a pinch never drop a p
   await page.keyboard.press('KeyM');await page.locator('[data-map="places"]').click();
   await page.mouse.move(900,450);await page.mouse.down();await page.mouse.move(1000,500,{steps:4});await page.mouse.up();
   assert.equal(await page.evaluate(()=>BIGMAP.selected),null);
-  await page.evaluate(()=>bigMapDraw());await page.mouse.click(1000,500);
+  // Pick genuinely empty map space; a fixed screen pixel can land on a shop after a layout/centering change.
+  const empty=await page.evaluate(()=>{bigMapDraw();const o=typeof bigMapOrigin==='function'?bigMapOrigin():{x:bigMapCv.clientWidth/2,y:bigMapCv.clientHeight/2},v=bigMapViewport();for(let y=v.y+20;y<v.y+v.h-12;y+=29)for(let x=v.x+20;x<v.x+v.w-12;x+=29){const wx=mapCoordinate(BIGMAP.cx+(x-o.x)/BIGMAP.z,MAP_WORLD.width),wy=mapCoordinate(BIGMAP.cy+(y-o.y)/BIGMAP.z,MAP_WORLD.height);if(!SHOP[idx(Math.floor(wx),Math.floor(wy))]&&!BIGMAP.points.some(p=>Math.hypot(p.x-x,p.y-y)<16))return[x,y];}throw Error('no empty map space');});await page.mouse.click(...empty);
   assert.ok(await page.evaluate(()=>!!BIGMAP.selected));
   const pin=await page.evaluate(()=>({selected:BIGMAP.selected,pin:BIGMAP.places.find(p=>p.id==='pin'),waypoint:mapWaypoint}));
   assert.equal(pin.selected,'pin');assert.equal(pin.waypoint.id,'pin');assert.equal(pin.waypoint.x,pin.pin.x);assert.equal(pin.waypoint.y,pin.pin.y);
