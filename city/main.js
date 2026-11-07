@@ -423,7 +423,8 @@ function loop(t) {
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
-    px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+    groundFootprintNear = chaseOn ? Math.hypot(cx - saved[0], cy - saved[1]) * .9 : 0; // (the ground as detailed behind the car as at it: home-balcony-deck.js)
+    try { px = cx; py = cy; a = yaw; render(dt); } finally { [px, py, a] = saved; groundFootprintNear = 0; }
   } else if (stadiumTVOn()) { // at the football with the TV view on: from the gantry, following the ball (stadium.js)
     const saved = [px, py, a, pitch], baseFOV = FOV, cam = stadiumCam(dt);
     try { FOV = cam.fov; stadiumView = { eye: cam.z }; px = cam.x; py = cam.y; a = cam.a; pitch = cam.pitch; render(dt); }

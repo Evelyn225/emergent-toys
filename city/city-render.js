@@ -277,7 +277,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
   }
   // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
-  const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
+  const inside = (k, col) => d < 3.5 * lodScale() ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   const fpU = Math.max(uStep, d / projY), floorH = 1 / 3, litNow = k => hash(k, fl, sk) > litT - 0.1;
