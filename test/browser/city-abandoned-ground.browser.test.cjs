@@ -37,7 +37,7 @@ test('weed rays taper to pointed tips rather than solid boxes',()=>fixture(async
 test('native street rendering includes the ground objects, keeps foreground occlusion and leaves shop prompts anonymous',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   if(typeof drawAbandonedGround!=='function')return {missing:true};const draw=drawAbandonedGround;let result;
-  try{for(const e of abandonedDressingList().flat()){
+  try{for(const e of abandonedGroundList().flat()){
    px=e.x+e.nx*.19;py=e.y+e.ny*.19;if(!free(px,py))continue;a=Math.atan2(-e.ny,-e.nx);pitch=-.58;body.z=outdoorGroundHeight(px,py);body.vz=body.crouch=0;let calls=0;
    drawAbandonedGround=(...args)=>{calls++;return draw(...args);};render(0);const bg=Uint8Array.from(BG);
    drawAbandonedGround=()=>{};render(0);let changed=0;for(let i=0;i<BG.length;i++)if(bg[i]!==BG[i])changed++;
@@ -68,4 +68,8 @@ test('abandoned ground dressing reaches other facade families with cached native
 }));
 test('several permanently shut facade families visibly draw rubbish and weeds through the native street pass',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{if(typeof abandonedGroundList!=='function')return{bad:['missing ground registry']};const entries=abandonedGroundList().flat(),families=[...new Set(entries.map(e=>e.family))],draw=drawAbandonedGround,bad=[],seen=[];try{for(const family of families){for(const e of entries.filter(e=>e.family===family)){px=e.x+e.nx*.19;py=e.y+e.ny*.19;if(!free(px,py))continue;a=Math.atan2(-e.ny,-e.nx);pitch=-.58;body.z=outdoorGroundHeight(px,py);body.vz=body.crouch=0;drawAbandonedGround=draw;render(0);const before=BG.slice();drawAbandonedGround=(q,...args)=>q===e?undefined:draw(q,...args);render(0);let changed=0;for(let k=0;k<BG.length;k++)if(BG[k]!==before[k])changed++;if(changed<6)continue;seen.push(family);break;}}}finally{drawAbandonedGround=draw;}return{bad,seen};});assert.deepEqual(r.bad,[]);assert.ok(r.seen.length>=3,JSON.stringify(r));
+}));
+
+test('parallel frontage passes never place both ground groups at the same shop',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{const steps=new Set(abandonedStepList().flat().map(e=>e.sh)),ground=abandonedGroundList().flat();return{ground:ground.length,steps:steps.size,overlaps:ground.filter(e=>steps.has(e.sh)).length};});assert.ok(r.ground>30&&r.steps>30,JSON.stringify(r));assert.equal(r.overlaps,0,JSON.stringify(r));
 }));

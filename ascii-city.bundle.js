@@ -5005,7 +5005,9 @@ function drawAbandonedGround(e,vx,vy){
 let ABANDONED_GROUND_B=null;
 function abandonedGroundList(){
  if(ABANDONED_GROUND_B)return ABANDONED_GROUND_B;
- const out=abandonedDressingList().flat().map(e=>({...e,family:'brownstones'})),existing=new Set(out.map(e=>e.sh)),lots=new Map(),buildings=new Map(ARCH_BUILDINGS.map(b=>[b.sh,b]));
+ // The merged step pass owns its shops; extend only the remaining facade families.
+ const covered=new Set(abandonedStepList().flat().map(e=>e.sh));
+ const out=abandonedDressingList().flat().filter(e=>!covered.has(e.sh)).map(e=>({...e,family:'brownstones'})),existing=new Set([...covered,...out.map(e=>e.sh)]),lots=new Map(),buildings=new Map(ARCH_BUILDINGS.map(b=>[b.sh,b]));
  for(let k=0;k<map.length;k++){const sh=SHOP[k];if(!sh||sh.kind!==SHOP_SHUT||sh.wilderness||!map[k]||existing.has(sh))continue;if(!lots.has(sh))lots.set(sh,[]);lots.get(sh).push(k);}
  for(const [sh,cells]of lots){
   const k=cells[0],b=buildings.get(sh)||{sh,x0:k%N,y0:Math.floor(k/N)},faces=architectureFaces(b,cells,Array.from({length:4},()=>Object.create(null)));
