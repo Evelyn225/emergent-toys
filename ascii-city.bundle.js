@@ -31349,7 +31349,7 @@ function asciiBar(f) {
   const style = document.createElement('style');
   style.textContent = `
     #controls .controls-panel { width:min(960px,calc(100vw - 32px)); padding:32px; background:#13191b; border:1px solid #465452;border-top:3px solid #a9d9ca; border-radius:0; box-shadow:0 24px 80px #0009; }
-    #controls .controls-header { position:sticky;top:0;z-index:2;background:#13191b;padding-bottom:12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    #controls .controls-header { position:sticky;top:-32px;z-index:2;background:#13191b;margin:-32px -32px 0;padding:32px 32px 12px;display:flex; justify-content:space-between; gap:24px; align-items:center; }
     #controls .controls-eyebrow { font-size:10px; letter-spacing:2px; color:#8ebbb0; margin:0 0 12px; }
     #controls h1 { font-size:30px; margin:0; color:#f0f5f2; }
     #controls .controls-intro { color:#a2afad; margin:10px 0 0; font-size:15px; }
@@ -31368,7 +31368,7 @@ function asciiBar(f) {
     #controls [hidden] { display:none !important; }
     @media(max-width:600px) {
       #controls .controls-panel { padding:20px 16px; }
-      #controls .controls-header{align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
+      #controls .controls-header{top:-20px;margin:-20px -16px 0;padding:20px 16px 12px;align-items:center;gap:12px;}#controls .controls-header>div{min-width:0;}#controls h1{font-size:26px;}#controls .controls-intro,#controls .controls-eyebrow,#controls .controls-back-long,#controls .controls-back .k{display:none;}#controls .controls-back-short{display:inline;}
       #controls .control-binding { grid-template-columns:1fr; gap:8px; }
       #controls .controls-tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:16px 0;}#controls .controls-tabs button{flex:0 0 auto;white-space:nowrap;}
       #controls .controls-tabs button { padding:9px; }
@@ -51947,6 +51947,501 @@ function heldFurnitureFlatpack(it) {
   });
 }
 for(const id of Object.keys(HOME_FURNITURE))if(id.startsWith('f_'))DENSE[id]=heldFurnitureFlatpack;
+// Two interiors finished (WORLD_QUALITY.md items 39 and 40): IDEA, the flatpack furniture store, and the bank's hall.
+// Metres. What each already had (the things you buy at IDEA, the bank's tellers, vault and guard) stays put.
+
+// ---- IDEA: room sets round the buyable pieces, the warehouse racking along the back, the yellow arrows on the floor,
+// the departments' signs hung from the ceiling, trolleys at the door, shoppers and a member of staff in yellow
+// a flat thing on the floor you walk over (a rug, an arrow)
+const IDEA_FLAT = (x, y, hl, hw, shade) => ({ ...BX(x, y, hl, hw, 0, .012, (i, t, L) => HIT.face === 5 ? shade(i, t, L) : false), walk: true });
+const IDEA_RUG = (x, y, hl, hw, col) => IDEA_FLAT(x, y, hl, hw, (i, t, L) => {
+  const e = Math.min(hl - Math.abs(HIT.u), hw - Math.abs(HIT.v)), stripe = fract(HIT.u * 1.5) < .5;
+  BG[i] = C(e < .1 ? WHITE : col, (e < .1 ? 3.4 : stripe ? 2.6 : 2.1) + L * .2); return set(i, ' ', 0), true;
+});
+// an arrow painted on the floor pointing (dx, dy): the way round the store
+function IDEA_ARROW(x, y, dx, dy) {
+  return IDEA_FLAT(x, y, .45, .45, (i, t, L) => {
+    const u = HIT.u * dx + HIT.v * dy, v = -HIT.u * dy + HIT.v * dx, head = u > 0 && Math.abs(v) < (.4 - u) * .9, shaft = u <= 0 && u > -.4 && Math.abs(v) < .1;
+    if (!head && !shaft) return false;
+    BG[i] = C(YEL, 8 + L * .2); return set(i, ' ', 0), true;
+  });
+}
+// a department's sign on wires from the ceiling, its name both sides
+function IDEA_HANGING_SIGN(x, y, word, along = true, ceiling = 3.4) {
+  const hl = word.length * .14 + .2, c = along ? 1 : 0, s = along ? 0 : 1;
+  return { x, y, ideaSign: word, radius: hl + .2, draw: (vx, vy) => {
+    for (const k of [-1, 1]) rod(vx + c * k * (hl - .1), vy + s * k * (hl - .1), 2.95, vx + c * k * (hl - .1), vy + s * k * (hl - .1), ceiling, .006, GRAY, 1);
+    drawBox(boxAt(vx, vy, c, s, hl, .03, 2.55, 2.95), (i, t, L) => {
+      BG[i] = C(YEL, 9 + L * .2);
+      if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
+      const n = word.length, q = (HIT.face === 3 ? HIT.u : -HIT.u) / (hl * 2 - .2) * n + n / 2;
+      if (q >= 0 && q < n && oneCell(HIT.w - 2.75, t / projY) && oneCell((fract(q) - .5) * (hl * 2 - .2) / n, t / projX)) return set(i, word[Math.floor(q)], C(BLUE, 4)), true;
+      return set(i, ' ', 0), true;
+    });
+  } };
+}
+// pallet racking against a wall, facing (0, 1): blue uprights, orange beams on three levels, flatpacks in their brown
+// boxes on every shelf with the store's labels, the aisle and bay on a plate
+function IDEA_RACKING(x, y, hl, aisle) {
+  const D = .45, levels = [.12, 1.2, 2.3];
+  return { x, y, ideaRacking: aisle, radius: hl + .5, box: boxAt(x, y, 1, 0, hl, D, 0, 2.7), draw: (vx, vy) => {
+    drawBox(boxAt(vx, vy, 1, 0, hl, D, 0, 2.7), (i, t, L) => {
+      const u = HIT.u + hl, w = HIT.w, f = HIT.face, upright = Math.abs(fract(u / 1.4) - .5) * 1.4 > .66 || u < .05 || u > 2 * hl - .05;
+      const lvl = levels.findIndex(z => w >= z && w < z + .08);
+      if (upright) { BG[i] = C(BLUE, 3 + L * .25 - (fract(w * 12) < .2 ? .7 : 0)); return set(i, ' ', 0), true; } // (its punched holes)
+      if (lvl >= 0) { BG[i] = C(ORANGE, 6 + L * .3); return set(i, ' ', 0), true; }
+      const base = levels.filter(z => w >= z + .08).pop(), bay = Math.floor(u / .7), k = levels.indexOf(base), fill = hash(bay, k, 3401 + aisle);
+      const top = base + .1 + .55 + fill * .3, boxHere = base != null && w < Math.min(top, (levels[k + 1] ?? 2.7) - .05) && fill > .15 && Math.abs(fract(u / .7) - .5) < .44;
+      if (!boxHere) { if (f === 4 || f === 3) return false; BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; } // (empty: see the wall behind)
+      const label = f === 4 && Math.abs(fract(u / .7) - .5) < .12 && Math.abs(w - base - .3) < .06; // (4: the front, toward the aisle)
+      BG[i] = label ? C(WHITE, 9) : C(BRICK, (f === 5 ? 3.6 : 2.8 * shadeFace(f)) + L * .2 - (Math.abs(fract(u / .7) - .5) > .41 ? .6 : 0)); return set(i, ' ', 0), true;
+    });
+  } };
+}
+// a store trolley: a wire basket on wheels, yellow handle
+const IDEA_TROLLEY = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .4, .27, .35, .85), (i, t, L) => { const mesh = Math.abs(fract(HIT.u * 18) - .5) > .38 || Math.abs(fract(HIT.w * 18) - .5) > .38 || HIT.face === 6; if (!mesh) return false; BG[i] = C(GRAY, 4 + L * .3); return set(i, ' ', 0), true; });
+  drawBox(boxAt(vx - .42, vy, 1, 0, .03, .27, .85, 1.0), (i, t, L) => { BG[i] = C(YEL, 8); return set(i, ' ', 0), true; });
+  for (const [u, v] of [[-.32, -.22], [-.32, .22], [.32, -.22], [.32, .22]]) drawBox(boxAt(vx + u, vy + v, 1, 0, .04, .04, 0, .35), (i, t, L) => { BG[i] = C(GRAY, HIT.w < .08 ? 1 : 3); return set(i, ' ', 0), true; });
+}, [.45, .3, 1]);
+// a price tag on a stand by a set: yellow, the price in black
+function IDEA_TAG(x, y, price) {
+  const text = '$' + price;
+  return ROOM_MODEL(x, y, (vx, vy) => {
+    drawBox(boxAt(vx, vy, 1, 0, .012, .012, 0, .9), (i, t, L) => { BG[i] = C(GRAY, 3); return set(i, ' ', 0), true; });
+    drawBox(boxAt(vx, vy, 1, 0, .16, .012, .9, 1.12), (i, t, L) => {
+      BG[i] = C(YEL, 10 + L * .2);
+      if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
+      const q = (HIT.face === 3 ? HIT.u : -HIT.u) / .28 * text.length + text.length / 2;
+      if (q >= 0 && q < text.length && oneCell(HIT.w - 1.01, t / projY) && oneCell((fract(q) - .5) * .28 / text.length, t / projX)) return set(i, text[Math.floor(q)], C(GRAY, 1)), true;
+      return set(i, ' ', 0), true;
+    });
+  });
+}
+const IDEA_BASE_PROPS = ROOM_DEFS.idea.props, IDEA_BASE_WALL = ROOM_DEFS.idea.wall;
+// the walls: the store's blue band below, white above, a yellow stripe between; the back wall over the racking marked SELF SERVE
+ROOM_DEFS.idea.wall = (i, u, uStep, z, d, mx, my, L) => {
+  if (my === 0 && z > 2.85 && z < 3.25 && Math.abs(u - 9) > 2.2 && wallText(i, u, uStep, z, d, 'SELF SERVE', u < 9 ? 3.6 : 14.4, 3.05, .26, .3, C(BLUE, 10), C(YEL, 9))) return true;
+  if (Math.abs(z - .74) < .05) { BG[i] = C(YEL, 8 + L * .2); return set(i, ' ', 0), true; }
+  return IDEA_BASE_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.idea.props = r => {
+  const p = [...IDEA_BASE_PROPS(r)];
+  p.push(IDEA_RUG(3, 5.9, 1.7, 1.25, BLUE), IDEA_RUG(3, 8.6, 1.3, 1.1, GREEN), IDEA_RUG(14.3, 5.4, 1.5, 1.1, RED), IDEA_RUG(14.6, 11, 1.6, 1.5, BLUE)); // under each set
+  p.push(...FURNITURE_BED(14.6, 11.2, .8, 1.05, WHITE, 0, .5, 1), FURNITURE_STORAGE(13.4, 10.4, .22, .2, .55), FURNITURE_STORAGE(15.8, 10.4, .22, .2, .55)); // the bedroom set
+  p.push(IDEA_RACKING(3.6, 1.5, 2.8, 1), IDEA_RACKING(14.4, 1.5, 2.8, 2)); // the warehouse along the back
+  p.push(IDEA_HANGING_SIGN(3, 6.4, 'LIVING ROOMS'), IDEA_HANGING_SIGN(14.6, 10.6, 'BEDROOMS'), IDEA_HANGING_SIGN(14.3, 4.6, 'KIDS'), IDEA_HANGING_SIGN(9, 4.3, 'MARKET HALL'));
+  for (const [x, y, dx, dy] of [[9, 11.4, 0, -1], [7.4, 10.2, -.7, -.7], [6.2, 8.2, 0, -1], [6.6, 4.8, .7, -.7], [11.6, 4.8, .7, .7], [12, 7.8, 0, 1]]) p.push(IDEA_ARROW(x, y, dx, dy)); // the way round
+  p.push(IDEA_TAG(4.9, 4.4, 349), IDEA_TAG(4.6, 8, 129), IDEA_TAG(12.6, 12.2, 499), IDEA_TAG(12.4, 5.6, 19));
+  p.push(IDEA_TROLLEY(11.2, 12.4), IDEA_TROLLEY(12.2, 12.4), POT_PLANT(16.8, 12.8, 1.6, 71));
+  // shoppers browsing the sets, a couple trying the bed, and somebody from the store in yellow
+  p.push({ ...standing(5.4, 6.3, GREEN), face: [-1, -.3] }, { ...standing(13.2, 12.6, MAG), face: [.6, -1] }, { ...standing(14, 12.7, BLUE), face: [.2, -1] },
+    { ...figProp(11.8, 8.6, figLook({ hair: 'pony', top: 'tee', bot: 'pants', col: { top: [YEL, 13], bot: [BLUE, 5] } }), { face: [-1, 0] }) });
+  return p;
+};
+
+// ---- the bank's hall: a queue between stanchions and their ropes up to the tellers, a desk for filling in slips, the
+// manager's desk with a nameplate, the cash machine by the door, a rates board, the founder's portrait and a clock
+function BANK_STANCHIONS(x0, x1, y) {
+  const n = Math.round((x1 - x0) / 1.2) + 1, xs = Array.from({ length: n }, (_, k) => x0 + (x1 - x0) * k / (n - 1));
+  return [...xs.map(x => ROOM_MODEL(x, y, (vx, vy) => {
+    drum(vx, vy, .16, 0, .04, (i, t, L) => { BG[i] = C(YEL, 4 + L * .3); return set(i, ' ', 0), true; });
+    drawBox(boxAt(vx, vy, 1, 0, .025, .025, .04, .95), (i, t, L) => { BG[i] = C(YEL, 5 + L * .3); return set(i, ' ', 0), true; });
+    drum(vx, vy, .04, .95, 1.0, (i, t, L) => { BG[i] = C(YEL, 8); return set(i, ' ', 0), true; });
+  }, [.06, .06, 1])), { x: (x0 + x1) / 2, y, bankRope: true, radius: (x1 - x0) / 2 + .2, draw: (vx, vy) => { // the ropes, sagging between
+    for (let k = 1; k < n; k++) { const a = xs[k - 1] - (x0 + x1) / 2, b = xs[k] - (x0 + x1) / 2;
+      for (let j = 0; j < 6; j++) { const q0 = j / 6, q1 = (j + 1) / 6, z = q => .9 - Math.sin(q * Math.PI) * .12; drawRod(vx + a + (b - a) * q0, vy, z(q0), vx + a + (b - a) * q1, vy, z(q1), .03, (i, t, L) => { BG[i] = C(RED, 5 + L * .4); return set(i, " ", 0), true; }); } }
+  } }];
+}
+// a writing desk: a slab on a pedestal, deposit slips in a rack, pens on chains
+const BANK_WRITING_DESK = (x, y) => [BX(x, y, .8, .35, 0, 1.05, (i, t, L) => {
+  const top = HIT.face === 5, slip = top && Math.abs(HIT.v) < .2 && Math.abs(fract(HIT.u * 2) - .5) < .15;
+  BG[i] = slip ? C(WHITE, 9) : C(top ? STONE : BRICK, (top ? 4 : 2.2 * shadeFace(HIT.face)) + L * .25); return set(i, ' ', 0), true; })];
+// the manager's desk: walnut, a green lamp, a nameplate facing out, a leather chair behind
+function BANK_MANAGER(x, y) {
+  return [SMALL_DESK(x, y, .85, .42, .78, 1, 0, BRICK), ...homeChair(x - .85, y, 1, 0, BRICK), ...homeChair(x + 1, y, -1, 0, RED),
+    ROOM_MODEL(x + .3, y - .25, (vx, vy) => { drawBox(boxAt(vx, vy, 1, 0, .012, .012, .78, 1.08), (i, t, L) => { BG[i] = C(YEL, 4); return set(i, ' ', 0), true; });
+      drawBox(boxAt(vx, vy, 1, 0, .12, .06, 1.04, 1.12), (i, t, L) => { BG[i] = C(GREEN, 5 + night * 3); return set(i, ' ', 0), true; }); }),
+    ROOM_MODEL(x + .4, y + .2, (vx, vy) => drawBox(boxAt(vx, vy, 0, 1, .16, .02, .78, .86), (i, t, L) => { BG[i] = HIT.face === 1 || HIT.face === 2 ? C(YEL, 7) : C(BRICK, 2); return set(i, ' ', 0), true; })),
+    { ...figProp(x - .85, y, figLook({ hair: 'short', top: 'suit', bot: 'pants', col: { top: [GRAY, 3], inner: [WHITE, 12], tie: [RED, 8], bot: [GRAY, 3], hair: [GRAY, 8] } }), { pose: 'sit', seatZ: .45, face: [1, 0], chat: false }) }];
+}
+const BANK_QUALITY_PROPS = ROOM_DEFS.bank.props, BANK_QUALITY_WALL = ROOM_DEFS.bank.wall;
+ROOM_DEFS.bank.wall = (i, u, uStep, z, d, mx, my, L) => {
+  const W = room.W, H = room.H, v = mx === 0 || my === H - 1 ? -u : u; // (u runs negative on the left and front walls)
+  if (mx === 0 && v > 2.6 && v < 5.4 && z > 1.4 && z < 2.6) { // the rates board: green felt, white letters, a brass frame
+    if (v < 2.68 || v > 5.32 || z < 1.48 || z > 2.52) { BG[i] = C(YEL, 5 + L * .3); return set(i, ' ', 0), true; }
+    BG[i] = C(GREEN, 1.6 + L * .1);
+    const rows = ['RATES', 'SAVINGS  2.5%', 'MORTGAGE 6.1%', 'LOANS    8.9%'], row = Math.floor((2.5 - z) / .26);
+    if (row >= 0 && row < rows.length && wallText(i, u, uStep, z, d, rows[row], -4, 2.37 - row * .26, .17, .18, C(row ? WHITE : YEL, 13), C(GREEN, 1.6))) return true;
+    return set(i, ' ', 0), true;
+  }
+  if (mx === 0 && Math.abs(v - 6.8) < .55 && z > 1.3 && z < 2.7) { // the founder: an oil portrait in a gilt frame
+    const fu = (v - 6.8) / .55, fz = (z - 2) / .7;
+    if (Math.abs(fu) > .86 || Math.abs(fz) > .9) { BG[i] = C(YEL, 6 + L * .3); return set(i, ' ', 0), true; }
+    const head = Math.hypot(fu * 1.3, fz - .35) < .35, body = fz < 0 && Math.abs(fu) < .6 - fz * .3;
+    BG[i] = head ? C(SKIN, 6) : body ? C(GRAY, 1.2) : C(BRICK, 1.8 + fz * .5); return set(i, ' ', 0), true;
+  }
+  if (my === 0 && Math.hypot(u - 11.9, z - 2.85) < .3) { // the clock over the tellers
+    const r = Math.hypot(u - 11.9, z - 2.85), ang = Math.atan2(z - 2.85, u - 11.9), hr = Math.PI / 2 - (tod % 12) / 12 * TAU, mn = Math.PI / 2 - fract(tod) * TAU;
+    const hand = (r < .18 && Math.abs(Math.sin(ang - hr)) < .08 && Math.cos(ang - hr) > 0) || (r < .25 && Math.abs(Math.sin(ang - mn)) < .06 && Math.cos(ang - mn) > 0);
+    BG[i] = r > .27 ? C(YEL, 6) : hand ? C(GRAY, 1) : C(WHITE, 10); return set(i, ' ', 0), true;
+  }
+  if (my === H - 1 && Math.abs(v - 3.6) < .45 && z > .8 && z < 2) { // the cash machine in the front wall: screen, keypad, the slot
+    const fu = v - 3.6;
+    if (z > 1.45 && z < 1.8 && Math.abs(fu) < .3) { BG[i] = C(CYAN, 5 + Math.sin(T * 2) * .4); return set(i, z > 1.7 && Math.abs(fu) < .2 ? '-' : ' ', C(WHITE, 12)), true; }
+    if (z > 1.1 && z < 1.38 && Math.abs(fu) < .18) { BG[i] = C(GRAY, 3 + (Math.abs(fract(fu * 18) - .5) < .2 && Math.abs(fract(z * 18) - .5) < .2 ? 2 : 0)); return set(i, ' ', 0), true; }
+    if (Math.abs(z - .98) < .02 && Math.abs(fu) < .2) { BG[i] = C(GRAY, .6); return set(i, ' ', 0), true; }
+    BG[i] = C(GRAY, 2.4 + L * .25); return set(i, ' ', 0), true;
+  }
+  return BANK_QUALITY_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.bank.props = r => [...BANK_QUALITY_PROPS(r), ...bankQualityAdds(r)];
+// (the people added here are tagged bankExtra: customers and the manager, not the tellers or the guard)
+const bankQualityAdds = r => [...BANK_STANCHIONS(3.6, 9.6, 3.9), ...BANK_WRITING_DESK(9.4, 6.4), ...BANK_MANAGER(2.4, 6.2),
+  POT_PLANT(1.4, 1.4, 1.5, 61), POT_PLANT(12.6, 7.6, 1.6, 62), POT_PLANT(1.3, 7.7, 1.5, 63),
+  { ...standing(5.2, 4.5, GREEN), face: [0, -1] }, { ...standing(6.2, 4.7, MAG), face: [0, -1] }, { ...standing(9.6, 6.95, YEL), face: [0, -1] }].map(o => o.fig ? { ...o, bankExtra: true } : o); // the queue, and someone filling in a slip
+'use strict';
+// ---- a second pass over the working rooms: the garage, the tyre shop, the welder's, the courier office and the gym.
+// Everything here is added on top of what each room already had (WORLD_QUALITY item 41).
+// The extra people are tagged sparseExtra so the rooms' own staff counts stay what they were.
+
+const SPARSE_FILL = (col, k = 1) => (i, t, L) => { BG[i] = C(col, (1 + L * .3 * k) * shadeFace(HIT.face) + (HIT.face === 5 ? .4 : 0)); return set(i, ' ', 0), true; };
+const SPARSE_FLAT = (x, y, hl, hw, shade, c = 1, s = 0) => ({ x, y, walk: true, radius: Math.hypot(hl, hw), draw: (vx, vy) => drawBox(boxAt(vx, vy, c, s, hl, hw, 0, .004), shade) });
+// a ring of short rods: a wheel's rim or a tyre seen side on, round the axis (ax, ay) at (x, y, z)
+function sparseRing(x, y, z, r, ax, ay, thick, col, k = 1, n = 14) {
+  for (let j = 0; j < n; j++) {
+    const a0 = j / n * TAU, a1 = (j + 1) / n * TAU, p = a => [x + -ay * Math.cos(a) * r, y + ax * Math.cos(a) * r, z + Math.sin(a) * r];
+    rod(...p(a0), ...p(a1), thick, col, k);
+  }
+}
+// a car tyre on its rim, its axle along (ax, ay): black rubber, a grey hub, the tread just showing up close
+function sparseTyre(x, y, z, r, ax, ay, w = .1) {
+  drawRod(x - ax * w, y - ay * w, z, x + ax * w, y + ay * w, z, r, (i, t, L) => { BG[i] = C(GRAY, .55 + L * .1); return set(i, t < 4 ? ':' : ' ', C(GRAY, 1.4)), true; });
+  drawRod(x - ax * (w + .01), y - ay * (w + .01), z, x + ax * (w + .01), y + ay * (w + .01), z, r * .55, (i, t, L) => { BG[i] = C(GRAY, 3 + L * .3); return set(i, ' ', 0), true; });
+  dot(x + ax * (w + .02), y + ay * (w + .02), z, r * .15, (i, t, L) => { BG[i] = C(GRAY, 1.5); return set(i, ' ', 0), true; });
+}
+const sparseExtra = list => list.map(o => o.fig ? { ...o, sparseAdded: true, sparseExtra: true } : { ...o, sparseAdded: true });
+
+// ---- the garage (AUTO REPAIR): the car on the lift gets wheels, lights and the lift's arms; a tool chest, oil drums,
+// a trolley jack, a tyre or two waiting, oil on the floor, someone in the chair waiting for their car
+const SPARSE_TOOL_CHEST = (x, y, fx, fy, col = RED) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
+  const c = Math.abs(fy), s = Math.abs(fx);
+  drawBox(boxAt(vx, vy, c, s, .45, .25, .12, 1.05), (i, t, L) => {
+    const f = HIT.face, w = HIT.w; BG[i] = C(col, (1.6 + L * .35) * shadeFace(f) + (f === 5 ? .6 : 0)); set(i, ' ', 0);
+    const front = (fy && (f === 3 || f === 4)) || (fx && (f === 1 || f === 2));
+    if (front && w > .15) { const dz = fract((w - .15) / .15); if (dz < .1) BG[i] = C(col, .6); else if (Math.abs(dz - .5) < .08 && Math.abs(f <= 2 ? HIT.v : HIT.u) < .3) BG[i] = C(GRAY, 4 + L * .3); } // drawers and their handles
+    return true;
+  });
+  drawBox(boxAt(vx, vy, c, s, .45, .25, 1.05, 1.09), SPARSE_FILL(GRAY, 1.2)); // the rubber mat on top
+  for (const e of [-1, 1]) for (const g of [-1, 1]) drum(vx + (c * e * .38 - s * g * .18), vy + (s * e * .38 + c * g * .18), .05, 0, .12, SPARSE_FILL(GRAY, .5));
+  drawBox(boxAt(vx + fx * .1 - c * .2, vy + fy * .1 - s * .2, c, s, .12, .05, 1.09, 1.18), SPARSE_FILL(YEL)); // a spanner set in its case
+}), box: boxAt(x, y, Math.abs(fy), Math.abs(fx), .45, .25, 0, 1.1), radius: .55, toolChest: true });
+const SPARSE_DRUM = (x, y, col, label) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, .29, 0, .88, (i, t, L) => { const band = Math.abs(HIT.w - .3) < .02 || Math.abs(HIT.w - .6) < .02; BG[i] = C(col, (band ? 1.3 : 2.4 + L * .3) * drumLit(.29)); return set(i, ' ', 0), true; });
+  drum(vx, vy, .27, .88, .9, (i, t, L) => { BG[i] = C(GRAY, 2.2 + L * .2); return set(i, Math.hypot(HIT.u - .12, HIT.v) < .04 ? 'o' : ' ', C(GRAY, .8)), true; });
+}, [.29, .29, .9]);
+const SPARSE_JACK = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .35, .14, .05, .17), SPARSE_FILL(RED, 1.2));
+  for (const e of [-1, 1]) for (const g of [-1, 1]) drum(vx + e * .28, vy + g * .12, .045, 0, .06, SPARSE_FILL(GRAY, .4));
+  drawBox(boxAt(vx + .32, vy, 1, 0, .06, .08, .17, .26), SPARSE_FILL(GRAY, 1)); // the saddle
+  rod(vx - .35, vy, .14, vx - 1.05, vy, .62, .016, GRAY, 1.3); // the handle
+}, [.38, .16, .3]);
+// the lifted car's running gear: four wheels hanging off it, the lift's arms under the sills, lamps at each end
+const SPARSE_LIFT_GEAR = (x, y, body) => ({ x, y, radius: 2.6, draw: (vx, vy) => {
+  for (const e of [-1, 1]) for (const g of [-1, 1]) sparseTyre(vx + e * 1.35, vy + g * .78, 1.22, .3, 0, 1, .11);
+  for (const e of [-1, 1]) for (const g of [-1, 1]) rod(vx - e * 2.2, vy + g * .55, 1.2, vx + e * .9, vy + g * .82, 1.2, .045, YEL, 1.4); // the lift's arms, swung in
+  for (const g of [-1, 1]) {
+    drawBox(boxAt(vx + 2.11, vy + g * .6, 1, 0, .02, .17, 1.6, 1.74), (i, t, L) => { BG[i] = C(WHITE, 9); return set(i, ' ', 0), true; });
+    drawBox(boxAt(vx - 2.11, vy + g * .62, 1, 0, .02, .15, 1.62, 1.74), (i, t, L) => { BG[i] = C(RED, 8); return set(i, ' ', 0), true; });
+  }
+  drawBox(boxAt(vx + 2.11, vy, 1, 0, .03, .32, 1.32, 1.45), SPARSE_FILL(GRAY, 1.3)); // the front bumper
+  drawBox(boxAt(vx - 2.11, vy, 1, 0, .03, .5, 1.3, 1.4), (i, t, L) => { BG[i] = C(YEL, 8); return set(i, ' ', 0), true; }); // the number plate
+  rod(vx - 1.6, vy + .3, 1.18, vx - 2.3, vy + .3, 1.12, .035, GRAY, 1.2); // the exhaust
+} });
+const SPARSE_GARAGE_PROPS = ROOM_DEFS.garage.props;
+ROOM_DEFS.garage.props = r => [...SPARSE_GARAGE_PROPS(r), ...sparseExtra([
+  SPARSE_LIFT_GEAR(6.5, 4), SPARSE_FLAT(6.7, 4.2, .9, .55, (i, t, L) => { BG[i] = C(GRAY, .55 + hash(Math.floor(HIT.u * 6), Math.floor(HIT.v * 6), 512) * .25); return set(i, ' ', 0), true; }), // oil under the lift
+  SPARSE_TOOL_CHEST(11.9, 8.5, 0, -1), SPARSE_TOOL_CHEST(1.6, 4.6, 1, 0, BLUE),
+  SPARSE_DRUM(12.4, 5.2, BLUE), SPARSE_DRUM(12.4, 5.85, RED), SPARSE_DRUM(11.75, 5.5, BLUE),
+  SPARSE_JACK(9.9, 6.1), ROOM_MODEL(11.1, 2.3, (vx, vy) => { for (let k = 0; k < 3; k++) sparseTyre(vx, vy - .25 + k * .25, .32, .3, 0, 1, .1); }, [.32, .4, .62]), // tyres waiting, stood on edge
+  ...shellChair(3.2, 8.4, 0, -1, GRAY), { ...sitting(3.2, 8.4, BLUE, .47), face: [0, -1] }, { ...standing(4.9, 3.6, ORANGE), face: [1, 0] }, // the customer; a mechanic under the car
+])];
+
+// ---- the tyre shop: a wall rack of tyres on edge, rims on show, the compressor, a tyre on a stand by the door
+const SPARSE_TYRE_RACK = (x, y, hl, c, s) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
+  const P = (u, v, z) => [vx + c * u - s * v, vy + s * u + c * v, z];
+  for (const u of [-hl, hl]) for (const v of [-.25, .25]) rod(...P(u, v, 0), ...P(u, v, 2.1), .025, BLUE, 1.2);
+  for (const z of [.05, .8, 1.5]) for (const v of [-.25, .25]) rod(...P(-hl, v, z), ...P(hl, v, z), .02, ORANGE, 1.3);
+  for (const [k, z] of [.05, .8, 1.5].entries()) for (let j = 0; j < Math.floor(hl * 2 / .26); j++) {
+    if (hash(j, k, 77) < .15) continue;
+    const r = .28 + hash(j, k, 78) * .05, [tx, ty] = P(-hl + .14 + j * .26, 0, 0);
+    sparseTyre(tx, ty, z + r + .01, r, c, s, .1);
+  }
+}), box: boxAt(x, y, c, s, hl, .3, 0, 2.1), radius: hl + .3, tyreRack: true });
+// alloy rims on the wall: shiny, five spokes
+function sparseRimWall(i, u, z, d, cu, cz) {
+  const du = u - cu, dz = z - cz, r = Math.hypot(du, dz);
+  if (r > .3) return false;
+  const a = Math.atan2(dz, du), spoke = Math.abs(fract(a / TAU * 5 + .1) - .5) < .12;
+  BG[i] = r > .25 ? C(GRAY, 1) : r < .06 ? C(GRAY, 5) : spoke ? C(GRAY, 4.2 + Math.cos(a) * .6) : C(GRAY, .5); return set(i, ' ', 0), true;
+}
+const SPARSE_COMPRESSOR = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawRod(vx - .45, vy, .32, vx + .45, vy, .32, .24, (i, t, L) => { BG[i] = C(RED, 2.2 + L * .4); return set(i, ' ', 0), true; });
+  for (const e of [-1, 1]) drawBox(boxAt(vx + e * .3, vy, 1, 0, .04, .14, 0, .1), SPARSE_FILL(GRAY, .5));
+  drawBox(boxAt(vx + .05, vy, 1, 0, .2, .14, .56, .78), SPARSE_FILL(GRAY, 1.2)); // the motor
+  dot(vx - .25, vy - .2, .62, .05, (i, t, L) => { BG[i] = C(WHITE, 8); return set(i, '+', C(GRAY, 1)), true; }); // the gauge
+  rod(vx - .4, vy - .1, .5, vx - .55, vy - .3, 1.4, .012, YEL, 1.2); // the coiled line, up to its hook
+}, [.5, .25, .8]);
+const SPARSE_TYRE_STAND = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .25, .2, 0, .05), SPARSE_FILL(GRAY, .8));
+  rod(vx, vy, .05, vx, vy, .4, .02, GRAY, 1.3);
+  sparseTyre(vx, vy, .72, .33, 0, 1, .11);
+  drawBox(boxAt(vx, vy + .2, 1, 0, .2, .01, .08, .3), (i, t, L) => { BG[i] = C(YEL, 10); return wallTextFlat(i, HIT.u, HIT.w - .19, '$89', .36) || set(i, ' ', 0), true; });
+}, [.3, .25, 1.05]);
+function wallTextFlat(i, u, w, text, width) { // a few letters across a small face, centred, no filtering
+  const n = text.length, q = (u / width + .5) * n;
+  if (q < 0 || q >= n || Math.abs(w) > .05) return false;
+  return set(i, text[Math.floor(q)], C(GRAY, 1)), true;
+}
+const SPARSE_TYRE_PROPS = ROOM_DEFS.tireshop.props, SPARSE_TYRE_WALL = ROOM_DEFS.tireshop.wall;
+ROOM_DEFS.tireshop.wall = (i, u, uStep, z, d, mx, my, L) => {
+  if (mx === room.W - 1 && z > 1.1 && z < 2.3) for (const [cu, cz] of [[5.2, 1.85], [5.9, 1.85], [6.6, 1.85]]) if (sparseRimWall(i, u, z, d, cu, cz)) return true;
+  return SPARSE_TYRE_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.tireshop.props = r => [...SPARSE_TYRE_PROPS(r), ...sparseExtra([
+  SPARSE_TYRE_RACK(10.65, 2.9, 1.5, 0, 1), SPARSE_COMPRESSOR(4.8, 1.45), SPARSE_TYRE_STAND(4.3, 6.2),
+  ROOM_MODEL(6.4, 2.6, (vx, vy) => drum(vx, vy, .3, .86, 1.06, (i, t, L) => { const r = Math.hypot(HIT.u, HIT.v); BG[i] = HIT.face === 5 ? C(GRAY, r < .17 ? 3.2 : .6 + L * .1) : C(GRAY, .6 + L * .15); return set(i, ' ', 0), true; })), // the tyre on the changer, lying flat
+  { ...standing(6.4, 3.3, BLUE), face: [0, -1] }, { ...standing(8.6, 7.1, shirt()), face: [1, 0] },
+])];
+
+// ---- the welder's: the welding set by the bench with its leads, a screen to keep the flash in, the scrap bin, a gate
+// finished by the door, masks on the wall, the extinguisher
+const SPARSE_WELDER_SET = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .3, .22, .15, .75), (i, t, L) => { BG[i] = C(BLUE, (1.6 + L * .3) * shadeFace(HIT.face)); set(i, ' ', 0); if (HIT.face === 4 && HIT.w > .55 && HIT.w < .68 && Math.abs(HIT.u) < .2) { BG[i] = C(GRAY, 1); if (Math.abs(HIT.u + .1) < .04) BG[i] = C(ORANGE, 9 + Math.sin(T * 9) * 2); } return true; });
+  for (const e of [-1, 1]) drum(vx + e * .22, vy, .07, 0, .15, SPARSE_FILL(GRAY, .4));
+  rod(vx - .1, vy - .23, .4, vx - .8, vy - .3, .05, .015, RED, 1.1); rod(vx - .8, vy - .3, .05, vx - 1.2, vy - .1, .85, .015, RED, 1.1); // the lead, up to the bench
+  rod(vx + .1, vy - .23, .4, vx + .3, vy - .6, .02, .015, GRAY, .8); // the earth clamp
+}, [.32, .24, .78]);
+const SPARSE_SCREEN = (x, y, hl, c, s) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, c, s, hl, .01, .15, 1.8), (i, t, L) => { BG[i] = C(ORANGE, 1.4 + L * .2 + (fract(HIT.u * 2.5) < .05 ? -.5 : 0)); return set(i, ' ', 0), true; });
+  for (const e of [-1, 1]) rod(vx + c * e * hl, vy + s * e * hl, 0, vx + c * e * hl, vy + s * e * hl, 1.85, .02, GRAY, 1.3);
+  rod(vx - c * hl, vy - s * hl, 1.85, vx + c * hl, vy + s * hl, 1.85, .02, GRAY, 1.3);
+}), box: boxAt(x, y, c, s, hl, .05, 0, 1.85), radius: hl + .1 });
+const SPARSE_SCRAP = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .4, .3, 0, .6), SPARSE_FILL(GRAY, .9));
+  for (let k = 0; k < 6; k++) { const a = hash(k, 1, 931) * TAU; rod(vx + Math.cos(a) * .2, vy + Math.sin(a) * .15, .3, vx + Math.cos(a) * .45, vy + Math.sin(a) * .3, .8 + hash(k, 2, 931) * .5, .015, k & 1 ? BRICK : GRAY, 1.1); }
+}, [.42, .32, .6]);
+const SPARSE_EXTINGUISHER = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, .08, .02, .55, (i, t, L) => { BG[i] = C(RED, (2.6 + L * .35) * drumLit(.08)); return set(i, Math.abs(HIT.w - .35) < .05 ? '=' : ' ', C(WHITE, 8)), true; });
+  drum(vx, vy, .03, .55, .63, SPARSE_FILL(GRAY, 1.3)); rod(vx, vy, .6, vx + .08, vy, .3, .01, GRAY, .5);
+}, [.1, .1, .63]);
+const SPARSE_WELD_PROPS = ROOM_DEFS.welding.props, SPARSE_WELD_WALL = ROOM_DEFS.welding.wall;
+ROOM_DEFS.welding.wall = (i, u, uStep, z, d, mx, my, L) => {
+  if (mx === 0) { // the masks on their pegs on the left wall
+    const v = -u;
+    for (const cu of [3.4, 4.0, 4.6]) { const du = v - cu, dz = z - 1.75; if (Math.abs(du) < .16 && dz > -.2 && dz < .18) { const glass = Math.abs(du) < .1 && Math.abs(dz - .02) < .04; BG[i] = glass ? C(GREEN, .8) : C(GRAY, .9 + L * .15 - Math.abs(du) * 2); return set(i, ' ', 0), true; } }
+  }
+  return SPARSE_WELD_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.welding.props = r => [...SPARSE_WELD_PROPS(r), ...sparseExtra([
+  SPARSE_WELDER_SET(6.1, 2.7), SPARSE_SCREEN(5.25, 2.5, .6, 0, 1), SPARSE_SCRAP(10.6, 7.6), SPARSE_EXTINGUISHER(1.3, 7.6),
+  GATE_FRAME(10.985, 6.6, .55, 1.3, 0, 1),
+  SPARSE_FLAT(4.1, 3.4, .5, .4, (i, t, L) => { const r = Math.hypot(HIT.u / .5, HIT.v / .4); BG[i] = C(GRAY, .5 + r * .6); return set(i, hash(Math.floor(HIT.u * 30), Math.floor(HIT.v * 30), 3) > .93 ? '.' : ' ', C(ORANGE, 3)), true; }), // scorch and spatter
+])];
+
+// ---- the courier office: bikes against the wall, a cage of parcels, the shelving, pigeonholes on the back wall,
+// a rider waiting on a job
+const SPARSE_BIKE = (x, y, col) => ROOM_MODEL(x, y, (vx, vy) => { // stood along y, leaning on a wall to its left
+  const W0 = [vx, vy - .5, .33], W1 = [vx, vy + .5, .33], crank = [vx, vy, .3], seat = [vx, vy - .2, .85], head = [vx, vy + .38, .9];
+  sparseRing(...W0, .32, 1, 0, .02, GRAY, .8); sparseRing(...W1, .32, 1, 0, .02, GRAY, .8);
+  for (const [a, b] of [[W0, crank], [crank, seat], [seat, W0], [crank, head], [seat, head], [head, W1]]) rod(...a, ...b, .018, col, 1.4);
+  rod(vx - .22, vy + .42, .98, vx + .22, vy + .42, .98, .015, GRAY, 1); // the bars
+  drawBox(boxAt(vx, vy - .22, 0, 1, .1, .04, .85, .9), SPARSE_FILL(GRAY, .5)); // the saddle
+  drawBox(boxAt(vx, vy + .62, 0, 1, .15, .13, .55, .78), SPARSE_FILL(ORANGE)); // a front rack and its bag
+}, [.12, .62, 1]);
+const SPARSE_PARCEL_SHELF = (x, y, hl, c, s) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
+  const P = (u, v) => [vx + c * u - s * v, vy + s * u + c * v];
+  for (const u of [-hl, hl]) for (const v of [-.25, .25]) rod(...P(u, v), 0, ...P(u, v), 1.9, .02, GRAY, 1.4);
+  for (const z of [.1, .7, 1.3]) {
+    drawBox(boxAt(...P(0, 0), c, s, hl, .28, z - .03, z), SPARSE_FILL(GRAY, 1.1));
+    let u = -hl + .05;
+    for (let k = 0; u < hl - .2; k++) {
+      const w = .18 + hash(k, z * 10, 611) * .2, h = .15 + hash(k, z * 10, 612) * .3, [bx, by] = P(u + w, (hash(k, z, 613) - .5) * .1);
+      if (hash(k, z * 10, 614) > .12) drawBox(boxAt(bx, by, c, s, w * .95, .2, z, z + h), (i, t, L) => { BG[i] = C(BRICK, (2.6 + L * .25) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, Math.abs(HIT.u) < .015 && HIT.face === 5 ? '|' : ' ', C(YEL, 4)), true; });
+      u += w * 2 + .04;
+    }
+  }
+}), box: boxAt(x, y, c, s, hl, .3, 0, 1.9), radius: hl + .3, parcelShelf: true });
+const SPARSE_CAGE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .45, .35, .1, 1.5), (i, t, L) => { const f = HIT.face, a = f <= 2 ? HIT.v : HIT.u; if (f !== 6 && f !== 5 && Math.abs(fract(a * 4) - .5) < .45 && Math.abs(fract(HIT.w * 4) - .5) < .45) return false; BG[i] = C(GRAY, 2.4 + L * .3); return set(i, ' ', 0), true; });
+  for (const [u, v, h] of [[-.2, -.15, .45], [.18, -.1, .3], [-.15, .15, .35], [.2, .17, .5]]) drawBox(boxAt(vx + u, vy + v, 1, 0, .16, .14, .12, .12 + h), SPARSE_FILL(BRICK, 1.2));
+  for (const e of [-1, 1]) for (const g of [-1, 1]) drum(vx + e * .38, vy + g * .28, .045, 0, .1, SPARSE_FILL(GRAY, .4));
+}, [.47, .37, 1.5]);
+const SPARSE_COURIER_PROPS = ROOM_DEFS.courier.props, SPARSE_COURIER_WALL = ROOM_DEFS.courier.wall;
+ROOM_DEFS.courier.wall = (i, u, uStep, z, d, mx, my, L) => {
+  if (my === 0 && u > 6.2 && u < 8.9 && z > 1.0 && z < 2.1) { // the pigeonholes, one per regular
+    const cu = (u - 6.2) / .3, cz = (z - 1.0) / .22, eu = fract(cu), ez = fract(cz), k = hash(Math.floor(cu), Math.floor(cz), 615);
+    if (eu < .08 || ez < .1 || u > 8.84 || z > 2.06) { BG[i] = C(BRICK, 2.6 + L * .2); return set(i, ' ', 0), true; }
+    BG[i] = k > .55 && ez < .75 ? C(WHITE, 6 + k * 3) : C(BRICK, .7); return set(i, ' ', 0), true;
+  }
+  return SPARSE_COURIER_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.courier.props = r => [...SPARSE_COURIER_PROPS(r), ...sparseExtra([
+  SPARSE_BIKE(1.25, 2.6, RED), SPARSE_BIKE(1.25, 4.0, CYAN), SPARSE_PARCEL_SHELF(12.65, 6.6, 1.6, 0, 1), SPARSE_CAGE(5.4, 6.3),
+  { ...standing(6.2, 4.6, YEL), face: [1, -.4] }, { ...standing(9.6, 4.8, shirt()), face: [0, -1] }, // a rider waiting, a customer at the counter
+])];
+
+// ---- the gym: two bench-press stations, kettlebells in front of the mirror, mats for stretching
+const SPARSE_BENCH_PRESS = (x, y) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy + .15, 0, 1, .6, .15, .38, .48), SPARSE_FILL(GRAY, .6)); // the pad
+  for (const e of [-1, 1]) drawBox(boxAt(vx, vy + .15 + e * .45, 1, 0, .1, .04, 0, .38), SPARSE_FILL(GRAY, 1.2));
+  for (const e of [-1, 1]) rod(vx + e * .32, vy - .5, 0, vx + e * .32, vy - .5, 1.15, .025, GRAY, 1.5); // the uprights
+  rod(vx - 1.05, vy - .5, 1.05, vx + 1.05, vy - .5, 1.05, .016, GRAY, 2); // the bar, racked
+  for (const e of [-1, 1]) for (const k of [0, 1]) drawRod(vx + e * (.78 + k * .07), vy - .5, 1.05, vx + e * (.82 + k * .07), vy - .5, 1.05, .24 - k * .06, (i, t, L) => { BG[i] = C(k ? RED : GRAY, k ? 2 + L * .3 : .7 + L * .15); return set(i, ' ', 0), true; });
+}), box: boxAt(x, y, 1, 0, .45, .7, 0, 1.15), radius: 1.1, benchPress: true });
+const SPARSE_KETTLEBELLS = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
+  for (let k = 0; k < n; k++) { const r = .08 + k * .012, cy = vy - (n - 1) * .2 + k * .4;
+    dot(vx, cy, r, r, (i, t, L) => { BG[i] = C(GRAY, .6 + L * .2); return set(i, ' ', 0), true; });
+    sparseRing(vx, cy, r * 2 + .03, .05 + k * .005, 1, 0, .012, GRAY, .7, 8);
+  }
+}, [.15, n * .2, .3]);
+const SPARSE_GYM_PROPS = ROOM_DEFS.gym.props;
+ROOM_DEFS.gym.props = r => [...SPARSE_GYM_PROPS(r), ...sparseExtra([
+  SPARSE_BENCH_PRESS(6.0, 6.4), SPARSE_BENCH_PRESS(8.4, 6.4), SPARSE_KETTLEBELLS(1.35, 4.6, 4),
+  SPARSE_FLAT(6.6, 9.1, .9, .45, (i, t, L) => { BG[i] = C(BLUE, 1.1 + L * .1 - (Math.abs(HIT.u) > .86 ? .4 : 0)); return set(i, ' ', 0), true; }),
+  { ...standing(6.0, 7.3, RED), face: [0, -1] }, { ...standing(6.6, 9.1, GREEN), face: [1, 0] }, // a spotter, someone on the mat
+])];
+'use strict';
+// ---- a second pass over the shops and lobbies that still felt thin: the phone shop, the pawnbroker, the off-licence,
+// the jeweller, and the hotel and motel lobbies (WORLD_QUALITY item 41). Added on top of what each room already had,
+// tagged sparseAdded (and the people sparseExtra) like workshop-dressing.js.
+
+// a rug: a border and a field, a pattern of diamonds in it up close
+const SPARSE_RUG = (x, y, hl, hw, field, border) => SPARSE_FLAT(x, y, hl, hw, (i, t, L) => {
+  const eu = hl - Math.abs(HIT.u), ev = hw - Math.abs(HIT.v), edge = Math.min(eu, ev);
+  if (edge < .1) { BG[i] = C(border, 1.6 + L * .15); return set(i, ' ', 0), true; }
+  const dia = t < 6 && Math.abs(fract(HIT.u * 2.5) - .5) + Math.abs(fract(HIT.v * 2.5) - .5) < .16;
+  BG[i] = C(field, (dia ? 2.2 : 1.3) + L * .12); return set(i, ' ', 0), true;
+});
+
+// ---- the phone shop: a wall of phones in their cradles, all lit; an accessories spinner; a poster of the new one
+const SPARSE_SPINNER = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, .25, 0, .04, SPARSE_FILL(GRAY, 1));
+  rod(vx, vy, 0, vx, vy, 1.7, .02, GRAY, 1.5);
+  const turn = T * .3;
+  for (let k = 0; k < 4; k++) {
+    const a = turn + k * Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
+    for (let j = 0; j < 4; j++) drawBox(boxAt(vx + c * .16, vy + s * .16, -s, c, .12, .015, .45 + j * .3, .7 + j * .3), (i, t, L) => {
+      const col = [CYAN, MAG, YEL, GREEN, RED, BLUE][(k * 4 + j) % 6]; BG[i] = C(col, 2.6 + L * .3); return set(i, Math.abs(HIT.w - (.66 + j * .3)) < .02 ? '-' : ' ', C(WHITE, 8)), true;
+    });
+  }
+}, [.28, .28, 1.75]);
+const SPARSE_PHONES_PROPS = ROOM_DEFS.phones.props, SPARSE_PHONES_WALL = ROOM_DEFS.phones.wall;
+ROOM_DEFS.phones.wall = (i, u, uStep, z, d, mx, my, L) => {
+  const v = -u;
+  if (mx === 0 && v > 1.4 && v < 4.6 && z > 1.0 && z < 2.0) { // the phone wall: a white panel, phones on it in rows, their screens on
+    const cu = (v - 1.4) / .4, cz = (z - 1.0) / .33, eu = fract(cu), ez = fract(cz), k = hash(Math.floor(cu), Math.floor(cz), 702);
+    const phone = Math.abs(eu - .5) < .22 && Math.abs(ez - .5) < .38, screen = Math.abs(eu - .5) < .17 && Math.abs(ez - .52) < .3;
+    BG[i] = screen ? C([CYAN, BLUE, MAG, GREEN][k * 4 | 0], 5 + Math.sin(T * 1.5 + k * 9) * .8) : phone ? C(GRAY, 1) : C(WHITE, 5 + L * .2); return set(i, ' ', 0), true;
+  }
+  if (mx === room.W - 1 && u > 2.2 && u < 4.2 && z > 1.0 && z < 2.3) { // the poster: the new one, floating in blue
+    const fu = u - 3.2, fz = z - 1.65, body = Math.abs(fu) < .22 && Math.abs(fz) < .45, glass = Math.abs(fu) < .18 && Math.abs(fz) < .4;
+    if (wallText(i, u, uStep, z, d, 'THE NEW ONE', 3.2, 1.12, .12, .1, C(WHITE, 15), C(BLUE, 1.2))) return true;
+    BG[i] = glass ? C(CYAN, 3 + fz * 2) : body ? C(GRAY, 2) : C(BLUE, 1.2 + (z - 1) * .4); return set(i, ' ', 0), true;
+  }
+  return SPARSE_PHONES_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.phones.props = r => [...SPARSE_PHONES_PROPS(r), ...sparseExtra([SPARSE_SPINNER(10.4, 4.4), SPARSE_RUG(6, 4.1, 3.2, .9, GRAY, BLUE)])];
+
+// ---- the pawnbroker: a drum kit, an amp, and a shelf of boxed games and films by the door
+const SPARSE_DRUM_KIT = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawRod(vx, vy - .15, .3, vx, vy + .15, .3, .28, (i, t, L) => { BG[i] = C(RED, 2 + L * .3); return set(i, ' ', 0), true; }); // the bass drum, on its side
+  dot(vx, vy - .17, .3, .2, (i, t, L) => { BG[i] = C(WHITE, 6 + L * .3); return set(i, ' ', 0), true; });
+  for (const [u, v, z, r] of [[-.45, -.2, .62, .17], [.42, -.15, .58, .2], [-.15, -.3, .8, .12], [.15, -.3, .82, .12]]) {
+    drum(vx + u, vy + v, r, z, z + .16, (i, t, L) => { BG[i] = HIT.face === 5 ? C(WHITE, 5) : C(RED, (2 + L * .3) * drumLit(r)); return set(i, ' ', 0), true; });
+    rod(vx + u, vy + v, 0, vx + u, vy + v, z, .012, GRAY, 1.4);
+  }
+  for (const [u, v, z] of [[-.6, .1, 1.15], [.6, .1, 1.25]]) { rod(vx + u, vy + v, 0, vx + u, vy + v, z, .01, GRAY, 1.4); drum(vx + u, vy + v, .22, z, z + .01, (i, t, L) => { BG[i] = C(YEL, 5 + L * .4); return set(i, ' ', 0), true; }); } // the cymbals
+}, [.65, .4, 1.2]);
+const SPARSE_AMP = (x, y, fy) => ROOM_MODEL(x, y, (vx, vy) => drawBox(boxAt(vx, vy, 1, 0, .3, .17, 0, .65), (i, t, L) => {
+  const f = HIT.face; BG[i] = C(GRAY, .6 + L * .15); set(i, ' ', 0);
+  if ((fy > 0 ? f === 4 : f === 3) && HIT.w < .52) BG[i] = C(BRICK, .9 + ((Math.abs(fract(HIT.u * 20) - .5) < .15) ? .3 : 0)); // the cloth
+  if ((fy > 0 ? f === 4 : f === 3) && HIT.w > .56 && Math.abs(HIT.u) < .25) { BG[i] = C(YEL, 4); if (Math.abs(fract(HIT.u * 12) - .5) < .2) set(i, 'o', C(GRAY, 1)); }
+  return true;
+}), [.3, .17, .65]);
+const SPARSE_PAWN_PROPS = ROOM_DEFS.pawn.props;
+ROOM_DEFS.pawn.props = r => [...SPARSE_PAWN_PROPS(r), ...sparseExtra([SPARSE_DRUM_KIT(8.6, 7.3), SPARSE_AMP(7.4, 7.6, -1), SPARSE_PARCEL_SHELF(1.3, 7.2, .5, 0, 1)])];
+
+// ---- the off-licence: a stacked display of wine cases by the door with a SALE card
+const SPARSE_CASE_STACK = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  const box = (u, v, z, col) => drawBox(boxAt(vx + u, vy + v, 1, 0, .22, .16, z, z + .3), (i, t, L) => { BG[i] = C(col, (2.2 + L * .25) * shadeFace(HIT.face) + (HIT.face === 5 ? .4 : 0)); return set(i, HIT.face === 4 && Math.abs(HIT.w - z - .15) < .03 && Math.abs(HIT.u) < .12 ? '~' : ' ', C(RED, 6)), true; });
+  for (const [u, v] of [[-.23, -.17], [.23, -.17], [-.23, .17], [.23, .17]]) box(u, v, 0, BRICK);
+  for (const [u, v] of [[0, -.17], [0, .17]]) box(u, v, .3, YEL);
+  box(0, 0, .6, BRICK);
+  drawBox(boxAt(vx, vy + .35, 1, 0, .22, .01, .55, .85), (i, t, L) => { BG[i] = C(WHITE, 10); return wallTextFlat(i, HIT.u, HIT.w - .76, 'SALE', .36) ? (COL[i] = C(RED, 12), true) : (set(i, ' ', 0), true); });
+}, [.46, .34, .9]);
+const SPARSE_LIQUOR_PROPS = ROOM_DEFS.liquor.props;
+ROOM_DEFS.liquor.props = r => [...SPARSE_LIQUOR_PROPS(r), ...sparseExtra([SPARSE_CASE_STACK(4.4, 5.9)])];
+
+// ---- the jeweller: a long-case clock ticking in the corner, flowers on a stand
+const SPARSE_LONGCASE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .24, .18, 0, 2.05), (i, t, L) => {
+    const f = HIT.face, w = HIT.w; BG[i] = C(BRICK, (1.4 + L * .25) * shadeFace(f)); set(i, ' ', 0);
+    if (f === 4 && w > 1.55 && w < 1.95) { const r = Math.hypot(HIT.u, w - 1.75); if (r < .17) { const ang = Math.atan2(w - 1.75, HIT.u), mn = Math.PI / 2 - fract(tod) * TAU, hr = Math.PI / 2 - (tod % 12) / 12 * TAU; const hand = (r < .1 && Math.abs(Math.sin(ang - hr)) < .12 && Math.cos(ang - hr) > 0) || (r < .15 && Math.abs(Math.sin(ang - mn)) < .09 && Math.cos(ang - mn) > 0); BG[i] = hand ? C(GRAY, 1) : r > .15 ? C(YEL, 6) : C(WHITE, 9); } }
+    if (f === 4 && w > .5 && w < 1.4 && Math.abs(HIT.u) < .12) { const sw = Math.sin(T * Math.PI) * .07; BG[i] = C(BRICK, .7); if (Math.hypot(HIT.u - sw, w - .7) < .06) BG[i] = C(YEL, 8); else if (Math.abs(HIT.u - sw * (w - .7) / -.7 - sw) < .01 && w > .7) BG[i] = C(YEL, 5); } // the pendulum, swinging behind the glass
+    return true;
+  });
+  drawBox(boxAt(vx, vy, 1, 0, .27, .2, 2.05, 2.15), SPARSE_FILL(BRICK, 1.2));
+}, [.27, .2, 2.15]);
+const SPARSE_FLOWERS = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, .18, 0, .9, (i, t, L) => { BG[i] = C(WHITE, (3.5 + L * .3) * drumLit(.18)); return set(i, ' ', 0), true; });
+  drum(vx, vy, .08, .9, 1.15, (i, t, L) => { BG[i] = C(CYAN, 2.5 + L * .3); return set(i, ' ', 0), true; });
+  for (let k = 0; k < 9; k++) { const a = k * 2.4, r = .06 + (k % 3) * .06, fx = vx + Math.cos(a) * r, fy = vy + Math.sin(a) * r, fz = 1.35 + (k % 4) * .07;
+    rod(vx, vy, 1.1, fx, fy, fz, .006, GREEN, 1); dot(fx, fy, fz, .05, (i, t, L) => { BG[i] = C([RED, WHITE, MAG][k % 3], 5 + L * .4); return set(i, ' ', 0), true; }); }
+}, [.2, .2, 1.4]);
+const SPARSE_JEWEL_PROPS = ROOM_DEFS.jeweler.props;
+ROOM_DEFS.jeweler.props = r => [...SPARSE_JEWEL_PROPS(r), ...sparseExtra([SPARSE_LONGCASE(1.45, 1.35), SPARSE_FLOWERS(8.4, 1.4), SPARSE_RUG(5, 4.2, 1.6, .7, RED, YEL)])];
+
+// ---- the hotel lobby: a seating group on a rug, a luggage trolley by the lift, the clocks of other cities over the
+// way up
+const SPARSE_LUGGAGE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .45, .28, .1, .14), (i, t, L) => { BG[i] = HIT.face === 5 ? C(RED, 2.2) : C(YEL, 5 + L * .3); return set(i, ' ', 0), true; });
+  for (const e of [-1, 1]) for (const g of [-1, 1]) drum(vx + e * .38, vy + g * .22, .05, 0, .1, SPARSE_FILL(GRAY, .4));
+  for (const e of [-1, 1]) { rod(vx + e * .42, vy - .25, .14, vx + e * .42, vy - .25, 1.8, .018, YEL, 2); rod(vx + e * .42, vy + .25, .14, vx + e * .42, vy + .25, 1.8, .018, YEL, 2); }
+  for (const e of [-1, 1]) rod(vx + e * .42, vy - .25, 1.8, vx + e * .42, vy + .25, 1.8, .018, YEL, 2);
+  rod(vx - .42, vy, 1.8, vx + .42, vy, 1.8, .018, YEL, 2); // the hanging rail
+  drawBox(boxAt(vx - .12, vy, 1, 0, .25, .18, .14, .75), SPARSE_FILL(BLUE, 1.1)); // a suitcase
+  drawBox(boxAt(vx + .22, vy + .02, 1, 0, .16, .13, .14, .5), SPARSE_FILL(BRICK, 1.1)); // a smaller one
+  drawBox(boxAt(vx + .3, vy, 1, 0, .02, .2, .9, 1.75), SPARSE_FILL(GRAY, .6)); // a suit in its bag
+}, [.47, .3, 1.85]);
+const SPARSE_HOTEL_PROPS = ROOM_DEFS.hotel.props, SPARSE_HOTEL_WALL = ROOM_DEFS.hotel.wall;
+const SPARSE_CITIES = [['TOKYO', 9], ['LONDON', -6], ['NEW YORK', -11]];
+ROOM_DEFS.hotel.wall = (i, u, uStep, z, d, mx, my, L) => {
+  if (my === 0 && u > 7.3 && u < 9.9 && z > 1.75 && z < 2.45) {
+    for (const [k, [name, off]] of SPARSE_CITIES.entries()) {
+      const cu = 7.8 + k * .8, r = Math.hypot(u - cu, z - 2.2);
+      if (r < .2) { const h = ((tod + off) % 12 + 12) % 12, ang = Math.atan2(z - 2.2, u - cu), hr = Math.PI / 2 - h / 12 * TAU, mn = Math.PI / 2 - fract(tod) * TAU; const hand = (r < .11 && Math.abs(Math.sin(ang - hr)) < .12 && Math.cos(ang - hr) > 0) || (r < .16 && Math.abs(Math.sin(ang - mn)) < .09 && Math.cos(ang - mn) > 0); BG[i] = r > .17 ? C(YEL, 6) : hand ? C(GRAY, 1) : C(WHITE, 10); return set(i, ' ', 0), true; }
+      if (Math.abs(u - cu) < .38 && z < 1.98 && wallText(i, u, uStep, z, d, name, cu, 1.88, .06, .08, C(YEL, 12))) return true;
+    }
+  }
+  return SPARSE_HOTEL_WALL(i, u, uStep, z, d, mx, my, L);
+};
+ROOM_DEFS.hotel.props = r => [...SPARSE_HOTEL_PROPS(r), ...sparseExtra(fillSeats([
+  SPARSE_RUG(3.0, 6.0, 1.75, .85, RED, YEL), ...couch(3.0, 6.55, .9, 0, -1, BLUE), ...armchair(4.45, 5.75, -1, 0, BLUE), ...tableBox(3.0, 5.7, .5, .3),
+  SPARSE_LUGGAGE(8.6, 2.0),
+], .35))];
+
+// ---- the motel office: a rug where the chairs are
+const SPARSE_ICE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, .32, .3, 0, 1.3), (i, t, L) => {
+    const f = HIT.face; BG[i] = C(WHITE, (3.4 + L * .3) * shadeFace(f)); set(i, ' ', 0);
+    if (f === 1 && HIT.w > .9 && HIT.w < 1.15) return wallTextFlat(i, -HIT.v, HIT.w - 1.02, 'ICE', .4) ? (COL[i] = C(BLUE, 8), true) : true;
+    if (f === 1 && HIT.w > .35 && HIT.w < .75 && Math.abs(HIT.v) < .22) BG[i] = C(GRAY, 1.6 + (fract(HIT.w * 10) < .15 ? .6 : 0)); // the bin door
+    return true;
+  });
+}, [.32, .3, 1.3]);
+const SPARSE_MOTEL_PROPS = ROOM_DEFS.motel.props;
+ROOM_DEFS.motel.props = r => [...SPARSE_MOTEL_PROPS(r), ...sparseExtra([SPARSE_RUG(2.3, 6, 1.2, .8, BRICK, ORANGE)])];
 // ---- the fixtures anybody can use, in any room: the tap on every sink (bathroom basins, fitted kitchens) and a
 // light switch on the wall beside the way out. Aim and E. Taps run till you turn them off (or leave); the switch
 // takes the room down to a glow, and the ceiling lamps in shops go with it (render.js dims by homeBaseLight).
