@@ -741,7 +741,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       const stain = noise(wx * 3, wy * 3, 98) > .7 ? .1 : 0, crack = clamp(1 - fpG / .01, 0, 1) * (Math.abs(noise(wx * 6, wy * 6, 99) - .5) < .015 ? .08 : 0);
       surf = line > .5 ? [YEL, LG * .45] : [GRAY, LG * (.36 - stain - crack)];
     } else if (kind === 'park' && (inSkatepark(wx, wy) || typeof inSkateSpotPatch === 'function' && inSkateSpotPatch(wx,wy))) { // the skatepark's concrete (skatepark-render.js)
-      soft = true; [ch, base, k] = skateparkFloor(wx, wy, r, x, d);
+      soft = true; const [, sb, sk] = skateparkFloor(wx, wy, r, x, d); surf = [sb, L * roadDark() * sk * .19]; // (a built surface: its joints, cure and wear in the colour, as the pavement's)
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);

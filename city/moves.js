@@ -89,12 +89,16 @@ function sitDown() {
 function standUp() { // back where you sat down from (it was walkable)
   [px, py] = body.seat.from; body.seat = null;
 }
+const STEP_DOWN = .025; // (cells: a drop deeper than 25 cm in one step is an edge you fall off, not a step down)
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
   const ground = mode === 'walk' ? walkGround(px, py) : 0;
   if (typeof skateGrinding === 'function' && (skateGrinding() || SK.transition) && skatingNow()) { body.ground = ground; body.groundMode = mode; body.lx = px; body.ly = py; body.lastA = a; return; } // (on a rail: skate.js holds you there)
   const wasAir = body.z > 0 || body.vz > 0; // (in the air coming into this frame: you land this frame or later, never get skipped)
   if (body.groundMode === mode && wasAir) body.z += ((body.ground || 0) - ground) * 10;
+  // walked off an edge (a ramp's deck, a wall, a drop in the rocks): the ground falls away by more than a step, so you
+  // fall from where you were instead of being set down on it. A kerb, a stair, a slope you walk down: your feet follow
+  else if (body.groundMode === mode && mode === 'walk' && !skatingNow() && !body.seat && (body.ground || 0) - ground > STEP_DOWN) { body.z = ((body.ground || 0) - ground) * 10; body.vz = 0; body.peak = body.z; }
   if (body.vz > 0 && body.z < 0) body.z = 0; // (still going up: rising ground under you can't land you, it lifts you with it)
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;

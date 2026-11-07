@@ -48,8 +48,23 @@ function rayProfile(ox, oy, oz, rx, ry, rz, b) {
 }
 SOLID_SHADE.skateprofile = o => (i, t, L) => {
   if (HIT.face === 9) { BG[i] = SK_STEEL(L, true); return set(i, ' ', 0), true; }
-  const curved = HIT.face === 7, light = curved ? .45 + .55 * Math.max(0, HIT.nz) : .5;
+  const curved = HIT.face === 7, light = curved ? .45 + .55 * Math.max(0, HIT.nz) : .5, foot = t / projY;
   const seam = !o.bowl && curved ? coveGroove(HIT.v, .3, .001, t / projX) : 0;
-  BG[i] = C(GRAY, (3.5 + L * .32) * light * (1 - seam * .18));
-  return set(i, ' ', 0), true;
+  let wear = 0, ch = ' ';
+  if (curved) { // the transition: rubber streaks up and down it, thickest across the middle where the lines go; at the top a band
+    // polished by trucks just under the coping, and on the flat deck a strip of diamond-plate steel along the edge
+    const [wx, wy] = skWorld(o, HIT.u, HIT.v), mid = 1 - Math.abs(HIT.v) / o.hw, p = o.profile, height = HIT.w - o.z0;
+    wear = skWheelMarks(wx, wy, o.c, o.s, .35 + mid * .65, foot) * 1.1 - (p && height > p.height - .03 && Math.abs(HIT.u) <= p.tip ? .35 : 0);
+    if (p && Math.abs(HIT.u) > p.tip && Math.abs(HIT.u) < p.tip + .025) { // (the deck plate)
+      const diamond = foot < .004 && Math.abs(fract((HIT.u + HIT.v) * 120) - .5) < .12 && Math.abs(fract((HIT.u - HIT.v) * 120) - .5) < .12;
+      BG[i] = C(GRAY, 2.6 + L * .3 + (diamond ? .8 : 0)); return set(i, ' ', 0), true;
+    }
+  } else if (!o.bowl && (HIT.face === 3 || HIT.face === 4)) { // its side walls: rust down from the coping, and some carry a tag
+    const p = o.profile, h = p ? skateProfileHeight({ profile: p, z0: 0 }, HIT.u) : 0;
+    if (p && skSideTag({ ...o, hl: p.tip + p.deck }, i, HIT.face, HIT.u, HIT.w - o.z0, h, t, L)) return true;
+    const drip = hash(Math.floor(HIT.u * 160 + o.x * 7), 2, 2119);
+    if (p && drip > .86 && h - (HIT.w - o.z0) < .012 + drip * .03) { BG[i] = C(BRICK, 2.1 + L * .2); return set(i, ' ', 0), true; } // (thin runs of rust from under the coping)
+  }
+  BG[i] = C(GRAY, (3.5 + L * .32) * light * (1 - seam * .18) - wear * 2);
+  return set(i, ch, 0), true;
 };
