@@ -51923,11 +51923,11 @@ ROOM_DEFS.hotel.wall = (i, u, uStep, z, d, mx, my, L) => {
   return SPARSE_HOTEL_WALL(i, u, uStep, z, d, mx, my, L);
 };
 ROOM_DEFS.hotel.props = r => [...SPARSE_HOTEL_PROPS(r), ...sparseExtra(fillSeats([
-  SPARSE_RUG(3.2, 5.4, 1.7, 1.05, RED, YEL), ...couch(1.55, 5.4, .9, 1, 0, BLUE), ...armchair(3.6, 6.35, 0, -1, BLUE), ...armchair(3.6, 4.45, 0, 1, BLUE), ...tableBox(2.8, 5.4, .35, .5),
+  SPARSE_RUG(3.0, 6.0, 1.75, .85, RED, YEL), ...couch(3.0, 6.55, .9, 0, -1, BLUE), ...armchair(4.45, 5.75, -1, 0, BLUE), ...tableBox(3.0, 5.7, .5, .3),
   SPARSE_LUGGAGE(8.6, 2.0),
 ], .35))];
 
-// ---- the motel office: a rug where the chairs are, an ice machine humming by the cooler
+// ---- the motel office: a rug where the chairs are
 const SPARSE_ICE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy, 1, 0, .32, .3, 0, 1.3), (i, t, L) => {
     const f = HIT.face; BG[i] = C(WHITE, (3.4 + L * .3) * shadeFace(f)); set(i, ' ', 0);
@@ -51937,7 +51937,7 @@ const SPARSE_ICE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
   });
 }, [.32, .3, 1.3]);
 const SPARSE_MOTEL_PROPS = ROOM_DEFS.motel.props;
-ROOM_DEFS.motel.props = r => [...SPARSE_MOTEL_PROPS(r), ...sparseExtra([SPARSE_RUG(2.3, 6, 1.2, .8, BRICK, ORANGE), SPARSE_ICE(8.5, 1.65)])];
+ROOM_DEFS.motel.props = r => [...SPARSE_MOTEL_PROPS(r), ...sparseExtra([SPARSE_RUG(2.3, 6, 1.2, .8, BRICK, ORANGE)])];
 // ---- the fixtures anybody can use, in any room: the tap on every sink (bathroom basins, fitted kitchens) and a
 // light switch on the wall beside the way out. Aim and E. Taps run till you turn them off (or leave); the switch
 // takes the room down to a glow, and the ceiling lamps in shops go with it (render.js dims by homeBaseLight).
