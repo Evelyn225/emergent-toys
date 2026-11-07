@@ -77,3 +77,23 @@ test('older heavy shutter courses retain lit lips and recessed creases at a stre
  });
  assert.equal(r.missing,undefined);assert.ok(r.aged[0]>r.aged[1]&&r.aged[1]>r.aged[2],JSON.stringify(r));assert.equal(new Set(r.clean).size,1);
 }));
+test('where the sign hung, its sun-faded ghost and a few lost letters; at the step, weeds and dumped junk',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const shops=[...new Set(SHOP.filter(s=>s?.kind===SHOP_SHUT&&!s.wilderness))],words=shops.map(sh=>[sh.word,ghostWord(sh)]);
+  const lost=words.filter(([w,g])=>g!==w).length,sameLength=words.every(([w,g])=>w.length===g.length),stable=shops.every(sh=>ghostWord(sh)===ghostWord(sh));
+  const fronts=ARCH_BUILDINGS.filter(b=>b.sh.kind===SHOP_SHUT&&!b.sh.wilderness);let steps=0,dumped=true,weeds=true;
+  for(const B of abandonedStepList())for(const e of B){steps++;const parts=abandonedStepParts(e);if(parts.filter(q=>q.kind==='weed').length<8)weeds=false;if(!parts.some(q=>['bag','box','mattress','crate','flat'].includes(q.kind)))dumped=false;}
+  // native: the ghost shows on the wall over the shutter, the junk at its foot
+  const spots=[];for(let k=0;k<map.length&&spots.length<40;k++){const sh=SHOP[k],x=k%N,y=Math.floor(k/N);if(sh?.kind===SHOP_SHUT&&!sh.wilderness&&map[k]&&!map[idx(x,y+1)]&&free(x+.5,y+1.6))spots.push({x,y});}
+  let ghost=0,step=0;const gs=ghostSign,st=abandonedStepDressing;
+  try{for(const s of spots){px=s.x+.5;py=s.y+1.6;a=-Math.PI/2;pitch=0;body.z=outdoorGroundHeight(px,py);render(0);const with_=Int16Array.from(BG);
+    ghostSign=()=>false;render(0);ghostSign=gs;let g=0;for(let i=0;i<BG.length;i++)if(BG[i]!==with_[i])g++;
+    abandonedStepDressing=()=>{};render(0);abandonedStepDressing=st;let d=0;for(let i=0;i<BG.length;i++)if(BG[i]!==with_[i])d++;
+    ghost=Math.max(ghost,g);step=Math.max(step,d);if(ghost>40&&step>40)break;}}
+  finally{ghostSign=gs;abandonedStepDressing=st;}
+  return{shops:shops.length,lost,sameLength,stable,fronts:fronts.length,steps,dumped,weeds,ghost,step};
+ });
+ assert.ok(r.lost>r.shops*.5,'most ghosts have lost a letter or two: '+JSON.stringify(r));assert.ok(r.sameLength&&r.stable);
+ assert.ok(r.steps>=r.fronts*.8,'a step dressed at nearly every shut front');assert.ok(r.dumped&&r.weeds);
+ assert.ok(r.ghost>40,'the ghost sign on screen: '+r.ghost);assert.ok(r.step>40,'the weeds and junk on screen: '+r.step);
+}));
