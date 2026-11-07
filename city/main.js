@@ -310,6 +310,7 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  if(!game)hideMinigamePresentation();
   controllerTick(clamp((t-t0)/1000,0,.05));
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
@@ -326,7 +327,7 @@ function loop(t) {
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { skateFixedReset(); // a cabinet or a shift has the screen; the world carries on behind it
-    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
+    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); else hideMinigamePresentation(); audioTick(dt);
     requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);

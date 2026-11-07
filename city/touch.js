@@ -177,6 +177,7 @@ function buildTouch() {
 function setSheet(on) { sheetOpen = on; touchEl.querySelector('.sheet').classList.toggle('open', on); touchEl.querySelector('[data-more]').classList.toggle('on', on); }
 let padSig = '';
 function showTouch() {
+  touchEl.classList.toggle('minigame',!!game);
   const pauseUp = typeof pauseEl !== 'undefined' && pauseEl && pauseEl.style.display !== 'none' && paused;
   touchEl.style.display = pauseUp ? 'none' : 'block'; // (a shop or the bag pauses too, but Close shuts it: keep the buttons)
   const busy = !!game || sleep || panelOpen();
