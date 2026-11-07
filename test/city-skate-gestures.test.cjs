@@ -113,3 +113,16 @@ test('partial diagonal flips and every combined flip have playable controller ge
   const g=make();g.sample(0,.8,0);const [x,y]=stick(sign*.6,-.6),event=g.sample(x,y,.12);assert.equal(event.key,key);
  }
 });
+
+test('the gamepad is more forgiving: a slow, off-centre, partial-stick flick still pops (the mouse keeps its precision)',()=>{
+ const PAD=vm.runInContext('SKATE_PAD_GESTURE',ctx);
+ // pulled back to 60% a little off to one side, then a lazy push forward-left over 0.4 s that stops at 75%
+ const path=[];for(let i=0;i<=24;i++){const q=i/24;path.push([.3+(-.55-.3)*q,.6+(-.6-.6)*q]);}path.push([0,0]);
+ const run=opts=>{const g=make(opts),ev=[];let t=0;g.sample(0,0,0);for(const [x,y]of path){const e=g.sample(x,y,t+=1/60);if(e)ev.push(e);}return ev;};
+ const pad=run(PAD),mouse=run();
+ assert.equal(pad.length,1);assert.equal(pad[0].key,'A','a kickflip on the pad');
+ assert.equal(mouse.length,0,'too sloppy for the mouse recogniser, as before');
+ // and resting thumb drift on the pad never pops
+ const g=make(PAD);let t=0,pops=0;for(let i=0;i<600;i++){const x=.5*Math.sin(i*.07),y=.5*Math.cos(i*.05);if(g.sample(x,y,t+=1/60))pops++;}
+ assert.equal(pops,0);
+});

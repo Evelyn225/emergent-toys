@@ -148,8 +148,8 @@ function abandonedStepParts(e) {
 }
 function drawAbandonedStep(e, vx, vy, d) {
   for (const p of abandonedStepParts(e)) {
-    if (p.kind === 'flyer' && d > 2) continue;
-    if (p.kind === 'weed' && d > 3.5) continue;
+    if (p.kind === 'flyer' && d > 2 * lodScale()) continue;
+    if (p.kind === 'weed' && d > 3.5 * lodScale()) continue;
     const box = { ...p.box, x: vx + (p.box.x - e.x), y: vy + (p.box.y - e.y) };
     drawBox(box, (i, t, L) => {
       const top = HIT.face === 5, sf = shadeFace(HIT.face), fp = t / projY;
