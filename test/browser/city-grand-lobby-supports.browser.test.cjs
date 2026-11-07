@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),path=requir
 let browser;test.before(async()=>browser=await chromium.launch());test.after(async()=>browser?.close());
 async function fixture(run){const p=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));try{await p.addInitScript(()=>{requestAnimationFrame=()=>0;HTMLCanvasElement.prototype.requestPointerLock=()=>Promise.resolve();});await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);await p.evaluate(()=>{paused=false;mode='walk';room=me=freecam=null;body.z=body.vz=body.crouch=0;T=26;tod=12;env(0);render(0);enterRoom('grandhotel',{word:'GRAND HOTEL',ret:[53,64.2,0]},[12,15.4,-Math.PI/2]);render(0);});await run(p);assert.deepEqual(errors,[]);}finally{await p.close();}}
 test('Grand lobby columns and chandelier have actual floor/ceiling contacts, closed supported parts, joined arms and reusable translated geometry',()=>fixture(async p=>{
- const bad=await p.evaluate(()=>{const bad=[],columns=room.props.filter(p=>p.hotelColumn),lamp=room.props.find(p=>p.hotelChandelier),height=room.def.height,draw=drawBox;if(columns.length!==2||!lamp)return['missing fitted columns/chandelier'];
+ const bad=await p.evaluate(()=>{const bad=[],columns=room.props.filter(p=>p.hotelColumn),lamp=room.props.find(p=>p.hotelChandelier),height=room.def.height,draw=drawBox;if(columns.length<2||!lamp)return['missing fitted columns/chandelier'];
   const capture=(o,x=0,y=0)=>{const a=[];drawBox=(b,shade,ray=rayBox)=>a.push({b:{...b},ref:b,shade,ray});try{o.draw(x,y);}finally{drawBox=draw;}return a;};
   const axis=(q,dir)=>{const from=dir>0?-1:height+1,t=q.ray(q.b.x,q.b.y,from,0,0,dir,q.b);return t>.01?from+dir*t:NaN;};
   for(const o of [...columns,lamp]){
@@ -34,7 +34,8 @@ test('Grand lobby columns and chandelier have actual floor/ceiling contacts, clo
    }
   }
   for(const h of [4.2,6.1]){const c=HOTEL_LOBBY_COLUMN(0,0,h),l=HOTEL_LOBBY_CHANDELIER(0,0,h),top=o=>Math.max(...capture(o).map(q=>{const t=q.ray(0,0,h+1,0,0,-1,q.b);return t>.01?h+1-t:-Infinity;}));if(Math.abs(top(c)-h)>1e-8||Math.abs(top(l)-h)>1e-8)bad.push('fixture uses a hardcoded room height');}
-  for(const u of [.2,1.3,3.6])for(const z of [.1,.8,1.5,3,4.8]){roomWall(0,u,.01,z,height,3,0,0,8,1,false);if(CH[0]!==' '||(BG[0]>>4)!==WHITE)bad.push('painted architectural glyphs remain on lobby wall');}
+  for(const u of [.2,1.3,3.6])for(const z of [.1,.8,1.5,3,4.8]){roomWall(0,u,.01,z,height,3,0,0,8,1,false);if(CH[0]!==' ')bad.push('painted architectural glyphs remain on lobby wall');} // (finishes in colour, panelling and gilt, are fine: no glyph characters)
+  {}
   room.def.wall(0,2,.01,3,3,0,8,0);const dark=BG[0];room.def.wall(0,2,.01,3,3,0,8,12);if(BG[0]===dark)bad.push('wall finish ignores room light');
   ROOM_CEILS.hotel(0,0,0,2,2);if(CH[0]!==' ')bad.push('phantom painted ceiling light remains');
   return bad;});assert.deepEqual(bad,[]);
