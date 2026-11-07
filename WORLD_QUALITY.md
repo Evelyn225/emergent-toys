@@ -84,6 +84,7 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 43. [ ] Bare island landings: Fern Island, Cabin Cove, Juniper Isle and Crescent Sands are flat ground with a path.
 44. [ ] Dev tools: many shop and landmark teleports land nose-to-wall; five districts teleport to the same waterfront spot.
 45. [ ] Emergency service vehicles: the ones parked outside police, fire and hospital buildings should be real vehicles you can steal; ambulances stealable and drivable, with their own handling (heavy, slow to turn, quick off the line, lights and siren).
+46. [ ] Belle Époque ivy: the vines up the sides of the Belle Époque buildings look flat; give them real stems, leaf clusters with depth and light, seasonal colour.
 
 ## Checkpoint
 
