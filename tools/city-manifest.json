@@ -210,6 +210,8 @@
     "city/hotel-polish.js",
     "city/grand-lobby-entrance.js",
     "city/grand-lobby-arrival.js",
+    "city/grand-lobby-furnish.js",
+    "city/showroom-quality.js",
     "city/motel-office-architecture.js",
     "city/apartment-lobby-entrances.js",
     "city/apartment-lobby-mailboxes.js",
