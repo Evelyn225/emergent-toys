@@ -34020,13 +34020,14 @@ const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefi
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k < 9 ? k + 1 : ''}</span><span data-preview-id="${id}"></span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
-    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${itemName(it)}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span data-preview-slot="${k}"></span><span>${itemName(it)}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
   const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
     ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${Math.min(9, stock.length)} buy &middot; click any item${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
+  populateItemMenuPreviews(shopEl);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
   if(title==='BAIT & TACKLE')addFishingCompetitionShop();
 }
@@ -34055,10 +34056,11 @@ function openInventory() {
   const canDrop = placeKey() !== null;
   const rows_ = inv.length ? inv.map((it, k) => {
     const slot = quickSlots.indexOf(k), name = itemName(it);
-    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label>${canDrop ? `<button class="drop" data-drop="${k}" aria-label="Drop ${name}">drop</button>` : ''}</div>`;
+    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span data-preview-slot="${k}"></span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label>${canDrop ? `<button class="drop" data-drop="${k}" aria-label="Drop ${name}">drop</button>` : ''}</div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
   showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; ${placeKey()!==null?'X drop &middot; ':''}I / Esc close</p>`);
+  populateItemMenuPreviews(invEl);
   invEl.onclick = e => {
     const d = e.target.closest('[data-drop]'); if (d) { dropSlot(+d.dataset.drop); return openInventory(); }
     const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); }
@@ -41751,6 +41753,35 @@ function waterWeatherCoverAt(x,y,z){
 }
 const WATER_WEATHER_SNOW=snowExposed;
 snowExposed=(x,y,z=0)=>WATER_WEATHER_SNOW(x,y,z)&&!waterWeatherCoverAt(x,y,z);
+// Static menu pictures reuse the game's item samples. They never run held
+// animations or add controls; the adjacent item name remains the readable label.
+const ITEM_MENU_PICTURES=new Map(),ITEM_MENU_PICTURE_LIMIT=192;
+function itemMenuPicture(it){
+ const def=ITEMS[it.id];if(!def||['car','home','look','tattoo'].includes(def.kind))return null;
+ const key=JSON.stringify([it,Math.floor(tod*60)]);let picture=ITEM_MENU_PICTURES.get(key);if(picture)return picture;
+ const [art,col]=(DENSE[it.id]||droppedArt)(it,usesLeft(it)),cells=[];
+ let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+ for(let r=0;r<art.length;r++)for(let c=0;c<art[r].length;c++){const ch=art[r][c];if(ch===' ')continue;const ink=col(ch,r,c);if(!ink)continue;cells.push([c,r,ch,ink]);x0=Math.min(x0,c);y0=Math.min(y0,r);x1=Math.max(x1,c);y1=Math.max(y1,r);}
+ if(!cells.length)return null;
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+ const ctx=canvas.getContext('2d'),aspect=DENSE[it.id]?D_ASPECT:.5,scale=Math.min(120/((x1-x0+1)*aspect),120/(y1-y0+1)),w=scale*aspect;
+ const left=(128-(x1-x0+1)*w)/2,top=(128-(y1-y0+1)*scale)/2;
+ ctx.font=scale+'px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+ for(const[c,r,ch,ink]of cells){const x=left+(c-x0)*w,y=top+(r-y0)*scale;ctx.fillStyle=PAL[ink];if(ch==='\u0001')ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(x+w)-Math.round(x)),Math.max(1,Math.round(y+scale)-Math.round(y)));else ctx.fillText(ch,x+w/2,y+scale/2,w);}
+ picture={src:canvas.toDataURL(),width:x1-x0+1,height:y1-y0+1};
+ if(ITEM_MENU_PICTURES.size>=ITEM_MENU_PICTURE_LIMIT)ITEM_MENU_PICTURES.delete(ITEM_MENU_PICTURES.keys().next().value);
+ ITEM_MENU_PICTURES.set(key,picture);return picture;
+}
+function populateItemMenuPreviews(el){
+ for(const cell of el.querySelectorAll('[data-preview-id],[data-preview-slot]')){
+  const id=cell.dataset.previewId,it=id?{id,uses:ITEMS[id].uses||0}:inv[+cell.dataset.previewSlot],picture=it&&itemMenuPicture(it);
+  if(!picture){cell.remove();continue;}
+  const img=document.createElement('img');img.src=picture.src;img.alt='';img.width=img.height=48;img.draggable=false;cell.className='item-picture';cell.setAttribute('aria-hidden','true');cell.replaceChildren(img);
+ }
+}
+{
+ const style=document.createElement('style');style.textContent='#inventory .panel{width:min(620px,calc(100vw - 32px))}#shop .panel{width:min(520px,calc(100vw - 32px))}.menu .item:has(.item-picture){align-items:center;gap:8px}.menu .item-picture{display:inline-flex;align-items:center;justify-content:center;flex:0 0 48px;width:48px;height:48px;margin:2px 2px 2px 0;pointer-events:none}.menu .item-picture img{display:block;width:48px;height:48px;object-fit:contain;image-rendering:pixelated}.menu .item:has(.item-picture)>span:not(.k):not(.lead):not(.v):not(.item-picture){min-width:0;overflow-wrap:anywhere;text-align:left}';document.head.appendChild(style);
+}
 // Hotel-only bedside fittings sit on the existing cabinet's measured top.
 // Closed lathe shells leave actual openings around the supported light bulb.
 function HOTEL_BEDSIDE_LAMP(x,y,tier,baseZ=.65) {
