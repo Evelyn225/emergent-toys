@@ -530,7 +530,7 @@ const EL_COL = 0.022, EL_PANEL = 0.07;
 function drawElPillar(p) {
   const [vx, vy] = R(p.x, p.y), d = Math.hypot(vx, vy);
   if (d > vis + 1) return;
-  if (d > 9) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
+  if (d > 9 * lodScale()) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
   drawBox(boxAt(vx, vy, 1, 0, 0.04, 0.04, 0, 0.025), (i, t, L) => {
     BG[i] = C(STONE, (1.2 + L * 0.25) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; // the footing
   });
@@ -567,7 +567,7 @@ function drawElStairs(st) {
   const [ox, oy] = R(st.ox, st.oy), at = (u, v) => [ox + c * (st.off + u) + fx * v, oy + s * (st.off + u) + fy * v];
   const [mx, my] = at(0, 0.3), d = Math.hypot(mx, my);
   if (d > vis + 2) return;
-  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
+  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12 * lodScale();
   for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
     const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
     if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); elSteelRod(ax, ay, za, bx, by, zb, 0.03); continue; }
@@ -658,7 +658,7 @@ const postRod = (ax, ay, az, bx, by, bz, r, col = GRAY) => drawRod(ax, ay, az, b
 function drawParkLamp(vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.3, lit = lampsOn > 0.3;
   if (d > vis) return;
-  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
+  if (d < 6 * lodScale()) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
   postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.024, 0.022, (i, t, L) => {
     BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(WHITE, 1.5 + L * 0.2);
@@ -677,7 +677,7 @@ const FAIR_BULBS = [YEL, RED, CYAN, MAG];
 function drawFairPost(o, vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.36, col = FAIR_BULBS[(Math.floor(T * 2) + Math.round(o.y)) & 3];
   if (d > vis) return;
-  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
+  if (d < 6 * lodScale()) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
   postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.016, 0.016, (i, t, L) => {
     BG[i] = C(col, 2 + night * 9 + L * 0.15);
@@ -719,13 +719,13 @@ function drawBike(o, vx, vy) {
   const at = (u, w = 0) => [vx + c * u - s * w, vy + s * u + c * w];
   const bar = (u0, z0, u1, z1, rr = 0.004, w0 = 0, w1 = 0) => { const [ax, ay] = at(u0, w0), [bx, by] = at(u1, w1); tube(ax, ay, z0, bx, by, z1, rr, col, 1.6, 0.5); };
   for (const hu of [-BIKE.hub, BIKE.hub]) { // the wheels: a tyre round in pieces, spokes up close
-    const segs = d < 7 ? 10 : 5;
+    const segs = d < 7 * lodScale() ? 10 : 5;
     for (let k = 0; k < segs; k++) {
       const a0 = k / segs * Math.PI * 2, a1 = (k + 1) / segs * Math.PI * 2;
       const [ax, ay] = at(hu + Math.cos(a0) * r), [bx, by] = at(hu + Math.cos(a1) * r);
       tube(ax, ay, r + Math.sin(a0) * r, bx, by, r + Math.sin(a1) * r, 0.005, GRAY, 0.5, 0.6);
     }
-    if (d < 4) for (const a of [0.4, 1.97]) {
+    if (d < 4 * lodScale()) for (const a of [0.4, 1.97]) {
       const [ax, ay] = at(hu - Math.cos(a) * r), [bx, by] = at(hu + Math.cos(a) * r);
       rod(ax, ay, r - Math.sin(a) * r, bx, by, r + Math.sin(a) * r, 0.001, GRAY, 0.6);
     }

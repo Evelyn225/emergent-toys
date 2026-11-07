@@ -180,9 +180,9 @@ function drawPoleSpans() {
   forNear(poleSpansB, sp => {
     const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
     if (d > Math.min(vis, POLE_WIRE_VIS * lodScale()) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
-    const n = d < 3 ? 12 : d < 6 ? 6 : 3;
+    const n = d < 3 * lodScale() ? 12 : d < 6 * lodScale() ? 6 : 3;
     poleSpanModel(sp,n).draw(ax,ay,0);
   });
 }
 const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR*lodScale());});drawPoleSpans();}

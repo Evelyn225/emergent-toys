@@ -4898,8 +4898,8 @@ function abandonedStepParts(e) {
 }
 function drawAbandonedStep(e, vx, vy, d) {
   for (const p of abandonedStepParts(e)) {
-    if (p.kind === 'flyer' && d > 2) continue;
-    if (p.kind === 'weed' && d > 3.5) continue;
+    if (p.kind === 'flyer' && d > 2 * lodScale()) continue;
+    if (p.kind === 'weed' && d > 3.5 * lodScale()) continue;
     const box = { ...p.box, x: vx + (p.box.x - e.x), y: vy + (p.box.y - e.y) };
     drawBox(box, (i, t, L) => {
       const top = HIT.face === 5, sf = shadeFace(HIT.face), fp = t / projY;
@@ -13823,7 +13823,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
   }
   // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
-  const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
+  const inside = (k, col) => d < 3.5 * lodScale() ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   const fpU = Math.max(uStep, d / projY), floorH = 1 / 3, litNow = k => hash(k, fl, sk) > litT - 0.1;
@@ -15742,7 +15742,7 @@ function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (tagCell(i, q, r, t, L)) return true;
   }
   if(SHOP[k]?.islandCabin==='cabin-cove')return false; // retain player paint above, leave this remote timber shelter free of generated street tags
-  if (z < 0.33 && d < 6) { // the quick tags low down
+  if (z < 0.33 && d < 6 * lodScale()) { // the quick tags low down
     const st = streetTags(k, mx, my, face);
     if (st) for (const t of st) {
       const lu = flip > 0 ? fract(wc) : 1 - fract(wc), u0 = u + (t.at - lu); // (the tag's centre, in u)
@@ -17091,7 +17091,7 @@ const EL_COL = 0.022, EL_PANEL = 0.07;
 function drawElPillar(p) {
   const [vx, vy] = R(p.x, p.y), d = Math.hypot(vx, vy);
   if (d > vis + 1) return;
-  if (d > 9) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
+  if (d > 9 * lodScale()) return elSteelRod(vx, vy, 0, vx, vy, EL_BOT, EL_COL);
   drawBox(boxAt(vx, vy, 1, 0, 0.04, 0.04, 0, 0.025), (i, t, L) => {
     BG[i] = C(STONE, (1.2 + L * 0.25) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; // the footing
   });
@@ -17128,7 +17128,7 @@ function drawElStairs(st) {
   const [ox, oy] = R(st.ox, st.oy), at = (u, v) => [ox + c * (st.off + u) + fx * v, oy + s * (st.off + u) + fy * v];
   const [mx, my] = at(0, 0.3), d = Math.hypot(mx, my);
   if (d > vis + 2) return;
-  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
+  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12 * lodScale();
   for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
     const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
     if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); elSteelRod(ax, ay, za, bx, by, zb, 0.03); continue; }
@@ -17219,7 +17219,7 @@ const postRod = (ax, ay, az, bx, by, bz, r, col = GRAY) => drawRod(ax, ay, az, b
 function drawParkLamp(vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.3, lit = lampsOn > 0.3;
   if (d > vis) return;
-  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
+  if (d < 6 * lodScale()) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
   postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.024, 0.022, (i, t, L) => {
     BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(WHITE, 1.5 + L * 0.2);
@@ -17238,7 +17238,7 @@ const FAIR_BULBS = [YEL, RED, CYAN, MAG];
 function drawFairPost(o, vx, vy) {
   const d = Math.hypot(vx, vy), top = 0.36, col = FAIR_BULBS[(Math.floor(T * 2) + Math.round(o.y)) & 3];
   if (d > vis) return;
-  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
+  if (d < 6 * lodScale()) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
   postRod(vx, vy, 0, vx, vy, top, 0.006);
   dot(vx, vy, top + 0.016, 0.016, (i, t, L) => {
     BG[i] = C(col, 2 + night * 9 + L * 0.15);
@@ -17280,13 +17280,13 @@ function drawBike(o, vx, vy) {
   const at = (u, w = 0) => [vx + c * u - s * w, vy + s * u + c * w];
   const bar = (u0, z0, u1, z1, rr = 0.004, w0 = 0, w1 = 0) => { const [ax, ay] = at(u0, w0), [bx, by] = at(u1, w1); tube(ax, ay, z0, bx, by, z1, rr, col, 1.6, 0.5); };
   for (const hu of [-BIKE.hub, BIKE.hub]) { // the wheels: a tyre round in pieces, spokes up close
-    const segs = d < 7 ? 10 : 5;
+    const segs = d < 7 * lodScale() ? 10 : 5;
     for (let k = 0; k < segs; k++) {
       const a0 = k / segs * Math.PI * 2, a1 = (k + 1) / segs * Math.PI * 2;
       const [ax, ay] = at(hu + Math.cos(a0) * r), [bx, by] = at(hu + Math.cos(a1) * r);
       tube(ax, ay, r + Math.sin(a0) * r, bx, by, r + Math.sin(a1) * r, 0.005, GRAY, 0.5, 0.6);
     }
-    if (d < 4) for (const a of [0.4, 1.97]) {
+    if (d < 4 * lodScale()) for (const a of [0.4, 1.97]) {
       const [ax, ay] = at(hu - Math.cos(a) * r), [bx, by] = at(hu + Math.cos(a) * r);
       rod(ax, ay, r - Math.sin(a) * r, bx, by, r + Math.sin(a) * r, 0.001, GRAY, 0.6);
     }
@@ -18638,12 +18638,12 @@ function drawPoleSpans() {
   forNear(poleSpansB, sp => {
     const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
     if (d > Math.min(vis, POLE_WIRE_VIS * lodScale()) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
-    const n = d < 3 ? 12 : d < 6 ? 6 : 3;
+    const n = d < 3 * lodScale() ? 12 : d < 6 * lodScale() ? 6 : 3;
     poleSpanModel(sp,n).draw(ax,ay,0);
   });
 }
 const KERB_DRAW={hydrant:drawKerbHydrant,bin:drawKerbBin,mailbox:drawKerbMailbox,bollard:drawKerbBollard,cabinet:drawKerbCabinet,shelter:drawKerbShelter,pole:drawKerbPole,guy:drawKerbPole};
-function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR);});drawPoleSpans();}
+function drawKerbFixtures() {forNear(kerbsB,o=>{const[vx,vy]=R(o.x,o.y),d=Math.hypot(vx,vy);if(d>vis||o.h*projY/d<.6||!inView(vx,vy,o.kind==='pole'?Math.max(.22,o.drop?POLE.drop+.012:0):o.kind==='guy'?POLE.guy+.02:Math.max(.05,Math.hypot(o.hl,o.hw))))return;KERB_DRAW[o.kind](o,vx,vy,terrainHeight(o.x,o.y),d<KERB_NEAR*lodScale());});drawPoleSpans();}
 // The vending machine, built: a steel cabinet with rounded edges on a recessed
 // plinth, its door framing a lit header, a glass window onto four shelves of
 // stock, the control column (display, keypad, coin and note slots, the coin
@@ -32017,7 +32017,8 @@ const stadiumCheers = m => !m ? -1 : m.phase === 'goal' ? m.celebrate?.side ?? -
 // off the strip above stands in for them (it leaves out these seats, so nobody is drawn twice)
 const CROWD_NEAR = 6.5, CROWD_H = 1.6; // (a touch under full height: sat down, the heads in front sit below your eyes)
 const seatAt = (s, k, seat) => { const a = (s.a0 + s.a1) / 2 + (seat + .5) * SEAT_PITCH, b = s.front + s.out * (k + .5 + .15) * s.depth; return s.axis === 'y' ? [a, b] : [b, a]; };
-const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < CROWD_NEAR * CROWD_NEAR; };
+const crowdNearR = () => CROWD_NEAR * clamp(lodScale(), .6, 1.6); // (Detail distance: how far round you the crowd are people)
+const crowdNear = (s, k, seat) => { const [x, y] = seatAt(s, k, seat); return (x - px) ** 2 + (y - py) ** 2 < crowdNearR() ** 2; };
 const crowdLooks = new Map();
 function crowdLook(s, k, seat, kit, side) {
   const key = `${s.id}:${k}:${seat}:${kit.join()}`;
@@ -32039,15 +32040,15 @@ function tipUpSeat(rx, ry, z0, fx, fy, col) {
   drawBox(boxAt(rx - fx * .21, ry - fy * .21, fy ? 1 : 0, fy ? 0 : 1, .25, .03, z0 + .42, z0 + .82), shade);
   drawBox(boxAt(rx + fx * .02, ry + fy * .02, fy ? 1 : 0, fy ? 0 : 1, .04, .04, z0, z0 + .36), solid(GRAY));
 }
-const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR + 1, draw: () => {
-  const m = stadiumMatch, fill = m ? m.crowd : .8;
+const nearCrowdProp = () => ({ get x() { return px; }, get y() { return py; }, radius: CROWD_NEAR * 1.6 + 1, draw: () => {
+  const m = stadiumMatch, fill = m ? m.crowd : .8, NR = crowdNearR();
   for (const s of STANDS) {
     const along = s.axis === 'y', across = along ? py : px, alongMe = (along ? px : py) - (s.a0 + s.a1) / 2;
-    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - CROWD_NEAR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + CROWD_NEAR / s.depth));
+    const k0 = Math.max(0, Math.floor((across - s.front) * s.out / s.depth - NR / s.depth)), k1 = Math.min(s.rows - 1, Math.ceil((across - s.front) * s.out / s.depth + NR / s.depth));
     const half = (s.a1 - s.a0) / 2 / SEAT_PITCH;
     for (let k = k0; k <= k1; k++) {
       const z0 = (k + 1) * s.rise;
-      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - CROWD_NEAR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + CROWD_NEAR) / SEAT_PITCH)); seat++) {
+      for (let seat = Math.max(-Math.floor(half), Math.floor((alongMe - NR) / SEAT_PITCH)); seat <= Math.min(Math.ceil(half) - 1, Math.ceil((alongMe + NR) / SEAT_PITCH)); seat++) {
         if (!crowdNear(s, k, seat)) continue;
         const [x, y] = seatAt(s, k, seat), rx = x - px, ry = y - py;
         if (!inView(rx, ry, 1)) continue;
@@ -50787,7 +50788,7 @@ function homeBalconyPavingFootprint(t,height,unit=1){
   t=Math.max(t,groundFootprintNear);
   // Row-to-row floor spacing grows faster at grazing angles than distance
   // alone. Account for both screen axes before filtering the metre joints.
-  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit;
+  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit/lodScale(); // (Detail distance: finer joints further off)
 }
 const homeBalconyDeckModels=new WeakMap();
 function homeBalconyDeckModel(home,b){
@@ -52586,7 +52587,7 @@ function parkShrubAt(x,y,pad,z=null,height=Infinity){
     if(plantingFootprint(o,rel(x-o.x),rel(y-o.y),pad,lo,lo+height))return o;
   }return null;
 }
-function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR);});}
+function drawParkShrubs(){forNear(parkShrubsB,o=>{const[x,y]=R(o.x,o.y),d=Math.hypot(x,y);if(d>Math.min(vis,9*lodScale())||!inView(x,y,o.hl))return;drawParkShrub(o,x,y,terrainHeight(o.x,o.y),d<KERB_NEAR*lodScale());});}
 for(const edge of [CURB,2-CURB])alongStreets(4.5,edge,(x,y,ax,ay,bx,by)=>{
   const district=districtAt(x-ax*.5,y-ay*.5);
   if(!['midtown','brownstones','chinatown'].includes(district)||hash(bx,by,edge<1?1961:1962)>.32)return;

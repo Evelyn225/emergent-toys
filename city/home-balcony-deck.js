@@ -13,7 +13,7 @@ function homeBalconyPavingFootprint(t,height,unit=1){
   t=Math.max(t,groundFootprintNear);
   // Row-to-row floor spacing grows faster at grazing angles than distance
   // alone. Account for both screen axes before filtering the metre joints.
-  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit;
+  return Math.max(t/projX,t*t/(Math.max(.001/unit,Math.abs(height))*projY))*unit/lodScale(); // (Detail distance: finer joints further off)
 }
 const homeBalconyDeckModels=new WeakMap();
 function homeBalconyDeckModel(home,b){
