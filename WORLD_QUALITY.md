@@ -83,7 +83,7 @@ Each unchecked row is a chunk, with its own verification and screenshots. The li
 42. [x] Civic exteriors: the police station front is a flat grey grid; fire station and hospital forecourts are plain red and white slabs (bay markings, doors, parked vehicles).
 43. [x] Bare island landings: Fern Island, Cabin Cove, Juniper Isle and Crescent Sands are flat ground with a path.
 44. [x] Dev tools: many shop and landmark teleports land nose-to-wall; five districts teleport to the same waterfront spot.
-45. [ ] Emergency service vehicles: the ones parked outside police, fire and hospital buildings should be real vehicles you can steal; ambulances stealable and drivable, with their own handling (heavy, slow to turn, quick off the line, lights and siren).
+45. [x] Emergency service vehicles: the ones parked outside police, fire and hospital buildings should be real vehicles you can steal; ambulances stealable and drivable, with their own handling (heavy, slow to turn, quick off the line, lights and siren).
 46. [x] Belle Époque ivy: the vines up the sides of the Belle Époque buildings look flat; give them real stems, leaf clusters with depth and light, seasonal colour.
 
 ## Checkpoint

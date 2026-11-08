@@ -284,6 +284,7 @@ function interact() {
   if (useFerry() || useGardens() || useMarina()) return;
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
+  if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
