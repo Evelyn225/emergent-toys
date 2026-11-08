@@ -89,7 +89,7 @@ function elFrame() {
 
 const nearestCar = r => {
   let best = null, bd = r;
-  for (const c of cars) { if (c.player || c.rider || c.ev) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
+  for (const c of cars) { if (c.player || c.rider || (c.ev && !c.mine)) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
   return best;
 };
 // someone right in front of you, close enough to talk to
@@ -208,7 +208,7 @@ function promptText() {
     const next = elTrains(T).filter(t => t.tr === plat.tr && EL_STATIONS[t.next] === plat.s && !t.stopped).map(t => t.left);
     return `E: stairs down${next.length ? `   (next train in ${Math.ceil(Math.min(...next))}s)` : ''}`;
   }
-  if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
+  if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : `W/S gas & brake | A/D steer | V: camera | ${me?.ev ? `H: lights ${me.siren ? 'off' : '& siren'} | ` : ''}E: get out (when slow)`;
   if (mode === 'taxi') return TOUCH ? 'drag: look around' : 'mouse: look around | V: camera | E: get out';
   if (mode === 'air') return airPrompt();
   { const ac = nearAircraft(); if (ac) return aircraftPrompt(ac); }
@@ -221,6 +221,9 @@ function promptText() {
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   const gp = gardensPrompt() || marinaPrompt();
   if (gp) return gp;
+  const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
+  if (ev) return ev;
+  if (c && c.v < 0.6 && c.ev && c.mine) return `E: get back in the ${EV_NAME[c.kind]}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
   if (nearAngler()) return 'E: talk to the angler';

@@ -67,7 +67,7 @@ onkeydown = e => {
     if (e.code === 'KeyP') startPee();
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
   }
-  if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyH' && !toggleEvSiren()) hail(); // (at the wheel of an emergency vehicle: its lights and siren)
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
@@ -236,7 +236,8 @@ function drive(dt) {
   // A wreck disables controls but need not have the PIT manoeuvre's spin timer.
   const c = me, spun = c.spunT > T, disabled = spun || c.wrecked;
   const f = disabled ? 0 : controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = disabled ? 0 : controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
-  const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
+  const H = c.handling || NO_HANDLING; // (an ambulance, fire engine or police car drives like one: emergency-theft.js)
+  const traction = roadTraction(c.x, c.y), braking = (0.55 + traction * 0.45) * H.brake, acceleration = (0.75 + traction * 0.25) * H.accel;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (c.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * f * dt;
   else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * -f * dt;
@@ -245,10 +246,10 @@ function drive(dt) {
   if (c.wrecked) c.v = 0;
   const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
   if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5) * braking);
-  a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
+  a += s * dt * (handbrake && fast ? 2.5 : 1.8) * H.steer * clamp(c.v / 0.5, -1, 1);
   c.travelA ??= oldA;
   const slip = mod(a - c.travelA + Math.PI, Math.PI * 2) - Math.PI;
-  const grip = (handbrake && fast ? 1.2 : 10) * traction;
+  const grip = (handbrake && fast ? 1.2 : 10) * traction * H.grip;
   c.travelA += slip * (1 - Math.exp(-grip * dt));
   if (!fast) c.travelA = a;
   const drifting = fast && (handbrake && Math.abs(slip) > 0.12 || traction < 0.99 && Math.abs(slip) > 0.2);

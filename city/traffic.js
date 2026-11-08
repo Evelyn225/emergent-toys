@@ -357,7 +357,7 @@ const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.ab
 // base like any other car and parks out front again.
 // state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
-const code = c => !c.returning && c.state !== 'back' && (c.state === 'out' || !!c.pursuit);
+const code = c => c.ev && c.mine ? !!(c.player && c.siren) : !c.returning && c.state !== 'back' && (c.state === 'out' || !!c.pursuit); // (one you've taken: when you put the siren on, emergency-theft.js)
 const lightsOn_ = c => !c.returning && c.state !== 'back' && (code(c) || c.state === 'scene');
 const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
@@ -398,7 +398,7 @@ function endCall(c) { // parked at its station again (or just gone, if it came f
 }
 function stepEmergency(dt) {
   for (const c of cars.slice()) {
-    if (!c.ev || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit
+    if (!c.ev || c.mine || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit; a stolen one is yours
     if (c.home) { endCall(c); continue; }
     const far = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
@@ -406,7 +406,7 @@ function stepEmergency(dt) {
     if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
     else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev).length < 3 && (evTimer -= dt) < 0) {
+  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev && !c.mine).length < 3 && (evTimer -= dt) < 0) {
     spawnEmergency(); evTimer = 60 + Math.random() * 90;
   }
 }
@@ -428,6 +428,7 @@ function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
   for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
     const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.ev && c.mine && !c.player && c.parked && d > 45) { returnStolenEv(c, k); continue; } // (a stolen ambulance, fire engine or police car: home to its station)
     if (c.owned || c.player || !c.parked) continue;
     if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
     else if (d > 45 && c.fireT == null) { c.parked = c.mine = false; c.v = 0; repairCar(c); toLane(c); }
