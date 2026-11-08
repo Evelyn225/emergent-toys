@@ -20,6 +20,9 @@ const pick = a => a[Math.random() * a.length | 0];
 const CITY_SOURCE_N = 256, CITY_SOURCE_NB = 32;
 const OCEAN_SIZE = 16384, OCEAN_MIN = 256 - OCEAN_SIZE / 2;
 let NB = CITY_SOURCE_NB, N = CITY_SOURCE_N, worldReady = false;
+// a car somebody's driving or keeping: you (player), or another player in a multiplayer room (remote, a stand-in for
+// theirs: net.js). The traffic never drives either, and the police and the gas stations leave both alone.
+const playerCar = c => !!(c.player || c.remote);
 const rel = v => { const size = worldReady ? OCEAN_SIZE : N; return worldReady && Math.abs(v) < size / 2 ? v : mod(v + size / 2, size) - size / 2; };
 function worldCoord(value) {
   if (!worldReady) return mod(value,N);

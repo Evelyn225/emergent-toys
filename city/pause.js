@@ -52,6 +52,7 @@ function buildPause() {
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
+      <button class="item" data-act="multiplayer">Multiplayer <span class="k" data-net-badge style="margin-left:auto"></span></button>
       <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
       <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
       <button class="item" data-act="newgame">Start over</button>
@@ -98,6 +99,7 @@ function buildPause() {
     const fare = el.querySelector('[data-act="cancel-fare"]');
     fare.style.display = job && (job.ride || job.hail) ? 'flex' : 'none';
     fare.firstChild.textContent = job && job.ride ? 'Cancel this fare (let them out, find another)' : 'Cancel this pickup (find another fare)';
+    el.querySelector('[data-net-badge]').textContent = net.on ? `${net.code}, ${net.peers.size + 1} here` : '';
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
@@ -128,6 +130,7 @@ function buildPause() {
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
+    if (b.dataset.act === 'multiplayer') openNetMenu(); // (net.js)
     if (b.dataset.act === 'cancel-courier' && cancelCourier()) { saveGame(); say('You call dispatch and hand the parcel back. No pay, no hard feelings.', 4); closePause(true); }
     if (b.dataset.act === 'cancel-fare' && cancelFare()) { say('You call it off. The light goes back on: someone else will flag you down soon.', 4); closePause(true); }
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }

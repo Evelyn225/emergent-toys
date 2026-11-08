@@ -174,7 +174,7 @@ function render(dt,sceneOnly=false,mask=null) {
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
-    if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
+    if (mode === 'drive' || mode === 'taxi' || mode === 'ride') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
   tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
@@ -253,6 +253,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawBlood(); // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
+  drawPeers(); // other players, in a multiplayer room (net.js)
   drawPeeMarks(); // stains on walls and solid static objects
   if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
@@ -281,6 +282,7 @@ function render(dt,sceneOnly=false,mask=null) {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
     wreckOverlay(); // (going in, in an aircraft: flight.js)
     hud();
+    netOverlay(); // their names, speech bubbles and the chat (net.js)
   }
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes

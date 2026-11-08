@@ -154,6 +154,7 @@ function enterRoom(kind, extra, spawn) {
   transitSync();
 }
 function interact() {
+  if (mode === 'ride') return netGetOut(); // (in another player's car: net.js)
   if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
@@ -285,6 +286,7 @@ function interact() {
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
+  if (netCarUse()) return; // (another player's car, in multiplayer: net.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -399,15 +401,17 @@ function stepSleep(dt) {
     sleep.done = true;
     clearDrugEffects();
     if(fx.smokeKind==='joint')fx.smoke=0;
-    if (tod > 7) dayNum++; // slept through midnight
-    tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
+    if (!netClockShared()) { // (in multiplayer the clock is everyone's: you sleep, but the night doesn't skip: net.js)
+      if (tod > 7) dayNum++; // slept through midnight
+      tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
+    }
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
     if (!sleep.home) {
       const lobby=sleep.lobby,def=lobby.suite?ROOM_DEFS.hotelSuite:lobby.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom;
       enterRoom('hotelroom',{lobby,suite:!!lobby.suite},def.entry);
     } // (at home you wake where you are)
   }
-  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
+  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say(netClockShared() ? 'You nap a while and wake rested. The city kept going without you.' : '7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
@@ -439,6 +443,6 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 function hail() {
   if (mode !== 'walk') return;
   let best = null, bd = 3;
-  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (c.body === TAXI && !c.rider && !playerCar(c) && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }

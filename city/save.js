@@ -15,7 +15,7 @@ let streetSpot = null; // where you last were on foot outdoors (inside a shop or
 function noteStreet() {
   if (mode === 'walk') streetSpot = { x: px, y: py, a };
   else if(mode==='room'&&homeRecord(room)&&room.ret)streetSpot={x:room.ret[0],y:room.ret[1],a:room.ret[2]||0};
-  else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
+  else if ((mode === 'drive' || mode === 'ride') && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) }; // (ride: in another player's car, net.js)
 }
 function saveCityJourney() {
   if(mode==='ferry')return savedFerryJourney();

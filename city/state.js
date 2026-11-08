@@ -91,19 +91,19 @@ function settledSnow(wx, wy, wear = 0) {
   return edge * edge * (3 - 2 * edge) * clamp(snowCover * 8, 0, 1) * (1 - wear);
 }
 function env(dt) {
-  const elapsed = dt * (hurrying() ? 40 : 1); // the watch advances the hours, clouds and environmental processes together
+  const elapsed = dt * (hurrying() && !netFollowsClock() ? 40 : 1); // the watch advances the hours, clouds and environmental processes together (in multiplayer, only the clock's keeper's watch: net.js)
   const t0 = tod;
   tod = mod(tod + elapsed * 0.05, 24); cloudT += elapsed;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
-  if ((wTimer -= elapsed) < 0) { weather = pick(SEASON_WEATHER[season()]); wTimer = 60 + Math.random() * 90; }
-  if (weatherDue) {
+  if (!netFollowsClock() && (wTimer -= elapsed) < 0) { weather = pick(SEASON_WEATHER[season()]); wTimer = 60 + Math.random() * 90; }
+  if (weatherDue && !netFollowsClock()) {
     weatherDue -= elapsed - dt; // forecast deadlines use T: consume the watch's extra elapsed time from their remaining wait
     if (T > weatherDue) { weatherDue = 0; weather = pick(SEASON_WEATHER[season()].filter(w => w !== weather)); wTimer = 90 + Math.random() * 90; }
   }
   rain += clamp((weather === 'rain' || weather === 'storm') - rain, -elapsed / 6, elapsed / 6);
   storm += clamp((weather === 'storm') - storm, -elapsed / 8, elapsed / 8);
   // Lightning and its thunder stay paced in real time, keeping simultaneous sound voices and particles bounded.
-  if (storm > 0.6 && Math.random() < dt / 6) bolt = { t: T, az: Math.random() * Math.PI * 2, d: 12 + Math.random() * 70, seed: Math.random() * 1e4 | 0 };
+  if (storm > 0.6 && !netFollowsClock() && Math.random() < dt / 6) bolt = { t: T, az: Math.random() * Math.PI * 2, d: 12 + Math.random() * 70, seed: Math.random() * 1e4 | 0 };
   fogAmt += clamp((weather === 'fog') - fogAmt, -elapsed / 6, elapsed / 6);
   snow += clamp((weather === 'snow') - snow, -elapsed / 8, elapsed / 8);
   const winter = season() === 'winter'; // (it settles while it falls; melts slowly in winter, quickly once it's spring)

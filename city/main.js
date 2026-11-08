@@ -5,6 +5,7 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
+  if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
@@ -33,6 +34,7 @@ onkeydown = e => {
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
+  if (netChatKey(e)) return; // T or Enter in a multiplayer room: the chat box (net.js)
   K[e.code] = 1;
   if (e.repeat) return;
   audioStart(); // sound can only start from a key press or click
@@ -94,7 +96,7 @@ function turnBy(mx, my) {
   if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
-  else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (mode === 'taxi' || mode === 'ride') look += mx * 0.003 * s; // (ride: in another player's car, net.js)
   else if (mode === 'sea' || mode === 'boat') look=clamp(look+mx*.003*s,-Math.PI,Math.PI);
   else if (skatingNow()) { SK.look += mx * 0.003 * s; SK.lookT = T; } // on the board: look round (the camera swings back behind you)
   else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
@@ -312,6 +314,7 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  netFrame(t); // (multiplayer: sent and received whatever else is going on, the menus and cabinets included: net.js)
   if(!game)hideMinigamePresentation();
   controllerTick(clamp((t-t0)/1000,0,.05));
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu

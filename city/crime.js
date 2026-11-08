@@ -324,7 +324,7 @@ for (let n = 0; n < PATROLS; n++) {
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
-const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
+const copSees = (x, y) => cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
   || footCops.some(c => !c.dead && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y)); // (not one lying shot: gun.js)
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
@@ -335,7 +335,7 @@ function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
 }
 // a red light only counts with a cop right there
 function redLightCrime(x, y) {
-  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < 2.5) || footCops.some(c => near(c.x, c.y, x, y) < 2.5);
+  const cop = cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, x, y) < 2.5) || footCops.some(c => near(c.x, c.y, x, y) < 2.5);
   if (cop) addWanted('redlight', x, y, true);
   return cop;
 }
@@ -401,7 +401,7 @@ function policeSpawnLane(x, y) {
 // enough patrol cars on the case for the stars: the nearest free ones first, then more from a few blocks off
 function callUnits() {
   const on = cars.filter(c => c.pursuit).length, need = UNITS[wanted.stars] - on;
-  const free = cars.filter(c => c.patrol && !c.pursuit && !c.player && !c.returning).sort((a_, b) => near(a_.x, a_.y, wanted.lastX, wanted.lastY) - near(b.x, b.y, wanted.lastX, wanted.lastY));
+  const free = cars.filter(c => c.patrol && !c.pursuit && !playerCar(c) && !c.returning).sort((a_, b) => near(a_.x, a_.y, wanted.lastX, wanted.lastY) - near(b.x, b.y, wanted.lastX, wanted.lastY));
   for (let k = 0; k < need; k++) {
     let c = free[k];
     if (!c || near(c.x, c.y, wanted.lastX, wanted.lastY) > POLICE_NEAR_SPAWN) { // nobody close: one drives in, from a block or two off and out of your sight

@@ -45,8 +45,8 @@ for (const st of GAS_STATIONS) {
   for (let x = 3; x <= 6; x++) GAS_ZONE[idx(st.x0 + x, st.y0 - 1)] = st;
   for (let y = 1; y <= 4; y++) GAS_ZONE[idx(st.x0 + 3, st.y0 + y)] = st;
 }
-const gasLaneFree = (st, l) => !cars.some(o => o.pit && o.pit.st === st && o.pit.lane === l && !o.player && !o.parked) &&
-  !cars.some(o => (o.parked || o.player) && Math.abs(rel(o.ex - st.x0 - 1.5)) < 1.8 && Math.abs(rel(o.ey - st.y0 - GAS.lanes[l])) < 0.35); // (nor anything left in it)
+const gasLaneFree = (st, l) => !cars.some(o => o.pit && o.pit.st === st && o.pit.lane === l && !playerCar(o) && !o.parked) &&
+  !cars.some(o => (o.parked || playerCar(o)) && Math.abs(rel(o.ex - st.x0 - 1.5)) < 1.8 && Math.abs(rel(o.ey - st.y0 - GAS.lanes[l])) < 0.35); // (nor anything left in it)
 // a car in the zone (st, or null just out of it): decide whether to fill up; once it has, slow for the turn (c.gas, see
 // stepTraffic) and turn in at the right spot, if there's a lane free by then
 function gasConsider(c, st) {
@@ -136,7 +136,7 @@ function gasClear(c) {
   return !(mode === 'walk' && Math.abs(rel(px - wx)) < 0.45 && Math.abs(rel(py - wy)) < 0.25);
 }
 const PIT_V = 0.4, PIT_ACC = 0.8, PIT_BRAKE = 0.9;
-const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !c.player && !c.parked;
+const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !playerCar(c) && !c.parked;
 function stepPit(c, dt) {
   const p = c.pit;
   c.ex = c.x; c.ey = c.y;
