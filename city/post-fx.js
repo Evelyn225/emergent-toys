@@ -15,12 +15,15 @@
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 // box-filter a texture down; threshold > 0 keeps only what's bright (soft knee, so nothing pops in or out)
 const POSTFX_DOWN = `precision highp float;
-uniform sampler2D src; uniform vec2 srcSize, dstSize; uniform float spread, threshold, knee;
+uniform sampler2D src, mask; uniform vec2 srcSize, dstSize, canvas, cell, grid; uniform float spread, threshold, knee;
 vec3 tap(vec2 uv) { return texture2D(src, uv).rgb; }
 void main() {
   vec2 uv = gl_FragCoord.xy / dstSize, t = spread / srcSize;
   vec3 c = (tap(uv + vec2(-t.x, -t.y)) + tap(uv + vec2(t.x, -t.y)) + tap(uv + vec2(-t.x, t.y)) + tap(uv + t)) * 0.25;
-  if (threshold > 0.0) { float b = max(c.r, max(c.g, c.b)); c *= smoothstep(threshold, threshold + knee, b); }
+  if (threshold > 0.0) {
+    float b = max(c.r, max(c.g, c.b)); c *= smoothstep(threshold, threshold + knee, b);
+    vec2 px = uv * canvas; c *= texture2D(mask, vec2(px.x, canvas.y - px.y) / cell / grid).r; // (per cell: how much it may glow)
+  }
   gl_FragColor = vec4(c, 1.0);
 }`;
 // one direction of a 9-tap gaussian, in 5 linear samples (dir longer than 1 spreads the taps for a longer smear)
@@ -57,11 +60,14 @@ void main() {
   if (grain > 0.0) {
     float l = max(s.r, max(s.g, s.b));
     float n = hash(gl_FragCoord.xy + seed) + hash(gl_FragCoord.xy * 1.37 + seed * 0.71) - 1.0; // (triangular: no visible bias)
-    s += n * grain * (0.025 * (1.0 - l) + 0.006);
+    s += n * grain * (0.0125 * (1.0 - l) + 0.003);
   }
   gl_FragColor = vec4(s, 1.0);
 }`;
 const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
+// How much each cell may feed the bloom: puddles (FL 2) mirror the lamps and signs above them, and blooming the
+// reflection as well as the light doubled every glow into a big smear across the road; they keep a little.
+const POSTFX_PUDDLE_GLOW = 0.25;
 
 // how much of the night look: outdoors the sky's; a room is lit by its own lamps, so it reads as evening at least
 const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
@@ -110,10 +116,13 @@ function postFxInit(st) {
   if (!down || !blur || !compose) return null;
   gl.useProgram(compose.p);
   ['scene', 'near', 'wide', 'streak'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
-  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT);
+  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 4);
   gl.useProgram(blur.p); gl.uniform1i(blur.U('src'), POSTFX_UNIT);
   gl.useProgram(st.prog);
-  return { down, blur, compose, key: '' };
+  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, mask);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.activeTexture(gl.TEXTURE0);
+  return { down, blur, compose, mask, key: '' };
 }
 
 // a colour texture and a framebuffer drawing into it
@@ -130,6 +139,11 @@ function postFxTarget(gl, w, h) {
 const POSTFX_TARGETS = ['scene', 'a4', 'b4', 's4', 'a8', 'b8'];
 function postFxSize(st, fx) {
   const { gl } = st, W = cv.width, H = cv.height, key = W + 'x' + H;
+  if (fx.key === key && fx.maskKey === cols + 'x' + rows) return true;
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); // (the mask's rows are one byte a cell, any width)
+  fx.maskData = new Uint8Array(cols * rows); fx.maskKey = cols + 'x' + rows;
+  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, cols, rows, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, fx.maskData);
   if (fx.key === key) return true;
   for (const n of POSTFX_TARGETS) if (fx[n]) { gl.deleteTexture(fx[n].tex); gl.deleteFramebuffer(fx[n].fb); }
   const q = n => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
@@ -159,6 +173,13 @@ function postFxEnd(st) {
   const into = t => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fb : null); t ? gl.viewport(0, 0, t.w, t.h) : gl.viewport(0, 0, cv.width, cv.height); };
   const down = (src, dst, spread, threshold) => {
     into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
+    if (threshold > 0) {
+      const M = fx.maskData, puddle = POSTFX_PUDDLE_GLOW * 255 | 0;
+      for (let i = 0, n = M.length; i < n; i++) M[i] = FL[i] === 2 ? puddle : 255;
+      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
+      gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
+    }
     gl.uniform2f(U('srcSize'), src.w, src.h); gl.uniform2f(U('dstSize'), dst.w, dst.h);
     gl.uniform1f(U('spread'), spread); gl.uniform1f(U('threshold'), threshold); gl.uniform1f(U('knee'), 0.25);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
