@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Glyphport",
+  "productName": "ASCII City",
   "version": "1.0.14",
   "identifier": "fun.evenet.glyphport",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Glyphport",
+        "title": "ASCII City",
         "width": 1280,
         "height": 800,
         "minWidth": 800,

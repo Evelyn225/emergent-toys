@@ -137,13 +137,13 @@ function faceText(word, i, t, vx, vy, hl, z0, bandH) {
 // out to the gates, which gates over each
 const TERMINAL_DOOR_SIGNS = ['DEPARTURES', 'GATES 1-2', 'GATES 2-3'];
 function drawTerminal(b, vx, vy, lit) {
-  const NAME = 'GLYPHPORT INTERNATIONAL', band = b.h - 0.22;
+  const NAME = 'ASCII CITY INTERNATIONAL', band = b.h - 0.22;
   drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f), long = f === 3 || f === 4, along = long ? u : v, half = long ? b.hl : b.hw;
     if (f >= 5) { const plant = hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85; BG[i] = C(GRAY, 2 + L * 0.25 + (plant ? (fract(u * 3) > .5 ? .8 : -.4) : 0)); return set(i, ' ', 0), true; } // the roof, plant boxes on it lit on one side
-    if (w > band) { // the band along the top: the name on the long sides, GLYPHPORT on the ends
+    if (w > band) { // the band along the top: the name on the long sides, ASCII CITY on the ends
       BG[i] = C(BLUE, (1.5 + L * 0.2) * k);
-      const word = long ? NAME : 'GLYPHPORT', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
+      const word = long ? NAME : 'ASCII CITY', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
       const [ex, ey] = f === 3 ? [1, 0] : f === 4 ? [-1, 0] : f === 1 ? [0, -1] : [0, 1], nx = f === 1 ? 1 : f === 2 ? -1 : 0, ny = f === 3 ? 1 : f === 4 ? -1 : 0;
       const fx = vx + nx * b.hl, fy = vy + ny * b.hw, letterW = Math.min(2 * half / (n + 2), 0.5);
       const ch = signLine(word, (q - 0.5) * 2 * half / letterW + n / 2, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(fx, fy), t, letterW, 0.16, farDepth(fx, fy, half), ex, ey);

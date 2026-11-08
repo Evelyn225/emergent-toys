@@ -2,7 +2,7 @@
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {
-  if (!GLYPHPORT_DESKTOP_APP || screenshotFolderBusy) return;
+  if (!ASCII_CITY_DESKTOP_APP || screenshotFolderBusy) return;
   screenshotFolderBusy = true;
   const button = pauseEl?.querySelector('[data-act="screenshot-folder"]');
   if (button) button.disabled = true;
@@ -39,7 +39,7 @@ async function takeScreenshot() {
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');
     });
-    if (GLYPHPORT_DESKTOP_APP) {
+    if (ASCII_CITY_DESKTOP_APP) {
       if (!window.__TAURI__?.core?.invoke) throw new Error('Please update the desktop app to save screenshots.');
       const png = Array.from(new Uint8Array(await blob.arrayBuffer()));
       const path = await window.__TAURI__.core.invoke('save_screenshot', { png });
@@ -47,7 +47,7 @@ async function takeScreenshot() {
     } else {
       const url = URL.createObjectURL(blob), link = document.createElement('a');
       link.href = url;
-      link.download = `Glyphport-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      link.download = `ASCII-City-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       document.body.appendChild(link);
       link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);

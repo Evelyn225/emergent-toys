@@ -89,7 +89,7 @@ async fn open_game_update(window: tauri::WebviewWindow, version: String) -> Resu
     #[cfg(windows)]
     {
         use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
-        let url: Vec<u16> = format!("https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v{version}/Glyphport-Setup.exe\0").encode_utf16().collect();
+        let url: Vec<u16> = format!("https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v{version}/ASCII-City-Setup.exe\0").encode_utf16().collect();
         let verb: Vec<u16> = "open\0".encode_utf16().collect();
         let hwnd = window.hwnd().map_err(|error| error.to_string())?;
         let result = unsafe {
@@ -131,5 +131,5 @@ fn main() {
             quit_game
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Glyphport");
+        .expect("failed to run ASCII City");
 }

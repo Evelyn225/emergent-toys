@@ -6,7 +6,7 @@ function relock(e) {
 }
 onkeydown = e => {
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
-  if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
+  if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
