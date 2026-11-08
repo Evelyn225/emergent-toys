@@ -30,7 +30,7 @@ fn save_in(directory: &Path, png: &[u8], timestamp: u128) -> Result<PathBuf, Str
     fs::create_dir_all(directory)
         .map_err(|error| format!("Could not create Screenshots: {error}"))?;
     for suffix in 0..1000 {
-        let path = directory.join(format!("Glyphport-{timestamp}-{suffix}.png"));
+        let path = directory.join(format!("ASCII-City-{timestamp}-{suffix}.png"));
         let mut file = match OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(file) => file,
             Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn creates_folder_and_never_overwrites_screenshots() {
         let directory = std::env::temp_dir().join(format!(
-            "glyphport-screenshots-{}-{}",
+            "ascii-city-screenshots-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

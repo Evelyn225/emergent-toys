@@ -1,6 +1,5 @@
 'use strict';
-// Concatenate Glyphport's sources (tools/city-manifest.json) into ascii-city.bundle.js. (It was called ASCII City:
-// its files, URLs and storage keys still are, so links, installed apps and saves keep working.)
+// Concatenate ASCII City's sources (tools/city-manifest.json) into ascii-city.bundle.js.
 // One classic script, same as sleep-os.bundle.js: top-level declarations share one scope and
 // load order is the manifest order. "pure" files must not touch the DOM at load time, so the
 // node tests can run them in a vm (test/helpers/load-city.cjs); "dom" files come after.

@@ -4,17 +4,17 @@ function showDesktopUpdate(el) {
   const button = el.querySelector('[data-act="update"]'), status = el.querySelector('[data-update-status]');
   button.disabled = desktopUpdateState === 'checking';
   button.textContent = 'Check for updates';
-  if (desktopUpdate) button.textContent = `Download Glyphport ${desktopUpdate.version}`;
+  if (desktopUpdate) button.textContent = `Download ASCII City ${desktopUpdate.version}`;
   else if (desktopUpdateState === 'checking') button.textContent = 'Checking for updates...';
-  const installed = window.__GLYPHPORT_VERSION__;
+  const installed = window.__ASCII_CITY_VERSION__;
   status.textContent = '';
   if (desktopUpdateState === 'download-failed') status.textContent = 'Could not open the download. Try again.';
   else if (desktopUpdate) status.textContent = `Version ${desktopUpdate.version} is available. Run the downloaded installer to update.`;
-  else if (desktopUpdateState === 'current') status.textContent = `Glyphport ${installed} is up to date.`;
+  else if (desktopUpdateState === 'current') status.textContent = `ASCII City ${installed} is up to date.`;
   else if (desktopUpdateState === 'unavailable') status.textContent = 'Could not check for updates. Try again when online.';
 }
 async function checkDesktopUpdates() {
-  if (!GLYPHPORT_DESKTOP_APP || desktopUpdateState === 'checking') return;
+  if (!ASCII_CITY_DESKTOP_APP || desktopUpdateState === 'checking') return;
   desktopUpdateState = 'checking';
   if (pauseEl) pauseEl.show();
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 8000);
@@ -23,9 +23,9 @@ async function checkDesktopUpdates() {
       headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal
     });
     if (!response.ok) throw new Error('Release check failed');
-    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__GLYPHPORT_VERSION__);
+    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__ASCII_CITY_VERSION__);
     desktopUpdateState = desktopUpdate ? 'available' : 'current';
-    if (desktopUpdate) say(`Glyphport ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
+    if (desktopUpdate) say(`ASCII City ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
   } catch (error) {
     desktopUpdateState = 'unavailable';
   } finally {
@@ -42,4 +42,4 @@ async function desktopUpdateAction() {
     if (pauseEl) pauseEl.show();
   }
 }
-if (GLYPHPORT_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);
+if (ASCII_CITY_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);

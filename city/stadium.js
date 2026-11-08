@@ -296,7 +296,7 @@ ROOM_DEFS.stadium = {
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
     const P = MatchEngine.PITCH, bx = P.hl + STADIUM.board, by = P.hw + STADIUM.board;
-    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'GLYPHPORT', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
+    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'ASCII CITY', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
     for (const [e, ax] of [[-1, 'x'], [1, 'x'], [-1, 'y'], [1, 'y']]) {
       const len = ax === 'x' ? bx : by, cxp = ax === 'x' ? STADIUM.cx : STADIUM.cx + e * bx, cyp = ax === 'x' ? STADIUM.cy + e * by : STADIUM.cy;
       for (let k = 0, n = Math.round(len * 2 / 12); k < n; k++) {

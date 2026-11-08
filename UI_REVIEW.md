@@ -1,6 +1,6 @@
 # UI review
 
-Keep Glyphport's pixel font, straight edges, restrained colour and ASCII game art. Improve hierarchy, legibility and use of space across desktop, controller and touch. Preserve existing actions, prices, saves and minigame rules. Changes are made in `city/*.js`, followed by the canonical rebuild. Each chunk needs native browser evidence, failing-before checks and real control coverage.
+Keep ASCII City's pixel font, straight edges, restrained colour and ASCII game art. Improve hierarchy, legibility and use of space across desktop, controller and touch. Preserve existing actions, prices, saves and minigame rules. Changes are made in `city/*.js`, followed by the canonical rebuild. Each chunk needs native browser evidence, failing-before checks and real control coverage.
 
 ## Review findings
 

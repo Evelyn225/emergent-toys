@@ -8,7 +8,7 @@ test('all carryable pictures use coloured surfaces, with only actual printing an
   return{bad:bad.slice(0,10),count,solid};});assert.deepEqual(r.bad,[],JSON.stringify(r));assert.ok(r.count>=187&&r.solid>10000);
 }));
 test('keepsake, package, newspaper and tape lettering stays complete; the vertical vape brand has exactly five letters',()=>fixture(async p=>{
- const r=await p.evaluate(()=>{const bad=[],words={cigarettes:['SMOKES'],book:['NOVEL'],newspaper:['THE DAILY'],vinyl:['GREATEST HITS'],vhs:['MOVIE NITE'],tigerbalm:['TIGER'],mysterybox:['?'],cityglobe:['GLYPHPORT'],postcard:['T REX'],neon:['NEON','2 PACKS'],weed:['WEED','2 PACKS'],tincan:['BEANS'],plasticbag:['THANK YOU'],oldcoin:['KING','1908'],divewatch:['14:15']};
+ const r=await p.evaluate(()=>{const bad=[],words={cigarettes:['SMOKES'],book:['NOVEL'],newspaper:['THE DAILY'],vinyl:['GREATEST HITS'],vhs:['MOVIE NITE'],tigerbalm:['TIGER'],mysterybox:['?'],cityglobe:['ASCII CITY'],postcard:['T REX'],neon:['NEON','2 PACKS'],weed:['WEED','2 PACKS'],tincan:['BEANS'],plasticbag:['THANK YOU'],oldcoin:['KING','1908'],divewatch:['14:15']};
  for(const[id,expected]of Object.entries(words)){const[art]=DENSE[id]({id,uses:2},1),lines=art.map(l=>l.replace(/\u0001/g,' '));for(const word of expected)if(!lines.some(l=>l.includes(word)))bad.push([id,word,lines]);}
  const[vape]=DENSE.vape({id:'vape'},1);if(vape.join('').replace(/[^A-Z]/g,'')!=='MANGO')bad.push('vape printing repeats or skips letters');return bad;});assert.deepEqual(r,[]);
 }));

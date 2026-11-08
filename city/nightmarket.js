@@ -1,5 +1,5 @@
 // ===== the Chinatown night market (props.js puts up the stalls): what E does at a stall, and what it says. Open 8pm
-// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the Glyphport snow globe, which changes
+// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the ASCII City snow globe, which changes
 // the weather: goods.js)
 function marketSpot() {
   if (mode !== 'walk') return null;

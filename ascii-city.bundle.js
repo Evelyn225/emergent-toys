@@ -326,8 +326,8 @@ function desktopReleaseUpdate(releases, installed) {
     if (!release || release.draft || release.prerelease || typeof release.tag_name !== 'string' || !release.tag_name.startsWith('ascii-city-v')) continue;
     const version = release.tag_name.slice('ascii-city-v'.length);
     if (!newerDesktopVersion(version, update ? update.version : installed)) continue;
-    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/Glyphport-Setup.exe`;
-    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'Glyphport-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
+    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/ASCII-City-Setup.exe`;
+    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'ASCII-City-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
   }
   return update;
 }
@@ -1711,7 +1711,7 @@ function onIsland(x, y, margin = 0) {
   return Math.abs(rel(x - ISLE.x)) <= reach && Math.abs(rel(y - ISLE.y)) <= reach && isleEdge(x, y) > -margin;
 }
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && worldCoord(y) > FOOTBRIDGE.y0 && worldCoord(y) < FOOTBRIDGE.y1;
-// ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
+// ---- the airport: ASCII City International, on reclaimed land out in the bay west of the first bridge, joined to the
 // promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
 // hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
 // grass, the runway (east-west: 09 / 27), grass, and rocks round the shore.
@@ -7836,10 +7836,10 @@ const ITEMS = {
   goldfish: { name: 'goldfish in a bag', price: 3, kind: 'gear' }, // (won at the night market's tub)
   // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
   pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
-  cityglobe: { name: 'Glyphport snow globe', price: 350, kind: 'gear' },
-  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica Glyphport Star', price: 15, kind: 'gear' }, // (the museum gift shop)
+  cityglobe: { name: 'ASCII City snow globe', price: 350, kind: 'gear' },
+  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica ASCII City Star', price: 15, kind: 'gear' }, // (the museum gift shop)
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
-  diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
+  diamond: { name: 'the ASCII City Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
   hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
   hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
@@ -8160,7 +8160,7 @@ function useHeld(near) {
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
     case 'dinotoy': return ['RAWR. The little T. rex\'s arms flap uselessly.', 'squeak'];
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
-    case 'diamond': return [pick(['The Glyphport Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
+    case 'diamond': return [pick(['The ASCII City Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
     case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
     case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
     case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
@@ -8209,7 +8209,7 @@ function fortune() {
   return `${FORTUNE_HINT[s.sym]} Lucky numbers: ${[0, 0, 0].map(() => 1 + (Math.random() * 49 | 0)).join(', ')}`;
 }
 const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) => t + w, 0); for (const [id, w] of list) if ((r -= w) < 0) return id; return list[0][0]; };
-// the Glyphport snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
+// the ASCII City snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
 // give the snow a few seconds to settle before you try again
 const GLOBE_SETTLE = 8;
 let globeT = -99;
@@ -12770,7 +12770,7 @@ function cityLayoutInventory(splitY = 72) {
     group('gardens', 'Botanical Gardens', GARDEN.x0, GARDEN.y0, GARDEN.x0 + GARDEN.w, GARDEN.y0 + GARDEN.h),
     ...[['casino', CASINO], ['exchange', EXCHANGE], ['museum', MUSEUM], ['club', CLUB], ['aquarium', AQUARIUM]].map(([id, b]) =>
       group(id, b.sh.word, b.bx * 8, b.by * 8, b.bx * 8 + 8, b.by * 8 + 8)),
-    group('airport', 'Glyphport International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
+    group('airport', 'ASCII City International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
     group('lighthouse', 'Lighthouse and footbridge', ISLE.x - ISLE.r * 1.5, FOOTBRIDGE.y0, ISLE.x + ISLE.r * 1.5, ISLE.y + ISLE.r * 1.5),
     group('fair', 'Sunset Pier', FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1),
     group('marina', 'Marina', MARINA.x - MARINA.reach - 1.2, MARINA.y0 - 1.2, MARINA.x + MARINA.reach + 1.2, MARINA.end + .8),
@@ -13616,7 +13616,7 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
-const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
+const NATIVE_MOUSE_APP = Boolean(window.__ASCII_CITY_DESKTOP__ && window.__TAURI__?.core?.invoke);
 let desktopMouseCaptured = false;
 let desktopMouseFallback = false;
 let desktopMouseReady = Promise.resolve();
@@ -22341,7 +22341,7 @@ const TERMINAL_GRID = ['########DD############DD########', ...Array.from({ lengt
 
 // in by one of the building's doors: the main doors into check-in, the airside ones in by the gates
 function enterTerminal(d) {
-  enterRoom('terminal', { word: 'GLYPHPORT', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
+  enterRoom('terminal', { word: 'ASCII CITY', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
 }
 // and out: by the door you walk into, the main doors or the nearer airside one
 function leaveTerminal() {
@@ -26504,11 +26504,11 @@ function stepExchange() {
     if (shares[n.sym] || mode === 'room' && room.kind === 'exchange') say(`NEWS: ${n.line}. ${n.sym} ${n.up ? 'jumps' : 'drops'} to ${fmt$(stockBy(n.sym).price)}.`, 5);
   }
 }
-// ===== the Glyphport Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
+// ===== the ASCII City Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
 // steps, columns hung with banners, bronze doors, a copper dome. Open 10 to 6, $10 in.
 // Inside: the entrance hall with a T. rex skeleton and the gift shop desk; the Egyptian room to the west (a gold
 // sarcophagus, the walls covered in hieroglyphs); the picture gallery to the east (every painting generated, so no two
-// frames match); and through the arch at the back, the gem room: the Glyphport Star (a diamond the size of your fist)
+// frames match); and through the arch at the back, the gem room: the ASCII City Star (a diamond the size of your fist)
 // and the Equinox Orrery (turn its crank and the year turns) under glass. Every exhibit has a plaque (E).
 // After dark it's a job: pick the door lock (L), keep out of the guards' torch beams (crouch and they see less far),
 // crack a case (the lock game). That sets off a silent alarm: half a minute, then every cop in town. What you take
@@ -26576,7 +26576,7 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, ' ', 0);
   }
   if (front && z > 1.18 && z <= 1.32) { // the frieze
-    if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
+    if (wallText(i, u, uStep, z, d, 'ASCII CITY MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
     BG[i] = C(STONE, 1.9 + L * .3 - (fract(z * 30) < 0.15 ? .5 : 0)); return set(i, ' ', 0);
   }
   if (z < 1.18) { // the colonnade: steps, eight fluted columns, banners hung between them, the bronze doors
@@ -26705,7 +26705,7 @@ function museumAlarm(line) {
 }
 
 // ---- what's on show: the plaques, and the two cases
-const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE GLYPHPORT STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
+const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE ASCII CITY STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
   { id: 'orrery', x: 15.5, y: 4.3, plaque: 'THE EQUINOX ORRERY. Brass and glass, maker unknown. The story goes that turning its crank turns the year. Please do not turn the crank.' }];
 const PLAQUES = [
   [12.5, 13.2, 2.6, 'TYRANNOSAURUS GLYPHUS. Dug out of the cliffs under the lighthouse in 1911. Its arms were too short to hold this plaque, so we did.'],
@@ -26730,7 +26730,7 @@ function museumUse() {
   if (!sp) return false;
   if (sp.text) return say(sp.text, 6), true;
   const c = sp.case;
-  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
+  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The ASCII City Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
   if (!room.burgled) return say(c.plaque, 6), true;
   if (inv.length >= INV_SIZE) return say('Your bag is full.'), true;
   startCrime('lockpick', ok => {
@@ -26739,7 +26739,7 @@ function museumUse() {
     museumStolen[c.id] = true; carryItem({ id: c.id, uses: 0 });
     room.props = room.props.filter(p => p.exhibit !== c.id);
     if (!room.silent && !room.alarm) room.silent = T + 30;
-    say(`The case clicks open. ${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
+    say(`The case clicks open. ${c.id === 'diamond' ? 'The ASCII City Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
   });
   return true;
 }
@@ -28438,7 +28438,7 @@ function hud() {
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
+  const isle = onAirport(px, py) ? 'ASCII City International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
@@ -29398,7 +29398,7 @@ function stepFairFolk(dt) {
   }
 }
 // ===== the Chinatown night market (props.js puts up the stalls): what E does at a stall, and what it says. Open 8pm
-// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the Glyphport snow globe, which changes
+// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the ASCII City snow globe, which changes
 // the weather: goods.js)
 function marketSpot() {
   if (mode !== 'walk') return null;
@@ -29498,7 +29498,7 @@ function finishBout(g, quit) {
     earn(g.purse); newsEvent('bout', ...crimePos(), { who: g.name }); // (it makes the papers)
     if (g.foe >= boxRank) boxRank = Math.min(BOXERS.length, g.foe + 1);
     const how = { KO: 'by knockout', TKO: 'on a stoppage', decision: 'on points' }[res.how] || '';
-    const next = champ ? ' You\'re the champion of Glyphport.' : ` Next on the card: ${nextBoxer().name}.`;
+    const next = champ ? ' You\'re the champion of ASCII City.' : ` Next on the card: ${nextBoxer().name}.`;
     return say(`You beat ${g.name} ${how}. The purse is yours: ${fmt$(g.purse)}.${next}`, 6);
   }
   say({ towel: 'You throw in the towel. No purse.', KO: `${g.name} puts you down for the count. No purse.`, TKO: 'The ref waves it off. No purse.',
@@ -29765,13 +29765,13 @@ function faceText(word, i, t, vx, vy, hl, z0, bandH) {
 // out to the gates, which gates over each
 const TERMINAL_DOOR_SIGNS = ['DEPARTURES', 'GATES 1-2', 'GATES 2-3'];
 function drawTerminal(b, vx, vy, lit) {
-  const NAME = 'GLYPHPORT INTERNATIONAL', band = b.h - 0.22;
+  const NAME = 'ASCII CITY INTERNATIONAL', band = b.h - 0.22;
   drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f), long = f === 3 || f === 4, along = long ? u : v, half = long ? b.hl : b.hw;
     if (f >= 5) { const plant = hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85; BG[i] = C(GRAY, 2 + L * 0.25 + (plant ? (fract(u * 3) > .5 ? .8 : -.4) : 0)); return set(i, ' ', 0), true; } // the roof, plant boxes on it lit on one side
-    if (w > band) { // the band along the top: the name on the long sides, GLYPHPORT on the ends
+    if (w > band) { // the band along the top: the name on the long sides, ASCII CITY on the ends
       BG[i] = C(BLUE, (1.5 + L * 0.2) * k);
-      const word = long ? NAME : 'GLYPHPORT', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
+      const word = long ? NAME : 'ASCII CITY', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
       const [ex, ey] = f === 3 ? [1, 0] : f === 4 ? [-1, 0] : f === 1 ? [0, -1] : [0, 1], nx = f === 1 ? 1 : f === 2 ? -1 : 0, ny = f === 3 ? 1 : f === 4 ? -1 : 0;
       const fx = vx + nx * b.hl, fy = vy + ny * b.hw, letterW = Math.min(2 * half / (n + 2), 0.5);
       const ch = signLine(word, (q - 0.5) * 2 * half / letterW + n / 2, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(fx, fy), t, letterW, 0.16, farDepth(fx, fy, half), ex, ey);
@@ -30157,7 +30157,7 @@ function enterAircraft(c) {
   if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
     c.stolen = true; addWanted('planetheft', c.x, c.y, true);
     say(T_.price ? `You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."` :
-      `You shut the door on the empty cabin and spool up the engines. The tower: "Glyphport heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
+      `You shut the door on the empty cabin and spool up the engines. The tower: "ASCII City heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
   }
 }
 // buying the one you're standing by: it's yours, kept where you leave it (and saved)
@@ -31523,7 +31523,7 @@ function asciiBar(f) {
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {
-  if (!GLYPHPORT_DESKTOP_APP || screenshotFolderBusy) return;
+  if (!ASCII_CITY_DESKTOP_APP || screenshotFolderBusy) return;
   screenshotFolderBusy = true;
   const button = pauseEl?.querySelector('[data-act="screenshot-folder"]');
   if (button) button.disabled = true;
@@ -31560,7 +31560,7 @@ async function takeScreenshot() {
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');
     });
-    if (GLYPHPORT_DESKTOP_APP) {
+    if (ASCII_CITY_DESKTOP_APP) {
       if (!window.__TAURI__?.core?.invoke) throw new Error('Please update the desktop app to save screenshots.');
       const png = Array.from(new Uint8Array(await blob.arrayBuffer()));
       const path = await window.__TAURI__.core.invoke('save_screenshot', { png });
@@ -31568,7 +31568,7 @@ async function takeScreenshot() {
     } else {
       const url = URL.createObjectURL(blob), link = document.createElement('a');
       link.href = url;
-      link.download = `Glyphport-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      link.download = `ASCII-City-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       document.body.appendChild(link);
       link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -31590,7 +31590,7 @@ document.addEventListener('keydown', e => {
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
-const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
+const ASCII_CITY_DESKTOP_APP = Boolean(window.__ASCII_CITY_DESKTOP__);
 let desktopFullscreen = false, desktopFullscreenBusy = false;
 let desktopQuitting = false;
 async function quitDesktopGame() {
@@ -31636,7 +31636,7 @@ function buildPause() {
   const el = menuEl('pause', 500, `
     <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
       <h1>Paused</h1>
-      <p class="sub">Glyphport</p>
+      <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
@@ -31646,13 +31646,13 @@ function buildPause() {
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <button class="item" data-act="screenshot" style="width:auto;flex:1">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
-        <button class="item" data-act="screenshot-folder" style="width:auto;display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
+        <button class="item" data-act="screenshot-folder" style="width:auto;display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
       </div>
-      <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
-      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
-      <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
-      <button class="item" data-act="update" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
-      <p class="sub" data-update-status style="display:${GLYPHPORT_DESKTOP_APP ? 'block' : 'none'}"></p>
+      <p class="sub">${ASCII_CITY_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
+      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/ASCII-City-Setup.exe" target="_blank" rel="noopener" style="display:${!ASCII_CITY_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
+      <button class="item" data-act="fullscreen" style="display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
+      <button class="item" data-act="update" style="display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
+      <p class="sub" data-update-status style="display:${ASCII_CITY_DESKTOP_APP ? 'block' : 'none'}"></p>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -31672,13 +31672,13 @@ function buildPause() {
       ${toggle('controllerVibration', 'Controller vibration')}
 
       <h2></h2>
-      ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
+      ${ASCII_CITY_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
-    if (GLYPHPORT_DESKTOP_APP) showDesktopUpdate(el);
+    if (ASCII_CITY_DESKTOP_APP) showDesktopUpdate(el);
     // the jobs you're on, to call off: only while there's one
     el.querySelector('[data-act="cancel-courier"]').style.display = courierJob ? 'flex' : 'none';
     const fare = el.querySelector('[data-act="cancel-fare"]');
@@ -31738,7 +31738,7 @@ function openControls() {
   if (!controlsEl) {
     controlsEl = menuEl('controls', 510, `
       <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
-        <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
+        <header class="controls-header"><div><p class="controls-eyebrow">ASCII CITY / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
         <button class="item controls-back" data-controls-back aria-label="Back to pause"><span class="controls-back-long">← Back to pause</span><span class="controls-back-short">← Back</span><span class="k">Esc</span></button></header>
         <nav class="controls-tabs" aria-label="Control categories">
           <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
@@ -31851,7 +31851,7 @@ function openPause() {
   paused = true;
   cancelTransitAnnouncements();
   for (const k in K) K[k] = 0; // nothing held down while we're away
-  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
+  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = ASCII_CITY_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
   releaseMouse();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();
@@ -31881,17 +31881,17 @@ function showDesktopUpdate(el) {
   const button = el.querySelector('[data-act="update"]'), status = el.querySelector('[data-update-status]');
   button.disabled = desktopUpdateState === 'checking';
   button.textContent = 'Check for updates';
-  if (desktopUpdate) button.textContent = `Download Glyphport ${desktopUpdate.version}`;
+  if (desktopUpdate) button.textContent = `Download ASCII City ${desktopUpdate.version}`;
   else if (desktopUpdateState === 'checking') button.textContent = 'Checking for updates...';
-  const installed = window.__GLYPHPORT_VERSION__;
+  const installed = window.__ASCII_CITY_VERSION__;
   status.textContent = '';
   if (desktopUpdateState === 'download-failed') status.textContent = 'Could not open the download. Try again.';
   else if (desktopUpdate) status.textContent = `Version ${desktopUpdate.version} is available. Run the downloaded installer to update.`;
-  else if (desktopUpdateState === 'current') status.textContent = `Glyphport ${installed} is up to date.`;
+  else if (desktopUpdateState === 'current') status.textContent = `ASCII City ${installed} is up to date.`;
   else if (desktopUpdateState === 'unavailable') status.textContent = 'Could not check for updates. Try again when online.';
 }
 async function checkDesktopUpdates() {
-  if (!GLYPHPORT_DESKTOP_APP || desktopUpdateState === 'checking') return;
+  if (!ASCII_CITY_DESKTOP_APP || desktopUpdateState === 'checking') return;
   desktopUpdateState = 'checking';
   if (pauseEl) pauseEl.show();
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 8000);
@@ -31900,9 +31900,9 @@ async function checkDesktopUpdates() {
       headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal
     });
     if (!response.ok) throw new Error('Release check failed');
-    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__GLYPHPORT_VERSION__);
+    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__ASCII_CITY_VERSION__);
     desktopUpdateState = desktopUpdate ? 'available' : 'current';
-    if (desktopUpdate) say(`Glyphport ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
+    if (desktopUpdate) say(`ASCII City ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
   } catch (error) {
     desktopUpdateState = 'unavailable';
   } finally {
@@ -31919,7 +31919,7 @@ async function desktopUpdateAction() {
     if (pauseEl) pauseEl.show();
   }
 }
-if (GLYPHPORT_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);
+if (ASCII_CITY_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);
 // ===== dev tools: F2 (or Dev tools in the pause menu). Teleport anywhere, spawn things, set your money, the day, the
 // time and the weather, without remembering any names: a search box over tabs of buttons. Everything takes effect
 // at once and the menu stays open, so you can do several things before closing it (Esc, F2 or the close button).
@@ -32683,7 +32683,7 @@ ROOM_DEFS.stadium = {
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
     const P = MatchEngine.PITCH, bx = P.hl + STADIUM.board, by = P.hw + STADIUM.board;
-    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'GLYPHPORT', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
+    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'ASCII CITY', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
     for (const [e, ax] of [[-1, 'x'], [1, 'x'], [-1, 'y'], [1, 'y']]) {
       const len = ax === 'x' ? bx : by, cxp = ax === 'x' ? STADIUM.cx : STADIUM.cx + e * bx, cyp = ax === 'x' ? STADIUM.cy + e * by : STADIUM.cy;
       for (let k = 0, n = Math.round(len * 2 / 12); k < n; k++) {
@@ -33706,7 +33706,7 @@ function openBigMap() {
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
       <div class="bar"><input type="search" placeholder="Search places or contacts" aria-label="Find a place"><button data-map="close" aria-label="Close map">×</button>
       <div class="tools"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">−</button><button data-map="me">You</button><button data-map="fit">City</button><button data-map="places" aria-controls="map-directory" aria-expanded="true">Places</button></div></div>
-      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>GLYPHPORT</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
+      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>ASCII CITY</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
       <div class="tip"></div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
     const q = bigMapEl.querySelector('input');
@@ -33798,7 +33798,7 @@ function closeBigMap() {
   if(bigMapEl.contains(document.activeElement))document.activeElement.blur();
   BIGMAP.pts.clear();BIGMAP.tap=null;paused=BIGMAP.returnPaused;
   if (paused && pauseEl && pauseEl.style.display === 'flex') {
-    homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block';
+    homeEl.style.display = ASCII_CITY_DESKTOP_APP ? 'none' : 'block';
     pauseEl.querySelector('[data-act="map"]').focus();
   }
   else homeEl.style.display='none';
@@ -34865,7 +34865,7 @@ Object.assign(DENSE, {
     return ['.', C(WARM, 6 + dBall(x, y, cx, cy, R * 0.84) * 3)]; // the face, old and yellowed
   }),
   cityglobe: () => sculptSurface(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
-    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
+    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'ASCII CITY'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
     const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
     if (d > 1 || y > 4.2) return null;
     if (d > 0.92) return ['|', C(WHITE, 12)];
@@ -38154,7 +38154,7 @@ function minigamePresentation(g){
  if(ui.key!==key||ui.game!==game){
   ui.el.hidden=false;ui.key=key;ui.game=game;ui.el.style.setProperty('--game-accent',PAL[C(gameFrameColor(g),12)]);
   const setText=(sel,text)=>{const el=ui.el.querySelector(sel);if(el.textContent!==text)el.textContent=text;};
-  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'GLYPHPORT'));
+  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'ASCII CITY'));
   setText('h1',g.title);setText('.game-summary',summary);ui.el.querySelector('.game-summary').hidden=!summary;setText('.game-status',status);setText('.game-earned',earned);
   ui.footer.hidden=result;ui.result.hidden=!result;ui.result.dataset.kind=game.kind;ui.el.querySelector('footer button').hidden=TOUCH;setText('footer button',({cook:'Stop cooking',workshop:'Stop machine',shift:'Clock off',crime:'Back off',bout:'Towel'}[game.kind]||'Leave')+(CONTROLLER.active?' · B':' · E / Esc'));ui.el.querySelector('.game-actions').hidden=TOUCH;
   for(const el of [ui.header,ui.footer,ui.result]){el.style.left=left+'px';el.style.width=width+'px';}
@@ -54971,7 +54971,7 @@ function relock(e) {
 }
 onkeydown = e => {
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
-  if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
+  if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)

@@ -10,7 +10,7 @@ const TERMINAL_GRID = ['########DD############DD########', ...Array.from({ lengt
 
 // in by one of the building's doors: the main doors into check-in, the airside ones in by the gates
 function enterTerminal(d) {
-  enterRoom('terminal', { word: 'GLYPHPORT', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
+  enterRoom('terminal', { word: 'ASCII CITY', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
 }
 // and out: by the door you walk into, the main doors or the nearer airside one
 function leaveTerminal() {

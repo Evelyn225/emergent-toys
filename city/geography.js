@@ -44,7 +44,7 @@ function cityLayoutInventory(splitY = 72) {
     group('gardens', 'Botanical Gardens', GARDEN.x0, GARDEN.y0, GARDEN.x0 + GARDEN.w, GARDEN.y0 + GARDEN.h),
     ...[['casino', CASINO], ['exchange', EXCHANGE], ['museum', MUSEUM], ['club', CLUB], ['aquarium', AQUARIUM]].map(([id, b]) =>
       group(id, b.sh.word, b.bx * 8, b.by * 8, b.bx * 8 + 8, b.by * 8 + 8)),
-    group('airport', 'Glyphport International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
+    group('airport', 'ASCII City International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
     group('lighthouse', 'Lighthouse and footbridge', ISLE.x - ISLE.r * 1.5, FOOTBRIDGE.y0, ISLE.x + ISLE.r * 1.5, ISLE.y + ISLE.r * 1.5),
     group('fair', 'Sunset Pier', FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1),
     group('marina', 'Marina', MARINA.x - MARINA.reach - 1.2, MARINA.y0 - 1.2, MARINA.x + MARINA.reach + 1.2, MARINA.end + .8),

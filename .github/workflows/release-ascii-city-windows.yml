@@ -1,4 +1,4 @@
-name: Glyphport Windows release
+name: ASCII City Windows release
 
 on:
   push:
@@ -35,9 +35,11 @@ jobs:
         run: |
           $installer = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
           if (-not $installer) { throw 'Tauri did not produce an NSIS installer' }
+          Copy-Item -LiteralPath $installer.FullName -Destination 'src-tauri/target/release/bundle/nsis/ASCII-City-Setup.exe'
+          # The same installer under the game's old name: apps from before the rename look for this asset to find updates
           Copy-Item -LiteralPath $installer.FullName -Destination 'src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe'
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$env:GITHUB_REF_NAME" "src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe" --generate-notes
+        run: gh release create "$env:GITHUB_REF_NAME" "src-tauri/target/release/bundle/nsis/ASCII-City-Setup.exe" "src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe" --generate-notes

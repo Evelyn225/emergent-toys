@@ -7,23 +7,23 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Glyphport">
+  <meta name="apple-mobile-web-app-title" content="ASCII City">
   <link rel="apple-touch-icon" sizes="180x180" href="images/ascii-city-180.png">
   <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
   <link rel="manifest" href="ascii-city.webmanifest">
-  <title>Glyphport</title>
+  <title>ASCII City</title>
   <meta name="description" content="A whole city drawn in text characters. Wander the streets, take courier jobs, drive taxis and get lost.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Eve Net">
-  <meta property="og:title" content="Glyphport">
+  <meta property="og:title" content="ASCII City">
   <meta property="og:description" content="A whole city drawn in text characters. Wander the streets, take courier jobs, drive taxis and get lost.">
   <meta property="og:url" content="https://evenet.fun/ascii-city">
   <meta property="og:image" content="https://evenet.fun/images/previews/ascii-city.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Glyphport">
+  <meta name="twitter:title" content="ASCII City">
   <meta name="twitter:description" content="A whole city drawn in text characters. Wander the streets, take courier jobs, drive taxis and get lost.">
   <meta name="twitter:image" content="https://evenet.fun/images/previews/ascii-city.jpg">
   <style>
@@ -48,7 +48,7 @@
 <script src="ascii-city.bundle.js"></script>
 <script>
   // installable as an app (Chrome's "Install app" / "Add to Home screen"), and it opens offline once it has been played
-  if (!window.__GLYPHPORT_DESKTOP__ && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('ascii-city-sw.js', { scope: 'ascii-city' }).catch(() => {});
+  if (!window.__ASCII_CITY_DESKTOP__ && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('ascii-city-sw.js', { scope: 'ascii-city' }).catch(() => {});
 </script>
 </body>
 </html>

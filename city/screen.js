@@ -177,7 +177,7 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
-const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
+const NATIVE_MOUSE_APP = Boolean(window.__ASCII_CITY_DESKTOP__ && window.__TAURI__?.core?.invoke);
 let desktopMouseCaptured = false;
 let desktopMouseFallback = false;
 let desktopMouseReady = Promise.resolve();

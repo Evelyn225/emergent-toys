@@ -107,7 +107,7 @@ Object.assign(DENSE, {
     return ['.', C(WARM, 6 + dBall(x, y, cx, cy, R * 0.84) * 3)]; // the face, old and yellowed
   }),
   cityglobe: () => sculptSurface(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
-    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
+    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'ASCII CITY'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
     const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
     if (d > 1 || y > 4.2) return null;
     if (d > 0.92) return ['|', C(WHITE, 12)];
