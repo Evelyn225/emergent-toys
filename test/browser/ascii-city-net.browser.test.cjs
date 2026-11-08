@@ -11,7 +11,7 @@ const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
 const BASE = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href + '?net=local';
-const URL_ = BASE + '&netfeatures=chat,clock'; // (both built, not yet released: switched on here)
+const URL_ = BASE; // (chat and the shared clock: on as released)
 
 test('two players: seen in the street, chat in a bubble, one clock, the same room, a car, and leaving', async () => {
   const browser = await chromium.launch();
@@ -61,7 +61,7 @@ test('two players: seen in the street, chat in a bubble, one clock, the same roo
 
     // the clock: whoever keeps it sets the time and the sky; the other follows within a couple of seconds
     const [keeper, follower] = await A.evaluate(() => net.clockOwner) ? [A, B] : [B, A];
-    await keeper.evaluate(() => { tod = 20.5; weather = 'rain'; });
+    await keeper.evaluate(() => { tod = 20.5; weather = 'rain'; wTimer = 1e9; }); // (and the keeper's own sky holds still for the test)
     const inStep = async () => { // the follower's time and sky match the keeper's (whose clock is still running)
       for (let k = 0; k < 60; k++) {
         const [kt, kw] = await keeper.evaluate(() => [tod, weather]), [ft, fw] = await follower.evaluate(() => [tod, weather]);
@@ -98,14 +98,14 @@ test('two players: seen in the street, chat in a bubble, one clock, the same roo
   } finally { await browser.close(); }
 });
 
-test('as released: ghosts only. Each sees the other (on a skateboard too), but T is just T and each keeps their own clock', async () => {
+test('ghosts only (?netfeatures=none): each sees the other (on a skateboard too), but T is just T and each keeps their own clock', async () => {
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
       const page = await ctx.newPage();
       page.on('pageerror', e => errors.push(e.message));
-      await page.goto(BASE);
+      await page.goto(BASE + '&netfeatures=none');
       await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
       return page;
     };

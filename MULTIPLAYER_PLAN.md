@@ -8,15 +8,16 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   drawing, chat, clock, menu), `vendor/trystero.js` (Trystero 0.26.0 bundled). Esc -> Multiplayer to join; T or Enter to chat;
   `?room=code` invite links; `?net=local` for two tabs on one machine. Other players are drawn on foot or as a car
   (a picture only: no riding or collisions yet). Tests: `test/city-net.test.cjs`, `test/browser/ascii-city-net.browser.test.cjs`.
-- **Not verified**: real Trystero connections between two machines (the dev sandbox can't reach the Nostr relays).
-  Needs a manual test on two networks.
-- **Release order (feature flags, `NET_FEATURES` in `city/net-core.js`)**: release 1 is **ghosts only**: other players
-  on foot and in cars, name tags, wanted stars, join/leave lines. `chat` and `clock` are built and tested but off; turn
-  one on by flipping its flag (try them first with `?netfeatures=chat,clock`). Each later phase lands behind its own flag
-  (`rides`, `guns`, `hooks`, `police`), off until it's been tried with real players. The set of switched-on features is part
-  of the build fingerprint, so players with different sets get the "different version" message instead of half-working.
-- **Next**: get release 1 tried on two real machines, then switch on `chat`, then `clock`, then build phase 3 (shared
-  vehicles + riding), then 4-6.
+- **Verified by hand**: two real machines connect over Trystero and see each other (ghosts, skateboarding).
+- **Release order (feature flags, `NET_FEATURES` in `city/net-core.js`)**: ghosts (other players on foot, in cars and on
+  skateboards, name tags, wanted stars, join/leave lines) are always on. `chat` and `clock` are switched on (not yet
+  tried by real players). Each later phase lands behind its own flag (`rides`, `guns`, `hooks`, `police`), off until it's
+  been tried. `?netfeatures=a,b` sets exactly that list for trying things (`?netfeatures=none`: ghosts only). The set of
+  switched-on features is part of the build fingerprint, so players with different sets get the "different version"
+  message instead of half-working.
+- **Next**: try chat and the clock with real players; then phase 3 (shared vehicles + riding), then 4-6. Smaller
+  gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
+  rotation in the air, no bail sprawl, no passenger shown in a taxi.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
   syncs, so the step is tiny). A player who goes quiet for 8 s is hidden, not dropped: only the transport saying they
   left removes them, so a tab that was in the background comes back. A background tab gets no animation frames, so

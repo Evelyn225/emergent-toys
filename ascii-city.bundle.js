@@ -13451,11 +13451,11 @@ const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder'];
 const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance)\d*$/;
 
-// What's switched on. The first release is ghosts only: other players walking and driving about in your city, with
-// their names over them. Chat and the shared clock are built and tested but off until they're wanted; the phases after
-// them (riding, guns, hooks, police) get a flag each as they land. Everyone in a room needs the same set, so the set
-// is part of netBuildId(). (?netfeatures=chat,clock turns them on for trying out: net.js)
-const NET_FEATURES = { chat: false, clock: false };
+// What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
+// them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
+// needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
+// ?netfeatures=none switches them all off, for trying things out: net.js)
+const NET_FEATURES = { chat: true, clock: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -55114,9 +55114,9 @@ const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search)
 const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
-try { // ?netfeatures=chat,clock: switch on what isn't released yet, to try it (everyone in the room needs the same)
+try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
   const want = new URLSearchParams(location.search).get('netfeatures');
-  if (want) for (const k of want.split(',')) if (k in NET_FEATURES) NET_FEATURES[k] = true;
+  if (want !== null) { const on = want.split(','); for (const k in NET_FEATURES) NET_FEATURES[k] = on.includes(k); }
 } catch (e) { /* no query */ }
 const netNow = () => performance.now() / 1000;
 const netRandomId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 16);

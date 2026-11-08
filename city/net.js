@@ -7,9 +7,9 @@ const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search)
 const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
-try { // ?netfeatures=chat,clock: switch on what isn't released yet, to try it (everyone in the room needs the same)
+try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
   const want = new URLSearchParams(location.search).get('netfeatures');
-  if (want) for (const k of want.split(',')) if (k in NET_FEATURES) NET_FEATURES[k] = true;
+  if (want !== null) { const on = want.split(','); for (const k in NET_FEATURES) NET_FEATURES[k] = on.includes(k); }
 } catch (e) { /* no query */ }
 const netNow = () => performance.now() / 1000;
 const netRandomId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 16);
