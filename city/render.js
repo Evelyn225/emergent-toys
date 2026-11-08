@@ -174,7 +174,7 @@ function render(dt,sceneOnly=false,mask=null) {
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
-    if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
+    if (mode === 'drive' || mode === 'taxi' || mode === 'ride') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
   tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;

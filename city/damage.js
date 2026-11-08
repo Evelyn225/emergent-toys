@@ -10,13 +10,14 @@ const crashDamage = speed => Math.max(0, (speed - 0.6) * 22); // 1 (36 km/h): 9;
 // a car left parked with nobody in it (not a police car) that's shot or knocked sets its alarm off: CAR_ALARM_T
 // seconds of whooping (audio.js) and flashing lights (city-sprites.js)
 const CAR_ALARM_T = 20;
-const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !c.player && !c.wrecked && c.fireT == null; // (getting in turns it off)
+const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !playerCar(c) && !c.wrecked && c.fireT == null; // (getting in turns it off)
 function damageCar(c, n) {
   if (!c || c.wrecked || !(n > 0)) return;
-  if (c.parked && !c.player && !c.patrol) c.alarmT = T;
+  if (c.remote) return typeof netHurtCar === 'function' && netHurtCar(c, n); // (another player's: it's theirs to dent, net.js)
+  if (c.parked && !playerCar(c) && !c.patrol) c.alarmT = T;
   c.dmg = Math.min(DMG_FIRE, (c.dmg || 0) + n);
   if (c.dmg >= DMG_FIRE && c.fireT == null) c.fireT = 0; // alight
-  if (c.fireT != null && !c.player && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
+  if (c.fireT != null && !playerCar(c) && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
 }
 const carPower = c => !c || !c.dmg ? 1 : c.dmg >= DMG_BAD ? 0.7 : c.dmg >= DMG_SMOKE ? 0.9 : 1; // the share of its top speed it can still make
 const burning = c => c.fireT != null && !c.wrecked;

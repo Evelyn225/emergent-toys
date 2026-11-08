@@ -154,6 +154,7 @@ function enterRoom(kind, extra, spawn) {
   transitSync();
 }
 function interact() {
+  if (mode === 'ride') return netGetOut(); // (in another player's car: net.js)
   if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
@@ -285,6 +286,7 @@ function interact() {
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
+  if (netCarUse()) return; // (another player's car, in multiplayer: net.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -441,6 +443,6 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 function hail() {
   if (mode !== 'walk') return;
   let best = null, bd = 3;
-  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (c.body === TAXI && !c.rider && !playerCar(c) && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }

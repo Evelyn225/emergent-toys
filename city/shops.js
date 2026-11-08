@@ -1007,7 +1007,7 @@ function gasOutside(H) {
     for (const e of [-3.65, 3.65]) out.push({ b: boxAt(6.5 + e, y, 1, 0, 0.22, 0.22, 0.25, 4.3), kind: 'post' });
   }
   if (st) for (const c of cars) { // the cars in the forecourt: filling up, pulling in, pulling out
-    if (!c.pit || c.pit.st !== st || c.player || c.parked) continue;
+    if (!c.pit || c.pit.st !== st || playerCar(c) || c.parked) continue;
     const x = 6.5 - 10 * (rel(c.x - st.x0) - 1.5), y = H - 1 + 10 * (2 - rel(c.y - st.y0)), hx = -c.hx, hy = -c.hy;
     out.push({ b: boxAt(x, y, hx, hy, 2.4, 1.05, 0.25, 1), kind: 'car', col: c.body }, { b: boxAt(x - hx * 0.2, y - hy * 0.2, hx, hy, 1.3, 0.95, 1, 1.45), kind: 'cab', col: c.body });
   }

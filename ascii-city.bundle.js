@@ -21,6 +21,9 @@ const pick = a => a[Math.random() * a.length | 0];
 const CITY_SOURCE_N = 256, CITY_SOURCE_NB = 32;
 const OCEAN_SIZE = 16384, OCEAN_MIN = 256 - OCEAN_SIZE / 2;
 let NB = CITY_SOURCE_NB, N = CITY_SOURCE_N, worldReady = false;
+// a car somebody's driving or keeping: you (player), or another player in a multiplayer room (remote, a stand-in for
+// theirs: net.js). The traffic never drives either, and the police and the gas stations leave both alone.
+const playerCar = c => !!(c.player || c.remote);
 const rel = v => { const size = worldReady ? OCEAN_SIZE : N; return worldReady && Math.abs(v) < size / 2 ? v : mod(v + size / 2, size) - size / 2; };
 function worldCoord(value) {
   if (!worldReady) return mod(value,N);
@@ -5422,7 +5425,7 @@ function toLane(c) {
 
 // Routing keeps cardinal headings; the body and passenger camera follow the actual steering.
 function carYaw(c) {
-  return c.kind === 'taxi' && !c.player && !c.parked && c.laneYaw != null ? c.laneYaw : Math.atan2(c.hy, c.hx);
+  return c.kind === 'taxi' && !playerCar(c) && !c.parked && c.laneYaw != null ? c.laneYaw : Math.atan2(c.hy, c.hx);
 }
 function taxiLaneTarget(c, line) {
   const along = o => rel(o.ex - c.x) * c.hx + rel(o.ey - c.y) * c.hy;
@@ -5583,7 +5586,7 @@ function stepTraffic(dt, t, everywhere = false) {
   for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
     const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (c.ev && c.mine && !c.player && c.parked && d > 45) { returnStolenEv(c, k); continue; } // (a stolen ambulance, fire engine or police car: home to its station)
-    if (c.owned || c.player || !c.parked) continue;
+    if (c.owned || playerCar(c) || !c.parked) continue; // (another player's car is theirs to keep or lose: net.js)
     if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
     else if (d > 45 && c.fireT == null) { c.parked = c.mine = false; c.v = 0; repairCar(c); toLane(c); }
   }
@@ -5595,7 +5598,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : c.kind === 'taxi' && (c.pass || c.off < -0.01) ? 0.26 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !c.player && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !playerCar(c) && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -5806,8 +5809,8 @@ for (const st of GAS_STATIONS) {
   for (let x = 3; x <= 6; x++) GAS_ZONE[idx(st.x0 + x, st.y0 - 1)] = st;
   for (let y = 1; y <= 4; y++) GAS_ZONE[idx(st.x0 + 3, st.y0 + y)] = st;
 }
-const gasLaneFree = (st, l) => !cars.some(o => o.pit && o.pit.st === st && o.pit.lane === l && !o.player && !o.parked) &&
-  !cars.some(o => (o.parked || o.player) && Math.abs(rel(o.ex - st.x0 - 1.5)) < 1.8 && Math.abs(rel(o.ey - st.y0 - GAS.lanes[l])) < 0.35); // (nor anything left in it)
+const gasLaneFree = (st, l) => !cars.some(o => o.pit && o.pit.st === st && o.pit.lane === l && !playerCar(o) && !o.parked) &&
+  !cars.some(o => (o.parked || playerCar(o)) && Math.abs(rel(o.ex - st.x0 - 1.5)) < 1.8 && Math.abs(rel(o.ey - st.y0 - GAS.lanes[l])) < 0.35); // (nor anything left in it)
 // a car in the zone (st, or null just out of it): decide whether to fill up; once it has, slow for the turn (c.gas, see
 // stepTraffic) and turn in at the right spot, if there's a lane free by then
 function gasConsider(c, st) {
@@ -5897,7 +5900,7 @@ function gasClear(c) {
   return !(mode === 'walk' && Math.abs(rel(px - wx)) < 0.45 && Math.abs(rel(py - wy)) < 0.25);
 }
 const PIT_V = 0.4, PIT_ACC = 0.8, PIT_BRAKE = 0.9;
-const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !c.player && !c.parked;
+const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !playerCar(c) && !c.parked;
 function stepPit(c, dt) {
   const p = c.pit;
   c.ex = c.x; c.ey = c.y;
@@ -5947,13 +5950,14 @@ const crashDamage = speed => Math.max(0, (speed - 0.6) * 22); // 1 (36 km/h): 9;
 // a car left parked with nobody in it (not a police car) that's shot or knocked sets its alarm off: CAR_ALARM_T
 // seconds of whooping (audio.js) and flashing lights (city-sprites.js)
 const CAR_ALARM_T = 20;
-const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !c.player && !c.wrecked && c.fireT == null; // (getting in turns it off)
+const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !playerCar(c) && !c.wrecked && c.fireT == null; // (getting in turns it off)
 function damageCar(c, n) {
   if (!c || c.wrecked || !(n > 0)) return;
-  if (c.parked && !c.player && !c.patrol) c.alarmT = T;
+  if (c.remote) return typeof netHurtCar === 'function' && netHurtCar(c, n); // (another player's: it's theirs to dent, net.js)
+  if (c.parked && !playerCar(c) && !c.patrol) c.alarmT = T;
   c.dmg = Math.min(DMG_FIRE, (c.dmg || 0) + n);
   if (c.dmg >= DMG_FIRE && c.fireT == null) c.fireT = 0; // alight
-  if (c.fireT != null && !c.player && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
+  if (c.fireT != null && !playerCar(c) && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
 }
 const carPower = c => !c || !c.dmg ? 1 : c.dmg >= DMG_BAD ? 0.7 : c.dmg >= DMG_SMOKE ? 0.9 : 1; // the share of its top speed it can still make
 const burning = c => c.fireT != null && !c.wrecked;
@@ -10495,7 +10499,7 @@ for (let n = 0; n < PATROLS; n++) {
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
-const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
+const copSees = (x, y) => cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
   || footCops.some(c => !c.dead && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y)); // (not one lying shot: gun.js)
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
@@ -10506,7 +10510,7 @@ function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
 }
 // a red light only counts with a cop right there
 function redLightCrime(x, y) {
-  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < 2.5) || footCops.some(c => near(c.x, c.y, x, y) < 2.5);
+  const cop = cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, x, y) < 2.5) || footCops.some(c => near(c.x, c.y, x, y) < 2.5);
   if (cop) addWanted('redlight', x, y, true);
   return cop;
 }
@@ -10572,7 +10576,7 @@ function policeSpawnLane(x, y) {
 // enough patrol cars on the case for the stars: the nearest free ones first, then more from a few blocks off
 function callUnits() {
   const on = cars.filter(c => c.pursuit).length, need = UNITS[wanted.stars] - on;
-  const free = cars.filter(c => c.patrol && !c.pursuit && !c.player && !c.returning).sort((a_, b) => near(a_.x, a_.y, wanted.lastX, wanted.lastY) - near(b.x, b.y, wanted.lastX, wanted.lastY));
+  const free = cars.filter(c => c.patrol && !c.pursuit && !playerCar(c) && !c.returning).sort((a_, b) => near(a_.x, a_.y, wanted.lastX, wanted.lastY) - near(b.x, b.y, wanted.lastX, wanted.lastY));
   for (let k = 0; k < need; k++) {
     let c = free[k];
     if (!c || near(c.x, c.y, wanted.lastX, wanted.lastY) > POLICE_NEAR_SPAWN) { // nobody close: one drives in, from a block or two off and out of your sight
@@ -12208,7 +12212,7 @@ function panicAt(x, y) {
   for (const c of cars) if (near(c.x, c.y, x, y) < HEAR_R * 0.7) speedOff(c);
 }
 function speedOff(c) {
-  if (c.player || c.rider || c.patrol || c.ev || c.parked || c.rush && !c.panicT) return;
+  if (playerCar(c) || c.rider || c.patrol || c.ev || c.parked || c.rush && !c.panicT) return;
   c.rush = true; c.panicT = T + SPEED_OFF_T;
 }
 // an ambulance for whoever's lying there: the nearest that's in, lights and siren, to the nearest bit of street
@@ -12266,7 +12270,7 @@ function copsShoot(dt) {
   const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
   const shooters = inside ? roomCops.filter(c => !c.dead && c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
     : mode === 'roof' ? roofCops.filter(c => !c.dead && c.sees).map(c => [c, near(c.x, c.y, px, py)])
-    : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !c.player && !c.wrecked)]
+    : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !playerCar(c) && !c.wrecked)]
       .map(c => [c, near(c.x, c.y, wx, wy)]).filter(([c, d]) => d < COP_FIRE_R && lineOfSight(c.x, c.y, wx, wy)).sort((p, q) => p[1] - q[1]).slice(0, COP_GUNS);
   const live = new Set(shooters.map(s => s[0]));
   for (const c of [...footCops, ...cars, ...roomCops, ...roofCops]) if (c.fireT && !live.has(c)) delete c.fireT; // (lost sight: they'll take a moment to aim again)
@@ -13441,21 +13445,21 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 2; // (2: spray-paint tags)
+const NET_PROTOCOL = 3; // (2: spray-paint tags; 3: shared cars)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
 const NET_TIMEOUT = 8; // seconds without a word from someone and they've gone
 const NET_CHAT_MAX = 120, NET_NAME_MAX = 16, NET_CODE_MAX = 32;
 const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
-const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder'];
+const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder', 'ride'];
 const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance)\d*$/;
 
 // What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -13492,7 +13496,7 @@ function netCheckTick(d) {
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
-    out.veh = { kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
+    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
   if (d.sk && typeof d.sk === 'object' && netNum(d.sk.yaw) && netNum(d.sk.nose) && netNum(d.sk.roll)) // on the board: which way it points, tipped how, and which foot forward
     out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1 };
   return out;
@@ -13515,6 +13519,21 @@ function netCheckLook(l) {
 function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
   return { tod: mod(d.tod, 24), dayNum: Math.max(0, d.dayNum | 0), weather: d.weather, seasonShift: mod(d.seasonShift | 0, 4) };
+}
+
+// ---- cars: one a player's driven is theirs to share (net.js). Its id is theirs too: their peer id and a count, so two
+// players never make the same one.
+const NET_PARKED_MAX = 12; // cars of yours others see parked where you left them (the nearest, if you've left more)
+const netCarId = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}:\d{1,6}$/.test(v) ? v : '';
+function netCheckParked(d) {
+  if (!Array.isArray(d)) return null;
+  const out = [];
+  for (const c of d.slice(0, NET_PARKED_MAX)) {
+    if (!c || !netCarId(c.id) || typeof c.kind !== 'string' || c.kind.length > 15 || !netNum(c.body) || !netNum(c.x) || !netNum(c.y) || !netNum(c.a)) continue;
+    out.push({ id: c.id, kind: c.kind, body: c.body | 0, x: worldCoord(c.x), y: worldCoord(c.y), a: c.a, dmg: netNum(c.dmg) ? clamp(c.dmg, 0, 200) : 0,
+      wrecked: !!c.wrecked, locked: !!c.locked, patrol: !!c.patrol, ev: !!c.ev });
+  }
+  return out;
 }
 
 // someone's spray-painted tags (graffiti.js): theirs to keep in their save, shown on your walls while they're here
@@ -17246,7 +17265,7 @@ function citySprites() {
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
-    const [vx, vy] = R(m.ex, m.ey), steering = m.kind === 'taxi' && !m.player && !m.parked && m.laneYaw != null;
+    const [vx, vy] = R(m.ex, m.ey), steering = m.kind === 'taxi' && !playerCar(m) && !m.parked && m.laneYaw != null;
     const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
@@ -22017,7 +22036,7 @@ function gasOutside(H) {
     for (const e of [-3.65, 3.65]) out.push({ b: boxAt(6.5 + e, y, 1, 0, 0.22, 0.22, 0.25, 4.3), kind: 'post' });
   }
   if (st) for (const c of cars) { // the cars in the forecourt: filling up, pulling in, pulling out
-    if (!c.pit || c.pit.st !== st || c.player || c.parked) continue;
+    if (!c.pit || c.pit.st !== st || playerCar(c) || c.parked) continue;
     const x = 6.5 - 10 * (rel(c.x - st.x0) - 1.5), y = H - 1 + 10 * (2 - rel(c.y - st.y0)), hx = -c.hx, hy = -c.hy;
     out.push({ b: boxAt(x, y, hx, hy, 2.4, 1.05, 0.25, 1), kind: 'car', col: c.body }, { b: boxAt(x - hx * 0.2, y - hy * 0.2, hx, hy, 1.3, 0.95, 1, 1.45), kind: 'cab', col: c.body });
   }
@@ -27932,7 +27951,7 @@ function render(dt,sceneOnly=false,mask=null) {
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
-    if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
+    if (mode === 'drive' || mode === 'taxi' || mode === 'ride') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
   tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
@@ -28318,7 +28337,7 @@ function elFrame() {
 
 const nearestCar = r => {
   let best = null, bd = r;
-  for (const c of cars) { if (c.player || c.rider || (c.ev && !c.mine)) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
+  for (const c of cars) { if (playerCar(c) || c.rider || (c.ev && !c.mine)) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
   return best;
 };
 // someone right in front of you, close enough to talk to
@@ -28360,6 +28379,7 @@ const homeSpot = () => {
 };
 const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2&&interactionClear(k[0],k[1],1.5); };
 function promptText() {
+  if (mode === 'ride') return netRidePrompt(); // (in another player's car: net.js)
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   if(furnishingPlacement){const p=furnishingCandidate();return p.ok?'E: place · Q: rotate · Esc: cancel':p.reason+' · Q: rotate · Esc: cancel';}
   const focused=focusedInteractionPrompt();if(focused)return focused;
@@ -28452,6 +28472,8 @@ function promptText() {
   if (gp) return gp;
   const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
   if (ev) return ev;
+  const shared = netCarPrompt(); // (another player's car: net.js)
+  if (shared) return shared;
   if (c && c.v < 0.6 && c.ev && c.mine) return `E: get back in the ${EV_NAME[c.kind]}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
@@ -28487,7 +28509,7 @@ function promptText() {
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
-  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && !cabUnmanned(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
+  if (cars.some(c => c.body === TAXI && !c.rider && !playerCar(c) && !c.hail && !cabUnmanned(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return fishPrompt();
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
@@ -28936,6 +28958,7 @@ function enterRoom(kind, extra, spawn) {
   transitSync();
 }
 function interact() {
+  if (mode === 'ride') return netGetOut(); // (in another player's car: net.js)
   if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
@@ -29067,6 +29090,7 @@ function interact() {
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
+  if (netCarUse()) return; // (another player's car, in multiplayer: net.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -29223,7 +29247,7 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 function hail() {
   if (mode !== 'walk') return;
   let best = null, bd = 3;
-  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (c.body === TAXI && !c.rider && !playerCar(c) && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
 'use strict';
@@ -29252,7 +29276,7 @@ function nearStationVehicle(r = .5) {
 // one stopped at a call that you could take, in reach
 function nearSceneVehicle(r = .5) {
   if (mode !== 'walk') return null;
-  return cars.find(c => c.ev && !c.player && !c.mine && c.state === 'scene' && Math.abs(c.v) < .6 && Math.hypot(rel(c.x - px), rel(c.y - py)) < r) || null;
+  return cars.find(c => c.ev && !playerCar(c) && !c.mine && c.state === 'scene' && Math.abs(c.v) < .6 && Math.hypot(rel(c.x - px), rel(c.y - py)) < r) || null;
 }
 function evPrompt() {
   const b = nearStationVehicle(), c = b ? null : nearSceneVehicle();
@@ -37785,7 +37809,7 @@ function peeWitness() {
     return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
   }
   if (mode !== 'walk' || pee.caught) return; // (up on a roof nobody's looking)
-  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py))
+  const cop = cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py))
     || footCops.some(c => near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py));
   if (cop) { pee.caught = true; addWanted('urination', px, py, true); return say('A cop saw that. Public urination!', 3); }
   if (pee.t > 1.5 && !pee.heard && people.some(p => !p.hidden && near(p.x, p.y, px, py) < CIV_PEE && lineOfSight(p.x, p.y, px, py))) {
@@ -54784,7 +54808,7 @@ let streetSpot = null; // where you last were on foot outdoors (inside a shop or
 function noteStreet() {
   if (mode === 'walk') streetSpot = { x: px, y: py, a };
   else if(mode==='room'&&homeRecord(room)&&room.ret)streetSpot={x:room.ret[0],y:room.ret[1],a:room.ret[2]||0};
-  else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
+  else if ((mode === 'drive' || mode === 'ride') && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) }; // (ride: in another player's car, net.js)
 }
 function saveCityJourney() {
   if(mode==='ferry')return savedFerryJourney();
@@ -55125,7 +55149,7 @@ function drawFerries() {
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -55193,6 +55217,7 @@ async function netJoin(codeIn, nameIn) {
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
+    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(),
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
@@ -55204,6 +55229,8 @@ function netLeave() {
   if (!net.on) return;
   try { net.tx.leave(); } catch (e) { /* gone */ }
   const was = net.clockOwner;
+  if (mode === 'ride') netEject('You get out.');
+  netDropCars();
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
   reindexTags(); // (theirs come off your walls)
   if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
@@ -55218,6 +55245,7 @@ function netPeerJoined(id) {
   net.peers.set(id, { id, name: '', hello: null, snaps: [], seenT: netNow(), ph: 0, chatBucket: {}, bubble: null });
   net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, id);
   netSendTags(id); // (your tags, for their walls)
+  netSendParked(id); // (and where you've left cars)
   netReclock();
 }
 function netPeerLeft(id) {
@@ -55226,6 +55254,7 @@ function netPeerLeft(id) {
   net.peers.delete(id);
   if (p.hello) netLog(`${p.name} left.`);
   if (p.tags) reindexTags();
+  if (net.riders?.delete(id)) netLog(`${p.name} is gone from your car.`);
   netReclock(); netMenuShow();
 }
 function netReclock() {
@@ -55256,6 +55285,7 @@ function netReceive(type, data, from) {
     return;
   }
   if (!p.hello || p.mismatch) return;
+  if (netCarMessage(type, data, from, p, now)) return;
   if (type === 'tick') { const s = netCheckTick(data); if (s) netPushSnap(p, s, now); return; }
   if (type === 'chat') {
     if (!NET_FEATURES.chat || !netAllow(p.chatBucket, now, 1, 3)) return;
@@ -55278,11 +55308,12 @@ function netApplyClock(c) {
 }
 
 // ---- every frame (from main.js, before anything else, paused or not)
-function netFrame(t) {
+function netFrame(t, fromTimer = false) {
   const now = t / 1000, dt = net.lastT ? clamp(now - net.lastT, 0, 0.25) : 0;
   net.lastT = now;
+  if (!fromTimer) net.frameT = now;
   if (!net.on) return;
-  if ((paused || game || document.hidden) && netClockShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
+  if ((paused || game || fromTimer) && netClockShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
   if ((net.sendT -= dt) <= 0) { net.sendT += 1 / NET_TICK_HZ; if (net.sendT < 0) net.sendT = 1 / NET_TICK_HZ; netSendTick(now); }
   if (netClockShared() && net.clockOwner) {
     if ((net.clockT -= dt) <= 0 || weather !== net.lastWeather) {
@@ -55299,10 +55330,21 @@ function netFrame(t) {
   }
   // quiet a while: not drawn till they speak again (only the transport says someone has actually gone)
   for (const p of net.peers.values()) p.stale = now - p.seenT > NET_TIMEOUT;
+  if (NET_FEATURES.cars) {
+    if ((net.parkedT -= dt) <= 0) { net.parkedT = 1; netSendParked(); }
+    if (net.claiming && now - net.claiming.t > 4) { net.claiming = null; say('Nothing. It won\'t open.', 2); }
+    if (net.asking && now - net.asking.t > 4) { net.asking = null; say('No answer from the driver.', 2); }
+    if (net.riders.size && !(mode === 'drive' && me && me.netId === net.riderCar)) { // out of the car (or in another): your passengers get out too
+      for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'parked' }, id);
+      net.riders.clear();
+    }
+  }
+  netSyncCars(now);
+  if (mode === 'ride') netRideStep();
 }
-// A tab in the background gets no animation frames, so the loop stops: keep sending and listening on a timer meanwhile
-// (otherwise you'd freeze for everyone, and if you keep the clock, so would the time)
-setInterval(() => { if (document.hidden && net.on) netFrame(performance.now()); }, 250);
+// A tab in the background (or a window covered up, in some browsers) gets no animation frames, so the loop stops: keep
+// sending and listening on a timer meanwhile (otherwise you'd freeze for everyone, and if you keep the clock, so would the time)
+setInterval(() => { if (net.on && performance.now() / 1000 - (net.frameT || 0) > 0.4) netFrame(performance.now(), true); }, 250);
 // you, as others see you
 function netSelfZ() {
   try {
@@ -55331,9 +55373,186 @@ function netSendTick(now) {
   const it = heldItem();
   const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
   if (skatingNow() && !car) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
-  if (car) s.veh = { kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
+  if (car) s.veh = { id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
   net.tx.send('tick', s);
+}
+
+// ---- shared cars. A car you've driven is yours to share: while you drive it, it's in your updates; once you leave it
+// parked, it's in a list you send each second. Everyone else has a stand-in for it in their own traffic (remote: true,
+// see playerCar in core.js): the traffic steers round it, your car can hit it, a bullet can. To take one someone's
+// left parked, you ask them, and their game hands it over and drops it from their city, so it's never in two places.
+// One they bought stays locked.
+function netMyCarId(c) {
+  if (!c.netId) c.netId = net.selfId + ':' + (++net.carN);
+  net.mine.add(c);
+  return c.netId;
+}
+function netMyParked() {
+  for (const c of net.mine) if (!cars.includes(c) || !c.parked && !c.player) { net.mine.delete(c); delete c.netId; } // (towed, or back in the traffic)
+  const d = c => Math.hypot(rel(c.x - px), rel(c.y - py));
+  return [...net.mine].filter(c => c.parked && !c.player).sort((p, q) => d(p) - d(q)).slice(0, NET_PARKED_MAX);
+}
+function netSendParked(to) {
+  if (!net.on || !NET_FEATURES.cars) return;
+  net.tx.send('parked', netMyParked().map(c => ({ id: c.netId, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), dmg: c.dmg || 0,
+    wrecked: !!c.wrecked || c.fireT != null, locked: !!c.owned, patrol: !!c.patrol, ev: !!c.ev })), to);
+}
+// every frame: the stand-ins match what everyone's told us (made, moved, or gone)
+function netSyncCars(now) {
+  const want = new Map();
+  if (NET_FEATURES.cars) for (const p of net.peers.values()) {
+    if (!p.hello || p.mismatch) continue;
+    for (const c of p.parked || []) if (!net.taken.has(c.id)) want.set(c.id, { ...c, owner: p.id, parked: true, v: 0, brake: true });
+    if (p.stale) continue;
+    const s = netSample(p, now);
+    if (s && s.veh && s.veh.id && s.rk === 'out' && VEHICLES[s.veh.kind]) want.set(s.veh.id, { ...s.veh, x: s.x, y: s.y, a: s.a, owner: p.id, parked: false });
+  }
+  for (const c of [...net.cars.values()]) if (!want.has(c.netId)) netDropCar(c);
+  for (const [id, w] of want) {
+    let c = net.cars.get(id);
+    if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
+    Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
+      brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev });
+  }
+  for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
+}
+function netDropCar(c) {
+  if (mode === 'ride' && me === c) netEject(net.peers.has(c.owner) ? 'The car pulls away without you.' : 'The driver\'s gone. You climb out.');
+  net.cars.delete(c.netId);
+  const k = cars.indexOf(c);
+  if (k >= 0) cars.splice(k, 1);
+}
+function netDropCars() { if (net.cars) for (const c of [...net.cars.values()]) netDropCar(c); }
+const netCarNear = (r = 0.5) => { let best = null, bd = r; if (net.on && net.cars) for (const c of net.cars.values()) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } return best; };
+const netOwnerName = c => net.peers.get(c.owner)?.name || 'someone';
+function netCarPrompt() { // (hud.js, for E)
+  const c = mode === 'walk' && NET_FEATURES.cars ? netCarNear() : null;
+  if (!c) return '';
+  if (!c.parked) return c.v < 0.6 && !c.wrecked ? `E: ride with ${netOwnerName(c)}` : '';
+  return c.locked ? `${netOwnerName(c)}'s car (locked)` : c.wrecked ? `${netOwnerName(c)}'s car (a wreck)` : `E: take ${netOwnerName(c)}'s car`;
+}
+function netCarUse() { // (actions.js, on E: true if it was about another player's car)
+  const c = mode === 'walk' && NET_FEATURES.cars ? netCarNear() : null;
+  if (!c) return false;
+  if (!c.parked) return netAskRide(c), true;
+  if (c.locked) return say(`That's ${netOwnerName(c)}'s car. It's locked.`, 3), true;
+  if (c.wrecked) return say('It\'s a wreck. Nobody\'s driving that anywhere.', 3), true;
+  if (net.claiming) return true;
+  net.claiming = { id: c.netId, t: netNow() };
+  net.tx.send('claim', { id: c.netId }, c.owner);
+  return true;
+}
+// your car (or your bullet) hurt one of theirs: tell them, and they dent it (damageCar sends it here, damage.js)
+function netHurtCar(c, n) {
+  if (!net.on || !c.owner || !c.netId) return;
+  const at = me && me !== c ? me : { x: px, y: py }, dx = rel(c.x - at.x), dy = rel(c.y - at.y), d = Math.hypot(dx, dy) || 1;
+  const crash = mode === 'drive' && !!me && Math.hypot(rel(me.x - c.x), rel(me.y - c.y)) < 0.7;
+  if (crash) net.hitT.set(c.owner, netNow());
+  net.tx.send('bump', { id: c.netId, dmg: Math.min(n, 100), dx: dx / d, dy: dy / d, crash }, c.owner);
+}
+
+// ---- riding in someone else's car: you ask, the driver's game says yes if there's a seat; you're in their car's
+// stand-in from then on, carried along with it (mode 'ride'), looking about with the mouse; E gets you out
+const netSeats = kind => kind === 'car' || kind === 'taxi' ? 3 : 1; // (behind the driver: the front seat and two in the back)
+function netFreeSeat() { const n = me ? netSeats(me.kind) : 0, used = new Set(net.riders.values()); for (let k = 1; k <= n; k++) if (!used.has(k)) return k; return 0; }
+function netAskRide(c) {
+  if (c.v >= 0.6) return say('Not while it\'s moving.', 2);
+  if (c.wrecked) return say('It\'s a wreck.', 2);
+  if (net.asking) return;
+  net.asking = { id: c.netId, t: netNow() };
+  net.tx.send('ride', { id: c.netId }, c.owner);
+  say(`You knock on ${netOwnerName(c)}'s window...`, 2);
+}
+const NET_SEAT_AT = [null, [0.02, 0.045], [-0.08, -0.045], [-0.08, 0.045]]; // seat: [forward, right] of the car's middle
+function netRideStep() {
+  const c = net.ride && net.cars.get(net.ride.id);
+  if (!c) return netEject('The car pulls away without you.');
+  if (c.wrecked) return netEject('You scramble out of the wreck.');
+  const [f, r] = NET_SEAT_AT[net.ride.seat] || NET_SEAT_AT[1], yaw = carYaw(c);
+  px = worldCoord(c.x + c.hx * f - c.hy * r); py = worldCoord(c.y + c.hy * f + c.hx * r);
+  a = yaw + look; // (where the car's pointing, and wherever you're looking)
+}
+function netEject(text) {
+  const c = me;
+  if (c) { c.rider = false; try { [px, py] = exitSpot(c); } catch (e) { /* stay put */ } a = Math.atan2(c.hy, c.hx); }
+  me = null; mode = 'walk'; look = 0; net.ride = null;
+  if (text) say(text, 3);
+}
+function netGetOut() {
+  if (mode !== 'ride' || !net.ride) return;
+  const c = net.cars.get(net.ride.id);
+  if (c && c.v > 0.6) return say('Not at this speed.', 2);
+  if (c) net.tx.send('rideOut', { id: net.ride.id }, c.owner);
+  netEject('You get out.');
+}
+const netRidePrompt = () => { const c = net.ride && net.cars.get(net.ride.id); return c ? `In ${netOwnerName(c)}'s car. ` + (c.v > 0.6 ? 'V: camera' : 'E: get out   V: camera') : ''; };
+
+// the car messages (true if it was one)
+function netCarMessage(type, data, from, p, now) {
+  if (!['parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump'].includes(type)) return false;
+  if (!NET_FEATURES.cars) return true;
+  if (type === 'parked') { if (netAllow(p.parkedBucket ||= {}, now, 0.5, 4)) p.parked = netCheckParked(data) || []; return true; }
+  const id = netCarId(data && data.id);
+  if (type === 'claim') { // someone wants a car you left: theirs, if it's still there and not one you bought
+    const c = [...net.mine].find(c => c.netId === id);
+    const ok = !!c && c.parked && !c.player && !c.owned && !c.wrecked && c.fireT == null && cars.includes(c);
+    if (ok) { cars.splice(cars.indexOf(c), 1); net.mine.delete(c); delete c.netId; netSendParked(); netLog(`${p.name} drove off in the car you left.`); }
+    net.tx.send('claimed', { id, ok }, from);
+    return true;
+  }
+  if (type === 'bump') { // you hit (or shot) one of their cars, or they did one of yours: the damage is the owner's to take
+    if (!netAllow(p.bumpBucket ||= {}, now, 0.3, 4) || !data || !netNum(data.dmg)) return true;
+    const c = [...net.mine].find(c => c.netId === id);
+    if (!c || !cars.includes(c)) return true;
+    if (c.player && now - (net.hitT.get(from) ?? -9) < 0.6) return true; // (you were both driving and both felt it: yours already counted it)
+    damageCar(c, clamp(data.dmg, 0, 100));
+    if (c.player) { // at the wheel: knocked, and slowed
+      const dx = netNum(data.dx) ? clamp(data.dx, -1, 1) : 0, dy = netNum(data.dy) ? clamp(data.dy, -1, 1) : 0, nx = worldCoord(c.x + dx * 0.04), ny = worldCoord(c.y + dy * 0.04);
+      if (free(nx, ny)) { c.x = nx; c.y = ny; c.ex = nx; c.ey = ny; px = nx; py = ny; }
+      c.v *= 0.4;
+      if (data.crash) { say('*CRUNCH*', 1); if (actx) playClip('crash', 0.5); }
+    }
+    return true;
+  }
+  if (type === 'ride') { // someone wants a lift: in, if you're driving the car they mean and there's a seat
+    const seat = netFreeSeat(), ok = mode === 'drive' && !!me && me.netId === id && seat > 0 && !net.riders.has(from);
+    if (ok) { net.riders.set(from, seat); net.riderCar = id; netLog(`${p.name} got in.`); }
+    net.tx.send('rideOk', { id, ok, seat }, from);
+    return true;
+  }
+  if (type === 'rideOk') {
+    if (!net.asking || net.asking.id !== id) return true;
+    net.asking = null;
+    const c = net.cars.get(id);
+    if (!data.ok || !c) return say(c ? 'No room in there.' : 'They drove off.', 2), true;
+    if (mode !== 'walk' || Math.hypot(rel(c.x - px), rel(c.y - py)) > 0.8) { net.tx.send('rideOut', { id }, from); return true; } // (walked off meanwhile)
+    body.seat = null; fx.skating = false;
+    me = c; c.rider = true; mode = 'ride'; look = 0; pitch = 0; camYaw = carYaw(c);
+    net.ride = { id, seat: clamp(data.seat | 0, 1, 3) };
+    netRideStep();
+    say(`You climb in with ${p.name}. E: get out`, 3);
+    return true;
+  }
+  if (type === 'rideOut') {
+    if (net.riders.get(from) !== undefined && id === net.riderCar) { net.riders.delete(from); netLog(`${p.name} got out.`); return true; } // (a passenger, getting out)
+    if (mode === 'ride' && net.ride && net.ride.id === id) netEject(data.why === 'parked' ? `${p.name} parks up. You get out.` : 'You get out.'); // (the driver's done)
+    return true;
+  }
+  if (type === 'claimed') {
+    if (!net.claiming || net.claiming.id !== id) return true;
+    net.claiming = null;
+    const c = net.cars.get(id);
+    if (!data.ok || !c) return say('It won\'t open.', 2), true;
+    net.cars.delete(id); net.taken.set(id, now + 5); // (theirs no longer: till their list catches up, don't make it again)
+    if (p.parked) p.parked = p.parked.filter(x => x.id !== id);
+    delete c.remote; delete c.owner; delete c.netId; c.locked = false;
+    if (mode !== 'walk' || Math.hypot(rel(c.x - px), rel(c.y - py)) > 0.8) { c.parked = true; return true; } // (walked off meanwhile: it's left there, yours to take)
+    me = c; mode = 'drive'; c.player = true; c.parked = false; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
+    say(`You get into ${p.name}'s car.`, 2);
+    return true;
+  }
+  return true;
 }
 
 // your tags (graffiti.js), to everyone or to one who's just arrived: the whole list, so the council's scrubbing goes too
@@ -55405,7 +55624,8 @@ function drawPeers() {
     const vx = inRoom ? s.x - px : rel(s.x - px), vy = inRoom ? s.y - py : rel(s.y - py), fx = Math.cos(s.a), fy = Math.sin(s.a);
     if (p.lastX !== undefined && p.lastRk === s.rk) p.ph += Math.hypot(rel(s.x - p.lastX), rel(s.y - p.lastY)) * (inRoom ? 3 : 30);
     p.lastX = s.x; p.lastY = s.y; p.lastRk = s.rk; p.drawn = true;
-    if (s.veh && VEHICLES[s.veh.kind]) { // at the wheel: their car (it's only a picture of one: you can't get in or hit it yet)
+    if (s.veh && s.veh.id && net.cars.has(s.veh.id)) continue; // at the wheel of a car they're sharing: it's in the traffic (netSyncCars), drawn with the rest
+    if (s.veh && VEHICLES[s.veh.kind]) { // in a taxi (a picture of it)
       const car = p.car = Object.assign(p.car || { id: (hash(p.id.length, p.id.charCodeAt(0) || 0, 77) * 1e6) | 0 }, s.veh);
       drawVehicle(car, vx, vy, fx, fy);
       continue;
@@ -55677,7 +55897,7 @@ function turnBy(mx, my) {
   if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
-  else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (mode === 'taxi' || mode === 'ride') look += mx * 0.003 * s; // (ride: in another player's car, net.js)
   else if (mode === 'sea' || mode === 'boat') look=clamp(look+mx*.003*s,-Math.PI,Math.PI);
   else if (skatingNow()) { SK.look += mx * 0.003 * s; SK.lookT = T; } // on the board: look round (the camera swings back behind you)
   else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;

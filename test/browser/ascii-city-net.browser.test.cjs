@@ -205,3 +205,77 @@ test('spray paint: a tag one player sprays is on everyone\'s wall, a late arriva
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('shared cars: Bob\'s car in Ann\'s traffic, a lift (carried along, out by E, out when he parks, out when he goes), dents and bullets to the owner, and taking one he left', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'cars-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 80; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const drive = () => B.evaluate(() => { const c = cars.find(c => c.kind === 'car' && !c.patrol && !c.ev && c.body !== TAXI && !c.remote); mode = 'walk'; room = null; px = c.x; py = c.y; me = c; mode = 'drive'; c.player = true; c.parked = false; c.v = 0; c.dmg = 0; a = Math.atan2(c.hy, c.hx); return { x: c.x, y: c.y, hx: c.hx, hy: c.hy }; });
+    const beside = c => { mode = 'walk'; room = null; me = null; px = mod(c.x - c.hy * 0.3, N); py = mod(c.y + c.hx * 0.3, N); a = 0; };
+
+    // Bob at the wheel: a stand-in in Ann's traffic that her traffic never drives
+    let car = await drive();
+    await A.evaluate(beside, car);
+    await until(A, () => [...net.cars.values()].some(c => !c.parked && cars.includes(c) && c.remote), null, 'Bob\'s car in Ann\'s traffic');
+    assert.equal(await A.evaluate(() => { const c = [...net.cars.values()][0], x = c.x; stepTraffic(0.5, T); return c.x === x; }), true, 'her traffic leaves it be');
+
+    // a lift: E by it, carried along when he drives, E to get out
+    assert.equal(await A.evaluate(() => promptText()), 'E: ride with Bob');
+    await A.evaluate(() => interact());
+    await until(A, () => mode === 'ride', null, 'Ann gets in');
+    assert.equal(await B.evaluate(() => net.riders.size), 1);
+    await B.evaluate(() => { me.x = mod(me.x + me.hx * 2, N); me.y = mod(me.y + me.hy * 2, N); me.ex = me.x; me.ey = me.y; px = me.x; py = me.y; });
+    await until(A, c => Math.hypot(rel(px - (c.x + c.hx * 2)), rel(py - (c.y + c.hy * 2))) < 0.12, car, 'carried along');
+    await A.evaluate(() => interact());
+    assert.deepEqual(await A.evaluate(() => [mode, !!me]), ['walk', false], 'E gets her out');
+    await until(B, () => net.riders.size === 0, null, 'Bob\'s told');
+    // back in, and Bob parks: she's put out
+    car = await B.evaluate(() => ({ x: me.x, y: me.y, hx: me.hx, hy: me.hy }));
+    await A.evaluate(beside, car); await A.waitForTimeout(300);
+    await A.evaluate(() => interact()); await until(A, () => mode === 'ride', null, 'in again');
+    await B.evaluate(() => leaveCar());
+    await until(A, () => mode === 'walk', null, 'put out when he parks');
+
+    // parked: a crash and a bullet dent it, on Bob's side (the owner's)
+    await until(A, () => [...net.cars.values()].some(c => c.parked), null, 'parked stand-in');
+    await A.evaluate(() => { damageCar([...net.cars.values()][0], 16); });
+    await until(B, () => ([...net.mine][0]?.dmg || 0) >= 16, null, 'dented on Bob\'s side');
+    assert.equal(await B.evaluate(() => [...net.mine][0].alarmT !== undefined), true, 'and its alarm goes');
+    const shot = await A.evaluate(c => { clearInventory(); carryItem({ id: 'revolver', uses: 6 }); held = 0; gun.cool = 0; gun.reload = 0; mode = 'walk'; px = mod(c.x - c.hy * 0.5, N); py = mod(c.y + c.hx * 0.5, N); a = Math.atan2(rel(c.y - py), rel(c.x - px)); const s = fireGun(px, py, walkGround(px, py) + 0.12, a, -0.12); return s && s.what; }, car);
+    assert.equal(shot, 'car', 'Ann\'s bullet hits the stand-in');
+    await until(B, () => ([...net.mine][0]?.dmg || 0) >= 28, null, 'and Bob\'s car takes it');
+
+    // Ann takes the car Bob left: hers, and gone from his city
+    await A.evaluate(c => { clearInventory(); mode = 'walk'; px = mod(c.x - c.hy * 0.3, N); py = mod(c.y + c.hx * 0.3, N); }, car);
+    assert.equal(await A.evaluate(() => promptText()), 'E: take Bob\'s car');
+    await B.evaluate(() => { window.leftCar = [...net.mine][0]; });
+    await A.evaluate(() => interact());
+    await until(A, () => mode === 'drive' && me && !me.remote, null, 'Ann drives it');
+    await until(B, () => !cars.includes(window.leftCar) && net.mine.size === 0, null, 'gone from Bob\'s city');
+    await until(B, () => [...net.cars.values()].some(c => !c.parked && net.peers.get(c.owner)?.name === 'Ann'), null, 'Bob sees Ann driving it');
+
+    // a lift with Bob again, then he leaves the room: she's put out, and his cars are gone from hers
+    await A.evaluate(() => leaveCar());
+    car = await drive();
+    await A.evaluate(beside, car); await A.waitForTimeout(400);
+    // (wherever this car happens to be, E might find a machine or a door first: ask for the lift directly)
+    await until(A, () => !!netCarNear(), null, 'his new car in Ann\'s traffic');
+    await A.evaluate(() => netCarUse()); await until(A, () => mode === 'ride', null, 'in a third time');
+    await B.evaluate(() => netLeave());
+    await until(A, () => mode === 'walk' && ![...net.cars.values()].some(c => net.peers.get(c.owner)?.name === 'Bob'), null, 'put out when he goes');
+    await A.evaluate(() => { netLeave(); localStorage.clear(); });
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

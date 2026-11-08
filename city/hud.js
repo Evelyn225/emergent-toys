@@ -89,7 +89,7 @@ function elFrame() {
 
 const nearestCar = r => {
   let best = null, bd = r;
-  for (const c of cars) { if (c.player || c.rider || (c.ev && !c.mine)) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
+  for (const c of cars) { if (playerCar(c) || c.rider || (c.ev && !c.mine)) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
   return best;
 };
 // someone right in front of you, close enough to talk to
@@ -131,6 +131,7 @@ const homeSpot = () => {
 };
 const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2&&interactionClear(k[0],k[1],1.5); };
 function promptText() {
+  if (mode === 'ride') return netRidePrompt(); // (in another player's car: net.js)
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   if(furnishingPlacement){const p=furnishingCandidate();return p.ok?'E: place · Q: rotate · Esc: cancel':p.reason+' · Q: rotate · Esc: cancel';}
   const focused=focusedInteractionPrompt();if(focused)return focused;
@@ -223,6 +224,8 @@ function promptText() {
   if (gp) return gp;
   const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
   if (ev) return ev;
+  const shared = netCarPrompt(); // (another player's car: net.js)
+  if (shared) return shared;
   if (c && c.v < 0.6 && c.ev && c.mine) return `E: get back in the ${EV_NAME[c.kind]}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
@@ -258,7 +261,7 @@ function promptText() {
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
-  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && !cabUnmanned(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
+  if (cars.some(c => c.body === TAXI && !c.rider && !playerCar(c) && !c.hail && !cabUnmanned(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return fishPrompt();
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination

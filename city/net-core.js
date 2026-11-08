@@ -2,21 +2,21 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 2; // (2: spray-paint tags)
+const NET_PROTOCOL = 3; // (2: spray-paint tags; 3: shared cars)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
 const NET_TIMEOUT = 8; // seconds without a word from someone and they've gone
 const NET_CHAT_MAX = 120, NET_NAME_MAX = 16, NET_CODE_MAX = 32;
 const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
-const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder'];
+const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder', 'ride'];
 const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance)\d*$/;
 
 // What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -53,7 +53,7 @@ function netCheckTick(d) {
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
-    out.veh = { kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
+    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
   if (d.sk && typeof d.sk === 'object' && netNum(d.sk.yaw) && netNum(d.sk.nose) && netNum(d.sk.roll)) // on the board: which way it points, tipped how, and which foot forward
     out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1 };
   return out;
@@ -76,6 +76,21 @@ function netCheckLook(l) {
 function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
   return { tod: mod(d.tod, 24), dayNum: Math.max(0, d.dayNum | 0), weather: d.weather, seasonShift: mod(d.seasonShift | 0, 4) };
+}
+
+// ---- cars: one a player's driven is theirs to share (net.js). Its id is theirs too: their peer id and a count, so two
+// players never make the same one.
+const NET_PARKED_MAX = 12; // cars of yours others see parked where you left them (the nearest, if you've left more)
+const netCarId = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}:\d{1,6}$/.test(v) ? v : '';
+function netCheckParked(d) {
+  if (!Array.isArray(d)) return null;
+  const out = [];
+  for (const c of d.slice(0, NET_PARKED_MAX)) {
+    if (!c || !netCarId(c.id) || typeof c.kind !== 'string' || c.kind.length > 15 || !netNum(c.body) || !netNum(c.x) || !netNum(c.y) || !netNum(c.a)) continue;
+    out.push({ id: c.id, kind: c.kind, body: c.body | 0, x: worldCoord(c.x), y: worldCoord(c.y), a: c.a, dmg: netNum(c.dmg) ? clamp(c.dmg, 0, 200) : 0,
+      wrecked: !!c.wrecked, locked: !!c.locked, patrol: !!c.patrol, ev: !!c.ev });
+  }
+  return out;
 }
 
 // someone's spray-painted tags (graffiti.js): theirs to keep in their save, shown on your walls while they're here

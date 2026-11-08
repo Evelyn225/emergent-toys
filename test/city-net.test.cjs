@@ -19,7 +19,7 @@ test('updates from other players: the expected shape or nothing', () => {
   assert.strictEqual(ev(`netCheckTick(${tick({ pose: '<script>' })}).pose`), 'stand', 'an unknown pose falls back to standing');
   assert.strictEqual(ev(`netCheckTick(${tick({ stars: 99 })}).stars`), 5);
   assert.deepStrictEqual(j(ev, `netCheckTick(${tick({ mode: 'drive', veh: { kind: 'car', body: 2, v: 1.5, brake: 1 } })}).veh`),
-    { kind: 'car', body: 2, v: 1.5, brake: true, dmg: 0, patrol: false, ev: false });
+    { id: '', kind: 'car', body: 2, v: 1.5, brake: true, dmg: 0, patrol: false, ev: false }); // (a taxi you're riding in has no id: only cars you drive are shared)
   assert.strictEqual(ev(`netCheckHello({ name: 'a\\u0000b\\u202e  c', ver: 'x', look: { hat: 99, top: 1, bot: 0 } }).name`), 'ab c', 'control and direction characters stripped');
   assert.deepStrictEqual(j(ev, `netCheckHello({ name: 'a', ver: 'x', look: { hat: 99, top: 1, bot: 0 } }).look`), { hat: 0, top: 1, bot: 0 }, 'a bad colour: the default outfit');
   assert.strictEqual(ev(`netCheckClock({ tod: 30, dayNum: 3, weather: 'rain', seasonShift: 5 }).tod`), 6);
@@ -65,7 +65,7 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
   assert.deepStrictEqual(j(ev, `[0, 0, 0, 0].map(() => netAllow(B, 5, 1, 3))`), [true, true, true, false], 'three at once, then wait');
   assert.strictEqual(ev(`netAllow(B, 6.1, 1, 3)`), true, 'a second later: one more');
   assert.strictEqual(ev('netBuildId()'), ev('netBuildId()'));
-  assert.match(ev('netBuildId()'), /^2-[0-9a-z]+$/);
+  assert.match(ev('netBuildId()'), /^3-[0-9a-z]+$/);
   const look = j(ev, `netLookFor('Ann')`);
   assert.deepStrictEqual(j(ev, `netLookFor('Ann')`), look, 'the same name, the same colours, on every machine');
 });
@@ -89,4 +89,27 @@ test('the shared clock: someone else keeps it, so your weather, watch and lightn
   assert.notStrictEqual(ev('wTimer'), 1, 'keeping it yourself: the weather timer runs again');
   ev(`net.on = false; net.peers.clear();`);
   assert.strictEqual(ev('netShared()'), false);
+});
+
+test('shared cars: ids, the parked list, and the traffic leaving another player\'s car alone', () => {
+  const { ev } = loadCity();
+  assert.strictEqual(ev(`netCarId('abc123:4')`), 'abc123:4');
+  assert.strictEqual(ev(`netCarId('abc 123:4')`), '', 'no spaces');
+  assert.strictEqual(ev(`netCarId('x'.repeat(50) + ':1')`), '', 'too long');
+  assert.strictEqual(ev(`netCarId(7)`), '');
+  const parked = j(ev, `netCheckParked([{ id: 'p:1', kind: 'car', body: 2, x: N + 1, y: 3, a: 0, locked: 1 }, { id: 'bad', kind: 'car', body: 2, x: 1, y: 1, a: 0 }, { id: 'p:2', kind: 'car', body: 2, x: 'NaN', y: 1, a: 0 }])`);
+  assert.strictEqual(parked.length, 1, 'only the good one');
+  assert.strictEqual(parked[0].x, 1, 'wrapped into the world');
+  assert.strictEqual(parked[0].locked, true);
+  assert.strictEqual(ev(`netCheckParked(Array.from({ length: 40 }, (_, k) => ({ id: 'p:' + k, kind: 'car', body: 1, x: 1, y: 1, a: 0 }))).length`), ev('NET_PARKED_MAX'));
+  assert.strictEqual(ev(`netCheckTick(${tick({ mode: 'drive', veh: { id: 'p:9', kind: 'car', body: 2 } })}).veh.id`), 'p:9');
+  assert.strictEqual(ev(`playerCar({ remote: true })`), true);
+  assert.strictEqual(ev(`playerCar({ player: true })`), true);
+  assert.strictEqual(ev(`playerCar({})`), false);
+  // a stand-in for another player's car, out in the traffic: never driven, never towed or sent back into the lanes
+  ev(`var R_ = cars.find(c => c.kind === 'car' && !c.patrol && !c.ev); R_.remote = true; R_.parked = false; R_.v = 1; var rx = R_.x, ry = R_.y;
+      for (let k = 0; k < 40; k++) stepTraffic(0.05, T += 0.05);`);
+  assert.deepStrictEqual(j(ev, '[R_.x, R_.y]'), j(ev, '[rx, ry]'), 'the traffic doesn\'t drive it');
+  ev(`R_.parked = true; px = mod(R_.x + 100, N); for (let k = 0; k < 5; k++) stepTraffic(0.05, T += 0.05);`);
+  assert.strictEqual(ev('cars.includes(R_) && R_.parked'), true, 'nor tidy it away when you\'re far off');
 });

@@ -24,7 +24,7 @@ function nearStationVehicle(r = .5) {
 // one stopped at a call that you could take, in reach
 function nearSceneVehicle(r = .5) {
   if (mode !== 'walk') return null;
-  return cars.find(c => c.ev && !c.player && !c.mine && c.state === 'scene' && Math.abs(c.v) < .6 && Math.hypot(rel(c.x - px), rel(c.y - py)) < r) || null;
+  return cars.find(c => c.ev && !playerCar(c) && !c.mine && c.state === 'scene' && Math.abs(c.v) < .6 && Math.hypot(rel(c.x - px), rel(c.y - py)) < r) || null;
 }
 function evPrompt() {
   const b = nearStationVehicle(), c = b ? null : nearSceneVehicle();

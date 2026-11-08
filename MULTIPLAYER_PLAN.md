@@ -17,13 +17,21 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   been tried. `?netfeatures=a,b` sets exactly that list for trying things (`?netfeatures=none`: ghosts only). The set of
   switched-on features is part of the build fingerprint, so players with different sets get the "different version"
   message instead of half-working.
-- **Next**: try chat and the clock with real players; then phase 3 (shared vehicles + riding), then 4-6. Smaller
+- **Phase 3 (flag `cars`, on)**: done on the branch. A car you've driven is shared: others get a stand-in for it in
+  their own traffic (`remote: true`; `playerCar()` in `core.js` makes the traffic, police, gas stations and alarms leave it
+  alone). Parked ones go out once a second (your nearest 12). E by someone's stopped car asks for a lift: mode `'ride'`,
+  carried in their car's stand-in, mouse to look about, V for the chase camera, E to get out; put out when they park,
+  wreck it or leave. E by one they've left parked asks for it: their game hands it over and drops it, so it's never in
+  two places; one they bought stays locked. Crashing into or shooting someone's car sends the damage to them
+  (`damageCar` -> `netHurtCar`); if both drivers' games felt the same crash, it counts once.
+  Not done: door locks for drivers, a passenger shown in the car, two drivers pushing each other (each just stops).
+- **Next**: try phase 3, chat and the clock with real players; then phase 4 (guns), 5 (hooks), 6 (police). Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
-  rotation in the air, no bail sprawl, no passenger shown in a taxi.
+  rotation in the air, no bail sprawl.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
   syncs, so the step is tiny). A player who goes quiet for 8 s is hidden, not dropped: only the transport saying they
   left removes them, so a tab that was in the background comes back. A background tab gets no animation frames, so
-  `net.js` keeps sending, listening and running the shared clock on a 250 ms timer while `document.hidden`. In a room,
+  `net.js` keeps sending, listening and running the shared clock on a 250 ms timer whenever frames stop for 0.4 s. In a room,
   sleeping doesn't skip the night and the pocket watch only hurries time for the clock keeper. Everyone wears the
   same outfit as the skater, in colours picked from their name.
 

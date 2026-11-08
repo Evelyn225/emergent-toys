@@ -268,7 +268,7 @@ function toLane(c) {
 
 // Routing keeps cardinal headings; the body and passenger camera follow the actual steering.
 function carYaw(c) {
-  return c.kind === 'taxi' && !c.player && !c.parked && c.laneYaw != null ? c.laneYaw : Math.atan2(c.hy, c.hx);
+  return c.kind === 'taxi' && !playerCar(c) && !c.parked && c.laneYaw != null ? c.laneYaw : Math.atan2(c.hy, c.hx);
 }
 function taxiLaneTarget(c, line) {
   const along = o => rel(o.ex - c.x) * c.hx + rel(o.ey - c.y) * c.hy;
@@ -429,7 +429,7 @@ function stepTraffic(dt, t, everywhere = false) {
   for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
     const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (c.ev && c.mine && !c.player && c.parked && d > 45) { returnStolenEv(c, k); continue; } // (a stolen ambulance, fire engine or police car: home to its station)
-    if (c.owned || c.player || !c.parked) continue;
+    if (c.owned || playerCar(c) || !c.parked) continue; // (another player's car is theirs to keep or lose: net.js)
     if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
     else if (d > 45 && c.fireT == null) { c.parked = c.mine = false; c.v = 0; repairCar(c); toLane(c); }
   }
@@ -441,7 +441,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : c.kind === 'taxi' && (c.pass || c.off < -0.01) ? 0.26 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !c.player && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !playerCar(c) && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;

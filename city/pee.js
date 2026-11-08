@@ -229,7 +229,7 @@ function peeWitness() {
     return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
   }
   if (mode !== 'walk' || pee.caught) return; // (up on a roof nobody's looking)
-  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py))
+  const cop = cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py))
     || footCops.some(c => near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py));
   if (cop) { pee.caught = true; addWanted('urination', px, py, true); return say('A cop saw that. Public urination!', 3); }
   if (pee.t > 1.5 && !pee.heard && people.some(p => !p.hidden && near(p.x, p.y, px, py) < CIV_PEE && lineOfSight(p.x, p.y, px, py))) {

@@ -170,7 +170,7 @@ function panicAt(x, y) {
   for (const c of cars) if (near(c.x, c.y, x, y) < HEAR_R * 0.7) speedOff(c);
 }
 function speedOff(c) {
-  if (c.player || c.rider || c.patrol || c.ev || c.parked || c.rush && !c.panicT) return;
+  if (playerCar(c) || c.rider || c.patrol || c.ev || c.parked || c.rush && !c.panicT) return;
   c.rush = true; c.panicT = T + SPEED_OFF_T;
 }
 // an ambulance for whoever's lying there: the nearest that's in, lights and siren, to the nearest bit of street
@@ -228,7 +228,7 @@ function copsShoot(dt) {
   const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
   const shooters = inside ? roomCops.filter(c => !c.dead && c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
     : mode === 'roof' ? roofCops.filter(c => !c.dead && c.sees).map(c => [c, near(c.x, c.y, px, py)])
-    : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !c.player && !c.wrecked)]
+    : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !playerCar(c) && !c.wrecked)]
       .map(c => [c, near(c.x, c.y, wx, wy)]).filter(([c, d]) => d < COP_FIRE_R && lineOfSight(c.x, c.y, wx, wy)).sort((p, q) => p[1] - q[1]).slice(0, COP_GUNS);
   const live = new Set(shooters.map(s => s[0]));
   for (const c of [...footCops, ...cars, ...roomCops, ...roofCops]) if (c.fireT && !live.has(c)) delete c.fireT; // (lost sight: they'll take a moment to aim again)

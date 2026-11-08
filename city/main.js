@@ -95,7 +95,7 @@ function turnBy(mx, my) {
   if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
-  else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (mode === 'taxi' || mode === 'ride') look += mx * 0.003 * s; // (ride: in another player's car, net.js)
   else if (mode === 'sea' || mode === 'boat') look=clamp(look+mx*.003*s,-Math.PI,Math.PI);
   else if (skatingNow()) { SK.look += mx * 0.003 * s; SK.lookT = T; } // on the board: look round (the camera swings back behind you)
   else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
