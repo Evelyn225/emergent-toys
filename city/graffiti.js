@@ -308,6 +308,7 @@ function tagCell(i, q, r, t, L) {
 // the facade asks first: graffiti here? (true if it painted the cell)
 function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), face = faceOf(side, mx, my), L = fog * amb * (side ? 10 : 15), flip = u < 0 !== wc < 0 ? -1 : 1;
+  if (paintCell(i, k, face, wc, z, uStep, d, L)) return true; // (your own spray paint, on top of everything: spray-paint.js)
   const mine = tagIndex.get(k);
   if (mine) for (const t of mine) {
     if (t.face !== face || Math.abs(rel(wc - t.u)) > TAG_W / 2 || Math.abs(z - t.z) > TAG_H / 2) continue;
