@@ -1,6 +1,6 @@
 [package]
 name = "ascii-city"
-version = "1.0.14"
+version = "1.0.15"
 description = "ASCII City desktop game"
 authors = ["Eve Net"]
 edition = "2021"
