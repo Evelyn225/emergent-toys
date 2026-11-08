@@ -25,6 +25,10 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   two places; one they bought stays locked. Crashing into or shooting someone's car sends the damage to them
   (`damageCar` -> `netHurtCar`); if both drivers' games felt the same crash, it counts once.
   Not done: door locks for drivers, a passenger shown in the car, two drivers pushing each other (each just stops).
+- **Spray paint (flag `paint`, on)**: `main`'s freehand spray paint (`city/spray-paint.js`) is shared through its
+  `PAINT_LISTENERS` hook: strokes go out as you spray them; on joining, everyone sends you their most recent 3000 dots.
+  Others' paint stays on your walls and in your save (as the hook intends), deduplicated by dot so rejoining doesn't double it.
+  The old tags (`tags` flag) still sync for saves that have them.
 - **Next**: try phase 3, chat and the clock with real players; then phase 4 (guns), 5 (hooks), 6 (police). Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
   rotation in the air, no bail sprawl.

@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 3; // (2: spray-paint tags; 3: shared cars)
+const NET_PROTOCOL = 4; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -16,7 +16,7 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -106,6 +106,24 @@ function netCheckTags(d, designs) {
   return out;
 }
 const netPeerTags = () => { const out = []; if (net.on && NET_FEATURES.tags) for (const p of net.peers.values()) if (p.tags && p.hello && !p.mismatch) for (const t of p.tags) out.push(t); return out; };
+
+// freehand spray paint (spray-paint.js): dots [cell, face, u, z, r, colour, seed]. What others spray goes on your walls
+// and stays there (paintDots(..., false): kept in your save like your own, till the council scrubs the oldest)
+const NET_PAINT_MSG = 1000, NET_PAINT_JOIN = 3000; // dots per message at most; your most recent, sent to someone arriving
+function netCheckDots(d, colours) {
+  if (!Array.isArray(d)) return [];
+  const out = [];
+  for (const t of d.slice(0, NET_PAINT_MSG)) {
+    if (!Array.isArray(t) || t.length < 7) continue;
+    const [cell, face, u, z, r, col, seed] = t;
+    if (!Number.isInteger(cell) || cell < 0 || cell >= N * N || !Number.isInteger(face) || face < 0 || face > 3 || !netNum(u) || !netNum(z) || z < 0 || z > 50) continue;
+    if (!netNum(r) || r <= 0 || r > 0.05 || !Number.isInteger(col) || col < 0 || col >= colours || !Number.isInteger(seed) || seed < 0 || seed > 1e7) continue;
+    out.push([cell, face, worldCoord(u), z, r, col, seed]);
+  }
+  return out;
+}
+const netDotKey = d => d[0] + ',' + d[1] + ',' + (+d[2]).toFixed(4) + ',' + (+d[3]).toFixed(4) + ',' + d[6];
+const netDotOut = d => [d[0], d[1], +(+d[2]).toFixed(4), +(+d[3]).toFixed(4), +(+d[4]).toFixed(4), d[5], d[6]];
 
 // ---- smoothing: an update arrives every 80 ms or so, a little early or late; others are drawn NET_DELAY behind the
 // newest, between the two updates either side of then, so they glide instead of hopping

@@ -279,3 +279,42 @@ test('shared cars: Bob\'s car in Ann\'s traffic, a lift (carried along, out by E
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('freehand spray paint: what Bob sprays is on Ann\'s walls (and kept), someone arriving later gets it, and nothing doubles', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      await page.evaluate(() => paintLoad([]));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'spray-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 80; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what + ': ' + await P.evaluate(() => sprayDots.length)); };
+    // Bob sprays a stroke of 40 dots (as stepSprayPaint does: paintDots announces them)
+    await B.evaluate(() => { const d = doors.find(d => d.use === 'shop'), cell = idx(Math.floor(d.x), Math.floor(d.y)); paintDots(Array.from({ length: 40 }, (_, k) => [cell, 0, d.x + k * 0.002, 0.15, 0.01, 4, 1000 + k])); });
+    await until(A, () => sprayDots.length === 40, null, 'on Ann\'s walls');
+    assert.equal(await A.evaluate(() => paintSave().length), 40, 'and in what Ann\'s save keeps');
+    // Cat arrives: both send her what they've got; she gets the 40 once, not twice
+    const C = await open();
+    await C.evaluate(r => netJoin(r, 'Cat'), room);
+    await until(C, () => sprayDots.length === 40, null, 'Cat gets it');
+    await C.waitForTimeout(1000);
+    assert.equal(await C.evaluate(() => sprayDots.length), 40, 'once, though Ann and Bob both sent it');
+    // Bob leaves and comes back: his paint isn't added again
+    await B.evaluate(() => netLeave()); await A.waitForFunction(() => net.peers.size === 1, null, { timeout: 8000, polling: 100 });
+    await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].filter(p => p.hello).length === 2, null, { timeout: 8000, polling: 100 });
+    await A.waitForTimeout(1000);
+    assert.equal(await A.evaluate(() => sprayDots.length), 40, 'still 40 after he rejoins');
+    for (const P of [A, B, C]) await P.evaluate(() => netLeave());
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

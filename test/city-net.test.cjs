@@ -65,7 +65,7 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
   assert.deepStrictEqual(j(ev, `[0, 0, 0, 0].map(() => netAllow(B, 5, 1, 3))`), [true, true, true, false], 'three at once, then wait');
   assert.strictEqual(ev(`netAllow(B, 6.1, 1, 3)`), true, 'a second later: one more');
   assert.strictEqual(ev('netBuildId()'), ev('netBuildId()'));
-  assert.match(ev('netBuildId()'), /^3-[0-9a-z]+$/);
+  assert.match(ev('netBuildId()'), /^4-[0-9a-z]+$/);
   const look = j(ev, `netLookFor('Ann')`);
   assert.deepStrictEqual(j(ev, `netLookFor('Ann')`), look, 'the same name, the same colours, on every machine');
 });
@@ -112,4 +112,14 @@ test('shared cars: ids, the parked list, and the traffic leaving another player\
   assert.deepStrictEqual(j(ev, '[R_.x, R_.y]'), j(ev, '[rx, ry]'), 'the traffic doesn\'t drive it');
   ev(`R_.parked = true; px = mod(R_.x + 100, N); for (let k = 0; k < 5; k++) stepTraffic(0.05, T += 0.05);`);
   assert.strictEqual(ev('cars.includes(R_) && R_.parked'), true, 'nor tidy it away when you\'re far off');
+});
+
+test('spray paint from other players: only well-formed dots, rounded the same way as a save', () => {
+  const { ev } = loadCity();
+  const good = '[5, 2, 10.123456, 0.2, 0.01, 3, 42]';
+  assert.strictEqual(ev(`netCheckDots([${good}], 9).length`), 1);
+  for (const bad of ['[5, 4, 1, 0.2, 0.01, 3, 42]', '[-1, 0, 1, 0.2, 0.01, 3, 42]', '[5, 0, 1, 0.2, 0.9, 3, 42]', '[5, 0, 1, 0.2, 0.01, 9, 42]', '[5, 0, 1, -1, 0.01, 3, 42]', '[5, 0, "x", 0.2, 0.01, 3, 42]', '[5, 0, 1, 0.2]'])
+    assert.strictEqual(ev(`netCheckDots([${bad}], 9).length`), 0, bad);
+  assert.strictEqual(ev(`netCheckDots(Array.from({ length: 3000 }, () => ${good}), 9).length`), ev('NET_PAINT_MSG'), 'capped per message');
+  assert.strictEqual(ev(`netDotKey(${good})`), ev(`netDotKey(netDotOut(${good}))`), 'a dot and its sent (rounded) form are the same dot');
 });

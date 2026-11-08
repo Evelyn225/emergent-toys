@@ -4,7 +4,7 @@
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -72,7 +72,7 @@ async function netJoin(codeIn, nameIn) {
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
-    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(),
+    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
@@ -101,6 +101,7 @@ function netPeerJoined(id) {
   net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, id);
   netSendTags(id); // (your tags, for their walls)
   netSendParked(id); // (and where you've left cars)
+  netSendPaint(sprayDots.slice(-NET_PAINT_JOIN), id); // (and your most recent spray paint)
   netReclock();
 }
 function netPeerLeft(id) {
@@ -141,6 +142,12 @@ function netReceive(type, data, from) {
   }
   if (!p.hello || p.mismatch) return;
   if (netCarMessage(type, data, from, p, now)) return;
+  if (type === 'paint') { // their spray paint, on your walls (anything you've got already, from them or earlier, isn't doubled)
+    if (!NET_FEATURES.paint || !netAllow(p.paintBucket ||= {}, now, 0.05, 12)) return;
+    const keys = netPaintKeys(), fresh = netCheckDots(data, SPRAY_COLOURS.length).filter(d => { const k = netDotKey(d); if (keys.has(k)) return false; keys.add(k); return true; });
+    if (fresh.length) paintDots(fresh, false);
+    return;
+  }
   if (type === 'tick') { const s = netCheckTick(data); if (s) netPushSnap(p, s, now); return; }
   if (type === 'chat') {
     if (!NET_FEATURES.chat || !netAllow(p.chatBucket, now, 1, 3)) return;
@@ -185,6 +192,7 @@ function netFrame(t, fromTimer = false) {
   }
   // quiet a while: not drawn till they speak again (only the transport says someone has actually gone)
   for (const p of net.peers.values()) p.stale = now - p.seenT > NET_TIMEOUT;
+  if (net.paintOut.length) { netSendPaint(net.paintOut); net.paintOut = []; } // (the strokes you've sprayed since the last frame)
   if (NET_FEATURES.cars) {
     if ((net.parkedT -= dt) <= 0) { net.parkedT = 1; netSendParked(); }
     if (net.claiming && now - net.claiming.t > 4) { net.claiming = null; say('Nothing. It won\'t open.', 2); }
@@ -409,6 +417,21 @@ function netCarMessage(type, data, from, p, now) {
   }
   return true;
 }
+
+// ---- spray paint (spray-paint.js): what you spray goes out as you spray it (PAINT_LISTENERS); someone arriving gets your
+// most recent. The keys are every dot you've got, so nothing's painted twice when it comes round again.
+function netPaintKeys() {
+  if (!net.paintKeys || net.paintKeys.size > PAINT_MAX * 3) net.paintKeys = new Set(sprayDots.map(netDotKey));
+  return net.paintKeys;
+}
+function netSendPaint(dots, to) {
+  if (!net.on || !NET_FEATURES.paint || !dots.length) return;
+  for (let k = 0; k < dots.length; k += NET_PAINT_MSG) net.tx.send('paint', dots.slice(k, k + NET_PAINT_MSG).map(netDotOut), to);
+}
+PAINT_LISTENERS.push(dots => {
+  if (!net.on || !NET_FEATURES.paint) return;
+  for (const d of dots) { net.paintOut.push(d); if (net.paintKeys) net.paintKeys.add(netDotKey(d)); }
+});
 
 // your tags (graffiti.js), to everyone or to one who's just arrived: the whole list, so the council's scrubbing goes too
 function netSendTags(to) {
