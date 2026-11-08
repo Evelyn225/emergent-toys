@@ -14,7 +14,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {

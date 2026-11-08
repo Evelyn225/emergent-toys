@@ -347,7 +347,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
@@ -28019,10 +28019,10 @@ function render(dt,sceneOnly=false,mask=null) {
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
 // in one shader pass (glPresent) onto a canvas of its own, just under the game's canvas, which is then left clear for
-// the HUD and whatever else draws over the frame; without it, the canvas calls of present2D. (Whatever needs the
+// the HUD and whatever else draws over the frame (world: false for a minigame's screen, which gets less post-fx); without it, the canvas calls of present2D. (Whatever needs the
 // picture as you see it, both layers together, takes frameCanvas().)
-function present() {
-  if (!glPresent()) present2D();
+function present(world = true) {
+  if (!glPresent(world)) present2D();
 }
 // One pass of a fragment shader over the WebGL canvas: per cell, its character (from an atlas of the ASCII
 // glyphs drawn in the game's own font), its text and background colours (palette indices) and their fog. The rare
@@ -28090,7 +28090,7 @@ function glPresentSize(st) {
   gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
   st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
 }
-function glPresent() {
+function glPresent(world = true) {
   if (GLP_OFF) return false;
   if (!GLP) { try { GLP = glPresentInit(); } catch (e) { GLP = null; } if (!GLP) { GLP_OFF = true; return false; } }
   const st = GLP, { gl, U } = st;
@@ -28103,7 +28103,7 @@ function glPresent() {
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
-  const post = postFxBegin(st); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
+  const post = postFxBegin(st, world); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
   gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   if (post) postFxEnd(st);
@@ -28159,12 +28159,18 @@ function present2D() {
 }
 // Post-processing on the WebGL presenter (render.js glPresent). Only the GL path gets it: the canvas fallback is
 // already the slow path. With every effect off the grid shader draws straight to the screen as before, at no cost.
+// Each effect has its own setting (pause menu, "view"); all are kept subtle.
 //
 // Bloom: the grid is drawn into a full-size texture; its bright parts (judged by the brightest channel, so a pure
 // red neon glows as much as a white lamp) are box-filtered down to 1/4 size, blurred, taken down again to 1/8 for a
 // wider halo, blurred, and screen-blended back over the frame. Screen blending, not adding, so a lit sky can't clip
 // to white, and damped over what's already bright, so a big lit surface keeps its colour and only its edges
 // glow. Tuned so it mostly shows at night: signs, lamps, windows, headlights.
+// Rain streaks: in rain, and on wet streets after it, the same bright parts are also smeared up and down, the way
+// lights run on a wet lens and stretch over wet tarmac.
+// Colour grade: cool shadows and warm lights at night, warm at dusk, a touch of contrast by day, flatter in fog.
+// Vignette: the corners a little darker. Grain: a fine moving noise, mostly in the dark, that hides banding.
+// Minigames get only the vignette and grain: grading or smearing them would just muddy their colours.
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 // box-filter a texture down; threshold > 0 keeps only what's bright (soft knee, so nothing pops in or out)
 const POSTFX_DOWN = `precision highp float;
@@ -28176,7 +28182,7 @@ void main() {
   if (threshold > 0.0) { float b = max(c.r, max(c.g, c.b)); c *= smoothstep(threshold, threshold + knee, b); }
   gl_FragColor = vec4(c, 1.0);
 }`;
-// one direction of a 9-tap gaussian, in 5 linear samples
+// one direction of a 9-tap gaussian, in 5 linear samples (dir longer than 1 spreads the taps for a longer smear)
 const POSTFX_BLUR = `precision highp float;
 uniform sampler2D src; uniform vec2 size, dir;
 void main() {
@@ -28187,16 +28193,36 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`;
 const POSTFX_COMPOSE = `precision highp float;
-uniform sampler2D scene, near, wide; uniform vec2 size; uniform float bloom;
+uniform sampler2D scene, near, wide, streak; uniform vec2 size;
+uniform float bloom, streaks, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
+float hash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
-  vec3 s = texture2D(scene, uv).rgb, b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom;
-  b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
-  gl_FragColor = vec4(1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0)), 1.0);
+  vec3 s = texture2D(scene, uv).rgb;
+  if (bloom > 0.0 || streaks > 0.0) {
+    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 1.1 * streaks;
+    b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
+    s = 1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0));
+  }
+  if (grade > 0.0) {
+    float l = dot(s, vec3(0.299, 0.587, 0.114));
+    vec3 g = mix(vec3(l), s, sat) * mix(shadowTint, lightTint, smoothstep(0.05, 0.6, l));
+    s = mix(s, clamp(g, 0.0, 1.0), grade);
+  }
+  if (vignette > 0.0) {
+    vec2 d = (uv - 0.5) * vec2(size.x / size.y, 1.0);
+    s *= 1.0 - vignette * smoothstep(0.35, 1.0, length(d));
+  }
+  if (grain > 0.0) {
+    float l = max(s.r, max(s.g, s.b));
+    float n = hash(gl_FragCoord.xy + seed) + hash(gl_FragCoord.xy * 1.37 + seed * 0.71) - 1.0; // (triangular: no visible bias)
+    s += n * grain * (0.025 * (1.0 - l) + 0.006);
+  }
+  gl_FragColor = vec4(s, 1.0);
 }`;
 const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
 
-// how strong the bloom is this frame: the setting, fuller at night (a daylit sky would only haze over)
+// how much of the night look: outdoors the sky's; a room is lit by its own lamps, so it reads as evening at least
 const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
 function postFxBloom() {
   const k = clamp(Number(settings.bloom) || 0, 0, 1);
@@ -28205,6 +28231,28 @@ function postFxBloom() {
 // what counts as bright (brightest channel, 0-1). The night city is almost all under a quarter, its lights well
 // above; by day a third of the frame is sky and walls at 0.4-0.6, so only what's brighter than that glows.
 const postFxThreshold = () => 0.62 - 0.3 * postFxNight();
+// rain smears lights; wet streets after it still do, a little. Outdoors only.
+function postFxStreaks() {
+  if (!settings.rainStreaks || mode === 'room') return 0;
+  return clamp(Math.max(rain || 0, (wet || 0) * 0.35), 0, 1) * (0.5 + 0.5 * postFxNight());
+}
+// the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
+function postFxGrade() {
+  const n = mode === 'room' ? 0.3 : postFxNight(), dk = mode === 'room' ? 0 : (dusk || 0) * (1 - n * 0.5), d = Math.max(0, 1 - n - dk);
+  const tot = n + dk + d, mix3 = (a, b, c) => [0, 1, 2].map(k => (a[k] * n + b[k] * dk + c[k] * d) / tot);
+  let shadow = mix3([0.9, 0.96, 1.1], [0.98, 0.93, 1.02], [0.99, 1.0, 1.02]);
+  const light = mix3([1.04, 1.0, 0.94], [1.1, 1.0, 0.88], [1.04, 1.02, 0.98]);
+  let sat = (n * 0.94 + dk * 1.08 + d * 1.05) / tot;
+  const f = mode === 'room' ? 0 : clamp(fogAmt || 0, 0, 1);
+  if (f) { sat *= 1 - 0.15 * f; shadow = shadow.map(x => x + (1 - x) * f * 0.5); }
+  return { shadow, light, sat };
+}
+// is any effect on for this frame? (minigames: only the ones that suit a flat screen of text)
+function postFxWanted(world) {
+  if (POSTFX_OFF) return false;
+  if (settings.vignette || settings.grain) return true;
+  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || !!settings.colorGrade);
+}
 
 function postFxInit(st) {
   const { gl } = st;
@@ -28220,7 +28268,7 @@ function postFxInit(st) {
   const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE);
   if (!down || !blur || !compose) return null;
   gl.useProgram(compose.p);
-  gl.uniform1i(compose.U('scene'), POSTFX_UNIT); gl.uniform1i(compose.U('near'), POSTFX_UNIT + 1); gl.uniform1i(compose.U('wide'), POSTFX_UNIT + 2);
+  ['scene', 'near', 'wide', 'streak'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
   gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT);
   gl.useProgram(blur.p); gl.uniform1i(blur.U('src'), POSTFX_UNIT);
   gl.useProgram(st.prog);
@@ -28238,32 +28286,35 @@ function postFxTarget(gl, w, h) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return ok ? { tex, fb, w, h } : null;
 }
+const POSTFX_TARGETS = ['scene', 'a4', 'b4', 's4', 'a8', 'b8'];
 function postFxSize(st, fx) {
   const { gl } = st, W = cv.width, H = cv.height, key = W + 'x' + H;
   if (fx.key === key) return true;
-  for (const t of [fx.scene, fx.a4, fx.b4, fx.a8, fx.b8]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); }
-  const q = (n) => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
+  for (const n of POSTFX_TARGETS) if (fx[n]) { gl.deleteTexture(fx[n].tex); gl.deleteFramebuffer(fx[n].fb); }
+  const q = n => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
   fx.scene = postFxTarget(gl, W, H);
-  fx.a4 = postFxTarget(gl, ...q(4)); fx.b4 = postFxTarget(gl, ...q(4));
+  fx.a4 = postFxTarget(gl, ...q(4)); fx.b4 = postFxTarget(gl, ...q(4)); fx.s4 = postFxTarget(gl, ...q(4));
   fx.a8 = postFxTarget(gl, ...q(8)); fx.b8 = postFxTarget(gl, ...q(8));
   fx.key = key;
-  return !!(fx.scene && fx.a4 && fx.b4 && fx.a8 && fx.b8);
+  return POSTFX_TARGETS.every(n => fx[n]);
 }
 
 // Before the grid shader draws: point it at the scene texture if any effect is on. Returns whether post runs.
 // A GPU that can't build the passes just doesn't get them (POSTFX_OFF), and the frame goes straight to the screen.
+// world: false for a minigame's screen.
 let POSTFX_OFF = false;
-function postFxBegin(st) {
+function postFxBegin(st, world = true) {
   const { gl } = st;
-  if (POSTFX_OFF || !postFxBloom()) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
+  if (!postFxWanted(world)) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
   if (!st.fx) { try { st.fx = postFxInit(st); } catch (e) { st.fx = null; } if (!st.fx) { POSTFX_OFF = true; return false; } }
   if (!postFxSize(st, st.fx)) { POSTFX_OFF = true; gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
+  st.fx.world = world;
   gl.bindFramebuffer(gl.FRAMEBUFFER, st.fx.scene.fb); gl.viewport(0, 0, cv.width, cv.height);
   return true;
 }
-// After it: the bloom passes, and the frame composited to the screen
+// After it: the bloom and streak passes, and the frame composited to the screen with the grade, vignette and grain
 function postFxEnd(st) {
-  const { gl } = st, fx = st.fx, bind = (unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t.tex); };
+  const { gl } = st, fx = st.fx, world = fx.world, bind = (unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t.tex); };
   const into = t => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fb : null); t ? gl.viewport(0, 0, t.w, t.h) : gl.viewport(0, 0, cv.width, cv.height); };
   const down = (src, dst, spread, threshold) => {
     into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
@@ -28271,16 +28322,24 @@ function postFxEnd(st) {
     gl.uniform1f(U('spread'), spread); gl.uniform1f(U('threshold'), threshold); gl.uniform1f(U('knee'), 0.25);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
-  const blur = (a, b) => { // a -> b across, b -> a down: the result ends up back in a
-    gl.useProgram(fx.blur.p); const U = fx.blur.U;
-    into(b); bind(POSTFX_UNIT, a); gl.uniform2f(U('size'), a.w, a.h); gl.uniform2f(U('dir'), 1, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
-    into(a); bind(POSTFX_UNIT, b); gl.uniform2f(U('dir'), 0, 1); gl.drawArrays(gl.TRIANGLES, 0, 3);
-  };
-  down(fx.scene, fx.a4, 1, postFxThreshold()); blur(fx.a4, fx.b4); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
-  down(fx.a4, fx.a8, 0.5, 0); blur(fx.a8, fx.b8); blur(fx.a8, fx.b8);
-  into(null); gl.useProgram(fx.compose.p);
-  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8);
-  gl.uniform2f(fx.compose.U('size'), cv.width, cv.height); gl.uniform1f(fx.compose.U('bloom'), postFxBloom());
+  const pass = (src, dst, x, y) => { into(dst); bind(POSTFX_UNIT, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); gl.drawArrays(gl.TRIANGLES, 0, 3); };
+  const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0;
+  if (bloom || streaks) {
+    down(fx.scene, fx.a4, 1, postFxThreshold()); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
+    gl.useProgram(fx.blur.p);
+    if (streaks) { pass(fx.a4, fx.s4, 0, 1.5); pass(fx.s4, fx.b4, 0, 4); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
+    pass(fx.a4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
+    if (bloom) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
+  }
+  into(null); gl.useProgram(fx.compose.p); const U = fx.compose.U;
+  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4);
+  gl.uniform2f(U('size'), cv.width, cv.height);
+  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks);
+  const grade = world && settings.colorGrade ? postFxGrade() : null;
+  gl.uniform1f(U('grade'), grade ? 1 : 0);
+  if (grade) { gl.uniform3fv(U('shadowTint'), grade.shadow); gl.uniform3fv(U('lightTint'), grade.light); gl.uniform1f(U('sat'), grade.sat); }
+  gl.uniform1f(U('vignette'), settings.vignette ? 0.22 : 0);
+  gl.uniform1f(U('grain'), settings.grain ? 1 : 0); gl.uniform1f(U('seed'), (T * 60 % 997) | 0);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.useProgram(st.prog); gl.activeTexture(gl.TEXTURE0);
 }
@@ -31913,6 +31972,7 @@ function buildPause() {
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -38331,7 +38391,7 @@ function drawGame() {
        lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
      });
   placeMinigameFooter((y0+gh+2)*FS+10);
-  present();
+  present(false);
 }
 
 // ---- in the arcade: the cabinets (each plays one of ARCADE_GAMES), and the prize counter

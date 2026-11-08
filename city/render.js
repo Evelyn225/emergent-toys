@@ -285,10 +285,10 @@ function render(dt,sceneOnly=false,mask=null) {
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
 // in one shader pass (glPresent) onto a canvas of its own, just under the game's canvas, which is then left clear for
-// the HUD and whatever else draws over the frame; without it, the canvas calls of present2D. (Whatever needs the
+// the HUD and whatever else draws over the frame (world: false for a minigame's screen, which gets less post-fx); without it, the canvas calls of present2D. (Whatever needs the
 // picture as you see it, both layers together, takes frameCanvas().)
-function present() {
-  if (!glPresent()) present2D();
+function present(world = true) {
+  if (!glPresent(world)) present2D();
 }
 // One pass of a fragment shader over the WebGL canvas: per cell, its character (from an atlas of the ASCII
 // glyphs drawn in the game's own font), its text and background colours (palette indices) and their fog. The rare
@@ -356,7 +356,7 @@ function glPresentSize(st) {
   gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
   st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
 }
-function glPresent() {
+function glPresent(world = true) {
   if (GLP_OFF) return false;
   if (!GLP) { try { GLP = glPresentInit(); } catch (e) { GLP = null; } if (!GLP) { GLP_OFF = true; return false; } }
   const st = GLP, { gl, U } = st;
@@ -369,7 +369,7 @@ function glPresent() {
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
-  const post = postFxBegin(st); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
+  const post = postFxBegin(st, world); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
   gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   if (post) postFxEnd(st);

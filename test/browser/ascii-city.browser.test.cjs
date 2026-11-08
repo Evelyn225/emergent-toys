@@ -149,7 +149,7 @@ test('Unicode graffiti keeps combining marks together without shifting subsequen
 
 test('the WebGL grid paints the same picture as the 2D canvas, and only odd characters go through fillText', () => withPage(async page => {
   const r = await page.evaluate(() => {
-    paused = true; GLP_SOFT = true; GLP_OFF = false; GLP = null; const bloom = settings.bloom; settings.bloom = 0; // (headless GL is software: allowed here only; bloom would change the picture)
+    paused = true; GLP_SOFT = true; GLP_OFF = false; GLP = null; const fx = { ...settings }; Object.assign(settings, { bloom: 0, colorGrade: false, rainStreaks: false, vignette: false, grain: false }); // (headless GL is software: allowed here only; post-fx would change the picture)
     const n = cols * rows, word = 'ASCII CITY ~#@%& 0123', calls = [], original = g.fillText;
     for (let i = 0; i < n; i++) {
       CH[i] = i % 7 ? word[i % word.length] : ' '; COL[i] = C(1 + i % 13, 4 + i % 9);
@@ -166,7 +166,7 @@ test('the WebGL grid paints the same picture as the 2D canvas, and only odd char
       const d = Math.abs(flat[i] - mine[i]) + Math.abs(flat[i + 1] - mine[i + 1]) + Math.abs(flat[i + 2] - mine[i + 2]);
       if (d > 24) off++; if (d > 200) far++;
     }
-    GLP_SOFT = false; GLP_OFF = true; if (GLP) GLP.glc.remove(); GLP = null; settings.bloom = bloom;
+    GLP_SOFT = false; GLP_OFF = true; if (GLP) GLP.glc.remove(); GLP = null; Object.assign(settings, fx);
     return { gl, calls, off: off / (flat.length / 4), far: far / (flat.length / 4) };
   });
   assert.ok(r.gl, 'the WebGL path ran');
