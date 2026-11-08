@@ -48,7 +48,7 @@ function loadGame() {
   citySaveBackupPending = null;
   try {
     text = localStorage.getItem(SAVE_KEY);
-    if (text == null) return;
+    if (text == null) { freshStartPending = true; return; } // a new game: somewhere different each time, once the game's set up (spawn-points.js)
     prepared = prepareCitySave(JSON.parse(text));
     if (prepared && !prepared.upgraded) for (const key of ['ascii-city-save-backup-v3-archipelago-v1','ascii-city-save-backup-v4-archipelago-v2']) {
       if (localStorage.getItem(key) != null) SAVE_BACKUP_KEY = key;
@@ -138,7 +138,7 @@ function newGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ }
   location.reload();
 }
-let startingOver = false;
+let startingOver = false, freshStartPending = false;
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
