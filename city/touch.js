@@ -44,7 +44,7 @@ function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
-const E_WORDS = [[/^friday fish-off/, 'Fish-off'], [/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
+const E_WORDS = [[/^friday fish-off/, 'Fish-off'], [/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car|get back in|take the (ambulance|fire engine|police car))/, 'Get in'], [/^get out/, 'Get out'],
   [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^cook/, 'Cook'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
@@ -127,7 +127,7 @@ function touchActions() {
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => handheldMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
-  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
+  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Lights & siren', 'KeyH', () => mode === 'drive' && !!me?.ev], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
 

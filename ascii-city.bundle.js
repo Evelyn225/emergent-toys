@@ -5511,7 +5511,7 @@ const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.ab
 // base like any other car and parks out front again.
 // state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
-const code = c => !c.returning && c.state !== 'back' && (c.state === 'out' || !!c.pursuit);
+const code = c => c.ev && c.mine ? !!(c.player && c.siren) : !c.returning && c.state !== 'back' && (c.state === 'out' || !!c.pursuit); // (one you've taken: when you put the siren on, emergency-theft.js)
 const lightsOn_ = c => !c.returning && c.state !== 'back' && (code(c) || c.state === 'scene');
 const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
@@ -5552,7 +5552,7 @@ function endCall(c) { // parked at its station again (or just gone, if it came f
 }
 function stepEmergency(dt) {
   for (const c of cars.slice()) {
-    if (!c.ev || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit
+    if (!c.ev || c.mine || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit; a stolen one is yours
     if (c.home) { endCall(c); continue; }
     const far = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
@@ -5560,7 +5560,7 @@ function stepEmergency(dt) {
     if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
     else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev).length < 3 && (evTimer -= dt) < 0) {
+  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev && !c.mine).length < 3 && (evTimer -= dt) < 0) {
     spawnEmergency(); evTimer = 60 + Math.random() * 90;
   }
 }
@@ -5582,6 +5582,7 @@ function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
   for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
     const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.ev && c.mine && !c.player && c.parked && d > 45) { returnStolenEv(c, k); continue; } // (a stolen ambulance, fire engine or police car: home to its station)
     if (c.owned || c.player || !c.parked) continue;
     if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
     else if (d > 45 && c.fireT == null) { c.parked = c.mine = false; c.v = 0; repairCar(c); toLane(c); }
@@ -28103,7 +28104,7 @@ function elFrame() {
 
 const nearestCar = r => {
   let best = null, bd = r;
-  for (const c of cars) { if (c.player || c.rider || c.ev) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
+  for (const c of cars) { if (c.player || c.rider || (c.ev && !c.mine)) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
   return best;
 };
 // someone right in front of you, close enough to talk to
@@ -28222,7 +28223,7 @@ function promptText() {
     const next = elTrains(T).filter(t => t.tr === plat.tr && EL_STATIONS[t.next] === plat.s && !t.stopped).map(t => t.left);
     return `E: stairs down${next.length ? `   (next train in ${Math.ceil(Math.min(...next))}s)` : ''}`;
   }
-  if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
+  if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : `W/S gas & brake | A/D steer | V: camera | ${me?.ev ? `H: lights ${me.siren ? 'off' : '& siren'} | ` : ''}E: get out (when slow)`;
   if (mode === 'taxi') return TOUCH ? 'drag: look around' : 'mouse: look around | V: camera | E: get out';
   if (mode === 'air') return airPrompt();
   { const ac = nearAircraft(); if (ac) return aircraftPrompt(ac); }
@@ -28235,6 +28236,9 @@ function promptText() {
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   const gp = gardensPrompt() || marinaPrompt();
   if (gp) return gp;
+  const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
+  if (ev) return ev;
+  if (c && c.v < 0.6 && c.ev && c.mine) return `E: get back in the ${EV_NAME[c.kind]}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
   if (nearAngler()) return 'E: talk to the angler';
@@ -28848,6 +28852,7 @@ function interact() {
   if (useFerry() || useGardens() || useMarina()) return;
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
+  if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -29004,6 +29009,81 @@ function hail() {
   let best = null, bd = 3;
   for (const c of cars) if (c.body === TAXI && !c.rider && !c.player && !cabUnmanned(c)) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
+}
+'use strict';
+// ---- the emergency vehicles you can take (WORLD_QUALITY item 45). The ambulance, fire engine or police car parked out
+// front of its station is a real vehicle: walk up, E, and it's yours (and stolen: the station always calls it in). One
+// pulled in at a call can be taken too, while it's stopped there. Each drives like what it is (EV_HANDLING), and H
+// works its lights and siren: traffic pulls over for you as it does for the real thing. Left behind and out of sight,
+// it goes back to its station.
+
+const EV_NAME = { amb: 'ambulance', fire: 'fire engine', police: 'police car' };
+// multipliers on an ordinary car's driving (main.js drive): pickup, braking, steering, grip; and its own top speeds
+const EV_HANDLING = {
+  amb: { accel: 1.35, brake: .8, steer: .7, grip: .85, top: 2.0, boost: 2.6 }, // heavy and slow to turn, but quick off the line
+  fire: { accel: .7, brake: .65, steer: .55, grip: .8, top: 1.7, boost: 2.1 }, // the heaviest thing on the road: everything takes a while
+  police: { accel: 1.25, brake: 1.15, steer: 1.12, grip: 1.1, top: 2.6, boost: 3.6 }, // built for it
+};
+const NO_HANDLING = { accel: 1, brake: 1, steer: 1, grip: 1 };
+
+// the station vehicle within reach, waiting at its kerb
+function nearStationVehicle(r = .5) {
+  if (mode !== 'walk') return null;
+  let best = null, bd = r;
+  for (const b of SERVICES) if (!b.out) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
+  return best;
+}
+// one stopped at a call that you could take, in reach
+function nearSceneVehicle(r = .5) {
+  if (mode !== 'walk') return null;
+  return cars.find(c => c.ev && !c.player && !c.mine && c.state === 'scene' && Math.abs(c.v) < .6 && Math.hypot(rel(c.x - px), rel(c.y - py)) < r) || null;
+}
+function evPrompt() {
+  const b = nearStationVehicle(), c = b ? null : nearSceneVehicle();
+  return b || c ? `E: take the ${EV_NAME[(b || c).kind]}` : '';
+}
+// make it a driveable, stolen vehicle of yours (it remembers its station, to go back to)
+function makeEvYours(c, base) {
+  Object.assign(c, { ev: true, mine: true, state: null, dest: null, until: null, born: T, home: false, siren: false, parked: false,
+    stolenFrom: base || c.base || null, base: null, handling: EV_HANDLING[c.kind], top: EV_HANDLING[c.kind].top, boost: EV_HANDLING[c.kind].boost });
+  return c;
+}
+function driveOff(c, line) {
+  me = c; mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
+  px = c.ex; py = c.ey;
+  const w = crime('steal', c.x, c.y);
+  say(w === 'cop' ? 'A cop saw that.' : line, 3);
+}
+// E on foot: take the station's vehicle, or the one at the call. True if it did.
+function takeEmergencyVehicle() {
+  const b = nearStationVehicle();
+  if (b) {
+    b.out = true;
+    const c = addCar({ kind: b.kind, body: EV_BODY[b.kind], x: b.x, y: b.y, hx: -1, hy: 0 });
+    makeEvYours(c, b); c.ex = c.x; c.ey = c.y;
+    driveOff(c, b.kind === 'police' ? 'The keys are in it. Of course they are.' : b.kind === 'fire' ? 'You haul yourself up into the cab. It\'s enormous.' : 'You climb into the ambulance. The keys are in it.');
+    return true;
+  }
+  const c = nearSceneVehicle();
+  if (c) {
+    if (c.pursuit || c.patrol || c.returning) takePoliceCar(c);
+    makeEvYours(c, c.base);
+    driveOff(c, `The crew's busy. You slide into the ${EV_NAME[c.kind]} and pull away.`);
+    return true;
+  }
+  return false;
+}
+// H at the wheel of one: lights and siren on or off
+function toggleEvSiren() {
+  if (mode !== 'drive' || !me?.ev) return false;
+  me.siren = !me.siren;
+  say(me.siren ? 'Lights and siren.' : 'Lights off.', 1.5);
+  return true;
+}
+// left somewhere and out of sight: back to its station (taken off the road; it's parked out front again)
+function returnStolenEv(c, k) {
+  cars.splice(k, 1);
+  if (c.stolenFrom) c.stolenFrom.out = false;
 }
 // ===== the taxi job: J at an idle taxi and you drive it yourself. Now and then someone on the sidewalk nearby flags
 // you down (marked on the map, and with a ! over their head); pull up beside them and stop to pick them up, drive
@@ -54889,7 +54969,7 @@ onkeydown = e => {
     if (e.code === 'KeyP') startPee();
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
   }
-  if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyH' && !toggleEvSiren()) hail(); // (at the wheel of an emergency vehicle: its lights and siren)
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
@@ -55058,7 +55138,8 @@ function drive(dt) {
   // A wreck disables controls but need not have the PIT manoeuvre's spin timer.
   const c = me, spun = c.spunT > T, disabled = spun || c.wrecked;
   const f = disabled ? 0 : controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = disabled ? 0 : controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
-  const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
+  const H = c.handling || NO_HANDLING; // (an ambulance, fire engine or police car drives like one: emergency-theft.js)
+  const traction = roadTraction(c.x, c.y), braking = (0.55 + traction * 0.45) * H.brake, acceleration = (0.75 + traction * 0.25) * H.accel;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (c.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * f * dt;
   else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * -f * dt;
@@ -55067,10 +55148,10 @@ function drive(dt) {
   if (c.wrecked) c.v = 0;
   const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
   if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5) * braking);
-  a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
+  a += s * dt * (handbrake && fast ? 2.5 : 1.8) * H.steer * clamp(c.v / 0.5, -1, 1);
   c.travelA ??= oldA;
   const slip = mod(a - c.travelA + Math.PI, Math.PI * 2) - Math.PI;
-  const grip = (handbrake && fast ? 1.2 : 10) * traction;
+  const grip = (handbrake && fast ? 1.2 : 10) * traction * H.grip;
   c.travelA += slip * (1 - Math.exp(-grip * dt));
   if (!fast) c.travelA = a;
   const drifting = fast && (handbrake && Math.abs(slip) > 0.12 || traction < 0.99 && Math.abs(slip) > 0.2);
@@ -55375,7 +55456,7 @@ function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
-const E_WORDS = [[/^friday fish-off/, 'Fish-off'], [/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
+const E_WORDS = [[/^friday fish-off/, 'Fish-off'], [/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car|get back in|take the (ambulance|fire engine|police car))/, 'Get in'], [/^get out/, 'Get out'],
   [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^cook/, 'Cook'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
@@ -55458,7 +55539,7 @@ function touchActions() {
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => handheldMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
-  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
+  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Lights & siren', 'KeyH', () => mode === 'drive' && !!me?.ev], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
 

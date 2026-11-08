@@ -118,6 +118,7 @@
     "city/hud.js",
     "city/interactions.js",
     "city/actions.js",
+    "city/emergency-theft.js",
     "city/taxi-job.js",
     "city/fair.js",
     "city/nightmarket.js",
