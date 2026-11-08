@@ -31964,17 +31964,33 @@ function devFree() {
   if(mode==='ferry')ferryRide=null;
   plat = null; body.seat = null; mode = 'walk'; pitch = 0; look = 0;
 }
-const devAt = (x, y, ang) => { devFree(); px = worldCoord(x); py = worldCoord(y); a = ang; };
-// a street spot in a district: the middle of the street beside one of its plain blocks
+const devAt = (x, y, ang) => { devFree(); px = worldCoord(x); py = worldCoord(y); a = ang; devStandBack(); };
+// After a jump on foot: if a wall is right in your face, back away from it (keeping your heading) until it's a
+// shopfront's width off, or until something behind you stops you, so you land looking at the place, not into it.
+function devStandBack(want = .6) {
+  if (mode !== 'walk' || room) return;
+  const c = Math.cos(a), s = Math.sin(a), ahead = () => { let d = 0; for (; d < want; d += .02) if (map[idx(Math.floor(px + c * d), Math.floor(py + s * d))] > 0) break; return d; };
+  for (let k = 0; k < 30 && ahead() < want; k++) {
+    const x = worldCoord(px - c * .02), y = worldCoord(py - s * .02);
+    if (!free(x, y) || map[idx(Math.floor(x), Math.floor(y))] > 0) break;
+    px = x; py = y;
+  }
+}
+// a street spot in a district: on the street beside the plain block nearest the district's middle (any block of it, if
+// it has no plain ones, as on the waterfront), so each district lands somewhere of its own
 function districtSpot(d) {
-  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
-    if (districtName(bx, by) === d && !blockKind(bx, by) && hseg(bx, by)) return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
-  return null;
+  const blocks = [];
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) if (districtName(bx, by) === d && hseg(bx, by)) blocks.push([bx, by]);
+  if (!blocks.length) return null;
+  const cx = blocks.reduce((t, b) => t + b[0], 0) / blocks.length, cy = blocks.reduce((t, b) => t + b[1], 0) / blocks.length;
+  const plain = blocks.filter(([bx, by]) => !blockKind(bx, by)), pool = plain.length ? plain : blocks;
+  const [bx, by] = pool.reduce((best, b) => Math.hypot(b[0] - cx, b[1] - cy) < Math.hypot(best[0] - cx, best[1] - cy) ? b : best);
+  return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
 }
 // every place you can jump to: [group, label, go]
 function devPlaces() {
   const out = [];
-  const land = [['Casino', () => gotoShop('CASINO')], ['Stock Exchange', () => gotoShop('EXCHANGE')], ['The Velvet Rope', () => gotoShop('VELVET')],
+  const land = [['Casino', () => { gotoShop('CASINO'); devStandBack(); }], ['Stock Exchange', () => { gotoShop('EXCHANGE'); devStandBack(); }], ['The Velvet Rope', () => { gotoShop('VELVET'); devStandBack(); }],
     ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)], ['Bait & tackle hut', () => devAt(FISH_HUT.x + FISH_HUT.hatch, FISH_HUT.y - FISH_HUT.hw - 0.2, Math.PI / 2)],
     ['Airport', () => devAt(TERMINAL.x + TERMINAL_DOORS.find(d=>d.land).u, TERMINAL.y - TERMINAL.hw - .3, Math.PI / 2)],
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
@@ -32014,7 +32030,7 @@ function devPlaces() {
   owned.homes.forEach((h, k) => out.push(['Your homes', `${ITEMS[h.kind].name} ${k + 1}`, () => { const [x, y] = homeKerb(h.cell % N, Math.floor(h.cell / N)); devAt(x, y, 0); }]));
   const words = new Map(); // every kind of shop, by its sign: you land outside the nearest one
   for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
-  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w} (${set.size})`, () => { devFree(); gotoShop(w); }]);
+  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w} (${set.size})`, () => { devFree(); gotoShop(w); devStandBack(); }]);
   return out;
 }
 function devItems() {
