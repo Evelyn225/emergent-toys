@@ -13441,7 +13441,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 1;
+const NET_PROTOCOL = 2; // (2: spray-paint tags)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -13455,7 +13455,7 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -13516,6 +13516,20 @@ function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
   return { tod: mod(d.tod, 24), dayNum: Math.max(0, d.dayNum | 0), weather: d.weather, seasonShift: mod(d.seasonShift | 0, 4) };
 }
+
+// someone's spray-painted tags (graffiti.js): theirs to keep in their save, shown on your walls while they're here
+const NET_TAG_FACES = ['N', 'S', 'E', 'W'], NET_TAG_MAX = 60;
+function netCheckTags(d, designs) {
+  if (!Array.isArray(d)) return null;
+  const out = [];
+  for (const t of d.slice(-NET_TAG_MAX)) {
+    if (!t || !Number.isInteger(t.cell) || t.cell < 0 || t.cell >= N * N || !NET_TAG_FACES.includes(t.face) || !netNum(t.u) || !netNum(t.z)) continue;
+    if (!Number.isInteger(t.design) || t.design < 0 || t.design >= designs) continue;
+    out.push({ cell: t.cell, face: t.face, u: t.u, z: clamp(t.z, 0, 2), design: t.design });
+  }
+  return out;
+}
+const netPeerTags = () => { const out = []; if (net.on && NET_FEATURES.tags) for (const p of net.peers.values()) if (p.tags && p.hello && !p.mismatch) for (const t of p.tags) out.push(t); return out; };
 
 // ---- smoothing: an update arrives every 80 ms or so, a little early or late; others are drawn NET_DELAY behind the
 // newest, between the two updates either side of then, so they glide instead of hopping
@@ -15939,7 +15953,7 @@ const STREET_MARKS = [...STREET_TAGS,...TAG_SYMBOLS];
 const tags = []; // { cell, face: 'N' | 'S' | 'E' | 'W', u (along the wall, world), z (height, cells), design }
 const TAG_MAX = 60, TAG_W = 0.26, TAG_H = 0.12;
 let tagIndex = new Map(); // cell -> its tags, for the facade to check quickly
-const reindexTags = () => { tagIndex = new Map(); for (const t of tags) { if (!tagIndex.has(t.cell)) tagIndex.set(t.cell, []); tagIndex.get(t.cell).push(t); } };
+const reindexTags = () => { tagIndex = new Map(); for (const t of [...tags, ...netPeerTags()]) { if (!tagIndex.has(t.cell)) tagIndex.set(t.cell, []); tagIndex.get(t.cell).push(t); } }; // (yours, and in multiplayer whoever else is here: net.js)
 // which face of cell (mx, my) we're looking at, from where we stand
 const faceOf = (side, mx, my) => side ? (rel(py - (my + 0.5)) < 0 ? 'N' : 'S') : (rel(px - (mx + 0.5)) < 0 ? 'W' : 'E');
 // tag designs: small pieces of ASCII art, or a word in bubble letters, in two colours
@@ -16182,10 +16196,10 @@ function sprayTarget() {
 function sprayTag() {
   const it = heldItem(), tg = sprayTarget();
   if (!tg) return say(mode === 'walk' ? 'Get up close to a wall.' : 'Not here.');
-  if (tags.some(t => t.cell === tg.cell && t.face === tg.face && Math.abs(rel(t.u - tg.u)) < TAG_W)) return say('There\'s a tag there already. Find a clean wall.');
+  if ((tagIndex.get(tg.cell) || []).some(t => t.face === tg.face && Math.abs(rel(t.u - tg.u)) < TAG_W)) return say('There\'s a tag there already. Find a clean wall.'); // (anyone's)
   tags.push({ ...tg, design: Math.random() * designCount | 0 });
   if (tags.length > TAG_MAX) tags.shift(); // (the council scrubs the oldest)
-  reindexTags();
+  reindexTags(); netSendTags(); // (and everyone else in a multiplayer room sees it: net.js)
   if (actx) burst(actx.currentTime, 1.1, [filt('highpass', 3500, 0.7)], 0.14); // psssssht
   const empty = --it.uses <= 0;
   if (empty) removeHeld();
@@ -55111,7 +55125,7 @@ function drawFerries() {
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -55191,6 +55205,7 @@ function netLeave() {
   try { net.tx.leave(); } catch (e) { /* gone */ }
   const was = net.clockOwner;
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
+  reindexTags(); // (theirs come off your walls)
   if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
   netLog('You left the room.');
   netStatus('Not connected.');
@@ -55202,6 +55217,7 @@ function netPeerJoined(id) {
   if (net.peers.size >= NET_MAX_PEERS) return; // the room's full: they're not drawn or listened to
   net.peers.set(id, { id, name: '', hello: null, snaps: [], seenT: netNow(), ph: 0, chatBucket: {}, bubble: null });
   net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, id);
+  netSendTags(id); // (your tags, for their walls)
   netReclock();
 }
 function netPeerLeft(id) {
@@ -55209,6 +55225,7 @@ function netPeerLeft(id) {
   if (!p) return;
   net.peers.delete(id);
   if (p.hello) netLog(`${p.name} left.`);
+  if (p.tags) reindexTags();
   netReclock(); netMenuShow();
 }
 function netReclock() {
@@ -55229,7 +55246,14 @@ function netReceive(type, data, from) {
     p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null;
     if (first) netLog(p.mismatch ? `${p.name} is on a different version of the game. Both of you refresh the page.` : `${p.name} joined.`, null, p.mismatch ? '#f96' : '#9ab');
     if (net.clockOwner) net.clockT = 0;
+    if (p.tags) reindexTags(); // (any that came before their hello)
     netMenuShow(); return;
+  }
+  if (type === 'tags') { // (may come before their hello: kept, and shown once they've said who they are)
+    if (!NET_FEATURES.tags || !netAllow(p.tagBucket ||= {}, now, 0.5, 4)) return;
+    const list = netCheckTags(data, designCount);
+    if (list) { p.tags = list; reindexTags(); }
+    return;
   }
   if (!p.hello || p.mismatch) return;
   if (type === 'tick') { const s = netCheckTick(data); if (s) netPushSnap(p, s, now); return; }
@@ -55310,6 +55334,12 @@ function netSendTick(now) {
   if (car) s.veh = { kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
   net.tx.send('tick', s);
+}
+
+// your tags (graffiti.js), to everyone or to one who's just arrived: the whole list, so the council's scrubbing goes too
+function netSendTags(to) {
+  if (!net.on || !NET_FEATURES.tags) return;
+  net.tx.send('tags', tags.map(t => ({ cell: t.cell, face: t.face, u: t.u, z: t.z, design: t.design })), to);
 }
 
 // ---- chat

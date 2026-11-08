@@ -149,3 +149,59 @@ test('ghosts only (?netfeatures=none): each sees the other (on a skateboard too)
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('spray paint: a tag one player sprays is on everyone\'s wall, a late arrival gets it, it blocks the spot, and goes when they leave', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'paint-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => { tags.length = 0; reindexTags(); netJoin(r, 'Ann'); }, room);
+    await B.evaluate(r => { tags.length = 0; reindexTags(); netJoin(r, 'Bob'); }, room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    // Bob, up against a shop wall with a can, sprays
+    const sprayed = await B.evaluate(() => {
+      clearInventory(); carryItem({ id: 'spraypaint', uses: 6 }); held = 0; mode = 'walk'; room = null; paused = true;
+      for (const d of doors.filter(d => d.use === 'shop')) for (let k = 0; k < 8; k++) {
+        px = d.x; py = d.y; a = k * Math.PI / 4; pitch = 0; render(0);
+        const tg = sprayTarget(); if (!tg || !paintable(tg.cell)) continue;
+        sprayTag(); if (tags.length) return { tag: tags[0], px, py, a };
+      }
+      return null;
+    });
+    assert.ok(sprayed, 'Bob found a wall and sprayed it');
+    const has = (P, t) => P.evaluate(t => (tagIndex.get(t.cell) || []).some(x => x.face === t.face && x.u === t.u), t);
+    for (let k = 0; k < 30 && !(await has(A, sprayed.tag)); k++) await A.waitForTimeout(100);
+    assert.equal(await has(A, sprayed.tag), true, 'on Ann\'s wall');
+    assert.equal(await A.evaluate(() => tags.length), 0, 'but not in Ann\'s own tags (or her save)');
+    // drawn: Ann where Bob stood sees paint on the wall in front of her that a frame without Bob's tags doesn't have
+    const painted = await A.evaluate(s => {
+      mode = 'walk'; room = null; px = s.px; py = s.py; a = s.a; pitch = 0; paused = true;
+      render(0); const withTag = CH.join('');
+      const keep = net.on; net.on = false; reindexTags(); render(0); const without = CH.join(''); net.on = keep; reindexTags();
+      return withTag !== without;
+    }, sprayed);
+    assert.equal(painted, true, 'and painted there');
+    // someone joining later gets it too
+    const C = await open();
+    await C.evaluate(r => { tags.length = 0; reindexTags(); netJoin(r, 'Cat'); }, room);
+    for (let k = 0; k < 60 && !(await has(C, sprayed.tag)); k++) await C.waitForTimeout(100);
+    assert.equal(await has(C, sprayed.tag), true, 'a late arrival sees it');
+    // the spot's taken, whoever's tag it is
+    const again = await A.evaluate(() => { clearInventory(); carryItem({ id: 'spraypaint', uses: 6 }); held = 0; sprayTag(); return { msg: msgText, mine: tags.length }; });
+    assert.deepEqual(again, { msg: 'There\'s a tag there already. Find a clean wall.', mine: 0 });
+    // Bob leaves: his tag comes off the others' walls
+    await B.evaluate(() => netLeave());
+    for (let k = 0; k < 80 && (await has(A, sprayed.tag)); k++) await A.waitForTimeout(100);
+    assert.equal(await has(A, sprayed.tag), false, 'gone with him');
+    await A.evaluate(() => { netLeave(); localStorage.clear(); }); await C.evaluate(() => netLeave());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 1;
+const NET_PROTOCOL = 2; // (2: spray-paint tags)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -16,7 +16,7 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -77,6 +77,20 @@ function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
   return { tod: mod(d.tod, 24), dayNum: Math.max(0, d.dayNum | 0), weather: d.weather, seasonShift: mod(d.seasonShift | 0, 4) };
 }
+
+// someone's spray-painted tags (graffiti.js): theirs to keep in their save, shown on your walls while they're here
+const NET_TAG_FACES = ['N', 'S', 'E', 'W'], NET_TAG_MAX = 60;
+function netCheckTags(d, designs) {
+  if (!Array.isArray(d)) return null;
+  const out = [];
+  for (const t of d.slice(-NET_TAG_MAX)) {
+    if (!t || !Number.isInteger(t.cell) || t.cell < 0 || t.cell >= N * N || !NET_TAG_FACES.includes(t.face) || !netNum(t.u) || !netNum(t.z)) continue;
+    if (!Number.isInteger(t.design) || t.design < 0 || t.design >= designs) continue;
+    out.push({ cell: t.cell, face: t.face, u: t.u, z: clamp(t.z, 0, 2), design: t.design });
+  }
+  return out;
+}
+const netPeerTags = () => { const out = []; if (net.on && NET_FEATURES.tags) for (const p of net.peers.values()) if (p.tags && p.hello && !p.mismatch) for (const t of p.tags) out.push(t); return out; };
 
 // ---- smoothing: an update arrives every 80 ms or so, a little early or late; others are drawn NET_DELAY behind the
 // newest, between the two updates either side of then, so they glide instead of hopping

@@ -65,7 +65,7 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
   assert.deepStrictEqual(j(ev, `[0, 0, 0, 0].map(() => netAllow(B, 5, 1, 3))`), [true, true, true, false], 'three at once, then wait');
   assert.strictEqual(ev(`netAllow(B, 6.1, 1, 3)`), true, 'a second later: one more');
   assert.strictEqual(ev('netBuildId()'), ev('netBuildId()'));
-  assert.match(ev('netBuildId()'), /^1-[0-9a-z]+$/);
+  assert.match(ev('netBuildId()'), /^2-[0-9a-z]+$/);
   const look = j(ev, `netLookFor('Ann')`);
   assert.deepStrictEqual(j(ev, `netLookFor('Ann')`), look, 'the same name, the same colours, on every machine');
 });

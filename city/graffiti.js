@@ -105,7 +105,7 @@ const STREET_MARKS = [...STREET_TAGS,...TAG_SYMBOLS];
 const tags = []; // { cell, face: 'N' | 'S' | 'E' | 'W', u (along the wall, world), z (height, cells), design }
 const TAG_MAX = 60, TAG_W = 0.26, TAG_H = 0.12;
 let tagIndex = new Map(); // cell -> its tags, for the facade to check quickly
-const reindexTags = () => { tagIndex = new Map(); for (const t of tags) { if (!tagIndex.has(t.cell)) tagIndex.set(t.cell, []); tagIndex.get(t.cell).push(t); } };
+const reindexTags = () => { tagIndex = new Map(); for (const t of [...tags, ...netPeerTags()]) { if (!tagIndex.has(t.cell)) tagIndex.set(t.cell, []); tagIndex.get(t.cell).push(t); } }; // (yours, and in multiplayer whoever else is here: net.js)
 // which face of cell (mx, my) we're looking at, from where we stand
 const faceOf = (side, mx, my) => side ? (rel(py - (my + 0.5)) < 0 ? 'N' : 'S') : (rel(px - (mx + 0.5)) < 0 ? 'W' : 'E');
 // tag designs: small pieces of ASCII art, or a word in bubble letters, in two colours
@@ -348,10 +348,10 @@ function sprayTarget() {
 function sprayTag() {
   const it = heldItem(), tg = sprayTarget();
   if (!tg) return say(mode === 'walk' ? 'Get up close to a wall.' : 'Not here.');
-  if (tags.some(t => t.cell === tg.cell && t.face === tg.face && Math.abs(rel(t.u - tg.u)) < TAG_W)) return say('There\'s a tag there already. Find a clean wall.');
+  if ((tagIndex.get(tg.cell) || []).some(t => t.face === tg.face && Math.abs(rel(t.u - tg.u)) < TAG_W)) return say('There\'s a tag there already. Find a clean wall.'); // (anyone's)
   tags.push({ ...tg, design: Math.random() * designCount | 0 });
   if (tags.length > TAG_MAX) tags.shift(); // (the council scrubs the oldest)
-  reindexTags();
+  reindexTags(); netSendTags(); // (and everyone else in a multiplayer room sees it: net.js)
   if (actx) burst(actx.currentTime, 1.1, [filt('highpass', 3500, 0.7)], 0.14); // psssssht
   const empty = --it.uses <= 0;
   if (empty) removeHeld();

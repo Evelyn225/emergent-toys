@@ -4,7 +4,7 @@
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -84,6 +84,7 @@ function netLeave() {
   try { net.tx.leave(); } catch (e) { /* gone */ }
   const was = net.clockOwner;
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
+  reindexTags(); // (theirs come off your walls)
   if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
   netLog('You left the room.');
   netStatus('Not connected.');
@@ -95,6 +96,7 @@ function netPeerJoined(id) {
   if (net.peers.size >= NET_MAX_PEERS) return; // the room's full: they're not drawn or listened to
   net.peers.set(id, { id, name: '', hello: null, snaps: [], seenT: netNow(), ph: 0, chatBucket: {}, bubble: null });
   net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, id);
+  netSendTags(id); // (your tags, for their walls)
   netReclock();
 }
 function netPeerLeft(id) {
@@ -102,6 +104,7 @@ function netPeerLeft(id) {
   if (!p) return;
   net.peers.delete(id);
   if (p.hello) netLog(`${p.name} left.`);
+  if (p.tags) reindexTags();
   netReclock(); netMenuShow();
 }
 function netReclock() {
@@ -122,7 +125,14 @@ function netReceive(type, data, from) {
     p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null;
     if (first) netLog(p.mismatch ? `${p.name} is on a different version of the game. Both of you refresh the page.` : `${p.name} joined.`, null, p.mismatch ? '#f96' : '#9ab');
     if (net.clockOwner) net.clockT = 0;
+    if (p.tags) reindexTags(); // (any that came before their hello)
     netMenuShow(); return;
+  }
+  if (type === 'tags') { // (may come before their hello: kept, and shown once they've said who they are)
+    if (!NET_FEATURES.tags || !netAllow(p.tagBucket ||= {}, now, 0.5, 4)) return;
+    const list = netCheckTags(data, designCount);
+    if (list) { p.tags = list; reindexTags(); }
+    return;
   }
   if (!p.hello || p.mismatch) return;
   if (type === 'tick') { const s = netCheckTick(data); if (s) netPushSnap(p, s, now); return; }
@@ -203,6 +213,12 @@ function netSendTick(now) {
   if (car) s.veh = { kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
   net.tx.send('tick', s);
+}
+
+// your tags (graffiti.js), to everyone or to one who's just arrived: the whole list, so the council's scrubbing goes too
+function netSendTags(to) {
+  if (!net.on || !NET_FEATURES.tags) return;
+  net.tx.send('tags', tags.map(t => ({ cell: t.cell, face: t.face, u: t.u, z: t.z, design: t.design })), to);
 }
 
 // ---- chat

@@ -10,8 +10,10 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   (a picture only: no riding or collisions yet). Tests: `test/city-net.test.cjs`, `test/browser/ascii-city-net.browser.test.cjs`.
 - **Verified by hand**: two real machines connect over Trystero and see each other (ghosts, skateboarding).
 - **Release order (feature flags, `NET_FEATURES` in `city/net-core.js`)**: ghosts (other players on foot, in cars and on
-  skateboards, name tags, wanted stars, join/leave lines) are always on. `chat` and `clock` are switched on (not yet
-  tried by real players). Each later phase lands behind its own flag (`rides`, `guns`, `hooks`, `police`), off until it's
+  skateboards, name tags, wanted stars, join/leave lines) are always on. `chat`, `clock` and `tags` are switched on
+  (chat and clock not yet tried by real players). `tags`: spray-paint tags are shared: each player sends their whole
+  list (up to 60, from their save) on joining and after every spray; others show them on their walls (never in their
+  own save), a tag anyone has there blocks the spot, and a player's tags go when they leave. Each later phase lands behind its own flag (`rides`, `guns`, `hooks`, `police`), off until it's
   been tried. `?netfeatures=a,b` sets exactly that list for trying things (`?netfeatures=none`: ghosts only). The set of
   switched-on features is part of the build fingerprint, so players with different sets get the "different version"
   message instead of half-working.
