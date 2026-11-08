@@ -63,6 +63,7 @@
   "dom": [
     "city/screen.js",
     "city/city-render.js",
+    "city/belle-ivy.js",
     "city/street-drains.js",
     "city/road-surface.js",
     "city/shop-windows.js",
