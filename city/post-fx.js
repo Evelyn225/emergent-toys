@@ -44,7 +44,7 @@ void main() {
   vec2 uv = gl_FragCoord.xy / size;
   vec3 s = texture2D(scene, uv).rgb;
   if (bloom > 0.0 || streaks > 0.0) {
-    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 1.1 * streaks;
+    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks;
     b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
     s = 1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0));
   }
@@ -81,7 +81,7 @@ const postFxThreshold = () => 0.62 - 0.24 * postFxNight();
 // rain smears lights; wet streets after it still do, a little. Outdoors only.
 function postFxStreaks() {
   if (!settings.rainStreaks || mode === 'room') return 0;
-  return clamp(Math.max(rain || 0, (wet || 0) * 0.35), 0, 1) * (0.5 + 0.5 * postFxNight());
+  return clamp(Math.max(rain || 0, (wet || 0) * 0.2), 0, 1) * (0.5 + 0.5 * postFxNight());
 }
 // the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
 function postFxGrade() {
@@ -189,7 +189,7 @@ function postFxEnd(st) {
   if (bloom || streaks) {
     down(fx.scene, fx.a4, 1, postFxThreshold()); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
     gl.useProgram(fx.blur.p);
-    if (streaks) { pass(fx.a4, fx.s4, 0, 1.5); pass(fx.s4, fx.b4, 0, 4); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
+    if (streaks) { pass(fx.a4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
     pass(fx.a4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
     if (bloom) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
   }
