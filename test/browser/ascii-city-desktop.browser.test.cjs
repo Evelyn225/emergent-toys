@@ -22,7 +22,7 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
         if (command === 'save_screenshot') {
           if (window.failScreenshot) throw new Error('The Screenshots folder is not writable.');
           if (window.deferScreenshot) return new Promise(resolve => { window.resolveScreenshot = resolve; });
-          return 'C:\\Games\\ASCII City\\Screenshots\\ASCII City-test.png';
+          return 'C:\\Games\\ASCII City\\Screenshots\\ASCII-City-test.png';
         }
         if (command === 'open_screenshot_folder' && window.failOpenFolder) throw new Error('Windows could not open the folder.');
         if (command === 'set_game_mouse_capture' && args.active && window.deferCapture) return new Promise(resolve => { window.resolveCapture = resolve; });
@@ -106,7 +106,7 @@ test('browser screenshot downloads a real PNG with F12 and the pause menu button
       const downloadPromise = page.waitForEvent('download');
       await trigger();
       const download = await downloadPromise;
-      assert.match(download.suggestedFilename(), /^ASCII City-.*\.png$/);
+      assert.match(download.suggestedFilename(), /^ASCII-City-.*\.png$/);
       assert.equal(await download.failure(), null);
       const bytes = require('node:fs').readFileSync(await download.path());
       assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
