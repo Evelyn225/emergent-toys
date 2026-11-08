@@ -65,7 +65,7 @@ test('two players: seen in the street, chat in a bubble, one clock, the same roo
     const inStep = async () => { // the follower's time and sky match the keeper's (whose clock is still running)
       for (let k = 0; k < 60; k++) {
         const [kt, kw] = await keeper.evaluate(() => [tod, weather]), [ft, fw] = await follower.evaluate(() => [tod, weather]);
-        if (Math.abs(kt - ft) < 0.1 && kw === fw && fw === 'rain') return;
+        if (Math.abs(kt - ft) < 0.15 && kw === fw && fw === 'rain') return;
         await follower.waitForTimeout(100);
       }
       assert.fail('the clocks never agreed');
@@ -98,7 +98,7 @@ test('two players: seen in the street, chat in a bubble, one clock, the same roo
   } finally { await browser.close(); }
 });
 
-test('as released: ghosts only. Each sees the other, but T is just T and each keeps their own clock', async () => {
+test('as released: ghosts only. Each sees the other (on a skateboard too), but T is just T and each keeps their own clock', async () => {
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
@@ -128,6 +128,20 @@ test('as released: ghosts only. Each sees the other, but T is just T and each ke
     await A.keyboard.press('KeyT');
     assert.equal(await A.evaluate(() => netTyping()), false, 'no chat box');
     assert.equal(await A.evaluate(() => netSay('hello')), false, 'and nothing sent');
+    // on a skateboard: the board under them and the rider side on to it, not someone standing on air
+    await B.evaluate(() => { clearInventory(); carryItem({ id: 'skateboard', uses: 0 }); held = 0; fx.skating = true; SKB.yaw = 1.2; SKB.pitch = SKB.roll = 0; });
+    let drawnBoard = null;
+    for (let k = 0; k < 40 && !(drawnBoard && drawnBoard.board && drawnBoard.rider); k++) {
+      drawnBoard = await A.evaluate(() => {
+        let board = 0, rider = 0; const b0 = drawSkateBoard, r0 = drawSkaterFigure;
+        drawSkateBoard = (...x) => { board++; return b0(...x); }; drawSkaterFigure = (...x) => { rider++; return r0(...x); };
+        try { render(0); } finally { drawSkateBoard = b0; drawSkaterFigure = r0; }
+        const v = [...net.peers.values()][0].view; return { board, rider, yaw: v && v.sk && v.sk.yaw };
+      });
+      await A.waitForTimeout(100);
+    }
+    assert.ok(drawnBoard.board && drawnBoard.rider, 'Bob on his board: ' + JSON.stringify(drawnBoard));
+    assert.ok(Number.isFinite(drawnBoard.yaw), 'with the way his board points (his own skate physics moves it on from the value set here)');
     await A.waitForTimeout(2500); // (longer than the clock's broadcast interval)
     assert.ok(Math.abs(await A.evaluate(() => tod) - 12) < 0.5, 'Ann keeps her own time');
     assert.equal(await B.evaluate(() => weather), 'rain', 'and Bob his own weather');

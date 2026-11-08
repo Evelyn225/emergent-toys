@@ -54,6 +54,8 @@ function netCheckTick(d) {
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
+  if (d.sk && typeof d.sk === 'object' && netNum(d.sk.yaw) && netNum(d.sk.nose) && netNum(d.sk.roll)) // on the board: which way it points, tipped how, and which foot forward
+    out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1 };
   return out;
 }
 function netCheckHello(d) {
@@ -104,7 +106,9 @@ function netSample(p, now) {
   if (s0.rk !== s1.rk || s0.mode !== s1.mode && (s0.mode === 'room' || s1.mode === 'room')) return { ...(f < 0.5 ? s0 : s1) }; // through a door: no sliding through the wall
   const ddx = rel(s1.x - s0.x), ddy = rel(s1.y - s0.y);
   if (Math.hypot(ddx, ddy) > NET_SNAP) return { ...(f < 0.5 ? s0 : s1) };
-  return { ...s1, x: worldCoord(s0.x + ddx * f), y: worldCoord(s0.y + ddy * f), z: s0.z + (s1.z - s0.z) * f, a: netLerpAngle(s0.a, s1.a, f) };
+  const out = { ...s1, x: worldCoord(s0.x + ddx * f), y: worldCoord(s0.y + ddy * f), z: s0.z + (s1.z - s0.z) * f, a: netLerpAngle(s0.a, s1.a, f) };
+  if (s0.sk && s1.sk) out.sk = { ...s1.sk, yaw: netLerpAngle(s0.sk.yaw, s1.sk.yaw, f), nose: s0.sk.nose + (s1.sk.nose - s0.sk.nose) * f, roll: s0.sk.roll + (s1.sk.roll - s0.sk.roll) * f };
+  return out;
 }
 
 // ---- rules that stand in for a server: everyone sees the same peers and applies the same rule, so they agree

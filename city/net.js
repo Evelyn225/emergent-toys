@@ -185,7 +185,7 @@ function netSelfZ() {
   } catch (e) { return 0; }
 }
 function netSelfPose(speed) {
-  if (skatingNow()) return skateAir() ? 'skateair' : SK.kicking ? 'push' + (Math.floor(SK.kick * 8) & 7) : 'ride1';
+  if (skatingNow()) return skateAir() ? 'skateair' : SK.charge >= 0 ? 'crouch' : SK.kicking ? 'push' + (Math.floor(SK.kick * 8) & 7) : 'ride' + Math.round(1 + clamp(SK.steer * SK.stance, -1, 1)); // (as skate.js draws you)
   if (body.seat) return 'sit';
   if (heldGun() && gunAim() > 0.5) return 'aim';
   if (body.crouch > 0.5) return 'crouch';
@@ -199,6 +199,7 @@ function netSendTick(now) {
   const speed = last && gap > 0 && last.rk === netRoomKey() ? Math.hypot(rel(x - last.x), rel(y - last.y)) / gap : 0;
   const it = heldItem();
   const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
+  if (skatingNow() && !car) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
   if (car) s.veh = { kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
   net.tx.send('tick', s);
@@ -274,6 +275,12 @@ function drawPeers() {
     }
     if (!NET_ON_FOOT.has(s.mode)) continue; // (on the water or in the air: just their name, for now)
     const gait = /^(walk|run)$/.test(s.pose) ? s.pose + (Math.floor(p.ph) & 7) : s.pose;
+    if (s.sk && !inRoom) { // on the board: the deck under them, and them side on to it, front foot forward (as skate.js draws you)
+      const sk = s.sk, ang = sk.yaw + sk.st * Math.PI / 2, look = netFigLook(p), pose = /^(ride|push|crouch|skateair|mongo)/.test(s.pose) ? s.pose : 'ride1';
+      drawSkateBoard(vx, vy, s.z, sk.yaw, sk.nose, sk.roll);
+      drawSkaterFigure(vx, vy, s.z + SB.up + SB.ht, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, [0, 0, 1], skaterFootAnchor(pose, look));
+      continue;
+    }
     if (inRoom) drawFigure(vx, vy, s.z, 1.8, fx, fy, netFigLook(p), gait, { light: 9, hold: p });
     else drawFigure(vx, vy, s.z, 0.175, fx, fy, netFigLook(p), gait, { light: 6, hold: p });
   }
