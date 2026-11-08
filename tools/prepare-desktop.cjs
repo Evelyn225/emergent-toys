@@ -20,7 +20,7 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Expected a stable desktop
 const html = fs.readFileSync(path.join(root, 'ascii-city.html'), 'utf8')
   .replace('</head>', `  <script>window.__GLYPHPORT_DESKTOP__ = true; window.__GLYPHPORT_VERSION__ = ${JSON.stringify(version)};</script>\n</head>`);
 fs.writeFileSync(path.join(out, 'index.html'), html);
-for (const file of ['ascii-city.bundle.js', 'ascii-city.webmanifest', 'w95font.woff', 'w95font.woff2']) copy(file);
+for (const file of ['ascii-city.bundle.js', 'ascii-city.webmanifest', 'w95font.woff', 'w95font.woff2', 'vendor/trystero.js', 'vendor/trystero-LICENSE.txt']) copy(file);
 for (const file of ['ascii-city-180.png', 'ascii-city-192.png', 'ascii-city-512.png', 'favicon-16x16.png', 'favicon-32x32.png', 'go-home.png']) {
   copy(path.join('images', file));
 }

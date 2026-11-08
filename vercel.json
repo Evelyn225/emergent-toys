@@ -13,6 +13,7 @@
     { "src": "*.webp", "use": "@vercel/static" },
     { "src": "casino-assets/**", "use": "@vercel/static" },
     { "src": "images/**", "use": "@vercel/static" },
+    { "src": "vendor/**", "use": "@vercel/static" },
     { "src": "audio/**", "use": "@vercel/static" },
     { "src": "os/os.css", "use": "@vercel/static" },
     { "src": "os/sounds/**", "use": "@vercel/static" },

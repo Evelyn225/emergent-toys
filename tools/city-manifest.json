@@ -58,7 +58,8 @@
     "city/save-format.js",
     "city/navigation.js",
     "city/terrain.js",
-    "city/ferry.js"
+    "city/ferry.js",
+    "city/net-core.js"
   ],
   "dom": [
     "city/screen.js",
@@ -336,6 +337,7 @@
     "city/save.js",
     "city/el-life.js",
     "city/ferry-render.js",
+    "city/net.js",
     "city/main.js",
     "city/touch.js",
     "city/controller-ui.js",

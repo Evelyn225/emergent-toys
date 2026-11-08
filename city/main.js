@@ -5,6 +5,7 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
+  if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
@@ -33,6 +34,7 @@ onkeydown = e => {
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
+  if (netChatKey(e)) return; // T or Enter in a multiplayer room: the chat box (net.js)
   K[e.code] = 1;
   if (e.repeat) return;
   audioStart(); // sound can only start from a key press or click
@@ -311,6 +313,7 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  netFrame(t); // (multiplayer: sent and received whatever else is going on, the menus and cabinets included: net.js)
   if(!game)hideMinigamePresentation();
   controllerTick(clamp((t-t0)/1000,0,.05));
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu

@@ -253,6 +253,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawBlood(); // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
+  drawPeers(); // other players, in a multiplayer room (net.js)
   drawPeeMarks(); // stains on walls and solid static objects
   if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
@@ -281,6 +282,7 @@ function render(dt,sceneOnly=false,mask=null) {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
     wreckOverlay(); // (going in, in an aircraft: flight.js)
     hud();
+    netOverlay(); // their names, speech bubbles and the chat (net.js)
   }
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
