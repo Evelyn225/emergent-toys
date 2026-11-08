@@ -16007,6 +16007,7 @@ function tagCell(i, q, r, t, L) {
 // the facade asks first: graffiti here? (true if it painted the cell)
 function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), face = faceOf(side, mx, my), L = fog * amb * (side ? 10 : 15), flip = u < 0 !== wc < 0 ? -1 : 1;
+  if (paintCell(i, k, face, wc, z, uStep, d, L)) return true; // (your own spray paint, on top of everything: spray-paint.js)
   const mine = tagIndex.get(k);
   if (mine) for (const t of mine) {
     if (t.face !== face || Math.abs(rel(wc - t.u)) > TAG_W / 2 || Math.abs(z - t.z) > TAG_H / 2) continue;
@@ -16056,6 +16057,130 @@ function sprayTag() {
   if (empty) removeHeld();
   const w = crime('graffiti', px, py);
   say((w === 'cop' ? '"HEY! You! Drop the can!"' : w === 'reported' ? 'Psssht. Somebody across the street gets their phone out.' : pick(['Psssht. Nice.', 'Psssht. Your mark on the city.', 'Psssht. Nobody saw. Probably.'])) + (empty ? ' The can rattles empty.' : ''), 3);
+}
+'use strict';
+// ---- freehand spray paint. Hold the can, face a wall, hold Q: paint goes where you're looking, a soft round dot with
+// overspray round it, so moving your view draws lines. Closer to the wall the line is finer; Shift is the fat cap; R
+// changes colour. Hold still too long and it runs. The can empties with how much you sprayStroke. Police still call it
+// vandalism.
+//
+// The paint is plain data: dots [cell, face, u, z, r, colour, seed] on the faces of buildings (u: along the wall, in
+// world coordinates; z: height, cells). Everything that paints goes through paintDots(), and every dot added goes out
+// to PAINT_LISTENERS, so another player's spray can be applied with paintDots(theirDots, false) and yours sent on.
+
+const SPRAY_COLOURS = [MAG, CYAN, GREEN, ORANGE, RED, YEL, WHITE, BLUE, BLACK];
+const SPRAY_NAMES = ['magenta', 'cyan', 'green', 'orange', 'red', 'yellow', 'white', 'blue', 'black'];
+const SPRAY_REACH = .4; // you can paint a wall up to 4m away
+const PAINT_MAX = 12000; // dots kept citywide; past it the oldest go (the council scrubs them)
+const PAINT_BUCKET = .05;
+const sprayDots = []; // every dot, oldest first
+let paintIndex = new Map(); // cell*4+face -> Map(bucket key -> dots)
+const PAINT_LISTENERS = []; // fn(dots): called with each batch of dots you spray (for sending to other players)
+const paintBucketKey = (u, z) => Math.floor(u / PAINT_BUCKET) * 4096 + Math.floor(z / PAINT_BUCKET);
+function paintIndexDot(d) {
+  const fk = d[0] * 4 + d[1];
+  let face = paintIndex.get(fk);
+  if (!face) paintIndex.set(fk, face = new Map());
+  const bk = paintBucketKey(d[2], d[3]);
+  let list = face.get(bk);
+  if (!list) face.set(bk, list = []);
+  list.push(d);
+}
+function reindexPaint() { paintIndex = new Map(); for (const d of sprayDots) paintIndexDot(d); }
+// add dots (yours, or another player's with announce false); trims the oldest past the cap
+function paintDots(dots, announce = true) {
+  for (const d of dots) { sprayDots.push(d); paintIndexDot(d); }
+  if (sprayDots.length > PAINT_MAX) { sprayDots.splice(0, sprayDots.length - PAINT_MAX + 500); reindexPaint(); }
+  if (announce) for (const fn of PAINT_LISTENERS) try { fn(dots); } catch (e) { /* (a listener's problem, not the can's) */ }
+}
+const paintSave = () => sprayDots.map(d => [d[0], d[1], +d[2].toFixed(4), +d[3].toFixed(4), +d[4].toFixed(4), d[5], d[6]]);
+function paintLoad(list) { sprayDots.length = 0; for (const d of list || []) if (Array.isArray(d) && d.length >= 7) sprayDots.push(d); if (sprayDots.length > PAINT_MAX) sprayDots.splice(0, sprayDots.length - PAINT_MAX); reindexPaint(); }
+
+// the facade asks: paint on this cell of this face? (true if it painted the screen cell)
+function paintCell(i, k, face, wc, z, uStep, d, L) {
+  const faceDots = paintIndex.get(k * 4 + PAINT_FACE[face]);
+  if (!faceDots) return false;
+  const fp = Math.max(uStep, d / projY), bu = Math.floor(wc / PAINT_BUCKET), bz = Math.floor(z / PAINT_BUCKET);
+  let hit = null;
+  for (let du = -1; du <= 1; du++) for (let dz = -1; dz <= 1; dz++) {
+    const list = faceDots.get((bu + du) * 4096 + bz + dz);
+    if (list) for (const dot of list) {
+      const r = dot[4], dist = Math.hypot(rel(wc - dot[2]), z - dot[3]);
+      if (dist > r * 1.6 + fp * .5) continue;
+      // the core is solid; the overspray round it is speckle, thinning outward (far off, averaged into a soft edge)
+      let on = dist < r * .8;
+      if (!on) {
+        const t = (dist - r * .8) / (r * .8);
+        on = fp > r * .5 ? t < .35 : hash(Math.floor(wc * 900), Math.floor(z * 900), dot[6]) > .35 + t * .65;
+      }
+      if (on) hit = dot; // (the last one sprayed is on top)
+    }
+  }
+  if (!hit) return false;
+  const lit = Math.max(L * 1.05, 4), col = SPRAY_COLOURS[hit[5]] ?? MAG;
+  BG[i] = C(col, col === BLACK ? 1 + L * .05 : lit * (.62 + hash(Math.floor(wc * 300), Math.floor(z * 300), 4411) * .08));
+  return set(i, ' ', 0), true;
+}
+
+// where the crosshair meets a wall you could paint: the cell, face, u along it and z up it, and how far off
+function sprayAim() {
+  if (mode !== 'walk' || !lookHit || lookHit.d > SPRAY_REACH) return null;
+  const k = idx(lookHit.mx, lookHit.my);
+  if (!map[k] || STY[k] >= 3 && STY[k] <= 6) return null; // (not the landmarks)
+  const d = lookHit.d, hx = px + Math.cos(a) * d, hy = py + Math.sin(a) * d, fx_ = fract(hx), fy = fract(hy);
+  const side = Math.min(fy, 1 - fy) < Math.min(fx_, 1 - fx_), face = faceOf(side, lookHit.mx, lookHit.my);
+  const z = eye + (hor - (rows >> 1) - .5) * d / projY;
+  if (z < .005 || z > map[k] - .005) return null; // (below the pavement, above the roofline)
+  return { cell: k, face, faceIdx: PAINT_FACE[face], u: worldCoord(side ? hx : hy), z, d };
+}
+let sprayStroke = null; // the stroke in progress: { last: [u, z], cell, face, still, born, dist, hiss }
+function sprayColourOf(it) { return it.col ?? (it.uses & 3); }
+function sprayCycleColour() {
+  const it = heldItem();
+  if (it?.id !== 'spraypaint') return false;
+  it.col = (sprayColourOf(it) + 1) % SPRAY_COLOURS.length;
+  say(`The ${SPRAY_NAMES[it.col]} can.`, 1.2);
+  return true;
+}
+function stepSprayPaint(dt) {
+  const it = heldItem();
+  if (it?.id !== 'spraypaint' || !K.KeyQ || wanted.busted) { sprayStroke = null; return; }
+  const aim = sprayAim();
+  if (!aim) { if (sprayStroke) sprayStroke.last = null; return; }
+  const fat = K.ShiftLeft || K.ShiftRight, r = (.0025 + aim.d * .013) * (fat ? 2.3 : 1), col = sprayColourOf(it);
+  if (!sprayStroke) { // a new stroke: is anyone watching?
+    sprayStroke = { last: null, still: 0, born: T, dist: 0, hiss: 0, crimeT: T };
+    const w = crime('graffiti', px, py);
+    if (w === 'cop') say('"HEY! You! Drop the can!"', 3);
+    else if (w === 'reported') say('Somebody across the street gets their phone out.', 3);
+  }
+  if (T - sprayStroke.crimeT > 6) { sprayStroke.crimeT = T; crime('graffiti', px, py); } // (a long session gets noticed again)
+  const dots = [], seed = () => Math.floor(Math.random() * 1e6);
+  const last = sprayStroke.last && sprayStroke.last.cell === aim.cell && sprayStroke.last.face === aim.face ? sprayStroke.last : null;
+  const step = Math.max(.003, r * .35);
+  if (last) {
+    const du = rel(aim.u - last.u), dz = aim.z - last.z, len = Math.hypot(du, dz);
+    if (len >= step) { // the line from the last dot to here, filled in so a quick sweep is still a line
+      const n = Math.min(40, Math.ceil(len / step));
+      for (let s = 1; s <= n; s++) dots.push([aim.cell, aim.faceIdx, worldCoord(last.u + du * s / n), last.z + dz * s / n, r, col, seed()]);
+      sprayStroke.dist += len; sprayStroke.still = 0;
+    } else sprayStroke.still += dt;
+  } else dots.push([aim.cell, aim.faceIdx, aim.u, aim.z, r, col, seed()]);
+  // held in one place, the paint pools and runs
+  if (sprayStroke.still > .7 && (sprayStroke.drip = (sprayStroke.drip || 0) + dt) > .12) {
+    sprayStroke.drip = 0;
+    const run = Math.min(.09, (sprayStroke.still - .7) * .05);
+    dots.push([aim.cell, aim.faceIdx, worldCoord(aim.u + (hash(Math.floor(aim.u * 99), 1, 4412) - .5) * r * .6), aim.z - r * .6 - run, r * .28, col, seed()]);
+  }
+  if (dots.length) {
+    paintDots(dots);
+    sprayStroke.last = { cell: aim.cell, face: aim.face, u: aim.u, z: aim.z };
+  }
+  if (actx && (sprayStroke.hiss -= dt) <= 0) { sprayStroke.hiss = .11; burst(actx.currentTime, .14, [filt('highpass', 3800, .7)], .06); } // psssss
+  // the can empties: a can's worth is about 3 cells (30m) of line, fat cap faster
+  it.paint = (it.paint ?? 1) - (dots.length ? (last ? Math.hypot(rel(aim.u - last.u), aim.z - last.z) : r) : 0) * (fat ? 2.2 : 1) / .5;
+  while (it.paint <= 0 && it.uses > 0) { it.uses--; it.paint += 1; }
+  if (it.uses <= 0) { removeHeld(); sprayStroke = null; say('The can sputters and rattles empty.', 2); }
 }
 // Belle stone cornices, balconies and copper roofs use the shared geometry from belle-geometry.js.
 function belleDetailShade(o, i, t, L) {
@@ -28294,7 +28419,7 @@ function promptText() {
   const dr = droppedHere();
   if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
-  if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
+  if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   const gp = gardensPrompt() || marinaPrompt();
@@ -34581,7 +34706,7 @@ function useHeldItem() {
   if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
-  if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
+  if (heldItem() && heldItem().id === 'spraypaint') return; // (held down, Q sprays: spray-paint.js)
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
     const name = ITEMS[heldItem().id].name, [, sound] = useHeld({ indoors: false, x: px, y: py, a, rain, person: null, headlines: HEADLINES(), water: false });
     say(rain > 0.3 ? `A soggy picnic. The ${name} is good anyway.` : pick([`A picnic on the grass. The ${name} tastes better out here.`, `You eat your ${name} on the lawn. A sparrow watches every bite.`, day > 0.3 ? `Sun on your back, ${name} in hand. Not a bad afternoon.` : `A picnic by moonlight. The ${name} and the crickets.`]), 3);
@@ -54643,7 +54768,7 @@ function saveGame() {
   if (citySaveBlocked || startingOver) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, paint: paintSave(), money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -54661,7 +54786,7 @@ function loadGame() {
   citySaveBackupPending = null;
   try {
     text = localStorage.getItem(SAVE_KEY);
-    if (text == null) return;
+    if (text == null) { freshStartPending = true; return; } // a new game: somewhere different each time, once the game's set up (spawn-points.js)
     prepared = prepareCitySave(JSON.parse(text));
     if (prepared && !prepared.upgraded) for (const key of ['ascii-city-save-backup-v3-archipelago-v1','ascii-city-save-backup-v4-archipelago-v2']) {
       if (localStorage.getItem(key) != null) SAVE_BACKUP_KEY = key;
@@ -54680,6 +54805,7 @@ function loadGame() {
   loadFishingCompetition(d.fishingCompetition);
   leagueLoad(d.league);
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
+  paintLoad(d.paint); // (freehand spray paint: spray-paint.js)
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
@@ -54751,7 +54877,7 @@ function newGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ }
   location.reload();
 }
-let startingOver = false;
+let startingOver = false, freshStartPending = false;
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
@@ -55018,6 +55144,7 @@ onkeydown = e => {
   if (handheldMode() && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'KeyR' && heldGun()) reloadKey(); // (the revolver: gun-ui.js)
+    else if (e.code === 'KeyR') sprayCycleColour(); // (a spray can: the next colour, spray-paint.js)
     if (e.code === 'KeyI') openInventory();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1);
@@ -55368,6 +55495,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepSprayPaint(dt); // (holding Q with a spray can: spray-paint.js)
   stepLookoutScope(); // (the lookout's telescope: islands-content.js)
   updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
@@ -55473,6 +55601,47 @@ requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
 addEventListener('wheel', e => { if (!paused && inv.length) cycleQuickSlot(Math.sign(e.deltaY)); }, { passive: true }); // quick slots, with empty hands between them
+'use strict';
+// ---- where a new game starts. Instead of the same corner every time, one of a handful of places, picked at random,
+// each with a line to set the scene. Only for a fresh start (no save): a loaded game puts you back where you were.
+// Each spot is [label, x, y, heading, line]; worked out when it's needed, since some places only exist once the world
+// is laid out.
+function spawnPoints() {
+  const out = [];
+  const add = (label, at, line) => { try { const p = at(); if (p && p.every(Number.isFinite)) out.push([label, ...p, line]); } catch (e) { /* (a place this city doesn't have) */ } };
+  add('marina', () => [MARINA.x, MARINA.y0 + .6, Math.PI / 2], 'Gulls, rigging slapping on masts, the smell of diesel and salt. You\'re on the boardwalk at the marina.');
+  add('pier', () => [FAIR.cx, FAIR.y0 - .5, Math.PI / 2], 'The pier boards creak underfoot. Up ahead, the Ferris wheel starts its first turn of the day.');
+  add('grand hotel', () => [GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2], 'The doorman at the Grand Hotel gives you a long look. You don\'t look like you\'re staying here.');
+  add('night market', () => { const s = STALLS[1]; return [s.at[0], s.at[1] - .9, Math.PI / 2]; }, 'Chinatown. Steam off the stalls, lanterns strung over the street, someone already frying something wonderful.');
+  add('gardens', () => { const [gx, gy] = GARDEN_GATES[0]; return [GARDEN.x0 + gx, GARDEN.y0 + gy - .6, Math.PI / 2]; }, 'The gates of the Botanical Gardens. Birdsong, wet leaves, a gardener with a barrow who nods at you.');
+  add('lighthouse walk', () => [FOOTBRIDGE.x, FOOTBRIDGE.y0 + .5, Math.PI / 2], 'The start of the Lighthouse Walk. The wind off the water is cold and clean.');
+  add('belle', () => districtSpot('belle'), 'A Belle Époque street: ivy, iron balconies, a bakery opening its shutters.');
+  add('skatepark', () => { const S = SKATEPARK; return S && [S.bx * 8 + (S.x0 + S.x1) / 2, S.by * 8 + S.y0 + .15, Math.PI / 2]; }, 'The clack of wheels on concrete. A kid lands a kickflip and doesn\'t look round to see if you saw.');
+  add('downtown', () => districtSpot('downtown'), 'Downtown. Taxis, towers, everybody in a hurry but you.');
+  return out;
+}
+// put a new game somewhere: one of the spots, on clear ground, or (if none will do) where it always started
+// ?spawn=marina (or any spot's name) picks one; ?spawn=random forces the draw. Under test automation, without one of
+// those, a new game starts where it always did, so tests that rely on that corner still find it.
+function freshSpawn() {
+  if (!worldReady) return null;
+  const q = new URLSearchParams(location.search), want = q.get('spawn');
+  if (q.get('goto') || (!want && navigator.webdriver)) return null; // (?goto= has put you outside a shop already: main.js)
+  let spots = spawnPoints();
+  if (want && want !== 'random') spots = spots.filter(q => q[0] === want.toLowerCase().replace(/-/g, ' '));
+  while (spots.length) {
+    const [label, x, y, ang, line] = spots.splice(Math.floor(Math.random() * spots.length), 1)[0];
+    const sx = worldCoord(x), sy = worldCoord(y);
+    if (!free(sx, sy) || map[idx(Math.floor(sx), Math.floor(sy))] > 0) continue;
+    px = sx; py = sy; a = ang; pitch = 0;
+    if (typeof devStandBack === 'function') devStandBack(); // (not nose to a wall: dev.js)
+    say(line, 7);
+    return label;
+  }
+  return null;
+}
+// (loaded after main.js, so everything a spot needs is set up; save.js only notes that there was no game to load)
+if (freshStartPending) { freshStartPending = false; freshSpawn(); }
 // ===== touch: on a phone or tablet. A floating stick under the left thumb walks (or drives: push it to the rim to
 // run), dragging anywhere on the right looks round. Buttons are words, not keys, and only the ones that do something
 // right here show: the big one is whatever E would do (Talk, Enter, Get in...), smaller ones pop up beside it when
@@ -55537,7 +55706,7 @@ const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', ge
 // The same held-item verbs apply while walking or riding as a passenger.
 function touchHeldActions(out) {
   const it = heldItem();
-  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (it.id === 'spraypaint') out.push(['Colour', 'KeyR', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
   else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
 }
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
