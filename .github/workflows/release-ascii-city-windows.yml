@@ -1,15 +1,47 @@
 name: ASCII City Windows release
 
+# A release happens three ways: merging a version bump (src-tauri/tauri.conf.json) to main, pushing an
+# ascii-city-v* tag, or Run workflow on the Actions tab. Without a tag pushed, the release is created at the
+# commit that was built, which makes the tag on GitHub's side.
 on:
   push:
     tags:
       - 'ascii-city-v*'
+    branches:
+      - main
+    paths:
+      - 'src-tauri/tauri.conf.json'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Which release this would be, and whether it exists already (a bump that didn't change the version, a re-run)
+  release-check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      needed: ${{ steps.check.outputs.needed }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tag="$GITHUB_REF_NAME"
+          else tag="ascii-city-v$(node -p "require('./src-tauri/tauri.conf.json').version")"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $tag already exists: nothing to build."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   windows-installer:
+    needs: release-check
+    if: needs.release-check.outputs.needed == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,4 +74,5 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$env:GITHUB_REF_NAME" "src-tauri/target/release/bundle/nsis/ASCII-City-Setup.exe" "src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe" --generate-notes
+          TAG: ${{ needs.release-check.outputs.tag }}
+        run: gh release create "$env:TAG" "src-tauri/target/release/bundle/nsis/ASCII-City-Setup.exe" "src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe" --target "$env:GITHUB_SHA" --generate-notes
