@@ -74,13 +74,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
       return set(i, ' ', 0);
     }
   }
-  if (b.ivy && z < Math.min(h - 0.25, 2.5)) {
-    const vine = 0.24 + Math.sin(z * 3 + b.seed * 8) * 0.14 + z * 0.13;
-    const stem = Math.min(Math.abs(along - vine), z > 0.4 ? Math.abs(along - vine - Math.sin(z * 4) * 0.25) : 9);
-    if (stem < 0.028 || stem < 0.13 && grain > 0.25) {
-      BG[i] = C(GREEN, (stem < 0.028 ? 1.1 : 1.3 + grain * (fpB < .03 ? 1.2 : .3)) + L * 0.14); return set(i, ' ', 0); // ivy: its stem, and the leaves round it
-    }
-  }
+  if (b.ivy && z < Math.min(h - 0.25, 2.5) && belleIvy(i, along, z, h, b, L, fpB)) return; // ivy: stems, leaves, the season's colour (belle-ivy.js)
   if (h - z < 0.12 || Math.abs(z - 0.43) < 0.035) { BG[i] = C(WHITE, 2.4 + L * .3); return set(i, ' ', 0); } // cornice and string course
   if (along < 0.13 || width - along < 0.13) { BG[i] = C(WHITE, 2.4 + L * .28 - coveGroove(z, 1 / 8, .012, fpB) * 1.2); return set(i, ' ', 0); } // dressed corner quoins; no half windows
   if (z < 0.4) {
