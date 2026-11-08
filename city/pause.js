@@ -70,6 +70,8 @@ function buildPause() {
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
+      ${slider('bloom', 'Bloom', 0, 1, 0.05)}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}

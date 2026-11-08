@@ -153,7 +153,7 @@ function drawGame() {
        lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
      });
   placeMinigameFooter((y0+gh+2)*FS+10);
-  present();
+  present(false);
 }
 
 // ---- in the arcade: the cabinets (each plays one of ARCADE_GAMES), and the prize counter

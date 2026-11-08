@@ -116,6 +116,7 @@
     "city/terrain-render.js",
     "city/world-bridges-render.js",
     "city/render.js",
+    "city/post-fx.js",
     "city/drug-vision.js",
     "city/hud.js",
     "city/interactions.js",

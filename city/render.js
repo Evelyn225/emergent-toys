@@ -285,10 +285,10 @@ function render(dt,sceneOnly=false,mask=null) {
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
 // in one shader pass (glPresent) onto a canvas of its own, just under the game's canvas, which is then left clear for
-// the HUD and whatever else draws over the frame; without it, the canvas calls of present2D. (Whatever needs the
+// the HUD and whatever else draws over the frame (world: false for a minigame's screen, which gets less post-fx); without it, the canvas calls of present2D. (Whatever needs the
 // picture as you see it, both layers together, takes frameCanvas().)
-function present() {
-  if (!glPresent()) present2D();
+function present(world = true) {
+  if (!glPresent(world)) present2D();
 }
 // One pass of a fragment shader over the WebGL canvas: per cell, its character (from an atlas of the ASCII
 // glyphs drawn in the game's own font), its text and background colours (palette indices) and their fog. The rare
@@ -321,7 +321,7 @@ function glPresentInit() {
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
   const vs = sh(gl.VERTEX_SHADER, GLP_VS), fs = sh(gl.FRAGMENT_SHADER, GLP_FS);
   if (!vs || !fs) return null;
-  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
   gl.useProgram(prog);
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); // one triangle over the screen
@@ -356,7 +356,7 @@ function glPresentSize(st) {
   gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
   st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
 }
-function glPresent() {
+function glPresent(world = true) {
   if (GLP_OFF) return false;
   if (!GLP) { try { GLP = glPresentInit(); } catch (e) { GLP = null; } if (!GLP) { GLP_OFF = true; return false; } }
   const st = GLP, { gl, U } = st;
@@ -369,8 +369,10 @@ function glPresent() {
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
+  const post = postFxBegin(st, world); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
   gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (post) postFxEnd(st);
   g.clearRect(0, 0, cv.width, cv.height); // (the game's canvas, clear over the frame for what's drawn on top)
   for (const i of odd) { g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]]; g.fillText(CH[i], (i % cols) * cw, Math.floor(i / cols) * FS, cw); }
   return true;
