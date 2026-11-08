@@ -1,5 +1,5 @@
 'use strict';
-// Stage a small, self-contained copy of Glyphport for Tauri's Windows WebView.
+// Stage a small, self-contained copy of ASCII City for Tauri's Windows WebView.
 const fs = require('fs');
 const path = require('path');
 
@@ -18,7 +18,7 @@ const copy = (from, to = from) => {
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'src-tauri', 'tauri.conf.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Expected a stable desktop version');
 const html = fs.readFileSync(path.join(root, 'ascii-city.html'), 'utf8')
-  .replace('</head>', `  <script>window.__GLYPHPORT_DESKTOP__ = true; window.__GLYPHPORT_VERSION__ = ${JSON.stringify(version)};</script>\n</head>`);
+  .replace('</head>', `  <script>window.__ASCII_CITY_DESKTOP__ = true; window.__ASCII_CITY_VERSION__ = ${JSON.stringify(version)};</script>\n</head>`);
 fs.writeFileSync(path.join(out, 'index.html'), html);
 for (const file of ['ascii-city.bundle.js', 'ascii-city.webmanifest', 'w95font.woff', 'w95font.woff2', 'vendor/trystero.js', 'vendor/trystero-LICENSE.txt']) copy(file);
 for (const file of ['ascii-city-180.png', 'ascii-city-192.png', 'ascii-city-512.png', 'favicon-16x16.png', 'favicon-32x32.png', 'go-home.png']) {
@@ -27,4 +27,4 @@ for (const file of ['ascii-city-180.png', 'ascii-city-192.png', 'ascii-city-512.
 for (const file of fs.readdirSync(path.join(root, 'audio', 'ascii-city'))) {
   if (/\.(mp3|wav)$/.test(file)) copy(path.join('audio', 'ascii-city', file));
 }
-console.log('staged Glyphport desktop assets in desktop-dist');
+console.log('staged ASCII City desktop assets in desktop-dist');

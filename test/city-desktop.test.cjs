@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, '../city/desktop-release.js'
 const { desktopReleaseUpdate, newerDesktopVersion } = vm.runInNewContext(source + '\n({desktopReleaseUpdate, newerDesktopVersion})');
 const release = (version, overrides = {}) => ({
   tag_name: 'ascii-city-v' + version,
-  assets: [{ name: 'Glyphport-Setup.exe', browser_download_url: `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/Glyphport-Setup.exe` }],
+  assets: [{ name: 'ASCII-City-Setup.exe', browser_download_url: `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/ASCII-City-Setup.exe` }],
   ...overrides
 });
 test('desktop update versions compare numerically, including double-digit patches', () => {
@@ -19,7 +19,7 @@ test('desktop update versions compare numerically, including double-digit patche
 test('desktop updates select the newest complete official installer, ignoring unrelated and unfinished releases', () => {
   const releases = [release('1.0.4'), release('1.0.10'), release('1.0.8'), release('9.0.0', { draft: true }),
     release('8.0.0', { prerelease: true }), release('7.0.0', { tag_name: 'another-toy-v7.0.0' }),
-    release('6.0.0', { assets: [] }), release('5.0.0', { assets: [{ name: 'Glyphport-Setup.exe', browser_download_url: 'https://untrusted.example/setup.exe' }] }), { tag_name: 5 }, null];
+    release('6.0.0', { assets: [] }), release('5.0.0', { assets: [{ name: 'ASCII-City-Setup.exe', browser_download_url: 'https://untrusted.example/setup.exe' }] }), { tag_name: 5 }, null];
   const update = desktopReleaseUpdate(releases, '1.0.3');
   assert.equal(update.version, '1.0.10');
   assert.equal(update.url, release('1.0.10').assets[0].browser_download_url);

@@ -17,8 +17,8 @@ function desktopReleaseUpdate(releases, installed) {
     if (!release || release.draft || release.prerelease || typeof release.tag_name !== 'string' || !release.tag_name.startsWith('ascii-city-v')) continue;
     const version = release.tag_name.slice('ascii-city-v'.length);
     if (!newerDesktopVersion(version, update ? update.version : installed)) continue;
-    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/Glyphport-Setup.exe`;
-    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'Glyphport-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
+    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/ASCII-City-Setup.exe`;
+    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'ASCII-City-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
   }
   return update;
 }

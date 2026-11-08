@@ -1,8 +1,8 @@
-// ===== the Glyphport Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
+// ===== the ASCII City Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
 // steps, columns hung with banners, bronze doors, a copper dome. Open 10 to 6, $10 in.
 // Inside: the entrance hall with a T. rex skeleton and the gift shop desk; the Egyptian room to the west (a gold
 // sarcophagus, the walls covered in hieroglyphs); the picture gallery to the east (every painting generated, so no two
-// frames match); and through the arch at the back, the gem room: the Glyphport Star (a diamond the size of your fist)
+// frames match); and through the arch at the back, the gem room: the ASCII City Star (a diamond the size of your fist)
 // and the Equinox Orrery (turn its crank and the year turns) under glass. Every exhibit has a plaque (E).
 // After dark it's a job: pick the door lock (L), keep out of the guards' torch beams (crouch and they see less far),
 // crack a case (the lock game). That sets off a silent alarm: half a minute, then every cop in town. What you take
@@ -70,7 +70,7 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, ' ', 0);
   }
   if (front && z > 1.18 && z <= 1.32) { // the frieze
-    if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
+    if (wallText(i, u, uStep, z, d, 'ASCII CITY MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
     BG[i] = C(STONE, 1.9 + L * .3 - (fract(z * 30) < 0.15 ? .5 : 0)); return set(i, ' ', 0);
   }
   if (z < 1.18) { // the colonnade: steps, eight fluted columns, banners hung between them, the bronze doors
@@ -199,7 +199,7 @@ function museumAlarm(line) {
 }
 
 // ---- what's on show: the plaques, and the two cases
-const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE GLYPHPORT STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
+const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE ASCII CITY STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
   { id: 'orrery', x: 15.5, y: 4.3, plaque: 'THE EQUINOX ORRERY. Brass and glass, maker unknown. The story goes that turning its crank turns the year. Please do not turn the crank.' }];
 const PLAQUES = [
   [12.5, 13.2, 2.6, 'TYRANNOSAURUS GLYPHUS. Dug out of the cliffs under the lighthouse in 1911. Its arms were too short to hold this plaque, so we did.'],
@@ -224,7 +224,7 @@ function museumUse() {
   if (!sp) return false;
   if (sp.text) return say(sp.text, 6), true;
   const c = sp.case;
-  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
+  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The ASCII City Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
   if (!room.burgled) return say(c.plaque, 6), true;
   if (inv.length >= INV_SIZE) return say('Your bag is full.'), true;
   startCrime('lockpick', ok => {
@@ -233,7 +233,7 @@ function museumUse() {
     museumStolen[c.id] = true; carryItem({ id: c.id, uses: 0 });
     room.props = room.props.filter(p => p.exhibit !== c.id);
     if (!room.silent && !room.alarm) room.silent = T + 30;
-    say(`The case clicks open. ${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
+    say(`The case clicks open. ${c.id === 'diamond' ? 'The ASCII City Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
   });
   return true;
 }

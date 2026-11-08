@@ -760,7 +760,7 @@ function useHeldItem() {
   if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
-  if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
+  if (heldItem() && heldItem().id === 'spraypaint') return; // (held down, Q sprays: spray-paint.js)
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
     const name = ITEMS[heldItem().id].name, [, sound] = useHeld({ indoors: false, x: px, y: py, a, rain, person: null, headlines: HEADLINES(), water: false });
     say(rain > 0.3 ? `A soggy picnic. The ${name} is good anyway.` : pick([`A picnic on the grass. The ${name} tastes better out here.`, `You eat your ${name} on the lawn. A sparrow watches every bite.`, day > 0.3 ? `Sun on your back, ${name} in hand. Not a bad afternoon.` : `A picnic by moonlight. The ${name} and the crickets.`]), 3);

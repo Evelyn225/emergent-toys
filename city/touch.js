@@ -62,7 +62,7 @@ const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', ge
 // The same held-item verbs apply while walking or riding as a passenger.
 function touchHeldActions(out) {
   const it = heldItem();
-  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (it.id === 'spraypaint') out.push(['Colour', 'KeyR', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
   else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
 }
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)

@@ -52,7 +52,7 @@ function minigamePresentation(g){
  if(ui.key!==key||ui.game!==game){
   ui.el.hidden=false;ui.key=key;ui.game=game;ui.el.style.setProperty('--game-accent',PAL[C(gameFrameColor(g),12)]);
   const setText=(sel,text)=>{const el=ui.el.querySelector(sel);if(el.textContent!==text)el.textContent=text;};
-  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'GLYPHPORT'));
+  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'ASCII CITY'));
   setText('h1',g.title);setText('.game-summary',summary);ui.el.querySelector('.game-summary').hidden=!summary;setText('.game-status',status);setText('.game-earned',earned);
   ui.footer.hidden=result;ui.result.hidden=!result;ui.result.dataset.kind=game.kind;ui.el.querySelector('footer button').hidden=TOUCH;setText('footer button',({cook:'Stop cooking',workshop:'Stop machine',shift:'Clock off',crime:'Back off',bout:'Towel'}[game.kind]||'Leave')+(CONTROLLER.active?' · B':' · E / Esc'));ui.el.querySelector('.game-actions').hidden=TOUCH;
   for(const el of [ui.header,ui.footer,ui.result]){el.style.left=left+'px';el.style.width=width+'px';}

@@ -41,6 +41,8 @@ test('real abandoned shopfronts visibly age in native renders and remain anonymo
   return result||{missingView:true};
  });
  assert.equal(r.missing,undefined);assert.equal(r.missingView,undefined);assert.ok(r.changed>30);assert.equal(r.open,false);assert.equal(r.signed,false);assert.ok(!r.prompt.includes(r.word)&&!/LEASE|closed down/.test(r.prompt),JSON.stringify(r));
+ // (nothing else in reach for E to act on: a car stopped at the kerb or a station's vehicle would be taken instead)
+ await p.evaluate(()=>{for(let k=cars.length-1;k>=0;k--)if(Math.hypot(rel(cars[k].x-px),rel(cars[k].y-py))<1.5)cars.splice(k,1);for(const b of SERVICES)if(Math.hypot(rel(b.x-px),rel(b.y-py))<1.5)b.out=true;});
  await p.keyboard.press('KeyE');assert.equal(await p.evaluate(()=>mode),'walk');
 }));
 test('closed-for-good street faces attract substantially more tags, including a valid palette in otherwise pristine districts',()=>fixture(async p=>{

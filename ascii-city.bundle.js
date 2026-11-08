@@ -329,8 +329,8 @@ function desktopReleaseUpdate(releases, installed) {
     if (!release || release.draft || release.prerelease || typeof release.tag_name !== 'string' || !release.tag_name.startsWith('ascii-city-v')) continue;
     const version = release.tag_name.slice('ascii-city-v'.length);
     if (!newerDesktopVersion(version, update ? update.version : installed)) continue;
-    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/Glyphport-Setup.exe`;
-    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'Glyphport-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
+    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/ASCII-City-Setup.exe`;
+    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'ASCII-City-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
   }
   return update;
 }
@@ -350,7 +350,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
@@ -1714,7 +1714,7 @@ function onIsland(x, y, margin = 0) {
   return Math.abs(rel(x - ISLE.x)) <= reach && Math.abs(rel(y - ISLE.y)) <= reach && isleEdge(x, y) > -margin;
 }
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && worldCoord(y) > FOOTBRIDGE.y0 && worldCoord(y) < FOOTBRIDGE.y1;
-// ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
+// ---- the airport: ASCII City International, on reclaimed land out in the bay west of the first bridge, joined to the
 // promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
 // hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
 // grass, the runway (east-west: 09 / 27), grass, and rocks round the shore.
@@ -7840,10 +7840,10 @@ const ITEMS = {
   goldfish: { name: 'goldfish in a bag', price: 3, kind: 'gear' }, // (won at the night market's tub)
   // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
   pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
-  cityglobe: { name: 'Glyphport snow globe', price: 350, kind: 'gear' },
-  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica Glyphport Star', price: 15, kind: 'gear' }, // (the museum gift shop)
+  cityglobe: { name: 'ASCII City snow globe', price: 350, kind: 'gear' },
+  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica ASCII City Star', price: 15, kind: 'gear' }, // (the museum gift shop)
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
-  diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
+  diamond: { name: 'the ASCII City Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
   hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
   hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
@@ -8164,7 +8164,7 @@ function useHeld(near) {
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
     case 'dinotoy': return ['RAWR. The little T. rex\'s arms flap uselessly.', 'squeak'];
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
-    case 'diamond': return [pick(['The Glyphport Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
+    case 'diamond': return [pick(['The ASCII City Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
     case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
     case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
     case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
@@ -8213,7 +8213,7 @@ function fortune() {
   return `${FORTUNE_HINT[s.sym]} Lucky numbers: ${[0, 0, 0].map(() => 1 + (Math.random() * 49 | 0)).join(', ')}`;
 }
 const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) => t + w, 0); for (const [id, w] of list) if ((r -= w) < 0) return id; return list[0][0]; };
-// the Glyphport snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
+// the ASCII City snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
 // give the snow a few seconds to settle before you try again
 const GLOBE_SETTLE = 8;
 let globeT = -99;
@@ -12774,7 +12774,7 @@ function cityLayoutInventory(splitY = 72) {
     group('gardens', 'Botanical Gardens', GARDEN.x0, GARDEN.y0, GARDEN.x0 + GARDEN.w, GARDEN.y0 + GARDEN.h),
     ...[['casino', CASINO], ['exchange', EXCHANGE], ['museum', MUSEUM], ['club', CLUB], ['aquarium', AQUARIUM]].map(([id, b]) =>
       group(id, b.sh.word, b.bx * 8, b.by * 8, b.bx * 8 + 8, b.by * 8 + 8)),
-    group('airport', 'Glyphport International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
+    group('airport', 'ASCII City International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
     group('lighthouse', 'Lighthouse and footbridge', ISLE.x - ISLE.r * 1.5, FOOTBRIDGE.y0, ISLE.x + ISLE.r * 1.5, ISLE.y + ISLE.r * 1.5),
     group('fair', 'Sunset Pier', FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1),
     group('marina', 'Marina', MARINA.x - MARINA.reach - 1.2, MARINA.y0 - 1.2, MARINA.x + MARINA.reach + 1.2, MARINA.end + .8),
@@ -13784,7 +13784,7 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
-const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
+const NATIVE_MOUSE_APP = Boolean(window.__ASCII_CITY_DESKTOP__ && window.__TAURI__?.core?.invoke);
 let desktopMouseCaptured = false;
 let desktopMouseFallback = false;
 let desktopMouseReady = Promise.resolve();
@@ -16175,6 +16175,7 @@ function tagCell(i, q, r, t, L) {
 // the facade asks first: graffiti here? (true if it painted the cell)
 function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), face = faceOf(side, mx, my), L = fog * amb * (side ? 10 : 15), flip = u < 0 !== wc < 0 ? -1 : 1;
+  if (paintCell(i, k, face, wc, z, uStep, d, L)) return true; // (your own spray paint, on top of everything: spray-paint.js)
   const mine = tagIndex.get(k);
   if (mine) for (const t of mine) {
     if (t.face !== face || Math.abs(rel(wc - t.u)) > TAG_W / 2 || Math.abs(z - t.z) > TAG_H / 2) continue;
@@ -16224,6 +16225,130 @@ function sprayTag() {
   if (empty) removeHeld();
   const w = crime('graffiti', px, py);
   say((w === 'cop' ? '"HEY! You! Drop the can!"' : w === 'reported' ? 'Psssht. Somebody across the street gets their phone out.' : pick(['Psssht. Nice.', 'Psssht. Your mark on the city.', 'Psssht. Nobody saw. Probably.'])) + (empty ? ' The can rattles empty.' : ''), 3);
+}
+'use strict';
+// ---- freehand spray paint. Hold the can, face a wall, hold Q: paint goes where you're looking, a soft round dot with
+// overspray round it, so moving your view draws lines. Closer to the wall the line is finer; Shift is the fat cap; R
+// changes colour. Hold still too long and it runs. The can empties with how much you sprayStroke. Police still call it
+// vandalism.
+//
+// The paint is plain data: dots [cell, face, u, z, r, colour, seed] on the faces of buildings (u: along the wall, in
+// world coordinates; z: height, cells). Everything that paints goes through paintDots(), and every dot added goes out
+// to PAINT_LISTENERS, so another player's spray can be applied with paintDots(theirDots, false) and yours sent on.
+
+const SPRAY_COLOURS = [MAG, CYAN, GREEN, ORANGE, RED, YEL, WHITE, BLUE, BLACK];
+const SPRAY_NAMES = ['magenta', 'cyan', 'green', 'orange', 'red', 'yellow', 'white', 'blue', 'black'];
+const SPRAY_REACH = .4; // you can paint a wall up to 4m away
+const PAINT_MAX = 12000; // dots kept citywide; past it the oldest go (the council scrubs them)
+const PAINT_BUCKET = .05;
+const sprayDots = []; // every dot, oldest first
+let paintIndex = new Map(); // cell*4+face -> Map(bucket key -> dots)
+const PAINT_LISTENERS = []; // fn(dots): called with each batch of dots you spray (for sending to other players)
+const paintBucketKey = (u, z) => Math.floor(u / PAINT_BUCKET) * 4096 + Math.floor(z / PAINT_BUCKET);
+function paintIndexDot(d) {
+  const fk = d[0] * 4 + d[1];
+  let face = paintIndex.get(fk);
+  if (!face) paintIndex.set(fk, face = new Map());
+  const bk = paintBucketKey(d[2], d[3]);
+  let list = face.get(bk);
+  if (!list) face.set(bk, list = []);
+  list.push(d);
+}
+function reindexPaint() { paintIndex = new Map(); for (const d of sprayDots) paintIndexDot(d); }
+// add dots (yours, or another player's with announce false); trims the oldest past the cap
+function paintDots(dots, announce = true) {
+  for (const d of dots) { sprayDots.push(d); paintIndexDot(d); }
+  if (sprayDots.length > PAINT_MAX) { sprayDots.splice(0, sprayDots.length - PAINT_MAX + 500); reindexPaint(); }
+  if (announce) for (const fn of PAINT_LISTENERS) try { fn(dots); } catch (e) { /* (a listener's problem, not the can's) */ }
+}
+const paintSave = () => sprayDots.map(d => [d[0], d[1], +d[2].toFixed(4), +d[3].toFixed(4), +d[4].toFixed(4), d[5], d[6]]);
+function paintLoad(list) { sprayDots.length = 0; for (const d of list || []) if (Array.isArray(d) && d.length >= 7) sprayDots.push(d); if (sprayDots.length > PAINT_MAX) sprayDots.splice(0, sprayDots.length - PAINT_MAX); reindexPaint(); }
+
+// the facade asks: paint on this cell of this face? (true if it painted the screen cell)
+function paintCell(i, k, face, wc, z, uStep, d, L) {
+  const faceDots = paintIndex.get(k * 4 + PAINT_FACE[face]);
+  if (!faceDots) return false;
+  const fp = Math.max(uStep, d / projY), bu = Math.floor(wc / PAINT_BUCKET), bz = Math.floor(z / PAINT_BUCKET);
+  let hit = null;
+  for (let du = -1; du <= 1; du++) for (let dz = -1; dz <= 1; dz++) {
+    const list = faceDots.get((bu + du) * 4096 + bz + dz);
+    if (list) for (const dot of list) {
+      const r = dot[4], dist = Math.hypot(rel(wc - dot[2]), z - dot[3]);
+      if (dist > r * 1.6 + fp * .5) continue;
+      // the core is solid; the overspray round it is speckle, thinning outward (far off, averaged into a soft edge)
+      let on = dist < r * .8;
+      if (!on) {
+        const t = (dist - r * .8) / (r * .8);
+        on = fp > r * .5 ? t < .35 : hash(Math.floor(wc * 900), Math.floor(z * 900), dot[6]) > .35 + t * .65;
+      }
+      if (on) hit = dot; // (the last one sprayed is on top)
+    }
+  }
+  if (!hit) return false;
+  const lit = Math.max(L * 1.05, 4), col = SPRAY_COLOURS[hit[5]] ?? MAG;
+  BG[i] = C(col, col === BLACK ? 1 + L * .05 : lit * (.62 + hash(Math.floor(wc * 300), Math.floor(z * 300), 4411) * .08));
+  return set(i, ' ', 0), true;
+}
+
+// where the crosshair meets a wall you could paint: the cell, face, u along it and z up it, and how far off
+function sprayAim() {
+  if (mode !== 'walk' || !lookHit || lookHit.d > SPRAY_REACH) return null;
+  const k = idx(lookHit.mx, lookHit.my);
+  if (!map[k] || STY[k] >= 3 && STY[k] <= 6) return null; // (not the landmarks)
+  const d = lookHit.d, hx = px + Math.cos(a) * d, hy = py + Math.sin(a) * d, fx_ = fract(hx), fy = fract(hy);
+  const side = Math.min(fy, 1 - fy) < Math.min(fx_, 1 - fx_), face = faceOf(side, lookHit.mx, lookHit.my);
+  const z = eye + (hor - (rows >> 1) - .5) * d / projY;
+  if (z < .005 || z > map[k] - .005) return null; // (below the pavement, above the roofline)
+  return { cell: k, face, faceIdx: PAINT_FACE[face], u: worldCoord(side ? hx : hy), z, d };
+}
+let sprayStroke = null; // the stroke in progress: { last: [u, z], cell, face, still, born, dist, hiss }
+function sprayColourOf(it) { return it.col ?? (it.uses & 3); }
+function sprayCycleColour() {
+  const it = heldItem();
+  if (it?.id !== 'spraypaint') return false;
+  it.col = (sprayColourOf(it) + 1) % SPRAY_COLOURS.length;
+  say(`The ${SPRAY_NAMES[it.col]} can.`, 1.2);
+  return true;
+}
+function stepSprayPaint(dt) {
+  const it = heldItem();
+  if (it?.id !== 'spraypaint' || !K.KeyQ || wanted.busted) { sprayStroke = null; return; }
+  const aim = sprayAim();
+  if (!aim) { if (sprayStroke) sprayStroke.last = null; return; }
+  const fat = K.ShiftLeft || K.ShiftRight, r = (.0025 + aim.d * .013) * (fat ? 2.3 : 1), col = sprayColourOf(it);
+  if (!sprayStroke) { // a new stroke: is anyone watching?
+    sprayStroke = { last: null, still: 0, born: T, dist: 0, hiss: 0, crimeT: T };
+    const w = crime('graffiti', px, py);
+    if (w === 'cop') say('"HEY! You! Drop the can!"', 3);
+    else if (w === 'reported') say('Somebody across the street gets their phone out.', 3);
+  }
+  if (T - sprayStroke.crimeT > 6) { sprayStroke.crimeT = T; crime('graffiti', px, py); } // (a long session gets noticed again)
+  const dots = [], seed = () => Math.floor(Math.random() * 1e6);
+  const last = sprayStroke.last && sprayStroke.last.cell === aim.cell && sprayStroke.last.face === aim.face ? sprayStroke.last : null;
+  const step = Math.max(.003, r * .35);
+  if (last) {
+    const du = rel(aim.u - last.u), dz = aim.z - last.z, len = Math.hypot(du, dz);
+    if (len >= step) { // the line from the last dot to here, filled in so a quick sweep is still a line
+      const n = Math.min(40, Math.ceil(len / step));
+      for (let s = 1; s <= n; s++) dots.push([aim.cell, aim.faceIdx, worldCoord(last.u + du * s / n), last.z + dz * s / n, r, col, seed()]);
+      sprayStroke.dist += len; sprayStroke.still = 0;
+    } else sprayStroke.still += dt;
+  } else dots.push([aim.cell, aim.faceIdx, aim.u, aim.z, r, col, seed()]);
+  // held in one place, the paint pools and runs
+  if (sprayStroke.still > .7 && (sprayStroke.drip = (sprayStroke.drip || 0) + dt) > .12) {
+    sprayStroke.drip = 0;
+    const run = Math.min(.09, (sprayStroke.still - .7) * .05);
+    dots.push([aim.cell, aim.faceIdx, worldCoord(aim.u + (hash(Math.floor(aim.u * 99), 1, 4412) - .5) * r * .6), aim.z - r * .6 - run, r * .28, col, seed()]);
+  }
+  if (dots.length) {
+    paintDots(dots);
+    sprayStroke.last = { cell: aim.cell, face: aim.face, u: aim.u, z: aim.z };
+  }
+  if (actx && (sprayStroke.hiss -= dt) <= 0) { sprayStroke.hiss = .11; burst(actx.currentTime, .14, [filt('highpass', 3800, .7)], .06); } // psssss
+  // the can empties: a can's worth is about 3 cells (30m) of line, fat cap faster
+  it.paint = (it.paint ?? 1) - (dots.length ? (last ? Math.hypot(rel(aim.u - last.u), aim.z - last.z) : r) : 0) * (fat ? 2.2 : 1) / .5;
+  while (it.paint <= 0 && it.uses > 0) { it.uses--; it.paint += 1; }
+  if (it.uses <= 0) { removeHeld(); sprayStroke = null; say('The can sputters and rattles empty.', 2); }
 }
 // Belle stone cornices, balconies and copper roofs use the shared geometry from belle-geometry.js.
 function belleDetailShade(o, i, t, L) {
@@ -22509,7 +22634,7 @@ const TERMINAL_GRID = ['########DD############DD########', ...Array.from({ lengt
 
 // in by one of the building's doors: the main doors into check-in, the airside ones in by the gates
 function enterTerminal(d) {
-  enterRoom('terminal', { word: 'GLYPHPORT', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
+  enterRoom('terminal', { word: 'ASCII CITY', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
 }
 // and out: by the door you walk into, the main doors or the nearer airside one
 function leaveTerminal() {
@@ -26672,11 +26797,11 @@ function stepExchange() {
     if (shares[n.sym] || mode === 'room' && room.kind === 'exchange') say(`NEWS: ${n.line}. ${n.sym} ${n.up ? 'jumps' : 'drops'} to ${fmt$(stockBy(n.sym).price)}.`, 5);
   }
 }
-// ===== the Glyphport Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
+// ===== the ASCII City Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
 // steps, columns hung with banners, bronze doors, a copper dome. Open 10 to 6, $10 in.
 // Inside: the entrance hall with a T. rex skeleton and the gift shop desk; the Egyptian room to the west (a gold
 // sarcophagus, the walls covered in hieroglyphs); the picture gallery to the east (every painting generated, so no two
-// frames match); and through the arch at the back, the gem room: the Glyphport Star (a diamond the size of your fist)
+// frames match); and through the arch at the back, the gem room: the ASCII City Star (a diamond the size of your fist)
 // and the Equinox Orrery (turn its crank and the year turns) under glass. Every exhibit has a plaque (E).
 // After dark it's a job: pick the door lock (L), keep out of the guards' torch beams (crouch and they see less far),
 // crack a case (the lock game). That sets off a silent alarm: half a minute, then every cop in town. What you take
@@ -26744,7 +26869,7 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, ' ', 0);
   }
   if (front && z > 1.18 && z <= 1.32) { // the frieze
-    if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
+    if (wallText(i, u, uStep, z, d, 'ASCII CITY MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
     BG[i] = C(STONE, 1.9 + L * .3 - (fract(z * 30) < 0.15 ? .5 : 0)); return set(i, ' ', 0);
   }
   if (z < 1.18) { // the colonnade: steps, eight fluted columns, banners hung between them, the bronze doors
@@ -26873,7 +26998,7 @@ function museumAlarm(line) {
 }
 
 // ---- what's on show: the plaques, and the two cases
-const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE GLYPHPORT STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
+const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE ASCII CITY STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
   { id: 'orrery', x: 15.5, y: 4.3, plaque: 'THE EQUINOX ORRERY. Brass and glass, maker unknown. The story goes that turning its crank turns the year. Please do not turn the crank.' }];
 const PLAQUES = [
   [12.5, 13.2, 2.6, 'TYRANNOSAURUS GLYPHUS. Dug out of the cliffs under the lighthouse in 1911. Its arms were too short to hold this plaque, so we did.'],
@@ -26898,7 +27023,7 @@ function museumUse() {
   if (!sp) return false;
   if (sp.text) return say(sp.text, 6), true;
   const c = sp.case;
-  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
+  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The ASCII City Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
   if (!room.burgled) return say(c.plaque, 6), true;
   if (inv.length >= INV_SIZE) return say('Your bag is full.'), true;
   startCrime('lockpick', ok => {
@@ -26907,7 +27032,7 @@ function museumUse() {
     museumStolen[c.id] = true; carryItem({ id: c.id, uses: 0 });
     room.props = room.props.filter(p => p.exhibit !== c.id);
     if (!room.silent && !room.alarm) room.silent = T + 30;
-    say(`The case clicks open. ${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
+    say(`The case clicks open. ${c.id === 'diamond' ? 'The ASCII City Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
   });
   return true;
 }
@@ -28064,10 +28189,10 @@ function render(dt,sceneOnly=false,mask=null) {
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
 // in one shader pass (glPresent) onto a canvas of its own, just under the game's canvas, which is then left clear for
-// the HUD and whatever else draws over the frame; without it, the canvas calls of present2D. (Whatever needs the
+// the HUD and whatever else draws over the frame (world: false for a minigame's screen, which gets less post-fx); without it, the canvas calls of present2D. (Whatever needs the
 // picture as you see it, both layers together, takes frameCanvas().)
-function present() {
-  if (!glPresent()) present2D();
+function present(world = true) {
+  if (!glPresent(world)) present2D();
 }
 // One pass of a fragment shader over the WebGL canvas: per cell, its character (from an atlas of the ASCII
 // glyphs drawn in the game's own font), its text and background colours (palette indices) and their fog. The rare
@@ -28100,7 +28225,7 @@ function glPresentInit() {
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
   const vs = sh(gl.VERTEX_SHADER, GLP_VS), fs = sh(gl.FRAGMENT_SHADER, GLP_FS);
   if (!vs || !fs) return null;
-  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
   gl.useProgram(prog);
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); // one triangle over the screen
@@ -28135,7 +28260,7 @@ function glPresentSize(st) {
   gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
   st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
 }
-function glPresent() {
+function glPresent(world = true) {
   if (GLP_OFF) return false;
   if (!GLP) { try { GLP = glPresentInit(); } catch (e) { GLP = null; } if (!GLP) { GLP_OFF = true; return false; } }
   const st = GLP, { gl, U } = st;
@@ -28148,8 +28273,10 @@ function glPresent() {
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
+  const post = postFxBegin(st, world); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
   gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (post) postFxEnd(st);
   g.clearRect(0, 0, cv.width, cv.height); // (the game's canvas, clear over the frame for what's drawn on top)
   for (const i of odd) { g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]]; g.fillText(CH[i], (i % cols) * cw, Math.floor(i / cols) * FS, cw); }
   return true;
@@ -28199,6 +28326,213 @@ function present2D() {
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
     x = x1; // trailing blank cells were already scanned while finding this run
   }
+}
+// Post-processing on the WebGL presenter (render.js glPresent). Only the GL path gets it: the canvas fallback is
+// already the slow path. With every effect off the grid shader draws straight to the screen as before, at no cost.
+// Each effect has its own setting (pause menu, "view"); all are kept subtle.
+//
+// Bloom: the grid is drawn into a full-size texture; its bright parts (judged by the brightest channel, so a pure
+// red neon glows as much as a white lamp) are box-filtered down to 1/4 size, blurred, taken down again to 1/8 for a
+// wider halo, blurred, and screen-blended back over the frame. Screen blending, not adding, so a lit sky can't clip
+// to white, and damped over what's already bright, so a big lit surface keeps its colour and only its edges
+// glow. Tuned so it mostly shows at night: signs, lamps, windows, headlights.
+// Rain streaks: in rain, and on wet streets after it, the same bright parts are also smeared up and down, the way
+// lights run on a wet lens and stretch over wet tarmac.
+// Colour grade: cool shadows and warm lights at night, warm at dusk, a touch of contrast by day, flatter in fog.
+// Vignette: the corners a little darker. Grain: a fine moving noise, mostly in the dark, that hides banding.
+// Minigames get only the vignette and grain: grading or smearing them would just muddy their colours.
+const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
+// box-filter a texture down; threshold > 0 keeps only what's bright (soft knee, so nothing pops in or out)
+const POSTFX_DOWN = `precision highp float;
+uniform sampler2D src, mask; uniform vec2 srcSize, dstSize, canvas, cell, grid; uniform float spread, threshold, knee;
+vec3 tap(vec2 uv) { return texture2D(src, uv).rgb; }
+void main() {
+  vec2 uv = gl_FragCoord.xy / dstSize, t = spread / srcSize;
+  vec3 c = (tap(uv + vec2(-t.x, -t.y)) + tap(uv + vec2(t.x, -t.y)) + tap(uv + vec2(-t.x, t.y)) + tap(uv + t)) * 0.25;
+  if (threshold > 0.0) {
+    float b = max(c.r, max(c.g, c.b)); c *= smoothstep(threshold, threshold + knee, b);
+    vec2 px = uv * canvas; c *= texture2D(mask, vec2(px.x, canvas.y - px.y) / cell / grid).r; // (per cell: how much it may glow)
+  }
+  gl_FragColor = vec4(c, 1.0);
+}`;
+// one direction of a 9-tap gaussian, in 5 linear samples (dir longer than 1 spreads the taps for a longer smear)
+const POSTFX_BLUR = `precision highp float;
+uniform sampler2D src; uniform vec2 size, dir;
+void main() {
+  vec2 uv = gl_FragCoord.xy / size, o1 = dir * 1.3846153846 / size, o2 = dir * 3.2307692308 / size;
+  vec3 c = texture2D(src, uv).rgb * 0.2270270270
+    + (texture2D(src, uv + o1).rgb + texture2D(src, uv - o1).rgb) * 0.3162162162
+    + (texture2D(src, uv + o2).rgb + texture2D(src, uv - o2).rgb) * 0.0702702703;
+  gl_FragColor = vec4(c, 1.0);
+}`;
+const POSTFX_COMPOSE = `precision highp float;
+uniform sampler2D scene, near, wide, streak; uniform vec2 size;
+uniform float bloom, streaks, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
+float hash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
+void main() {
+  vec2 uv = gl_FragCoord.xy / size;
+  vec3 s = texture2D(scene, uv).rgb;
+  if (bloom > 0.0 || streaks > 0.0) {
+    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks;
+    b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
+    s = 1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0));
+  }
+  if (grade > 0.0) {
+    float l = dot(s, vec3(0.299, 0.587, 0.114));
+    vec3 g = mix(vec3(l), s, sat) * mix(shadowTint, lightTint, smoothstep(0.05, 0.6, l));
+    s = mix(s, clamp(g, 0.0, 1.0), grade);
+  }
+  if (vignette > 0.0) {
+    vec2 d = (uv - 0.5) * vec2(size.x / size.y, 1.0);
+    s *= 1.0 - vignette * smoothstep(0.35, 1.0, length(d));
+  }
+  if (grain > 0.0) {
+    float l = max(s.r, max(s.g, s.b));
+    float n = hash(gl_FragCoord.xy + seed) + hash(gl_FragCoord.xy * 1.37 + seed * 0.71) - 1.0; // (triangular: no visible bias)
+    s += n * grain * (0.0125 * (1.0 - l) + 0.003);
+  }
+  gl_FragColor = vec4(s, 1.0);
+}`;
+const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
+// How much each cell may feed the bloom: puddles (FL 2) mirror the lamps and signs above them, and blooming the
+// reflection as well as the light doubled every glow into a big smear across the road; they keep a little.
+const POSTFX_PUDDLE_GLOW = 0.25;
+
+// how much of the night look: outdoors the sky's; a room is lit by its own lamps, so it reads as evening at least
+const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
+function postFxBloom() {
+  const k = clamp(Number(settings.bloom) || 0, 0, 1);
+  return k && k * (0.6 + 0.15 * postFxNight());
+}
+// what counts as bright (brightest channel, 0-1). The night city is almost all under a quarter, its lights well
+// above; by day a third of the frame is sky and walls at 0.4-0.6, so only what's brighter than that glows.
+const postFxThreshold = () => 0.62 - 0.24 * postFxNight();
+// rain smears lights; wet streets after it still do, a little. Outdoors only.
+function postFxStreaks() {
+  if (!settings.rainStreaks || mode === 'room') return 0;
+  return clamp(Math.max(rain || 0, (wet || 0) * 0.2), 0, 1) * (0.5 + 0.5 * postFxNight());
+}
+// the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
+function postFxGrade() {
+  const n = mode === 'room' ? 0.3 : postFxNight(), dk = mode === 'room' ? 0 : (dusk || 0) * (1 - n * 0.5), d = Math.max(0, 1 - n - dk);
+  const tot = n + dk + d, mix3 = (a, b, c) => [0, 1, 2].map(k => (a[k] * n + b[k] * dk + c[k] * d) / tot);
+  let shadow = mix3([0.9, 0.96, 1.1], [0.98, 0.93, 1.02], [0.99, 1.0, 1.02]);
+  const light = mix3([1.04, 1.0, 0.94], [1.1, 1.0, 0.88], [1.04, 1.02, 0.98]);
+  let sat = (n * 0.94 + dk * 1.08 + d * 1.05) / tot;
+  const f = mode === 'room' ? 0 : clamp(fogAmt || 0, 0, 1);
+  if (f) { sat *= 1 - 0.15 * f; shadow = shadow.map(x => x + (1 - x) * f * 0.5); }
+  return { shadow, light, sat };
+}
+// is any effect on for this frame? (minigames: only the ones that suit a flat screen of text)
+function postFxWanted(world) {
+  if (POSTFX_OFF) return false;
+  if (settings.vignette || settings.grain) return true;
+  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || !!settings.colorGrade);
+}
+
+function postFxInit(st) {
+  const { gl } = st;
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
+  const vs = sh(gl.VERTEX_SHADER, POSTFX_VS);
+  const program = src => {
+    const fs = sh(gl.FRAGMENT_SHADER, src); if (!vs || !fs) return null;
+    const p = gl.createProgram(); gl.attachShader(p, vs); gl.attachShader(p, fs);
+    gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p); // (the grid shader's triangle, at location 0 too)
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return null;
+    const loc = {}; return { p, U: n => loc[n] ??= gl.getUniformLocation(p, n) };
+  };
+  const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE);
+  if (!down || !blur || !compose) return null;
+  gl.useProgram(compose.p);
+  ['scene', 'near', 'wide', 'streak'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
+  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 4);
+  gl.useProgram(blur.p); gl.uniform1i(blur.U('src'), POSTFX_UNIT);
+  gl.useProgram(st.prog);
+  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, mask);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.activeTexture(gl.TEXTURE0);
+  return { down, blur, compose, mask, key: '' };
+}
+
+// a colour texture and a framebuffer drawing into it
+function postFxTarget(gl, w, h) {
+  const tex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT); gl.bindTexture(gl.TEXTURE_2D, tex);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return ok ? { tex, fb, w, h } : null;
+}
+const POSTFX_TARGETS = ['scene', 'a4', 'b4', 's4', 'a8', 'b8'];
+function postFxSize(st, fx) {
+  const { gl } = st, W = cv.width, H = cv.height, key = W + 'x' + H;
+  if (fx.key === key && fx.maskKey === cols + 'x' + rows) return true;
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); // (the mask's rows are one byte a cell, any width)
+  fx.maskData = new Uint8Array(cols * rows); fx.maskKey = cols + 'x' + rows;
+  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, cols, rows, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, fx.maskData);
+  if (fx.key === key) return true;
+  for (const n of POSTFX_TARGETS) if (fx[n]) { gl.deleteTexture(fx[n].tex); gl.deleteFramebuffer(fx[n].fb); }
+  const q = n => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
+  fx.scene = postFxTarget(gl, W, H);
+  fx.a4 = postFxTarget(gl, ...q(4)); fx.b4 = postFxTarget(gl, ...q(4)); fx.s4 = postFxTarget(gl, ...q(4));
+  fx.a8 = postFxTarget(gl, ...q(8)); fx.b8 = postFxTarget(gl, ...q(8));
+  fx.key = key;
+  return POSTFX_TARGETS.every(n => fx[n]);
+}
+
+// Before the grid shader draws: point it at the scene texture if any effect is on. Returns whether post runs.
+// A GPU that can't build the passes just doesn't get them (POSTFX_OFF), and the frame goes straight to the screen.
+// world: false for a minigame's screen.
+let POSTFX_OFF = false;
+function postFxBegin(st, world = true) {
+  const { gl } = st;
+  if (!postFxWanted(world)) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
+  if (!st.fx) { try { st.fx = postFxInit(st); } catch (e) { st.fx = null; } if (!st.fx) { POSTFX_OFF = true; return false; } }
+  if (!postFxSize(st, st.fx)) { POSTFX_OFF = true; gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
+  st.fx.world = world;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, st.fx.scene.fb); gl.viewport(0, 0, cv.width, cv.height);
+  return true;
+}
+// After it: the bloom and streak passes, and the frame composited to the screen with the grade, vignette and grain
+function postFxEnd(st) {
+  const { gl } = st, fx = st.fx, world = fx.world, bind = (unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t.tex); };
+  const into = t => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fb : null); t ? gl.viewport(0, 0, t.w, t.h) : gl.viewport(0, 0, cv.width, cv.height); };
+  const down = (src, dst, spread, threshold) => {
+    into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
+    if (threshold > 0) {
+      const M = fx.maskData, puddle = POSTFX_PUDDLE_GLOW * 255 | 0;
+      for (let i = 0, n = M.length; i < n; i++) M[i] = FL[i] === 2 ? puddle : 255;
+      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
+      gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
+    }
+    gl.uniform2f(U('srcSize'), src.w, src.h); gl.uniform2f(U('dstSize'), dst.w, dst.h);
+    gl.uniform1f(U('spread'), spread); gl.uniform1f(U('threshold'), threshold); gl.uniform1f(U('knee'), 0.25);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+  const pass = (src, dst, x, y) => { into(dst); bind(POSTFX_UNIT, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); gl.drawArrays(gl.TRIANGLES, 0, 3); };
+  const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0;
+  if (bloom || streaks) {
+    down(fx.scene, fx.a4, 1, postFxThreshold()); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
+    gl.useProgram(fx.blur.p);
+    if (streaks) { pass(fx.a4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
+    pass(fx.a4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
+    if (bloom) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
+  }
+  into(null); gl.useProgram(fx.compose.p); const U = fx.compose.U;
+  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4);
+  gl.uniform2f(U('size'), cv.width, cv.height);
+  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks);
+  const grade = world && settings.colorGrade ? postFxGrade() : null;
+  gl.uniform1f(U('grade'), grade ? 1 : 0);
+  if (grade) { gl.uniform3fv(U('shadowTint'), grade.shadow); gl.uniform3fv(U('lightTint'), grade.light); gl.uniform1f(U('sat'), grade.sat); }
+  gl.uniform1f(U('vignette'), settings.vignette ? 0.22 : 0);
+  gl.uniform1f(U('grain'), settings.grain ? 1 : 0); gl.uniform1f(U('seed'), (T * 60 % 997) | 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.useProgram(st.prog); gl.activeTexture(gl.TEXTURE0);
 }
 // Reused canvas surfaces work with both presenters. No pixel readbacks and no work while sober.
 let drugVisionCanvas=null, drugVisionTrail=null, drugVisionTrailReady=false;
@@ -28465,7 +28799,7 @@ function promptText() {
   const dr = droppedHere();
   if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
-  if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
+  if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   const gp = gardensPrompt() || marinaPrompt();
@@ -28611,7 +28945,7 @@ function hud() {
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
+  const isle = onAirport(px, py) ? 'ASCII City International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'
@@ -29575,7 +29909,7 @@ function stepFairFolk(dt) {
   }
 }
 // ===== the Chinatown night market (props.js puts up the stalls): what E does at a stall, and what it says. Open 8pm
-// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the Glyphport snow globe, which changes
+// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the ASCII City snow globe, which changes
 // the weather: goods.js)
 function marketSpot() {
   if (mode !== 'walk') return null;
@@ -29675,7 +30009,7 @@ function finishBout(g, quit) {
     earn(g.purse); newsEvent('bout', ...crimePos(), { who: g.name }); // (it makes the papers)
     if (g.foe >= boxRank) boxRank = Math.min(BOXERS.length, g.foe + 1);
     const how = { KO: 'by knockout', TKO: 'on a stoppage', decision: 'on points' }[res.how] || '';
-    const next = champ ? ' You\'re the champion of Glyphport.' : ` Next on the card: ${nextBoxer().name}.`;
+    const next = champ ? ' You\'re the champion of ASCII City.' : ` Next on the card: ${nextBoxer().name}.`;
     return say(`You beat ${g.name} ${how}. The purse is yours: ${fmt$(g.purse)}.${next}`, 6);
   }
   say({ towel: 'You throw in the towel. No purse.', KO: `${g.name} puts you down for the count. No purse.`, TKO: 'The ref waves it off. No purse.',
@@ -29942,13 +30276,13 @@ function faceText(word, i, t, vx, vy, hl, z0, bandH) {
 // out to the gates, which gates over each
 const TERMINAL_DOOR_SIGNS = ['DEPARTURES', 'GATES 1-2', 'GATES 2-3'];
 function drawTerminal(b, vx, vy, lit) {
-  const NAME = 'GLYPHPORT INTERNATIONAL', band = b.h - 0.22;
+  const NAME = 'ASCII CITY INTERNATIONAL', band = b.h - 0.22;
   drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f), long = f === 3 || f === 4, along = long ? u : v, half = long ? b.hl : b.hw;
     if (f >= 5) { const plant = hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85; BG[i] = C(GRAY, 2 + L * 0.25 + (plant ? (fract(u * 3) > .5 ? .8 : -.4) : 0)); return set(i, ' ', 0), true; } // the roof, plant boxes on it lit on one side
-    if (w > band) { // the band along the top: the name on the long sides, GLYPHPORT on the ends
+    if (w > band) { // the band along the top: the name on the long sides, ASCII CITY on the ends
       BG[i] = C(BLUE, (1.5 + L * 0.2) * k);
-      const word = long ? NAME : 'GLYPHPORT', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
+      const word = long ? NAME : 'ASCII CITY', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
       const [ex, ey] = f === 3 ? [1, 0] : f === 4 ? [-1, 0] : f === 1 ? [0, -1] : [0, 1], nx = f === 1 ? 1 : f === 2 ? -1 : 0, ny = f === 3 ? 1 : f === 4 ? -1 : 0;
       const fx = vx + nx * b.hl, fy = vy + ny * b.hw, letterW = Math.min(2 * half / (n + 2), 0.5);
       const ch = signLine(word, (q - 0.5) * 2 * half / letterW + n / 2, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(fx, fy), t, letterW, 0.16, farDepth(fx, fy, half), ex, ey);
@@ -30334,7 +30668,7 @@ function enterAircraft(c) {
   if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
     c.stolen = true; addWanted('planetheft', c.x, c.y, true);
     say(T_.price ? `You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."` :
-      `You shut the door on the empty cabin and spool up the engines. The tower: "Glyphport heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
+      `You shut the door on the empty cabin and spool up the engines. The tower: "ASCII City heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
   }
 }
 // buying the one you're standing by: it's yours, kept where you leave it (and saved)
@@ -31700,7 +32034,7 @@ function asciiBar(f) {
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {
-  if (!GLYPHPORT_DESKTOP_APP || screenshotFolderBusy) return;
+  if (!ASCII_CITY_DESKTOP_APP || screenshotFolderBusy) return;
   screenshotFolderBusy = true;
   const button = pauseEl?.querySelector('[data-act="screenshot-folder"]');
   if (button) button.disabled = true;
@@ -31737,7 +32071,7 @@ async function takeScreenshot() {
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');
     });
-    if (GLYPHPORT_DESKTOP_APP) {
+    if (ASCII_CITY_DESKTOP_APP) {
       if (!window.__TAURI__?.core?.invoke) throw new Error('Please update the desktop app to save screenshots.');
       const png = Array.from(new Uint8Array(await blob.arrayBuffer()));
       const path = await window.__TAURI__.core.invoke('save_screenshot', { png });
@@ -31745,7 +32079,7 @@ async function takeScreenshot() {
     } else {
       const url = URL.createObjectURL(blob), link = document.createElement('a');
       link.href = url;
-      link.download = `Glyphport-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      link.download = `ASCII-City-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       document.body.appendChild(link);
       link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -31767,7 +32101,7 @@ document.addEventListener('keydown', e => {
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
-const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
+const ASCII_CITY_DESKTOP_APP = Boolean(window.__ASCII_CITY_DESKTOP__);
 let desktopFullscreen = false, desktopFullscreenBusy = false;
 let desktopQuitting = false;
 async function quitDesktopGame() {
@@ -31813,7 +32147,7 @@ function buildPause() {
   const el = menuEl('pause', 500, `
     <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
       <h1>Paused</h1>
-      <p class="sub">Glyphport</p>
+      <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
@@ -31824,18 +32158,20 @@ function buildPause() {
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <button class="item" data-act="screenshot" style="width:auto;flex:1">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
-        <button class="item" data-act="screenshot-folder" style="width:auto;display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
+        <button class="item" data-act="screenshot-folder" style="width:auto;display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
       </div>
-      <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
-      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
-      <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
-      <button class="item" data-act="update" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
-      <p class="sub" data-update-status style="display:${GLYPHPORT_DESKTOP_APP ? 'block' : 'none'}"></p>
+      <p class="sub">${ASCII_CITY_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
+      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/ASCII-City-Setup.exe" target="_blank" rel="noopener" style="display:${!ASCII_CITY_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
+      <button class="item" data-act="fullscreen" style="display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
+      <button class="item" data-act="update" style="display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
+      <p class="sub" data-update-status style="display:${ASCII_CITY_DESKTOP_APP ? 'block' : 'none'}"></p>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
+      ${slider('bloom', 'Bloom', 0, 1, 0.05)}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -31850,13 +32186,13 @@ function buildPause() {
       ${toggle('controllerVibration', 'Controller vibration')}
 
       <h2></h2>
-      ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
+      ${ASCII_CITY_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
-    if (GLYPHPORT_DESKTOP_APP) showDesktopUpdate(el);
+    if (ASCII_CITY_DESKTOP_APP) showDesktopUpdate(el);
     // the jobs you're on, to call off: only while there's one
     el.querySelector('[data-act="cancel-courier"]').style.display = courierJob ? 'flex' : 'none';
     const fare = el.querySelector('[data-act="cancel-fare"]');
@@ -31918,7 +32254,7 @@ function openControls() {
   if (!controlsEl) {
     controlsEl = menuEl('controls', 510, `
       <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
-        <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
+        <header class="controls-header"><div><p class="controls-eyebrow">ASCII CITY / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
         <button class="item controls-back" data-controls-back aria-label="Back to pause"><span class="controls-back-long">← Back to pause</span><span class="controls-back-short">← Back</span><span class="k">Esc</span></button></header>
         <nav class="controls-tabs" aria-label="Control categories">
           <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
@@ -32031,7 +32367,7 @@ function openPause() {
   paused = true;
   cancelTransitAnnouncements();
   for (const k in K) K[k] = 0; // nothing held down while we're away
-  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
+  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = ASCII_CITY_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
   releaseMouse();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();
@@ -32061,17 +32397,17 @@ function showDesktopUpdate(el) {
   const button = el.querySelector('[data-act="update"]'), status = el.querySelector('[data-update-status]');
   button.disabled = desktopUpdateState === 'checking';
   button.textContent = 'Check for updates';
-  if (desktopUpdate) button.textContent = `Download Glyphport ${desktopUpdate.version}`;
+  if (desktopUpdate) button.textContent = `Download ASCII City ${desktopUpdate.version}`;
   else if (desktopUpdateState === 'checking') button.textContent = 'Checking for updates...';
-  const installed = window.__GLYPHPORT_VERSION__;
+  const installed = window.__ASCII_CITY_VERSION__;
   status.textContent = '';
   if (desktopUpdateState === 'download-failed') status.textContent = 'Could not open the download. Try again.';
   else if (desktopUpdate) status.textContent = `Version ${desktopUpdate.version} is available. Run the downloaded installer to update.`;
-  else if (desktopUpdateState === 'current') status.textContent = `Glyphport ${installed} is up to date.`;
+  else if (desktopUpdateState === 'current') status.textContent = `ASCII City ${installed} is up to date.`;
   else if (desktopUpdateState === 'unavailable') status.textContent = 'Could not check for updates. Try again when online.';
 }
 async function checkDesktopUpdates() {
-  if (!GLYPHPORT_DESKTOP_APP || desktopUpdateState === 'checking') return;
+  if (!ASCII_CITY_DESKTOP_APP || desktopUpdateState === 'checking') return;
   desktopUpdateState = 'checking';
   if (pauseEl) pauseEl.show();
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 8000);
@@ -32080,9 +32416,9 @@ async function checkDesktopUpdates() {
       headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal
     });
     if (!response.ok) throw new Error('Release check failed');
-    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__GLYPHPORT_VERSION__);
+    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__ASCII_CITY_VERSION__);
     desktopUpdateState = desktopUpdate ? 'available' : 'current';
-    if (desktopUpdate) say(`Glyphport ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
+    if (desktopUpdate) say(`ASCII City ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
   } catch (error) {
     desktopUpdateState = 'unavailable';
   } finally {
@@ -32099,7 +32435,7 @@ async function desktopUpdateAction() {
     if (pauseEl) pauseEl.show();
   }
 }
-if (GLYPHPORT_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);
+if (ASCII_CITY_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);
 // ===== dev tools: F2 (or Dev tools in the pause menu). Teleport anywhere, spawn things, set your money, the day, the
 // time and the weather, without remembering any names: a search box over tabs of buttons. Everything takes effect
 // at once and the menu stays open, so you can do several things before closing it (Esc, F2 or the close button).
@@ -32863,7 +33199,7 @@ ROOM_DEFS.stadium = {
     for (const [x, y] of [[8, 8], [142, 8], [8, 106], [142, 106]]) p.push(floodlight(x, y));
     // the advertising boards round the pitch: the city's shops, in their colours (and between you and the grass)
     const P = MatchEngine.PITCH, bx = P.hl + STADIUM.board, by = P.hw + STADIUM.board;
-    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'GLYPHPORT', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
+    const ads = ['YARDS ATHLETIC', 'HARDWARE', 'ASCII CITY', 'DINER', 'BODEGA 24/7', 'VIDEO', 'TATTOO', 'COURIER'];
     for (const [e, ax] of [[-1, 'x'], [1, 'x'], [-1, 'y'], [1, 'y']]) {
       const len = ax === 'x' ? bx : by, cxp = ax === 'x' ? STADIUM.cx : STADIUM.cx + e * bx, cyp = ax === 'x' ? STADIUM.cy + e * by : STADIUM.cy;
       for (let k = 0, n = Math.round(len * 2 / 12); k < n; k++) {
@@ -33886,7 +34222,7 @@ function openBigMap() {
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
       <div class="bar"><input type="search" placeholder="Search places or contacts" aria-label="Find a place"><button data-map="close" aria-label="Close map">×</button>
       <div class="tools"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">−</button><button data-map="me">You</button><button data-map="fit">City</button><button data-map="places" aria-controls="map-directory" aria-expanded="true">Places</button></div></div>
-      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>GLYPHPORT</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
+      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>ASCII CITY</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
       <div class="tip"></div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
     const q = bigMapEl.querySelector('input');
@@ -33978,7 +34314,7 @@ function closeBigMap() {
   if(bigMapEl.contains(document.activeElement))document.activeElement.blur();
   BIGMAP.pts.clear();BIGMAP.tap=null;paused=BIGMAP.returnPaused;
   if (paused && pauseEl && pauseEl.style.display === 'flex') {
-    homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block';
+    homeEl.style.display = ASCII_CITY_DESKTOP_APP ? 'none' : 'block';
     pauseEl.querySelector('[data-act="map"]').focus();
   }
   else homeEl.style.display='none';
@@ -34761,7 +35097,7 @@ function useHeldItem() {
   if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
-  if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
+  if (heldItem() && heldItem().id === 'spraypaint') return; // (held down, Q sprays: spray-paint.js)
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
     const name = ITEMS[heldItem().id].name, [, sound] = useHeld({ indoors: false, x: px, y: py, a, rain, person: null, headlines: HEADLINES(), water: false });
     say(rain > 0.3 ? `A soggy picnic. The ${name} is good anyway.` : pick([`A picnic on the grass. The ${name} tastes better out here.`, `You eat your ${name} on the lawn. A sparrow watches every bite.`, day > 0.3 ? `Sun on your back, ${name} in hand. Not a bad afternoon.` : `A picnic by moonlight. The ${name} and the crickets.`]), 3);
@@ -35045,7 +35381,7 @@ Object.assign(DENSE, {
     return ['.', C(WARM, 6 + dBall(x, y, cx, cy, R * 0.84) * 3)]; // the face, old and yellowed
   }),
   cityglobe: () => sculptSurface(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
-    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
+    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'ASCII CITY'); return t_ ? [t_, C(YEL, 14),true] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
     const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
     if (d > 1 || y > 4.2) return null;
     if (d > 0.92) return ['|', C(WHITE, 12)];
@@ -38256,7 +38592,7 @@ function drawGame() {
        lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
      });
   placeMinigameFooter((y0+gh+2)*FS+10);
-  present();
+  present(false);
 }
 
 // ---- in the arcade: the cabinets (each plays one of ARCADE_GAMES), and the prize counter
@@ -38334,7 +38670,7 @@ function minigamePresentation(g){
  if(ui.key!==key||ui.game!==game){
   ui.el.hidden=false;ui.key=key;ui.game=game;ui.el.style.setProperty('--game-accent',PAL[C(gameFrameColor(g),12)]);
   const setText=(sel,text)=>{const el=ui.el.querySelector(sel);if(el.textContent!==text)el.textContent=text;};
-  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'GLYPHPORT'));
+  setText('.game-kind',({arcade:'ARCADE',shift:'WORK SHIFT',table:'MAHJONG',casino:'CASINO',crime:'CRIME',cook:'COOKING',workshop:'WORKSHOP',bout:'BOXING',market:'MARKET',show:'SHOW'}[game.kind]||'ASCII CITY'));
   setText('h1',g.title);setText('.game-summary',summary);ui.el.querySelector('.game-summary').hidden=!summary;setText('.game-status',status);setText('.game-earned',earned);
   ui.footer.hidden=result;ui.result.hidden=!result;ui.result.dataset.kind=game.kind;ui.el.querySelector('footer button').hidden=TOUCH;setText('footer button',({cook:'Stop cooking',workshop:'Stop machine',shift:'Clock off',crime:'Back off',bout:'Towel'}[game.kind]||'Leave')+(CONTROLLER.active?' · B':' · E / Esc'));ui.el.querySelector('.game-actions').hidden=TOUCH;
   for(const el of [ui.header,ui.footer,ui.result]){el.style.left=left+'px';el.style.width=width+'px';}
@@ -54823,7 +55159,7 @@ function saveGame() {
   if (citySaveBlocked || startingOver) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, paint: paintSave(), money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -54841,7 +55177,7 @@ function loadGame() {
   citySaveBackupPending = null;
   try {
     text = localStorage.getItem(SAVE_KEY);
-    if (text == null) return;
+    if (text == null) { freshStartPending = true; return; } // a new game: somewhere different each time, once the game's set up (spawn-points.js)
     prepared = prepareCitySave(JSON.parse(text));
     if (prepared && !prepared.upgraded) for (const key of ['ascii-city-save-backup-v3-archipelago-v1','ascii-city-save-backup-v4-archipelago-v2']) {
       if (localStorage.getItem(key) != null) SAVE_BACKUP_KEY = key;
@@ -54860,6 +55196,7 @@ function loadGame() {
   loadFishingCompetition(d.fishingCompetition);
   leagueLoad(d.league);
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
+  paintLoad(d.paint); // (freehand spray paint: spray-paint.js)
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
@@ -54931,7 +55268,7 @@ function newGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ }
   location.reload();
 }
-let startingOver = false;
+let startingOver = false, freshStartPending = false;
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
@@ -55809,7 +56146,7 @@ function relock(e) {
 onkeydown = e => {
   if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
-  if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
+  if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
@@ -55857,6 +56194,7 @@ onkeydown = e => {
   if (handheldMode() && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'KeyR' && heldGun()) reloadKey(); // (the revolver: gun-ui.js)
+    else if (e.code === 'KeyR') sprayCycleColour(); // (a spray can: the next colour, spray-paint.js)
     if (e.code === 'KeyI') openInventory();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1);
@@ -56208,6 +56546,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepSprayPaint(dt); // (holding Q with a spray can: spray-paint.js)
   stepLookoutScope(); // (the lookout's telescope: islands-content.js)
   updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
@@ -56313,6 +56652,47 @@ requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
 addEventListener('wheel', e => { if (!paused && inv.length) cycleQuickSlot(Math.sign(e.deltaY)); }, { passive: true }); // quick slots, with empty hands between them
+'use strict';
+// ---- where a new game starts. Instead of the same corner every time, one of a handful of places, picked at random,
+// each with a line to set the scene. Only for a fresh start (no save): a loaded game puts you back where you were.
+// Each spot is [label, x, y, heading, line]; worked out when it's needed, since some places only exist once the world
+// is laid out.
+function spawnPoints() {
+  const out = [];
+  const add = (label, at, line) => { try { const p = at(); if (p && p.every(Number.isFinite)) out.push([label, ...p, line]); } catch (e) { /* (a place this city doesn't have) */ } };
+  add('marina', () => [MARINA.x, MARINA.y0 + .6, Math.PI / 2], 'Gulls, rigging slapping on masts, the smell of diesel and salt. You\'re on the boardwalk at the marina.');
+  add('pier', () => [FAIR.cx, FAIR.y0 - .5, Math.PI / 2], 'The pier boards creak underfoot. Up ahead, the Ferris wheel starts its first turn of the day.');
+  add('grand hotel', () => [GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2], 'The doorman at the Grand Hotel gives you a long look. You don\'t look like you\'re staying here.');
+  add('night market', () => { const s = STALLS[1]; return [s.at[0], s.at[1] - .9, Math.PI / 2]; }, 'Chinatown. Steam off the stalls, lanterns strung over the street, someone already frying something wonderful.');
+  add('gardens', () => { const [gx, gy] = GARDEN_GATES[0]; return [GARDEN.x0 + gx, GARDEN.y0 + gy - .6, Math.PI / 2]; }, 'The gates of the Botanical Gardens. Birdsong, wet leaves, a gardener with a barrow who nods at you.');
+  add('lighthouse walk', () => [FOOTBRIDGE.x, FOOTBRIDGE.y0 + .5, Math.PI / 2], 'The start of the Lighthouse Walk. The wind off the water is cold and clean.');
+  add('belle', () => districtSpot('belle'), 'A Belle Époque street: ivy, iron balconies, a bakery opening its shutters.');
+  add('skatepark', () => { const S = SKATEPARK; return S && [S.bx * 8 + (S.x0 + S.x1) / 2, S.by * 8 + S.y0 + .15, Math.PI / 2]; }, 'The clack of wheels on concrete. A kid lands a kickflip and doesn\'t look round to see if you saw.');
+  add('downtown', () => districtSpot('downtown'), 'Downtown. Taxis, towers, everybody in a hurry but you.');
+  return out;
+}
+// put a new game somewhere: one of the spots, on clear ground, or (if none will do) where it always started
+// ?spawn=marina (or any spot's name) picks one; ?spawn=random forces the draw. Under test automation, without one of
+// those, a new game starts where it always did, so tests that rely on that corner still find it.
+function freshSpawn() {
+  if (!worldReady) return null;
+  const q = new URLSearchParams(location.search), want = q.get('spawn');
+  if (q.get('goto') || (!want && navigator.webdriver)) return null; // (?goto= has put you outside a shop already: main.js)
+  let spots = spawnPoints();
+  if (want && want !== 'random') spots = spots.filter(q => q[0] === want.toLowerCase().replace(/-/g, ' '));
+  while (spots.length) {
+    const [label, x, y, ang, line] = spots.splice(Math.floor(Math.random() * spots.length), 1)[0];
+    const sx = worldCoord(x), sy = worldCoord(y);
+    if (!free(sx, sy) || map[idx(Math.floor(sx), Math.floor(sy))] > 0) continue;
+    px = sx; py = sy; a = ang; pitch = 0;
+    if (typeof devStandBack === 'function') devStandBack(); // (not nose to a wall: dev.js)
+    say(line, 7);
+    return label;
+  }
+  return null;
+}
+// (loaded after main.js, so everything a spot needs is set up; save.js only notes that there was no game to load)
+if (freshStartPending) { freshStartPending = false; freshSpawn(); }
 // ===== touch: on a phone or tablet. A floating stick under the left thumb walks (or drives: push it to the rim to
 // run), dragging anywhere on the right looks round. Buttons are words, not keys, and only the ones that do something
 // right here show: the big one is whatever E would do (Talk, Enter, Get in...), smaller ones pop up beside it when
@@ -56377,7 +56757,7 @@ const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', ge
 // The same held-item verbs apply while walking or riding as a passenger.
 function touchHeldActions(out) {
   const it = heldItem();
-  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (it.id === 'spraypaint') out.push(['Colour', 'KeyR', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
   else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
 }
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)

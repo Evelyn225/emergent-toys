@@ -255,7 +255,7 @@ function openBigMap() {
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
       <div class="bar"><input type="search" placeholder="Search places or contacts" aria-label="Find a place"><button data-map="close" aria-label="Close map">×</button>
       <div class="tools"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">−</button><button data-map="me">You</button><button data-map="fit">City</button><button data-map="places" aria-controls="map-directory" aria-expanded="true">Places</button></div></div>
-      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>GLYPHPORT</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
+      <aside id="map-directory" class="directory" aria-label="City directory"><div class="directory-heading"><div><h1>ASCII CITY</h1><div class="subtitle">PLACES &amp; ROUTES</div><div class="results-count"></div></div><button class="contact-shortcut" data-map="supplier" aria-label="Find workshop supplier">Mara</button></div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="places"></div></aside>
       <div class="tip"></div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
     const q = bigMapEl.querySelector('input');
@@ -347,7 +347,7 @@ function closeBigMap() {
   if(bigMapEl.contains(document.activeElement))document.activeElement.blur();
   BIGMAP.pts.clear();BIGMAP.tap=null;paused=BIGMAP.returnPaused;
   if (paused && pauseEl && pauseEl.style.display === 'flex') {
-    homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block';
+    homeEl.style.display = ASCII_CITY_DESKTOP_APP ? 'none' : 'block';
     pauseEl.querySelector('[data-act="map"]').focus();
   }
   else homeEl.style.display='none';

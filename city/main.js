@@ -7,7 +7,7 @@ function relock(e) {
 onkeydown = e => {
   if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
-  if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
+  if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
@@ -55,6 +55,7 @@ onkeydown = e => {
   if (handheldMode() && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'KeyR' && heldGun()) reloadKey(); // (the revolver: gun-ui.js)
+    else if (e.code === 'KeyR') sprayCycleColour(); // (a spray can: the next colour, spray-paint.js)
     if (e.code === 'KeyI') openInventory();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1);
@@ -406,6 +407,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepSprayPaint(dt); // (holding Q with a spray can: spray-paint.js)
   stepLookoutScope(); // (the lookout's telescope: islands-content.js)
   updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)

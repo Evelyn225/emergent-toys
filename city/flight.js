@@ -42,7 +42,7 @@ function enterAircraft(c) {
   if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
     c.stolen = true; addWanted('planetheft', c.x, c.y, true);
     say(T_.price ? `You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."` :
-      `You shut the door on the empty cabin and spool up the engines. The tower: "Glyphport heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
+      `You shut the door on the empty cabin and spool up the engines. The tower: "ASCII City heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
   }
 }
 // buying the one you're standing by: it's yours, kept where you leave it (and saved)

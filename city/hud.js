@@ -217,7 +217,7 @@ function promptText() {
   const dr = droppedHere();
   if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
-  if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
+  if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   const gp = gardensPrompt() || marinaPrompt();
@@ -363,7 +363,7 @@ function hud() {
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
+  const isle = onAirport(px, py) ? 'ASCII City International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const keyboardHelp = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | hold Air out at takeoff: deck exit | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() && SK.grind ? 'GRINDING: right stick / right-drag mouse left/right: balance (A/D also works) | SPACE pop off (hold an arrow: flip trick off it)'

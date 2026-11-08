@@ -13,8 +13,8 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => {
-    window.__GLYPHPORT_DESKTOP__ = true;
-    window.__GLYPHPORT_VERSION__ = '1.0.3';
+    window.__ASCII_CITY_DESKTOP__ = true;
+    window.__ASCII_CITY_VERSION__ = '1.0.3';
     window.nativeCalls = [];
     window.__TAURI__ = {
       core: { invoke: async (command, args) => {
@@ -22,7 +22,7 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
         if (command === 'save_screenshot') {
           if (window.failScreenshot) throw new Error('The Screenshots folder is not writable.');
           if (window.deferScreenshot) return new Promise(resolve => { window.resolveScreenshot = resolve; });
-          return 'C:\\Games\\Glyphport\\Screenshots\\Glyphport-test.png';
+          return 'C:\\Games\\ASCII City\\Screenshots\\ASCII-City-test.png';
         }
         if (command === 'open_screenshot_folder' && window.failOpenFolder) throw new Error('Windows could not open the folder.');
         if (command === 'set_game_mouse_capture' && args.active && window.deferCapture) return new Promise(resolve => { window.resolveCapture = resolve; });
@@ -36,7 +36,7 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
     };
   });
   await page.route('https://api.github.com/repos/Evelyn225/emergent-toys/releases?per_page=100', route => offline ? route.abort() : route.fulfill({
-    json: [{ tag_name: 'ascii-city-v' + version, assets: [{ name: 'Glyphport-Setup.exe', browser_download_url: `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/Glyphport-Setup.exe` }] }]
+    json: [{ tag_name: 'ascii-city-v' + version, assets: [{ name: 'ASCII-City-Setup.exe', browser_download_url: `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/ASCII-City-Setup.exe` }] }]
   }));
   try {
     await page.goto(PAGE);
@@ -68,7 +68,7 @@ test('F12 saves a PNG through native IPC in freecam without releasing capture or
   assert.equal(image.captured, true);
   assert.equal(image.paused, false);
   assert.equal(image.freecam, true);
-  await page.evaluate(() => window.resolveScreenshot('C:\\Games\\Glyphport\\Screenshots\\photo.png'));
+  await page.evaluate(() => window.resolveScreenshot('C:\\Games\\ASCII City\\Screenshots\\photo.png'));
   await page.waitForFunction(() => !screenshotBusy);
   assert.match(await page.locator('[role="status"]').textContent(), /Screenshots\\photo\.png/);
   assert.equal(downloads.length, 0);
@@ -106,7 +106,7 @@ test('browser screenshot downloads a real PNG with F12 and the pause menu button
       const downloadPromise = page.waitForEvent('download');
       await trigger();
       const download = await downloadPromise;
-      assert.match(download.suggestedFilename(), /^Glyphport-.*\.png$/);
+      assert.match(download.suggestedFilename(), /^ASCII-City-.*\.png$/);
       assert.equal(await download.failure(), null);
       const bytes = require('node:fs').readFileSync(await download.path());
       assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
@@ -194,7 +194,7 @@ test('failed native capture tries browser pointer lock rather than silently acce
 test('launch update check offers the official newer installer through native IPC', () => withDesktop(async page => {
   assert.equal(await page.evaluate(() => desktopUpdate.version), '1.0.4');
   await page.evaluate(() => openPause());
-  assert.equal(await page.locator('[data-act="update"]').textContent(), 'Download Glyphport 1.0.4');
+  assert.equal(await page.locator('[data-act="update"]').textContent(), 'Download ASCII City 1.0.4');
   await page.click('[data-act="update"]');
   await page.waitForFunction(() => window.nativeCalls.some(call => call.command === 'open_game_update' && call.version === '1.0.4'));
 }));

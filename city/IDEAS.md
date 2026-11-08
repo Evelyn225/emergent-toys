@@ -1,4 +1,4 @@
-# Glyphport: ideas for later
+# ASCII City: ideas for later
 
 A wishlist of districts and buildings to look over. Nothing here is promised; pick what sounds fun.
 Things get crossed off (deleted) once they're in the game.
@@ -222,7 +222,7 @@ Further architectural and activity ideas:
   dark for a minute); the skylight from the roof.
 - **A disguise**: a guard's uniform from a laundromat dryer, and the guards nod you through.
 - **A special exhibit that changes each week**, and a museum shop restock to match.
-- **Fencing**: the pawn shop takes the Glyphport Star at 40%; a proper fence in the docks who pays more and asks less.
+- **Fencing**: the pawn shop takes the ASCII City Star at 40%; a proper fence in the docks who pays more and asks less.
 
 ## Weird and special buildings
 - Pay phones: call a number scrawled on a wall, get a strange task.
@@ -243,7 +243,7 @@ Further architectural and activity ideas:
   carried down the street), Halloween with trick-or-treaters, snow at New Year. A page in the pause menu showing
   the week ahead.
 - The city changes over time: construction sites finish into new buildings as days pass.
-- **The Relics**: the cursed pocket watch and the Glyphport snow globe are two of a set of strange objects scattered
+- **The Relics**: the cursed pocket watch and the ASCII City snow globe are two of a set of strange objects scattered
   round the city, each bending one rule. Others: a compass that points at whatever you need most (the nearest
   food when you're starving, a hospital when you're hurt, the gold duck); a mirror that shows a cop coming before
   they see you; a key that opens any one door, once. Each turns up somewhere different (a prize counter, a market

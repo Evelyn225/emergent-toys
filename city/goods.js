@@ -81,10 +81,10 @@ const ITEMS = {
   goldfish: { name: 'goldfish in a bag', price: 3, kind: 'gear' }, // (won at the night market's tub)
   // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
   pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
-  cityglobe: { name: 'Glyphport snow globe', price: 350, kind: 'gear' },
-  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica Glyphport Star', price: 15, kind: 'gear' }, // (the museum gift shop)
+  cityglobe: { name: 'ASCII City snow globe', price: 350, kind: 'gear' },
+  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica ASCII City Star', price: 15, kind: 'gear' }, // (the museum gift shop)
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
-  diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
+  diamond: { name: 'the ASCII City Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
   hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
   hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
@@ -405,7 +405,7 @@ function useHeld(near) {
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
     case 'dinotoy': return ['RAWR. The little T. rex\'s arms flap uselessly.', 'squeak'];
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
-    case 'diamond': return [pick(['The Glyphport Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
+    case 'diamond': return [pick(['The ASCII City Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
     case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
     case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
     case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
@@ -454,7 +454,7 @@ function fortune() {
   return `${FORTUNE_HINT[s.sym]} Lucky numbers: ${[0, 0, 0].map(() => 1 + (Math.random() * 49 | 0)).join(', ')}`;
 }
 const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) => t + w, 0); for (const [id, w] of list) if ((r -= w) < 0) return id; return list[0][0]; };
-// the Glyphport snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
+// the ASCII City snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
 // give the snow a few seconds to settle before you try again
 const GLOBE_SETTLE = 8;
 let globeT = -99;

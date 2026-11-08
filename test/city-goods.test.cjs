@@ -245,7 +245,7 @@ test('the pocket watch: the prize counters\' top prize; in your hand, holding Q 
   ev("inv.push({ id: 'yoyo', uses: 0 }); held = inv.length - 1"); assert.ok(Math.abs(run() - 12.05) < 1e-6, 'only while it is in your hand');
 });
 
-test('the Glyphport snow globe: Q shakes it and the weather turns over (and holds); the snow has to settle first', () => {
+test('the ASCII City snow globe: Q shakes it and the weather turns over (and holds); the snow has to settle first', () => {
   const { ev, j } = fresh();
   ev("inv.length = 0; weather = 'clear'; T = 100");
   ev("inv.push({ id: 'cityglobe', uses: 0 }); held = 0");

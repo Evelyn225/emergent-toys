@@ -2,7 +2,7 @@
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
-const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
+const ASCII_CITY_DESKTOP_APP = Boolean(window.__ASCII_CITY_DESKTOP__);
 let desktopFullscreen = false, desktopFullscreenBusy = false;
 let desktopQuitting = false;
 async function quitDesktopGame() {
@@ -48,7 +48,7 @@ function buildPause() {
   const el = menuEl('pause', 500, `
     <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
       <h1>Paused</h1>
-      <p class="sub">Glyphport</p>
+      <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
@@ -59,18 +59,20 @@ function buildPause() {
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <button class="item" data-act="screenshot" style="width:auto;flex:1">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
-        <button class="item" data-act="screenshot-folder" style="width:auto;display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
+        <button class="item" data-act="screenshot-folder" style="width:auto;display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
       </div>
-      <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
-      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
-      <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
-      <button class="item" data-act="update" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
-      <p class="sub" data-update-status style="display:${GLYPHPORT_DESKTOP_APP ? 'block' : 'none'}"></p>
+      <p class="sub">${ASCII_CITY_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
+      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/ASCII-City-Setup.exe" target="_blank" rel="noopener" style="display:${!ASCII_CITY_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
+      <button class="item" data-act="fullscreen" style="display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
+      <button class="item" data-act="update" style="display:${ASCII_CITY_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
+      <p class="sub" data-update-status style="display:${ASCII_CITY_DESKTOP_APP ? 'block' : 'none'}"></p>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
+      ${slider('bloom', 'Bloom', 0, 1, 0.05)}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -85,13 +87,13 @@ function buildPause() {
       ${toggle('controllerVibration', 'Controller vibration')}
 
       <h2></h2>
-      ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
+      ${ASCII_CITY_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
-    if (GLYPHPORT_DESKTOP_APP) showDesktopUpdate(el);
+    if (ASCII_CITY_DESKTOP_APP) showDesktopUpdate(el);
     // the jobs you're on, to call off: only while there's one
     el.querySelector('[data-act="cancel-courier"]').style.display = courierJob ? 'flex' : 'none';
     const fare = el.querySelector('[data-act="cancel-fare"]');
@@ -153,7 +155,7 @@ function openControls() {
   if (!controlsEl) {
     controlsEl = menuEl('controls', 510, `
       <div class="panel controls-panel" role="dialog" aria-labelledby="controls-title">
-        <header class="controls-header"><div><p class="controls-eyebrow">GLYPHPORT / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
+        <header class="controls-header"><div><p class="controls-eyebrow">ASCII CITY / FIELD GUIDE</p><h1 id="controls-title">Controls</h1><p class="controls-intro">Pick a tab to find the controls you need.</p></div>
         <button class="item controls-back" data-controls-back aria-label="Back to pause"><span class="controls-back-long">← Back to pause</span><span class="controls-back-short">← Back</span><span class="k">Esc</span></button></header>
         <nav class="controls-tabs" aria-label="Control categories">
           <button data-controls-tab="keyboard" aria-pressed="true">Keyboard & mouse</button>
@@ -266,7 +268,7 @@ function openPause() {
   paused = true;
   cancelTransitAnnouncements();
   for (const k in K) K[k] = 0; // nothing held down while we're away
-  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
+  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = ASCII_CITY_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
   releaseMouse();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();

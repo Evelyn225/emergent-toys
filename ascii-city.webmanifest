@@ -1,7 +1,7 @@
 {
   "id": "ascii-city",
-  "name": "Glyphport",
-  "short_name": "Glyphport",
+  "name": "ASCII City",
+  "short_name": "ASCII City",
   "description": "Walk, drive and get into trouble in a harbour city drawn in text.",
   "start_url": "ascii-city.html",
   "scope": "./",

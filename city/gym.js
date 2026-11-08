@@ -61,7 +61,7 @@ function finishBout(g, quit) {
     earn(g.purse); newsEvent('bout', ...crimePos(), { who: g.name }); // (it makes the papers)
     if (g.foe >= boxRank) boxRank = Math.min(BOXERS.length, g.foe + 1);
     const how = { KO: 'by knockout', TKO: 'on a stoppage', decision: 'on points' }[res.how] || '';
-    const next = champ ? ' You\'re the champion of Glyphport.' : ` Next on the card: ${nextBoxer().name}.`;
+    const next = champ ? ' You\'re the champion of ASCII City.' : ` Next on the card: ${nextBoxer().name}.`;
     return say(`You beat ${g.name} ${how}. The purse is yours: ${fmt$(g.purse)}.${next}`, 6);
   }
   say({ towel: 'You throw in the towel. No purse.', KO: `${g.name} puts you down for the count. No purse.`, TKO: 'The ref waves it off. No purse.',

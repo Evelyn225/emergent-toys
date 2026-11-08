@@ -215,7 +215,7 @@ function onIsland(x, y, margin = 0) {
   return Math.abs(rel(x - ISLE.x)) <= reach && Math.abs(rel(y - ISLE.y)) <= reach && isleEdge(x, y) > -margin;
 }
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && worldCoord(y) > FOOTBRIDGE.y0 && worldCoord(y) < FOOTBRIDGE.y1;
-// ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
+// ---- the airport: ASCII City International, on reclaimed land out in the bay west of the first bridge, joined to the
 // promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
 // hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
 // grass, the runway (east-west: 09 / 27), grass, and rocks round the shore.
