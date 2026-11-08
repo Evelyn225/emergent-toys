@@ -399,7 +399,7 @@ function stepSleep(dt) {
     sleep.done = true;
     clearDrugEffects();
     if(fx.smokeKind==='joint')fx.smoke=0;
-    if (!netShared()) { // (in multiplayer the clock is everyone's: you sleep, but the night doesn't skip: net.js)
+    if (!netClockShared()) { // (in multiplayer the clock is everyone's: you sleep, but the night doesn't skip: net.js)
       if (tod > 7) dayNum++; // slept through midnight
       tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     }
@@ -409,7 +409,7 @@ function stepSleep(dt) {
       enterRoom('hotelroom',{lobby,suite:!!lobby.suite},def.entry);
     } // (at home you wake where you are)
   }
-  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say(netShared() ? 'You nap a while and wake rested. The city kept going without you.' : '7:00. You slept well, and the sky has cleared.', 4); }
+  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say(netClockShared() ? 'You nap a while and wake rested. The city kept going without you.' : '7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {

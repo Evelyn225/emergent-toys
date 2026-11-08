@@ -13451,14 +13451,21 @@ const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder'];
 const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance)\d*$/;
 
+// What's switched on. The first release is ghosts only: other players walking and driving about in your city, with
+// their names over them. Chat and the shared clock are built and tested but off until they're wanted; the phases after
+// them (riding, guns, hooks, police) get a flag each as they land. Everyone in a room needs the same set, so the set
+// is part of netBuildId(). (?netfeatures=chat,clock turns them on for trying out: net.js)
+const NET_FEATURES = { chat: false, clock: false };
+const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
-const netShared = () => net.on && net.peers.size > 0; // somebody else is here: the clock isn't yours alone
-const netFollowsClock = () => netShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
+const netShared = () => net.on && net.peers.size > 0; // somebody else is here
+const netClockShared = () => NET_FEATURES.clock && netShared(); // the clock isn't yours alone
+const netFollowsClock = () => netClockShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
 
 // The world and the items have to match, or the same id means a different thing: a fingerprint of what this build has.
 function netBuildId() {
-  const items = typeof ITEMS === 'object' ? Object.keys(ITEMS) : [], s = NET_PROTOCOL + ':' + N + ':' + items.length + ':' + items.join(',');
+  const items = typeof ITEMS === 'object' ? Object.keys(ITEMS) : [], s = NET_PROTOCOL + ':' + N + ':' + netFeatureKey() + ':' + items.length + ':' + items.join(',');
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return NET_PROTOCOL + '-' + (h >>> 0).toString(36);
@@ -29156,7 +29163,7 @@ function stepSleep(dt) {
     sleep.done = true;
     clearDrugEffects();
     if(fx.smokeKind==='joint')fx.smoke=0;
-    if (!netShared()) { // (in multiplayer the clock is everyone's: you sleep, but the night doesn't skip: net.js)
+    if (!netClockShared()) { // (in multiplayer the clock is everyone's: you sleep, but the night doesn't skip: net.js)
       if (tod > 7) dayNum++; // slept through midnight
       tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     }
@@ -29166,7 +29173,7 @@ function stepSleep(dt) {
       enterRoom('hotelroom',{lobby,suite:!!lobby.suite},def.entry);
     } // (at home you wake where you are)
   }
-  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say(netShared() ? 'You nap a while and wake rested. The city kept going without you.' : '7:00. You slept well, and the sky has cleared.', 4); }
+  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say(netClockShared() ? 'You nap a while and wake rested. The city kept going without you.' : '7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
@@ -55103,6 +55110,10 @@ const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search)
 const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
+try { // ?netfeatures=chat,clock: switch on what isn't released yet, to try it (everyone in the room needs the same)
+  const want = new URLSearchParams(location.search).get('netfeatures');
+  if (want) for (const k of want.split(',')) if (k in NET_FEATURES) NET_FEATURES[k] = true;
+} catch (e) { /* no query */ }
 const netNow = () => performance.now() / 1000;
 const netRandomId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 16);
 
@@ -55176,7 +55187,7 @@ function netLeave() {
   try { net.tx.leave(); } catch (e) { /* gone */ }
   const was = net.clockOwner;
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
-  if (!was) wTimer = 60 + Math.random() * 90; // your own weather again
+  if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
   netLog('You left the room.');
   netStatus('Not connected.');
 }
@@ -55199,7 +55210,7 @@ function netPeerLeft(id) {
 function netReclock() {
   const was = net.clockOwner;
   net.clockOwner = netClockOwnerOf(net.selfId, [...net.peers.keys()]);
-  if (net.clockOwner && !was) wTimer = 60 + Math.random() * 90; // you keep the time now: the weather moves on again
+  if (NET_FEATURES.clock && net.clockOwner && !was) wTimer = 60 + Math.random() * 90; // you keep the time now: the weather moves on again
   if (net.clockOwner) net.clockT = 0; // (send it straight away)
 }
 function netReceive(type, data, from) {
@@ -55219,7 +55230,7 @@ function netReceive(type, data, from) {
   if (!p.hello || p.mismatch) return;
   if (type === 'tick') { const s = netCheckTick(data); if (s) netPushSnap(p, s, now); return; }
   if (type === 'chat') {
-    if (!netAllow(p.chatBucket, now, 1, 3)) return;
+    if (!NET_FEATURES.chat || !netAllow(p.chatBucket, now, 1, 3)) return;
     const text = netClean(data && data.text, NET_CHAT_MAX);
     if (!text) return;
     netLog(text, p.name, NET_CSS[p.hello.look.top]);
@@ -55227,6 +55238,7 @@ function netReceive(type, data, from) {
     return;
   }
   // the time and the sky: only from whoever keeps the clock
+  if (!NET_FEATURES.clock) return;
   if (from !== [net.selfId, ...net.peers.keys()].sort()[0]) return;
   if (type === 'clock') { const c = netCheckClock(data); if (c) netApplyClock(c); }
   if (type === 'bolt' && data && netNum(data.az) && netNum(data.d) && netNum(data.seed)) bolt = { t: T, az: data.az, d: clamp(data.d, 1, 200), seed: data.seed | 0 };
@@ -55242,9 +55254,9 @@ function netFrame(t) {
   const now = t / 1000, dt = net.lastT ? clamp(now - net.lastT, 0, 0.25) : 0;
   net.lastT = now;
   if (!net.on) return;
-  if ((paused || game || document.hidden) && netShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
+  if ((paused || game || document.hidden) && netClockShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
   if ((net.sendT -= dt) <= 0) { net.sendT += 1 / NET_TICK_HZ; if (net.sendT < 0) net.sendT = 1 / NET_TICK_HZ; netSendTick(now); }
-  if (netShared() && net.clockOwner) {
+  if (netClockShared() && net.clockOwner) {
     if ((net.clockT -= dt) <= 0 || weather !== net.lastWeather) {
       net.clockT = NET_CLOCK_EVERY; net.lastWeather = weather;
       net.tx.send('clock', { tod, dayNum, weather, seasonShift });
@@ -55298,7 +55310,7 @@ function netSendTick(now) {
 // ---- chat
 function netSay(textIn) {
   const text = netClean(textIn, NET_CHAT_MAX);
-  if (!text || !net.on) return false;
+  if (!text || !net.on || !NET_FEATURES.chat) return false;
   if (!netAllow(net.chatBucket, netNow(), 1, 3)) { netLog('Slow down a little.', null, '#f96'); return false; }
   net.tx.send('chat', { text });
   netLog(text, net.name, NET_CSS[net.look.top]);
@@ -55334,7 +55346,7 @@ function netCloseChat(relockMouse = true) {
 }
 // from main.js's key handler, once the menus have had theirs: T or Enter opens the chat box (only in a room)
 function netChatKey(e) {
-  if (!net.on || e.repeat || sleep) return false;
+  if (!net.on || !NET_FEATURES.chat || e.repeat || sleep) return false;
   if (e.code !== 'KeyT' && e.code !== 'Enter' && e.code !== 'NumpadEnter') return false;
   e.preventDefault?.(); netOpenChat(); return true;
 }
@@ -55468,7 +55480,7 @@ function buildNetMenu() {
   const el = menuEl('netmenu', 520, `
     <div class="panel" role="dialog" aria-label="Multiplayer" style="width:min(480px, calc(100vw - 32px))">
       <h1>Multiplayer</h1>
-      <p class="sub">Same city, same time and weather, your friends walking about in it. Everyone keeps their own money, things and saves.</p>
+      <p class="sub" data-net="about"></p>
       ${field('name', 'Your name', NET_NAME_MAX, prefs.name || '')}
       ${field('code', 'Room code', NET_CODE_MAX, net.code || netPendingCode || netSuggestCode())}
       <button class="item" data-net-act="join">Join room</button>
@@ -55476,7 +55488,7 @@ function buildNetMenu() {
       <button class="item" data-net-act="leave">Leave room</button>
       <p class="sub" data-net="status"></p>
       <div data-net="peers" style="margin:6px 0 12px"></div>
-      <p class="sub">In a room: T or Enter to chat.</p>
+      <p class="sub" data-net="chathelp" style="display:${NET_FEATURES.chat ? 'block' : 'none'}">In a room: T or Enter to chat.</p>
       <button class="item" data-net-act="back">Back</button>
     </div>`);
   el.addEventListener('keydown', e => {
@@ -55501,6 +55513,7 @@ function buildNetMenu() {
 function netMenuShow() {
   if (!netMenuOpen()) return;
   const el = netMenuEl;
+  el.querySelector('[data-net="about"]').textContent = `Your friends walking and driving about in your city${NET_FEATURES.clock ? ', at the same time and in the same weather' : ''}. Everyone keeps their own city, money, things and saves.`;
   el.querySelector('[data-net="status"]').textContent = net.status || (net.on ? `In room "${net.code}".` : 'Not connected.');
   el.querySelector('[data-net-act="leave"]').style.display = net.on || net.joining ? 'flex' : 'none';
   el.querySelector('[data-net-act="join"]').firstChild.textContent = net.on ? 'Join a different room' : 'Join room';

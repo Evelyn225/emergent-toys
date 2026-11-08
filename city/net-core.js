@@ -12,14 +12,21 @@ const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder'];
 const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance)\d*$/;
 
+// What's switched on. The first release is ghosts only: other players walking and driving about in your city, with
+// their names over them. Chat and the shared clock are built and tested but off until they're wanted; the phases after
+// them (riding, guns, hooks, police) get a flag each as they land. Everyone in a room needs the same set, so the set
+// is part of netBuildId(). (?netfeatures=chat,clock turns them on for trying out: net.js)
+const NET_FEATURES = { chat: false, clock: false };
+const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
-const netShared = () => net.on && net.peers.size > 0; // somebody else is here: the clock isn't yours alone
-const netFollowsClock = () => netShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
+const netShared = () => net.on && net.peers.size > 0; // somebody else is here
+const netClockShared = () => NET_FEATURES.clock && netShared(); // the clock isn't yours alone
+const netFollowsClock = () => netClockShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
 
 // The world and the items have to match, or the same id means a different thing: a fingerprint of what this build has.
 function netBuildId() {
-  const items = typeof ITEMS === 'object' ? Object.keys(ITEMS) : [], s = NET_PROTOCOL + ':' + N + ':' + items.length + ':' + items.join(',');
+  const items = typeof ITEMS === 'object' ? Object.keys(ITEMS) : [], s = NET_PROTOCOL + ':' + N + ':' + netFeatureKey() + ':' + items.length + ':' + items.join(',');
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return NET_PROTOCOL + '-' + (h >>> 0).toString(36);

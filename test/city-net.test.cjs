@@ -72,7 +72,12 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
 
 test('the shared clock: someone else keeps it, so your weather, watch and lightning don\'t move it', () => {
   const { ev } = loadCity();
-  ev(`net.on = true; net.peers.set('zz', {}); net.clockOwner = false; mode = 'walk'; tod = 10; weather = 'clear'; wTimer = 1; weatherDue = 0; storm = 1;
+  ev(`net.on = true; net.peers.set('zz', {}); net.clockOwner = false;`);
+  assert.strictEqual(ev('netFollowsClock()'), false, 'the shared clock isn\'t released yet: off, your clock is your own');
+  const offId = ev('netBuildId()');
+  ev(`NET_FEATURES.clock = true;`);
+  assert.notStrictEqual(ev('netBuildId()'), offId, 'players with different features switched on don\'t mix');
+  ev(`mode = 'walk'; tod = 10; weather = 'clear'; wTimer = 1; weatherDue = 0; storm = 1;
       clearInventory(); carryItem({ id: 'pocketwatch', uses: 0 }); held = 0; K.KeyQ = 1; bolt = null;`);
   assert.strictEqual(ev('netFollowsClock()'), true);
   ev(`for (let k = 0; k < 600; k++) env(0.05);`); // 30 s, the watch held out

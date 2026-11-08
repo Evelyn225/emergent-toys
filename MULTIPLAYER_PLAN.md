@@ -10,7 +10,13 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   (a picture only: no riding or collisions yet). Tests: `test/city-net.test.cjs`, `test/browser/ascii-city-net.browser.test.cjs`.
 - **Not verified**: real Trystero connections between two machines (the dev sandbox can't reach the Nostr relays).
   Needs a manual test on two networks.
-- **Next**: phase 3 (shared vehicles + riding), then 4-6.
+- **Release order (feature flags, `NET_FEATURES` in `city/net-core.js`)**: release 1 is **ghosts only**: other players
+  on foot and in cars, name tags, wanted stars, join/leave lines. `chat` and `clock` are built and tested but off; turn
+  one on by flipping its flag (try them first with `?netfeatures=chat,clock`). Each later phase lands behind its own flag
+  (`rides`, `guns`, `hooks`, `police`), off until it's been tried with real players. The set of switched-on features is part
+  of the build fingerprint, so players with different sets get the "different version" message instead of half-working.
+- **Next**: get release 1 tried on two real machines, then switch on `chat`, then `clock`, then build phase 3 (shared
+  vehicles + riding), then 4-6.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
   syncs, so the step is tiny). A player who goes quiet for 8 s is hidden, not dropped: only the transport saying they
   left removes them, so a tab that was in the background comes back. A background tab gets no animation frames, so

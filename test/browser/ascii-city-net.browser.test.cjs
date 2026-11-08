@@ -10,16 +10,17 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
-const URL_ = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href + '?net=local';
+const BASE = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href + '?net=local';
+const URL_ = BASE + '&netfeatures=chat,clock'; // (both built, not yet released: switched on here)
 
 test('two players: seen in the street, chat in a bubble, one clock, the same room, a car, and leaving', async () => {
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
-    const open = async () => {
+    const open = async (url = URL_) => {
       const page = await ctx.newPage();
       page.on('pageerror', e => errors.push(e.message));
-      await page.goto(URL_);
+      await page.goto(url);
       await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
       return page;
     };
@@ -93,6 +94,44 @@ test('two players: seen in the street, chat in a bubble, one clock, the same roo
     assert.ok(await A.evaluate(() => net.chat.some(m => m.text === 'Bob left.')));
     assert.equal(await A.evaluate(() => net.clockOwner), true, 'alone: the clock is yours again');
     await A.evaluate(() => { netLeave(); localStorage.clear(); });
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('as released: ghosts only. Each sees the other, but T is just T and each keeps their own clock', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(BASE);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'ghosts-' + Date.now().toString(36);
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    const met = () => [...net.peers.values()].some(p => p.hello && !p.mismatch);
+    await A.waitForFunction(met, null, { timeout: 8000, polling: 100 });
+    await B.waitForFunction(met, null, { timeout: 8000, polling: 100 });
+    assert.deepEqual(await A.evaluate(() => ({ chat: NET_FEATURES.chat, clock: NET_FEATURES.clock })), { chat: false, clock: false });
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; tod = 12; weather = 'clear'; }, spot);
+    await B.evaluate(s => { mode = 'walk'; room = null; px = mod(s.x + Math.cos(s.a) * 0.5, N); py = mod(s.y + Math.sin(s.a) * 0.5, N); a = s.a + Math.PI; tod = 22; weather = 'rain'; }, spot);
+    let seen = null;
+    for (let k = 0; k < 60 && !(seen && seen.drawn && Math.abs(seen.d - 0.5) < 0.02); k++) {
+      seen = await A.evaluate(() => { render(0); const p = [...net.peers.values()][0]; return { drawn: p.drawn, d: p.view && Math.hypot(rel(p.view.x - px), rel(p.view.y - py)) }; });
+      await A.waitForTimeout(100);
+    }
+    assert.ok(seen.drawn && Math.abs(seen.d - 0.5) < 0.02, 'the ghost, where he is: ' + JSON.stringify(seen));
+    await A.bringToFront();
+    await A.keyboard.press('KeyT');
+    assert.equal(await A.evaluate(() => netTyping()), false, 'no chat box');
+    assert.equal(await A.evaluate(() => netSay('hello')), false, 'and nothing sent');
+    await A.waitForTimeout(2500); // (longer than the clock's broadcast interval)
+    assert.ok(Math.abs(await A.evaluate(() => tod) - 12) < 0.5, 'Ann keeps her own time');
+    assert.equal(await B.evaluate(() => weather), 'rain', 'and Bob his own weather');
+    await A.evaluate(() => { netLeave(); localStorage.clear(); }); await B.evaluate(() => netLeave());
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
