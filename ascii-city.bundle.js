@@ -28232,11 +28232,11 @@ const POSTFX_PUDDLE_GLOW = 0.25;
 const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
 function postFxBloom() {
   const k = clamp(Number(settings.bloom) || 0, 0, 1);
-  return k && k * (0.6 + 0.4 * postFxNight());
+  return k && k * (0.6 + 0.15 * postFxNight());
 }
 // what counts as bright (brightest channel, 0-1). The night city is almost all under a quarter, its lights well
 // above; by day a third of the frame is sky and walls at 0.4-0.6, so only what's brighter than that glows.
-const postFxThreshold = () => 0.62 - 0.3 * postFxNight();
+const postFxThreshold = () => 0.62 - 0.24 * postFxNight();
 // rain smears lights; wet streets after it still do, a little. Outdoors only.
 function postFxStreaks() {
   if (!settings.rainStreaks || mode === 'room') return 0;
