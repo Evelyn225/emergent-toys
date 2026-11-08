@@ -338,6 +338,7 @@
     "city/el-life.js",
     "city/ferry-render.js",
     "city/main.js",
+    "city/spawn-points.js",
     "city/touch.js",
     "city/controller-ui.js",
     "city/controller.js"
