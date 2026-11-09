@@ -93,7 +93,7 @@ const POSTFX_PUDDLE_GLOW = 0.25;
 const POSTFX_FIGURE_GLOW = 0.12;
 const POSTFX_BASE_GLOW = (() => {
   const w = new Float32Array(16).fill(1);
-  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8;
+  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8; w[WET] = 0.3;
   return w;
 })();
 let postFxPalLumGlow = null; // (palette luminance, to tell which of a cell's colours is the bright one)

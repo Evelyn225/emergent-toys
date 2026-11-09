@@ -33,8 +33,9 @@ function worldBlock(value) { return worldReady ? value : value & (NB - 1); }
 
 // ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
 const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],
-               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0],[240,222,190]];
-const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK, STONE] = BASES.keys();
+               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0],[240,222,190],
+               [120,140,190]]; // (WET, last: its level 15 is index 255, NONE, so it only goes to 14)
+const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK, STONE, WET] = BASES.keys();
 const PAL = [], PALRGB = [];
 for (const [r, gg, b] of BASES) for (let i = 0; i < 16; i++) {
   const f = 0.1 + i / 15 * 0.9, c = [r * f | 0, gg * f | 0, b * f | 0];

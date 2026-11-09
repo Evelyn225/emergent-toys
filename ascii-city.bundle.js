@@ -34,8 +34,9 @@ function worldBlock(value) { return worldReady ? value : value & (NB - 1); }
 
 // ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
 const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],
-               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0],[240,222,190]];
-const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK, STONE] = BASES.keys();
+               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0],[240,222,190],
+               [120,140,190]]; // (WET, last: its level 15 is index 255, NONE, so it only goes to 14)
+const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK, STONE, WET] = BASES.keys();
 const PAL = [], PALRGB = [];
 for (const [r, gg, b] of BASES) for (let i = 0; i < 16; i++) {
   const f = 0.1 + i / 15 * 0.9, c = [r * f | 0, gg * f | 0, b * f | 0];
@@ -14899,6 +14900,21 @@ function sunMoon() { // sun rises in +x, sets in -x
   disc(az + Math.PI, Math.asin(-sunEl), C(WHITE, 13), C(BLUE, 2), 1.4, true);
 }
 
+// A puddle with nothing to mirror: the ground under it, darker and a little blue (WET, a blue-grey), as bright as
+// the ground would be a couple of shades down. Under a streetlamp (lamp: its light there, 0-13) it shades into the
+// lamp's warm pool rather than stopping at an edge: a little light brightens the wet, where the two are about even
+// every other cell is warm, and where the lamp is strong it's all warm.
+const WET_LUM = (() => { const [r, g, b] = BASES[WET]; return 0.2126 * r + 0.7152 * g + 0.0722 * b; })();
+function wetGround(g, lamp = 0, i = 0) {
+  let lw;
+  if (g === NONE) lw = 1 + day * 2;
+  else { const [r, gg, b] = PALRGB[g], f = (0.2126 * r + 0.7152 * gg + 0.0722 * b) * 0.72 / WET_LUM; lw = Math.round((f - 0.1) / 0.9 * 15); } // (0.72: about two shades darker)
+  if (!lamp) return C(WET, Math.min(14, lw));
+  const warm = Math.max(3 + day * 3, lamp), t = lamp / (lamp + lw + 1);
+  if (t > 0.62) return C(WARM, warm);
+  if (t > 0.38 && ((i % cols) + (i / cols | 0)) & 1) return C(WARM, warm * 0.85);
+  return C(WET, Math.min(14, lw + lamp * 0.35));
+}
 // puddles (FL 2) and open water (FL 3) mirror whatever is above them, about the base of the nearest wall in that column
 function reflect() {
   for (let x = 0; x < cols; x++) {
@@ -14911,11 +14927,8 @@ function reflect() {
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
         const lv = (COL[j] & 15) * 0.55;
         CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
-      }else if(f===2){ // nothing to mirror here: just the ground, wet (a shade or two darker), unless a lamp lights it
-        set(i,' ',0); const g=BG[i];
-        BG[i]=lamp?C(WARM,Math.max(3+day*3,lamp)):g===NONE?C(GRAY,1+day*2):(g&0xf0)|Math.max(1,(g&15)-2);
-      }
-      if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
+        if (f === 2) BG[i] = wetGround(BG[i], lamp * 0.4, i); // (the wet ground under it; a lamp's pool kept soft, so the reflection still reads)
+      }else if(f===2){set(i,' ',0);BG[i]=wetGround(BG[i],lamp,i);} // nothing to mirror: the wet ground, shading into a lamp's light
     }
   }
 }
@@ -28507,7 +28520,7 @@ const POSTFX_PUDDLE_GLOW = 0.25;
 const POSTFX_FIGURE_GLOW = 0.12;
 const POSTFX_BASE_GLOW = (() => {
   const w = new Float32Array(16).fill(1);
-  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8;
+  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8; w[WET] = 0.3;
   return w;
 })();
 let postFxPalLumGlow = null; // (palette luminance, to tell which of a cell's colours is the bright one)
