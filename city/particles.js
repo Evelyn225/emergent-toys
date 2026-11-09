@@ -42,13 +42,13 @@ function drawMoths() {
     if (districtAt(l.x, l.y) === 'belle') return;
     const hx = l.x + l.ax * REACH, hy = l.y + l.ay * REACH, hz = (l.top ?? LAMP_TOP) - 0.075; // (the lantern's glass, hanging under the arm)
     if (Math.hypot(rel(hx - px), rel(hy - py)) > 2.5 || !inView(rel(hx - px), rel(hy - py), 0.1)) return;
-    const n = 4 + (hash(Math.floor(l.x * 10), Math.floor(l.y * 10), 3301) * 5 | 0);
+    const n = 6 + (hash(Math.floor(l.x * 10), Math.floor(l.y * 10), 3301) * 5 | 0);
     for (let k = 0; k < n; k++) {
       const a = hash(Math.floor(l.x * 10) + k * 17, Math.floor(l.y * 10), 3302), b = hash(Math.floor(l.x * 10), Math.floor(l.y * 10) + k * 23, 3303);
       const t = T * (2.2 + a * 2.4) * (b > 0.5 ? 1 : -1) + a * 40, r = 0.035 + b * 0.04; // (out round the lantern, not hidden behind it)
       const x = hx + Math.cos(t) * r + Math.sin(t * 2.7 + b * 9) * 0.005, y = hy + Math.sin(t) * r * 0.85 + Math.cos(t * 3.1 + a * 7) * 0.005;
       const z = hz + Math.sin(t * 1.6 + b * 11) * 0.03 + Math.sin(T * 9 + a * 50) * 0.003;
-      speck(x, y, z, Math.sin(T * 26 + a * 90) > 0.55 ? "'" : '.', C(BLACK, 0), 1, 0.12);
+      speck(x, y, z, Math.sin(T * 26 + a * 90) > 0 ? 'v' : '^', C(BLACK, 0), 1, 0.12); // (wings flapping)
     }
   });
 }
