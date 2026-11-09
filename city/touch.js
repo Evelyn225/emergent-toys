@@ -129,6 +129,7 @@ const SHEET = [
   ['Empty hands', 'Digit0', () => handheldMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Lights & siren', 'KeyH', () => mode === 'drive' && !!me?.ev], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
+  ['Chat', 'KeyT', () => net.on && NET_FEATURES.chat], // (in a multiplayer room: net.js; a controller gets it in its Actions too)
 ];
 
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched

@@ -133,9 +133,9 @@ test('ghosts only (?netfeatures=none): each sees the other (on a skateboard too)
     let drawnBoard = null;
     for (let k = 0; k < 40 && !(drawnBoard && drawnBoard.board && drawnBoard.rider); k++) {
       drawnBoard = await A.evaluate(() => {
-        let board = 0, rider = 0; const b0 = drawSkateBoard, r0 = drawSkaterFigure;
-        drawSkateBoard = (...x) => { board++; return b0(...x); }; drawSkaterFigure = (...x) => { rider++; return r0(...x); };
-        try { render(0); } finally { drawSkateBoard = b0; drawSkaterFigure = r0; }
+        let board = 0, rider = 0; const b0 = drawSkateBoard, r0 = drawFigure;
+        drawSkateBoard = (...x) => { board++; return b0(...x); }; drawFigure = (...x) => { if (/^(ride|push|crouch|skateair)/.test(x[7])) rider++; return r0(...x); };
+        try { render(0); } finally { drawSkateBoard = b0; drawFigure = r0; }
         const v = [...net.peers.values()][0].view; return { board, rider, yaw: v && v.sk && v.sk.yaw };
       });
       await A.waitForTimeout(100);
@@ -458,6 +458,89 @@ test('police: the chase after Bob is in Ann\'s street (lights, siren, the office
     await until(A, () => mode === 'walk', null, 'Ann put out');
     assert.deepEqual(await A.evaluate(() => ({ stars: wanted.stars, crime: wanted.crime })), { stars: 1, crime: 'riding with a wanted driver' });
     for (const P of [A, B]) await P.evaluate(() => { clearWanted(); netLeave(); });
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('what else others see: paused (can\'t be shot, says so), spraying, a bail, peeing, a boat, an aircraft, who\'s riding in a car, and everyone on the maps; Chat for phones and pads', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'seen-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; for (const p of people) p.hidden = true; }, spot);
+    await B.evaluate(s => { mode = 'walk'; room = null; px = worldCoord(s.x + Math.cos(s.a) * 0.6); py = worldCoord(s.y + Math.sin(s.a) * 0.6); a = s.a + Math.PI; needs.health = 100; }, spot);
+    // each check: Bob sets something up and sends an update at once (so his own game can't move on first); Ann looks
+    const sent = setup => B.evaluate(new Function(setup + '; net.lastSent = null; netSendTick(netNow());'));
+    const seen = async (check, what) => { for (let k = 0; k < 40; k++) { const v = await A.evaluate(new Function('const p = [...net.peers.values()][0], v = netViewOf(p); return ' + check)); if (v) return v; await A.waitForTimeout(100); } assert.fail(what); };
+    const calls = (P, names) => P.evaluate(names => { const n = {}, saved = {}; for (const f of names) { n[f] = 0; saved[f] = window[f]; window[f] = (...x) => { n[f]++; return saved[f](...x); }; } try { render(0); } finally { for (const f of names) window[f] = saved[f]; } return n; }, names);
+
+    await seen('v && Math.abs(Math.hypot(rel(v.x - px), rel(v.y - py)) - 0.6) < 0.02', 'Bob in front of Ann');
+    // paused: shots pass through him, and his name says so
+    await sent('paused = true');
+    await seen('v && v.away', 'Bob away');
+    assert.equal(await A.evaluate(() => { clearInventory(); carryItem({ id: 'revolver', uses: 6 }); held = 0; gun.cool = 0; render(0); const r = fireGun(px, py, eye, a, 0, false); return r && r.what; }), 'air', 'the round goes past him');
+    await A.waitForTimeout(300);
+    assert.equal(await B.evaluate(() => needs.health), 100);
+    await sent('paused = false');
+    // spraying: arms out, a mist off the can
+    await sent("clearInventory(); carryItem({ id: 'spraypaint', uses: 6 }); held = 0; K.KeyQ = 1");
+    assert.equal(await seen('v && v.spray && v.pose', 'spraying'), 'reach');
+    await B.evaluate(() => { K.KeyQ = 0; clearInventory(); });
+    // a bail: tumbling, the board off on its own
+    // (a bail faked this way isn't one his own skate code could draw: sent, then put back before his next frame)
+    await B.evaluate(() => { clearInventory(); carryItem({ id: 'skateboard', uses: 0 }); held = 0; fx.skating = true; SK.bailAt = [px, py, a, a]; SK.bail = 1; SK.bailData = { t0: T, board: [worldCoord(px + 0.1), py, skateGround(px, py)], yaw: 0.3, roll: 1 };
+      net.lastSent = null; netSendTick(netNow()); SK.bailAt = null; SK.bailData = null; SK.bail = 0; fx.skating = false; net.sendT = 5; }); // (and hold his next update back while Ann looks)
+    assert.match(await seen('v && /^tumble/.test(v.pose) && v.pose', 'bail'), /^tumble/);
+    assert.ok((await calls(A, ['drawSkateBoard'])).drawSkateBoard >= 1, 'the board drawn where it went');
+    await B.evaluate(() => { net.sendT = 0; clearInventory(); });
+    // peeing: his stream runs through Ann's own pee.js, from where he stands
+    await sent("pee = { left: 30, t: 1, at: placeKey(), loo: null, seen: 99, caught: true }");
+    await seen('v && v.pee', 'peeing');
+    assert.ok(await A.evaluate(() => { peeDrops.length = 0; for (let k = 0; k < 30; k++) { T += 1 / 60; netPeeFrame(1 / 60); } const v = netViewOf([...net.peers.values()][0]); return peeDrops.length > 10 && peeDrops.every(d => Math.hypot(rel(d.x - v.x), rel(d.y - v.y)) < 0.3); }), 'his stream, in her street');
+    await B.evaluate(() => { pee = null; });
+    // at the helm of a boat, then flying
+    await sent("sea = { kind: Object.keys(BOAT_KINDS)[0], x: px, y: py, hx: 1, hy: 0, v: 0.5, col: RED }; mode = 'sea'");
+    await seen("v && v.craft && v.craft.k === 'sea'", 'boat');
+    assert.equal((await calls(A, ['drawBoat3D'])).drawBoat3D >= 1, true, 'his boat drawn');
+    await sent("sea = null; const ac = aircraft[0]; pilot = ac; mode = 'air'; ac.x = px; ac.y = py; ac.z = 1.5");
+    await seen("v && v.craft && v.craft.k === 'air'", 'aircraft');
+    const air = await calls(A, ['drawPlaneCraft', 'drawHeliCraft']);
+    assert.equal(air.drawPlaneCraft + air.drawHeliCraft >= 1, true, 'his aircraft drawn');
+    await B.evaluate(() => { pilot.state = 'parked'; pilot = null; mode = 'walk'; });
+    // on the maps: the minimap's marks and the big map both have him
+    const mapped = await A.evaluate(() => { const q = netMapPlayers(); return q.length === 1 && q[0].name === 'Bob' && !q[0].inside; });
+    assert.equal(mapped, true);
+    await B.evaluate(() => { mode = 'walk'; room = null; px = LIGHTHOUSE.x; py = LIGHTHOUSE.y; enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [LIGHTHOUSE.x, LIGHTHOUSE.y, 0], line: 'hi' }, [4, 6.2, 0]); net.lastSent = null; netSendTick(netNow()); });
+    for (let k = 0; k < 40 && !(await A.evaluate(() => netMapPlayers()[0]?.inside)); k++) await A.waitForTimeout(100);
+    assert.deepEqual(await A.evaluate(() => { const q = netMapPlayers()[0]; return [q.inside, Math.round(q.x * 10) / 10 === Math.round(LIGHTHOUSE.x * 10) / 10]; }), [true, true], 'inside: shown at the door he went in by');
+    await B.evaluate(() => leaveRoom());
+    // Bob in Ann's car: the tag over it has him too
+    const car = await A.evaluate(() => { clearInventory(); const c = cars.find(c => c.kind === 'car' && !c.patrol && !c.ev && c.body !== TAXI); px = c.x; py = c.y; me = c; mode = 'drive'; c.player = true; c.parked = false; c.v = 0; a = Math.atan2(c.hy, c.hx); return { x: c.x, y: c.y, hx: c.hx, hy: c.hy }; });
+    await B.evaluate(c => { mode = 'walk'; room = null; me = null; px = worldCoord(c.x - c.hy * 0.3); py = worldCoord(c.y + c.hx * 0.3); }, car);
+    for (let k = 0; k < 40 && !(await B.evaluate(() => !!netCarNear())); k++) await B.waitForTimeout(100);
+    await B.evaluate(() => netCarUse());
+    for (let k = 0; k < 40 && !(await B.evaluate(() => mode === 'ride')); k++) await B.waitForTimeout(100);
+    const C = await open();
+    await C.evaluate(r => netJoin(r, 'Cat'), room);
+    await C.evaluate(c => { mode = 'walk'; room = null; px = worldCoord(c.x - c.hy * 0.8); py = worldCoord(c.y + c.hx * 0.8); a = Math.atan2(rel(c.y - py), rel(c.x - px)); pitch = 0; }, car);
+    let tag = '';
+    for (let k = 0; k < 60 && !/\+ Bob/.test(tag); k++) { tag = await C.evaluate(() => { render(0); return [...net.peers.values()].map(p => p.tagName || '').join('|'); }); await C.waitForTimeout(100); }
+    assert.match(tag, /Ann \+ Bob/, 'the car\'s tag names its passenger');
+    // phones and pads: Chat in the More sheet (and so in a controller's Actions)
+    assert.equal(await A.evaluate(() => SHEET.some(([l, k, w]) => l === 'Chat' && k === 'KeyT' && (!w || w()))), true);
+    for (const P of [A, B, C]) await P.evaluate(() => netLeave());
     await A.evaluate(() => localStorage.clear());
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

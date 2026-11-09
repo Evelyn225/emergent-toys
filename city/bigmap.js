@@ -176,6 +176,10 @@ function bigMapDraw() {
     x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, -6); x.lineTo(-3, 0); x.lineTo(-6, 6); x.closePath(); x.stroke(); x.fill(); x.restore();
     taken.push([youX - 10, youY - 10, youX + 10, youY + 10]);
   }
+  for (const q of netMapPlayers()) { // other players, in multiplayer (net.js): a dot and their name (inside somewhere: at its door)
+    dot(q.x, q.y, q.inside ? 'o' : '@', q.col, 16);
+    label(q.x, q.y - 1.6, q.name + (q.inside ? ' (inside)' : ''), q.col, 13, true, true);
+  }
   for (const h of owned.homes) { // your homes: a pulsing ring and a tag, loud enough to spot from the whole-city view
     const hx = h.cell % N + 0.5, hy = Math.floor(h.cell / N) + 0.5, X = sx(hx), Y = sy(hy);
     if (!onScreen(X, Y)) continue;

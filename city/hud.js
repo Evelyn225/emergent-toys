@@ -301,7 +301,7 @@ function minimap() {
   };
   if(MAP_NAV.path)for(const point of MAP_NAV.path.slice(MAP_NAV.next)){const p=inMap(point.x,point.y);if(p){g.fillStyle='#78d8d1';g.fillRect(p[0]+tw*.25,p[1]+fs*.35,tw*.5,fs*.3);}}
   for (const pp of people) if (!pp.hidden) { const p = inMap(pp.x, pp.y); if (p) { g.fillStyle = '#b9a'; g.fillRect(p[0] + cw_ * 0.8, p[1] + fs * 0.4, 2, 2); } }
-  for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit ? 'P' : 'o', c.pursuit ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]);
+  for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit || c.cop ? 'P' : 'o', c.pursuit || c.cop ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]); // (cop: another player's chase, net.js)
   for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
   for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
   for (const c of owned.cars) if (c !== me) mark(c.x, c.y, 'C', '#fff');
@@ -322,6 +322,7 @@ function minimap() {
   if(supplierVisit)mark(supplierVisit.x,supplierVisit.y,'+','#ffd575');
   if(drugBuyer)mark(drugBuyer.x,drugBuyer.y,'$','#f8a0d9');
   if(mapWaypoint)mark(mapWaypoint.x,mapWaypoint.y,'X','#8de5df');
+  for (const q of netMapPlayers()) mark(q.x, q.y, q.name[0].toUpperCase(), q.col); // (other players, in multiplayer: the first letter of their name, in their colour)
   const ang = me ? Math.atan2(me.hy, me.hx) : a; // you, and which way you're facing
   mark(px, py, '@' + ['>', 'v', '<', '^'][mod(Math.round(ang / (Math.PI / 2)), 4)], '#ff5');
   g.fillStyle = PAL[C(GRAY, 9)]; // the frame
