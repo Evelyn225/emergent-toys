@@ -64,3 +64,31 @@ test('E and drop place on an extra Belle shelf, save the board, and let you take
  await p.evaluate(()=>openStorage(stored,'your unit','Storage unit','Ordinary storage',null,STORE_SIZE));
  assert.ok(await p.evaluate(()=>storeCtx[6]===null));const k=await p.evaluate(()=>inv.findIndex(it=>it.id==='apple'));await p.locator(`[data-store="${k}"]`).click();assert.equal(await p.evaluate(()=>homeRecord().decor.length),0);assert.ok(await p.evaluate(()=>stored.some(it=>it.id==='apple')));
 }));
+
+test('home guests can see shelf items but cannot take them or store their own',()=>fixture(async p=>{
+ await p.evaluate(()=>{
+  const h=homeRecord(),cell=[h.cell%N,Math.floor(h.cell/N)];h.decor=[];
+  enterRoom('bellehome',{cell,ret:[41,73,0]},[10.9,2.5,-Math.PI/2]);env(0);render(0);
+  clearInventory();carryItem({id:'apple',uses:1});held=0;
+  pitch=((1.2-interactionEye())/(2.5-1.536))*projY/rows;render(0);
+ });
+ assert.equal(await p.evaluate(()=>interactionFocus()?.kind),'home-shelf','the owner can reach this board');
+ await p.keyboard.press('KeyE');
+ assert.equal(await p.evaluate(()=>homeRecord().decor.length),1);
+ await p.evaluate(()=>{
+  const guestHome=JSON.parse(JSON.stringify(homeRecord())),cell=room.cell;
+  enterRoom('bellehome',{cell,ret:[41,73,0],guestHome},[10.9,2.5,-Math.PI/2]);
+  const q=homeShelfLayout()[0];px=q.x;py=2.5;a=-Math.PI/2;
+  pitch=((q.z+q.size.height/2-interactionEye())/(py-q.y))*projY/rows;render(0);
+ });
+ assert.equal(await p.evaluate(()=>homeShelfLayout().length),1,'the copied display is still rendered');
+ assert.ok(!['home-display','home-shelf'].includes(await p.evaluate(()=>interactionFocus()?.kind)),'the guest has no shelf action');
+ await p.keyboard.press('KeyE');
+ const state=await p.evaluate(()=>{
+  const q=homeShelfLayout()[0];homeShelfTake(q);
+  carryItem({id:'candy',uses:1});held=0;
+  const stored=homeShelfStore(0,{surface:q.surface,u:0})[0];
+  return {items:homeRecord().decor.map(it=>it.id),bag:inv.map(it=>it.id),stored};
+ });
+ assert.deepEqual(state,{items:['apple'],bag:['candy'],stored:false});
+}));

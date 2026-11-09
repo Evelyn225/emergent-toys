@@ -66,6 +66,7 @@ function homeShelfAim() {
   }return out;
 }
 function homeShelfStore(k,target=homeShelfMenuTarget) {
+  if(room?.guestHome)return [false,'These shelves belong to your host.'];
   const home=homeRecord(),it=inv[k];if(!home||!target||!room.props.includes(target.surface.owner)||!it||!homeShelfItem(it))return [false,'Hold a small item to put on the shelf.'];
   if((home.decor||[]).length>=HOME_SHELF_CAPACITY)return [false,'Take an item down first.'];
   const p=homeShelfFind(target.surface,homeShelfSize(it),homeShelfLayout(),target.u);
@@ -74,11 +75,13 @@ function homeShelfStore(k,target=homeShelfMenuTarget) {
   return [true,`You put the ${itemName(item)} on the shelf.`];
 }
 function homeShelfUse(target) {
+  if(room?.guestHome)return say('These shelves belong to your host.',3);
   if(heldItem())return say(homeShelfStore(held,target)[1],3);
   const home=homeRecord();home.decor||=[];homeShelfMenuTarget=target;
   openStorage(home.decor,'the shelf','Display shelves','Hold an item and look at any shelf to place it. Click a displayed item to take it down.',it=>homeShelfItem(it)&&!!homeShelfFind(target.surface,homeShelfSize(it),homeShelfLayout(),target.u),HOME_SHELF_CAPACITY,k=>homeShelfStore(k,target));
 }
 function homeShelfTake(p) {
+  if(room?.guestHome)return say('These shelves belong to your host.',3);
   if(inv.length>=INV_SIZE)return say('Your bag is full.',3);
   const home=homeRecord(),k=home.decor.indexOf(p.it);if(k<0)return;
   const it=home.decor.splice(k,1)[0];delete it.shelfPlacement;carryItem(it,false);saveGame();say(`You take the ${itemName(it)} down.`,3);
