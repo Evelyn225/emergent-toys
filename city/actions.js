@@ -278,6 +278,7 @@ function interact() {
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
   if (mode === 'air') { if (wreckCam) return; if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
+  if (netDropUse()) return; // (something another player put down: net.js)
   const dr = droppedHere();
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
@@ -288,7 +289,7 @@ function interact() {
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
-  if (netCarUse()) return; // (another player's car, in multiplayer: net.js)
+  if (netCarUse() || netCraftUse()) return; // (another player's car, boat or aircraft, in multiplayer: net.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -352,7 +353,8 @@ function interact() {
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
-    const home = homeAt(sh);
+    const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
+    if (guest) return netEnterAsGuest(guest);
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);

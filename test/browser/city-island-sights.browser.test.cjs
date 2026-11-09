@@ -141,7 +141,7 @@ test('hillside triangles leave the entire narrow lighthouse deck level and its b
     let deck=0,grass=0;
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) {
       const i=r*cols+c,t=ZB[i];if(FL[i]!==1||!Number.isFinite(t)||t<=0)continue;
-      const cx=2*c/cols-1,x=px+(dx-dy*tf*cx)*t,y=py+(dy+dx*tf*cx)*t;
+      const cx=2*(c+.5)/cols-1,x=px+(dx-dy*tf*cx)*t,y=py+(dy+dx*tf*cx)*t;
       if(onFootbridge(x,y)){deck++;if(COL[i]>>4===GREEN)grass++;}
     }
     return {height,deck,grass};

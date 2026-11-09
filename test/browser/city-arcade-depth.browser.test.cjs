@@ -10,7 +10,7 @@ test('Shotengai roof records its own ray depth in front of walls and later geome
   try{CITY.sprites=()=>{
    const cells=[];
    for(let c=0;c<cols;c++)for(let r=0;r<Math.min(rows,hor);r++){
-    const up=(hor-r-.5)/projY,t=(ARCADE_Z-eye)/up,cx=2*c/cols-1,rx=dx-dy*tf*cx,ry=dy+dx*tf*cx;
+    const up=(hor-r-.5)/projY,t=(ARCADE_Z-eye)/up,cx=2*(c+.5)/cols-1,rx=dx-dy*tf*cx,ry=dy+dx*tf*cx;
     const wx=px+rx*t,wy=py+ry*t,i=r*cols+c;
     if(t<=0||t>40||!arcadeAt(wx,wy)||!arcadeRoofPart(worldCoord(wx),worldCoord(wy)))continue;
     covered++;if(ZB[i]>t+1e-4)bad++;

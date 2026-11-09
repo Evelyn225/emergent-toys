@@ -31,7 +31,7 @@ test('rendered terrain pixels lie on the collision triangles, including slopes a
     for (const [x,y,yaw] of [[132,238.1,-Math.PI/2],[129,234,0],[132,230,Math.PI/2],[134,233,Math.PI]]) {
       [px,py]=citySourcePoint(x,y);a=yaw;render(0);
       for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) {
-        const i=r*cols+c,t=ZB[i],cx=2*c/cols-1;
+        const i=r*cols+c,t=ZB[i],cx=2*(c+.5)/cols-1;
         if(FL[i]!==1||t<=0||t>vis)continue;
         const wx=px+(dx-dy*tf*cx)*t,wy=py+(dy+dx*tf*cx)*t,h=terrainHeight(wx,wy);
         if(h<.002)continue;

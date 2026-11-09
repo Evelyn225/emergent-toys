@@ -274,7 +274,9 @@ test('steal a jet and get it up: the air force scrambles two fighters, the radio
       const [x,y]=citySourcePoint(120,60);
       Object.assign(c, { ground: false, z: 9, v: 7, throttle: 0.7, pitch: 0.02, x, y, yaw: 0 }); third = true; scramble = SCRAMBLE_T - 0.5; paused = false;
     });
-    await page.waitForTimeout(1500);
+    // The game caps each simulation step at 50 ms, so a busy runner can take
+    // longer than 1.5 wall-clock seconds to advance the remaining scramble time.
+    await page.waitForFunction(() => fighters.length === 2, null, { timeout: 30000 });
     const r = await page.evaluate(() => { let dash = ''; for (let k = (rows - 3) * cols; k < rows * cols; k++) dash += CH[k]; return { n: fighters.length, msg: msgText, dash }; });
     assert.equal(r.n, 2, 'two of them');
     assert.match(r.msg, /interceptors/);

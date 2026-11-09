@@ -23,7 +23,10 @@ const roundOf = n => n % ((MatchEngine.CLUBS.length - 1) * 2);
 const groundPair = n => roundPairs(roundOf(n))[Math.floor(n / ((MatchEngine.CLUBS.length - 1) * 2) + n) % 4];
 const clubName = id => MatchEngine.CLUBS.find(c => c.id === id)?.name || id;
 const clubShort = id => MatchEngine.CLUBS.find(c => c.id === id)?.short || id;
-const fixtureSeed = (n, k) => ((n + 1) * 7919 + k * 104729 + league.season * 31) >>> 0;
+// (in multiplayer the season comes from the slot, which everyone agrees on through the shared clock, not from your save,
+// which can be a season ahead if you joined someone earlier in the calendar: so you all see the same match. They're the
+// same number in a game played straight through: net.js)
+const fixtureSeed = (n, k) => ((n + 1) * 7919 + k * 104729 + (typeof netClockShared === 'function' && netClockShared() ? Math.floor(n / SEASON_SLOTS()) + 1 : league.season) * 31) >>> 0;
 // the next fixture at the ground (now, if it's on): { n, when, short, home, away, kick (hours), live, open, seed, cup }
 // A league match has its slot for n; a cup tie a negative n (cupId), and cup: the round's name
 function stadiumNextFixture() {

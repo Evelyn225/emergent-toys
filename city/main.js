@@ -6,6 +6,7 @@ function relock(e) {
 }
 onkeydown = e => {
   if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
+  if (netPlayersKey(e)) { if (!e.isTrusted && netPlayersOpen()) netPlayersPinned = true; return; } // (Tab: the players menu, net.js; from a phone's or pad's button it stays open)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
@@ -80,7 +81,7 @@ onkeydown = e => {
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; transitSubwayDeparted(); }
 };
-onkeyup = e => { K[e.code] = 0; if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
+onkeyup = e => { K[e.code] = 0; netPlayersKeyUp(e); if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
 cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 // how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);

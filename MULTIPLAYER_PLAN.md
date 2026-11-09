@@ -55,8 +55,7 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   close. Flips and spins already came through (the board's yaw, pitch and roll are sent).
 - **Next**: try it all with real players: peaceful mode, car hits, pickpocketing and soccer balls are tested only in
   tabs on one machine (see the sections at the end). Smaller
-  gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
-  rotation in the air, no bail sprawl.
+  gaps: the gifts, drops, visiting and craft rides from the latest round are tested only in tabs on one machine too.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
   syncs, so the step is tiny). A player who goes quiet for 8 s is hidden, not dropped: only the transport saying they
   left removes them, so a tab that was in the background comes back. A background tab gets no animation frames, so
@@ -344,6 +343,28 @@ and replaces the friendly-fire toggle. Only a ball's owner can pick it up. As bu
   most $50; they find out a moment later. One try per thief per minute.
 - **Soccer balls** (`netBallFrame` and friends): as planned below; the ball physics are goods.js's own `stepBall`, run on
   other balls by swapping them in.
+
+## Built: the players menu, gifts, shared drops, visiting, riding in anything
+
+- **Players menu** (hold Tab; phone: More > Players): everyone in the room, with where they are. Let go and it closes;
+  click something and it stays open until Done. Per player: **Whisper** (`dm`: only they get it, no speech bubble),
+  **Give money**, **Give item** (pick one from your bag), **Invite home** (needs a home), and **Go to their home** once invited.
+- **Gifts** (`gift` / `giftAck`): money leaves your pocket and the item your bag when you send; the receiver's game takes
+  it if there's room and answers. No answer in 10 s, or no room, and it comes back. Accepted ones are gone for good.
+- **Shared drops** (`drops`, 1 Hz): things you put down in the street are shown to everyone. E picks it up: your game asks
+  theirs (`dropClaim`), theirs takes it out of its street and says yes (`dropGiven`), so it can't be picked up twice.
+- **Visiting** (`invite`): the invite carries your home record (cell, kind, furniture). The guest's map gets a waypoint;
+  E at that door enters a copy of your flat (`room.guestHome`) keyed by the cell, so both of you are in the same room.
+  Guests can't use the bed, closet, shelves or workshop, or move furniture; the TV and terrace work.
+- **Riding in anything** (flag `cars`): boats, the swan and aircraft as well as cars (`craft:<peer>:sea|air|swan` ids).
+  E by one that's stopped (an aircraft: on the ground) asks for a seat: a car or taxi seats 3, a boat 3, a helicopter 3,
+  a plane 2, the swan 1. Getting out of a boat puts you on the nearest land; getting out in the air drops you with a
+  parachute. Riding with someone on a taxi shift, you pay the meter fare (`fare`) when you get out; it counts toward their shift.
+- **Checked**: the football league (item 6) seeds fixtures from the season, which in multiplayer is now worked out from
+  the shared clock's slot, so everyone sees the same matches. Trains, the el and the ferry (item 7): the el and the ferry
+  already shared a room; trains all shared one key, so now a train is keyed by its station and the half-hour you boarded,
+  and two players on the same train see each other. Homes are keyed by cell, so a visit and its owner meet.
+- Protocol 10.
 
 ## The plan as written (kept for the reasoning)
 

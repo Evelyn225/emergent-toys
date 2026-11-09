@@ -171,6 +171,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if (freecam) eye = freecam.z;
   else if(mode==='ferry')eye=ferryGround()+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
+  else if (mode === 'ride' && netRideEye() !== null) eye = netRideEye(); // (in another player's boat or aircraft: net.js)
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if (stadiumView) eye = stadiumView.eye; // (the football on TV: stadium.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
