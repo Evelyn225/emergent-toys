@@ -709,3 +709,38 @@ manual HUD hint is also corrected: fore/aft pressure balances, A/D steers.
 The final browser regression checks both the actual HUD output and opening that
 Controls tab, alongside real mouse gestures. Three rebuilt-bundle browser cases
 and the focused Node suite pass after this integration.
+
+## Half-pipe air posture and predictable turns
+
+Half-pipe return airs used the steep wall's normal throughout flight, so the
+rider could appear horizontal or upside down during an ordinary spin. They now
+ease upright after takeoff and fit the forecast landing plane again before
+touchdown. The blend uses flight time and clearance, leaving short hops time
+to catch the wall. Board and rider share the same frame; requested spin angles
+and the existing landing checks remain independent of this posture adjustment.
+
+Popped half-pipe return airs also no longer add the pre-wind boost that natural
+airs did not have. Holding steering for 55 ticks previously produced about
+225 degrees and a bail instead of the expected 197-degree turn and clean return.
+Bowls, pools, street pops and deliberate air-outs retain their existing behavior.
+
+Regressions exercise both walls of mini and vert profiles, upright apexes,
+continuous takeoff/catch poses, zero/half/full turns, and popped turn timing.
+The native browser matrix covers all three half-pipes with keyboard and gamepad
+inputs, both spin directions, and natural/popped launches (72 combinations).
+Isolated reversions of the posture blend and spin-boost change each fail their
+respective regression. Before/after day-close and night-wide native views show
+the rider upright rather than cartwheeling through a spin.
+
+Integrated main `09d9526a`; all 87 focused skating/bundle Node checks and six
+rebuilt-bundle browser regressions pass, including bowl choice, camera, manual,
+pose and fixed-clock coverage. Generated bundle syntax passes. Browser checks
+used system Chromium over localhost because the managed browser blocks file
+URLs. A loaded parallel run hit page-load timeouts; the serial final run passed.
+The full repository suite was not completed locally; full CI is required before
+merge.
+
+Serial ABAB against main `09d9526a`, 177×66 at viewport width 1170: main/branch
+median render times 27.0/21.3 ms, then 20.4/22.5 ms (60 frames after 20 warm-up
+frames). These mixed local observations do not establish a consistent increase
+or an FPS guarantee.

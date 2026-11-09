@@ -93,6 +93,14 @@ function skateAirBase(dt,pitch,roll) {
   const wantRoll=Math.atan2(dot(n,right),dot(n,neutral));
   const angle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from))*smooth;
   const base={yaw,pitch:angle(pitch,wantPitch),roll:angle(roll,wantRoll)};
+  if(SK.airRoute&&!SK.airRoute.out&&!SK.airRoute.o.bowl){
+    // A half-pipe air leaves and returns to the same steep wall. Keeping its
+    // normal throughout the flight makes an ordinary spin look like a cartwheel.
+    // Level between takeoff and catch; short hops keep time to fit the wall.
+    const step=x=>{const t=clamp(x,0,1);return t*t*(3-2*t);};
+    const level=step((T-pose.t)/.22)*step(landingIn/.28)*step(height/.04);
+    base.pitch*=1-level;base.roll*=1-level;
+  }
   SK.airNormal=skateBoardAxes(yaw,base.pitch,base.roll).up;
   return base;
 }
