@@ -28565,17 +28565,17 @@ void main() {
 }`;
 // the glows added up at 1/4 size, damped over what's already bright, ready to be blended over the screen
 const POSTFX_GLOW = `precision highp float;
-uniform sampler2D low, near, wide, streak, rayTex; uniform vec2 size; uniform float bloom, streaks, rays, nearGain, wideGain, cap;
+uniform sampler2D low, near, wide, streak, rayTex; uniform vec2 size; uniform float bloom, streaks, rays;
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
   vec3 b = vec3(0.0);
   // (mostly the tight 1/4 halo; the wide 1/8 one only a little, or a light you're close to hazes a whole wall)
-  if (bloom > 0.0) b += (texture2D(near, uv).rgb * nearGain + texture2D(wide, uv).rgb * wideGain) * bloom;
+  if (bloom > 0.0) b += (texture2D(near, uv).rgb * 1.1 + texture2D(wide, uv).rgb * 0.6) * bloom;
   if (streaks > 0.0) b += texture2D(streak, uv).rgb * 0.7 * streaks;
   if (rays > 0.0) b += texture2D(rayTex, uv).rgb * 0.8 * rays;
   vec3 s = texture2D(low, uv).rgb;
   b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
-  gl_FragColor = vec4(min(b, vec3(cap)), 1.0); // (a glow never more than part way to white)
+  gl_FragColor = vec4(min(b, vec3(0.45)), 1.0); // (a glow never more than about half way to white)
 }`;
 // over the screen, blended as src + dst * (1 - src): a screen blend. Vignetted like the frame under it.
 const POSTFX_OVER = `precision highp float;
@@ -28609,10 +28609,7 @@ function postFxBloom() {
 }
 // what counts as bright (brightest channel, 0-1). The night city is almost all under a quarter, its lights well
 // above; by day a third of the frame is sky and walls at 0.4-0.6, so only what's brighter than that glows.
-// The bloom's tuning, in one place. Kept restrained: at night only what's really bright (lamps, neon, headlights) and
-// not the mid-tones of every lit window; the halo mostly tight; no glow more than a third of the way to white.
-const POSTFX_TUNE = { nightThreshold: 0.55, dayThreshold: 0.65, nearGain: 0.8, wideGain: 0.3, cap: 0.3 };
-const postFxThreshold = () => POSTFX_TUNE.dayThreshold - (POSTFX_TUNE.dayThreshold - POSTFX_TUNE.nightThreshold) * postFxNight();
+const postFxThreshold = () => 0.62 - 0.24 * postFxNight();
 // rain smears lights; wet streets after it still do, a little. Outdoors only.
 function postFxStreaks() {
   if (!settings.rainStreaks || mode === 'room') return 0;
@@ -28802,8 +28799,7 @@ function postFxGlow(st, world = true) {
   // summed, damped, and blended over the screen
   into(fx.g4); gl.useProgram(fx.glow.p); U = fx.glow.U;
   bind(UN, fx.l4); bind(UN + 1, fx.a4); bind(UN + 2, fx.a8); bind(UN + 3, fx.s4); bind(UN + 4, fx.r4);
-  gl.uniform2f(U('size'), fx.g4.w, fx.g4.h); gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks); gl.uniform1f(U('rays'), rays);
-  gl.uniform1f(U('nearGain'), POSTFX_TUNE.nearGain); gl.uniform1f(U('wideGain'), POSTFX_TUNE.wideGain); gl.uniform1f(U('cap'), POSTFX_TUNE.cap); draw();
+  gl.uniform2f(U('size'), fx.g4.w, fx.g4.h); gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks); gl.uniform1f(U('rays'), rays); draw();
   into(null); gl.useProgram(fx.over.p); bind(UN, fx.g4); U = fx.over.U;
   gl.uniform2f(U('size'), cv.width, cv.height); gl.uniform1f(U('vignette'), settings.vignette ? 0.22 : 0);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR); draw(); gl.disable(gl.BLEND);
