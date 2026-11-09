@@ -596,6 +596,8 @@ function floorCell(i, r, x, rx, ry) {
   if (snowCover <= 0 || water || FL[i] >= 3) return; // open water remains open water
   const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
   if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
+  const mh = (road === 1 || road === 2) && manholeAt(wx, wy); // (warm from the pipes under it: snow melts off a manhole cover)
+  if (mh && Math.hypot(rel(wx - mh[0]), rel(wy - mh[1])) <= 0.031) return;
   const lx = mod(wx, 8), ly = mod(wy, 8);
   let wear = 0;
   if (road === 1) wear = snowRoadWear(lx);
