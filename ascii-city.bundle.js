@@ -2129,7 +2129,7 @@ for (const gh of GLASSHOUSES) {
 // lanes = the middle of each lane (a car fills up with its middle at slotX, its filler cap by the pump), islands = the
 // middle of each island, from ix0 to ix1, its pump at pumpX
 const GAS = { lanes: [0.42, 1.02, 1.62], islands: [0.72, 1.32], ix0: 1.1, ix1: 1.9, pumpX: 1.5, slotX: 1.37, h: 0.38 };
-const GAS_BRANDS = [['GLYPHCO', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
+const GAS_BRANDS = [['ANSI OIL', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
 let GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
 {
   const taken = new Set([...SERVICES, GRAND_HOTEL, AQUARIUM, CASINO, EXCHANGE, MUSEUM, CLUB].map(b => bi(b.bx, b.by))), cand = [];
