@@ -1410,7 +1410,7 @@ function roomCeil(i, r, x, rx, ry) {
   if(room.kind==='train'){BG[i]=C(WHITE,2.5);set(i,' ',0);return;}
   if(room.kind==='station'){BG[i]=C(GRAY,2.4-coveGroove(wx,2.5,.015,d/projY)*.5);set(i,' ',0);return;}
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
-  if (strip && !ceilLit()) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off)
+  if (strip && !tubeLit(Math.round(wx / 2.5) * 97 + Math.floor(wy / 2.5))) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off, or failing: room-light.js)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {

@@ -261,6 +261,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
+  if (!city) { roomPools(); tvGlow(); } // pools of light under a room's lamps, dim between; a TV's glow (room-light.js)
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   // (particles.js: after the puddles' reflections, before the fog)
   if (city) { reflect(); drawParticles(dt); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
