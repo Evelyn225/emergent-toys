@@ -158,6 +158,8 @@ function drawDeck(x, rx, ry, t0, t1) {
   }
 }
 
+// set for the one render a screenshot takes (screenshots.js): just the world, no HUD and nothing in your hand
+let cleanShot = false;
 function render(dt,sceneOnly=false,mask=null) {
   videoBackroomTick();
   if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
@@ -267,24 +269,26 @@ function render(dt,sceneOnly=false,mask=null) {
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if(sceneOnly)return;
-  drawFurnishingPreview();
+  if (!cleanShot) drawFurnishingPreview();
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
     chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
-    if (!stadiumTVOn()) drawHeld(dt); // what's in your hand (or mouth, or under your feet); not on the TV
+    if (!stadiumTVOn() && !cleanShot) drawHeld(dt); // what's in your hand (or mouth, or under your feet); not on the TV
   }
   drawTelescope(); // (the eyepiece, in the grid: held-curios.js)
   present();
   drawDrugVision();
-  if (freecam) freecamHud();
+  if (freecam) { if (!cleanShot) freecamHud(); }
   else {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
     wreckOverlay(); // (going in, in an aircraft: flight.js)
-    hud();
-    netOverlay(); // their names, speech bubbles and the chat (net.js)
+    if (!cleanShot) {
+      hud();
+      netOverlay(); // their names, speech bubbles and the chat (net.js)
+    }
   }
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes

@@ -31,7 +31,7 @@ for(const kind of ['ferry','el']){
   await p.mouse.up();assert.equal(await p.evaluate(()=>usingHeldItem()),false);
   await p.keyboard.press('i');await p.keyboard.press('q');assert.equal(await p.evaluate(()=>panelOpen()),false,'inventory Q closes the bag and uses once');assert.equal(await p.evaluate(()=>heldItem().uses),water-2);
   assert.equal(await p.evaluate(()=>mode),kind);
-  const touch=await p.evaluate(()=>{const labels=[],cs=[g,hudTopContext()];for(const c of cs)c.fillText=function(s,...args){labels.push(s);return CanvasRenderingContext2D.prototype.fillText.call(this,s,...args);};try{hud();return {actions:touchActions(),empty:SHEET.find(s=>s[0]==='Empty hands')[2](),labels:labels.join(' ')};}finally{for(const c of cs)delete c.fillText;}});
+  const touch=await p.evaluate(()=>{const labels=[],fill=g.fillText;g.fillText=(s,...args)=>{labels.push(s);return fill.call(g,s,...args);};try{hud();return {actions:touchActions(),empty:SHEET.find(s=>s[0]==='Empty hands')[2](),labels:labels.join(' ')};}finally{g.fillText=fill;}});
   assert.match(touch.labels,/1-8 items/);assert.match(touch.labels,/Q use/);
   assert.ok(touch.actions.some(a=>a[0]==='Drink'&&a[1]==='KeyQ'));assert.ok(touch.actions.some(a=>a[1]==='KeyI'));assert.ok(touch.empty);
   assert.ok(!touch.actions.some(a=>a[0]==='Jump'),'passenger controls retain their own movement');

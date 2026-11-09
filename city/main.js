@@ -320,7 +320,6 @@ function loop(t) {
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  clearHudTop(); // (hud() draws the top-left block again if this frame has one: hud.js)
   if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
@@ -428,6 +427,13 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   stepTransitAnnouncements();
+  renderView(dt);
+  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
+  requestAnimationFrame(loop);
+}
+// the view from wherever the camera is this frame (behind the car, the plane, the board; the TV at the football; or your
+// own eyes, swaying if you've had a drink), drawn with render(). Also run with dt 0 for a screenshot (screenshots.js)
+function renderView(dt) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
@@ -456,8 +462,6 @@ function loop(t) {
     if (wob > 0.08) drunkVision(wob);
     };if(skatingNow())skateFixedRender(draw);else draw();
   }
-  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
-  requestAnimationFrame(loop);
 }
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
 function drunkVision(wob) {
