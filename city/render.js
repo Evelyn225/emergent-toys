@@ -186,10 +186,11 @@ function render(dt,sceneOnly=false,mask=null) {
   lookHit = null;
   for (let x = 0; x < cols; x++) {
     if(mask&&!mask.columns[x])continue;
-    const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+    const cx = 2 * (x + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
     for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; NOGLOW[i] = 0; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
+    // Grid surfaces and later 3D props share the same cell-centre rays and row bounds.
     // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
     // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA
     // gets that far. It leaves gaps in the column, so once it's drawn every later write checks ZB first.
@@ -214,7 +215,7 @@ function render(dt,sceneOnly=false,mask=null) {
       if (city && drawTerrainColumn(x, rx, ry, mx - (side === 0 ? sx : 0), my - (side === 1 ? sy : 0), dPrev, d)) holes = true;
       // the cell we just crossed spans dPrev..d; when we're above it (on a roof), draw its top
       if (hCur > 0 && hCur < eye && W.roof) {
-        const k = (eye - hCur) * projY, rIn = dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows, rOut = Math.max(0, Math.ceil(hor + k / Math.min(d, vis)));
+        const k = (eye - hCur) * projY, rIn = dPrev > 0 ? Math.ceil(hor + k / dPrev - 0.5) : rows, rOut = Math.max(0, Math.ceil(hor + k / Math.min(d, vis) - 0.5));
         for (let r = rOut; r < Math.min(clip, rIn); r++) {
           const i = r * cols + x, dr = k / (r - hor + 0.5);
           if (holes && ZB[i] >= 0) continue;
@@ -231,7 +232,7 @@ function render(dt,sceneOnly=false,mask=null) {
       // or above floor level; ceil without that half-cell paints below it.
       const floorEnd = Math.min(rows, Math.floor(hor + eye * projY / d + .5));
       if (first) { first = false; BASE[x] = floorEnd; if (x === cols >> 1) lookHit = { d, mx, my }; }
-      const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
+      const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d - 0.5));
       const bot = Math.min(clip, floorEnd);
       // u runs left-to-right on screen for whichever face we see, so signs read correctly
       const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
