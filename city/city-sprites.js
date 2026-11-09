@@ -238,6 +238,7 @@ function citySprites() {
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
+    if (m.patrol && !playerCar(m) && netCopCarNear(m)) continue; // (another player's chase is right here: theirs is drawn, not yours too, net.js)
     const [vx, vy] = R(m.ex, m.ey), steering = m.kind === 'taxi' && !playerCar(m) && !m.parked && m.laneYaw != null;
     const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;

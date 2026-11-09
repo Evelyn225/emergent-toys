@@ -29,7 +29,24 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   `PAINT_LISTENERS` hook: strokes go out as you spray them; on joining, everyone sends you their most recent 3000 dots.
   Others' paint stays on your walls and in your save (as the hook intends), deduplicated by dot so rejoining doesn't double it.
   The old tags (`tags` flag) still sync for saves that have them.
-- **Next**: try phase 3, chat and the clock with real players; then phase 4 (guns), 5 (hooks), 6 (police). Smaller
+- **Phase 4 (flag `guns`, on)**: other players are targets in `traceShot` / `traceRoomShot`; every shot goes to
+  everyone (`netShotFired`): they see the streak, hear the bang and their street scatters. A hit is taken by the victim's
+  game like a police round (22-36 off 100: three rounds put you down); down, you lie in the street for the others a few
+  seconds and wake in hospital (nobody takes your gun: it wasn't the police). Gunning a player down is a crime
+  (`shotdown`, 3 stars) if anyone saw. Friendly fire is on by default; each player can switch it off for themselves in
+  the multiplayer menu.
+- **Phase 5 (flag `hooks`, on)**: a cast passing through another player on foot hooks them (`netHookTarget` in
+  `lureHits`). In their game they're held at the end of the line (walking off just drags against it), Space or E over
+  and over works it loose, and it slips out by itself after 6 s if you don't reel. Q reels: their game walks them in,
+  snagging on a corner as an NPC would; at your feet the hook comes out. Either end lets go if the other's gone, gets
+  in a car, goes indoors, or the line runs past 1.5x a full cast.
+- **Phase 6 (flag `police`, on)**: while you're wanted, your updates carry the police after you (up to 12: pursuing
+  cruisers, officers on foot, on the roofs, or in the building with you). Others get your cruisers as stand-ins in their
+  traffic (`cop: true`, `state: 'out'` so they're lit and wail; never `pursuit`, which their police code would count as
+  their own), and see your officers running. Their own patrol cars aren't drawn within 1.5 cells of one of yours.
+  Busted at the wheel: your passengers are pulled out and get a star (`accomplice`). Not done: the 5-star helicopter
+  isn't shared.
+- **Next**: try everything with real players. Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
   rotation in the air, no bail sprawl.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between

@@ -85,6 +85,7 @@ function traceShot(x, y, z, hx, hy, slope) {
   for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
   for(const c of roofCops)if(!c.dead)figure(c,'cop',{x:c.x,y:c.y,z:policeRoofHeight(c.x,c.y),h:.18});
   if(typeof gunSceneFigures==='function')for(const target of gunSceneFigures())figure(target.who,'person',target);
+  for (const target of netShotTargets(x, y)) figure(target.who, 'player', target); // (other players, in multiplayer: net-core.js)
   for (const c of cars) { // a car: where the line goes into its box, if that's below its roof
     if (c.player || near(c.x, c.y, x, y) > SHOT_RANGE + 0.4) continue;
     const [hl, hw, h] = CAR_HIT[c.kind] || CAR_DEFAULT, ox = rel(x - c.x), oy = rel(y - c.y);
@@ -112,13 +113,14 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
   wanted.fired = true; // (and now they'll shoot back)
   if (indoors) {
     const hx=Math.cos(yaw),hy=Math.sin(yaw),hit=typeof traceRoomShot==='function'?traceRoomShot(x,y,z,hx,hy,slope):{d:3,x:x+hx*3,y:y+hy*3,z:z+slope*3,what:'wall'};
+    if(hit.who&&hit.who.netPeer)hit.what='player'; // (another player in here with you: it's theirs to be hurt, net.js)
     const [rx,ry]=crimePos();
     if(hit.what==='person'||hit.what==='cop')killRoomFigure(hit.who,hx,hy);
     if(hit.what==='cop')addWanted('copkill',rx,ry,true);
     const witnesses=typeof room!=='undefined'&&room?.props.some(p=>p.fig&&!p.fig.build&&!p.still&&!p.dead&&!p.hidden);
     if(witnesses)reports.push({t:T+reportDelay(),x:rx,y:ry,kind:hit.what==='person'?'murder':'gunfire'});
     else gunCrime('gunfire',rx,ry);
-    const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);return shot;
+    const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);if(typeof netShotFired==='function')netShotFired(shot,true);return shot;
   }
   const hx = Math.cos(yaw), hy = Math.sin(yaw), hit = traceShot(x, y, z, hx, hy, slope);
   const shot = { x0: x, y0: y, z0: z, ...hit, t: T };
@@ -136,6 +138,7 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
     }
   }
   panicAt(x, y);
+  if (typeof netShotFired === 'function') netShotFired(shot, false); // (everyone in a multiplayer room sees and hears it: net.js)
   return shot;
 }
 // who saw it, or heard it: a cop who can see you puts you on the list straight away; a shot is heard by anybody in

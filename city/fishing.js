@@ -138,7 +138,7 @@ function rodUse(near) {
     return [pick(['Fish on!', 'Got it!', 'Something\'s on!']), 'reel'];
   }
   if (f.st === 'lure') { reelIn(); return ['Too soon. Whatever it was bolts.', 'reel']; }
-  if (f.st === 'hooked') { Object.assign(f, { st: 'haul', t: 0 }); f.who.hooked.haul = true; return [pick(['You lean back and start reeling.', 'You put your back into it and wind.']), 'reel']; }
+  if (f.st === 'hooked') { Object.assign(f, { st: 'haul', t: 0 }); f.who.hooked.haul = true; if (f.who.netPeer && typeof netHookReel === 'function') netHookReel(f); return [pick(['You lean back and start reeling.', 'You put your back into it and wind.']), 'reel']; }
   if (f.st === 'wait' || f.st === 'land') { reelIn(); return ['', 'reel']; }
   return ['', null];
 }
@@ -213,15 +213,17 @@ function lureHits(f) {
     const h = f.z - walkGround(p.x, p.y); if (h < .005 || h > .2) continue; // (over their head, or skimming the ground past their feet)
     return p;
   }
-  return null;
+  return netHookTarget(f); // (or another player, in multiplayer: net-core.js)
 }
 function hookPerson(f, p) {
+  if (p.netPeer) return typeof netHookPeer === 'function' ? netHookPeer(f, p) : undefined; // (another player: it's their game that's hooked, net.js)
   p.hooked = { t: 0, haul: false }; delete p.flee; delete p.gawk; p.talk = 0; p.wait = 0;
   Object.assign(f, { st: 'hooked', t: 0, who: p, x: p.x, y: p.y, z: walkGround(p.x, p.y) + .11, d: Math.max(f.d, Math.hypot(rel(p.x - px), rel(p.y - py)) + .1) });
   fishSfx.push('ground');
   say(pick(['You hook someone by the coat. "OW! Hey!"', 'The lure catches a passer-by in the sleeve. "What the-"', 'Right in the jacket. They yelp and spin round.']) + ' (Q: reel them in)', 3);
 }
 function stepHooked(f, dt) {
+  if (f.who && f.who.netPeer) return typeof netHookAnglerStep === 'function' ? netHookAnglerStep(f, dt) : undefined; // (another player on your line: net.js)
   const p = f.who;
   if (!p || p.dead || p.hidden || !p.hooked) { fishing = null; return; }
   p.hooked.t += dt;
