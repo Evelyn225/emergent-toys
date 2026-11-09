@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 7; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police)
+const NET_PROTOCOL = 8; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -10,7 +10,7 @@ const NET_TIMEOUT = 8; // seconds without a word from someone and they've gone
 const NET_CHAT_MAX = 120, NET_NAME_MAX = 16, NET_CODE_MAX = 32;
 const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder', 'ride'];
-const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp)\d*$/;
+const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp|tumble|reach|mongo)\d*$/;
 
 // What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
@@ -55,8 +55,19 @@ function netCheckTick(d) {
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
+  if (d.away) out.away = true;
+  if (d.ride) out.ride = netCarId(d.ride); // (in someone's car: which)
+  if (d.pee && netNum(d.pee.el) && netNum(d.pee.flow)) out.pee = { el: clamp(d.pee.el, -1.3, 1.3), flow: clamp(d.pee.flow, 0, 1), loo: d.pee.loo && netNum(d.pee.loo[0]) && netNum(d.pee.loo[1]) ? [d.pee.loo[0], d.pee.loo[1]] : null }; // (peeing: aimed how high, how hard)
+  if (d.spray && Number.isInteger(d.spray.col)) out.spray = { col: clamp(d.spray.col, 0, 8) }; // (spraying, in this colour)
+  if (d.fish && netNum(d.fish.x) && netNum(d.fish.y) && netNum(d.fish.z)) out.fish = { x: d.fish.x, y: d.fish.y, z: clamp(d.fish.z, -1, 50) }; // (their line's out: the lure)
+  if (d.craft && typeof d.craft === 'object' && ['sea', 'swan', 'air'].includes(d.craft.k)) { // (a boat, a swan, an aircraft)
+    const c = d.craft, o = { k: c.k, kind: typeof c.kind === 'string' ? c.kind.slice(0, 20) : '', col: netNum(c.col) ? c.col | 0 : 0, v: netNum(c.v) ? c.v : 0 };
+    for (const f of ['yaw', 'pitch', 'roll', 'rotor']) o[f] = netNum(c[f]) ? c[f] : 0;
+    out.craft = o;
+  } // (in the pause menu or another tab: can't be hurt or hooked, and it says so over them)
   if (d.sk && typeof d.sk === 'object' && netNum(d.sk.yaw) && netNum(d.sk.nose) && netNum(d.sk.roll)) // on the board: which way it points, tipped how, and which foot forward
-    out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1 };
+    out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1,
+      ...(netNum(d.sk.bx) && netNum(d.sk.by) && netNum(d.sk.bz) ? { bx: d.sk.bx, by: d.sk.by, bz: d.sk.bz } : {}) }; // (bx..: where the board went, in a bail)
   return out;
 }
 function netCheckHello(d) {
@@ -149,7 +160,7 @@ function netShotTargets(x, y) {
   const out = [];
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || !NET_SHOOTABLE.has(s.mode)) continue;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.away || !NET_SHOOTABLE.has(s.mode)) continue;
     if (Math.hypot(rel(s.x - x), rel(s.y - y)) > SHOT_RANGE) continue;
     out.push({ who: p, x: s.x, y: s.y, z: s.z, h: 0.175 });
   }
@@ -161,7 +172,7 @@ function netHookTarget(f) {
   if (!net.on || !NET_FEATURES.hooks || mode !== 'walk') return null;
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || s.mode !== 'walk') continue;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || s.away || s.mode !== 'walk') continue;
     if (Math.hypot(rel(s.x - f.x), rel(s.y - f.y)) > HOOK_REACH) continue;
     const h = f.z - s.z; if (h < .005 || h > .2) continue;
     return { netPeer: p.id, name: p.name, x: s.x, y: s.y, hooked: { t: 0, haul: false } };
