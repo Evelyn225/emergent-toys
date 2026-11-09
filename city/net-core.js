@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 5; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns)
+const NET_PROTOCOL = 6; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -10,13 +10,13 @@ const NET_TIMEOUT = 8; // seconds without a word from someone and they've gone
 const NET_CHAT_MAX = 120, NET_NAME_MAX = 16, NET_CODE_MAX = 32;
 const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder', 'ride'];
-const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance)\d*$/;
+const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp)\d*$/;
 
 // What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { ff: true, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -125,20 +125,34 @@ function netCheckDots(d, colours) {
 const netDotKey = d => d[0] + ',' + d[1] + ',' + (+d[2]).toFixed(4) + ',' + (+d[3]).toFixed(4) + ',' + d[6];
 const netDotOut = d => [d[0], d[1], +(+d[2]).toFixed(4), +(+d[3]).toFixed(4), +(+d[4]).toFixed(4), d[5], d[6]];
 
+// where someone is right now (as drawn this instant), whether or not this frame's drawn them yet
+const netViewOf = p => netSample(p, performance.now() / 1000) || p.view;
 // other players out in the street as something a bullet can hit (gun.js's traceShot): standing where they're drawn
 const NET_SHOOTABLE = new Set(['walk', 'roof', 'elplat', 'fair']);
 function netShotTargets(x, y) {
   if (!net.on || !NET_FEATURES.guns || mode === 'room') return [];
   const out = [];
   for (const p of net.peers.values()) {
-    const s = p.view;
+    const s = netViewOf(p);
     if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || !NET_SHOOTABLE.has(s.mode)) continue;
     if (Math.hypot(rel(s.x - x), rel(s.y - y)) > SHOT_RANGE) continue;
     out.push({ who: p, x: s.x, y: s.y, z: s.z, h: 0.175 });
   }
   return out;
 }
-const NET_SHOT_HURT = [22, 36]; // what a round from another player takes off you (health's out of 100: three will do)
+const NET_SHOT_HURT = [22, 36];
+// another player your lure's passing through (fishing.js's lureHits): on foot in the street, the lure at their body
+function netHookTarget(f) {
+  if (!net.on || !NET_FEATURES.hooks || mode !== 'walk') return null;
+  for (const p of net.peers.values()) {
+    const s = netViewOf(p);
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || s.mode !== 'walk') continue;
+    if (Math.hypot(rel(s.x - f.x), rel(s.y - f.y)) > HOOK_REACH) continue;
+    const h = f.z - s.z; if (h < .005 || h > .2) continue;
+    return { netPeer: p.id, name: p.name, x: s.x, y: s.y, hooked: { t: 0, haul: false } };
+  }
+  return null;
+} // what a round from another player takes off you (health's out of 100: three will do)
 
 // ---- smoothing: an update arrives every 80 ms or so, a little early or late; others are drawn NET_DELAY behind the
 // newest, between the two updates either side of then, so they glide instead of hopping

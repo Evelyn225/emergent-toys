@@ -35,7 +35,12 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   seconds and wake in hospital (nobody takes your gun: it wasn't the police). Gunning a player down is a crime
   (`shotdown`, 3 stars) if anyone saw. Friendly fire is on by default; each player can switch it off for themselves in
   the multiplayer menu.
-- **Next**: try phases 3-4, chat and the clock with real players; then 5 (hooks), 6 (police). Smaller
+- **Phase 5 (flag `hooks`, on)**: a cast passing through another player on foot hooks them (`netHookTarget` in
+  `lureHits`). In their game they're held at the end of the line (walking off just drags against it), Space or E over
+  and over works it loose, and it slips out by itself after 6 s if you don't reel. Q reels: their game walks them in,
+  snagging on a corner as an NPC would; at your feet the hook comes out. Either end lets go if the other's gone, gets
+  in a car, goes indoors, or the line runs past 1.5x a full cast.
+- **Next**: try phases 3-5, chat and the clock with real players; then 6 (police). Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
   rotation in the air, no bail sprawl.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
