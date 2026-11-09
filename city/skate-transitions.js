@@ -236,7 +236,9 @@ function skateFinishTransitionPop(trick,gesture,velocity){
   SK.lipPop=null;SK.v=Math.hypot(velocity[0],velocity[1]);if(SK.v>1e-9)SK.dir=Math.atan2(velocity[1],velocity[0]);body.vz=velocity[2]*10;SKB.v=velocity;
   const [name,flip,turn]=TRICKS[trick??arrowTrick()]||['ollie',0,0];
   body.trick=skateTrick(name,flip,turn,skateAirTime(body.vz),!!gesture?.nollie);
-  SK.preWind=clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
+  // Return airs need the same controllable turn whether the coping or a pop
+  // launched them. The extra wind-up otherwise adds nearly 30 degrees.
+  SK.preWind=SK.airRoute&&!SK.airRoute.out&&!SK.airRoute.o.bowl?0:clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
   SK.charge=-1;SK.spin=0;SK.popT=T;controllerRumble('pop');if(actx)sfxUse('ollie');return true;
 }
 // Keep ramp pops close to the wall: most impulse is vertical, with only

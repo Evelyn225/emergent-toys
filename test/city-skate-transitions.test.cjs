@@ -79,3 +79,35 @@ test('pops on either vert wall retain descending momentum and land fakie',()=>{
   assert.ok(run.every(p=>!p.bail));
  }
 });
+
+test('half-pipe airs level at the apex for readable spins, then catch either wall',()=>{
+ for(const transition of [{},{radius:.3,height:.36,extension:.06}])for(const yaw of [0,Math.PI]){
+  const opts={transition,speed:transition.extension?1:.8,yaw,dt:1/120,fixed:true};
+  const natural=skateSim([{frames:300}],opts),first=natural.findIndex(p=>p.contact==='air');
+  assert.ok(first>0);
+  for(const frames of [0,50,100]){
+   const run=frames?skateSim([{frames:first},{frames,keys:{KeyD:1}},{frames:220}],opts):natural;
+   const end=run.findIndex((p,i)=>i>first&&(p.contact==='transition'||p.bail));
+   assert.ok(end>first,'returns to the ramp');
+   const air=run.slice(first,end),apex=air.reduce((a,b)=>a.worldZ>b.worldZ?a:b);
+   assert.ok(apex.board.up[2]>.98,`upright at apex: ${JSON.stringify(apex.board.up)}`);
+   assert.ok(run.slice(0,end+1).every(p=>!p.bail),'zero, half and full turns re-enter');
+   const landed=run[end],dot=landed.board.up.reduce((sum,v,i)=>sum+v*landed.normal[i],0);
+   assert.ok(dot>.999,'wheels meet the wall');
+   assert.ok(frames?Math.abs(landed.spin-frames*7.5/120)<.01:Math.abs(landed.spin)<1e-8,'leveling does not add spin');
+   for(let i=1;i<air.length;i++)assert.ok(Math.hypot(...air[i].board.up.map((v,j)=>v-air[i-1].board.up[j]))<.18,'no takeoff or catch snap');
+  }
+ }
+});
+
+test('popped half-pipe turns use the same spin rate as natural airs',()=>{
+ for(const transition of [{},{radius:.3,height:.36,extension:.06}])for(const yaw of [0,Math.PI]){
+  const opts={transition,speed:transition.extension?1:.8,yaw,dt:1/120,fixed:true};
+  const first=skateSim([{frames:180}],opts).findIndex(p=>p.contact==='air');
+  const run=skateSim([{frames:first-6},{frames:5,keys:{Space:1}},{frames:55,keys:{KeyA:1}},{frames:250}],opts);
+  const start=run.findIndex(p=>p.contact==='air'),end=run.findIndex((p,i)=>i>start&&(p.contact==='transition'||p.bail));
+  assert.ok(start>0&&end>start);
+  assert.ok(!run[end].bail,'a released half turn with a small timing error rides away');
+  assert.ok(Math.abs(run[end-1].spin+55*7.5/120)<.01,'a pop does not add a hidden spin boost');
+ }
+});

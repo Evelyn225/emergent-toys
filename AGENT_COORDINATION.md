@@ -16,6 +16,10 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
   tunes mouse-only manual entry/range and verifies real mouse motion gestures
   as well as simple fallback tricks. Controller pressure, raw gesture samples,
   other world work and reserved files are preserved; see `SKATE_IMPLEMENTATION.md`.
+- **Half-pipe handling (Codex):** `codex/halfpipe-air-control` levels return-air
+  posture between takeoff and catch, and removes the popped return's extra spin
+  boost. Bowls and deliberate exits retain their existing behavior. Validation
+  and the native half-pipe matrix are in `SKATE_IMPLEMENTATION.md`.
 - **Claude:** finished pass 33 (abandoned shopfronts: ghost signs and step dressing on top of Codex's rust, boards and graffiti, `city/abandoned-shop-dressing.js`). Earlier: passes 7 to 13 closed; pass 16's first chunk (road and pavement surfaces, #374) is in. Next: pass 14
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. The user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
   authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check

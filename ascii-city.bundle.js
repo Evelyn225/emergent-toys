@@ -41773,6 +41773,14 @@ function skateAirBase(dt,pitch,roll) {
   const wantRoll=Math.atan2(dot(n,right),dot(n,neutral));
   const angle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from))*smooth;
   const base={yaw,pitch:angle(pitch,wantPitch),roll:angle(roll,wantRoll)};
+  if(SK.airRoute&&!SK.airRoute.out&&!SK.airRoute.o.bowl){
+    // A half-pipe air leaves and returns to the same steep wall. Keeping its
+    // normal throughout the flight makes an ordinary spin look like a cartwheel.
+    // Level between takeoff and catch; short hops keep time to fit the wall.
+    const step=x=>{const t=clamp(x,0,1);return t*t*(3-2*t);};
+    const level=step((T-pose.t)/.22)*step(landingIn/.28)*step(height/.04);
+    base.pitch*=1-level;base.roll*=1-level;
+  }
   SK.airNormal=skateBoardAxes(yaw,base.pitch,base.roll).up;
   return base;
 }
@@ -42070,7 +42078,9 @@ function skateFinishTransitionPop(trick,gesture,velocity){
   SK.lipPop=null;SK.v=Math.hypot(velocity[0],velocity[1]);if(SK.v>1e-9)SK.dir=Math.atan2(velocity[1],velocity[0]);body.vz=velocity[2]*10;SKB.v=velocity;
   const [name,flip,turn]=TRICKS[trick??arrowTrick()]||['ollie',0,0];
   body.trick=skateTrick(name,flip,turn,skateAirTime(body.vz),!!gesture?.nollie);
-  SK.preWind=clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
+  // Return airs need the same controllable turn whether the coping or a pop
+  // launched them. The extra wind-up otherwise adds nearly 30 degrees.
+  SK.preWind=SK.airRoute&&!SK.airRoute.out&&!SK.airRoute.o.bowl?0:clamp((K.KeyD?1:0)-(K.KeyA?1:0)+(SK_INPUT.steerTarget??SK_INPUT.steer),-1,1);
   SK.charge=-1;SK.spin=0;SK.popT=T;controllerRumble('pop');if(actx)sfxUse('ollie');return true;
 }
 // Keep ramp pops close to the wall: most impulse is vertical, with only
