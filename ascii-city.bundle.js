@@ -13456,7 +13456,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 7; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police)
+const NET_PROTOCOL = 8; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -13464,7 +13464,7 @@ const NET_TIMEOUT = 8; // seconds without a word from someone and they've gone
 const NET_CHAT_MAX = 120, NET_NAME_MAX = 16, NET_CODE_MAX = 32;
 const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder', 'ride'];
-const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp)\d*$/;
+const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp|tumble|reach|mongo)\d*$/;
 
 // What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
@@ -13509,8 +13509,19 @@ function netCheckTick(d) {
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
+  if (d.away) out.away = true;
+  if (d.ride) out.ride = netCarId(d.ride); // (in someone's car: which)
+  if (d.pee && netNum(d.pee.el) && netNum(d.pee.flow)) out.pee = { el: clamp(d.pee.el, -1.3, 1.3), flow: clamp(d.pee.flow, 0, 1), loo: d.pee.loo && netNum(d.pee.loo[0]) && netNum(d.pee.loo[1]) ? [d.pee.loo[0], d.pee.loo[1]] : null }; // (peeing: aimed how high, how hard)
+  if (d.spray && Number.isInteger(d.spray.col)) out.spray = { col: clamp(d.spray.col, 0, 8) }; // (spraying, in this colour)
+  if (d.fish && netNum(d.fish.x) && netNum(d.fish.y) && netNum(d.fish.z)) out.fish = { x: d.fish.x, y: d.fish.y, z: clamp(d.fish.z, -1, 50) }; // (their line's out: the lure)
+  if (d.craft && typeof d.craft === 'object' && ['sea', 'swan', 'air'].includes(d.craft.k)) { // (a boat, a swan, an aircraft)
+    const c = d.craft, o = { k: c.k, kind: typeof c.kind === 'string' ? c.kind.slice(0, 20) : '', col: netNum(c.col) ? c.col | 0 : 0, v: netNum(c.v) ? c.v : 0 };
+    for (const f of ['yaw', 'pitch', 'roll', 'rotor']) o[f] = netNum(c[f]) ? c[f] : 0;
+    out.craft = o;
+  } // (in the pause menu or another tab: can't be hurt or hooked, and it says so over them)
   if (d.sk && typeof d.sk === 'object' && netNum(d.sk.yaw) && netNum(d.sk.nose) && netNum(d.sk.roll)) // on the board: which way it points, tipped how, and which foot forward
-    out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1 };
+    out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1,
+      ...(netNum(d.sk.bx) && netNum(d.sk.by) && netNum(d.sk.bz) ? { bx: d.sk.bx, by: d.sk.by, bz: d.sk.bz } : {}) }; // (bx..: where the board went, in a bail)
   return out;
 }
 function netCheckHello(d) {
@@ -13603,7 +13614,7 @@ function netShotTargets(x, y) {
   const out = [];
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || !NET_SHOOTABLE.has(s.mode)) continue;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.away || !NET_SHOOTABLE.has(s.mode)) continue;
     if (Math.hypot(rel(s.x - x), rel(s.y - y)) > SHOT_RANGE) continue;
     out.push({ who: p, x: s.x, y: s.y, z: s.z, h: 0.175 });
   }
@@ -13615,7 +13626,7 @@ function netHookTarget(f) {
   if (!net.on || !NET_FEATURES.hooks || mode !== 'walk') return null;
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || s.mode !== 'walk') continue;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || s.away || s.mode !== 'walk') continue;
     if (Math.hypot(rel(s.x - f.x), rel(s.y - f.y)) > HOOK_REACH) continue;
     const h = f.z - s.z; if (h < .005 || h > .2) continue;
     return { netPeer: p.id, name: p.name, x: s.x, y: s.y, hooked: { t: 0, haul: false } };
@@ -28261,7 +28272,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
-  if (city) drawAnglerLines(); // (the regulars' lines too)
+  if (city) { drawAnglerLines(); netDrawLines(); } // (the regulars' lines too; and other players', net.js)
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if(sceneOnly)return;
@@ -29060,7 +29071,7 @@ function minimap() {
   };
   if(MAP_NAV.path)for(const point of MAP_NAV.path.slice(MAP_NAV.next)){const p=inMap(point.x,point.y);if(p){g.fillStyle='#78d8d1';g.fillRect(p[0]+tw*.25,p[1]+fs*.35,tw*.5,fs*.3);}}
   for (const pp of people) if (!pp.hidden) { const p = inMap(pp.x, pp.y); if (p) { g.fillStyle = '#b9a'; g.fillRect(p[0] + cw_ * 0.8, p[1] + fs * 0.4, 2, 2); } }
-  for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit ? 'P' : 'o', c.pursuit ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]);
+  for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit || c.cop ? 'P' : 'o', c.pursuit || c.cop ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]); // (cop: another player's chase, net.js)
   for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
   for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
   for (const c of owned.cars) if (c !== me) mark(c.x, c.y, 'C', '#fff');
@@ -29081,6 +29092,7 @@ function minimap() {
   if(supplierVisit)mark(supplierVisit.x,supplierVisit.y,'+','#ffd575');
   if(drugBuyer)mark(drugBuyer.x,drugBuyer.y,'$','#f8a0d9');
   if(mapWaypoint)mark(mapWaypoint.x,mapWaypoint.y,'X','#8de5df');
+  for (const q of netMapPlayers()) mark(q.x, q.y, q.name[0].toUpperCase(), q.col); // (other players, in multiplayer: the first letter of their name, in their colour)
   const ang = me ? Math.atan2(me.hy, me.hx) : a; // you, and which way you're facing
   mark(px, py, '@' + ['>', 'v', '<', '^'][mod(Math.round(ang / (Math.PI / 2)), 4)], '#ff5');
   g.fillStyle = PAL[C(GRAY, 9)]; // the frame
@@ -34319,6 +34331,10 @@ function bigMapDraw() {
     x.fillStyle = fract(T * 2) < 0.5 ? '#ff5' : '#fff'; x.strokeStyle = '#000'; x.lineWidth = 2;
     x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, -6); x.lineTo(-3, 0); x.lineTo(-6, 6); x.closePath(); x.stroke(); x.fill(); x.restore();
     taken.push([youX - 10, youY - 10, youX + 10, youY + 10]);
+  }
+  for (const q of netMapPlayers()) { // other players, in multiplayer (net.js): a dot and their name (inside somewhere: at its door)
+    dot(q.x, q.y, q.inside ? 'o' : '@', q.col, 16);
+    label(q.x, q.y - 1.6, q.name + (q.inside ? ' (inside)' : ''), q.col, 13, true, true);
   }
   for (const h of owned.homes) { // your homes: a pulsing ring and a tag, loud enough to spot from the whole-city view
     const hx = h.cell % N + 0.5, hy = Math.floor(h.cell / N) + 0.5, X = sx(hx), Y = sy(hy);
@@ -55870,6 +55886,7 @@ function netFrame(t, fromTimer = false) {
     }
   }
   netSyncCars(now);
+  netPeeFrame(dt);
   if (mode === 'ride') netRideStep();
   netHookFrame(dt);
 }
@@ -55898,14 +55915,29 @@ function netSelfPose(speed) {
   return speed > run ? 'run' : speed > walk ? 'walk' : 'stand';
 }
 function netSendTick(now) {
-  const car = (mode === 'drive' || mode === 'taxi') && me ? me : null;
-  const x = car ? car.x : px, y = car ? car.y : py, a_ = car ? Math.atan2(car.hy, car.hx) : a;
+  const car = (mode === 'drive' || mode === 'taxi') && me ? me : null, plane = mode === 'air' && pilot ? pilot : null, helm = mode === 'sea' && sea ? sea : null;
+  const x = car ? car.x : plane ? plane.x : helm ? helm.x : px, y = car ? car.y : plane ? plane.y : helm ? helm.y : py;
+  const a_ = car ? Math.atan2(car.hy, car.hx) : plane ? plane.yaw : helm ? Math.atan2(helm.hy, helm.hx) : a;
   const last = net.lastSent, gap = last ? now - last.t : 0;
   const speed = last && gap > 0 && last.rk === netRoomKey() ? Math.hypot(rel(x - last.x), rel(y - last.y)) / gap : 0;
   const it = heldItem();
   const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
+  if (netAway()) s.away = true;
+  if (plane) { s.z = plane.z; s.craft = { k: 'air', kind: plane.type, yaw: plane.yaw, pitch: plane.pitch, roll: plane.roll, rotor: plane.rotor || 0 }; }
+  if (helm) s.craft = { k: 'sea', kind: helm.kind, col: helm.col ?? WHITE, v: helm.v || 0 };
+  if (mode === 'boat') s.craft = { k: 'swan' };
+  if (mode === 'ride' && net.ride) s.ride = net.ride.id;
+  if (pee) s.pee = { el: clamp(Math.atan(pitch * rows / projY) + 0.55, -1.3, 1.3), flow: Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4), loo: pee.loo || null }; // (as peeSpray aims it, pee.js)
+  if (heldItem()?.id === 'spraypaint' && usingHeldItem() && onFootMode()) { s.spray = { col: sprayColourOf(heldItem()) }; s.pose = 'reach'; } // (holding Q with the can: spraying, spray-paint.js)
+  if (fishing && fishing.st !== 'wind' && netNum(fishing.x)) s.fish = { x: fishing.x, y: fishing.y, z: fishing.z };
+  if (skatingNow() && SK.bailAt) { // fallen off the board: as skate-bails.js draws you
+    const B = SK.bailData, age = B ? T - B.t0 : 0;
+    s.x = SK.bailAt[0]; s.y = SK.bailAt[1]; s.a = SK.bailAt[2]; s.z = skateGround(s.x, s.y);
+    s.pose = 'tumble' + clamp(age < .35 ? Math.floor(age / .35 * 3) : SK.bail > .5 ? 3 : 4 + Math.floor((.5 - SK.bail) / .5 * 4), 0, 7);
+    s.sk = B ? { yaw: B.yaw, nose: 0, roll: B.roll, st: 1, bx: B.board[0], by: B.board[1], bz: B.board[2] } : { yaw: s.a, nose: 0, roll: 0, st: 1 };
+  }
   if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
-  if (skatingNow() && !car) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
+  if (skatingNow() && !car && !SK.bailAt) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
   if (car) s.veh = { id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
   net.tx.send('tick', s);
@@ -56107,7 +56139,7 @@ function netRoomShotTargets() { // (gun-ui.js's traceRoomShot: who's in this roo
   const out = [], rk = netRoomKey();
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (p.hello && !p.mismatch && !p.stale && s && s.rk === rk && s.mode === 'room') out.push({ x: s.x, y: s.y, z: s.z, h: 1.8, fig: true, netPeer: p.id, name: p.name });
+    if (p.hello && !p.mismatch && !p.stale && s && !s.away && s.rk === rk && s.mode === 'room') out.push({ x: s.x, y: s.y, z: s.z, h: 1.8, fig: true, netPeer: p.id, name: p.name });
   }
   return out;
 }
@@ -56119,7 +56151,7 @@ function netGunMessage(type, data, from, p, now) {
     const ok = ['x0', 'y0', 'z0', 'x', 'y', 'z'].every(k => netNum(data[k]));
     if (!ok || data.rk !== netRoomKey()) return true; // (somewhere else: out of earshot, as far as this goes)
     const inside = mode === 'room';
-    if (data.target === net.selfId && net.ff && !sleep && !wakeT) { // you: hit
+    if (data.target === net.selfId && net.ff && !sleep && !wakeT && !netAway()) { // you: hit
       gun.copShots.push({ x: data.x0, y: data.y0, hit: true, t: T, room: inside, side: Math.random() < 0.5 ? -1 : 1 }); // (the bang, the flash at them, "you're hit": gun-ui.js)
       needs.health = Math.max(0, needs.health - (NET_SHOT_HURT[0] + Math.random() * (NET_SHOT_HURT[1] - NET_SHOT_HURT[0])));
       gun.hurtT = T;
@@ -56188,7 +56220,7 @@ function netHookMessage(type, data, from, p, now) {
   if (type !== 'hook' && type !== 'reel' && type !== 'unhook') return false;
   if (!NET_FEATURES.hooks) return true;
   if (type === 'hook') { // you're on their line (if you can be)
-    if (mode !== 'walk' || skatingNow() || net.hooked || sleep || wakeT) { net.tx.send('unhook', { why: 'no' }, from); return true; }
+    if (mode !== 'walk' || skatingNow() || net.hooked || sleep || wakeT || netAway()) { net.tx.send('unhook', { why: 'no' }, from); return true; }
     net.hooked = { by: from, t: 0, haul: false, struggle: 0, d0: Math.max(0.15, netViewOf(p) ? Math.hypot(rel(netViewOf(p).x - px), rel(netViewOf(p).y - py)) : 0.5), keys: false };
     body.seat = null;
     say(`${p.name}'s fishing line has you by the coat! (Space or E, again and again: work it loose)`, 4);
@@ -56211,6 +56243,7 @@ function netHookFrame(dt) { // every frame: both ends of a line
   const p = net.peers.get(h.by), s = p && netViewOf(p), free = (why, text) => { net.tx.send('unhook', { why }, h.by); net.hooked = null; if (text) say(text, 3); };
   if (!p || p.stale || !s || s.rk !== 'out') return free('gone');
   if (mode !== 'walk' || skatingNow()) return free('gone');
+  if (netAway()) return free('free', 'You slip off the hook.'); // (paused, or in another tab: let go)
   h.t += dt;
   const keys = !!(K.Space || K.KeyE); // (struggling: each press loosens it)
   if (keys && !h.keys) h.struggle += h.haul ? 0.1 : 0.16;
@@ -56247,6 +56280,9 @@ function netSendTags(to) {
   net.tx.send('tags', tags.map(t => ({ cell: t.cell, face: t.face, u: t.u, z: t.z, design: t.design })), to);
 }
 
+// in the pause menu, or the game's in another tab: you're not really here, so nobody can hurt or hook you
+const netAway = () => !!(paused || document.hidden);
+
 // ---- chat
 function netSay(textIn) {
   const text = netClean(textIn, NET_CHAT_MAX);
@@ -56272,12 +56308,14 @@ function netOpenChat() {
       else if (e.code === 'Escape') { e.preventDefault(); netCloseChat(); }
     });
     netChatEl.addEventListener('keyup', e => e.stopPropagation());
-    netChatEl.addEventListener('blur', () => { if (netTyping()) netCloseChat(false); });
+    netChatEl.addEventListener('blur', () => { if (netTyping() && CONTROLLER.textInput !== netChatEl) netCloseChat(false); }); // (the controller's on-screen keyboard takes the focus while you type)
+    netChatEl.addEventListener('change', () => { if (netChatEl.dataset.pad) { delete netChatEl.dataset.pad; netSay(netChatEl.value); netCloseChat(); } }); // (the controller's keyboard: Done sends it)
     document.body.appendChild(netChatEl);
   }
   for (const k in K) K[k] = 0; // (stop walking: the keys are for the message now)
   releaseHeldMouse(); releaseMouse();
   netChatEl.value = ''; netChatEl.style.display = 'block'; netChatEl.focus();
+  if (CONTROLLER.active) { netChatEl.dataset.pad = '1'; controllerKeyboard(netChatEl); } // (a controller: type it on the on-screen keyboard)
 }
 function netCloseChat(relockMouse = true) {
   if (!netChatEl) return;
@@ -56322,16 +56360,27 @@ function drawPeers() {
       drawVehicle(car, vx, vy, fx, fy);
       continue;
     }
-    if (!NET_ON_FOOT.has(s.mode)) continue; // (on the water or in the air: just their name, for now)
+    if (s.craft) { netDrawCraft(p, s, vx, vy); continue; } // (a boat, a swan, an aircraft)
+    if (!NET_ON_FOOT.has(s.mode)) continue;
     const gait = /^(walk|run)$/.test(s.pose) ? s.pose + (Math.floor(p.ph) & 7) : s.pose;
+    if (s.sk && !inRoom && /^tumble/.test(s.pose)) { // bailed: the board gone off on its own, them sprawled (as skate-bails.js draws you)
+      const sk = s.sk;
+      if (netNum(sk.bx)) drawSkateBoard(rel(sk.bx - px), rel(sk.by - py), sk.bz, sk.yaw, 0, sk.roll);
+      drawFigure(vx, vy, s.z, SB.rider, fx, fy, netFigLook(p), s.pose, { light: 5, hold: p });
+      continue;
+    }
     if (s.sk && !inRoom) { // on the board: the deck under them, and them side on to it, front foot forward (as skate.js draws you)
       const sk = s.sk, ang = sk.yaw + sk.st * Math.PI / 2, look = netFigLook(p), pose = /^(ride|push|crouch|skateair|mongo)/.test(s.pose) ? s.pose : 'ride1';
       drawSkateBoard(vx, vy, s.z, sk.yaw, sk.nose, sk.roll);
-      drawSkaterFigure(vx, vy, s.z + SB.up + SB.ht, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, 5, [0, 0, 1], skaterFootAnchor(pose, look));
+      drawFigure(vx, vy, s.z + SB.up + SB.ht, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, { light: 5, hold: p }); // (the plain figure: skate.js's per-pixel one is made to be seen from behind at a distance, and comes apart up close)
       continue;
     }
     if (inRoom) drawFigure(vx, vy, s.z, 1.8, fx, fy, netFigLook(p), gait, { light: 9, hold: p });
     else drawFigure(vx, vy, s.z, 0.175, fx, fy, netFigLook(p), gait, { light: 6, hold: p });
+    if (s.spray && !inRoom) { // the can out in front of them, and the mist off it
+      const col = SPRAY_COLOURS[s.spray.col] ?? MAG, mx = vx + fx * 0.06, my = vy + fy * 0.06;
+      drawArt(mx, my, s.z + 0.12, 0.03, 0.03, [fract(T * 7) < .5 ? '.:.' : ':.:'], () => C(col, 13));
+    }
   }
 }
 
@@ -56358,6 +56407,93 @@ function netDrawCops(p, s, inRoom) {
   }
 }
 const netCopCarNear = m => { if (!net.on || !net.cars) return false; for (const c of net.cars.values()) if (c.cop && Math.hypot(rel(c.x - m.x), rel(c.y - m.y)) < 1.5) return true; return false; };
+
+// a boat at the helm, a swan on the lake, an aircraft: drawn as they draw their own (marina.js, gardens.js, aircraft-render.js)
+function netDrawCraft(p, s, vx, vy) {
+  const c = s.craft, hx = Math.cos(s.a), hy = Math.sin(s.a);
+  if (c.k === 'sea' && BOAT_KINDS[c.kind]) drawBoat3D(p.boat = Object.assign(p.boat || {}, { kind: c.kind, col: c.col }), vx, vy, hx, hy, Math.abs(c.v) > 0.1 ? 0.6 : 0);
+  else if (c.k === 'swan') { drawSwanBoat(vx, vy, hx, hy); drawFigure(vx - hx * 0.01, vy - hy * 0.01, 0.01, 0.17, hx, hy, netFigLook(p), 'sit6'); }
+  else if (c.k === 'air' && PLANE_TYPES[c.kind]) {
+    const T_ = PLANE_TYPES[c.kind], o = p.plane = Object.assign(p.plane || { id: (hash(p.id.length, p.id.charCodeAt(1) || 0, 91) * 1e6) | 0 },
+      { x: s.x, y: s.y, z: s.z, yaw: c.yaw, pitch: c.pitch, roll: c.roll, rotor: c.rotor, rotorA: T * 40 * (c.rotor || 0), wrecked: false });
+    if (T_.heli) drawHeliCraft(o, T_, vx, vy); else drawPlaneCraft(o, T_, vx, vy);
+  }
+}
+// their fishing lines (render.js, after the anglers'): the rod in their hands, the line to the lure, a bobber on the water.
+// If the lure's in you (hooked), the line runs to just in front of you.
+function netDrawLines() {
+  if (!net.on) return;
+  for (const p of net.peers.values()) {
+    const s = p.view;
+    if (!s || !s.fish || !p.drawn || s.rk !== 'out') continue;
+    const vx = rel(s.x - px), vy = rel(s.y - py), fx = Math.cos(s.a), fy = Math.sin(s.a);
+    const hand = fishProj(vx + fx * 0.02, vy + fy * 0.02, s.z + 0.1), tip = fishProj(vx + fx * 0.12, vy + fy * 0.12, s.z + 0.22);
+    if (hand && tip) fishSeg(hand, tip, C(YEL, 13));
+    let lx = rel(s.fish.x - px), ly = rel(s.fish.y - py), lz = s.fish.z;
+    if (Math.hypot(lx, ly) < 0.06) { lx = dx * 0.08; ly = dy * 0.08; lz = eye - 0.05; } // (it's in you)
+    const end = fishProj(lx, ly, lz);
+    if (tip && end) fishSeg(tip, end, C(WHITE, 8 * Math.max(0.5, amb)));
+    if (end && lz < 0.02) fishSurface(end.c, end.r, end.depth, C(RED, 14)); // (the bobber)
+  }
+}
+
+// ---- peeing: theirs runs through your own pee.js, drop by drop, from where they stand the way they're aimed, so the
+// arc, the splashes on the wall and the puddle are all there for you as they are for them. And you hear it, close up.
+let netPeeVoice = null;
+function netPeeFrame(dt) {
+  let nearest = Infinity;
+  const at = placeKey(), rk = netRoomKey();
+  if (net.on && at !== null && !paused) for (const p of net.peers.values()) {
+    if (!p.hello || p.mismatch || p.stale) continue;
+    const s = netViewOf(p);
+    if (!s || !s.pee || s.rk !== rk || !NET_ON_FOOT.has(s.mode)) continue;
+    const inRoom = mode === 'room', sc = inRoom ? 1 : 0.1, d = inRoom ? Math.hypot(s.x - px, s.y - py) : Math.hypot(rel(s.x - px), rel(s.y - py));
+    nearest = Math.min(nearest, d / sc);
+    if (d / sc > 40) continue; // (out of sight: no point)
+    const { el, flow, loo } = s.pee, hip = s.z + 0.9 * sc;
+    for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) {
+      const wob = Math.sin(T * 6 + p.ph) * 0.05 + Math.sin(T * 1.7) * 0.09, x = s.x + Math.cos(s.a) * 0.25 * sc, y = s.y + Math.sin(s.a) * 0.25 * sc;
+      let ang = s.a + wob, sp = (1.5 + flow * 4.5) * Math.cos(el), up = Math.sin(el) * (1.5 + flow * 4.5);
+      if (loo) { // (at a toilet: into the bowl, as yours goes)
+        const dd = Math.hypot(loo[0] - x, loo[1] - y), fall = Math.max(0.05, hip - LOO_TOP);
+        up = 0.4 + flow * 0.7; ang = Math.atan2(loo[1] - y, loo[0] - x); sp = dd * 9.8 / (up + Math.sqrt(up * up + 2 * 9.8 * fall));
+      }
+      peeDrops.push({ at, s: sc, x, y, z: hip, vx: Math.cos(ang) * sp * sc, vy: Math.sin(ang) * sp * sc, vz: (up + (Math.random() - 0.5) * 0.15) * sc, t0: T, n: peeN++ });
+    }
+    while (peeDrops.length > 400) peeDrops.shift();
+  }
+  // the sound: theirs, by how near the nearest is (yours plays itself, pee.js)
+  const vol = !pee && nearest < 15 ? 0.22 * (1 - nearest / 15) : 0;
+  if (!actx) return;
+  if (vol > 0 && !netPeeVoice) {
+    netPeeVoice = { gain: null, source: null, loading: true };
+    clipBuffer('piss_seamless').then(buf => {
+      if (!buf || !netPeeVoice || !netPeeVoice.loading) return;
+      const source = actx.createBufferSource(), gain = actx.createGain();
+      source.buffer = buf; source.loop = true; gain.gain.value = 0; source.connect(gain); gain.connect(sfxBus); source.start();
+      Object.assign(netPeeVoice, { source, gain, loading: false });
+    });
+  }
+  if (netPeeVoice && netPeeVoice.gain) netPeeVoice.gain.gain.setTargetAtTime(vol, actx.currentTime, 0.1);
+  if (netPeeVoice && !vol && netPeeVoice.gain) { const v = netPeeVoice; netPeeVoice = null; v.source.stop(actx.currentTime + 0.4); v.source.onended = () => { v.source.disconnect(); v.gain.disconnect(); }; }
+  else if (netPeeVoice && !vol && netPeeVoice.loading) netPeeVoice = null;
+}
+
+// everyone else for the maps (hud.js's minimap, bigmap.js): where they are in the city; inside somewhere, at the door
+// they went in by (it's in their room key: 'kind:x,y')
+function netMapPlayers() {
+  const out = [];
+  if (!net.on) return out;
+  for (const p of net.peers.values()) {
+    if (!p.hello || p.mismatch || p.stale) continue;
+    const s = netViewOf(p);
+    if (!s) continue;
+    let x = s.x, y = s.y, inside = false;
+    if (s.rk !== 'out') { const m = /:(-?[\d.]+),(-?[\d.]+)$/.exec(s.rk); if (!m) continue; x = +m[1]; y = +m[2]; inside = true; }
+    out.push({ x, y, inside, name: p.name, col: NET_CSS[p.hello.look.top] });
+  }
+  return out;
+}
 
 // ---- over the frame: their names, their speech bubbles (and yours, when you can see yourself), the chat log
 function netProject(vx, vy, z) {
@@ -56403,12 +56539,16 @@ function netOverlay() {
       if (fade <= 0 || !netSeen(vx, vy, s.z, h, head.depth, inRoom ? 0.6 : s.veh ? 0.4 : 0.06)) continue;
       const x = head.c * cw, y = head.r * FS - 4; // (just over the top of their head, or the car's roof)
       let tagTop = y;
-      const tag = p.name + (s.stars ? ' ' + '*'.repeat(s.stars) : '');
+      const riders = s.veh && s.veh.id ? [...net.peers.values()].filter(q => q.hello && q.view && q.view.ride === s.veh.id).map(q => q.name) : [];
+      if (riders.length) p.tagName = p.name + ' + ' + riders.join(', '); else p.tagName = p.name; // (and whoever's riding with them)
+      const tag = p.tagName + (s.away ? ' (paused)' : '') + (s.stars ? ' ' + '*'.repeat(s.stars) : '');
       if (fade > 0.05) { // the name: small, over their head
         const w = g.measureText(tag).width;
         g.globalAlpha = fade * 0.9; g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - w / 2 - 3, y - FS - 2, w + 6, FS + 2);
-        g.fillStyle = NET_CSS[p.hello.look.top]; g.fillText(p.name, x - w / 2, y - FS);
-        if (s.stars) { g.fillStyle = '#f55'; g.fillText(' ' + '*'.repeat(s.stars), x - w / 2 + g.measureText(p.name).width, y - FS); }
+        g.fillStyle = NET_CSS[p.hello.look.top]; g.fillText(p.tagName, x - w / 2, y - FS);
+        let tx = x - w / 2 + g.measureText(p.tagName).width;
+        if (s.away) { g.fillStyle = '#9ab'; g.fillText(' (paused)', tx, y - FS); tx += g.measureText(' (paused)').width; }
+        if (s.stars) { g.fillStyle = '#f55'; g.fillText(' ' + '*'.repeat(s.stars), tx, y - FS); }
         g.globalAlpha = 1; tagTop = y - FS - 2;
       }
       if (p.bubble && p.bubble.until > now && (inRoom || head.depth < 20)) netBubbleAt(x, tagTop, p.bubble.lines, clamp((p.bubble.until - now) * 2, 0, 1) * Math.max(0.35, fade));
@@ -57207,6 +57347,7 @@ const SHEET = [
   ['Empty hands', 'Digit0', () => handheldMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Lights & siren', 'KeyH', () => mode === 'drive' && !!me?.ev], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
+  ['Chat', 'KeyT', () => net.on && NET_FEATURES.chat], // (in a multiplayer room: net.js; a controller gets it in its Actions too)
 ];
 
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched

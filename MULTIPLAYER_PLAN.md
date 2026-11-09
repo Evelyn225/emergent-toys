@@ -46,7 +46,14 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   their own), and see your officers running. Their own patrol cars aren't drawn within 1.5 cells of one of yours.
   Busted at the wheel: your passengers are pulled out and get a star (`accomplice`). Not done: the 5-star helicopter
   isn't shared.
-- **Next**: try everything with real players. Smaller
+- **Round after the first real test**: paused (or in another tab) players can't be shot or hooked and show "(paused)";
+  Chat in the phone's More sheet and a controller's Actions (the on-screen keyboard; Done sends); others now see boats,
+  the swan, aircraft, skate bails, spraying (arms out, a mist), fishing lines (the hooked end too), peeing (their stream
+  runs through your own pee.js, so the splashes and puddles happen in your street, and you hear it), who's riding in a
+  car (on its tag), and everyone on the minimap and the big map (inside: at the door they went in by). Other players'
+  skaters are drawn as plain solid figures: skate.js's per-pixel skater is made for the chase camera and comes apart up
+  close. Flips and spins already came through (the board's yaw, pitch and roll are sent).
+- **Next**: the section at the end (peaceful mode, car hits, pickpocketing, soccer balls), once its decisions are made. Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
   rotation in the air, no bail sprawl.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
@@ -317,3 +324,80 @@ Phases 1, 2, 4, 5 can happen in any order after 0. Do 3 before 6 (chases are car
 - Freecam and dev tools should be disabled in MP.
 - No authority: a modified client can teleport, one-shot people, or fake claims. Acceptable for friends only; if it
   ever goes public, move to Cloudflare Durable Objects behind the same transport interface.
+
+## Next: pickpocketing players, hitting them with cars, peaceful mode, soccer balls (planned, not built)
+
+Same rule as everything else: the game of the player it happens *to* decides what happens to them; the other side
+only asks. So no player's money, items or health is ever changed by someone else's game.
+
+### Peaceful mode (do this first: the other two check it)
+
+- A toggle in Esc > Multiplayer, per player, **off by default**: "Peaceful: you can't hurt or rob other players, and
+  they can't hurt or rob you." It replaces the friendly-fire toggle, which only protects you one way (you could still
+  shoot people while they can't shoot you).
+- Sent in every update (`peaceful: true`, like `away`). Anything player-against-player checks both sides: if either the
+  one doing it or the one it's done to is peaceful, it doesn't happen.
+  - guns: `netShotTargets` / `netRoomShotTargets` skip them, and a peaceful shooter gets no player targets at all, so the
+    round goes past (the streak and the bang still happen);
+  - hooks: `netHookTarget` skips them, and the hooked side refuses (`unhook: 'no'`);
+  - car hits and pickpocketing: below, same check;
+  - shared police, chat, riding, paint, cars: unaffected.
+- Shown over them: their name with a small `~` (or "(peaceful)" up close), so nobody wonders why their shots miss.
+- Optional later: a room-wide "peaceful room" setting, held by whoever keeps the clock, that switches it on for everyone.
+- Size: half a day to a day.
+
+### Hitting players with cars
+
+- Now: another player's car drives straight through you, and yours through them (`drive()` in `main.js` only checks
+  NPCs, `people` and the foot police).
+- Driver's side: in `drive()`, alongside the NPC check, test other players on foot (live positions, not `away`, not
+  peaceful, not in a car or on the water) against the car's front the same way. On a hit: the car slows as it does for
+  an NPC, and the driver sends `runover { speed, dir }` to that player.
+- Victim's side: knocked flat (the existing `knockDown` look, pose `down` sent so others see it) for a couple of seconds,
+  can't move meanwhile, and loses health by speed: slow, a bruise; over the NPC fatal speed (`FATAL_V`), down and into
+  hospital the way a shooting does (`netShotDown`, with "hit by a car" in the message), lying in the road for the others.
+- Crime for the driver, from their own witnesses: `hit` (2 stars) when they get up, `roadkill` (4) when they don't, as
+  for NPCs. News lines already exist for both.
+- Riding: hitting someone with passengers aboard makes no difference to the passengers.
+- Size: one to two days, most of it making the knock-down feel right on the victim's screen.
+
+### Pickpocketing players
+
+- Target: another player on foot, close (0.3 cells) and **behind them**, i.e. they're facing away from you, using
+  their sent heading. Not away, not peaceful, not in a car. G, as for NPCs; the prompt says "G: pick Bob's pocket".
+- The thief plays the same pickpocket minigame as on NPCs (`startCrime('pickpocket')`).
+  - **Success:** the thief's game sends `pick` to the victim. The victim's game chooses what goes (see the decisions
+    below), takes it out of their own money or bag, and replies with it; the thief's game adds it. The victim gets a line
+    a moment later ("Your pocket feels lighter.") so they know, but not who unless they turn round in time.
+  - **Failure:** the victim's game is told at once ("Ann just tried to pick your pocket!") and the thief's own witnesses
+    decide the crime (`pickpocket`, 1 star), as for NPCs.
+- Not twice in a row: one attempt per victim per minute, checked on the victim's side.
+- Size: one to two days.
+
+### Soccer balls
+
+- Now: a kicked ball (`ball` in `goods.js`: kicked off the bag, dribbled by walking into it, E to pick it up) exists
+  only in its kicker's game. Nobody else sees it.
+- **Whoever touched it last runs it.** That player's game simulates it (the existing `stepBall` physics: bounces,
+  slopes, walls, water) and sends its position and speed with their updates (`ball { id, x, y, z, vx, vy, vz, t }`);
+  everyone else has a stand-in, drawn by the existing `drawBall`, moved between updates and carried on along its
+  velocity so it doesn't lag behind.
+- When you touch someone's ball in your own game (walk into it, or kick it with Q), you take it over: your game carries
+  on from the latest state with your touch added and starts sending it, stamped with the time of your touch. If two
+  players touch it at once, the later touch wins (ties: lower id), and the other snaps to it. That's what makes passing
+  and tackling work without asking anyone first, at the cost of a small hitch when two feet meet it together.
+- Each player's ball has its own id (one each, as now); a room can have several going.
+- Picking up: E picks up only your own ball. Anyone can kick or dribble anyone's.
+- Lost in the water: whoever's running it then sees it go, and it's gone for everyone (the owner's bag doesn't get it
+  back, same as now).
+- Later, if wanted: goals at the stadium or the park pitches counting for whoever scored.
+- Size: one and a half to two days, most of it making the hand-over between players smooth.
+
+### Decisions needed before building
+
+1. What a pickpocket takes: cash only, or sometimes an item from the bag? How much cash: a share of what they carry
+   (say 10%, at most $50) or a fixed $2-20 like NPCs?
+2. Can being run over send you to hospital (and cost the bill), or only knock you down?
+3. Peaceful mode: per player only, or also a room-wide switch? And should it replace the friendly-fire toggle (my
+   recommendation) or sit alongside it?
+4. Soccer balls: can anyone pick up anyone's ball (taking it into their bag), or only its owner (my recommendation)?
