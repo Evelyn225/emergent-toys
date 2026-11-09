@@ -969,7 +969,10 @@ function reflect() {
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
         const lv = (COL[j] & 15) * 0.55;
         CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
-      }else if(f===2){set(i,' ',0);BG[i]=C(lamp?WARM:BLUE,lamp?Math.max(3+day*3,lamp):3+day*3);}
+      }else if(f===2){ // nothing to mirror here: just the ground, wet (a shade or two darker), unless a lamp lights it
+        set(i,' ',0); const g=BG[i];
+        BG[i]=lamp?C(WARM,Math.max(3+day*3,lamp)):g===NONE?C(GRAY,1+day*2):(g&0xf0)|Math.max(1,(g&15)-2);
+      }
       if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }
   }
