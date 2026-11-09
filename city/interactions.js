@@ -73,6 +73,7 @@ function interactionFocus() {
     }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     for(const t of roomFixtureTargets())offer('room-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part||null,t.kind==='lamp'); // (taps, switches: room-fixtures.js)
+    for(const p of room.props)if(p.emergencyDispatch)offer('emergency-dispatch',p,p.x,p.y,.85,1.65,.55,2.1,p);
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!p.roomFlee&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
       const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
@@ -89,6 +90,7 @@ function interactionFocus() {
   return best;
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
+  if(target?.kind==='emergency-dispatch')return emergencyJob?'E: finish emergency shift':`E: start ${target.who.emergencyDispatch==='amb'?'paramedic':'firefighter'} shift`;
   if(target?.kind==='quiet-place')return `E: ${target.who.label}`;
   if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
   if(target?.kind==='home-display')return `E: take ${itemName(target.who.it)}`;
@@ -101,6 +103,7 @@ function focusedInteractionPrompt(target=interactionFocus()) {
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
+  if(target?.kind==='emergency-dispatch'){if(emergencyJob)endEmergencyShift();else startEmergencyShift(target.who.emergencyDispatch);return true;}
   if(target?.kind==='quiet-place'){quietPlaceUse(target.who);return true;}
   if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
   if(target?.kind==='home-display'){homeShelfTake(target.who);return true;}

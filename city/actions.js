@@ -155,6 +155,7 @@ function enterRoom(kind, extra, spawn) {
 }
 function interact() {
   if (mode === 'ride') return netGetOut(); // (in another player's car: net.js)
+  if(emergencyUse())return;
   if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
@@ -351,7 +352,7 @@ function interact() {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return say('The door is around the front.',2);
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
-    if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
+    if (sh.base && sh.base !== 'amb' && sh.base !== 'fire') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
     if (guest) return netEnterAsGuest(guest);
@@ -372,6 +373,7 @@ function interact() {
 // out cold (hunger, thirst, a bad fall): you come to in a bed at the nearest hospital, and they've billed you
 let wakeT = 0;
 function passOut(why) {
+  if(emergencyJob)endEmergencyShift('Shift interrupted');
   if(failCourier()){why+=' Your courier delivery failed.';saveGame();}
   climbing=null;
   chute = null;

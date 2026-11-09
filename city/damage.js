@@ -24,7 +24,7 @@ const burning = c => c.fireT != null && !c.wrecked;
 // every frame: fires burn down to the bang; returns the cars that have just gone up
 function stepCarFires(dt) {
   const out = [];
-  for (const c of cars) if (burning(c) && (c.fireT += dt) >= BURN_T) { c.wrecked = true; c.v = 0; c.boomT = T; out.push(c); }
+  for (const c of cars) if (burning(c) && !c.remote && (!fireActive(c.fireIncident)||c.fireIncident.volatile&&!(c.fireIncident.wetUntil>T)) && (c.fireT += dt) >= BURN_T) { c.wrecked = true; c.v = 0; c.boomT = T; out.push(c); }
   return out;
 }
 function repairCar(c) { c.dmg = 0; c.fireT = null; c.wrecked = false; c.boomT = undefined; }

@@ -193,6 +193,7 @@ function bigMapDraw() {
   for (const c of owned.cars) if (c !== me) dot(c.x, c.y, 'C', '#fff');
   for (const b of fleet) if (b.deal === 'mine' && b !== sea) dot(b.x, b.y, 'B', '#fff');
   const tt = taskTarget(); if (tt) dot(tt.x, tt.y, '?', '#4ff');
+  const et=emergencyTarget();if(et)dot(et.x,et.y,'!','#f97');
   const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
   for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);

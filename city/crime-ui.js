@@ -62,6 +62,7 @@ function bustedKey(e) { // nothing else while they've got you: not even Esc
 function outOfCar(keepCar = false) { // paying a fine leaves the car parked where they stopped you
   if (!me) return;
   const c = me;
+  if(emergencyJob)endEmergencyShift('Shift interrupted');
   if (mode === 'drive') {
     c.player = false; c.v = 0;
     if (keepCar) { [px, py] = exitSpot(c); c.parked = true; c.off = 0; c.ex = c.x; c.ey = c.y; }

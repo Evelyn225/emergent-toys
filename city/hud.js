@@ -28,6 +28,10 @@ function dash() {
   if (mode === 'drive' && job) { // on a taxi shift
     dashText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
     dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
+  } else if(mode==='drive'&&emergencyJob&&c===emergencyJob.car){
+    const j=emergencyJob,t=emergencyTarget();
+    dashText(rows-3,3,`${emergencyKindName(j.kind)} · ${j.calls} calls · ${fmt$(j.earned)} · ${c.siren?'SIREN ON':'H: SIREN'}`,C(j.kind==='amb'?CYAN:ORANGE,15));
+    dashText(rows-2,3,`${Math.abs(c.v*36)|0} km/h · ${t?t.what:'Awaiting dispatch…'}`,C(WHITE,13));damageDash();
   } else if (mode === 'drive') {
     dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
     damageDash();
@@ -135,6 +139,7 @@ function promptText() {
   if (mode === 'ride') return netRidePrompt(); // (in another player's car: net.js)
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   if(furnishingPlacement){const p=furnishingCandidate();return p.ok?'E: place · Q: rotate · Esc: cancel':p.reason+' · Q: rotate · Esc: cancel';}
+  const emergency=emergencyPrompt();if(emergency)return emergency;
   const focused=focusedInteractionPrompt();if(focused)return focused;
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
   const scenePrompt=streetScenePrompt();if(scenePrompt)return scenePrompt;
@@ -258,6 +263,7 @@ function promptText() {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return '';
     if (sh.stadium) { const f = stadiumNextFixture(); return f.open ? `E: tickets for ${f.short}${f.live ? ' (on now)' : ', ' + f.when}` : `${f.short}, ${f.when}`; }
+    if(sh.base==='fire')return 'E: enter fire station · firefighter dispatch inside';
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
@@ -319,6 +325,7 @@ function minimap() {
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
   mark(WHEEL.x, WHEEL.y, '*', fract(T) < 0.5 ? '#f6f' : '#ff6'); // the Ferris wheel
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
+  const et=emergencyTarget();if(et)mark(et.x,et.y,'!','#f97');
   const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
   mark(...COURIER_DEPOT.door,'C','#6c9');
   const courier=courierRoute();if(courier)mark(courier.recipient.x,courier.recipient.y,'!','#6f9');
@@ -364,7 +371,7 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
+  if(!telescopeActive()&&!stadiumTVOn()){if(emergencyHoseReady())drawHoseHeld();else drawHeldBig();} // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);

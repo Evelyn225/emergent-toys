@@ -757,6 +757,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
   if(wanted.busted)return;
+  if(emergencyHoseReady())return;
   if(furnishingPlacement){furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return;}
   if(heldItem()?.id==='camera')return takeHomePhoto();
   if(HOME_FURNITURE[heldItem()?.id]&&!room?.guestHome&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());

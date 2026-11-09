@@ -7,6 +7,7 @@ const DROP_R = 2, STOP_V = 5 / 36; // drop-off: within 20m, rolling at 5 km/h or
 let job = null; // { trips, earned, next: seconds till someone hails, hail: the person waving, ride: the trip under way }
 
 function startTaxiShift(c) {
+  if(typeof emergencyJob!=='undefined'&&emergencyJob)return say('Finish your emergency shift before taking taxi work.',4);
   me = c; mode = 'drive'; c.player = true; c.v = 0; c.hail = false; a = Math.atan2(c.hy, c.hx); px = c.x; py = c.y;
   job = { trips: 0, earned: 0, next: 3, hail: null, ride: null };
   say('You take the taxi out, light on. Watch for people waving you down.', 4);

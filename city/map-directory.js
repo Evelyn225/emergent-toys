@@ -18,7 +18,7 @@ function nearestWorkshopHome() {
 }
 function mapShopCategory(sh) {
   if(sh.word==='REALTY')return 'homes';
-  if(/^(PHARMACY|DRUGSTORE|HOSPITAL|POLICE|BANK|LAUNDRY|STORAGE|AUTO REPAIR)$/.test(sh.word))return 'essentials';
+  if(/^(PHARMACY|DRUGSTORE|HOSPITAL|FIRE DEPT|POLICE|BANK|LAUNDRY|STORAGE|AUTO REPAIR)$/.test(sh.word))return 'essentials';
   if(/^(GAS|CARS)$/.test(sh.word))return 'transport';
   if(/^(ARCADE|GYM|CINEMA|KARAOKE|PACHINKO|CRANE GAME|GACHA|CASINO|MUSEUM|AQUARIUM|VELVET|MAHJONG)$/.test(sh.word))return 'activities';
   if(stockFor('',sh.word).some(id=>['food','drink'].includes(ITEMS[id]?.kind)))return 'food';
@@ -45,7 +45,7 @@ function mapDirectory() {
     }
     const stock=stockFor('',sh.word).slice(0,6).map(id=>ITEMS[id]?.name).filter(Boolean);
     add({id:cityPlaceAtCell(k)?.id||`shop:${k}`,name:sh.word,x,y,category:mapShopCategory(sh),kind:'shop',shop:sh,
-      description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
+      description:sh.base==='fire'?'Firefighter shifts at the dispatch terminal inside. Engine, hose and paid emergency calls.':sh.base==='amb'?'Paramedic shifts at the dispatch terminal inside. Treat patients and drive them to hospital.':stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
@@ -86,6 +86,8 @@ function mapDirectory() {
   for(const [index,c] of owned.cars.entries())add({id:`car:${index}`,name:`Your ${CAR_MODELS[c.model]?.name||'car'}`,x:c.x,y:c.y,category:'transport',kind:'car',description:'Your parked vehicle.',status:c.wrecked?'Wrecked':'Owned'});
   for(const b of fleet)if(b.deal==='mine'||b.hired)add({id:`boat:${b.id}`,name:`${b.hired?'Your rental':'Your boat'} · ${b.name}`,x:b.x,y:b.y,category:'transport',kind:'boat',description:b.hired?'Waiting for your return trip. Bring it back to the marina to end the rental.':'Your boat stays where you tie it up.',status:b.hired?'Hired':'Owned'});
   for(const [index,v] of vendors.entries())add({id:`vendor:${index}`,name:v.type.name,x:v.x,y:v.y,category:'food',kind:'vendor',description:`Street vendor: ${v.type.item}.`});
+  for(const f of emergencyIncidents())if(!f.out)add({id:f.id,name:f.kind==='medical'?'Medical call':f.kind==='car'?'Vehicle fire':'Building fire',x:f.x,y:f.y,category:'activities',kind:'incident',description:f.assigned?'Emergency crew assigned.':'Emergency call awaiting a crew.'});
+  const incident=emergencyTarget();if(incident)add({id:'emergency-call',name:incident.what,x:incident.x,y:incident.y,category:'activities',kind:'objective',description:'Your emergency dispatch destination.'});
   const task=taskTarget(),job=jobTarget(),delivery=courierRoute();
   for(const [id,p,name] of [['task',task,'Current favour'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
     if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
@@ -201,6 +203,7 @@ function navigationTargets() {
     if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
     targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
   };
+  const emergency=emergencyTarget();if(emergency)add(emergency,emergency.what,'#ff9977',emergency.radius,emergency.stop);
   if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
   if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
   if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}

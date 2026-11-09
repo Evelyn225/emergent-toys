@@ -55,6 +55,7 @@ function buildPause() {
       <button class="item" data-act="appearance">Customize character</button>
       <button class="item" data-act="multiplayer">Multiplayer <span class="k" data-net-badge style="margin-left:auto"></span></button>
       <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
+      <button class="item" data-act="end-emergency" style="display:none">Finish emergency shift</button>
       <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
@@ -95,6 +96,7 @@ function buildPause() {
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
     if (ASCII_CITY_DESKTOP_APP) showDesktopUpdate(el);
+    el.querySelector('[data-act="end-emergency"]').style.display=emergencyJob?'flex':'none';
     // the jobs you're on, to call off: only while there's one
     el.querySelector('[data-act="cancel-courier"]').style.display = courierJob ? 'flex' : 'none';
     const fare = el.querySelector('[data-act="cancel-fare"]');
@@ -134,6 +136,7 @@ function buildPause() {
     if (b.dataset.act === 'appearance') openAppearance('pause');
     if (b.dataset.act === 'multiplayer') openNetMenu(); // (net.js)
     if (b.dataset.act === 'cancel-courier' && cancelCourier()) { saveGame(); say('You call dispatch and hand the parcel back. No pay, no hard feelings.', 4); closePause(true); }
+    if(b.dataset.act==='end-emergency'){endEmergencyShift();closePause(true);}
     if (b.dataset.act === 'cancel-fare' && cancelFare()) { say('You call it off. The light goes back on: someone else will flag you down soon.', 4); closePause(true); }
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
@@ -184,7 +187,8 @@ function openControls() {
           <b>B</b><span>Play the next boombox tape.</span>
           <b>G</b><span>Pickpocket, shoplift or grab.</span>
           <b>L</b><span>Pick a lock at night.</span>
-          <b>J</b><span>Start taxi work or a shift.</span>
+          <b>Emergency shifts</b><span>Sign on at the hospital or fire station dispatch terminal. H: siren. E: get out to treat patients or take the hose. Hold Q / click: spray; J beside the engine: drive. Finish at dispatch or in the pause menu.</span>
+          <b>J</b><span>Start taxi work or drive your assigned fire engine.</span>
           <b>N</b><span>Toggle sound.</span>
           <b>P</b><span>Pee.</span>
           <b>Esc</b><span>Pause. In this guide, go back to the pause menu.</span>
