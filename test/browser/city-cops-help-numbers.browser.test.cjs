@@ -22,7 +22,7 @@ test('two officers and shoppers close by in a store: each officer keeps their cl
 }));
 
 test('the help line keeps to the context and the obscure: the full list is in the pause menu',()=>city(async p=>{
- const r=await p.evaluate(()=>{settings.help=true;const grab=()=>{const labels=[],fill=g.fillText;g.fillText=(s,...a)=>{labels.push(s);return fill.call(g,s,...a);};try{hud();}finally{g.fillText=fill;}return labels.join(' | ');};
+ const r=await p.evaluate(()=>{settings.help=true;const grab=()=>{const labels=[],cs=[g,hudTopContext()];for(const c of cs)c.fillText=function(s,...a){labels.push(s);return CanvasRenderingContext2D.prototype.fillText.call(this,s,...a);};try{hud();}finally{for(const c of cs)delete c.fillText;}return labels.join(' | ');};
   return{walk:grab()};});
  assert.match(r.walk,/P pee/);assert.match(r.walk,/H hail taxi/);assert.match(r.walk,/all controls/);
  assert.doesNotMatch(r.walk,/WASD move/);assert.doesNotMatch(r.walk,/space jump/);
