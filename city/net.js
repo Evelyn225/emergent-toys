@@ -4,7 +4,7 @@
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -72,7 +72,7 @@ async function netJoin(codeIn, nameIn) {
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
-    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, ff: netLoadPrefs().ff !== false,
+    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, peaceful: !!netLoadPrefs().peaceful, knocked: null, picking: null, picked: null, pickCool: new Map(), runT: new Map(), balls: new Map(), ballGone: new Map(), myBallT: 0, myBall: null,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
@@ -86,6 +86,8 @@ function netLeave() {
   const was = net.clockOwner;
   if (mode === 'ride') netEject('You get out.');
   netDropCars();
+  if (net.balls.has(netMyBallId())) { const b = net.balls.get(netMyBallId()); ball = b; } // (yours comes back to you where it is)
+  net.balls.clear(); net.myBall = null;
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
   reindexTags(); // (theirs come off your walls)
   if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
@@ -110,6 +112,7 @@ function netPeerLeft(id) {
   net.peers.delete(id);
   if (p.hello) netLog(`${p.name} left.`);
   if (p.tags) reindexTags();
+  for (const b of [...net.balls.values()]) { if (b.owner === id) net.balls.delete(b.id); else if (b.runner === id) { b.runner = ''; b.vx = b.vy = b.vz = 0; } } // (theirs go with them; the rest stop where they are)
   if (net.riders?.delete(id)) netLog(`${p.name} is gone from your car.`);
   netReclock(); netMenuShow();
 }
@@ -143,6 +146,7 @@ function netReceive(type, data, from) {
   if (!p.hello || p.mismatch) return;
   if (netCarMessage(type, data, from, p, now)) return;
   if (netGunMessage(type, data, from, p, now)) return;
+  if (netCrimeMessage(type, data, from, p, now)) return;
   if (netHookMessage(type, data, from, p, now)) return;
   if (type === 'paint') { // their spray paint, on your walls (anything you've got already, from them or earlier, isn't doubled)
     if (!NET_FEATURES.paint || !netAllow(p.paintBucket ||= {}, now, 0.05, 12)) return;
@@ -150,7 +154,8 @@ function netReceive(type, data, from) {
     if (fresh.length) paintDots(fresh, false);
     return;
   }
-  if (type === 'tick') { const s = netCheckTick(data); if (s) netPushSnap(p, s, now); return; }
+  if (type === 'tick') { const s = netCheckTick(data); if (s) { netPushSnap(p, s, now); netReceiveBalls(p, data.balls); } return; }
+  if (type === 'ballGone') { const id = data && typeof data.id === 'string' ? data.id : ''; net.balls.delete(id); net.ballGone.set(id, now + 3); if (id === netMyBallId() && ball) { ball = null; net.myBall = null; } return; }
   if (type === 'chat') {
     if (!NET_FEATURES.chat || !netAllow(p.chatBucket, now, 1, 3)) return;
     const text = netClean(data && data.text, NET_CHAT_MAX);
@@ -210,6 +215,7 @@ function netFrame(t, fromTimer = false) {
   }
   netSyncCars(now);
   netPeeFrame(dt);
+  netKnockFrame(dt); netPickFrame(dt); netBallFrame(dt, now);
   if (mode === 'ride') netRideStep();
   netHookFrame(dt);
 }
@@ -246,6 +252,9 @@ function netSendTick(now) {
   const it = heldItem();
   const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
   if (netAway()) s.away = true;
+  if (net.peaceful) s.peaceful = true;
+  if (NET_FEATURES.balls) { const bs = netMyBalls(now); if (bs.length) s.balls = bs; }
+  if (net.knocked) s.pose = 'down';
   if (plane) { s.z = plane.z; s.craft = { k: 'air', kind: plane.type, yaw: plane.yaw, pitch: plane.pitch, roll: plane.roll, rotor: plane.rotor || 0 }; }
   if (helm) s.craft = { k: 'sea', kind: helm.kind, col: helm.col ?? WHITE, v: helm.v || 0 };
   if (mode === 'boat') s.craft = { k: 'swan' };
@@ -474,7 +483,7 @@ function netGunMessage(type, data, from, p, now) {
     const ok = ['x0', 'y0', 'z0', 'x', 'y', 'z'].every(k => netNum(data[k]));
     if (!ok || data.rk !== netRoomKey()) return true; // (somewhere else: out of earshot, as far as this goes)
     const inside = mode === 'room';
-    if (data.target === net.selfId && net.ff && !sleep && !wakeT && !netAway()) { // you: hit
+    if (data.target === net.selfId && !net.peaceful && !sleep && !wakeT && !netAway()) { // you: hit
       gun.copShots.push({ x: data.x0, y: data.y0, hit: true, t: T, room: inside, side: Math.random() < 0.5 ? -1 : 1 }); // (the bang, the flash at them, "you're hit": gun-ui.js)
       needs.health = Math.max(0, needs.health - (NET_SHOT_HURT[0] + Math.random() * (NET_SHOT_HURT[1] - NET_SHOT_HURT[0])));
       gun.hurtT = T;
@@ -492,16 +501,17 @@ function netGunMessage(type, data, from, p, now) {
   // somebody's gone down: shot by whoever (by), where they fell. You see them lie there a few seconds
   if (!netNum(data.x) || !netNum(data.y) || !netNum(data.z) || !netNum(data.a)) return true;
   p.fallen = { x: data.x, y: data.y, z: data.z, a: data.a, rk: typeof data.rk === 'string' ? data.rk : 'out', until: now + 6 };
-  const by = data.by === net.selfId ? 'you' : net.peers.get(data.by)?.name || 'someone';
-  netLog(`${p.name} went down, shot by ${by}.`, null, '#f96');
-  if (data.by === net.selfId) { const [cx, cy] = crimePos(); gunCrime('shotdown', cx, cy); }
+  const by = data.by === net.selfId ? 'you' : net.peers.get(data.by)?.name || 'someone', car = data.cause === 'car';
+  netLog(car ? `${p.name} went down, hit by ${by === 'you' ? 'your' : by + "'s"} car.` : `${p.name} went down, shot by ${by}.`, null, '#f96');
+  if (data.by === net.selfId) { const [cx, cy] = crimePos(); if (car) crime('roadkill', cx, cy); else gunCrime('shotdown', cx, cy); }
   return true;
 }
 // your health's gone: down where you stand for everyone, and you come to in the hospital (as after the police shoot you,
 // but they keep nothing: it wasn't them)
-function netShotDown(by) {
-  net.tx.send('down', { by: by.id, x: px, y: py, z: netSelfZ(), a, rk: netRoomKey() });
-  passOut(`Gunshot wounds. Someone called ${by.name} did this, they say.`);
+function netShotDown(by, cause = 'shot') {
+  net.knocked = null;
+  net.tx.send('down', { by: by.id, x: px, y: py, z: netSelfZ(), a, rk: netRoomKey(), cause });
+  passOut(cause === 'car' ? `Hit by a car. ${by.name} was driving, they say.` : `Gunshot wounds. Someone called ${by.name} did this, they say.`);
 }
 function netDrawShots() { // (gun-ui.js's drawShots: their shots, a streak from them to where it stopped)
   if (!net.on) return;
@@ -543,7 +553,7 @@ function netHookMessage(type, data, from, p, now) {
   if (type !== 'hook' && type !== 'reel' && type !== 'unhook') return false;
   if (!NET_FEATURES.hooks) return true;
   if (type === 'hook') { // you're on their line (if you can be)
-    if (mode !== 'walk' || skatingNow() || net.hooked || sleep || wakeT || netAway()) { net.tx.send('unhook', { why: 'no' }, from); return true; }
+    if (mode !== 'walk' || skatingNow() || net.hooked || sleep || wakeT || netAway() || net.peaceful) { net.tx.send('unhook', { why: 'no' }, from); return true; }
     net.hooked = { by: from, t: 0, haul: false, struggle: 0, d0: Math.max(0.15, netViewOf(p) ? Math.hypot(rel(netViewOf(p).x - px), rel(netViewOf(p).y - py)) : 0.5), keys: false };
     body.seat = null;
     say(`${p.name}'s fishing line has you by the coat! (Space or E, again and again: work it loose)`, 4);
@@ -663,6 +673,7 @@ const NET_ON_FOOT = new Set(['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'f
 function netVisible(p, s) { return s && s.rk === netRoomKey() && (mode === 'room' || Math.abs(rel(s.x - px)) < vis + 1 && Math.abs(rel(s.y - py)) < vis + 1); }
 function drawPeers() {
   if (!net.on || !net.peers.size) return;
+  netDrawBalls();
   const now = netNow(), inRoom = mode === 'room';
   for (const p of net.peers.values()) {
     const f = p.fallen; // (shot down a moment ago: lying where they fell, till the ambulance has them)
@@ -758,6 +769,196 @@ function netDrawLines() {
     if (tip && end) fishSeg(tip, end, C(WHITE, 8 * Math.max(0.5, amb)));
     if (end && lz < 0.02) fishSurface(end.c, end.r, end.depth, C(RED, 14)); // (the bobber)
   }
+}
+
+// ---- hit by a car: the driver's game sees you in the road (drive() asks netCarHitsPlayer) and tells you; your game
+// knocks you flat for a moment, takes health by how fast it was going, and the hospital if that's the last of it
+function netCarHitsPlayer(c, fx, fy) {
+  if (!net.on || !NET_FEATURES.guns) return false;
+  const now = netNow();
+  for (const p of net.peers.values()) {
+    const s = netViewOf(p);
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.mode !== 'walk' || s.veh || s.pose === 'down' || !netCanTouch(s)) continue;
+    if (Math.hypot(rel(s.x - fx), rel(s.y - fy)) > 0.15 || now - (net.runT.get(p.id) ?? -9) < 1.5) continue;
+    net.runT.set(p.id, now);
+    const sg = Math.sign(c.v), yaw = c.travelA ?? Math.atan2(c.hy, c.hx);
+    net.tx.send('runover', { sp: Math.abs(c.v), dx: Math.cos(yaw) * sg, dy: Math.sin(yaw) * sg }, p.id);
+    say(pick([`*THUMP* You knock ${p.name} flying.`, `*THUMP* ${p.name} goes over the bonnet.`]), 2.5);
+    crime('hit', c.x, c.y);
+    return true;
+  }
+  return false;
+}
+function netKnockFrame(dt) { // flat on your back: you stay where you landed till you're up
+  const k = net.knocked;
+  if (!k) return;
+  if ((k.t += dt) >= k.dur || mode !== 'walk') { net.knocked = null; return; }
+  px = k.x; py = k.y;
+  for (const key of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']) K[key] = 0;
+  body.mx = body.my = 0;
+}
+// ---- pickpocketing: behind another player, G. You play the pickpocket game; they feel it a moment in, and if they
+// turn round to you or step away before you're done, they've caught you. Their game takes the cash out of their pocket
+// (a tenth of what they carry, up to $50) and hands it to yours. Peaceful or paused: not them.
+const NET_PICK_COOL = 60, NET_PICK_SHARE = 0.1, NET_PICK_MAX = 50;
+function netPickTarget() {
+  if (!net.on || !NET_FEATURES.guns || mode !== 'walk' || net.picking) return null;
+  let best = null, bd = 0.3;
+  for (const p of net.peers.values()) {
+    const s = netViewOf(p);
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.mode !== 'walk' || s.veh || s.sk || !netCanTouch(s)) continue;
+    const ex = rel(px - s.x), ey = rel(py - s.y), d = Math.hypot(ex, ey);
+    if (d > bd || ex * Math.cos(s.a) + ey * Math.sin(s.a) > 0) continue; // (in front of them: they'd see you)
+    best = p; bd = d;
+  }
+  return best;
+}
+function netPickpocket(p) {
+  net.picking = { id: p.id, stopped: false };
+  net.tx.send('pickStart', {}, p.id);
+  startCrime('pickpocket', ok => {
+    const caught = net.picking && net.picking.stopped;
+    net.picking = null;
+    if (caught) return; // (they caught you: netCrimeMessage has said so)
+    if (ok === 'abort') return net.tx.send('pick', { ok: false, abort: true }, p.id);
+    net.tx.send('pick', { ok: !!ok }, p.id);
+    if (!ok) { say(pick([`"HEY!" ${p.name} spins round. "Get your hand out of my pocket!"`, `${p.name} feels it and slaps your hand away.`]), 3); crime('pickpocket', px, py); }
+  });
+}
+function netPickFrame(dt) { // you: is there a hand in your pocket?
+  const h = net.picked;
+  if (!h) return;
+  const p = net.peers.get(h.by), s = p && netViewOf(p);
+  if (!p || !s || (h.t += dt) > 20) { net.picked = null; return; }
+  if (!h.noticed && h.t > h.notice) { h.noticed = true; say('You feel a hand in your pocket! Turn round, or step away!', 3); if (actx) tone(actx.currentTime, 520, 0.08, 0.12); }
+  if (!h.noticed || h.stopped) return;
+  const ex = rel(s.x - px), ey = rel(s.y - py), d = Math.hypot(ex, ey) || 1, facing = (Math.cos(a) * ex + Math.sin(a) * ey) / d;
+  if (facing > 0.5 || d > 0.45) { // caught them at it
+    h.stopped = true;
+    net.tx.send('pickStop', {}, h.by);
+    say(`You catch ${p.name}'s hand in your pocket!`, 3);
+  }
+}
+function netCrimeMessage(type, data, from, p, now) {
+  if (!['runover', 'pickStart', 'pickStop', 'pick', 'picked'].includes(type)) return false;
+  if (!NET_FEATURES.guns || !data) return true;
+  if (type === 'runover') { // their car's hit you
+    if (net.peaceful || netAway() || mode !== 'walk' || net.knocked || sleep || wakeT || !netNum(data.sp)) return true;
+    const sp = clamp(data.sp, 0, 4), dxv = netNum(data.dx) ? clamp(data.dx, -1, 1) : 0, dyv = netNum(data.dy) ? clamp(data.dy, -1, 1) : 0;
+    const k = Math.min(0.6, 0.15 + sp * 0.12), nx = worldCoord(px + dxv * k), ny = worldCoord(py + dyv * k);
+    if (!map[idx(Math.floor(nx), Math.floor(ny))]) { px = nx; py = ny; }
+    fx.skating = false; body.seat = null;
+    needs.health = Math.max(0, needs.health - clamp(10 + sp * 22, 10, 60));
+    gun.hurtT = T;
+    if (actx) playClip('crash', 0.4);
+    if (needs.health <= 0) { netShotDown(p, 'car'); return true; }
+    net.knocked = { t: 0, dur: 1.2 + Math.min(1.5, sp * 0.6), x: px, y: py };
+    say(pick([`*THUMP* ${p.name}'s car knocks you flat.`, `${p.name} runs you down. You're on your back in the road.`]), 3);
+    return true;
+  }
+  if (type === 'pickStart') { // a hand in your pocket (you'll feel it in a moment)
+    if (net.peaceful || netAway() || net.picked) return true;
+    if (now < (net.pickCool.get(from) ?? 0)) return true;
+    net.picked = { by: from, t: 0, notice: 0.6 + Math.random() * 0.9, noticed: false, stopped: false };
+    return true;
+  }
+  if (type === 'pickStop') { // they caught you at it
+    if (net.picking && net.picking.id === from) {
+      net.picking.stopped = true;
+      say(pick([`${p.name} turns round and grabs your wrist. "I don't THINK so."`, `${p.name} catches you at it. "Hey! Thief!"`]), 3);
+      crime('pickpocket', px, py);
+      if (game && game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); }
+    }
+    return true;
+  }
+  if (type === 'pick') { // how it went for them: if they finished and you didn't catch them, it's gone
+    const h = net.picked;
+    if (!h || h.by !== from) return true;
+    net.picked = null;
+    net.pickCool.set(from, now + NET_PICK_COOL);
+    if (data.abort) return true;
+    if (!data.ok) { if (!h.stopped) say(`${p.name} just tried to pick your pocket!`, 3); return true; }
+    if (h.stopped || net.peaceful || netAway()) { net.tx.send('picked', { cash: 0, caught: true }, from); return true; }
+    const cash = Math.min(money, NET_PICK_MAX, Math.max(Math.min(1, money), Math.round(money * NET_PICK_SHARE * 4) / 4));
+    if (cash > 0) pay(cash);
+    net.tx.send('picked', { cash }, from);
+    setTimeout(() => say(cash > 0 ? `Your pocket feels lighter. ${fmt$(cash)} gone.` : 'Someone was in your pocket. Lucky it was empty.', 3), 1500);
+    return true;
+  }
+  if (type === 'picked') { // what came out of their pocket
+    const cash = netNum(data.cash) ? clamp(data.cash, 0, NET_PICK_MAX) : 0;
+    if (data.caught) { say(`${p.name} catches your hand at the last second!`, 3); crime('pickpocket', px, py); return true; }
+    if (cash > 0) { earn(cash); say(`You lift ${fmt$(cash)} from ${p.name}'s pocket. They walk on.`, 3); }
+    else say(`${p.name}'s pockets are empty.`, 2);
+    return true;
+  }
+  return true;
+}
+
+// ---- soccer balls: whoever touched one last runs it (the ball physics in goods.js) and sends it with their updates;
+// everyone else carries it on between updates. Touch someone's ball in your own game and it's yours to run, stamped with
+// when you touched it; two touches at once, the later one wins. Your own ball is goods.js's `ball` while you're running
+// it; anyone else's (or yours, while someone else has it) is in net.balls. Only its owner can pick it up.
+const netMyBallId = () => net.selfId + ':ball';
+const netBallOwner = id => id.slice(0, id.lastIndexOf(':'));
+function netBallOut(b, id, tt) { return { id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, tt }; }
+function netMyBalls(now) { // (in your updates: the balls you're running)
+  const out = [];
+  if (ball) out.push(netBallOut(ball, netMyBallId(), net.myBallT));
+  for (const b of net.balls.values()) if (b.runner === net.selfId) out.push(netBallOut(b, b.id, b.tt));
+  return out;
+}
+function netReceiveBalls(p, list) {
+  if (!NET_FEATURES.balls || !Array.isArray(list)) return;
+  const now = netNow();
+  for (const d of list.slice(0, 8)) {
+    if (!d || typeof d.id !== 'string' || !/^[A-Za-z0-9_-]{1,40}:ball$/.test(d.id) || !['x', 'y', 'z', 'vx', 'vy', 'vz', 'tt'].every(k => netNum(d[k]))) continue;
+    const tt = d.tt + (p.off ?? 0); // (their clock, as ours)
+    if (now < (net.ballGone.get(d.id) ?? 0)) continue; // (just picked up or lost: an update still on its way doesn't bring it back)
+    if (d.id === netMyBallId()) { if (net.myBallT >= tt) continue; if (ball) { net.myBall = null; ball = null; } } // (yours: they've taken it on since you last touched it)
+    const b = net.balls.get(d.id);
+    if (b && b.tt > tt) continue; // (somebody touched it since)
+    const o = b || { id: d.id, owner: netBallOwner(d.id), lx: d.x, ly: d.y };
+    Object.assign(o, { x: worldCoord(d.x), y: worldCoord(d.y), z: clamp(d.z, 0, 5), vx: clamp(d.vx, -20, 20), vy: clamp(d.vy, -20, 20), vz: clamp(d.vz, -20, 20), tt, runner: p.id });
+    net.balls.set(d.id, o);
+  }
+}
+function netBallFrame(dt, now) {
+  if (net.myBall && !ball && !net.balls.has(netMyBallId())) netBallGone(netMyBallId()); // (you picked it up, or it's in the water)
+  if (ball && ball !== net.myBall) { net.myBall = ball; net.myBallT = now; } // (kicked out of your bag: running it)
+  if (!NET_FEATURES.balls || paused || dt <= 0) return;
+  for (const b of [...net.balls.values()]) {
+    const near = mode === 'walk' && Math.hypot(rel(b.x - px), rel(b.y - py)) < 0.07;
+    if (b.runner !== net.selfId && near) { b.runner = net.selfId; b.tt = now; } // (you've touched it: yours to run)
+    if (b.runner === net.selfId) {
+      if (b.id === netMyBallId()) { net.balls.delete(b.id); ball = b; net.myBall = b; net.myBallT = b.tt; continue; } // (your own, back with you: goods.js runs it)
+      const mine = ball; ball = b; // (goods.js's physics, on this one)
+      let lost = false;
+      try { lost = stepBall(dt) === 'lost' || !ball; } finally { ball = mine; }
+      if (lost) netBallGone(b.id);
+    } else { // somebody else's: on along its way till their next update
+      b.vz -= 2 * dt; b.z = Math.max(0, b.z + b.vz * dt); if (b.z === 0 && b.vz < 0) b.vz = 0;
+      const f = Math.max(0, 1 - (b.z > 0 ? 0.2 : 1.1) * dt); b.vx *= f; b.vy *= f;
+      if (!ballBlocked(b.x + b.vx * dt, b.y + b.vy * dt, b.z)) { b.x = worldCoord(b.x + b.vx * dt); b.y = worldCoord(b.y + b.vy * dt); }
+    }
+  }
+}
+function netBallGone(id) { // (gone for good: everyone drops it, and nobody's late update brings it back for a few seconds)
+  net.balls.delete(id); net.ballGone.set(id, netNow() + 3);
+  if (id === netMyBallId()) net.myBall = null;
+  net.tx.send('ballGone', { id });
+}
+function netReclaimBall() { // (goods.js's pickUpBall: your own ball, when someone else has been running it, is yours to pick up)
+  const b = net.on && net.balls.get(netMyBallId());
+  if (!b || ball || Math.hypot(rel(b.x - px), rel(b.y - py)) > 0.3) return false;
+  net.balls.delete(b.id); ball = b; net.myBall = b; net.myBallT = netNow();
+  return true;
+}
+const netOwnBallNear = () => { const b = net.on && net.balls.get(netMyBallId()); return !!b && Math.hypot(rel(b.x - px), rel(b.y - py)) < 0.3; };
+function netDrawBalls() {
+  if (!net.on || !net.balls.size || mode === 'room') return;
+  const mine = ball;
+  try { for (const b of net.balls.values()) { ball = b; drawBall(); } } finally { ball = mine; }
 }
 
 // ---- peeing: theirs runs through your own pee.js, drop by drop, from where they stand the way they're aimed, so the
@@ -864,12 +1065,13 @@ function netOverlay() {
       let tagTop = y;
       const riders = s.veh && s.veh.id ? [...net.peers.values()].filter(q => q.hello && q.view && q.view.ride === s.veh.id).map(q => q.name) : [];
       if (riders.length) p.tagName = p.name + ' + ' + riders.join(', '); else p.tagName = p.name; // (and whoever's riding with them)
-      const tag = p.tagName + (s.away ? ' (paused)' : '') + (s.stars ? ' ' + '*'.repeat(s.stars) : '');
+      const tag = p.tagName + (s.peaceful ? ' ~' : '') + (s.away ? ' (paused)' : '') + (s.stars ? ' ' + '*'.repeat(s.stars) : '');
       if (fade > 0.05) { // the name: small, over their head
         const w = g.measureText(tag).width;
         g.globalAlpha = fade * 0.9; g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - w / 2 - 3, y - FS - 2, w + 6, FS + 2);
         g.fillStyle = NET_CSS[p.hello.look.top]; g.fillText(p.tagName, x - w / 2, y - FS);
         let tx = x - w / 2 + g.measureText(p.tagName).width;
+        if (s.peaceful) { g.fillStyle = '#9db'; g.fillText(' ~', tx, y - FS); tx += g.measureText(' ~').width; } // (peaceful)
         if (s.away) { g.fillStyle = '#9ab'; g.fillText(' (paused)', tx, y - FS); tx += g.measureText(' (paused)').width; }
         if (s.stars) { g.fillStyle = '#f55'; g.fillText(' ' + '*'.repeat(s.stars), tx, y - FS); }
         g.globalAlpha = 1; tagTop = y - FS - 2;
@@ -926,7 +1128,7 @@ function buildNetMenu() {
       <button class="item" data-net-act="join">Join room</button>
       <button class="item" data-net-act="copy">Copy invite link</button>
       <button class="item" data-net-act="leave">Leave room</button>
-      <button class="item" data-net-act="ff">Friendly fire <span class="k" data-net="ff" style="margin-left:auto"></span></button>
+      <button class="item" data-net-act="peaceful">Peaceful <span class="k" data-net="peaceful" style="margin-left:auto"></span></button>
       <p class="sub" data-net="status"></p>
       <div data-net="peers" style="margin:6px 0 12px"></div>
       <p class="sub" data-net="chathelp" style="display:${NET_FEATURES.chat ? 'block' : 'none'}">In a room: T or Enter to chat.</p>
@@ -943,7 +1145,7 @@ function buildNetMenu() {
     const name = el.querySelector('[data-net="name"]').value, code = el.querySelector('[data-net="code"]').value;
     if (b.dataset.netAct === 'join') netJoin(code, name);
     if (b.dataset.netAct === 'leave') netLeave();
-    if (b.dataset.netAct === 'ff') { net.ff = !net.ff; netSavePrefs({ ff: net.ff }); netMenuShow(); }
+    if (b.dataset.netAct === 'peaceful') { net.peaceful = !net.peaceful; netSavePrefs({ peaceful: net.peaceful }); netMenuShow(); }
     if (b.dataset.netAct === 'back') closeNetMenu();
     if (b.dataset.netAct === 'copy') {
       const link = netInviteLink(netCode(code) || net.code);
@@ -956,8 +1158,7 @@ function netMenuShow() {
   if (!netMenuOpen()) return;
   const el = netMenuEl;
   el.querySelector('[data-net="about"]').textContent = `Your friends walking and driving about in your city${NET_FEATURES.clock ? ', at the same time and in the same weather' : ''}. Everyone keeps their own city, money, things and saves.`;
-  el.querySelector('[data-net="ff"]').textContent = net.ff ? '[x] on: their shots hurt you' : '[ ] off: their shots pass you by';
-  el.querySelector('[data-net-act="ff"]').style.display = NET_FEATURES.guns ? 'flex' : 'none';
+  el.querySelector('[data-net="peaceful"]').textContent = net.peaceful ? '[x] on: nobody can hurt or rob you, nor you them' : '[ ] off';
   el.querySelector('[data-net="status"]').textContent = net.status || (net.on ? `In room "${net.code}".` : 'Not connected.');
   el.querySelector('[data-net-act="leave"]').style.display = net.on || net.joining ? 'flex' : 'none';
   el.querySelector('[data-net-act="join"]').firstChild.textContent = net.on ? 'Join a different room' : 'Join room';

@@ -236,6 +236,7 @@ function crimeKey(code) {
     if (mode === 'room' && room.burgled) return grabStock();
     const corpse=pickTarget();if(corpse?.dead)return pickpocket(corpse);
     if (canShoplift()) return shoplift();
+    const np = netPickTarget(); if (np) return netPickpocket(np); // (another player's pocket: net.js)
     const p = pickTarget();
     if (p) return pickpocket(p);
   }
@@ -247,6 +248,7 @@ function crimePrompt() {
   if (mode === 'room' && room.burgled && room.kind === 'museum') return museumPrompt() + (nearExit() ? '   E: leave' : '');
   if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   const vm = nearMachine(), use = vm ? `E: ${VENDING[vm.kind].title.toLowerCase()}   ` : ''; // (a machine right here still works: say so)
+  const np=netPickTarget();if(np)return use+`G: pick ${np.name}'s pocket`; // (another player: net.js)
   const target=pickTarget();if(target)return use+(target.dead?'G: search pockets':'G: pick their pocket');
   const sh = lockTarget();
   if (!sh || !nightTime()) return '';

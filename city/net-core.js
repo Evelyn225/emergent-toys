@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 8; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown)
+const NET_PROTOCOL = 9; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -10,16 +10,16 @@ const NET_TIMEOUT = 8; // seconds without a word from someone and they've gone
 const NET_CHAT_MAX = 120, NET_NAME_MAX = 16, NET_CODE_MAX = 32;
 const NET_CLOCK_EVERY = 2; // s: the clock owner's broadcast
 const NET_MODES = ['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'drive', 'taxi', 'boat', 'sea', 'air', 'fair', 'ladder', 'ride'];
-const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp|tumble|reach|mongo)\d*$/;
+const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance|gasp|tumble|reach|mongo|down)\d*$/;
 
 // What's switched on: other players are always there (the ghosts); chat and the shared clock are on; the phases after
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true, police: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true, police: true, balls: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
-const net = { ff: true, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
+const net = { peaceful: false, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
 const netShared = () => net.on && net.peers.size > 0; // somebody else is here
 const netClockShared = () => NET_FEATURES.clock && netShared(); // the clock isn't yours alone
 const netFollowsClock = () => netClockShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
@@ -55,7 +55,8 @@ function netCheckTick(d) {
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
-  if (d.away) out.away = true;
+  if (d.away) out.away = true; // (in the pause menu or another tab)
+  if (d.peaceful) out.peaceful = true; // (peaceful mode: can't hurt or rob anyone, nor be hurt or robbed)
   if (d.ride) out.ride = netCarId(d.ride); // (in someone's car: which)
   if (d.pee && netNum(d.pee.el) && netNum(d.pee.flow)) out.pee = { el: clamp(d.pee.el, -1.3, 1.3), flow: clamp(d.pee.flow, 0, 1), loo: d.pee.loo && netNum(d.pee.loo[0]) && netNum(d.pee.loo[1]) ? [d.pee.loo[0], d.pee.loo[1]] : null }; // (peeing: aimed how high, how hard)
   if (d.spray && Number.isInteger(d.spray.col)) out.spray = { col: clamp(d.spray.col, 0, 8) }; // (spraying, in this colour)
@@ -151,6 +152,8 @@ function netCheckDots(d, colours) {
 const netDotKey = d => d[0] + ',' + d[1] + ',' + (+d[2]).toFixed(4) + ',' + (+d[3]).toFixed(4) + ',' + d[6];
 const netDotOut = d => [d[0], d[1], +(+d[2]).toFixed(4), +(+d[3]).toFixed(4), +(+d[4]).toFixed(4), d[5], d[6]];
 
+// player against player (shots, hooks, car hits, pickpocketing): only if neither of you is peaceful and they're here
+const netCanTouch = s => !net.peaceful && !!s && !s.peaceful && !s.away;
 // where someone is right now (as drawn this instant), whether or not this frame's drawn them yet
 const netViewOf = p => netSample(p, performance.now() / 1000) || p.view;
 // other players out in the street as something a bullet can hit (gun.js's traceShot): standing where they're drawn
@@ -160,7 +163,7 @@ function netShotTargets(x, y) {
   const out = [];
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.away || !NET_SHOOTABLE.has(s.mode)) continue;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || !netCanTouch(s) || !NET_SHOOTABLE.has(s.mode)) continue;
     if (Math.hypot(rel(s.x - x), rel(s.y - y)) > SHOT_RANGE) continue;
     out.push({ who: p, x: s.x, y: s.y, z: s.z, h: 0.175 });
   }
@@ -172,7 +175,7 @@ function netHookTarget(f) {
   if (!net.on || !NET_FEATURES.hooks || mode !== 'walk') return null;
   for (const p of net.peers.values()) {
     const s = netViewOf(p);
-    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || s.away || s.mode !== 'walk') continue;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || s.sk || !netCanTouch(s) || s.mode !== 'walk') continue;
     if (Math.hypot(rel(s.x - f.x), rel(s.y - f.y)) > HOOK_REACH) continue;
     const h = f.z - s.z; if (h < .005 || h > .2) continue;
     return { netPeer: p.id, name: p.name, x: s.x, y: s.y, hooked: { t: 0, haul: false } };

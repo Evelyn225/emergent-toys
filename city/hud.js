@@ -237,7 +237,7 @@ function promptText() {
   if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'south' : 'north'} platform (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
-  if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
+  if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3 || netOwnBallNear()) return 'E: pick up the ball'; // (or yours, while another player has it: net.js)
   const fsp = fairSpot();
   if (fsp) return fairPrompt(fsp);
   const mk = marketSpot();
