@@ -19,7 +19,7 @@ test('updates from other players: the expected shape or nothing', () => {
   assert.strictEqual(ev(`netCheckTick(${tick({ pose: '<script>' })}).pose`), 'stand', 'an unknown pose falls back to standing');
   assert.strictEqual(ev(`netCheckTick(${tick({ stars: 99 })}).stars`), 5);
   assert.deepStrictEqual(j(ev, `netCheckTick(${tick({ mode: 'drive', veh: { kind: 'car', body: 2, v: 1.5, brake: 1 } })}).veh`),
-    { id: '', kind: 'car', body: 2, v: 1.5, brake: true, dmg: 0, patrol: false, ev: false, shift: false }); // (a taxi you're riding in has no id: only cars you drive are shared)
+    { id: '', kind: 'car', body: 2, v: 1.5, brake: true, dmg: 0, patrol: false, ev: false, siren: false, shift: false }); // (a taxi you're riding in has no id: only cars you drive are shared)
   assert.strictEqual(ev(`netCheckHello({ name: 'a\\u0000b\\u202e  c', ver: 'x', look: { hat: 99, top: 1, bot: 0 } }).name`), 'ab c', 'control and direction characters stripped');
   assert.deepStrictEqual(j(ev, `netCheckHello({ name: 'a', ver: 'x', look: { hat: 99, top: 1, bot: 0 } }).look`), { hat: 0, top: 1, bot: 0 }, 'a bad colour: the default outfit');
   assert.strictEqual(ev(`netCheckClock({ tod: 30, dayNum: 3, weather: 'rain', seasonShift: 5 }).tod`), 6);
@@ -65,7 +65,7 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
   assert.deepStrictEqual(j(ev, `[0, 0, 0, 0].map(() => netAllow(B, 5, 1, 3))`), [true, true, true, false], 'three at once, then wait');
   assert.strictEqual(ev(`netAllow(B, 6.1, 1, 3)`), true, 'a second later: one more');
   assert.strictEqual(ev('netBuildId()'), ev('netBuildId()'));
-  assert.match(ev('netBuildId()'), /^10-[0-9a-z]+$/);
+  assert.match(ev('netBuildId()'), /^11-[0-9a-z]+$/);
   const look = j(ev, `netLookFor('Ann')`);
   assert.deepStrictEqual(j(ev, `netLookFor('Ann')`), look, 'the same name, the same colours, on every machine');
 });

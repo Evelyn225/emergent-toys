@@ -2,7 +2,8 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 10; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
+const NET_PROTOCOL = 11; // 11: shared emergency incidents, responders and sirens
+// (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -55,7 +56,7 @@ function netCheckTick(d) {
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
-    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, shift: !!d.veh.shift };
+    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, siren:!!d.veh.siren, shift: !!d.veh.shift };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
   if (d.away) out.away = true; // (in the pause menu or another tab)
   if (d.peaceful) out.peaceful = true; // (peaceful mode: can't hurt or rob anyone, nor be hurt or robbed)

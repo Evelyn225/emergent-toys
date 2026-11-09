@@ -4,7 +4,7 @@
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['emergency', 'emergencyAct', 'emergencyWater', 'tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -83,12 +83,13 @@ function netLeave() {
   net.joining = false;
   if (!net.on) return;
   try { net.tx.leave(); } catch (e) { /* gone */ }
-  const was = net.clockOwner;
+  const was = net.clockOwner,emergencySelfBefore=net.selfId;
   if (mode === 'ride') netEject('You get out.');
   netDropCars();
   if (net.balls.has(netMyBallId())) { const b = net.balls.get(netMyBallId()); ball = b; } // (yours comes back to you where it is)
   net.balls.clear(); net.myBall = null;
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
+  netEmergencyLeft(emergencySelfBefore);
   reindexTags(); // (theirs come off your walls)
   if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
   netLog('You left the room.');
@@ -103,6 +104,7 @@ function netPeerJoined(id) {
   net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look, ask: true }, id); // (ask: say hello back, even if they never lost sight of us)
   netSendTags(id); // (your tags, for their walls)
   netSendParked(id); // (and where you've left cars)
+  netSendEmergency(id);
   netSendDrops(id); // (and what you've put down in the street)
   netSendPaint(sprayDots.slice(-NET_PAINT_JOIN), id); // (and your most recent spray paint)
   netReclock();
@@ -111,6 +113,7 @@ function netPeerLeft(id) {
   const p = net.peers.get(id);
   if (!p) return;
   net.peers.delete(id);
+  netEmergencyPeerLeft(id);
   if (p.hello) netLog(`${p.name} left.`);
   if (p.tags) reindexTags();
   for (const [gid, g] of [...net.gifts]) if (g.to === id) { net.gifts.delete(gid); netGiftBack(g, 'left'); } // (a gift they never took: yours again)
@@ -148,6 +151,7 @@ function netReceive(type, data, from) {
     return;
   }
   if (!p.hello || p.mismatch) return;
+  if (netEmergencyMessage(type,data,from,p))return;
   if (netCarMessage(type, data, from, p, now)) return;
   if (netGunMessage(type, data, from, p, now)) return;
   if (netCrimeMessage(type, data, from, p, now)) return;
@@ -188,6 +192,7 @@ function netFrame(t, fromTimer = false) {
   if (!fromTimer) net.frameT = now;
   if (!net.on) return;
   if ((paused || game || fromTimer) && netClockShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
+  netEmergencyFrame(dt);
   if ((net.sendT -= dt) <= 0) { net.sendT += 1 / NET_TICK_HZ; if (net.sendT < 0) net.sendT = 1 / NET_TICK_HZ; netSendTick(now); }
   if (netClockShared() && net.clockOwner) {
     if ((net.clockT -= dt) <= 0 || weather !== net.lastWeather) {
@@ -278,7 +283,7 @@ function netSendTick(now) {
   }
   if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
   if (skatingNow() && !car && !SK.bailAt) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
-  if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
+  if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev, siren:!!car.siren };
   net.lastSent = s;
   net.tx.send('tick', s);
 }
@@ -321,7 +326,7 @@ function netSyncCars(now) {
     if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
     Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
       brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev, cop: !!w.cop,
-      state: w.cop ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
+      state: w.cop||w.ev&&w.siren ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
   }
   for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
 }

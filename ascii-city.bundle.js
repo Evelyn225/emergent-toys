@@ -5263,6 +5263,13 @@ function shopExteriors() {
     drawShopExterior(e, vx, vy);
   });
 }
+// Shared by vehicle drawing, collision and emergency fire positions.
+// Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
+const VEHICLES = {
+  car: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02], taxi: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02],
+  police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
+};
+
 // ---- traffic lights, at intersections where three or four streets meet (corners and the bridges just flow).
 // 16s cycle: vertical green 0-6, yellow 6-7, all red 7-8, horizontal green 8-14, yellow, all red.
 // Intersections are addressed by their base cell (x, y multiples of 8).
@@ -5628,7 +5635,7 @@ const BASE_R = 50; // a station further away than this (500m) doesn't send the c
 let evTimer = 45;
 const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
   .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
-function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null) {
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null, fireIncident = null) {
   let scene = at; // somewhere on a street a few blocks from you, so you'll see it go by or pull up (or where it's needed)
   for (let tries = 0; tries < 200 && !scene; tries++) {
     const p = randomLane(12, px, py);
@@ -5637,7 +5644,8 @@ function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null
     if (d > 3 && d < 10) scene = [p.x, p.y];
   }
   if (!scene) return null;
-  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T };
+  if(kind==='fire'&&typeof createCityFire==='function'){fireIncident=fireIncident||createCityFire(scene);if(!fireIncident)return null;scene=[fireIncident.x,fireIncident.y];}
+  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T, fireIncident };
   if (base && bd < BASE_R) { // out of the station, westbound from the kerb
     base.out = true;
     return addCar({ ...props, x: base.x, y: base.lane, hx: -1, hy: 0, base });
@@ -5663,15 +5671,15 @@ function endCall(c) { // parked at its station again (or just gone, if it came f
 }
 function stepEmergency(dt) {
   for (const c of cars.slice()) {
-    if (!c.ev || c.mine || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit; a stolen one is yours
+    if (!c.ev || c.remote || c.mine || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit; a stolen one is yours
     if (c.home) { endCall(c); continue; }
     const far = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
+    if (c.state === 'scene' && T > c.until && !fireActive(c.fireIncident)) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
     // out of the neighbourhood that's simulated, it can't get anywhere (the traffic there is frozen): it's home
     if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
     else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev && !c.mine).length < 3 && (evTimer -= dt) < 0) {
+  if ((typeof netEmergencyAuthority!=='function'||netEmergencyAuthority()) && !cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev && !c.mine).length < 3 && (evTimer -= dt) < 0) {
     spawnEmergency(); evTimer = 60 + Math.random() * 90;
   }
 }
@@ -5693,6 +5701,7 @@ function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
   for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
     const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if(c.emergencyShift||c.incidentGhost||c.incidentCrew||fireActive(c.fireIncident))continue;
     if (c.ev && c.mine && !c.player && c.parked && d > 45) { returnStolenEv(c, k); continue; } // (a stolen ambulance, fire engine or police car: home to its station)
     if (c.owned || playerCar(c) || !c.parked) continue; // (another player's car is theirs to keep or lose: net.js)
     if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
@@ -6072,10 +6081,101 @@ const burning = c => c.fireT != null && !c.wrecked;
 // every frame: fires burn down to the bang; returns the cars that have just gone up
 function stepCarFires(dt) {
   const out = [];
-  for (const c of cars) if (burning(c) && (c.fireT += dt) >= BURN_T) { c.wrecked = true; c.v = 0; c.boomT = T; out.push(c); }
+  for (const c of cars) if (burning(c) && !c.remote && (!fireActive(c.fireIncident)||c.fireIncident.volatile&&!(c.fireIncident.wetUntil>T)) && (c.fireT += dt) >= BURN_T) { c.wrecked = true; c.v = 0; c.boomT = T; out.push(c); }
   return out;
 }
 function repairCar(c) { c.dmg = 0; c.fireT = null; c.wrecked = false; c.boomT = undefined; }
+// Real, bounded street incidents shared by dispatch and the player's shifts.
+// Positions outdoors are ten-metre cells; pressure and heat are simulation seconds.
+const cityFires=[];
+let fireIncidentId=0;
+const fireActive=f=>!!f&&!f.out&&Array.isArray(f.nodes)&&f.nodes.some(n=>n.heat>0);
+function fireNode(x,y,z,heat=4){return {x:worldCoord(x),y:worldCoord(y),z,heat,max:heat};}
+function createCarIncident(c){
+  if(c.fireIncident&&fireActive(c.fireIncident))return c.fireIncident;
+  if(c.wrecked||c.ev||c.remote)return null;
+  const volatile=!!(c.owned||playerCar(c));
+  Object.assign(c,{fireT:c.fireT??0,dmg:DMG_FIRE});
+  if(!playerCar(c))Object.assign(c,{parked:true,v:0,ex:c.x,ey:c.y,bail:true});
+  const [hl,hw,top]=VEHICLES[c.kind],x=c.x+c.hx*hl*.55,y=c.y+c.hy*hl*.55;
+  const f={id:++fireIncidentId,kind:'car',x:c.x,y:c.y,born:T,car:c,volatile,nodes:[-.5,.5].map(s=>fireNode(x-c.hy*hw*s,y+c.hx*hw*s,top+.04,volatile?2:4))};
+  c.fireIncident=f;cityFires.push(f);if(typeof registerIncident==='function')registerIncident(f);return f;
+}
+function createCityFire(at,kind=Math.random()<.55?'building':'car'){
+  if(cityFires.filter(fireActive).length>=5)return null;
+  const [x,y]=at;
+  const sites=doors.filter(d=>!d.sh.base&&!d.sh.fee&&!d.sh.club&&!cityFires.some(f=>fireActive(f)&&near(f.x,f.y,d.x,d.y)<2)&&near(d.x,d.y,x,y)<8);
+  const d=sites.reduce((best,d)=>!best||near(d.x,d.y,x,y)<near(best.x,best.y,x,y)?d:best,null);
+  if(!d)return null;
+  if(kind==='car'){
+    const old=cars.find(c=>c.parked&&!c.mine&&!c.owned&&!c.ev&&!c.remote&&!c.wrecked&&!burning(c)&&near(c.x,c.y,d.x,d.y)<3);
+    if(old)return createCarIncident(old);
+    // A kerbside breakdown, outside the walking line and the building's entrance.
+    const sx=d.nx?d.x-Math.sign(d.nx)*.18:d.x+.7,sy=d.ny?d.y-Math.sign(d.ny)*.18:d.y+.7;
+    if(map[idx(sx,sy)]||isWater(sx,sy)||solidAt(sx,sy,.12)||cars.some(c=>near(c.ex,c.ey,sx,sy)<.6))return createCityFire(at,'building');
+    const c=addCar({kind:'car',body:GRAY,x:worldCoord(sx),y:worldCoord(sy),hx:d.ny?1:0,hy:d.nx?1:0});
+    c.incidentVehicle=true;return createCarIncident(c);
+  }
+  const nx=Math.sign(d.nx),ny=Math.sign(d.ny),cx=d.x+nx*.105,cy=d.y+ny*.105;
+  const f={id:++fireIncidentId,kind:'building',x:d.x,y:d.y,born:T,site:d,
+    nodes:[[-.22,.12],[.22,.12],[-.22,.28],[.22,.28]].map(([offset,z])=>fireNode(cx-ny*offset,cy+nx*offset,z,3))};
+  cityFires.push(f);if(typeof registerIncident==='function')registerIncident(f);return f;
+}
+function coolFireNode(f,n,amount){
+  if(!fireActive(f)||n.heat<=0)return false;
+  n.heat=Math.max(0,n.heat-amount);f.wetUntil=T+.3;
+  if(!f.nodes.some(n=>n.heat>0)){
+    f.out=true;f.outAt=T;
+    if(f.car){f.car.fireT=null;f.car.dmg=DMG_BAD;f.car.fireIncident=null;}
+  }
+  return true;
+}
+// A stream stops on the first facade, terrain or solid prop. Never spray through
+// a building to reach a marker on the other side.
+function fireWaterClear(x,y,z,tx,ty,tz){
+  const dx=rel(tx-x),dy=rel(ty-y),dz=tz-z,steps=Math.ceil(Math.hypot(dx,dy)/.025);
+  for(let j=1;j<steps;j++){
+    const t=j/steps,xx=worldCoord(x+dx*t),yy=worldCoord(y+dy*t),zz=z+dz*t;
+    if(map[idx(xx,yy)]>zz||terrainHeight(xx,yy)>zz||solidAt(xx,yy,.003))return false;
+  }
+  return true;
+}
+function hoseHit(x,y,z,yaw,slope,range=2.6){
+  let best=null,dist=Infinity;
+  for(const f of cityFires)if(fireActive(f))for(const n of f.nodes)if(n.heat>0){
+    const dx=rel(n.x-x),dy=rel(n.y-y),forward=dx*Math.cos(yaw)+dy*Math.sin(yaw),side=-dx*Math.sin(yaw)+dy*Math.cos(yaw);
+    if(forward<.05||forward>range||Math.abs(side)>.055+forward*.035||Math.abs(n.z-z-slope*forward)>.07+forward*.025)continue;
+    if(forward<dist&&fireWaterClear(x,y,z,n.x,n.y,n.z)){best={fire:f,node:n};dist=forward;}
+  }
+  return best;
+}
+function fireCrewOrigin(c,f=c.fireIncident){
+  const x=c.ex??c.x,y=c.ey??c.y;
+  for(const side of [-1,1]){const xx=x-c.hy*side*.18,yy=y+c.hx*side*.18;
+    if(!map[idx(xx,yy)]&&!solidAt(xx,yy,.015)&&f?.nodes.some(n=>n.heat>0&&fireWaterClear(xx,yy,.14,n.x,n.y,n.z)))return [xx,yy,.14];
+  }
+  return [x,y,.14];
+}
+function fireCrewTarget(c){
+  const f=c.fireIncident;if(!fireActive(f)||c.mine||c.state!=='scene')return null;
+  const origin=fireCrewOrigin(c);
+  return f.nodes.find(n=>n.heat>0&&near(c.x,c.y,n.x,n.y)<4&&fireWaterClear(...origin,n.x,n.y,n.z))||null;
+}
+function stepCityFires(dt){
+  for(const c of cars)if(burning(c)&&!c.ev&&!c.remote&&!c.fireIncident){
+    const f=createCarIncident(c);if(f)spawnEmergency('fire',[f.x,f.y],f);
+  }
+  for(const c of cars){if(typeof incidentOwned==='function'&&!incidentOwned(c.fireIncident))continue;const n=fireCrewTarget(c);if(n)coolFireNode(c.fireIncident,n,dt*.9);}
+  if(mode==='walk'&&!freecam)for(const f of cityFires)if(fireActive(f)&&f.nodes.some(n=>n.heat>0&&near(n.x,n.y,px,py)<.13))hurt(dt*5);
+  for(let k=cityFires.length-1;k>=0;k--){
+    const f=cityFires[k];
+    if(f.car?.wrecked&&!f.out){f.failed=true;f.out=true;f.outAt=T;for(const n of f.nodes)n.heat=0;}
+    // Keep active player calls until dealt with. Distant incidents otherwise burn
+    // out, and their temporary parked breakdown is eventually towed.
+    if((typeof incidentOwned!=='function'||incidentOwned(f))&&fireActive(f)&&!f.assigned&&T-f.born>300)for(const n of f.nodes)coolFireNode(f,n,n.heat);
+    if(f.out&&T-f.outAt>30){if(f.crewCar){const i=cars.indexOf(f.crewCar);if(i>=0)cars.splice(i,1);}if(f.car?.incidentVehicle||f.car?.incidentGhost){const i=cars.indexOf(f.car);if(i>=0)cars.splice(i,1);}cityFires.splice(k,1);}
+  }
+}
 // ===== aircraft: everything that flies from the airport (world.js has the airport, aircraft-render.js draws them,
 // flight.js flies the one you're in). Speeds in cells a second (1 = 36 km/h), heights in cells (1 = 10m).
 // The airliners belong to the airport: they sit at the gates, and every few minutes one pushes back, taxis out, rolls
@@ -12321,7 +12421,7 @@ const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, last
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
-const canAimGun = () => !wanted.busted && !!heldGun() && handheldMode() && !freecam && !gun.reload;
+const canAimGun = () => (typeof emergencyHoseReady!=='function'||!emergencyHoseReady()) && !wanted.busted && !!heldGun() && handheldMode() && !freecam && !gun.reload;
 const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over
@@ -13709,7 +13809,8 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 10; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
+const NET_PROTOCOL = 11; // 11: shared emergency incidents, responders and sirens
+// (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -13762,7 +13863,7 @@ function netCheckTick(d) {
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
-    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, shift: !!d.veh.shift };
+    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, siren:!!d.veh.siren, shift: !!d.veh.shift };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
   if (d.away) out.away = true; // (in the pause menu or another tab)
   if (d.peaceful) out.peaceful = true; // (peaceful mode: can't hurt or rob anyone, nor be hurt or robbed)
@@ -17795,6 +17896,7 @@ function citySprites() {
   forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
   bridgeSprites();
   elSprites();
+  emergencySprites();
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
@@ -18432,11 +18534,6 @@ function drawCrane(k, vx, vy, th) {
 }
 
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
-// Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
-const VEHICLES = {
-  car: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02], taxi: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02],
-  police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
-};
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
 // the ambulance: a tall white box module behind a low cab. Red stripe and a star of life down the sides, a red cross on
 // the roof, rear doors with chevrons and little windows, the light bar along the top front edge of the box
@@ -29592,6 +29689,10 @@ function dash() {
   if (mode === 'drive' && job) { // on a taxi shift
     dashText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
     dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
+  } else if(mode==='drive'&&emergencyJob&&c===emergencyJob.car){
+    const j=emergencyJob,t=emergencyTarget();
+    dashText(rows-3,3,`${emergencyKindName(j.kind)} · ${j.calls} calls · ${fmt$(j.earned)} · ${c.siren?'SIREN ON':'H: SIREN'}`,C(j.kind==='amb'?CYAN:ORANGE,15));
+    dashText(rows-2,3,`${Math.abs(c.v*36)|0} km/h · ${t?t.what:'Awaiting dispatch…'}`,C(WHITE,13));damageDash();
   } else if (mode === 'drive') {
     dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
     damageDash();
@@ -29699,6 +29800,7 @@ function promptText() {
   if (mode === 'ride') return netRidePrompt(); // (in another player's car: net.js)
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   if(furnishingPlacement){const p=furnishingCandidate();return p.ok?'E: place · Q: rotate · Esc: cancel':p.reason+' · Q: rotate · Esc: cancel';}
+  const emergency=emergencyPrompt();if(emergency)return emergency;
   const focused=focusedInteractionPrompt();if(focused)return focused;
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
   const scenePrompt=streetScenePrompt();if(scenePrompt)return scenePrompt;
@@ -29822,6 +29924,7 @@ function promptText() {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return '';
     if (sh.stadium) { const f = stadiumNextFixture(); return f.open ? `E: tickets for ${f.short}${f.live ? ' (on now)' : ', ' + f.when}` : `${f.short}, ${f.when}`; }
+    if(sh.base==='fire')return 'E: enter fire station · firefighter dispatch inside';
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
@@ -29883,6 +29986,7 @@ function minimap() {
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
   mark(WHEEL.x, WHEEL.y, '*', fract(T) < 0.5 ? '#f6f' : '#ff6'); // the Ferris wheel
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
+  const et=emergencyTarget();if(et)mark(et.x,et.y,'!','#f97');
   const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
   mark(...COURIER_DEPOT.door,'C','#6c9');
   const courier=courierRoute();if(courier)mark(courier.recipient.x,courier.recipient.y,'!','#6f9');
@@ -29928,7 +30032,7 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
+  if(!telescopeActive()&&!stadiumTVOn()){if(emergencyHoseReady())drawHoseHeld();else drawHeldBig();} // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -30086,6 +30190,7 @@ function interactionFocus() {
     }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     for(const t of roomFixtureTargets())offer('room-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part||null,t.kind==='lamp'); // (taps, switches: room-fixtures.js)
+    for(const p of room.props)if(p.emergencyDispatch)offer('emergency-dispatch',p,p.x,p.y,.85,1.65,.55,2.1,p);
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!p.roomFlee&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
       const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
@@ -30102,6 +30207,7 @@ function interactionFocus() {
   return best;
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
+  if(target?.kind==='emergency-dispatch')return emergencyJob?'E: finish emergency shift':`E: start ${target.who.emergencyDispatch==='amb'?'paramedic':'firefighter'} shift`;
   if(target?.kind==='quiet-place')return `E: ${target.who.label}`;
   if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
   if(target?.kind==='home-display')return `E: take ${itemName(target.who.it)}`;
@@ -30114,6 +30220,7 @@ function focusedInteractionPrompt(target=interactionFocus()) {
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
+  if(target?.kind==='emergency-dispatch'){if(emergencyJob)endEmergencyShift();else startEmergencyShift(target.who.emergencyDispatch);return true;}
   if(target?.kind==='quiet-place'){quietPlaceUse(target.who);return true;}
   if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
   if(target?.kind==='home-display'){homeShelfTake(target.who);return true;}
@@ -30283,6 +30390,7 @@ function enterRoom(kind, extra, spawn) {
 }
 function interact() {
   if (mode === 'ride') return netGetOut(); // (in another player's car: net.js)
+  if(emergencyUse())return;
   if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
@@ -30479,7 +30587,7 @@ function interact() {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.islandCabin) return say('The door is around the front.',2);
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
-    if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
+    if (sh.base && sh.base !== 'amb' && sh.base !== 'fire') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
     if (guest) return netEnterAsGuest(guest);
@@ -30500,6 +30608,7 @@ function interact() {
 // out cold (hunger, thirst, a bad fall): you come to in a bed at the nearest hospital, and they've billed you
 let wakeT = 0;
 function passOut(why) {
+  if(emergencyJob)endEmergencyShift('Shift interrupted');
   if(failCourier()){why+=' Your courier delivery failed.';saveGame();}
   climbing=null;
   chute = null;
@@ -30662,6 +30771,7 @@ const DROP_R = 2, STOP_V = 5 / 36; // drop-off: within 20m, rolling at 5 km/h or
 let job = null; // { trips, earned, next: seconds till someone hails, hail: the person waving, ride: the trip under way }
 
 function startTaxiShift(c) {
+  if(typeof emergencyJob!=='undefined'&&emergencyJob)return say('Finish your emergency shift before taking taxi work.',4);
   me = c; mode = 'drive'; c.player = true; c.v = 0; c.hail = false; a = Math.atan2(c.hy, c.hx); px = c.x; py = c.y;
   job = { trips: 0, earned: 0, next: 3, hail: null, ride: null };
   say('You take the taxi out, light on. Watch for people waving you down.', 4);
@@ -30782,6 +30892,151 @@ function jobArrow(t=jobTarget(),courier=null) {
   const lw = g.measureText(label).width;
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
   g.fillStyle = col; g.fillText(label, x - lw / 2, y + s * 3.1 + 3);
+}
+// Paid emergency shifts start at an interior dispatch terminal. Unlike a taxi
+// fare, the shift survives getting out: treatment and the hose happen on foot.
+const medicalCalls=[];
+let emergencyJob=null,medicalCallId=0;
+const emergencyKindName=k=>k==='amb'?'PARAMEDIC':'FIREFIGHTER';
+const emergencyIncidents=()=>[...cityFires,...medicalCalls];
+const incidentOwned=f=>typeof netIncidentOwned!=='function'||netIncidentOwned(f);
+function registerIncident(f){if(!f.panicDone&&fireActive(f)){f.panicDone=true;panicAt(f.x,f.y);}
+ if(typeof netRegisterIncident==='function')netRegisterIncident(f);return f;}
+function createMedicalCall(at){
+  if(medicalCalls.filter(f=>!f.out).length>=8)return null;
+  const sites=doors.filter(d=>!d.sh.base&&!map[idx(d.x,d.y)]&&!isWater(d.x,d.y)&&near(d.x,d.y,...at)>3&&near(d.x,d.y,...at)<24);
+  const d=sites.length?pick(sites):doors.find(d=>!map[idx(d.x,d.y)]&&!isWater(d.x,d.y));if(!d)return null;
+  const look=figLook({top:'long',bot:'pants',col:{top:[pick([BLUE,GREEN,ORANGE,MAG]),10]}});
+  const f={id:'medical-'+(++medicalCallId),kind:'medical',x:d.x,y:d.y,born:T,stage:'waiting',look,caseName:pick(['Cyclist with a sprained ankle','Fainting passenger','Fall on the pavement','Dizzy pedestrian'])};
+  medicalCalls.push(f);registerIncident(f);return f;
+}
+function emergencyBase(kind,r=room){
+  const at=r?.ret||[px,py];return SERVICES.filter(b=>b.kind===kind).reduce((a,b)=>!a||near(...b.door,...at.slice(0,2))<near(...a.door,...at.slice(0,2))?b:a,null);
+}
+function startEmergencyShift(kind){
+  if(emergencyJob)return say('Finish your current emergency shift at a dispatch desk first.',4);
+  if(wanted.stars)return say('Dispatch cannot sign you on while the police are looking for you.',4);
+  if(room?.evacuating)return say('The building is evacuating. Dispatch is closed.',3);
+  const base=emergencyBase(kind);if(!base)return;
+  if(base.out)return say('This station’s vehicle is on a call. Try another station or wait for it to return.',4);
+  if(job||courierJob)return say('Finish your current job before signing on with emergency dispatch.',4);
+  base.out=true;
+  const c=addCar({kind,body:EV_BODY[kind],x:base.x,y:base.y,hx:-1,hy:0});makeEvYours(c,base);
+  c.emergencyShift=true;c.siren=true;c.player=true;
+  emergencyJob={kind,car:c,base,calls:0,earned:0,next:2,call:null,hose:false,care:0};
+  room=null;mode='drive';me=c;px=c.x;py=c.y;a=Math.PI;pitch=0;look=0;body.seat=null;body.z=body.vz=0;
+  transitSync();say(`${emergencyKindName(kind)} SHIFT · H: siren · E: get out when stopped. Dispatch will radio your first call.`,7);
+}
+function releaseEmergencyCall(j=emergencyJob){
+  if(!j?.call)return;
+  const f=j.call;
+  if(f.kind==='medical'&&f.stage==='transport'){
+    f.x=j.car.x;f.y=j.car.y;const curb=curbOf(j.car);f.x=curb[0];f.y=curb[1];
+  }
+  emergencyIncidentAction(f,'release',{x:f.x,y:f.y});j.call=null;j.care=0;
+}
+function endEmergencyShift(reason='Shift finished'){
+  const j=emergencyJob;if(!j)return;
+  releaseEmergencyCall(j);j.hose=false;j.car.emergencyShift=false;j.car.siren=false;
+  emergencyJob=null;say(`${reason}: ${j.calls} call${j.calls===1?'':'s'}, ${fmt$(j.earned)} earned. The vehicle will return to station when clear.`,6);
+}
+function emergencyIncidentAction(f,action,extra={}){
+  if(typeof netEmergencyAction==='function'&&netEmergencyAction(f,action,extra))return;
+  applyEmergencyAction(f,action,'solo',extra);
+}
+function applyEmergencyAction(f,action,who,extra={}){
+  if(action==='claim'&&!f.out&&(!f.assigned||f.assigned===who)){f.assigned=who;return true;}
+  if(action==='release'&&f.assigned===who){f.assigned=null;if(f.kind==='medical'&&!f.out){f.stage='waiting';if(Number.isFinite(extra.x)&&Number.isFinite(extra.y)){f.x=extra.x;f.y=extra.y;}}if(fireActive(f)&&!cars.some(c=>c.ev&&!c.mine&&!c.remote&&c.fireIncident===f))spawnEmergency('fire',[f.x,f.y],f);return true;}
+  if(f.kind!=='medical'||f.assigned!==who||f.out)return false;
+  if(action==='load'&&f.stage==='waiting'){f.stage='transport';return true;}
+  if(action==='deliver'&&f.stage==='transport'){f.stage='done';f.out=true;f.outAt=T;f.completedBy=who;return true;}
+  return false;
+}
+function nextEmergencyCall(){
+  const j=emergencyJob;if(!j||j.call)return;
+  const pool=j.kind==='fire'?cityFires.filter(f=>fireActive(f)&&!f.assigned&&near(f.x,f.y,j.car.x,j.car.y)<40):medicalCalls.filter(f=>!f.out&&!f.assigned&&f.stage==='waiting');
+  let f=pool.reduce((a,f)=>!a||near(f.x,f.y,j.car.x,j.car.y)<near(a.x,a.y,j.car.x,j.car.y)?f:a,null);
+  if(!f){f=j.kind==='fire'?createCityFire(tripDest(j.car)):createMedicalCall([j.car.x,j.car.y]);if(f)registerIncident(f);}
+  if(!f){j.next=4;return;}
+  j.call=f;j.started=T;j.care=0;j.claimDue=1;j.rough=0;j.damage=j.car.dmg||0;
+  emergencyIncidentAction(f,'claim');
+  say(`DISPATCH · ${f.kind==='medical'?f.caseName:f.kind==='car'?'Vehicle fire':'Building fire'} · Follow the marker. ${j.kind==='amb'?'Park, get out and E beside the patient.':'Park, get out and E beside your engine for the hose.'}`,8);
+}
+const emergencySelf=()=>typeof net!=='undefined'&&net.on?net.selfId:'solo';
+function finishEmergencyCall(){
+  const j=emergencyJob,f=j?.call;if(!j||!f||!f.out)return;
+  const ours=f.assigned===emergencySelf();
+  if(ours&&!f.failed){
+    const base=j.kind==='amb'?95:f.kind==='building'?140:100,bonus=Math.max(0,Math.round(35-(T-j.started)*.15-j.rough*.4)),paid=base+bonus;
+    earn(paid);j.calls++;j.earned+=paid;saveGame();
+    say(`${j.kind==='amb'?'Patient handed over to triage':'Fire out. Scene safe'}. ${fmt$(base)} + ${fmt$(bonus)} response bonus.`,6);
+  }else say(f.failed?'Dispatch: the vehicle was lost. No pay for this call.':'Dispatch: another crew has completed that call.',4);
+  j.call=null;j.care=0;j.next=5;j.hose=false;
+}
+function emergencyTarget(){
+  const j=emergencyJob,f=j?.call;if(!f||f.out)return null;
+  if(f.kind==='medical'&&f.stage==='transport'){
+    const b=SERVICES.filter(b=>b.kind==='amb').reduce((a,b)=>!a||near(b.x,b.lane,j.car.x,j.car.y)<near(a.x,a.lane,j.car.x,j.car.y)?b:a,null);
+    return {x:b.door[0],y:b.lane,what:'HOSPITAL HANDOVER',radius:1.6,stop:'STOP'};
+  }
+  const stop=mode==='drive'?'PARK & GET OUT':f.kind==='medical'?(j.care>0?'TREATING PATIENT':'TREAT PATIENT'):j.hose?'SPRAY FLAMES':'TAKE HOSE AT ENGINE';
+  return {x:f.x,y:f.y,what:f.kind==='medical'?'PATIENT':f.kind==='car'?'VEHICLE FIRE':'BUILDING FIRE',radius:1.8,stop};
+}
+function emergencyPrompt(){
+  const j=emergencyJob;if(!j)return '';
+  if(mode==='drive'&&me===j.car)return 'H: lights & siren · E: park and get out';
+  if(mode!=='walk')return '';
+  const f=j.call;
+  if(f?.kind==='medical'&&f.stage==='waiting'&&near(px,py,f.x,f.y)<.35){
+    if(!f.assigned)return 'Dispatch is confirming your assignment…';
+    if(f.assigned!==emergencySelf())return 'Another crew is treating this patient';
+    if(near(j.car.x,j.car.y,f.x,f.y)>1.8)return 'Bring your ambulance within 18m of the patient';
+    return j.care>0?`Treating patient · ${Math.min(100,Math.floor(j.care/3*100))}%`:'E: treat patient and load the ambulance';
+  }
+  if(near(px,py,j.car.x,j.car.y)<.6)return j.kind==='fire'?(j.hose?'E: stow hose · hold Q / click to spray':'E: take hose · J: drive engine'):'E: drive your ambulance';
+  if(j.hose)return 'Hold Q / click: spray · aim at flames · stay within 30m of engine';
+  return '';
+}
+function enterShiftVehicle(){
+  const j=emergencyJob;if(!j||mode!=='walk'||near(px,py,j.car.x,j.car.y)>.65)return false;
+  const c=j.car;if(c.wrecked||burning(c)){endEmergencyShift('Vehicle disabled');return true;}
+  j.hose=false;me=c;c.parked=false;c.player=true;c.v=0;mode='drive';px=c.x;py=c.y;a=Math.atan2(c.hy,c.hx);look=0;body.seat=null;
+  return true;
+}
+function emergencyUse(){
+  const j=emergencyJob;if(!j||mode!=='walk')return false;
+  const f=j.call;
+  if(f?.kind==='medical'&&!f.out&&f.stage==='waiting'&&near(px,py,f.x,f.y)<.35){
+    if(f.assigned!==emergencySelf())return say('Another crew is assigned to this patient.',3),true;
+    if(near(j.car.x,j.car.y,f.x,f.y)>1.8)return say('Park your ambulance within 18m first.',3),true;
+    j.care=.001;say('Checking the patient and securing the stretcher… Stay close.',4);return true;
+  }
+  if(near(px,py,j.car.x,j.car.y)<.6){
+    if(j.kind==='fire'){j.hose=!j.hose;j.care=0;say(j.hose?'Hose ready. Aim at the flames and hold Q or click. J beside the engine: drive.':'Hose stowed. J: drive the engine.',5);}
+    else enterShiftVehicle();return true;
+  }
+  return false;
+}
+function emergencyHoseReady(){return !!(emergencyJob?.hose&&mode==='walk'&&!sleep&&!freecam&&!body.seat&&near(px,py,emergencyJob.car.x,emergencyJob.car.y)<3);}
+function stepEmergencyJob(dt){
+  for(let k=medicalCalls.length-1;k>=0;k--)if(medicalCalls[k].out&&T-medicalCalls[k].outAt>30)medicalCalls.splice(k,1);
+  const j=emergencyJob;if(!j)return;
+  if(wanted.busted||j.car.wrecked||burning(j.car)||needs.health<=0){endEmergencyShift('Shift interrupted');return;}
+  if(j.call?.out){finishEmergencyCall();return;}
+  if(j.call?.assigned&&j.call.assigned!==emergencySelf()){j.call=null;j.next=2;j.care=0;}
+  if(!j.call){if((j.next-=dt)<=0)nextEmergencyCall();return;}
+  const f=j.call;
+  if(!f.assigned){if((j.claimDue-=dt)<=0){j.claimDue=1;emergencyIncidentAction(f,'claim');}return;}
+  if(j.hose&&(!emergencyHoseReady()||mode!=='walk'))j.hose=false;
+  if(j.care>0){
+    if(mode!=='walk'||near(px,py,f.x,f.y)>.4||near(j.car.x,j.car.y,f.x,f.y)>1.8){j.care=0;return;}
+    j.care+=dt;
+    if(j.care>=3){emergencyIncidentAction(f,'load');j.care=0;say('Patient secured. E beside the ambulance to drive; follow the hospital marker.',6);}
+  }
+  if(f.kind==='medical'&&f.stage==='transport'&&mode==='drive'&&me===j.car){
+    j.rough+=Math.max(0,(j.car.dmg||0)-(j.damage||0));j.damage=j.car.dmg||0;
+    const t=emergencyTarget();if(near(j.car.x,j.car.y,t.x,t.y)<t.radius&&Math.abs(j.car.v)<STOP_V)emergencyIncidentAction(f,'deliver');
+  }
 }
 // ===== the Sunset Pier (world.js lays it out, props.js puts up the booths, city-sprites.js draws the rides):
 // riding the Ferris wheel and the carousel, and what E does at the booths. The rides run 9am till 2am.
@@ -31130,6 +31385,89 @@ function stepSpray(dt) { // (stepSleep hands it over: ten minutes in a fade)
   if (sleep.t >= 1 && !sleep.done) { sleep.done = true; sleep.lost = applyRespray(me); if ((tod += 1 / 6) >= 24) { tod -= 24; dayNum++; } }
   if (sleep.t > 2 && !sleep.said) { sleep.said = true; say(`Ten minutes later the shutter rolls up: new paint, the dents knocked out.${sleep.lost ? ' Nobody\'s looking for this car now.' : ''}`, 5); }
   if (sleep.t > 3.2) { sleep = null; fade = 0; }
+}
+const emergencyStreams=new Map();
+let emergencyWaterT=0,emergencySmokeT=0;
+function rememberWater(key,from,to){emergencyStreams.set(key,{from,to,until:netNow()+.25});}
+function sprayEmergencyWater(dt){
+  const z=walkGround(px,py)+.17,slope=pitch*rows/projY,hit=hoseHit(px,py,z,a,slope);
+  let end=hit?[hit.node.x,hit.node.y,hit.node.z]:[worldCoord(px+Math.cos(a)*2.6),worldCoord(py+Math.sin(a)*2.6),z+slope*2.6];
+  if(!hit)for(let d=.08;d<2.6;d+=.025){
+    const x=worldCoord(px+Math.cos(a)*d),y=worldCoord(py+Math.sin(a)*d),zz=z+slope*d;
+    if(map[idx(x,y)]>zz||zz<terrainHeight(x,y)||solidAt(x,y,.003)){end=[x,y,Math.max(terrainHeight(x,y),zz)];break;}
+  }
+  rememberWater('self',[px+Math.cos(a)*.08-Math.sin(a)*.026,py+Math.sin(a)*.08+Math.cos(a)*.026,z-.022],end);
+  if(hit&&incidentOwned(hit.fire))coolFireNode(hit.fire,hit.node,dt);
+  if((emergencyWaterT-=dt)<=0){
+    emergencyWaterT=.15;
+    if(typeof netSendWater==='function')netSendWater({x:px,y:py,z,yaw:a,slope,end,fire:hit?.fire.id||null,dt:.15});
+  }
+}
+function stepEmergencyWater(dt){
+  if(emergencyHoseReady()&&(K.KeyQ||K.MouseUse))sprayEmergencyWater(dt);
+  else emergencyWaterT=0;
+  if((emergencySmokeT-=dt)<=0){
+    emergencySmokeT=.3;
+    for(const f of cityFires)if(fireActive(f)&&near(f.x,f.y,px,py)<18){
+      const n=f.nodes.find(n=>n.heat>0);if(n)worldPuff(n.x,n.y,n.z+.08,.04,.17,'soot',3,.08);
+    }
+  }
+}
+function drawWaterStream(from,to){
+  const [x,y,z]=from,ex=rel(to[0]-x),ey=rel(to[1]-y),ez=to[2]-z,[vx,vy]=R(x,y);
+  const shade=(i,t,L)=>{const h=hash(i,Math.floor(T*25),93);BG[i]=C(h>.7?WHITE:CYAN,Math.max(6,L*.6)+h*4);set(i,' ',0);return true;};
+  for(let j=0;j<10;j++){
+    const t=j/10,u=(j+1)/10,at=q=>[vx+ex*q,vy+ey*q,z+ez*q-.035*q*(1-q)];
+    drawRod(...at(t),...at(u),.003+t*.006,shade);
+  }
+  // Breaking droplets at the exact impact point, rather than an opaque cone.
+  for(let j=0;j<5;j++){
+    const q=fract(T*3+j*.21),s=(j-2)*.008;
+    drawRod(vx+ex+s,vy+ey, to[2]+.015,vx+ex+s*2,vy+ey+s,to[2]-.035*q,.002,shade);
+  }
+}
+const emergencyCrewLook=figLook({hat:'hardhat',top:'long',bot:'pants',col:{hat:[YEL,13],top:[YEL,9],bot:[GRAY,4],shoe:[GRAY,2]}});
+function emergencySprites(){
+  for(const f of cityFires){
+    if(near(f.x,f.y,px,py)>vis+1)continue;
+    if(f.kind==='building')for(const [k,n]of f.nodes.entries())if(n.heat>0){
+      const [vx,vy]=R(n.x,n.y),strength=Math.max(.15,n.heat/n.max);
+      const shade=(i,t,L)=>{const h=hash(i,Math.floor(T*17),f.id.length+k);if(h<.18)return false;BG[i]=C(h>.72?YEL:h>.3?ORANGE:RED,8+h*7);set(i,' ',0);return true;};
+      for(let j=0;j<3;j++){
+        const sway=Math.sin(T*(6+j)+k*2+j)*.015,height=(.065+.075*Math.abs(Math.sin(T*(7+j)+k)))*strength;
+        drawRod(vx+(j-1)*.025,vy,n.z-.045,vx+(j-1)*.025+sway,vy,n.z+height,.014*strength,shade);
+      }
+    }
+    const c=cars.find(c=>c.ev&&!c.mine&&c.fireIncident===f&&!c.home),remote=f.remoteCrew;
+    const n=c?fireCrewTarget(c):remote?.state==='scene'&&f.nodes.find(n=>n.heat>0);
+    if(remote&&!c){const [vx,vy]=R(remote.x,remote.y);drawVehicle({kind:'fire',body:RED,ev:true,state:remote.state,v:remote.v||0},vx,vy,remote.hx,remote.hy);}
+    if(n){
+      const crew=c||remote,origin=fireCrewOrigin(crew,f),[vx,vy]=R(origin[0],origin[1]);
+      drawFigure(vx,vy,walkGround(origin[0],origin[1]),.175,rel(n.x-origin[0]),rel(n.y-origin[1]),emergencyCrewLook,'aim');
+      drawWaterStream(origin,[n.x,n.y,n.z]);
+    }
+  }
+  for(const f of medicalCalls)if(!f.out&&f.stage==='waiting'&&near(f.x,f.y,px,py)<vis){
+    drawFigure(...R(f.x,f.y),walkGround(f.x,f.y),.175,0,-1,f.look,'sit0');
+    drawArt(...R(f.x,f.y),.20,.035,.055,['+'],()=>C(CYAN,15));
+  }
+  for(const [key,s]of emergencyStreams){if(s.until<netNow()){emergencyStreams.delete(key);continue;}drawWaterStream(s.from,s.to);}
+}
+let emergencyNozzlePicture=null;
+function drawHoseHeld(){
+  // The same sampled solid surfaces and hand mask as other held tools.
+  emergencyNozzlePicture||=sculptSurface(38,28,(x,y)=>{
+    const paint=(c,l)=>[' ',C(c,l)],length=Math.hypot(6,17),u=((x+5)*6+(y+11)*17)/length,v=(-(x+5)*17+(y+11)*6)/length;
+    if(heldToolPolygon(x,y,[[1,2],[6,2],[9,5],[8,8],[3,8],[2,6]]))return paint(GRAY,x>6?3:7);
+    if(y>6&&Math.abs(x-(y-6)*.38-1)<1.8)return paint(GRAY,3+Math.abs(Math.sin(y*2))*2);
+    if(u<0||u>18||Math.abs(v)>2.2-(u/18)*.6)return null;
+    const edge=Math.abs(v)/(2.2-u/18*.6),rib=u>9&&u<15&&fract(u*.7)<.3;
+    if(u<1.2)return paint(edge>.68?YEL:GRAY,edge>.68?12:1);
+    return paint(rib?GRAY:YEL,(rib?4:9)+(1-edge)*4-v*.3);
+  });
+  const [art,col]=emergencyNozzlePicture,s=Math.max(9,Math.round(cv.height/90)),hsz=Math.max(12,Math.round(cv.height/65)),cx=cv.width*.72,hy=cv.height*.85;
+  g.font=s+'px monospace';const w=g.measureText('M').width;
+  drawBehindHand(cx,hy,hsz,()=>artText(art,cx-art[0].length*w/2,hy-s*19,s,col));g.font=FS+'px monospace';
 }
 // ===== the airport on screen (where everything is: world.js). The ground: the runway with its edge and centre lines,
 // threshold stripes and numbers (09 at the west end, 27 at the east, the way a pilot coming in reads them), touchdown
@@ -33171,6 +33509,7 @@ function buildPause() {
       <button class="item" data-act="appearance">Customize character</button>
       <button class="item" data-act="multiplayer">Multiplayer <span class="k" data-net-badge style="margin-left:auto"></span></button>
       <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
+      <button class="item" data-act="end-emergency" style="display:none">Finish emergency shift</button>
       <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
@@ -33211,6 +33550,7 @@ function buildPause() {
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
     if (ASCII_CITY_DESKTOP_APP) showDesktopUpdate(el);
+    el.querySelector('[data-act="end-emergency"]').style.display=emergencyJob?'flex':'none';
     // the jobs you're on, to call off: only while there's one
     el.querySelector('[data-act="cancel-courier"]').style.display = courierJob ? 'flex' : 'none';
     const fare = el.querySelector('[data-act="cancel-fare"]');
@@ -33250,6 +33590,7 @@ function buildPause() {
     if (b.dataset.act === 'appearance') openAppearance('pause');
     if (b.dataset.act === 'multiplayer') openNetMenu(); // (net.js)
     if (b.dataset.act === 'cancel-courier' && cancelCourier()) { saveGame(); say('You call dispatch and hand the parcel back. No pay, no hard feelings.', 4); closePause(true); }
+    if(b.dataset.act==='end-emergency'){endEmergencyShift();closePause(true);}
     if (b.dataset.act === 'cancel-fare' && cancelFare()) { say('You call it off. The light goes back on: someone else will flag you down soon.', 4); closePause(true); }
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
@@ -33300,7 +33641,8 @@ function openControls() {
           <b>B</b><span>Play the next boombox tape.</span>
           <b>G</b><span>Pickpocket, shoplift or grab.</span>
           <b>L</b><span>Pick a lock at night.</span>
-          <b>J</b><span>Start taxi work or a shift.</span>
+          <b>Emergency shifts</b><span>Sign on at the hospital or fire station dispatch terminal. H: siren. E: get out to treat patients or take the hose. Hold Q / click: spray; J beside the engine: drive. Finish at dispatch or in the pause menu.</span>
+          <b>J</b><span>Start taxi work or drive your assigned fire engine.</span>
           <b>N</b><span>Toggle sound.</span>
           <b>P</b><span>Pee.</span>
           <b>Esc</b><span>Pause. In this guide, go back to the pause menu.</span>
@@ -34761,7 +35103,7 @@ function nearestWorkshopHome() {
 }
 function mapShopCategory(sh) {
   if(sh.word==='REALTY')return 'homes';
-  if(/^(PHARMACY|DRUGSTORE|HOSPITAL|POLICE|BANK|LAUNDRY|STORAGE|AUTO REPAIR)$/.test(sh.word))return 'essentials';
+  if(/^(PHARMACY|DRUGSTORE|HOSPITAL|FIRE DEPT|POLICE|BANK|LAUNDRY|STORAGE|AUTO REPAIR)$/.test(sh.word))return 'essentials';
   if(/^(GAS|CARS)$/.test(sh.word))return 'transport';
   if(/^(ARCADE|GYM|CINEMA|KARAOKE|PACHINKO|CRANE GAME|GACHA|CASINO|MUSEUM|AQUARIUM|VELVET|MAHJONG)$/.test(sh.word))return 'activities';
   if(stockFor('',sh.word).some(id=>['food','drink'].includes(ITEMS[id]?.kind)))return 'food';
@@ -34788,7 +35130,7 @@ function mapDirectory() {
     }
     const stock=stockFor('',sh.word).slice(0,6).map(id=>ITEMS[id]?.name).filter(Boolean);
     add({id:cityPlaceAtCell(k)?.id||`shop:${k}`,name:sh.word,x,y,category:mapShopCategory(sh),kind:'shop',shop:sh,
-      description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
+      description:sh.base==='fire'?'Firefighter shifts at the dispatch terminal inside. Engine, hose and paid emergency calls.':sh.base==='amb'?'Paramedic shifts at the dispatch terminal inside. Treat patients and drive them to hospital.':stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
@@ -34829,6 +35171,8 @@ function mapDirectory() {
   for(const [index,c] of owned.cars.entries())add({id:`car:${index}`,name:`Your ${CAR_MODELS[c.model]?.name||'car'}`,x:c.x,y:c.y,category:'transport',kind:'car',description:'Your parked vehicle.',status:c.wrecked?'Wrecked':'Owned'});
   for(const b of fleet)if(b.deal==='mine'||b.hired)add({id:`boat:${b.id}`,name:`${b.hired?'Your rental':'Your boat'} · ${b.name}`,x:b.x,y:b.y,category:'transport',kind:'boat',description:b.hired?'Waiting for your return trip. Bring it back to the marina to end the rental.':'Your boat stays where you tie it up.',status:b.hired?'Hired':'Owned'});
   for(const [index,v] of vendors.entries())add({id:`vendor:${index}`,name:v.type.name,x:v.x,y:v.y,category:'food',kind:'vendor',description:`Street vendor: ${v.type.item}.`});
+  for(const f of emergencyIncidents())if(!f.out)add({id:f.id,name:f.kind==='medical'?'Medical call':f.kind==='car'?'Vehicle fire':'Building fire',x:f.x,y:f.y,category:'activities',kind:'incident',description:f.assigned?'Emergency crew assigned.':'Emergency call awaiting a crew.'});
+  const incident=emergencyTarget();if(incident)add({id:'emergency-call',name:incident.what,x:incident.x,y:incident.y,category:'activities',kind:'objective',description:'Your emergency dispatch destination.'});
   const task=taskTarget(),job=jobTarget(),delivery=courierRoute();
   for(const [id,p,name] of [['task',task,'Current favour'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
     if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
@@ -34944,6 +35288,7 @@ function navigationTargets() {
     if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
     targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
   };
+  const emergency=emergencyTarget();if(emergency)add(emergency,emergency.what,'#ff9977',emergency.radius,emergency.stop);
   if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
   if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
   if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
@@ -35184,6 +35529,7 @@ function bigMapDraw() {
   for (const c of owned.cars) if (c !== me) dot(c.x, c.y, 'C', '#fff');
   for (const b of fleet) if (b.deal === 'mine' && b !== sea) dot(b.x, b.y, 'B', '#fff');
   const tt = taskTarget(); if (tt) dot(tt.x, tt.y, '?', '#4ff');
+  const et=emergencyTarget();if(et)dot(et.x,et.y,'!','#f97');
   const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
   for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);
@@ -36122,6 +36468,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
   if(wanted.busted)return;
+  if(emergencyHoseReady())return;
   if(furnishingPlacement){furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return;}
   if(heldItem()?.id==='camera')return takeHomePhoto();
   if(HOME_FURNITURE[heldItem()?.id]&&!room?.guestHome&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
@@ -39932,6 +40279,7 @@ function bustedKey(e) { // nothing else while they've got you: not even Esc
 function outOfCar(keepCar = false) { // paying a fine leaves the car parked where they stopped you
   if (!me) return;
   const c = me;
+  if(emergencyJob)endEmergencyShift('Shift interrupted');
   if (mode === 'drive') {
     c.player = false; c.v = 0;
     if (keepCar) { [px, py] = exitSpot(c); c.parked = true; c.off = 0; c.ex = c.x; c.ey = c.y; }
@@ -54707,6 +55055,100 @@ function videoTapeFrame(id,u,v,time){
  if(shot===2){base=CYAN;level=3;if(v>.55){base=BRICK;level=3;}if(u>.12&&u<.75&&v>.35&&v<.65){base=GRAY;level=3;}if(u>.72&&u<.8&&v>.12&&v<.6){base=GRAY;level=2;}if(v>.73){base=BRICK;level=5+Math.floor(fract(u*13)*2);}}
  return {base,level,ch,ink,label:mod(time,8)>2?'FIR CREEK':''};
 }
+// Station furniture is closed geometry with one measured collision footprint.
+// No glyph-texture blocks: metal, enamel, rubber and painted masonry use the
+// city's filtered surfaces and the same fitting text as the hospital.
+ROOM_FOR['FIRE DEPT']='firestation';
+function EMERGENCY_TERMINAL(x,y,kind){
+  const parts=[],metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+  const paint=(i,t,L)=>{BG[i]=C(kind==='amb'?CYAN:RED,1.8+L*.28*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const desk=(i,t,L)=>{BG[i]=C(GRAY,1.7+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const box=(role,u,v,hl,hw,z0,z1,r,shade)=>{const p=hotelLobbyRound(parts,role,hl,hw,z0,z1,r,shade);p.box.x=u;p.box.y=v;return p;};
+  for(const u of [-.64,.64])for(const v of [-.27,.27])box('leg',u,v,.022,.022,.03,.81,.005,metal);
+  box('cabinet',-.45,0,.23,.32,.12,.78,.015,paint);
+  for(const z of [.33,.55,.74])box('drawer-pull',-.45,.329,.12,.012,z-.008,z+.008,.006,metal);
+  box('worktop',0,0,.82,.4,.81,.86,.025,desk);
+  box('monitor-foot',0,-.15,.19,.12,.86,.88,.01,metal);
+  box('monitor-neck',0,-.19,.025,.025,.88,1.12,.005,metal);
+  box('monitor-shell',0,-.19,.48,.04,1.08,1.65,.018,desk);
+  const screen=(i,t,L)=>{
+    const bg=C(BLUE,2);BG[i]=bg;
+    if(HIT.face===3){
+      for(const [text,z,size]of [['DISPATCH',1.53,.10],[kind==='amb'?'PARAMEDIC':'FIRE & RESCUE',1.35,.07],['SIGN ON / OFF',1.18,.063]])
+        if(hotelFittingText(i,HIT.u,HIT.w,t,text,0,z,size,size*1.2,C(CYAN,14),bg))return true;
+    }
+    set(i,' ',0);return true;
+  };
+  box('screen',0,-.146,.435,.004,1.12,1.61,.005,screen);
+  box('keyboard',.08,.18,.32,.12,.86,.89,.008,metal);
+  // Radio: speaker perforations disappear once smaller than a pixel.
+  box('radio',.61,-.12,.13,.16,.86,1.10,.012,(i,t,L)=>{const grille=HIT.face===3&&Math.abs(HIT.u)<.09&&HIT.w<1.05;BG[i]=C(GRAY,grille?1:3+L*.2);set(i,' ',0);return true;});
+  hotelLobbyTube(parts,'aerial',.68,-.2,1.1,.68,-.2,1.54,.005,metal);
+  return {...ROOM_MODEL(x,y,hotelLobbyDraw(parts)),box:boxAt(x,y,1,0,.82,.4,0,1.65),radius:1,emergencyDispatch:kind,emergencyParts:parts};
+}
+function FIRE_EQUIPMENT(x,y){
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+    const paint=(i,t,L)=>{BG[i]=C(RED,2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const rubber=(i,t,L)=>{BG[i]=C(YEL,2+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    for(const sx of [-.64,.64])drawBox(boxAt(vx+sx,vy,1,0,.025,.28,0,2.15),metal);
+    for(const z of [.12,1.15,2.12])drawBox(boxAt(vx,vy,1,0,.68,.28,z,z+.035),metal);
+    for(const sx of [-.31,.31]){
+      // Coiled hose: concentric closed round segments, sitting on a shelf.
+      for(const radius of [.13,.19,.25])for(let k=0;k<20;k++){
+        const t=k/20*TAU,u=(k+1)/20*TAU;
+        drawRod(vx+sx+Math.cos(t)*radius,vy+.08,.41+Math.sin(t)*radius,vx+sx+Math.cos(u)*radius,vy+.08,.41+Math.sin(u)*radius,.023,rubber);
+      }
+      drawRod(vx+sx-.08,vy+.08,.66,vx+sx-.08,vy+.08,.79,.035,metal);
+      drum(vx+sx,vy,.11,1.19,1.67,paint);
+      drawRod(vx+sx,vy,1.67,vx+sx,vy,1.79,.025,metal);
+      drawRod(vx+sx,vy+.03,1.79,vx+sx+.15,vy+.06,1.69,.012,metal);
+    }
+  },[.69,.29,2.16]),fireEquipment:true};
+}
+function FIRE_LOCKER(x,y,k){
+  const p=ROOM_MODEL(x,y,(vx,vy)=>{
+    const metal=(i,t,L)=>{BG[i]=C(GRAY,2+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const cloth=(i,t,L)=>{const stripe=HIT.w>1.12&&HIT.w<1.18||HIT.w>.74&&HIT.w<.81;BG[i]=C(stripe?YEL:GRAY,(stripe?7:1.2)+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    for(const sx of [-.38,.38])drawBox(boxAt(vx+sx,vy,1,0,.018,.32,.07,2.24),metal);
+    drawBox(boxAt(vx,vy-.3,1,0,.36,.018,.07,2.24),metal);
+    for(const z of [.07,.5,1.83,2.20])drawBox(boxAt(vx,vy,1,0,.36,.32,z,z+.035),metal);
+    drawBox(boxAt(vx,vy,1,0,.20,.065,.66,1.47),cloth);
+    for(const s of [-1,1])drawRod(vx+s*.2,vy,1.4,vx+s*.29,vy+.015,1.01,.066,cloth);
+    drawBox(boxAt(vx,vy,1,0,.23,.15,1.88,1.98),solid(YEL));
+    drum(vx,vy,.17,1.98,2.10,solid(YEL));
+    for(const s of [-1,1])drawBox(boxAt(vx+s*.13,vy+.04,1,0,.07,.17,.105,.38),solid(GRAY));
+  },[.4,.33,2.24]);p.fireLocker=k;return p;
+}
+function fireStationWall(i,u,uStep,z,d,mx,my,L){
+  const stripe=z>.98&&z<1.06;
+  BG[i]=C(stripe?RED:z<1?GRAY:WARM,(stripe?2.5:2)+L*.24);
+  if(my===0&&u>6&&u<14&&z<2.6){
+    const bay=Math.abs(u-10)<.055||Math.abs(u-6.1)<.07||Math.abs(u-13.9)<.07||z>2.48;
+    BG[i]=C(bay?GRAY:RED,(bay?3:1.5)+L*.24-coveGroove(z,.18,.012,Math.max(uStep,d/projY)));
+    if(z>1.65&&z<2.05&&!bay){BG[i]=C(CYAN,1.4+day*2);}
+  }
+  if(my===0&&wallText(i,u,uStep,z,d,'FIRE & RESCUE',3.2,2.5,.14,.2,C(RED,15),BG[i]))return true;
+  if(mx===0&&z>1.4&&wallText(i,u,uStep,z,d,'CREW ROOM',8.2,2.1,.13,.17,C(GRAY,12),BG[i]))return true;
+  set(i,' ',0);return true;
+}
+ROOM_DEFS.firestation={grid:boxRoom(16,12),light:.95,floor:'concrete',ceil:'strip',wall:fireStationWall,spawn:[8,10.3],props:r=>{
+  const props=[EMERGENCY_TERMINAL(3.2,2.5,'fire'),FIRE_EQUIPMENT(7,1.4),FIRE_EQUIPMENT(9,1.4),
+    SMALL_DESK(3.3,7.5,1.3,.55,.76,0,1,BRICK),BENCHP(3.3,8.6,0,-1),standing(3.6,1.6,BLUE)];
+  for(let k=0;k<4;k++)props.push(FIRE_LOCKER(10.5+k,10.1,k));
+  props.push({...sitting(3,8.6,BLUE,.45),face:[0,-1]});
+  // A clear central aisle joins dispatch, the lockers and the exit. Equipment
+  // stays against the bay wall rather than in the doorway approach.
+  props.push(ROOM_MODEL(13.8,4.2,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,1,0,.4,1.1,0,.8),solid(GRAY));
+    drawBox(boxAt(vx,vy,1,0,.42,1.12,.8,.84),solid(STONE));
+    drum(vx,vy-.5,.16,.84,1.13,CHROME);
+    drawRod(vx,vy-.5,1.13,vx,vy-.5,1.25,.03,CHROME);
+  },[.42,1.12,1.25]));
+  return props;
+}};
+const EMERGENCY_HOSPITAL_PROPS=ROOM_DEFS.hospital.props;
+ROOM_DEFS.hospital.props=r=>[...EMERGENCY_HOSPITAL_PROPS(r),EMERGENCY_TERMINAL(11.5,7.6,'amb')];
 // Assemble the generated city after authored outdoor geometry has been created,
 // before saves or the first frame. Interior coordinates never enter this pass.
 function assembleArchipelago() {
@@ -57007,7 +57449,7 @@ function drawFerries() {
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['emergency', 'emergencyAct', 'emergencyWater', 'tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -57086,12 +57528,13 @@ function netLeave() {
   net.joining = false;
   if (!net.on) return;
   try { net.tx.leave(); } catch (e) { /* gone */ }
-  const was = net.clockOwner;
+  const was = net.clockOwner,emergencySelfBefore=net.selfId;
   if (mode === 'ride') netEject('You get out.');
   netDropCars();
   if (net.balls.has(netMyBallId())) { const b = net.balls.get(netMyBallId()); ball = b; } // (yours comes back to you where it is)
   net.balls.clear(); net.myBall = null;
   Object.assign(net, { on: false, tx: null, peers: new Map(), clockOwner: true, bubble: null });
+  netEmergencyLeft(emergencySelfBefore);
   reindexTags(); // (theirs come off your walls)
   if (!was && NET_FEATURES.clock) wTimer = 60 + Math.random() * 90; // your own weather again
   netLog('You left the room.');
@@ -57106,6 +57549,7 @@ function netPeerJoined(id) {
   net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look, ask: true }, id); // (ask: say hello back, even if they never lost sight of us)
   netSendTags(id); // (your tags, for their walls)
   netSendParked(id); // (and where you've left cars)
+  netSendEmergency(id);
   netSendDrops(id); // (and what you've put down in the street)
   netSendPaint(sprayDots.slice(-NET_PAINT_JOIN), id); // (and your most recent spray paint)
   netReclock();
@@ -57114,6 +57558,7 @@ function netPeerLeft(id) {
   const p = net.peers.get(id);
   if (!p) return;
   net.peers.delete(id);
+  netEmergencyPeerLeft(id);
   if (p.hello) netLog(`${p.name} left.`);
   if (p.tags) reindexTags();
   for (const [gid, g] of [...net.gifts]) if (g.to === id) { net.gifts.delete(gid); netGiftBack(g, 'left'); } // (a gift they never took: yours again)
@@ -57151,6 +57596,7 @@ function netReceive(type, data, from) {
     return;
   }
   if (!p.hello || p.mismatch) return;
+  if (netEmergencyMessage(type,data,from,p))return;
   if (netCarMessage(type, data, from, p, now)) return;
   if (netGunMessage(type, data, from, p, now)) return;
   if (netCrimeMessage(type, data, from, p, now)) return;
@@ -57191,6 +57637,7 @@ function netFrame(t, fromTimer = false) {
   if (!fromTimer) net.frameT = now;
   if (!net.on) return;
   if ((paused || game || fromTimer) && netClockShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
+  netEmergencyFrame(dt);
   if ((net.sendT -= dt) <= 0) { net.sendT += 1 / NET_TICK_HZ; if (net.sendT < 0) net.sendT = 1 / NET_TICK_HZ; netSendTick(now); }
   if (netClockShared() && net.clockOwner) {
     if ((net.clockT -= dt) <= 0 || weather !== net.lastWeather) {
@@ -57281,7 +57728,7 @@ function netSendTick(now) {
   }
   if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
   if (skatingNow() && !car && !SK.bailAt) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
-  if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
+  if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev, siren:!!car.siren };
   net.lastSent = s;
   net.tx.send('tick', s);
 }
@@ -57324,7 +57771,7 @@ function netSyncCars(now) {
     if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
     Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
       brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev, cop: !!w.cop,
-      state: w.cop ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
+      state: w.cop||w.ev&&w.siren ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
   }
   for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
 }
@@ -58637,6 +59084,144 @@ function playerSkinColour(delta=0,fallback=13){
  if(!playerAppearance)return C(SKIN,fallback);
  const [base,level]=FIG_SKINS[playerAppearance.skin];return C(base,level+delta);
 }
+// One authority per incident. The creator owns its state; peers send bounded
+// treatment/water requests. Snapshots include resolved incidents for late packets
+// and late joins. On disconnect the elected remaining peer takes over the scene.
+let emergencyNetSerial=0,emergencyNetT=0,emergencyNetRev=0;
+const emergencyNetSeen=new Map(),emergencyWaterBuckets=new Map();
+function netEmergencyLeader(){return [net.selfId,...[...net.peers.values()].filter(p=>p.hello&&!p.mismatch).map(p=>p.id)].sort()[0];}
+function netEmergencyAuthority(){return !net.on||netEmergencyLeader()===net.selfId;}
+function netIncidentOwned(f){return !!f&&(!net.on||!f.owner||f.owner===net.selfId);}
+function netRegisterIncident(f){
+  if(!String(f.id).startsWith('emg:'))f.id=`emg:${netRandomId()}:${++emergencyNetSerial}`;
+  if(!f.owner)f.owner=net.on?net.selfId:'';
+  if(net.on&&f.assigned==='solo')f.assigned=net.selfId;
+  f.netDirty=true;emergencyNetT=0;
+}
+function emergencyWire(f){
+  const car=f.car,crew=cars.find(c=>c.fireIncident===f&&!c.mine&&!c.remote&&!c.home&&c.ev);
+  const wire={id:f.id,kind:f.kind,x:f.x,y:f.y,age:Math.min(600,T-f.born),out:!!f.out,failed:!!f.failed,assigned:f.assigned||null,rev:++emergencyNetRev};
+  if(f.kind==='medical'){
+    wire.stage=f.stage;wire.caseName=f.caseName;wire.col=f.look.col.top[0];
+    if(f.stage==='transport'){
+      const s=f.assigned===net.selfId?emergencyJob?.call===f?{x:emergencyJob.car.x,y:emergencyJob.car.y,rk:'out',veh:{kind:emergencyJob.car.kind}}:null:(net.peers.has(f.assigned)?netSample(net.peers.get(f.assigned),netNow()):null);
+      if(s?.rk==='out'&&s.veh?.kind==='amb'){wire.x=f.x=s.x;wire.y=f.y=s.y;}
+    }
+  }else{
+    wire.nodes=f.nodes.map(n=>({x:n.x,y:n.y,z:n.z,heat:n.heat,max:n.max}));
+    if(car)wire.car={x:car.x,y:car.y,hx:car.hx,hy:car.hy,body:car.body};
+    if(crew)wire.crew={x:crew.ex,y:crew.ey,hx:crew.hx,hy:crew.hy,state:crew.state,v:crew.v};
+  }
+  return wire;
+}
+function netSendEmergency(to){
+  if(!net.on)return;
+  const owned=emergencyIncidents().filter(netIncidentOwned).slice(-16);
+  for(const f of owned){if(!f.owner)f.owner=net.selfId;if(f.assigned==='solo')f.assigned=net.selfId;}
+  net.tx.send('emergency',{scenes:owned.map(emergencyWire)},to);
+}
+function netEmergencyFrame(dt){
+  if(!net.on)return;
+  if((emergencyNetT-=dt)<=0){emergencyNetT=.4;netSendEmergency();}
+  for(const [id,v]of emergencyNetSeen)if(netNow()-v.t>600)emergencyNetSeen.delete(id);
+}
+function netEmergencyAction(f,action,extra){
+  if(!net.on)return false;
+  if(netIncidentOwned(f)){if(applyEmergencyAction(f,action,net.selfId,extra))emergencyNetT=0;}
+  else net.tx.send('emergencyAct',{id:f.id,action,...extra},f.owner);
+  return true;
+}
+function netSendWater(data){if(net.on)net.tx.send('emergencyWater',data);}
+function netEmergencyPeerLeft(id){
+  const leader=netEmergencyLeader();
+  for(const f of emergencyIncidents()){
+    if(f.owner===id){if(f.crewCar){const k=cars.indexOf(f.crewCar);if(k>=0)cars.splice(k,1);f.crewCar=null;}f.owner=leader;f.remoteCrew=null;f.netDirty=true;}
+    if(f.assigned===id&&!f.out){
+      f.assigned=null;
+      if(f.kind==='medical'){
+        if(f.stage==='transport'){const [x,y]=curbOf({x:f.x,y:f.y,hx:1,hy:0});f.x=x;f.y=y;}
+        f.stage='waiting';
+      }
+    }
+    if(netIncidentOwned(f)&&fireActive(f)&&!cars.some(c=>c.ev&&c.fireIncident===f&&!c.mine))spawnEmergency('fire',[f.x,f.y],f);
+  }
+  emergencyNetT=0;emergencyWaterBuckets.delete(id);
+}
+function netEmergencyLeft(oldSelf){
+  for(const f of emergencyIncidents()){
+    if(f.crewCar){const k=cars.indexOf(f.crewCar);if(k>=0)cars.splice(k,1);f.crewCar=null;}
+    f.owner='';f.remoteCrew=null;
+    if(f.assigned===oldSelf)f.assigned='solo';
+    else if(f.assigned&&!f.out){f.assigned=null;if(f.kind==='medical')f.stage='waiting';}
+  }
+  emergencyNetSeen.clear();emergencyStreams.clear();
+}
+function validEmergencyWire(w){
+  const coord=v=>netNum(v)&&v>=0&&v<N;
+  if(!w||typeof w.id!=='string'||!/^emg:[A-Za-z0-9_-]{1,40}:\d{1,8}$/.test(w.id)||!['car','building','medical'].includes(w.kind)||!coord(w.x)||!coord(w.y)||!netNum(w.rev)||w.rev<0)return false;
+  if(w.assigned!=null&&(typeof w.assigned!=='string'||w.assigned.length>80))return false;
+  if(w.kind==='medical')return ['waiting','transport','done'].includes(w.stage)&&netNum(w.col)&&w.col>=0&&w.col<32;
+  return Array.isArray(w.nodes)&&w.nodes.length>0&&w.nodes.length<=6&&w.nodes.every(n=>coord(n.x)&&coord(n.y)&&netNum(n.z)&&n.z>=0&&n.z<5&&netNum(n.heat)&&n.heat>=0&&n.heat<=10&&netNum(n.max)&&n.max>0&&n.max<=10);
+}
+function acceptEmergencyWire(w,from){
+  if(!validEmergencyWire(w))return;
+  let f=emergencyIncidents().find(f=>f.id===w.id);
+  if(f&&f.owner!==from&&(net.peers.has(f.owner)||f.owner===net.selfId))return;
+  const seen=emergencyNetSeen.get(w.id);
+  if(seen?.owner===from&&w.rev<=seen.rev)return;
+  if(!f){
+    if(emergencyIncidents().length>=32)return;
+    f={id:w.id,kind:w.kind,born:T-clamp(w.age||0,0,600)};
+    (w.kind==='medical'?medicalCalls:cityFires).push(f);if(w.kind!=='medical'&&!w.out)panicAt(w.x,w.y);
+  }
+  emergencyNetSeen.set(w.id,{owner:from,rev:w.rev,t:netNow()});
+  Object.assign(f,{owner:from,x:w.x,y:w.y,assigned:w.assigned||null,out:!!w.out,failed:!!w.failed});
+  if(f.out)f.outAt??=T;
+  if(w.kind==='medical'){
+    f.stage=w.stage;f.caseName=netClean(w.caseName,70)||'Medical assistance';
+    f.look=figLook({top:'long',bot:'pants',col:{top:[w.col,10]}});
+  }else{
+    f.nodes=w.nodes.map(n=>({...n}));
+    const vehicle=v=>v&&['x','y','hx','hy'].every(k=>netNum(v[k]))&&v.x>=0&&v.x<N&&v.y>=0&&v.y<N&&Math.abs(v.hx)<=1&&Math.abs(v.hy)<=1;
+    f.remoteCrew=vehicle(w.crew)?{...w.crew,state:['out','scene','back'].includes(w.crew.state)?w.crew.state:'out'}:null;
+    if(f.remoteCrew){
+      const c=f.remoteCrew;if(!f.crewCar)f.crewCar=addCar({kind:'fire',body:RED,x:c.x,y:c.y,hx:c.hx,hy:c.hy,remote:true,ev:true,incidentCrew:true,fireIncident:f});
+      Object.assign(f.crewCar,{x:c.x,y:c.y,ex:c.x,ey:c.y,hx:c.hx,hy:c.hy,v:clamp(c.v||0,0,5),state:c.state,parked:c.state==='scene'});
+    }else if(f.crewCar){const k=cars.indexOf(f.crewCar);if(k>=0)cars.splice(k,1);f.crewCar=null;}
+    if(w.kind==='car'&&vehicle(w.car)){
+      if(!f.car){f.car=addCar({kind:'car',body:GRAY,x:w.car.x,y:w.car.y,hx:w.car.hx,hy:w.car.hy});f.car.remote=true;f.car.incidentGhost=true;}
+      Object.assign(f.car,{x:w.car.x,y:w.car.y,ex:w.car.x,ey:w.car.y,hx:w.car.hx,hy:w.car.hy,parked:true,v:0,fireT:f.out?null:0,dmg:f.out?DMG_BAD:DMG_FIRE,fireIncident:f.out?null:f});
+    }
+  }
+}
+function netEmergencyMessage(type,data,from,p){
+  if(type==='emergency'){
+    if(!data||!Array.isArray(data.scenes)||data.scenes.length>16)return true;
+    for(const w of data.scenes)acceptEmergencyWire(w,from);return true;
+  }
+  if(type!=='emergencyAct'&&type!=='emergencyWater')return false;
+  if(!data||typeof data!=='object')return true;
+  if(type==='emergencyAct'&&data.action==='release'){const f=emergencyIncidents().find(f=>f.id===data.id);if(f&&netIncidentOwned(f)){applyEmergencyAction(f,'release',from);emergencyNetT=0;}return true;}
+  const s=netSample(p,netNow());
+  if(!s||s.rk!=='out'||s.away)return true;
+  if(type==='emergencyWater'){
+    if(!['x','y','z','yaw','slope'].every(k=>netNum(data[k]))||near(s.x,s.y,data.x,data.y)>.6||s.veh||Math.abs(data.slope)>3||data.z<-.1||data.z>5)return true;
+    const now=netNow(),last=emergencyWaterBuckets.get(from)||-1;
+    if(now-last<.08)return true;emergencyWaterBuckets.set(from,now);
+    const hit=hoseHit(data.x,data.y,data.z,data.yaw,data.slope);
+    const end=hit?[hit.node.x,hit.node.y,hit.node.z]:Array.isArray(data.end)&&data.end.length===3&&data.end.every(netNum)&&near(data.x,data.y,data.end[0],data.end[1])<2.7?data.end:null;
+    if(end)rememberWater(from,[data.x+Math.cos(data.yaw)*.08-Math.sin(data.yaw)*.026,data.y+Math.sin(data.yaw)*.08+Math.cos(data.yaw)*.026,data.z-.022],end);
+    if(hit&&netIncidentOwned(hit.fire))coolFireNode(hit.fire,hit.node,.15);
+    return true;
+  }
+  const f=emergencyIncidents().find(f=>f.id===data.id);if(!f||!netIncidentOwned(f))return true;
+  const atCall=near(s.x,s.y,f.x,f.y)<1.8;
+  if(data.action==='claim'&&near(s.x,s.y,f.x,f.y)<60)applyEmergencyAction(f,'claim',from);
+  if(data.action==='release')applyEmergencyAction(f,'release',from,{x:s.x,y:s.y});
+  if(data.action==='load'&&atCall&&!s.veh)applyEmergencyAction(f,'load',from);
+  if(data.action==='deliver'&&s.veh?.kind==='amb'&&SERVICES.some(b=>b.kind==='amb'&&near(s.x,s.y,b.door[0],b.lane)<1.6)&&Math.abs(s.veh.v||0)<STOP_V)applyEmergencyAction(f,'deliver',from);
+  emergencyNetT=0;return true;
+}
 // Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
   if(typeof CONTROLLER!=='undefined'&&CONTROLLER.dispatching)return;
@@ -58713,6 +59298,7 @@ onkeydown = e => {
   if (e.code === 'KeyH' && !toggleEvSiren()) hail(); // (at the wheel of an emergency vehicle: its lights and siren)
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
+  if (e.code === 'KeyJ' && mode === 'walk' && enterShiftVehicle()) return;
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && stadiumTVOk()) stadiumTV = !stadiumTV; // (at the football: the TV view, stadium.js)
   else if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
@@ -59019,6 +59605,7 @@ function loop(t) {
   if(!skateStepped){stepBody(dt);stepRoof();}stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   if ((leagueTickT -= dt) <= 0) { leagueTickT = 2; updateLeague(); } // (results from the matches played: league.js)
+  stepCityFires(dt);stepEmergencyWater(dt);stepEmergencyJob(dt);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
   fighterNews(stepFighters(mode === 'air' && !wreckCam ? pilot : null, dt)); // (the interceptors after a stolen aircraft: fighters.js, flight.js)
@@ -59268,6 +59855,7 @@ const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
 // The same held-item verbs apply while walking or riding as a passenger.
 function touchHeldActions(out) {
+  if(emergencyHoseReady()){out.push(['Spray hose','KeyQ','pop']);return;}
   const it = heldItem();
   if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (it.id === 'spraypaint') out.push(['Colour', 'KeyR', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
   else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
@@ -59318,7 +59906,7 @@ function touchActions() {
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if(mode==='room'&&homeRecord(room)&&!room.guestHome)out.push(['Furnish','KeyF','pop']);
-    if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
+    if (/\bJ: /.test(p)) out.push([emergencyJob?.kind==='fire'?'Drive engine':'Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);

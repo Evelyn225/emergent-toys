@@ -253,6 +253,7 @@ function citySprites() {
   forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
   bridgeSprites();
   elSprites();
+  emergencySprites();
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
@@ -890,11 +891,6 @@ function drawCrane(k, vx, vy, th) {
 }
 
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
-// Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
-const VEHICLES = {
-  car: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02], taxi: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02],
-  police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
-};
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
 // the ambulance: a tall white box module behind a low cab. Red stripe and a star of life down the sides, a red cross on
 // the roof, rear doors with chevrons and little windows, the light bar along the top front edge of the box

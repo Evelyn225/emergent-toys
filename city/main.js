@@ -74,6 +74,7 @@ onkeydown = e => {
   if (e.code === 'KeyH' && !toggleEvSiren()) hail(); // (at the wheel of an emergency vehicle: its lights and siren)
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
+  if (e.code === 'KeyJ' && mode === 'walk' && enterShiftVehicle()) return;
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && stadiumTVOk()) stadiumTV = !stadiumTV; // (at the football: the TV view, stadium.js)
   else if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
@@ -380,6 +381,7 @@ function loop(t) {
   if(!skateStepped){stepBody(dt);stepRoof();}stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   if ((leagueTickT -= dt) <= 0) { leagueTickT = 2; updateLeague(); } // (results from the matches played: league.js)
+  stepCityFires(dt);stepEmergencyWater(dt);stepEmergencyJob(dt);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
   fighterNews(stepFighters(mode === 'air' && !wreckCam ? pilot : null, dt)); // (the interceptors after a stolen aircraft: fighters.js, flight.js)

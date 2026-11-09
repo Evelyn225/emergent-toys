@@ -1,3 +1,10 @@
+// Shared by vehicle drawing, collision and emergency fire positions.
+// Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
+const VEHICLES = {
+  car: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02], taxi: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02],
+  police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
+};
+
 // ---- traffic lights, at intersections where three or four streets meet (corners and the bridges just flow).
 // 16s cycle: vertical green 0-6, yellow 6-7, all red 7-8, horizontal green 8-14, yellow, all red.
 // Intersections are addressed by their base cell (x, y multiples of 8).
@@ -363,7 +370,7 @@ const BASE_R = 50; // a station further away than this (500m) doesn't send the c
 let evTimer = 45;
 const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
   .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
-function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null) {
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null, fireIncident = null) {
   let scene = at; // somewhere on a street a few blocks from you, so you'll see it go by or pull up (or where it's needed)
   for (let tries = 0; tries < 200 && !scene; tries++) {
     const p = randomLane(12, px, py);
@@ -372,7 +379,8 @@ function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null
     if (d > 3 && d < 10) scene = [p.x, p.y];
   }
   if (!scene) return null;
-  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T };
+  if(kind==='fire'&&typeof createCityFire==='function'){fireIncident=fireIncident||createCityFire(scene);if(!fireIncident)return null;scene=[fireIncident.x,fireIncident.y];}
+  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T, fireIncident };
   if (base && bd < BASE_R) { // out of the station, westbound from the kerb
     base.out = true;
     return addCar({ ...props, x: base.x, y: base.lane, hx: -1, hy: 0, base });
@@ -398,15 +406,15 @@ function endCall(c) { // parked at its station again (or just gone, if it came f
 }
 function stepEmergency(dt) {
   for (const c of cars.slice()) {
-    if (!c.ev || c.mine || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit; a stolen one is yours
+    if (!c.ev || c.remote || c.mine || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit; a stolen one is yours
     if (c.home) { endCall(c); continue; }
     const far = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
+    if (c.state === 'scene' && T > c.until && !fireActive(c.fireIncident)) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
     // out of the neighbourhood that's simulated, it can't get anywhere (the traffic there is frozen): it's home
     if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
     else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev && !c.mine).length < 3 && (evTimer -= dt) < 0) {
+  if ((typeof netEmergencyAuthority!=='function'||netEmergencyAuthority()) && !cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev && !c.mine).length < 3 && (evTimer -= dt) < 0) {
     spawnEmergency(); evTimer = 60 + Math.random() * 90;
   }
 }
@@ -428,6 +436,7 @@ function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
   for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
     const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if(c.emergencyShift||c.incidentGhost||c.incidentCrew||fireActive(c.fireIncident))continue;
     if (c.ev && c.mine && !c.player && c.parked && d > 45) { returnStolenEv(c, k); continue; } // (a stolen ambulance, fire engine or police car: home to its station)
     if (c.owned || playerCar(c) || !c.parked) continue; // (another player's car is theirs to keep or lose: net.js)
     if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
