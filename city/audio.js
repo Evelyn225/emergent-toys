@@ -164,10 +164,10 @@ function tone(at, freq, len, gain, type = 'sine', pan = 0) {
 }
 // footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
 // [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
-const STEP = { stone: ['lowpass', 1000, 0.7, 0.07, 0.6, 72], grass: ['lowpass', 550, 0.5, 0.1, 0.45, 0], wood: ['bandpass', 420, 1.4, 0.09, 0.6, 115],
+const STEP = { ice: ['bandpass', 1500, .6, .1, .35, 100], stone: ['lowpass', 1000, 0.7, 0.07, 0.6, 72], grass: ['lowpass', 550, 0.5, 0.1, 0.45, 0], wood: ['bandpass', 420, 1.4, 0.09, 0.6, 115],
                metal: ['bandpass', 1300, 2.5, 0.12, 0.4, 90], gravel: ['bandpass', 1500, 0.6, 0.09, 0.5, 0], sand: ['lowpass', 650, 0.5, 0.1, 0.35, 0],
                tile: ['bandpass', 1300, 1, 0.05, 0.5, 95], carpet: ['lowpass', 380, 0.5, 0.06, 0.35, 0] };
-let stepSide = 1;
+let stepSide = 1, iceBladeAudioT = -9;
 function sfxStep(surface, run) {
   const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime + Math.random() * 0.01;
   const g = lvl * (run ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
@@ -417,6 +417,7 @@ function audioTick(dt) {
   for (const k in beds) { tickBed(beds[k], mix[k] * LEVEL[k], dt); beds[k].pan.pan.setTargetAtTime(musicPan[k] || 0, now, 0.1); }
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   const boardSurface = SKB.surf?.material || 'asphalt';
+  if(oceanFrozen())mix.waves=0;
   mix.board *= ({concrete:.8,grass:.6,wood:.9,stone:1.15})[boardSurface] || 1;
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
@@ -449,9 +450,18 @@ function audioTick(dt) {
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
   const footPos=mode==='ferry'?[ferryRide.u,ferryRide.v,mode]:[px,py,mode];
-  if (onFoot && lastPos && lastPos[2] === mode) {
+  if(body.z>0||body.vz>0)stepAcc=0;
+  if (onFoot && lastPos && lastPos[2] === mode && !body.z && !body.vz) {
     const moved = Math.hypot(rel(footPos[0] - lastPos[0]), rel(footPos[1] - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
-    if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
+    const blades=iceSkatesOn()&&oceanIceAt(px,py)&&body.z===0&&body.vz===0;
+    if(blades) {
+      stepAcc=0;
+      if(moved>.0005&&T-iceBladeAudioT>.14) {
+        iceBladeAudioT=T;stepSide=-stepSide;
+        const speed=clamp(Math.hypot(body.mx||0,body.my||0)/2.8,0,1),brake=!!K.KeyC;
+        burst(now,.22,[filt('bandpass',brake?2300:1300,.6),filt('lowpass',4000)],(.006+speed*.022)*(brake?1.5:1),stepSide*.1);
+      }
+    } else if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
     if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
   }
   lastPos = footPos;

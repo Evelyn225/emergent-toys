@@ -46,6 +46,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
 }
 
 function terrainCell(i, x, y, depth, sx, sy, light) {
+  if(oceanIceAt(x,y)){iceOceanCell(i,x,y,depth,Math.max(0,1-depth/vis*1.5));return;}
   const island = onIsland(x, y), coast = coastalGround(worldCoord(x), worldCoord(y));
   let surface = islandSurface(x,y);
   if(!surface&&worldReady&&naturalCoastAt(x,y))surface=islandShoreSurface(x,y,coast.depth,coast.beach);

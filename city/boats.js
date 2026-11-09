@@ -42,6 +42,7 @@ function nearBoat() {
 const nearOffice = () => mode === 'walk' && Math.abs(rel(px - MARINA.office.x)) < 0.8 && Math.abs(rel(py - MARINA.office.y)) < 0.6;
 const boatTitle = b => `the ${BOAT_KINDS[b.kind].name} '${b.name}'`;
 function marinaPrompt() {
+  if(oceanFrozen() && (mode==='sea'||nearBoat()||nearOffice()))return mode==='sea'?'FROZEN OCEAN · E: step off onto the ice':'MARINA: frozen in for winter. Ice skate shops beside the jetty.';
   if (mode === 'sea') {
     const k = BOAT_KINDS[sea.kind];
     if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
@@ -61,6 +62,7 @@ function useMarina() { // true if E did something
   if (mode === 'sea') { leaveBoat(); return true; }
   const b = nearBoat();
   if (!b) return false;
+  if(oceanFrozen()){say('The ocean is frozen. Boats stay tied up until spring.',3);return true;}
   const k = BOAT_KINDS[b.kind];
   if (b.deal === 'rent' && b.hired) { boardBoat(b); say(`You cast off. Return the '${b.name}' to the marina when you're finished.`, 3); return true; }
   if (b.deal === 'mine' || b.deal === 'stolen') { boardBoat(b); say(b.deal === 'mine' ? `You cast off the '${b.name}'.` : 'Back at the helm of your ill-gotten boat.', 3); return true; }
@@ -81,6 +83,7 @@ function useMarina() { // true if E did something
 function stealBoat() { // L beside a boat that isn't yours: true if it did
   const b = nearBoat();
   if (!b || b.deal === 'mine' || b.deal === 'stolen' || b.hired) return false;
+  if(oceanFrozen()){say('Frozen in. You cannot drive a boat on the ice.',3);return true;}
   b.deal = 'stolen'; b.hired = false;
   const seen = crime('boattheft', b.x, b.y);
   boardBoat(b);
@@ -88,21 +91,23 @@ function stealBoat() { // L beside a boat that isn't yours: true if it did
   return true;
 }
 function boardBoat(b) {
+  if(oceanFrozen())return false;
   sea = b; b.v = 0; mode = 'sea'; px = b.x; py = b.y; a = Math.atan2(b.hy, b.hx); camYaw = a; pitch = 0;
 }
 // somewhere to step off: a jetty, the promenade, a beach, right beside the hull
-const dryLand = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && outdoorGroundHeight(x, y) <= .12 && !solidAt(x, y, 0.06);
+const dryLand = (x, y, allowIce = false) => !map[idx(Math.floor(x), Math.floor(y))] && (!isWater(x, y) || allowIce && oceanIceAt(x,y)) && outdoorGroundHeight(x, y) <= .12 && !solidAt(x, y, 0.06);
 function landingSpot(b) {
   const k = BOAT_KINDS[b.kind];
   for (const off of [0.2, 0.4]) for (const [u, v] of [[0, k.hw + off], [0, -k.hw - off], [k.hl * 0.5, k.hw + off], [k.hl * 0.5, -k.hw - off],
     [-k.hl * 0.5, k.hw + off], [-k.hl * 0.5, -k.hw - off], [k.hl + off, 0], [-k.hl - off, 0]]) {
     const x = b.x + b.hx * u - b.hy * v, y = b.y + b.hy * u + b.hx * v;
-    if (dryLand(x, y)) return [worldCoord(x), worldCoord(y)];
+    if (dryLand(x, y, true) && !winterShopBlocked(x,y,.06)) return [worldCoord(x), worldCoord(y)];
   }
   return null;
 }
 function leaveBoat() {
   const b = sea;
+  if(oceanFrozen())b.v=0;
   if (Math.abs(b.v) > 0.25) return say('Slow down first.', 2);
   const at = landingSpot(b);
   if (!at) return say('Nowhere to step off. Pull up alongside a jetty or the sea wall.', 3);
@@ -116,18 +121,19 @@ function leaveBoat() {
   } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
 }
 // out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
-const navigable = (x, y) => seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y) || !!airportBridgeAt(x,y)) && !roadBridgePierAt(x,y);
+const navigable = (x, y, allowIce = false) => (allowIce || !oceanFrozen()) && seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y) || !!airportBridgeAt(x,y)) && !roadBridgePierAt(x,y);
 function hullPoints(b, x, y, hx, hy) {
   const k = BOAT_KINDS[b.kind];
   return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
 }
-const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !ferryHullAt(qx,qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
+const waterClear = (b, x, y, hx, hy, allowIce = false) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy, allowIce) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !ferryHullAt(qx,qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
 function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
   const pts = hullPoints(b, x, y, hx, hy);
   return !boats.some(o => { const p = boatAt(o, t), r = BOAT_HL[o.kind] * 0.85; return Math.abs(rel(p.x - x)) < 3 && pts.some(([qx, qy]) => Math.hypot(rel(p.x - qx), rel(p.y - qy)) < r); });
 }
 function stepSea(dt) { // throttle and helm; the shore and everything else in the water stops you
   const b = sea, k = BOAT_KINDS[b.kind];
+  if(oceanFrozen()){b.v=0;px=b.x;py=b.y;return;}
   const f = controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
   const cruise = K.ShiftLeft || K.ShiftRight, limit = cruise ? k.cruise : k.top;
   if (f > 0) {
@@ -170,7 +176,7 @@ function loadBoats(list) {
     if (s.deal === 'rent') {
       if (s.hired !== true || !Number.isInteger(s.slot) || restoredRentals.has(s.slot)) continue;
       const rental = fleet.find(b => b.slot === s.slot && b.deal === 'rent' && b.kind === s.kind);
-      if (!rental || !waterClear(rental, position.x, position.y, position.hx, position.hy)) continue;
+      if (!rental || !waterClear(rental, position.x, position.y, position.hx, position.hy, true)) continue;
       Object.assign(rental, position, { hired: true });
       restoredRentals.add(s.slot);
       continue;

@@ -604,6 +604,7 @@ function floorCell(i, r, x, rx, ry) {
   else if (road === 2) wear = snowRoadWear(ly);
   else if (road === 3) wear = Math.max(snowRoadWear(lx), snowRoadWear(ly));
   paintSettledSnow(i, wx, wy, Math.max(0, 1 - d / vis * 1.5) * 6 * (0.6 + amb), 1, wear);
+  if(iceTracks.length&&oceanIceAt(wx,wy))paintSnowIceTracks(i,wx,wy,d);
 }
 
 // how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
@@ -656,6 +657,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   const road = bridge ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
+  if(oceanFrozen()&&seaAt(wx,wy)&&(!onPier(wx,wy)||bridge)){iceOceanCell(i,wx,wy,d,f);return false;}
   if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return true;}
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...

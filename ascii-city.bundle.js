@@ -7673,6 +7673,7 @@ function surfaceAt(mode, room, x, y) {
     return f === 'carpet' ? 'carpet' : ['wood','home','hotel','cove','islandwood','fernwood'].includes(f) ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
   }
   if (mode === 'elplat' || mode === 'roof') return mode === 'roof' ? 'gravel' : 'metal';
+  if(oceanIceAt(x,y))return 'ice';
   if (onPier(x, y)) return 'wood';
   const k = ROAD[idx(Math.floor(x), Math.floor(y))], bx = Math.floor(x / 8), by = Math.floor(y / 8);
   if (k === 1 && onBridge(bx, by)) return 'metal';
@@ -7797,6 +7798,7 @@ const ITEMS = {
   cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 }, pipe: { name: 'pipe', price: 18, kind: 'smoke', uses: 4 },
   vape: { name: 'mango vape', price: 25, kind: 'gear' },
   // gear
+  iceskates: { name: 'ice skates', price: 75, kind: 'gear' },
   skateboard: { name: 'skateboard', price: 60, kind: 'gear' }, ball: { name: 'soccer ball', price: 20, kind: 'gear' },
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
@@ -7935,7 +7937,7 @@ function cycleQuickSlot(direction) {
   const choices = [-1, ...quickSlots.filter(k => k >= 0 && inv[k])], at = choices.indexOf(held);
   held = choices[mod((at < 0 ? 0 : at) + direction, choices.length)];
 }
-const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
+const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, iceSkating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
 let heldUse = null; // a short visual gesture, tied to this inventory item rather than its slot
 function animateHeldUse(it) {
   const d = ITEMS[it.id];
@@ -8121,9 +8123,14 @@ function useHeld(near) {
     case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];
+    case 'iceskates':
+      if (mode !== 'walk' || near.indoors) return ['Put your skates on outside, beside the ice.', null];
+      fx.iceSkating = !fx.iceSkating;
+      if (fx.iceSkating) { fx.skating = false; if(typeof skateDismount==='function')skateDismount(); }
+      return [fx.iceSkating ? 'You lace up your ice skates. On ice: WASD to push and carve, Shift to sprint, C to brake. You can walk on land.' : 'You unlace your skates and put your shoes back on.', 'click'];
     case 'skateboard':
       if (near.indoors || mode !== 'walk' && mode !== 'roof') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
-      if(typeof skateDismount==='function')skateDismount(); fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
+      fx.iceSkating = false; if(typeof skateDismount==='function')skateDismount(); fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
       if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));
@@ -11297,6 +11304,7 @@ function nearBoat() {
 const nearOffice = () => mode === 'walk' && Math.abs(rel(px - MARINA.office.x)) < 0.8 && Math.abs(rel(py - MARINA.office.y)) < 0.6;
 const boatTitle = b => `the ${BOAT_KINDS[b.kind].name} '${b.name}'`;
 function marinaPrompt() {
+  if(oceanFrozen() && (mode==='sea'||nearBoat()||nearOffice()))return mode==='sea'?'FROZEN OCEAN · E: step off onto the ice':'MARINA: frozen in for winter. Ice skate shops beside the jetty.';
   if (mode === 'sea') {
     const k = BOAT_KINDS[sea.kind];
     if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
@@ -11316,6 +11324,7 @@ function useMarina() { // true if E did something
   if (mode === 'sea') { leaveBoat(); return true; }
   const b = nearBoat();
   if (!b) return false;
+  if(oceanFrozen()){say('The ocean is frozen. Boats stay tied up until spring.',3);return true;}
   const k = BOAT_KINDS[b.kind];
   if (b.deal === 'rent' && b.hired) { boardBoat(b); say(`You cast off. Return the '${b.name}' to the marina when you're finished.`, 3); return true; }
   if (b.deal === 'mine' || b.deal === 'stolen') { boardBoat(b); say(b.deal === 'mine' ? `You cast off the '${b.name}'.` : 'Back at the helm of your ill-gotten boat.', 3); return true; }
@@ -11336,6 +11345,7 @@ function useMarina() { // true if E did something
 function stealBoat() { // L beside a boat that isn't yours: true if it did
   const b = nearBoat();
   if (!b || b.deal === 'mine' || b.deal === 'stolen' || b.hired) return false;
+  if(oceanFrozen()){say('Frozen in. You cannot drive a boat on the ice.',3);return true;}
   b.deal = 'stolen'; b.hired = false;
   const seen = crime('boattheft', b.x, b.y);
   boardBoat(b);
@@ -11343,21 +11353,23 @@ function stealBoat() { // L beside a boat that isn't yours: true if it did
   return true;
 }
 function boardBoat(b) {
+  if(oceanFrozen())return false;
   sea = b; b.v = 0; mode = 'sea'; px = b.x; py = b.y; a = Math.atan2(b.hy, b.hx); camYaw = a; pitch = 0;
 }
 // somewhere to step off: a jetty, the promenade, a beach, right beside the hull
-const dryLand = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && outdoorGroundHeight(x, y) <= .12 && !solidAt(x, y, 0.06);
+const dryLand = (x, y, allowIce = false) => !map[idx(Math.floor(x), Math.floor(y))] && (!isWater(x, y) || allowIce && oceanIceAt(x,y)) && outdoorGroundHeight(x, y) <= .12 && !solidAt(x, y, 0.06);
 function landingSpot(b) {
   const k = BOAT_KINDS[b.kind];
   for (const off of [0.2, 0.4]) for (const [u, v] of [[0, k.hw + off], [0, -k.hw - off], [k.hl * 0.5, k.hw + off], [k.hl * 0.5, -k.hw - off],
     [-k.hl * 0.5, k.hw + off], [-k.hl * 0.5, -k.hw - off], [k.hl + off, 0], [-k.hl - off, 0]]) {
     const x = b.x + b.hx * u - b.hy * v, y = b.y + b.hy * u + b.hx * v;
-    if (dryLand(x, y)) return [worldCoord(x), worldCoord(y)];
+    if (dryLand(x, y, true) && !winterShopBlocked(x,y,.06)) return [worldCoord(x), worldCoord(y)];
   }
   return null;
 }
 function leaveBoat() {
   const b = sea;
+  if(oceanFrozen())b.v=0;
   if (Math.abs(b.v) > 0.25) return say('Slow down first.', 2);
   const at = landingSpot(b);
   if (!at) return say('Nowhere to step off. Pull up alongside a jetty or the sea wall.', 3);
@@ -11371,18 +11383,19 @@ function leaveBoat() {
   } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
 }
 // out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
-const navigable = (x, y) => seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y) || !!airportBridgeAt(x,y)) && !roadBridgePierAt(x,y);
+const navigable = (x, y, allowIce = false) => (allowIce || !oceanFrozen()) && seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y) || !!airportBridgeAt(x,y)) && !roadBridgePierAt(x,y);
 function hullPoints(b, x, y, hx, hy) {
   const k = BOAT_KINDS[b.kind];
   return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
 }
-const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !ferryHullAt(qx,qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
+const waterClear = (b, x, y, hx, hy, allowIce = false) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy, allowIce) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !ferryHullAt(qx,qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
 function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
   const pts = hullPoints(b, x, y, hx, hy);
   return !boats.some(o => { const p = boatAt(o, t), r = BOAT_HL[o.kind] * 0.85; return Math.abs(rel(p.x - x)) < 3 && pts.some(([qx, qy]) => Math.hypot(rel(p.x - qx), rel(p.y - qy)) < r); });
 }
 function stepSea(dt) { // throttle and helm; the shore and everything else in the water stops you
   const b = sea, k = BOAT_KINDS[b.kind];
+  if(oceanFrozen()){b.v=0;px=b.x;py=b.y;return;}
   const f = controllerAxis((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0),'throttle'), s = controllerAxis((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0),'steer');
   const cruise = K.ShiftLeft || K.ShiftRight, limit = cruise ? k.cruise : k.top;
   if (f > 0) {
@@ -11425,7 +11438,7 @@ function loadBoats(list) {
     if (s.deal === 'rent') {
       if (s.hired !== true || !Number.isInteger(s.slot) || restoredRentals.has(s.slot)) continue;
       const rental = fleet.find(b => b.slot === s.slot && b.deal === 'rent' && b.kind === s.kind);
-      if (!rental || !waterClear(rental, position.x, position.y, position.hx, position.hy)) continue;
+      if (!rental || !waterClear(rental, position.x, position.y, position.hx, position.hy, true)) continue;
       Object.assign(rental, position, { hired: true });
       restoredRentals.add(s.slot);
       continue;
@@ -11437,6 +11450,131 @@ function loadBoats(list) {
     if (sold >= 0) fleet.splice(sold, 1);
     fleet.push({ id, kind: s.kind, deal: 'mine', ...position, col: s.col ?? WHITE, name: s.name || 'Boaty', slot: -1 });
   }
+}
+// The ocean changes surface, not geography: piers, bridges and inland lakes keep
+// their normal collision. Snowy weather in another season does not freeze it.
+const oceanFrozen = () => season() === 'winter';
+const oceanIceAt = (x,y) => oceanFrozen() && seaAt(x,y) && isWater(x,y);
+const iceSkatesOn = () => mode === 'walk' && fx.iceSkating && inv.some(it=>it.id==='iceskates');
+let iceShore = null;
+const ICE_TRACK_LIFE=16,ICE_TRACK_LIMIT=160,iceTracks=[],iceTrackCells=new Map();
+let iceTraceFrom=null;
+const iceTrackKey=(x,y)=>(Math.floor(x*2)+16384)*32768+Math.floor(y*2)+16384;
+function trimIceTracks() {
+  while(iceTracks.length&&(!oceanFrozen()||iceTracks.length>ICE_TRACK_LIMIT||T-iceTracks[0].t>ICE_TRACK_LIFE)) {
+    const old=iceTracks.shift();
+    for(const key of old.cells) {
+      const list=iceTrackCells.get(key),at=list.indexOf(old);list.splice(at,1);
+      if(!list.length)iceTrackCells.delete(key);
+    }
+  }
+}
+function traceIceBlades(x,y) {
+  if(!iceSkatesOn()||body.z>0||body.vz>0||!oceanIceAt(px,py)){iceTraceFrom=null;return;}
+  if(!iceTraceFrom||Math.hypot(rel(x-iceTraceFrom.lastX),rel(y-iceTraceFrom.lastY))>.05)
+    iceTraceFrom={x,y,lastX:x,lastY:y};
+  iceTraceFrom.lastX=px;iceTraceFrom.lastY=py;
+  x=iceTraceFrom.x;y=iceTraceFrom.y;
+  const ex=rel(px-x),ey=rel(py-y),d=Math.hypot(ex,ey);
+  if(d<.04)return; // resting blades and high frame rates do not fill the trail budget
+  iceTraceFrom.x=px;iceTraceFrom.y=py;
+  const nx=-ey/d,ny=ex/d;
+  for(const side of [-1,1]) {
+    const offset=side*.012,track={x:x+nx*offset,y:y+ny*offset,ex,ey,d2:d*d,t:T,brake:!!K.KeyC,cells:[]};
+    for(let gx=Math.floor((Math.min(track.x,track.x+ex)-.012)*2);gx<=Math.floor((Math.max(track.x,track.x+ex)+.012)*2);gx++)
+      for(let gy=Math.floor((Math.min(track.y,track.y+ey)-.012)*2);gy<=Math.floor((Math.max(track.y,track.y+ey)+.012)*2);gy++) {
+        const key=(gx+16384)*32768+gy+16384;
+        if(!iceTrackCells.has(key))iceTrackCells.set(key,[]);
+        iceTrackCells.get(key).push(track);track.cells.push(key);
+      }
+    iceTracks.push(track);
+  }
+  trimIceTracks();
+}
+function iceBladeMark(x,y,foot) {
+  const list=iceTrackCells.get(iceTrackKey(x,y));if(!list)return 0;
+  let mark=0;
+  for(const p of list) {
+    const u=clamp(((x-p.x)*p.ex+(y-p.y)*p.ey)/p.d2,0,1),d=Math.hypot(x-p.x-p.ex*u,y-p.y-p.ey*u);
+    const width=p.brake?.008:.0025;
+    mark=Math.max(mark,clamp((width-d)/Math.max(.002,foot)+.5,0,1)*(1-(T-p.t)/ICE_TRACK_LIFE));
+  }
+  return mark;
+}
+
+function winterSkateShops() {
+  if(!oceanFrozen())return [];
+  return [
+    {x:MARINA.x+1,y:MARINA.fingers[0]-1.2,name:'JETTY ICE SKATES'},
+    {x:MARINA.x-1,y:MARINA.fingers[1]+1.2,name:'FROST & GLIDE'}
+  ];
+}
+const nearWinterSkateShop = () => mode==='walk' ? winterSkateShops().find(s=>Math.hypot(rel(px-s.x),rel(py-s.y))<.65) : null;
+const winterShopBlocked = (x,y,pad=.03) => winterSkateShops().some(s=>Math.abs(rel(x-s.x))<.3+pad&&Math.abs(rel(y-s.y))<.16+pad);
+function winterIcePrompt() {
+  const shop=nearWinterSkateShop();
+  const lace=mode==='walk'&&heldItem()?.id==='iceskates'&&!iceSkatesOn();
+  if(shop)return `E: ${shop.name.toLowerCase()} · ice skates ${fmt$(ITEMS.iceskates.price)}${lace?' | Q: lace up':''}`;
+  if(lace)return 'Q: lace up your ice skates · glide, carve and brake on winter ice';
+  if(mode!=='walk'||!oceanIceAt(px,py))return '';
+  return iceSkatesOn()?'ICE SKATING · WASD: push / carve | Shift: sprint | C: brake | Space: jump':'SLIPPERY ICE · walk carefully · winter skate shops beside the marina jetty';
+}
+// Acceleration follows the camera, but velocity takes time to turn. Releasing
+// input coasts; opposite input scrubs speed before pushing in the new direction.
+function stepIceMotion(f,s,run,dt) {
+  if(dt<=0)return;
+  const skates=iceSkatesOn(),brake=!!K.KeyC,cx=Math.cos(a),cy=Math.sin(a);
+  const wx=cx*f-cy*s,wy=cy*f+cx*s,input=Math.hypot(f,s);
+  let vx=body.mx||0,vy=body.my||0;
+  const drag=brake?(skates?5.5:2.8):(skates?.16:.7),decay=Math.exp(-drag*dt);
+  vx*=decay;vy*=decay;
+  if(input&&!brake) {
+    const acc=skates?(run?1.65:1.15):.65;
+    vx+=wx*acc*dt;vy+=wy*acc*dt;
+    if(skates) {
+      // Blades carve a broad arc while retaining speed through a gentle turn.
+      const speed=Math.hypot(vx,vy),yaw=Math.atan2(vy,vx),wish=Math.atan2(wy,wx);
+      const turn=clamp(mod(wish-yaw+Math.PI,TAU)-Math.PI,-1.6*dt,1.6*dt);
+      vx=Math.cos(yaw+turn)*speed;vy=Math.sin(yaw+turn)*speed;
+    }
+  }
+  const speed=Math.hypot(vx,vy),cap=skates?(run?2.8:1.9):(run?.8:.5);
+  if(speed>cap){const limit=Math.max(cap,speed-2*dt);vx*=limit/speed;vy*=limit/speed;}
+  body.mx=vx;body.my=vy;body.hop=1;
+}
+function moveOnIce(dt) {
+  // Small swept steps keep a fast glide from skipping a thin jetty or seawall.
+  const startX=px,startY=py,n=Math.max(1,Math.ceil(Math.hypot(body.mx||0,body.my||0)*dt/.025));
+  for(let k=0;k<n;k++) {
+    const x=px,y=py,dx=body.mx*dt/n,dy=body.my*dt/n;
+    move(dx,dy);
+    if(Math.abs(rel(px-x))<Math.abs(dx)*.1)body.mx=0;
+    if(Math.abs(rel(py-y))<Math.abs(dy)*.1)body.my=0;
+  }
+  traceIceBlades(startX,startY);
+}
+function stepWinterOcean() {
+  trimIceTracks();
+  if(!oceanFrozen()||mode!=='walk'||body.z>0||!iceSkatesOn())iceTraceFrom=null;
+  if(fx.iceSkating&&!inv.some(it=>it.id==='iceskates'))fx.iceSkating=false;
+  if(mode!=='walk')return;
+  if(!isWater(px,py)) {
+    if(dryLand(px,py))iceShore=[px,py];
+    return;
+  }
+  if(oceanFrozen()||!seaAt(px,py))return;
+  // Thawing, including a loaded save or an orrery turn, must never leave a
+  // pedestrian stranded on liquid water. Prefer the shore they stepped off.
+  let shore=iceShore&&dryLand(...iceShore)?iceShore:null;
+  for(let radius=.5;!shore&&radius<=32;radius+=.5) {
+    const n=Math.ceil(TAU*radius/.5);
+    for(let k=0;k<n;k++) {
+      const x=worldCoord(px+Math.cos(k*TAU/n)*radius),y=worldCoord(py+Math.sin(k*TAU/n)*radius);
+      if(dryLand(x,y)){shore=[x,y];break;}
+    }
+  }
+  [px,py]=shore||[MARINA.x,MARINA.y0];body.mx=body.my=body.z=body.vz=0;body.seat=null;
+  say('The winter ice thaws. You make it safely back to shore.',4);
 }
 // ===== fishing. A rod from the bait and tackle hut at the foot of the Sunset Pier (props.js puts the hut up,
 // fishing-render.js draws it and everything on the line), and any water you can stand beside: the bay off the sea
@@ -13299,7 +13437,7 @@ function buildFerryNetwork() {
 }
 function ferryShip(id,time=T) {
   if(!FERRY.cycle)return null;
-  const phase=mod(time+ferryClockOffset+id*FERRY.cycle/FERRY.count,FERRY.cycle);
+  const phase=oceanFrozen()?FERRY_LEGS[id%FERRY_LEGS.length].start:mod(time+ferryClockOffset+id*FERRY.cycle/FERRY.count,FERRY.cycle);
   const leg=FERRY_LEGS.find(l=>phase<l.start+FERRY.dwell+l.seconds)||FERRY_LEGS.at(-1),stop=FERRY_STOPS[leg.from];
   const elapsed=phase-leg.start,stopped=elapsed<FERRY.dwell;
   let x=stop.x,y=stop.y,yaw=stop.yaw;
@@ -13391,11 +13529,12 @@ function ferryHullAt(x,y,time=T) {
 }
 function ferryPrompt() {
   if(mode==='ferry'&&ferryRide) {
-    const ship=ferryShip(ferryRide.id),status=ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
+    const ship=ferryShip(ferryRide.id),status=oceanFrozen()?`Tied up for winter · ${FERRY_STOPS[ship.stop].name}`:ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
     const gate=Math.hypot(ferryRide.u+.98,ferryRide.v+.53)<.36;
-    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | Walk ashore':''}`;
+    return `${status} | C: sit / stand${ferryRide.seat!=null&&!oceanFrozen()?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | Walk ashore':''}`;
   }
   const stop=nearFerryTerminal();if(!stop)return '';
+  if(oceanFrozen())return 'ISLAND FERRY · winter ice · service resumes in spring';
   const next=nextFerry(stop);
   return `ISLAND FERRY · all five outer islands | E: ${next.wait<.1?'board':'wait & board'} · ${fmt$(FERRY.fare)}${next.wait>.1?` · arrives in ${Math.ceil(next.wait)}s`:''}`;
 }
@@ -13407,6 +13546,7 @@ function advanceFerryTimetable(seconds) {
   if(seconds>.1)for(let n=wakes.length-1;n>=0;n--)if(typeof wakes[n].b==='string'&&wakes[n].b.startsWith('island-ferry:'))wakes.splice(n,1);
 }
 function ferryWaitNextPort() {
+  if(oceanFrozen())return say('The ferry is tied up for winter. You can walk ashore.',3);
   if(!ferryRide||ferryRide.seat==null)return say('Sit on a window seat or deck bench to wait until the next island.',3);
   const ship=ferryShip(ferryRide.id),seconds=ship.left+(ship.stopped?FERRY_LEGS[ship.stop].seconds:0)+.1;
   advanceFerryTimetable(seconds);ferrySync();
@@ -13421,6 +13561,7 @@ function useFerry() {
     ferryStepAshore(FERRY_STOPS[ship.stop]);return true;
   }
   const stop=nearFerryTerminal();if(!stop)return false;
+  if(oceanFrozen()){say('The ocean is frozen. The island ferry returns in spring.',3);return true;}
   if(!pay(FERRY.fare)){say(`The island ferry costs ${fmt$(FERRY.fare)}.`,3);return true;}
   const next=nextFerry(stop);noteStreet();
   advanceFerryTimetable(next.wait);
@@ -14562,6 +14703,7 @@ function floorCell(i, r, x, rx, ry) {
   else if (road === 2) wear = snowRoadWear(ly);
   else if (road === 3) wear = Math.max(snowRoadWear(lx), snowRoadWear(ly));
   paintSettledSnow(i, wx, wy, Math.max(0, 1 - d / vis * 1.5) * 6 * (0.6 + amb), 1, wear);
+  if(iceTracks.length&&oceanIceAt(wx,wy))paintSnowIceTracks(i,wx,wy,d);
 }
 
 // how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
@@ -14614,6 +14756,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   const road = bridge ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
+  if(oceanFrozen()&&seaAt(wx,wy)&&(!onPier(wx,wy)||bridge)){iceOceanCell(i,wx,wy,d,f);return false;}
   if(bridge&&seaAt(wx,wy)){seaCell(i,r,x,rx,ry,wx,wy,d,f);FL[i]=3;return true;}
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null, surf = null; // surf: [base, level] for a built surface (road-surface.js)
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
@@ -27675,6 +27818,7 @@ function trailWake(b, x, y, hw, moving) {
 // every frame, seen or not (a trail laid only while she's drawn dies whenever you look away): the bay boats going
 // round, and the one you're driving
 function stepWakes() {
+  if(oceanFrozen()){wakes.length=0;return;}
   const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, worldCoord(x - hx * hl * 0.9), worldCoord(y - hy * hl * 0.9), hw, moving); };
   for (const b of boats) {
     const p = boatAt(b, T);
@@ -27710,7 +27854,7 @@ function wakeAt(wx, wy, foot = 0) {
   }
   return WAKE_HIT.k;
 }
-const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
+const boatBob = (x, y) => oceanFrozen() ? 0 : Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
 // b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
 function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
   const k = BOAT_KINDS[b.kind], { hl, hw, fb } = k, z = boatBob(vx + px, vy + py), lit = Math.max(night, overcast * 0.5);
@@ -27806,6 +27950,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
 }
 // the boats going round the bay: heading from where they'll be a moment from now
 function bayBoats() {
+  if(oceanFrozen())return; // laid up for winter
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) continue;
@@ -27852,6 +27997,7 @@ function drawMarinaBoard(vx, vy) {
   });
 }
 function marinaSprites() {
+  drawWinterSkateShops();
   for (const b of fleet) {
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) > vis + 1 || !inView(vx, vy, 1)) continue;
@@ -27894,6 +28040,109 @@ function seaCam(dt, chase) {
   return [worldCoord(b.x - bx * back), worldCoord(b.y - by * back), camYaw];
 }
 const seaEye = () => { const k = BOAT_KINDS[sea.kind]; return chaseOn ? 0.22 + k.hl * 0.25 : k.fb + (sea.kind === 'cruiser' ? 0.25 : 0.16); }; // (the cruiser: up on the flybridge)
+// Still, pale ice with filtered fracture seams, cloudy frost and physical blade
+// marks. Every mark belongs to its world position, rather than to the camera.
+function iceOceanCell(i,x,y,d,f) {
+  const grain=noise(x*2,y*2,196),fp=d/projY;
+  const seam=Math.min(Math.abs(Math.sin(x*1.7+y*.63)),Math.abs(Math.sin(y*1.31-x*.42)));
+  const crack=clamp((.025-seam)/Math.max(.012,fp*2),0,1);
+  const mark=d<4&&iceTracks.length?iceBladeMark(x,y,fp):0;
+  const base=mark>.2?WHITE:crack>.1?CYAN:grain>.66?WHITE:GRAY;
+  BG[i]=C(base,(2+day*10+grain*2-crack*3+mark*2)*f);
+  set(i,' ',0);FL[i]=1;
+}
+function paintSnowIceTracks(i,x,y,d) {
+  if(d>4||!iceTracks.length)return;
+  const mark=iceBladeMark(x,y,d/projY);
+  if(mark>.2)BG[i]=C(GRAY,(2+day*7+mark)*Math.max(0,1-d/vis*1.5));
+}
+const ICE_SKATE_MATERIALS={
+  leather:(i,t,L)=>{BG[i]=C(WHITE,(3+L*.65)*shadeFace(HIT.face));set(i,' ',0);return true;},
+  sole:(i,t,L)=>{BG[i]=C(BRICK,(1+L*.35)*shadeFace(HIT.face));set(i,' ',0);return true;},
+  steel:(i,t,L)=>{BG[i]=C(HIT.face===5?WHITE:GRAY,(4+L*.65)*shadeFace(HIT.face));set(i,' ',0);return true;},
+  lace:(i,t,L)=>{BG[i]=C(GRAY,3+L*.45);set(i,' ',0);return true;}
+};
+// A shared boot, heel, welt, blade and two stanchions: worn and shop models use
+// the same dimensions. Laces resolve only up close, with no extra distant work.
+function drawIceSkateModel(x,y,c,s,z,scale=1,detail=true) {
+  const part=(u,hl,hw,z0,z1,mat,round=0)=> {
+    const box=boxAt(x+c*u*scale,y+s*u*scale,c,s,hl*scale,hw*scale,z+z0*scale,z+z1*scale);
+    if(round){box.round=round*scale;drawBox(box,ICE_SKATE_MATERIALS[mat],coveRayRounded);}
+    else drawBox(box,ICE_SKATE_MATERIALS[mat]);
+  };
+  part(.002,.019,.0008,0,.002,'steel');
+  for(const u of [-.009,.011])part(u,.002,.0013,.002,.004,'steel');
+  part(0,.016,.006,.004,.006,'sole');
+  part(.003,.013,.0058,.006,.015,'leather',.002);
+  part(-.008,.0055,.006,.013,.031,'leather',.0015);
+  if(detail) {
+    part(-.008,.0058,.0063,.029,.032,'leather');
+    for(const u of [-.003,.001,.005,.009])part(u,.0006,.0045,.015,.0155,'lace');
+    part(-.0023,.0004,.002,.016,.028,'lace');
+  }
+}
+function drawWornIceSkates() {
+  if(!iceSkatesOn()||body.seat||pitch>-.25)return;
+  const speed=Math.hypot(body.mx||0,body.my||0),gliding=oceanIceAt(px,py),moving=!!(K.KeyW||K.KeyS||K.KeyA||K.KeyD);
+  const yaw=gliding&&speed>.1?Math.atan2(body.my,body.mx):a,z=walkGround(px,py)+body.z/10;
+  for(const side of [-1,1]) {
+    const stride=moving&&speed>.1?Math.sin(T*(gliding?5:9)+side*Math.PI/2):0;
+    // Like the skateboard view, place the feet slightly ahead of the camera
+    // so a downward glance can reach them in the horizon-based renderer.
+    const across=side*(.012+Math.max(0,stride)*.006),along=.11+stride*.01;
+    const x=px+Math.cos(a)*along-Math.sin(a)*across,y=py+Math.sin(a)*along+Math.cos(a)*across;
+    const turn=yaw+side*(K.KeyC?.5:moving?Math.max(0,stride)*.16:.04);
+    drawIceSkateModel(rel(x-px),rel(y-py),Math.cos(turn),Math.sin(turn),z);
+  }
+}
+const WINTER_SHOP_LOOKS=new Map();
+function drawWinterSkateShops() {
+  for(const [index,shop] of winterSkateShops().entries()) {
+    const [x,y]=R(shop.x,shop.y),distance=Math.hypot(x,y);
+    if(distance>vis+1||!inView(x,y,1))continue;
+    const z=outdoorGroundHeight(shop.x,shop.y),accent=index?GREEN:BLUE;
+    const part=(u,v,hl,hw,z0,z1,col,wood=false)=>drawBox(boxAt(x+u,y+v,1,0,hl,hw,z+z0,z+z1),(i,t,L)=>{
+      const gap=wood?coveGroove(HIT.u+HIT.v,.045,.0015,t/projY):0;
+      BG[i]=C(col,(2+L*.5-gap*1.4)*shadeFace(HIT.face));set(i,' ',0);return true;
+    });
+    // A timber counter with recessed panels, brass edging and sled runners.
+    for(const u of [-.23,.23])part(u,0,.018,.18,0,.012,GRAY);
+    part(0,0,.3,.16,.012,.09,BRICK,true);
+    part(0,-.162,.27,.002,.027,.074,accent);
+    for(const u of [-.28,0,.28])part(u,-.166,.005,.003,.02,.083,BRICK);
+    part(0,0,.32,.18,.09,.101,BRICK,true);
+    part(0,-.181,.32,.002,.093,.101,YEL);
+    for(const u of [-.28,.28])part(u,.10,.008,.012,.1,.34,BRICK);
+    part(0,.13,.28,.006,.15,.28,BRICK,true); // slatted back and stock shelf
+    part(0,.08,.29,.055,.184,.191,BRICK,true);
+    part(0,0,.34,.2,.33,.35,accent);
+    // Rolled canvas valance, roof seam and a shallow cap of settled snow.
+    for(let k=0;k<8;k++)part(-.2975+k*.085,-.202,.0425,.003,.309+(k&1)*.004,.34,k&1?WHITE:accent);
+    part(0,0,.345,.205,.35,.357,WHITE);
+    part(0,0,.002,.205,.357,.36,GRAY);
+    if(distance<7) {
+      for(const [u,v,h] of [[-.23,-.08,.101],[-.185,-.08,.101],[.08,-.08,.101],[.125,-.08,.101],[-.12,.07,.191],[-.075,.07,.191],[.15,.07,.191],[.195,.07,.191]])
+        drawIceSkateModel(x+u,y+v,1,0,z+h,1.15,distance<3);
+      // A thermos, two paper cups and a folded wool scarf at the till.
+      part(.25,-.07,.009,.009,.101,.143,GRAY);
+      part(.25,-.07,.011,.011,.14,.146,BLACK);
+      for(const u of [.205,.23]){part(u,-.115,.007,.007,.101,.119,WHITE);part(u,-.115,.006,.006,.118,.12,BRICK);}
+      part(-.02,-.09,.032,.026,.101,.105,accent);
+    }
+    if(distance<10) {
+      if(!WINTER_SHOP_LOOKS.has(index))WINTER_SHOP_LOOKS.set(index,figStreetLook(7910+index,accent,GRAY,3));
+      drawFigure(x+.02,y+.07,z,.175,0,-1,WINTER_SHOP_LOOKS.get(index),'fold');
+    }
+    const word='ICE SKATES $75',hl=.32,z0=z+.235,z1=z+.305,n=word.length+2,far=farDepth(x,y,hl),tc=midDepth(x,y);
+    drawBox(boxAt(x,y-.171,1,0,hl,.004,z0,z1),(i,t,L)=>{
+      const edge=Math.min(hl-Math.abs(HIT.u),HIT.w-z0,z1-HIT.w)<.004;
+      BG[i]=C(edge?YEL:accent,edge?5+L*.5:2+L*.3);
+      if(HIT.face!==3&&HIT.face!==4||edge){set(i,' ',0);return true;}
+      const ch=signLine(word,faceQ(HIT.u,hl)*n-1,(z1-.008-HIT.w)/.048,i,z1-.032,tc,t,2*hl/n,.048,far,...faceDir(1,0));
+      set(i,ch??' ',C(WHITE,14));return true;
+    });
+  }
+}
 // Draw the ground triangles inside an existing DDA interval. No per-pixel
 // marching: a sloped triangle is one plane, with an analytic ray intersection.
 function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
@@ -27942,6 +28191,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
 }
 
 function terrainCell(i, x, y, depth, sx, sy, light) {
+  if(oceanIceAt(x,y)){iceOceanCell(i,x,y,depth,Math.max(0,1-depth/vis*1.5));return;}
   const island = onIsland(x, y), coast = coastalGround(worldCoord(x), worldCoord(y));
   let surface = islandSurface(x,y);
   if(!surface&&worldReady&&naturalCoastAt(x,y))surface=islandShoreSurface(x,y,coast.depth,coast.beach);
@@ -29393,6 +29643,8 @@ function promptText() {
   if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
+  const iceLine = winterIcePrompt();
+  if (iceLine) return iceLine;
   const gp = gardensPrompt() || marinaPrompt();
   if (gp) return gp;
   const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
@@ -29452,7 +29704,7 @@ function mapTile(mx, my) {
   if (onCauseway(wx, wy)) return '#16161c';
   if (onAirport(wx, wy)) return airportBlocked(wx, wy) || airportBldgAt(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || worldCoord(wy) > APRON.y0 && worldCoord(wy) < APRON.y1 || worldCoord(wy) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
   if (ROAD[k]) return underEl(wy,wx) ? '#3a2420' : '#16161c';
-  if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
+  if (seaAt(wx, wy) || gardenLake(wx, wy)) return oceanIceAt(wx,wy) ? '#9bc8d8' : MAP_COL.sea;
   const surface=islandSurface(wx,wy);if(surface)return surface.color;
   if(naturalCoastAt(wx,wy)){const coast=coastalGround(wx,wy);return coast.beach&&coast.depth<2?'#a18e57':'#2a5a30';}
   if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
@@ -30012,6 +30264,8 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
+  const iceShop = nearWinterSkateShop();
+  if (iceShop) return openShop(iceShop.name, ['iceskates','coffee','tea']);
   if (useFerry() || useGardens() || useMarina()) return;
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
@@ -31895,10 +32149,10 @@ function tone(at, freq, len, gain, type = 'sine', pan = 0) {
 }
 // footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
 // [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
-const STEP = { stone: ['lowpass', 1000, 0.7, 0.07, 0.6, 72], grass: ['lowpass', 550, 0.5, 0.1, 0.45, 0], wood: ['bandpass', 420, 1.4, 0.09, 0.6, 115],
+const STEP = { ice: ['bandpass', 1500, .6, .1, .35, 100], stone: ['lowpass', 1000, 0.7, 0.07, 0.6, 72], grass: ['lowpass', 550, 0.5, 0.1, 0.45, 0], wood: ['bandpass', 420, 1.4, 0.09, 0.6, 115],
                metal: ['bandpass', 1300, 2.5, 0.12, 0.4, 90], gravel: ['bandpass', 1500, 0.6, 0.09, 0.5, 0], sand: ['lowpass', 650, 0.5, 0.1, 0.35, 0],
                tile: ['bandpass', 1300, 1, 0.05, 0.5, 95], carpet: ['lowpass', 380, 0.5, 0.06, 0.35, 0] };
-let stepSide = 1;
+let stepSide = 1, iceBladeAudioT = -9;
 function sfxStep(surface, run) {
   const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime + Math.random() * 0.01;
   const g = lvl * (run ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
@@ -32148,6 +32402,7 @@ function audioTick(dt) {
   for (const k in beds) { tickBed(beds[k], mix[k] * LEVEL[k], dt); beds[k].pan.pan.setTargetAtTime(musicPan[k] || 0, now, 0.1); }
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   const boardSurface = SKB.surf?.material || 'asphalt';
+  if(oceanFrozen())mix.waves=0;
   mix.board *= ({concrete:.8,grass:.6,wood:.9,stone:1.15})[boardSurface] || 1;
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
@@ -32180,9 +32435,18 @@ function audioTick(dt) {
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
   const footPos=mode==='ferry'?[ferryRide.u,ferryRide.v,mode]:[px,py,mode];
-  if (onFoot && lastPos && lastPos[2] === mode) {
+  if(body.z>0||body.vz>0)stepAcc=0;
+  if (onFoot && lastPos && lastPos[2] === mode && !body.z && !body.vz) {
     const moved = Math.hypot(rel(footPos[0] - lastPos[0]), rel(footPos[1] - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
-    if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
+    const blades=iceSkatesOn()&&oceanIceAt(px,py)&&body.z===0&&body.vz===0;
+    if(blades) {
+      stepAcc=0;
+      if(moved>.0005&&T-iceBladeAudioT>.14) {
+        iceBladeAudioT=T;stepSide=-stepSide;
+        const speed=clamp(Math.hypot(body.mx||0,body.my||0)/2.8,0,1),brake=!!K.KeyC;
+        burst(now,.22,[filt('bandpass',brake?2300:1300,.6),filt('lowpass',4000)],(.006+speed*.022)*(brake?1.5:1),stepSide*.1);
+      }
+    } else if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
     if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
   }
   lastPos = footPos;
@@ -35106,6 +35370,7 @@ const DROPPED_ART = {
     (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
+  iceskates: () => [['  __     __', ' |==|   |==|', ' |  |__ |  |__', ' |_____)|_____)', ' _|___|__|___|_'], (c,r) => C(r===4?GRAY:WHITE, r===4?12:14)],
   skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
     (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
@@ -35143,6 +35408,7 @@ function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k)
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
   if (skatingNow() && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
+  drawWornIceSkates();
   drawSeatedLegs(); // sat down: your legs, when you look down at them (seated-legs.js)
 }
 
@@ -35250,7 +35516,7 @@ function drawHeldBig() {
   drawVapeCloud();
   const it = heldItem();
   const rodAfloat = it && ITEMS[it.id].rod && afloat() && !third; // (fishing from a boat: the rod, nothing else)
-  if (!it || !(onFoot || rodAfloat) || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
+  if (!it || !(onFoot || rodAfloat) || it.id === 'iceskates' && iceSkatesOn() || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
   if (ITEMS[it.id].kind === 'gun') {
     drawRevolver(it); handDrawn = { id: it.id, t: T }; return;
   }
@@ -35570,7 +35836,7 @@ function hotbar() {
     }
     bottom = y - 4;
   }
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', ...drugEffectTags(), fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', ...drugEffectTags(), fx.iceSkating && 'ice skates on', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) {
     const lines = wrapText(tags.join('  '), width - 12), h = lines.length * (FS + 4) + 4;
     bottom -= h;
@@ -37350,6 +37616,26 @@ function heldFrame(it, picture = null) {
   }
   return { u, s, hsz, cx: it.id === 'yoyo' ? cx : Math.round(cx), hy: it.id === 'yoyo' ? hy : Math.round(hy), grip: 1.1 * hsz, ...pose };
 }
+// The inventory and the held pair use the same lit, solid leather and steel
+// treatment as the city's other tools, with recessed cuffs and crossed laces.
+let iceSkatePicture = null;
+DENSE.iceskates=()=>iceSkatePicture||(iceSkatePicture=sculptSurface(44,28,(x,y)=>{
+  for(const side of [-1,1]) {
+    const u=x-side*6.3,v=y+(side>0?-1:1),edge=Math.max(0,1-Math.abs(u+1)/5);
+    if(v>8.6&&v<9.5&&u>-5.2&&u<5.9)return [' ',C(v<9?WHITE:GRAY,v<9?15:10)];
+    if(v>6.4&&v<=8.6&&(Math.abs(u+3)<.5||Math.abs(u-2.9)<.5))return [' ',C(GRAY,12)];
+    if(v>5.6&&v<=6.8&&u>-4.8&&u<5.1)return [' ',C(BRICK,5+edge*4)];
+    const ankle=u> -4.5&&u<.4&&v> -9&&v<4.8;
+    const foot=u> -4.5&&u<3.2&&v>.9&&v<5.7;
+    const toe=Math.hypot((u-3)/2.2,(v-3.4)/2.3)<1;
+    if(!ankle&&!foot&&!toe)continue;
+    if(v< -7.6)return [' ',C(u> -3.7&&u< -.4?GRAY:WHITE,u> -3.7&&u< -.4?3:14)];
+    const lace=v<1.8&&u> -1.3&&u<.5&&Math.abs(Math.sin(v*2.2)-u*.5)<.4;
+    const seam=Math.abs(u+4.1)<.24||v>5.1;
+    return [' ',C(lace||seam?GRAY:WHITE,lace?7:seam?10:9+edge*5-Math.max(0,v-3)*.6)];
+  }
+  return null;
+}));
 // ===== fishing, drawn (fishing.js has the rules): the bait and tackle hut and what's piled round it, the rod in your
 // hand (winding back, whipping forward, bending when something's on, the reel spinning as you wind in), the line out to
 // the bobber, the bobber riding the swell, rings spreading round it, the fish coming in under the water, the strike,
@@ -55778,7 +56064,7 @@ function saveGame() {
   if (citySaveBlocked || startingOver) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, paint: paintSave(), money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, paint: paintSave(), money, tickets, fish: fishLog, fishingCompetition:fishCompetition, league: leagueSave(), held, quickSlots: [...quickSlots], iceSkates: !!fx.iceSkating, inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -55818,6 +56104,8 @@ function loadGame() {
   paintLoad(d.paint); // (freehand spray paint: spray-paint.js)
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
+  fx.iceSkating = d.iceSkates === true && inv.some(it=>it.id==='iceskates');
+  iceShore = null;
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
   if (d.noto) { // how well known you are, and what's in the papers
     noto.level = clamp(+d.noto.level || 0, 0, 100); noto.day = Number.isInteger(d.noto.day) ? d.noto.day : dayNum; noto.lookDay = d.noto.lookDay ?? -9;
@@ -55867,7 +56155,7 @@ function loadGame() {
   if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, k === 'health' ? maxHealth() : 100);
   if (isFinite(d.boxRank)) boxRank = clamp(d.boxRank | 0, 0, BOXERS.length);
   const at = d.at;
-  if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
+  if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && (!isWater(at.x, at.y) || oceanIceAt(at.x,at.y))) {
     px = worldCoord(at.x); py = worldCoord(at.y); a = at.a || 0; streetSpot = { x: px, y: py, a };
   }
   if(d.journey?.kind==='ferry')loadFerryJourney(d.journey);
@@ -57448,7 +57736,7 @@ const free = (x, y) => {
   } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !(skatingNow()&&skateBowlEntryBlocked(x,y,walkGround(px,py)+body.z/10)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !(mode === 'walk' && benchAt(x, y, 0.02, walkGround(px, py) + body.z / 10)) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && (!isWater(x, y) || mode === 'walk' && oceanIceAt(x,y)) && !winterShopBlocked(x,y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !(skatingNow()&&skateBowlEntryBlocked(x,y,walkGround(px,py)+body.z/10)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !(mode === 'walk' && benchAt(x, y, 0.02, walkGround(px, py) + body.z / 10)) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03, skatingNow() ? walkGround(px,py)+body.z/10 : -Infinity) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 // Blocked by an edge that isn't square to the grid (a curving shoreline, a round planter): feel round you for which way the
@@ -57616,6 +57904,7 @@ function loop(t) {
   if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
   updateMapNavigation();
   env(dt);
+  stepWinterOcean();
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
@@ -57641,7 +57930,9 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (!airborne && dt > 0) {
+      const ice = mode === 'walk' && oceanIceAt(px,py);
+      if (!airborne && ice) stepIceMotion(f,s,run,dt);
+      else if (!airborne && dt > 0) {
         const wx = ix / dt, wy = iy / dt, vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy), w = Math.hypot(wx, wy);
         if (body.hop > 1.001 && v > 1e-6 && w > 0) { // carrying speed from hopping: at that speed, but swinging round to where you're going (not snapping), and a sharp turn costs the speed
           body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
@@ -57649,7 +57940,8 @@ function loop(t) {
           body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
         } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
       } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, HOP_TURN_RATE, dt); }
-      move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
+      if(ice)moveOnIce(dt);
+      else move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
   else if (mode === 'drive') { if (!sleep) drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (not while the respray's under way) // (eyes back on the road a moment after you stop looking about)

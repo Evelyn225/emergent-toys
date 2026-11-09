@@ -36,6 +36,7 @@ const ITEMS = {
   cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 }, pipe: { name: 'pipe', price: 18, kind: 'smoke', uses: 4 },
   vape: { name: 'mango vape', price: 25, kind: 'gear' },
   // gear
+  iceskates: { name: 'ice skates', price: 75, kind: 'gear' },
   skateboard: { name: 'skateboard', price: 60, kind: 'gear' }, ball: { name: 'soccer ball', price: 20, kind: 'gear' },
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
@@ -174,7 +175,7 @@ function cycleQuickSlot(direction) {
   const choices = [-1, ...quickSlots.filter(k => k >= 0 && inv[k])], at = choices.indexOf(held);
   held = choices[mod((at < 0 ? 0 : at) + direction, choices.length)];
 }
-const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
+const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, iceSkating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
 let heldUse = null; // a short visual gesture, tied to this inventory item rather than its slot
 function animateHeldUse(it) {
   const d = ITEMS[it.id];
@@ -360,9 +361,14 @@ function useHeld(near) {
     case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];
+    case 'iceskates':
+      if (mode !== 'walk' || near.indoors) return ['Put your skates on outside, beside the ice.', null];
+      fx.iceSkating = !fx.iceSkating;
+      if (fx.iceSkating) { fx.skating = false; if(typeof skateDismount==='function')skateDismount(); }
+      return [fx.iceSkating ? 'You lace up your ice skates. On ice: WASD to push and carve, Shift to sprint, C to brake. You can walk on land.' : 'You unlace your skates and put your shoes back on.', 'click'];
     case 'skateboard':
       if (near.indoors || mode !== 'walk' && mode !== 'roof') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
-      if(typeof skateDismount==='function')skateDismount(); fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
+      fx.iceSkating = false; if(typeof skateDismount==='function')skateDismount(); fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
       if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));

@@ -282,6 +282,8 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
+  const iceShop = nearWinterSkateShop();
+  if (iceShop) return openShop(iceShop.name, ['iceskates','coffee','tea']);
   if (useFerry() || useGardens() || useMarina()) return;
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);

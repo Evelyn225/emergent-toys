@@ -220,6 +220,8 @@ function promptText() {
   if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
+  const iceLine = winterIcePrompt();
+  if (iceLine) return iceLine;
   const gp = gardensPrompt() || marinaPrompt();
   if (gp) return gp;
   const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
@@ -279,7 +281,7 @@ function mapTile(mx, my) {
   if (onCauseway(wx, wy)) return '#16161c';
   if (onAirport(wx, wy)) return airportBlocked(wx, wy) || airportBldgAt(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || worldCoord(wy) > APRON.y0 && worldCoord(wy) < APRON.y1 || worldCoord(wy) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
   if (ROAD[k]) return underEl(wy,wx) ? '#3a2420' : '#16161c';
-  if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
+  if (seaAt(wx, wy) || gardenLake(wx, wy)) return oceanIceAt(wx,wy) ? '#9bc8d8' : MAP_COL.sea;
   const surface=islandSurface(wx,wy);if(surface)return surface.color;
   if(naturalCoastAt(wx,wy)){const coast=coastalGround(wx,wy);return coast.beach&&coast.depth<2?'#a18e57':'#2a5a30';}
   if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
