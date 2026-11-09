@@ -7,13 +7,13 @@ function quietPlaceBlocked(x,y,pad=.03,feet=0){
   for(const p of s.parts){
    if(!p.block||feet>=p.z1-.004||feet+.17<=p.z0)continue;
    const dx=rel(x-p.x),dy=rel(y-p.y);
-   if(Math.abs(dx*p.c+dy*p.s)<p.hl+pad&&Math.abs(-dx*p.s+dy*p.c)<p.hw+pad)return true;
+   if(p.profile?quietProfileBlocked(p,Math.hypot(dx,dy),pad,feet,feet+.17):quietPartFootprint(p,dx,dy,pad))return true;
   }
  }return false;
 }
 function quietPlaceGround(x,y){
  let h=0;
- for(const s of QUIET_PLACES)if(s.type!=='roof'&&Math.abs(x-s.x)<=s.halfX&&Math.abs(y-s.y)<=s.halfY)h=Math.max(h,s.base,quietPlaceSurfaceHeight(x,y,s));
+ for(const s of QUIET_PLACES)if(s.type!=='roof')h=Math.max(h,quietPlaceSurfaceHeight(x,y,s,false));
  return h;
 }
 function quietPlaceTargets(){
@@ -35,7 +35,7 @@ function quietPlaceOccludes(x,y,z){
   if(Math.abs(x-s.x)>s.radius||Math.abs(y-s.y)>s.radius)continue;
   for(const p of s.parts)if(p.block&&z>p.z0&&z<p.z1){
    const dx=x-p.x,dy=y-p.y;
-   if(Math.abs(dx*p.c+dy*p.s)<p.hl&&Math.abs(-dx*p.s+dy*p.c)<p.hw)return true;
+   if(p.profile?quietProfileBlocked(p,Math.hypot(dx,dy),0,z,z):quietPartFootprint(p,dx,dy,0))return true;
   }
  }return false;
 }
@@ -52,16 +52,54 @@ function quietPlaceCover(x,y,z=0){
  }return false;
 }
 
-function quietPlaceSurfaceHeight(x,y,only=null){
+function quietPlaceSurfaceHeight(x,y,only=null,fromAbove=true){
  let h=0;
  for(const s of only?[only]:QUIET_PLACES){
   if(Math.abs(x-s.x)>s.radius||Math.abs(y-s.y)>s.radius)continue;
   for(const p of s.parts){
-   if(!p.block)continue;
+   if(!p.block&&!p.walkSurface||!fromAbove&&p.z0>s.base+.1)continue;
    const dx=x-p.x,dy=y-p.y;
-   if(Math.abs(dx*p.c+dy*p.s)<=p.hl&&Math.abs(-dx*p.s+dy*p.c)<=p.hw)h=Math.max(h,p.z1);
+   h=Math.max(h,quietPartHeight(p,dx,dy));
   }
  }return h;
 }
 
 function quietGardenerHere(){return tod>=8&&tod<18&&rain<.5&&snow<.2;}
+
+function quietPartFootprint(p,dx,dy,pad=0){
+ if(p.profile)return Math.hypot(dx,dy)<p.hl+pad;
+ const u=Math.abs(dx*p.c+dy*p.s),v=Math.abs(-dx*p.s+dy*p.c),r=p.round||0;
+ return Math.hypot(Math.max(0,u-p.hl+r),Math.max(0,v-p.hw+r))<=r+pad;
+}
+function quietPartHeight(p,dx,dy){
+ const u=Math.abs(dx*p.c+dy*p.s),v=Math.abs(-dx*p.s+dy*p.c);
+ if(p.profile){
+  const r=Math.hypot(dx,dy);let h=0;
+  for(let j=1;j<p.profile.length;j++){
+   const [za,ra]=p.profile[j-1],[zb,rb]=p.profile[j];
+   if(r<Math.min(ra,rb)-1e-9||r>Math.max(ra,rb)+1e-9)continue;
+   h=Math.max(h,Math.abs(ra-rb)<1e-9?Math.max(za,zb):za+(zb-za)*(r-ra)/(rb-ra));
+  }return h;
+ }
+ if(u>p.hl||v>p.hw)return 0;
+ const r=p.round||0;if(!r)return p.z1;
+ const d=Math.hypot(Math.max(0,u-p.hl+r),Math.max(0,v-p.hw+r));
+ return d>r?0:p.z1-r+Math.sqrt(Math.max(0,r*r-d*d));
+}
+
+// Intersect the body with the actual revolved shell, including the hollow
+// middle. The same contour also supplies the rendered surface and foot height.
+function quietProfileBlocked(p,r,pad,lo,hi){
+ const levels=[lo,hi,...p.profile.map(v=>v[0]).filter(z=>z>lo&&z<hi)].sort((a,b)=>a-b);
+ const samples=levels.flatMap((z,j)=>j?[z,(z+levels[j-1])/2]:[z]);
+ for(const z of samples){
+  const radii=[];
+  for(let j=1;j<p.profile.length;j++){
+   const [a,ra]=p.profile[j-1],[b,rb]=p.profile[j];
+   if((a>z)===(b>z))continue;
+   radii.push(ra+(rb-ra)*(z-a)/(b-a));
+  }
+  radii.sort((a,b)=>a-b);
+  for(let j=1;j<radii.length;j+=2)if(r+pad>=radii[j-1]&&Math.max(0,r-pad)<=radii[j])return true;
+ }return false;
+}

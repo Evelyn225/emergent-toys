@@ -550,13 +550,13 @@ function quietPlaceBlocked(x,y,pad=.03,feet=0){
   for(const p of s.parts){
    if(!p.block||feet>=p.z1-.004||feet+.17<=p.z0)continue;
    const dx=rel(x-p.x),dy=rel(y-p.y);
-   if(Math.abs(dx*p.c+dy*p.s)<p.hl+pad&&Math.abs(-dx*p.s+dy*p.c)<p.hw+pad)return true;
+   if(p.profile?quietProfileBlocked(p,Math.hypot(dx,dy),pad,feet,feet+.17):quietPartFootprint(p,dx,dy,pad))return true;
   }
  }return false;
 }
 function quietPlaceGround(x,y){
  let h=0;
- for(const s of QUIET_PLACES)if(s.type!=='roof'&&Math.abs(x-s.x)<=s.halfX&&Math.abs(y-s.y)<=s.halfY)h=Math.max(h,s.base,quietPlaceSurfaceHeight(x,y,s));
+ for(const s of QUIET_PLACES)if(s.type!=='roof')h=Math.max(h,quietPlaceSurfaceHeight(x,y,s,false));
  return h;
 }
 function quietPlaceTargets(){
@@ -578,7 +578,7 @@ function quietPlaceOccludes(x,y,z){
   if(Math.abs(x-s.x)>s.radius||Math.abs(y-s.y)>s.radius)continue;
   for(const p of s.parts)if(p.block&&z>p.z0&&z<p.z1){
    const dx=x-p.x,dy=y-p.y;
-   if(Math.abs(dx*p.c+dy*p.s)<p.hl&&Math.abs(-dx*p.s+dy*p.c)<p.hw)return true;
+   if(p.profile?quietProfileBlocked(p,Math.hypot(dx,dy),0,z,z):quietPartFootprint(p,dx,dy,0))return true;
   }
  }return false;
 }
@@ -595,19 +595,57 @@ function quietPlaceCover(x,y,z=0){
  }return false;
 }
 
-function quietPlaceSurfaceHeight(x,y,only=null){
+function quietPlaceSurfaceHeight(x,y,only=null,fromAbove=true){
  let h=0;
  for(const s of only?[only]:QUIET_PLACES){
   if(Math.abs(x-s.x)>s.radius||Math.abs(y-s.y)>s.radius)continue;
   for(const p of s.parts){
-   if(!p.block)continue;
+   if(!p.block&&!p.walkSurface||!fromAbove&&p.z0>s.base+.1)continue;
    const dx=x-p.x,dy=y-p.y;
-   if(Math.abs(dx*p.c+dy*p.s)<=p.hl&&Math.abs(-dx*p.s+dy*p.c)<=p.hw)h=Math.max(h,p.z1);
+   h=Math.max(h,quietPartHeight(p,dx,dy));
   }
  }return h;
 }
 
 function quietGardenerHere(){return tod>=8&&tod<18&&rain<.5&&snow<.2;}
+
+function quietPartFootprint(p,dx,dy,pad=0){
+ if(p.profile)return Math.hypot(dx,dy)<p.hl+pad;
+ const u=Math.abs(dx*p.c+dy*p.s),v=Math.abs(-dx*p.s+dy*p.c),r=p.round||0;
+ return Math.hypot(Math.max(0,u-p.hl+r),Math.max(0,v-p.hw+r))<=r+pad;
+}
+function quietPartHeight(p,dx,dy){
+ const u=Math.abs(dx*p.c+dy*p.s),v=Math.abs(-dx*p.s+dy*p.c);
+ if(p.profile){
+  const r=Math.hypot(dx,dy);let h=0;
+  for(let j=1;j<p.profile.length;j++){
+   const [za,ra]=p.profile[j-1],[zb,rb]=p.profile[j];
+   if(r<Math.min(ra,rb)-1e-9||r>Math.max(ra,rb)+1e-9)continue;
+   h=Math.max(h,Math.abs(ra-rb)<1e-9?Math.max(za,zb):za+(zb-za)*(r-ra)/(rb-ra));
+  }return h;
+ }
+ if(u>p.hl||v>p.hw)return 0;
+ const r=p.round||0;if(!r)return p.z1;
+ const d=Math.hypot(Math.max(0,u-p.hl+r),Math.max(0,v-p.hw+r));
+ return d>r?0:p.z1-r+Math.sqrt(Math.max(0,r*r-d*d));
+}
+
+// Intersect the body with the actual revolved shell, including the hollow
+// middle. The same contour also supplies the rendered surface and foot height.
+function quietProfileBlocked(p,r,pad,lo,hi){
+ const levels=[lo,hi,...p.profile.map(v=>v[0]).filter(z=>z>lo&&z<hi)].sort((a,b)=>a-b);
+ const samples=levels.flatMap((z,j)=>j?[z,(z+levels[j-1])/2]:[z]);
+ for(const z of samples){
+  const radii=[];
+  for(let j=1;j<p.profile.length;j++){
+   const [a,ra]=p.profile[j-1],[b,rb]=p.profile[j];
+   if((a>z)===(b>z))continue;
+   radii.push(ra+(rb-ra)*(z-a)/(b-a));
+  }
+  radii.sort((a,b)=>a-b);
+  for(let j=1;j<radii.length;j+=2)if(r+pad>=radii[j-1]&&Math.max(0,r-pad)<=radii[j])return true;
+ }return false;
+}
 // Shared analog math. Trick sticks use a linear response; steering/look have
 // a softer centre and reach full travel before a worn stick hits its gate.
 function controllerStick(x=0,y=0,dead=.15,power=1.45){
@@ -17726,7 +17764,7 @@ function citySprites() {
   islandSprites();
   fairSprites();
   gasSprites(); // (the drivers at the pumps: gas-render.js)
-  forNear(solidsB, o => { if(o.pool){const [vx,vy]=R(o.x,o.y);if(Math.hypot(vx,vy)<vis+2&&inView(vx,vy,Math.max(o.hl,o.hw)+.1))drawSkatePool(o);return;} const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile, bowl: o.bowl } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
+  forNear(solidsB, o => { if(o.streetRail){drawStreetSkateRail(o);return;} if(o.pool){const [vx,vy]=R(o.x,o.y);if(Math.hypot(vx,vy)<vis+2&&inView(vx,vy,Math.max(o.hl,o.hw)+.1))drawSkatePool(o);return;} const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(o.ray ? { ...boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), ramp: o.ramp, run: o.run, profile: o.profile, bowl: o.bowl } : boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o), o.ray || undefined); });
   drawFacadeUtilities(); // (facade-utilities.js)
   drawKerbFixtures(); // (kerb-fixtures-render.js)
   drawParkShrubs();
@@ -41071,6 +41109,20 @@ function buildStreetSkateSpots(){
     SKATE_SPOTS.push({id,name:cap(site.district.replace(/[-_]/g,' '))+' · '+name,x,y,line:{x:site.x,y:site.y},description,street:true,district:site.district});
   }
 }
+
+// Square steel remains exact up close. Below a character in thickness, use
+// the city's measured rod renderer so a rail stays a line rather than dots.
+function drawStreetSkateRail(o){
+ const [x,y]=R(o.x,o.y),depth=dx*x+dy*y;
+ if(Math.hypot(x,y)>vis+1||!inView(x,y,o.hl+.1))return;
+ if(.006*projX/Math.max(.02,depth)>1.5){
+  drawBox(boxAt(x,y,o.c,o.s,o.hl,o.hw,o.z0,o.z1),SOLID_SHADE.skatestreetrail(o),o.ray);return;
+ }
+ const point=([u,z])=>[x+o.c*u,y+o.s*u,z-.003],points=o.streetRail.map(point);
+ const steel=(i,t,L)=>{BG[i]=SK_STEEL(L,true);set(i,' ',0);return true;};
+ for(let j=1;j<points.length;j++)drawRod(...points[j-1],...points[j],.003,steel);
+ for(const [xx,yy,z]of points)drawRod(xx,yy,o.z0,xx,yy,z,.003,steel);
+}
 const skateBalanceStick=()=>SK_INPUT.mouseHeld?SK_INPUT.mouse:SK_INPUT.right;
 // Grind paths use absolute world heights and 3D arc lengths. Segments are
 // indexed in every block they cross, rather than only at a long rail's midpoint.
@@ -56144,7 +56196,7 @@ buildStreetScenes();
 // Close detail uses the cabin's analytic rounded solids and vessels. Models
 // prepare once; the pump, water and wind cups are the only moving pieces.
 function quietPart(s,role,u,v,hl,hw,z0,z1,material='stone',block=false,extra={}){
- const p={role,x:s.x+u,y:s.y+v,c:1,s:0,hl,hw,z0:s.base+z0,z1:s.base+z1,material,block,...extra};
+ const p={role,x:s.x+u,y:s.y+v,c:1,s:0,hl,hw,z0:s.base+z0,z1:s.base+z1,textureU:u,textureV:v,textureZ:s.base,material,block,walkSurface:['court-paver','station-floor','path-paver','door-threshold'].includes(role),...extra};
  s.parts.push(p);return p;
 }
 function quietVessel(s,role,u,v,z,profile,material='clay',block=false){
@@ -56185,11 +56237,13 @@ function quietRoofGarden(s){
  for(const u of [-.10,.10])for(const v of [-.04,.04])quietTimber(s,'table-leg',-.7+u,.18+v,.004,.004,0,.085,true);
  quietTimber(s,'potting-top',-.7,.18,.125,.06,.085,.092,true);
  quietTimber(s,'potting-shelf',-.7,.18,.11,.05,.027,.033);
- for(const [u,v,z]of [[-.76,.17,.092],[-.64,.19,.092],[-.7,.18,.033]])quietVessel(s,'flowerpot',u,v,z,[[0,.012],[.003,.014],[.027,.019],[.029,.021],[.032,.021],[.032,.016],[.007,.009]],'clay');
- quietVessel(s,'water-barrel',.9,-.08,0,[[0,.035],[.005,.039],[.115,.039],[.12,.042],[.124,.042],[.124,.034],[.014,.034]],'paint',true);
- quietPart(s,'barrel-water',.9,-.08,.033,.033,.104,.106,'water',false,{ellipsoid:true});
+ for(const [u,v,z]of [[-.76,.17,.092],[-.64,.19,.092],[-.7,.18,.033]])quietVessel(s,'flowerpot',u,v,z,[[0,0],[0,.012],[.003,.014],[.027,.019],[.029,.021],[.032,.021],[.032,.016],[.007,.009],[.007,0]],'clay');
+ quietVessel(s,'water-barrel',.9,-.08,0,[[0,0],[0,.035],[.005,.039],[.115,.039],[.12,.042],[.124,.042],[.124,.034],[.014,.034],[.014,0]],'paint',true);
+ quietVessel(s,'barrel-water',.9,-.08,.104,[[0,0],[0,.033],[.002,.033],[.002,0]],'water');
  quietPart(s,'barrel-tap',.9,-.125,.004,.012,.028,.035,'brass');
- quietVessel(s,'watering-can',-.59,.17,.092,[[0,.012],[.004,.018],[.024,.018],[.026,.012],[.026,.009],[.009,.009]],'paint');
+ quietVessel(s,'watering-can',-.59,.17,.092,[[0,0],[0,.012],[.004,.018],[.024,.018],[.026,.012],[.026,.009],[.009,.009],[.009,0]],'paint');
+ for(const v of [-.012,.012])quietPart(s,'can-handle-stile',-.612,.17+v,.003,.002,.102,.125,'paint',false,{round:.001});
+ quietPart(s,'can-handle-grip',-.612,.17,.003,.01,.125,.13,'paint',false,{round:.001});
  const spout=quietPart(s,'can-spout',-.565,.17,.018,.003,.1,.108,'paint');spout.c=Math.cos(.3);spout.s=Math.sin(.3);
  // Trellis lives behind the bed, clear of both roof access and parapet.
  for(const u of [-.8,.8])quietTimber(s,'trellis-post',u,-.58,.004,.004,0,.26,true);
@@ -56205,11 +56259,12 @@ function quietRoofGarden(s){
 function quietCourtyard(s){
  // Walled garden with a dog-leg entrance: the opening is a real gap, not a
  // door texture. The southern approach and middle of the court stay empty.
- for(const u of [-.94,.94])quietPart(s,'garden-wall',u,0,.025,.83,0,.24,'brick',true);
+ for(const u of [-.94,.94])quietPart(s,'garden-wall',u,0,.025,.805,0,.24,'brick',true);
  quietPart(s,'garden-wall',0,-.83,.965,.025,0,.24,'brick',true);
  for(const [u,hl]of [[-.64,.325],[.64,.325]])quietPart(s,'entry-return',u,.83,hl,.025,0,.24,'brick',true);
- for(const u of [-.94,.94])quietPart(s,'wall-coping',u,0,.034,.86,.24,.257,'stone');
- quietPart(s,'wall-coping',0,-.83,.965,.034,.24,.257,'stone');
+ for(const u of [-.94,.94])quietPart(s,'wall-coping',u,0,.034,.796,.24,.257,'stone');
+ quietPart(s,'wall-coping',0,-.83,.974,.034,.24,.257,'stone');
+ for(const sign of [-1,1])quietPart(s,'entry-coping',sign*.6445,.83,.3295,.034,.24,.257,'stone');
  for(let u=-.8;u<=.8;u+=.2)for(let v=-.7;v<=.7;v+=.2)quietPart(s,'court-paver',u,v,.096,.096,0,.003,'paver');
  quietBench(s,-.5,-.48);quietBench(s,.5,-.48);
  for(const u of [-.62,.62])quietPlanter(s,u,.23,.15,.1);
@@ -56229,7 +56284,7 @@ function quietCourtyard(s){
  for(let u=-.77;u<=.8;u+=.11)quietTimber(s,'pergola-lath',u,-.49,.005,.28,.28,.288);
  for(let j=0;j<10;j++)quietPart(s,'climber',-.72+j*.16,-.68,.08,.04,.23,.30,'leaf',false,{ellipsoid:true,seed:j});
  quietPlaque(s,.55,.798,'WELL COURT',.18);
- quietPart(s,'lamp-plate',-.55,-.796,.026,.006,.16,.22,'iron');
+ quietPart(s,'lamp-plate',-.55,-.799,.026,.006,.16,.22,'iron');
  quietPart(s,'lamp-globe',-.55,-.779,.018,.015,.17,.21,'lamp',false,{ellipsoid:true});
  quietPart(s,'lamp-cap',-.55,-.779,.023,.02,.21,.217,'iron');
  s.lamp={x:s.x-.55,y:s.y-.779,z:s.base+.19};
@@ -56239,22 +56294,23 @@ function quietCourtyard(s){
 function quietChartRoom(s){
  // A 9 x 11 metre brick room: broken roof bays, a door wide enough to walk
  // through, and an open sea-facing window framed by real reveals.
- for(const u of [-.48,.48])quietPart(s,'station-wall',u,0,.025,.56,0,.31,'brick',true);
+ for(const u of [-.48,.48])quietPart(s,'station-wall',u,0,.025,.535,0,.31,'brick',true);
  quietPart(s,'station-back',0,-.56,.505,.025,0,.31,'brick',true);
  for(const u of [-.345,.345])quietPart(s,'door-jamb',u,.56,.16,.025,0,.31,'brick',true);
  quietPart(s,'door-head',0,.56,.185,.025,.25,.31,'brick',true);
  // Cut a window through the west wall by replacing the full slab.
  const west=s.parts.find(p=>p.role==='station-wall'&&p.x<s.x);s.parts.splice(s.parts.indexOf(west),1);
- for(const v of [-.415,.415])quietPart(s,'window-pier',-.48,v,.025,.145,0,.31,'brick',true);
+ for(const v of [-.4025,.4025])quietPart(s,'window-pier',-.48,v,.025,.1325,0,.31,'brick',true);
  for(const [lo,hi]of [[0,.105],[.23,.31]])quietPart(s,'window-spandrel',-.48,0,.025,.27,lo,hi,'brick',true);
- quietPart(s,'window-sill',-.48,0,.042,.28,.098,.108,'stone');
- for(const v of [-.27,.27])quietTimber(s,'window-frame',-.48,v,.031,.004,.108,.23);
- for(const z of [.112,.226])quietTimber(s,'window-frame',-.48,0,.031,.27,z,z+.005);
- quietTimber(s,'window-mullion',-.48,0,.031,.004,.115,.226);
- quietPart(s,'station-floor',0,0,.45,.53,0,.003,'paver');
+ quietPart(s,'window-sill',-.48,0,.042,.28,.105,.115,'stone');
+ for(const v of [-.266,.266])quietTimber(s,'window-frame',-.48,v,.031,.004,.12,.225);
+ for(const z of [.115,.225])quietTimber(s,'window-frame',-.48,0,.031,.27,z,z+.005);
+ quietTimber(s,'window-mullion',-.48,0,.031,.004,.12,.225);
+ quietPart(s,'station-floor',0,0,.455,.535,0,.003,'paver');
+ quietPart(s,'door-threshold',0,.56,.185,.025,0,.003,'paver');
  // Surviving roof boards leave a broad skylight into the room. Rafters remain.
  for(const v of [-.45,0,.45])quietTimber(s,'roof-rafter',0,v,.51,.009,.29,.305);
- for(const u of [-.38,-.29,.29,.38])quietTimber(s,'roof-board',u,0,.042,.59,.306,.315);
+ for(const u of [-.38,-.29,.29,.38])quietTimber(s,'roof-board',u,0,.042,.59,.305,.315);
  for(const v of [-.56,.56])quietPart(s,'roof-fascia',0,v,.53,.006,.303,.325,'wood');
  // Peeling door rests against the inside wall rather than blocking the exit.
  quietTimber(s,'fallen-door',.425,.24,.012,.13,.01,.225,true);
@@ -56268,15 +56324,16 @@ function quietChartRoom(s){
  quietPart(s,'desk-ledger',-.115,-.39,.027,.04,.091,.097,'book');
  quietPart(s,'chart-rule',.045,-.37,.002,.045,.0914,.093,'brass');
  quietPart(s,'pencil',-.07,-.34,.023,.001,.0914,.093,'wood');
- quietVessel(s,'mug',.12,-.39,.091,[[0,.007],[.002,.011],[.02,.011],[.021,.009],[.004,.009]],'enamel');
- quietTimber(s,'shelf',.37,-.24,.065,.22,.2,.206);
- for(let j=0;j<4;j++)quietTimber(s,'shelf-bracket',.39,-.4+j*.11,.035,.004,.175,.2);
+ quietVessel(s,'mug',.12,-.39,.091,[[0,0],[0,.007],[.002,.011],[.02,.011],[.021,.009],[.004,.009],[.004,0]],'enamel');
+ quietTimber(s,'shelf',.39,-.24,.065,.22,.2,.206);
+ for(let j=0;j<4;j++)quietTimber(s,'shelf-bracket',.425,-.4+j*.11,.03,.004,.175,.2);
  for(let j=0;j<5;j++)quietPart(s,'logbook',.37,-.4+j*.06,.045,.015,.206,.24,'book');
  // Fuse box has an empty mounting plate and disconnected conduit, not light.
  quietPart(s,'fusebox',0,-.529,.045,.008,.17,.235,'iron');
  for(const u of [-.02,0,.02])quietPart(s,'fuse-socket',u,-.519,.006,.003,.185,.199,'enamel');
  quietPart(s,'conduit',.08,-.526,.002,.003,.09,.28,'iron');
- quietPart(s,'rust-stain',.08,-.529,.009,.0005,.045,.12,'rust');
+ for(const z of [.11,.25])quietPart(s,'conduit-clamp',.08,-.531,.005,.004,z,z+.005,'iron');
+ quietPart(s,'rust-stain',.08,-.5345,.009,.0005,.045,.12,'rust');
  quietPlaque(s,0,.589,'TIDE OFFICE',.16,.262);
  // Weather mast beside the hut, with an operating cup assembly.
  quietPart(s,'mast-base',.8,-.3,.04,.04,0,.018,'stone',true);
@@ -56349,14 +56406,23 @@ function buildQuietPlaces(){
  }
  mapPlaceCache=null;
 }
-function quietMaterial(p,i,t,L){
- const face=HIT.face,top=face===5,fp=t/projY,fine=coveDetail(t,.1);
+function quietMaterial(p,i,t,L,lamp=null){
+ const face=HIT.face,curved=p.profile||p.ellipsoid||p.round;
+ const nu=face===1?1:face===2?-1:0,nv=face===3?1:face===4?-1:0;
+ const nx=curved?HIT.nx:p.c*nu-p.s*nv,ny=curved?HIT.ny:p.s*nu+p.c*nv,nz=curved?HIT.nz:face===5?1:face===6?-1:0;
+ const top=nz>.7,fp=t/projY,fine=coveDetail(t,.1);
+ const wx=p.x+(p.profile?HIT.u:p.c*HIT.u-p.s*HIT.v),wy=p.y+(p.profile?HIT.v:p.s*HIT.u+p.c*HIT.v);
+ if(lamp&&lampsOn){
+  const lx=lamp.x-wx,ly=lamp.y-wy,lz=lamp.z-HIT.w,d=Math.hypot(lx,ly,lz),facing=(nx*lx+ny*ly+nz*lz)/(d||1);
+  if(facing>0)L=Math.max(L,Math.max(0,1-d/.65)*facing*12);
+ }
+ const snowFinish=()=>{if(top)paintSettledSnow(i,wx,wy,L*.7,1,0,HIT.w);return true;};
  let base=STONE,level=2.2+L*.29;
  if(p.material==='lamp'){BG[i]=C(WARM,lampsOn?12:3+L*.3);set(i,' ',0);return true;}
- if(p.material==='wood')return coveTimber(i,HIT.u,HIT.w,L,t,face===1?1:face===2?-1:0,face===3?1:face===4?-1:0,top?1:0,3,.1);
- if(p.material==='iron'||p.material==='brass')return coveMetal(i,L,face===1?1:face===2?-1:0,face===3?1:face===4?-1:0,top?1:0,p.material==='brass'?YEL:GRAY);
+ if(p.material==='wood'){coveTimber(i,p.hl>p.hw?HIT.v:HIT.u,p.z1-p.z0>Math.max(p.hl,p.hw)*2?HIT.w:p.hl>=p.hw?HIT.u:HIT.v,L,t,nx,ny,nz,3,.1);return snowFinish();}
+ if(p.material==='iron'||p.material==='brass'){coveMetal(i,L,nx,ny,nz,p.material==='brass'?YEL:GRAY);return snowFinish();}
  if(p.material==='brick'){
-  const z=HIT.w,along=face<3?HIT.v:HIT.u,row=Math.floor(z/.0075);
+  const z=HIT.w-p.textureZ,along=face<3?p.textureV+HIT.v:p.textureU+HIT.u,row=Math.floor(z/.0075);
   const mortar=coveGroove(z,.0075,.0008,fp)+coveGroove(along+(row&1)*.012,.024,.001,fp);
   base=mortar>.5?GRAY:BRICK;level=1.3+L*.22+(hash(Math.floor(along/.024),row,2371)-.5)*fine;
  }else if(p.material==='leaf'){
@@ -56375,16 +56441,23 @@ function quietMaterial(p,i,t,L){
   // Faded contour and grid lines lie on the paper, not floating text.
   if(top){const grid=Math.min(coveGroove(HIT.u,.025,.0004,fp)+coveGroove(HIT.v,.025,.0004,fp),1);const shore=coveGroove(HIT.u+.02*Math.sin(HIT.v*55),.095,.001,fp);level-=grid*.7+shore*1.6;}
  }else if(p.material==='paver'){
-  base=GRAY;level=1.5+L*.27;const seam=coveGroove(HIT.u,.1,.002,fp)+coveGroove(HIT.v,.1,.002,fp);level-=seam*.7;
+  base=GRAY;
+  const u=p.textureU+HIT.u,v=p.textureV+HIT.v,individual=p.role==='court-paver'||p.role==='path-paver';
+  const tu=individual?p.textureU:Math.floor(u/.1),tv=individual?p.textureV:Math.floor(v/.1);
+  level=(1.5+L*.27)*(.92+hash(tu*1000|0,tv*1000|0,2373)*.16);
+  if(!individual)level-=(coveGroove(u,.1,.002,fp)+coveGroove(v,.1,.002,fp))*.7;
+  else level-=Math.max(0,1-Math.min(p.hl-Math.abs(HIT.u),p.hw-Math.abs(HIT.v))/.004)*.45;
+  // Broad slab variation stays stable at grazing angles; sub-cell grit
+  // otherwise aliases into a striped pattern on the courtyard floor.
  }
- BG[i]=C(base,level*shadeFace(face));set(i,' ',0);
+ BG[i]=C(base,level*(curved?coveLight(nx,ny,nz):shadeFace(face)));set(i,' ',0);
  if(p.text&&(face===3||face===4)){
   const q=(2*(i%cols+.5)/cols-1)*tf,rx=dx-dy*q,ry=dy+dx*q;
   const normal=-p.s*rx+p.c*ry,tangent=p.c*rx+p.s*ry,sign=face===4?-1:1,saved={...WH};
   WH.dn=Math.max(1e-6,Math.abs(normal*t));WH.sl=sign*tangent/(Math.abs(normal)||1e-6);WH.wc=sign*HIT.u;
-  try{wallText(i,sign*HIT.u,t/(projX*Math.max(1e-6,Math.abs(normal+(p.s*dy+p.c*dx)/projX))),HIT.w,t,p.text,0,(p.z0+p.z1)/2,p.hl*1.8,(p.z1-p.z0)*.55,C(GREEN,2+L*.5),BG[i]);}finally{Object.assign(WH,saved);}
+  try{wallText(i,sign*HIT.u,t/(projX*Math.max(1e-6,Math.abs(normal+(p.s*dy+p.c*dx)/projX))),HIT.w,t,p.text,0,(p.z0+p.z1)/2,p.hl*1.8/p.text.length,(p.z1-p.z0)*.55,C(GREEN,2+L*.5),BG[i]);}finally{Object.assign(WH,saved);}
  }
- if(top&&p.material!=='water')paintSettledSnow(i,p.x+p.c*HIT.u-p.s*HIT.v,p.y+p.s*HIT.u+p.c*HIT.v,L*.7,1,0,HIT.w);
+ if(p.material!=='water')snowFinish();
  return true;
 }
 function drawQuietPlaces(){
@@ -56405,10 +56478,7 @@ function drawQuietPlaces(){
     coveTube(vx+.014,vy-.72,s.base+.17,vx+.085,vy-.72,z,.003,GRAY);
     coveRound(vx+.085,vy-.72,1,0,.009,.006,z-.006,z+.006,.003,BRICK);continue;
    }
-   const shade=(i,t,L)=>{
-    const glow=s.lamp&&lampsOn?Math.max(0,1-Math.hypot(p.x-s.lamp.x,p.y-s.lamp.y,(p.z0+p.z1)/2-s.lamp.z)/.65)*5:0;
-    return quietMaterial(p,i,t,Math.max(L,glow));
-   };
+   const shade=(i,t,L)=>quietMaterial(p,i,t,L,s.lamp);
    if(p.profile)drawBox(b,shade,coveRayLathe);
    else if(p.ellipsoid)drawBox(b,shade,homeRayEllipsoid);
    else if(p.round)drawBox(b,shade,coveRayRounded);
