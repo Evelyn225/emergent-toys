@@ -63,7 +63,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
-    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
+    if (z > .28 && architectureSignedFace(f, sh) && !(f.numberOnCanopy && d < 9 * lodScale()) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
       g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
     if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), base, L)) return; // (shut for good: the old sign's shadow)
     if (f.front && sh.kind === SHOP_APTS) {
@@ -117,7 +117,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
-    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
+    if (z > .28 && architectureSignedFace(f, sh) && !(f.numberOnCanopy && d < 9 * lodScale()) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
       g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + width / 2), stone ? base : GRAY, L)) return; // (shut for good: the old sign's shadow)
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);

@@ -20,8 +20,8 @@ for (const st of GAS_STATIONS) {
     gasSolid(st, GAS.pumpX, iy, true, 0.06, 0.045, 0, 0.2, 'gaspump', { isle: k });
     for (const x of [GAS.ix0 + 0.035, GAS.ix1 - 0.035]) gasSolid(st, x, iy, true, 0.022, 0.022, 0, 0.43, 'gaspost');
   }
-  gasSolid(st, 0.12, 0.2, false, 0.015, 0.015, 0, 0.33, 'gaspost'); // the price sign on its pole, by the way out
-  gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.33, 0.66, 'gassign');
+  gasSolid(st, 0.12, 0.2, false, 0.015, 0.015, 0, 0.09, 'gaspost'); // the price sign on its pole, by the way out: its board clear
+  gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.09, 0.42, 'gassign'); // under the canopy's edge (0.43), so it reads whole from the forecourt
   gasSolid(st, 2.45, 1.91, true, 0.13, 0.05, 0, 0.09, 'gasice'); // the ice chest by the shop door
   for (const [x, y, hl, hw] of [[0.2, -0.16, 0.5, 0.16], [2.6, -0.16, 0.42, 0.16], [3.16, 1.35, 0.16, 0.65]])
     GAS_CLEAR.push({ x: worldCoord(st.x0 + x), y: worldCoord(st.y0 + y), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)

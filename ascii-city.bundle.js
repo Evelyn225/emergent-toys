@@ -2129,7 +2129,7 @@ for (const gh of GLASSHOUSES) {
 // lanes = the middle of each lane (a car fills up with its middle at slotX, its filler cap by the pump), islands = the
 // middle of each island, from ix0 to ix1, its pump at pumpX
 const GAS = { lanes: [0.42, 1.02, 1.62], islands: [0.72, 1.32], ix0: 1.1, ix1: 1.9, pumpX: 1.5, slotX: 1.37, h: 0.38 };
-const GAS_BRANDS = [['GLYPHCO', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
+const GAS_BRANDS = [['ANSI OIL', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
 let GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
 {
   const taken = new Set([...SERVICES, GRAND_HOTEL, AQUARIUM, CASINO, EXCHANGE, MUSEUM, CLUB].map(b => bi(b.bx, b.by))), cand = [];
@@ -5786,8 +5786,8 @@ for (const st of GAS_STATIONS) {
     gasSolid(st, GAS.pumpX, iy, true, 0.06, 0.045, 0, 0.2, 'gaspump', { isle: k });
     for (const x of [GAS.ix0 + 0.035, GAS.ix1 - 0.035]) gasSolid(st, x, iy, true, 0.022, 0.022, 0, 0.43, 'gaspost');
   }
-  gasSolid(st, 0.12, 0.2, false, 0.015, 0.015, 0, 0.33, 'gaspost'); // the price sign on its pole, by the way out
-  gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.33, 0.66, 'gassign');
+  gasSolid(st, 0.12, 0.2, false, 0.015, 0.015, 0, 0.09, 'gaspost'); // the price sign on its pole, by the way out: its board clear
+  gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.09, 0.42, 'gassign'); // under the canopy's edge (0.43), so it reads whole from the forecourt
   gasSolid(st, 2.45, 1.91, true, 0.13, 0.05, 0, 0.09, 'gasice'); // the ice chest by the shop door
   for (const [x, y, hl, hw] of [[0.2, -0.16, 0.5, 0.16], [2.6, -0.16, 0.42, 0.16], [3.16, 1.35, 0.16, 0.65]])
     GAS_CLEAR.push({ x: worldCoord(st.x0 + x), y: worldCoord(st.y0 + y), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)
@@ -16624,7 +16624,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
-    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
+    if (z > .28 && architectureSignedFace(f, sh) && !(f.numberOnCanopy && d < 9 * lodScale()) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), g.zc,
       g.cwid, g.band, C(STONE, signLight), C(base, 2))) return; // (up close, the fascia board carries it)
     if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), base, L)) return; // (shut for good: the old sign's shadow)
     if (f.front && sh.kind === SHOP_APTS) {
@@ -16678,7 +16678,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
     const g = architectureSignSpec(b, f, sh);
-    if (z > .28 && architectureSignedFace(f, sh) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
+    if (z > .28 && architectureSignedFace(f, sh) && !(f.numberOnCanopy && d < 9 * lodScale()) && (!f.fascia || archFasciaPainted(g, d)) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), g.zc,
       g.cwid, g.band, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (ghostSign(i, u, uStep, z, d, b, f, sh, (Math.sign(u * wc) || 1) * (f.start + width / 2), stone ? base : GRAY, L)) return; // (shut for good: the old sign's shadow)
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
@@ -22637,18 +22637,18 @@ Object.assign(SOLID_SHADE, {
   gaspost: () => (i, t, L) => { BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(HIT.face) + (HIT.face === 5 ? .5 : 0)); return set(i, ' ', 0), true; },
   // the price sign: the brand at the top, the three grades below in lit red digits, both faces
   gassign: o => (i, t, L) => {
-    const f = HIT.face, w = HIT.w, st = o.st, lit = Math.max(gasLights(), 0.35);
+    const f = HIT.face, w = HIT.w + 0.33 - o.z0, st = o.st, lit = Math.max(gasLights(), 0.35); // (w: as if the board started at 0.33, where its layout was drawn)
     if (f !== 3 && f !== 4) { BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; }
     const [vx, vy] = R(o.x, o.y);
     if (w > 0.57) { // the brand
       BG[i] = C(st.col, 3 + lit * 7);
-      const ch = gasFaceText(o, st.brand, i, t, vx, vy, 0.615, 0.06, 0.04);
+      const ch = gasFaceText(o, st.brand, i, t, vx, vy, 0.615 - 0.33 + o.z0, 0.06, 0.04);
       return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 15)), true;
     }
     BG[i] = C(GRAY, 0.6 + lit * 0.6);
     const row = Math.floor((0.565 - w) / 0.075), p = gasPrices(st)[row];
     if (!p || Math.abs(HIT.u) > o.hl - 0.012 || w < 0.34) { BG[i] = C(WHITE, 2.4 + L * .3); return set(i, ' ', 0), true; } // the frame
-    const ch = gasFaceText(o, p, i, t, vx, vy, 0.53 - row * 0.075, 0.045, 0.036);
+    const ch = gasFaceText(o, p, i, t, vx, vy, 0.53 - row * 0.075 - 0.33 + o.z0, 0.045, 0.036);
     return set(i, ch && ch !== ' ' ? ch : ' ', C(ch && ch >= 'A' ? WHITE : RED, 15)), true;
   },
   // the ice chest by the door: white, ICE in blue down its front, frost on the lid
@@ -22667,10 +22667,10 @@ function gasFloor(i, r, x, wx, wy, f, L, d) {
   const st = gasStationAt(wx, wy), lx = rel(wx - st.x0), ly = rel(wy - st.y0), fp = homeBalconyPavingFootprint(d, eye);
   const out = Math.hypot(Math.max(0, 0.45 - lx, lx - 2.55), Math.max(0, 0.07 - ly, ly - 1.83)), under = out === 0;
   const lit = gasLights() * clamp(1 - out / 0.45, 0, 1), base = Math.max(L * roadDark() * .44 * (under ? .7 : 1), lit * 6.5);
-  // concrete slabs, their joints filtered; oil where the cars stand; yellow hatching in front of the door; white under the canopy after dark
+  // concrete slabs, their joints faint and filtered (strong, they read as road markings); a little oil where the cars stand; yellow hatching in front of the door; white under the canopy after dark
   const j = Math.max(coveGroove(lx, .5, .012, fp), coveGroove(ly, .5, .012, fp));
-  let bg = C(lit > .3 ? WHITE : GRAY, base * (1 - j * .3) + (hash(Math.floor(wx * 40), Math.floor(wy * 40), 88) - .5) * .4 * clamp(1 - fp / .02, 0, 1));
-  if (GAS.lanes.some(l => Math.abs(ly - l) < 0.07) && Math.abs(lx - GAS.slotX) < 0.16 && noise(wx * 7, wy * 7, 87) > 0.52) bg = C(GRAY, base * .55); // oil
+  let bg = C(lit > .3 ? WHITE : GRAY, base * (1 - j * .12) + (hash(Math.floor(wx * 90), Math.floor(wy * 90), 88) - .5) * .25 * clamp(1 - fp / .008, 0, 1)); // (a fine grain, only up close: coarser, it blotched)
+  if (GAS.lanes.some(l => Math.abs(ly - l) < 0.05) && Math.abs(lx - GAS.slotX) < 0.12 && noise(wx * 9, wy * 9, 87) > 0.58) bg = C(GRAY, base * .82); // oil, a faint stain where the cars stand
   if (ly > 1.86 && Math.abs(lx - 1.5) < 0.3 && roadBands(lx + ly, 1 / 7, .45, fp) > .5) bg = C(YEL, Math.max(3, base * 1.1));
   set(i, ' ', 0); BG[i] = bg; LAMPL[i] = lit * 12;
 }
@@ -22685,10 +22685,10 @@ function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(front ? WHITE : BRICK, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
   const fp = uStep;
   if (z > h - 0.025) { BG[i] = C(GRAY, 1.6 + L * .3 + (z > h - .01 ? .7 : 0)); return set(i, ' ', 0); } // the coping
-  if (z > 0.29) { // the fascia
+  if (z > 0.29) { // the fascia (its lettering kept inside it, clear of the coping above: centred at 0.3225, 0.05 high)
     BG[i] = C(st.col, 2 + L * 0.2 + night * 3);
-    if (front && wallText(i, u, uStep, z, d, 'FOOD MART', s * (wc - a + 1.5), 0.335, 0.07, 0.06, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
-    if (!front && wallText(i, u, uStep, z, d, st.brand, s * (wc - a + 0.5), 0.335, 0.06, 0.06, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
+    if (front && wallText(i, u, uStep, z, d, 'FOOD MART', s * (wc - a + 1.5), 0.3225, 0.07, 0.05, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
+    if (!front && wallText(i, u, uStep, z, d, st.brand, s * (wc - a + 0.5), 0.3225, 0.06, 0.05, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
     return set(i, ' ', 0);
   }
   if (!front) { // the side: brick, a door, a poster for the car wash
