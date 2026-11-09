@@ -149,7 +149,7 @@ test('Unicode graffiti keeps combining marks together without shifting subsequen
 
 test('the WebGL grid paints the same picture as the 2D canvas, and only odd characters go through fillText', () => withPage(async page => {
   const r = await page.evaluate(() => {
-    paused = true; GLP_SOFT = true; GLP_OFF = false; GLP = null; const fx = { ...settings }; Object.assign(settings, { bloom: 0, colorGrade: false, rainStreaks: false, vignette: false, grain: false }); // (headless GL is software: allowed here only; post-fx would change the picture)
+    paused = true; GLP_SOFT = true; GLP_OFF = false; GLP = null; const fx = { ...settings }; Object.assign(settings, { bloom: 0, colorGrade: false, rainStreaks: false, vignette: false, grain: false, eyeAdapt: false, fogRays: false }); // (headless GL is software: allowed here only; post-fx would change the picture)
     const n = cols * rows, word = 'ASCII CITY ~#@%& 0123', calls = [], original = g.fillText;
     for (let i = 0; i < n; i++) {
       CH[i] = i % 7 ? word[i % word.length] : ' '; COL[i] = C(1 + i % 13, 4 + i % 9);

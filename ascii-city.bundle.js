@@ -350,7 +350,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
@@ -28358,6 +28358,11 @@ function present2D() {
 // lights run on a wet lens and stretch over wet tarmac.
 // Colour grade: cool shadows and warm lights at night, warm at dusk, a touch of contrast by day, flatter in fog.
 // Vignette: the corners a little darker. Grain: a fine moving noise, mostly in the dark, that hides banding.
+// Eye adjustment: the frame's average brightness is followed slowly, so stepping from the dark street into a lit
+// shop starts a little over-exposed and settles in about a second (the other way, a little dark, more slowly).
+// Fog light rays: in fog, each light throws soft rays outward. The bright parts are gathered along the direction
+// towards the nearest light (the slope of the wide bloom), so anything in the way of a light, a window's bars,
+// a lamp's frame, leaves a darker shaft between brighter ones.
 // Minigames get only the vignette and grain: grading or smearing them would just muddy their colours.
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 // box-filter a texture down; threshold > 0 keeps only what's bright (soft knee, so nothing pops in or out)
@@ -28383,15 +28388,29 @@ void main() {
     + (texture2D(src, uv + o2).rgb + texture2D(src, uv - o2).rgb) * 0.0702702703;
   gl_FragColor = vec4(c, 1.0);
 }`;
+const POSTFX_RAYS = `precision highp float;
+uniform sampler2D src, guide; uniform vec2 size, guideSize; uniform float len;
+float lum(vec2 uv) { vec3 c = texture2D(guide, uv).rgb; return max(c.r, max(c.g, c.b)); }
+void main() {
+  vec2 uv = gl_FragCoord.xy / size, t = 1.0 / guideSize;
+  vec2 g = vec2(lum(uv + vec2(t.x, 0.0)) - lum(uv - vec2(t.x, 0.0)), lum(uv + vec2(0.0, t.y)) - lum(uv - vec2(0.0, t.y)));
+  if (dot(g, g) < 1e-8) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec2 step = normalize(g) * len / 16.0 / size; // (towards the light, a sixteenth of the ray at a time)
+  vec3 sum = vec3(0.0); float tot = 0.0;
+  for (int i = 1; i <= 16; i++) { float w = 1.0 - float(i) / 17.0; sum += texture2D(src, uv + step * float(i)).rgb * w; tot += w; }
+  gl_FragColor = vec4(sum / tot, 1.0);
+}`;
 const POSTFX_COMPOSE = `precision highp float;
-uniform sampler2D scene, near, wide, streak; uniform vec2 size;
-uniform float bloom, streaks, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
+uniform sampler2D scene, near, wide, streak, rayTex; uniform vec2 size;
+uniform float bloom, streaks, rays, exposure, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
 float hash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
   vec3 s = texture2D(scene, uv).rgb;
-  if (bloom > 0.0 || streaks > 0.0) {
-    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks;
+  if (abs(exposure - 1.0) > 0.001) s = 1.0 - pow(1.0 - clamp(s, 0.0, 1.0), vec3(exposure)); // (no hard clip either way)
+  if (bloom > 0.0 || streaks > 0.0 || rays > 0.0) {
+    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks
+      + texture2D(rayTex, uv).rgb * 0.8 * rays;
     b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
     s = 1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0));
   }
@@ -28430,6 +28449,37 @@ function postFxStreaks() {
   if (!settings.rainStreaks || mode === 'room') return 0;
   return clamp(Math.max(rain || 0, (wet || 0) * 0.2), 0, 1) * (0.5 + 0.5 * postFxNight());
 }
+// fog light rays: how foggy, outdoors only, stronger at night when there are lights to see
+function postFxRays() {
+  if (!settings.fogRays || mode === 'room') return 0;
+  return clamp(fogAmt || 0, 0, 1) * (0.35 + 0.65 * postFxNight());
+}
+// Eye adjustment. The frame's brightness is worked out from the grid itself (cells' palette colours with their
+// fog, a glyph counting for a quarter of its cell), so there's no pixel readback.
+let postFxPalLum = null;
+function postFxSceneLum() {
+  if (!postFxPalLum) { postFxPalLum = new Float32Array(256); for (let k = 0; k < 256; k++) { const c = PALRGB[k]; postFxPalLum[k] = c ? (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255 : 0; } }
+  const P = postFxPalLum, fl = (0.2126 * fogRGB[0] + 0.7152 * fogRGB[1] + 0.0722 * fogRGB[2]) / 255;
+  let sum = 0, n = 0;
+  for (let i = 0, N = cols * rows; i < N; i += 2) {
+    const fb = FOGB[i] / 8, fs = Math.min(1, FOGS[i] / 8);
+    let l = (BG[i] === NONE ? 0 : P[BG[i]]) * (1 - fb) + fl * fb;
+    if (CH[i] && CH[i] !== ' ' && fs < 1) l = l * 0.75 + (P[COL[i]] * (1 - fs) + fl * fs) * 0.25;
+    sum += Math.log(l + 0.02); n++;
+  }
+  return n ? Math.exp(sum / n) : 0.1;
+}
+// how exposed this frame is: the brightness now against what the eye has got used to, which follows it, quickly
+// towards brighter and more slowly towards dark. 1 once settled; a pause or a jump of more than half a second resets.
+function postFxExposure(fx) {
+  if (!settings.eyeAdapt) { fx.adapt = null; return 1; }
+  const now = performance.now() / 1000, cur = postFxSceneLum(), dt = now - (fx.adaptT || 0);
+  fx.adaptT = now;
+  if (fx.adapt == null || dt > 0.5 || dt < 0) { fx.adapt = cur; return 1; }
+  const tau = cur > fx.adapt ? 0.45 : 1.1;
+  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-dt / tau));
+  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.35), 0.7, 1.45);
+}
 // the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
 function postFxGrade() {
   const n = mode === 'room' ? 0.3 : postFxNight(), dk = mode === 'room' ? 0 : (dusk || 0) * (1 - n * 0.5), d = Math.max(0, 1 - n - dk);
@@ -28445,7 +28495,7 @@ function postFxGrade() {
 function postFxWanted(world) {
   if (POSTFX_OFF) return false;
   if (settings.vignette || settings.grain) return true;
-  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || !!settings.colorGrade);
+  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || postFxRays() > 0 || !!settings.colorGrade || !!settings.eyeAdapt);
 }
 
 function postFxInit(st) {
@@ -28459,17 +28509,19 @@ function postFxInit(st) {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return null;
     const loc = {}; return { p, U: n => loc[n] ??= gl.getUniformLocation(p, n) };
   };
-  const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE);
-  if (!down || !blur || !compose) return null;
+  const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE), rays = program(POSTFX_RAYS);
+  if (!down || !blur || !compose || !rays) return null;
+  // (units 3-7: WebGL only promises 8. The mask and the rays' guide borrow unit 4 for their own passes.)
   gl.useProgram(compose.p);
-  ['scene', 'near', 'wide', 'streak'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
-  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 4);
+  ['scene', 'near', 'wide', 'streak', 'rayTex'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
+  gl.useProgram(rays.p); gl.uniform1i(rays.U('src'), POSTFX_UNIT); gl.uniform1i(rays.U('guide'), POSTFX_UNIT + 1);
+  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 1);
   gl.useProgram(blur.p); gl.uniform1i(blur.U('src'), POSTFX_UNIT);
   gl.useProgram(st.prog);
-  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, mask);
+  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, mask);
   for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
   gl.activeTexture(gl.TEXTURE0);
-  return { down, blur, compose, mask, key: '' };
+  return { down, blur, compose, rays, mask, key: '' };
 }
 
 // a colour texture and a framebuffer drawing into it
@@ -28483,19 +28535,19 @@ function postFxTarget(gl, w, h) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return ok ? { tex, fb, w, h } : null;
 }
-const POSTFX_TARGETS = ['scene', 'a4', 'b4', 's4', 'a8', 'b8'];
+const POSTFX_TARGETS = ['scene', 'p4', 'a4', 'b4', 's4', 'r4', 'a8', 'b8'];
 function postFxSize(st, fx) {
   const { gl } = st, W = cv.width, H = cv.height, key = W + 'x' + H;
   if (fx.key === key && fx.maskKey === cols + 'x' + rows) return true;
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); // (the mask's rows are one byte a cell, any width)
   fx.maskData = new Uint8Array(cols * rows); fx.maskKey = cols + 'x' + rows;
-  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, cols, rows, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, fx.maskData);
   if (fx.key === key) return true;
   for (const n of POSTFX_TARGETS) if (fx[n]) { gl.deleteTexture(fx[n].tex); gl.deleteFramebuffer(fx[n].fb); }
   const q = n => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
   fx.scene = postFxTarget(gl, W, H);
-  fx.a4 = postFxTarget(gl, ...q(4)); fx.b4 = postFxTarget(gl, ...q(4)); fx.s4 = postFxTarget(gl, ...q(4));
+  for (const n of ['p4', 'a4', 'b4', 's4', 'r4']) fx[n] = postFxTarget(gl, ...q(4)); // (p4: the bright parts, unblurred)
   fx.a8 = postFxTarget(gl, ...q(8)); fx.b8 = postFxTarget(gl, ...q(8));
   fx.key = key;
   return POSTFX_TARGETS.every(n => fx[n]);
@@ -28523,7 +28575,7 @@ function postFxEnd(st) {
     if (threshold > 0) {
       const M = fx.maskData, puddle = POSTFX_PUDDLE_GLOW * 255 | 0;
       for (let i = 0, n = M.length; i < n; i++) M[i] = FL[i] === 2 ? puddle : 255;
-      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
       gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
     }
@@ -28532,18 +28584,26 @@ function postFxEnd(st) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
   const pass = (src, dst, x, y) => { into(dst); bind(POSTFX_UNIT, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); gl.drawArrays(gl.TRIANGLES, 0, 3); };
-  const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0;
-  if (bloom || streaks) {
-    down(fx.scene, fx.a4, 1, postFxThreshold()); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
+  const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0, rays = world ? postFxRays() : 0;
+  const exposure = world ? postFxExposure(fx) : 1;
+  if (bloom || streaks || rays) {
+    // (fog scatters light: in fog, dimmer lights count as bright too, and fog dims the distant ones)
+    down(fx.scene, fx.p4, 1, postFxThreshold() - 0.04 * rays); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
     gl.useProgram(fx.blur.p);
-    if (streaks) { pass(fx.a4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
-    pass(fx.a4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
-    if (bloom) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
+    if (streaks) { pass(fx.p4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
+    pass(fx.p4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
+    if (bloom || rays) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
+    if (rays) {
+      into(fx.r4); gl.useProgram(fx.rays.p); bind(POSTFX_UNIT, fx.p4); bind(POSTFX_UNIT + 1, fx.a8); const R = fx.rays.U;
+      gl.uniform2f(R('size'), fx.r4.w, fx.r4.h); gl.uniform2f(R('guideSize'), fx.a8.w, fx.a8.h); gl.uniform1f(R('len'), fx.r4.h * 0.14);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.useProgram(fx.blur.p); pass(fx.r4, fx.b4, 0.5, 0); pass(fx.b4, fx.r4, 0, 0.5); // (just enough to hide the 1/4 size)
+    }
   }
   into(null); gl.useProgram(fx.compose.p); const U = fx.compose.U;
-  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4);
+  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4); bind(POSTFX_UNIT + 4, fx.r4);
   gl.uniform2f(U('size'), cv.width, cv.height);
-  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks);
+  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks); gl.uniform1f(U('rays'), rays); gl.uniform1f(U('exposure'), exposure);
   const grade = world && settings.colorGrade ? postFxGrade() : null;
   gl.uniform1f(U('grade'), grade ? 1 : 0);
   if (grade) { gl.uniform3fv(U('shadowTint'), grade.shadow); gl.uniform3fv(U('lightTint'), grade.light); gl.uniform1f(U('sat'), grade.sat); }
@@ -32189,7 +32249,7 @@ function buildPause() {
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
-      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
