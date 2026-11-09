@@ -6674,7 +6674,7 @@ function backToSidewalk(p) {
 }
 // somebody new in the city, in place of somebody who's gone (gun.js): their own home, their own routine
 function respawnPerson(p) {
-  for (const k of ['down', 'dead', 'flee', 'gawk', 'help', 'talk', 'dog', 'knew', 'follow', 'hailing']) delete p[k];
+  for (const k of ['down', 'dead', 'flee', 'gawk', 'help', 'talk', 'dog', 'knew', 'follow', 'hailing', 'facing']) delete p[k];
   p.home = pickHome();
   p.work = nearestDoor(p.home.x + (Math.random() - 0.5) * 24, p.home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
   p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9; p.dogSeed = null; p.dog = null; p.look = null; p.seed = null; // (somebody new)
@@ -6713,6 +6713,9 @@ function stepPeople(dt, t, everywhere = false) {
     if (!w) continue;
     if (w.gate && !w.go) { if (!w.gate(t)) continue; w.go = true; }
     const ex = rel(w.x - p.x), ey = rel(w.y - p.y), dist = Math.hypot(ex, ey), step = p.sp * (w.fast ? 2.2 : 1) * dt;
+    // Street routing keeps p.last as an axis-aligned leg. Park and doorway
+    // detours turn independently, including reversing after a bench stop.
+    if (dist > 1e-9) p.facing = [ex / dist, ey / dist];
     if (dist <= step) {
       p.x = worldCoord(w.x); p.y = worldCoord(w.y); p.path.shift();
       if (w.stay) p.wait = w.stay;
@@ -17691,7 +17694,10 @@ function citySprites() {
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
       drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
-    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m), { hold: m });
+    } else {
+      const facing = m.follow ? m.last : m.facing || m.last;
+      drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, facing[0], facing[1], streetLook(m), m.hailing ? 'wave' : walkPose(m), { hold: m });
+    }
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       const dogGround = walkGround(d.x, d.y), handGround = walkGround(m.x, m.y);

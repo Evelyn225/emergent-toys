@@ -281,7 +281,10 @@ function citySprites() {
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
       drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
-    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m), { hold: m });
+    } else {
+      const facing = m.follow ? m.last : m.facing || m.last;
+      drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, facing[0], facing[1], streetLook(m), m.hailing ? 'wave' : walkPose(m), { hold: m });
+    }
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       const dogGround = walkGround(d.x, d.y), handGround = walkGround(m.x, m.y);
