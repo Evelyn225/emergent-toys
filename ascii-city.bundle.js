@@ -351,7 +351,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
@@ -21242,7 +21242,7 @@ function roomCeil(i, r, x, rx, ry) {
   if(room.kind==='train'){BG[i]=C(WHITE,2.5);set(i,' ',0);return;}
   if(room.kind==='station'){BG[i]=C(GRAY,2.4-coveGroove(wx,2.5,.015,d/projY)*.5);set(i,' ',0);return;}
   const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
-  if (strip && !ceilLit()) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off)
+  if (strip && !tubeLit(Math.round(wx / 2.5) * 97 + Math.floor(wy / 2.5))) { BG[i] = C(GRAY, CEIL_OFF_LAMP); return set(i, ' ', 0); } // (a tube switched off, or failing: room-light.js)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
@@ -26811,6 +26811,7 @@ ROOM_FLOORS.casinoCarpet = (i, f, wx, wy, r) => casinoFloor(i, f, wx, wy, homeBa
 function casinoCeil(i, wx, wy) { // chandeliers: bright drops round a gilt rose, on a dark ceiling
   const d = Math.hypot(fract(wx / 4) - 0.5, fract(wy / 4) - 0.5) * 4;
   set(i, ' ', 0);
+  if (!ceilLit()) { BG[i] = d < 0.15 ? C(GRAY, 1.3) : d < 0.32 ? C(YEL, 1.4) : C(GRAY, 0.9); return; } // (switched off: dull glass, a dull rose, no pool of light)
   BG[i] = d < 0.15 ? C(WHITE, 13) : d < 0.32 ? C(YEL, 6) : d < 0.7 ? C(YEL, 1.6) : C(GRAY, 0.9);
 }
 // cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
@@ -28294,6 +28295,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
+  if (!city) { roomPools(); tvGlow(); } // pools of light under a room's lamps, dim between; a TV's glow (room-light.js)
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   // (particles.js: after the puddles' reflections, before the fog)
   if (city) { reflect(); drawParticles(dt); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
@@ -28653,10 +28655,13 @@ function postFxExposure(fx) {
   if (!fx.lumN-- || fx.lum == null) { fx.lum = postFxSceneLum(); fx.lumN = 2; }
   const now = performance.now() / 1000, cur = fx.lum, dt = now - (fx.adaptT || 0);
   fx.adaptT = now;
-  if (fx.adapt == null || dt > 0.5 || dt < 0) { fx.adapt = cur; return 1; }
-  const tau = cur > fx.adapt ? 0.45 : 1.1;
-  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-dt / tau));
-  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.35), 0.7, 1.45);
+  if (fx.adapt == null) { fx.adapt = cur; return 1; }
+  // (a long gap counts as one short step, not a reset: building a room as you walk in can take a moment, and that's
+  // just when the eye should still be used to outside)
+  const step = clamp(dt, 0, 0.1), tau = cur > fx.adapt ? 0.6 : 1.6;
+  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-step / tau));
+  // (a street and a shop differ by under 2x in this palette: the strong curve makes that step through the door show)
+  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.7), 0.55, 1.8);
 }
 // the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
 function postFxGrade() {
@@ -29002,6 +29007,116 @@ function drawParticles(dt) {
       if (gone > 0 && hash(Math.floor(p.seed * 1e4), Math.floor(p.age * 3), 3311) < gone) continue;
       speck(p.x, p.y, p.z + (down ? 0.003 : 0), down ? (p.seed > 0.5 ? ',' : '.') : '`,~\''[Math.floor(p.age * 5 + p.seed * 4) & 3], C(p.base, (4 + 8 * lit) * (down ? 0.75 : 1)), down ? 0.97 : 1);
     } else if (p.kind === 'spark') speck(p.x, p.y, p.z, f < 0.5 ? "'" : '.', C(f < 0.4 ? YEL : ORANGE, 14 - f * 6));
+  }
+}
+// ===== light that falls where the lamps are, indoors. A room is otherwise lit evenly; here each screen cell, from its
+// depth, finds where it is in the room and is brightened under and near the room's own lights (pendants, paper
+// lanterns, spot tracks, the chandeliers) and darkened away from them, so a bar or an izakaya at night has warm pools
+// under its lamps and dim corners between. The lights themselves keep their colour. With the switch off there are no
+// pools, just the dim room. Homes light themselves (home-lighting-quality.js) and are left alone.
+//
+// Tired tubes: in the subway station, the storage rooms, and the laundromat late at night, about one tube in six is
+// failing (it stutters off now and then) and a few are dead. They count as lights here too, so the floor and walls
+// under a failing tube darken with it.
+
+// a tube by its id (any number for the tube) is lit right now: the switch, then whether it's failing
+function tubeLit(id) {
+  if (!ceilLit()) return false;
+  id = Math.round(id * 100); // (ids are sums worked out in more than one order: a hair apart is the same tube)
+  if (!room || !tubesTired()) return true;
+  const k = room.flakyTube === id ? 0.1 : hash(id, 1, 3401); // (each tired room has one failing for sure)
+  if (k < 0.04) return false; // dead
+  if (k > 0.2) return true;
+  // failing: bursts of stuttering every few seconds, steady between
+  return hash(id, Math.floor(T * 0.6 + k * 40), 3402) > 0.3 || hash(id, Math.floor(T * 14), 3403) > 0.45;
+}
+const tubesTired = () => room.kind === 'station' || room.kind === 'storage' || room.kind === 'laundry' && (tod >= 22 || tod < 5);
+
+// the room's lights: { x, y, z, i (strength), on() }, worked out once per room (they don't move)
+function roomLightSources(r = room) {
+  if (r.lightSources) return r.lightSources;
+  if (r === room) { prepareInteriorBattens(); prepareInteriorHanging(); } // (the fittings are built the first time they're drawn)
+  const S = [], top = r.def.height || 3, all = () => ceilLit();
+  for (const p of r.props) {
+    if (p.ceilingPendant) S.push({ x: p.x, y: p.y, z: top - 0.55, i: 1, on: all });
+    else if (p.paperLantern) { const q = p.paperLantern; S.push({ x: p.x, y: p.y, z: q.base + q.height / 2, i: 0.9, on: all }); }
+    else if (p.ceilingTrack) for (const sx of p.ceilingTrack.spots) S.push({ x: sx, y: p.y, z: top - 0.3, i: 0.7, on: all });
+    else if ((p.ceilingBatten || p.laundryCeilingLight || p.storageCeilingLight) && tubesTired()) { // (only where tubes tire: elsewhere a room of tubes is evenly lit)
+      const b = p.ceilingBatten || p.laundryCeilingLight || p.storageCeilingLight, n = b.modules, L = b.length;
+      for (let k = 0; k < n; k++) { const y = p.y - L / 2 + L / n * (k + 0.5), id = p.x * 31 + y; S.push({ x: p.x, y, z: top - 0.1, i: 0.8, tube: id, on: () => tubeLit(id) }); }
+    }
+  }
+  if (r.def.ceil === 'chandelier') for (let y = 2; y < r.H; y += 4) for (let x = 2; x < r.W; x += 4) S.push({ x, y, z: top - 0.4, i: 1.1, on: all });
+  if (r.kind === 'station') for (let x = 10; x < 37; x += 2.5) for (let y = 1.25; y < r.H; y += 2.5) { const id = Math.round(x / 2.5) * 97 + Math.floor(y / 2.5); S.push({ x, y, z: top - 0.1, i: 0.7, tube: id, on: () => tubeLit(id) }); }
+  const tubes = S.filter(s => s.tube != null);
+  if (tubes.length) r.flakyTube = Math.round(tubes[Math.floor(hash(r.W, r.H, 3404) * tubes.length)].tube * 100);
+  return r.lightSources = S;
+}
+
+// after the room's walls, floor, ceiling and things are drawn, before the haze (render.js)
+function roomPools() {
+  if (!settings.roomPools || !room || homeRecord(room)) return;
+  const S = roomLightSources();
+  if (!S.length) return;
+  const lit = S.filter(s => s.on()), base = 0.38, reach2 = 1.35 * 1.35; // (how dim far from any lamp; a pool's size, metres)
+  for (let i = 0, n = cols * rows; i < n; i++) {
+    const t = ZB[i];
+    if (!(t > 0 && t < 40)) continue;
+    const c = i % cols, r = i / cols | 0, cx = 2 * (c + 0.5) / cols - 1;
+    const x = px + (dx - dy * tf * cx) * t, y = py + (dy + dx * tf * cx) * t, z = eye + (hor - r - 0.5) * t / projY;
+    let e = base;
+    for (const s of lit) { const ex = x - s.x, ey = y - s.y, ez = (z - s.z) * 0.8, q = 1 + (ex * ex + ey * ey + ez * ez) / reach2; e += s.i * 0.75 / (q * q); } // (falls off fast: a pool, not a wash)
+    const k = Math.min(1.3, e);
+    if (Math.abs(k - 1) < 0.04) continue;
+    const bg = BG[i];
+    if (bg !== NONE && !roomPoolLamp(bg)) BG[i] = roomPoolShade(bg, k);
+    const col = COL[i];
+    if (CH[i] && CH[i] !== ' ' && !roomPoolLamp(col)) COL[i] = roomPoolShade(col, k);
+  }
+}
+// a colour k times as bright, in its own base (WET's top shade would be NONE: it stops one short)
+const roomPoolShade = (c, k) => (c & 0xf0) | Math.max(0, Math.min(c >> 4 === WET ? 14 : 15, Math.round((c & 15) * k)));
+// a lamp's own glass or bulb: left as it is
+const roomPoolLamp = k => (k & 15) >= 12 && (k >> 4 === WHITE || k >> 4 === WARM || k >> 4 === YEL);
+
+// ---- the glow of a television that's on: a cool, shifting light on whatever's in front of it, falling off with
+// distance. Faint with the room's lights on; with them off, it's most of the light there is. (Homes too.)
+function tvSources(r = room) {
+  const out = [];
+  for (const p of r.props) {
+    const t = p.television || p.motelTV;
+    if (!t) continue;
+    const scale = t.scale || 1, angle = p.television ? (t.angle || 0) : Math.PI / 2, lift = t.lift || 0;
+    // the screen: 1.13 up (scaled), facing out along the TV's own v axis (home-television.js)
+    out.push({ x: p.x - Math.sin(angle) * 0.063 * scale, y: p.y + Math.cos(angle) * 0.063 * scale, z: 1.13 * scale + lift,
+      nx: -Math.sin(angle), ny: Math.cos(angle), half: 0.68 * scale });
+  }
+  return out;
+}
+function tvGlow() {
+  if (!room || !room.tv) return;
+  const S = tvSources();
+  if (!S.length) return;
+  const dark = roomLightsOn(room) ? 0.3 : 1;
+  // the picture's brightness and colour wander, with a cut now and then
+  const cut = Math.floor(T * 0.45), pulse = 0.62 + 0.25 * Math.sin(T * 2.3 + cut) + 0.13 * Math.sin(T * 7.1);
+  const tint = hash(cut, 7, 3411) < 0.35 ? CYAN : BLUE, R2 = 3.2 * 3.2;
+  for (let i = 0, n = cols * rows; i < n; i++) {
+    const t = ZB[i];
+    if (!(t > 0 && t < 30)) continue;
+    const c = i % cols, row = i / cols | 0, cx = 2 * (c + 0.5) / cols - 1;
+    const x = px + (dx - dy * tf * cx) * t, y = py + (dy + dx * tf * cx) * t, z = eye + (hor - row - 0.5) * t / projY;
+    if (x < -0.05 || y < -0.05 || x > room.W + 0.05 || y > room.H + 0.05) continue; // (only in the room: not the view out of its window)
+    let g = 0;
+    for (const s of S) {
+      const ex = x - s.x, ey = y - s.y, ez = z - s.z, front = ex * s.nx + ey * s.ny;
+      if (front < 0.06) continue; // (behind or level with the screen: the screen itself, its back, the wall it's on)
+      const d2 = ex * ex + ey * ey + ez * ez;
+      g += (front / Math.sqrt(d2)) / (1 + d2 / R2);
+    }
+    if (g < 0.04) continue;
+    const a = Math.min(0.8, g * 1.4 * pulse * dark);
+    if (BG[i] !== NONE) BG[i] = hazeTint(BG[i], C(tint, 5 + 8 * a), a * 0.85);
   }
 }
 // Reused canvas surfaces work with both presenters. No pixel readbacks and no work while sober.
@@ -32655,7 +32770,7 @@ function buildPause() {
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
-      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}${toggle('roomPools', 'Pools of light indoors')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -45829,6 +45944,7 @@ function sharedPendantCeil(i,on){BG[i]=on?ceilLit()?C(WARM,14):C(GRAY,CEIL_OFF_L
 // Coloured spots sweeping over a dark ceiling: they're big enough to read, and
 // their hue changes as a whole so nothing flickers cell by cell.
 function sharedDiscoCeil(i,wx,wy) {
+  if(!ceilLit())return sharedDarkCeil(i); // (the lights off: the spots too)
   const on=hash(Math.floor(wx),Math.floor(wy),9)>.72;
   BG[i]=on?C(NEON[Math.floor(wx+wy*2+T*1.5)&3],4):C(GRAY,.5);set(i,' ',0);
 }
@@ -51480,9 +51596,10 @@ function PAPER_LANTERN(x,y,{ceiling=3,top=2.35,height=.45,radius=.17}={}) {
     const rib=coveGroove(HIT.w-base,height/12,.005,footprint),fine=coveDetail(t,.035);
     const fibre=fine?Math.sin(HIT.u*640)*Math.sin(HIT.w*710)*fine*.08:0;
     const warmth=1-Math.abs((HIT.w-base)/height-.5)*1.2;
+    if(!ceilLit()){BG[i]=C(RED,1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*.6+fibre);set(i,' ',0);return true;} // (switched off: just paper)
     BG[i]=C(inside?ORANGE:RED,(inside?6:5.6)+Math.max(.3,night)*1.3+warmth*1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*3+fibre);set(i,' ',0);return true;
   };
-  const glow=(i,t,L)=>{BG[i]=C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const glow=(i,t,L)=>{BG[i]=ceilLit()?C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz)):C(GRAY,CEIL_OFF_LAMP);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const p of parts)drawBox({...p.box,x:vx,y:vy,lanternRole:p.role},p.role==='paper'?paper:p.role==='bulb'?glow:dark,coveRayLathe);
     for(const [ax,ay,bx,by]of [[-ringRadius+.002,0,ringRadius-.002,0],[0,-ringRadius+.002,0,ringRadius-.002]]){
@@ -51526,13 +51643,14 @@ function ceilingBattenPrism(half,width,z0,z1,bevel) {
 function CEILING_BATTEN(x,y,length,ceiling) {
   const n=Math.max(1,Math.ceil(length/1.8)),pitch=length/n,half=Math.min(1.4,pitch-.12)/2,parts=[];
   const metal=(i,t,L)=>{BG[i]=C(WHITE,2.3+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const glass=(i,t,L)=>{BG[i]=ceilLit()?C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;};
+  // (each tube asks for itself: in some rooms one fails now and then, room-light.js)
+  const glassOf=id=>(i,t,L)=>{BG[i]=tubeLit(id)?C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;};
   const clip=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const add=(u,a,b,z0,z1,bevel,shade)=>parts.push({box:{...ceilingBattenPrism(a,b,z0,z1,bevel),y:u},shade});
   for(let k=0;k<n;k++){const u=-length/2+pitch*(k+.5);
     // The lower clips and diffuser reject hidden housing pixels first.
     for(const e of [-1,1])add(u+e*(half-.08),.012,.18,ceiling-.064,ceiling-.052,.002,clip);
-    add(u,half-.028,.17,ceiling-.061,ceiling-.052,.002,glass);
+    add(u,half-.028,.17,ceiling-.061,ceiling-.052,.002,glassOf(x*31+y+u));
     add(u,half,.2,ceiling-.055,ceiling,.008,metal);
   }
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const p of parts)drawBox({...p.box,x:vx,y:vy+p.box.y},p.shade,homeRayWorktop);}),

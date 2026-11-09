@@ -13,13 +13,14 @@ function ceilingBattenPrism(half,width,z0,z1,bevel) {
 function CEILING_BATTEN(x,y,length,ceiling) {
   const n=Math.max(1,Math.ceil(length/1.8)),pitch=length/n,half=Math.min(1.4,pitch-.12)/2,parts=[];
   const metal=(i,t,L)=>{BG[i]=C(WHITE,2.3+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
-  const glass=(i,t,L)=>{BG[i]=ceilLit()?C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;};
+  // (each tube asks for itself: in some rooms one fails now and then, room-light.js)
+  const glassOf=id=>(i,t,L)=>{BG[i]=tubeLit(id)?C(WHITE,HIT.nz<-.7?12.5:4.2+L*.12):C(GRAY,CEIL_OFF_LAMP+L*.06);set(i,' ',0);return true;};
   const clip=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
   const add=(u,a,b,z0,z1,bevel,shade)=>parts.push({box:{...ceilingBattenPrism(a,b,z0,z1,bevel),y:u},shade});
   for(let k=0;k<n;k++){const u=-length/2+pitch*(k+.5);
     // The lower clips and diffuser reject hidden housing pixels first.
     for(const e of [-1,1])add(u+e*(half-.08),.012,.18,ceiling-.064,ceiling-.052,.002,clip);
-    add(u,half-.028,.17,ceiling-.061,ceiling-.052,.002,glass);
+    add(u,half-.028,.17,ceiling-.061,ceiling-.052,.002,glassOf(x*31+y+u));
     add(u,half,.2,ceiling-.055,ceiling,.008,metal);
   }
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const p of parts)drawBox({...p.box,x:vx,y:vy+p.box.y},p.shade,homeRayWorktop);}),

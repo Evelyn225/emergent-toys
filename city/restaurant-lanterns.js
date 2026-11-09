@@ -19,9 +19,10 @@ function PAPER_LANTERN(x,y,{ceiling=3,top=2.35,height=.45,radius=.17}={}) {
     const rib=coveGroove(HIT.w-base,height/12,.005,footprint),fine=coveDetail(t,.035);
     const fibre=fine?Math.sin(HIT.u*640)*Math.sin(HIT.w*710)*fine*.08:0;
     const warmth=1-Math.abs((HIT.w-base)/height-.5)*1.2;
+    if(!ceilLit()){BG[i]=C(RED,1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*.6+fibre);set(i,' ',0);return true;} // (switched off: just paper)
     BG[i]=C(inside?ORANGE:RED,(inside?6:5.6)+Math.max(.3,night)*1.3+warmth*1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*3+fibre);set(i,' ',0);return true;
   };
-  const glow=(i,t,L)=>{BG[i]=C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const glow=(i,t,L)=>{BG[i]=ceilLit()?C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz)):C(GRAY,CEIL_OFF_LAMP);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const p of parts)drawBox({...p.box,x:vx,y:vy,lanternRole:p.role},p.role==='paper'?paper:p.role==='bulb'?glow:dark,coveRayLathe);
     for(const [ax,ay,bx,by]of [[-ringRadius+.002,0,ringRadius-.002,0],[0,-ringRadius+.002,0,ringRadius-.002]]){
