@@ -171,3 +171,27 @@ test('thin skate rails remain continuous solid steel at normal viewing distances
   return {samples,missed,glyphs};
  });assert.ok(r.samples>=20);assert.equal(r.missed,0);assert.equal(r.glyphs,0);
 }));
+
+test('Well Court stands on coastal grass and the pump outlet and stream meet the inside of its basin',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const s=QUIET_PLACES.find(s=>s.type==='court'),coast=coastalGround(s.x,s.y),surface=islandShoreSurface(s.x,s.y,coast.depth,coast.beach),out=s.pump.outlet;
+  const water=s.parts.find(p=>p.role==='trough-water'),nozzle=s.parts.find(p=>p.role==='outlet-mouth');
+  const streamX=s.x+out[0],streamY=s.y+out[1];
+  return {coastal:naturalCoastAt(s.x,s.y),grass:surface.background===GREEN,kind:blockKind(Math.floor(s.x/8),Math.floor(s.y/8)),inside:Math.abs(streamX-water.x)+.002<water.hl&&Math.abs(streamY-water.y)+.002<water.hw,meetsWater:Math.abs(s.base+s.pump.waterZ-water.z1)<1e-9,meetsMouth:Math.abs(s.base+out[2]-nozzle.z0)<1e-9};
+ });assert.ok(r.coastal&&r.grass&&r.inside&&r.meetsWater&&r.meetsMouth,JSON.stringify(r));assert.ok(!['yard','construction'].includes(r.kind));
+}));
+
+test('plant foliage uses folded pointed blades, attached stalks and two-sided rendered triangles',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const parts=QUIET_PLACES.flatMap(s=>s.parts),leaves=parts.filter(p=>p.material==='leaf'),bad=[];
+  for(const p of leaves){
+   if(!p.leaf||p.ellipsoid||!p.triangles?.length)bad.push('blob foliage');
+   for(const t of p.triangles||[])for(const side of [-1,1]){
+    const point=t.a.map((v,i)=>v+(t.e1[i]+t.e2[i])/3),n=t.n.map(v=>v*side),u=point[0]+n[0]*.025,v=point[1]+n[1]*.025,z=point[2]+n[2]*.025;
+    const hit=rayQuietLeaf(p.x+p.c*u-p.s*v,p.y+p.s*u+p.c*v,z,-p.c*n[0]+p.s*n[1],-p.s*n[0]-p.c*n[1],-n[2],p);
+    if(hit<0||Math.abs(hit-.025)>1e-7)bad.push('missing blade face');
+   }
+  }
+  return {leaves:leaves.length,stalks:parts.filter(p=>p.segment).length,bad:bad.slice(0,8)};
+ });assert.ok(r.leaves>80&&r.stalks>80);assert.deepEqual(r.bad,[]);
+}));

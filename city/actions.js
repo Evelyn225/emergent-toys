@@ -14,6 +14,15 @@ function tipDriver() {
 }
 // the driver of a car you've just taken: out onto the sidewalk beside it, shouting (someone from far off stands in)
 function ejectDriver(c) {
+  // A manned cruiser ejects its officer into the real foot-pursuit system.
+  // A unit which already deployed its officer must not create another one.
+  if(c.kind==='police'){
+    if(c.dropped)return;
+    const at=cruiserOfficerExit(c);if(!at)return;
+    c.dropped=true;
+    const officer={x:at[0],y:at[1],car:null,returnCar:null,corner:null,dir:0,goal:null,chase:true,ph:0,extra:true,burst:T+5};
+    footCops.push(officer);return officer;
+  }
   const p = people.find(q => !q.follow && !q.hailing && Math.hypot(rel(q.x - px), rel(q.y - py)) > 40);
   if (!p) return;
   const [x, y] = curbOf(c);
@@ -312,7 +321,7 @@ function interact() {
       else {
         c.mine = true; ejectDriver(c);
         const w = crime('steal', c.x, c.y);
-        say(w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
+        say(c.kind==='police'?'The officer scrambles out, radios it in and comes straight after you.':w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
       }
     }
     px = c.ex; py = c.ey;
