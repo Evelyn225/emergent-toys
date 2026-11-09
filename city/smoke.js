@@ -2,7 +2,7 @@
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
 // hazy. Walk into a cloud and it fogs your view. Close wisps use the same colour-only treatment in goods-ui.js.
-const haze = []; // { at: placeKey, kind: 'smoke' | 'vape' | 'steam' | 'engine' | 'soot', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
+const haze = []; // { at: placeKey, kind: 'smoke' | 'vape' | 'steam' | 'engine' | 'soot' | 'breath' (cold breath: particles.js), x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
 let hazeLastTip = 0, hazeDue = 0, hazeWisp = 0;
 const HAZE_WIND = [0.035, 0.012]; // outside, in cells a second (a light breeze)
 // breathe out (amount 0..3: a wisp, a drag, a big vape cloud) in front of you
@@ -14,7 +14,7 @@ function hazeExhale(amount, kind) {
     const sp = (Math.random() - 0.5) * (0.5 + amount * 0.3), d = (0.7 + Math.random() * 0.5 + amount * 0.35) * s, r = (0.14 + amount * 0.1 + Math.random() * 0.08) * s;
     haze.push({ at, kind, s, x: px + Math.cos(a + sp) * d, y: py + Math.sin(a + sp) * d, z: (1.45 + Math.random() * 0.3) * s,
       r, rMax: r * (kind === 'vape' ? 2.5 : 2) + (kind === 'vape' ? 0.22 : 0.15) * s, vx: Math.cos(a + sp) * (0.3 + amount * 0.25) * s, vy: Math.sin(a + sp) * (0.3 + amount * 0.25) * s,
-      life: 1, fade: mode === 'room' ? 1 / 25 : kind === 'vape' ? 1 / 12 : 1 / 6, seed: Math.random() * 100 }); // (a vape cloud hangs about a while, even outside)
+      life: 1, fade: kind === 'breath' ? 1 / 1.5 : mode === 'room' ? 1 / 25 : kind === 'vape' ? 1 / 12 : 1 / 6, seed: Math.random() * 100 }); // (a vape cloud hangs about a while, even outside)
   }
   while (haze.length > 90) haze.shift();
 }
@@ -63,7 +63,7 @@ function drawHaze() {
     if (p.at !== at) continue;
     const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
     const near = Math.hypot(rx_, ry_, p.z - eye) / p.r;
-    if (near < 1 && p.life * (1 - near) > inside && p.kind !== 'engine' && p.kind !== 'soot' && p.kind !== 'fwsmoke') { inside = p.life * (1 - near); insideKind = p.kind; } // (a car's smoke drifts past you, it doesn't swallow the view)
+    if (near < 1 && p.life * (1 - near) > inside && p.kind !== 'engine' && p.kind !== 'soot' && p.kind !== 'fwsmoke' && p.kind !== 'breath') { inside = p.life * (1 - near); insideKind = p.kind; } // (a car's smoke drifts past you, it doesn't swallow the view)
     if (depth < 0.05 * p.s * 10 || depth > vis) continue;
     const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, rw = p.r * sc, cy = hor - (p.z - eye) * projY / depth, rh = p.r * projY / depth * 0.75;
     const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
@@ -90,12 +90,15 @@ function hazeTint(background,target,opacity){
   if(HAZE_TINTS.has(key))return HAZE_TINTS.get(key);
   const a=PALRGB[bg],b=PALRGB[target],f=alpha/8,r=a[0]+(b[0]-a[0])*f,g_=a[1]+(b[1]-a[1])*f,bl=a[2]+(b[2]-a[2])*f;
   let best=0,error=Infinity;
-  for(let k=0;k<PALRGB.length;k++){const p=PALRGB[k],d=(p[0]-r)**2+(p[1]-g_)**2+(p[2]-bl)**2;if(d<error){error=d;best=k;}}
+  for(let k=0;k<PALRGB.length;k++){if(k===NONE)continue;const p=PALRGB[k],d=(p[0]-r)**2+(p[1]-g_)**2+(p[2]-bl)**2;if(d<error){error=d;best=k;}}
   if(HAZE_TINTS.size>=8192)HAZE_TINTS.delete(HAZE_TINTS.keys().next().value);
   HAZE_TINTS.set(key,best);return best;
 }
 function hazeCell(i,dens,kind){
   let target,opacity;
+  if(kind==='breath'){ // cold breath: a faint pale veil, the world (and its lettering) plain through it
+    if(BG[i]!==NONE||dens>.45)BG[i]=hazeTint(BG[i],C(WHITE,(10+dens*4)*Math.max(.6,amb)),dens*.38);FOGS[i]=FOGB[i]=0;return;
+  }
   if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
   else if(kind==='fwsmoke'){
     const flash=Math.exp(-Math.max(0,T-fwLight.t)*2.5),col=flash>.15?fwLight.col:GRAY;

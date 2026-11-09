@@ -388,6 +388,7 @@ function loop(t) {
   stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
+  stepParticles(dt); // moths, rain splashes and drips, leaves, sparks, cold breath (particles.js)
   stepFairFolk(dt);
   stepJadeIncense(dt);
   stepExchange();

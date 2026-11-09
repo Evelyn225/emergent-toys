@@ -1,12 +1,15 @@
 // Post-processing on the WebGL presenter (render.js glPresent). Only the GL path gets it: the canvas fallback is
-// already the slow path. With every effect off the grid shader draws straight to the screen as before, at no cost.
-// Each effect has its own setting (pause menu, "view"); all are kept subtle.
+// already the slow path. Each effect has its own setting (pause menu, "view"); all are kept subtle.
 //
-// Bloom: the grid is drawn into a full-size texture; its bright parts (judged by the brightest channel, so a pure
-// red neon glows as much as a white lamp) are box-filtered down to 1/4 size, blurred, taken down again to 1/8 for a
-// wider halo, blurred, and screen-blended back over the frame. Screen blending, not adding, so a lit sky can't clip
-// to white, and damped over what's already bright, so a big lit surface keeps its colour and only its edges
-// glow. Tuned so it mostly shows at night: signs, lamps, windows, headlights.
+// Kept cheap: nothing is drawn at full size twice. The per-pixel effects (eye adjustment, colour grade, vignette,
+// grain) run inside the grid shader itself as it paints the screen (postFxGrid sets them up). The glows are built
+// from a 1/4-size picture of the frame drawn straight from the cell grid (each cell its background, mixed with its
+// glyph's colour by how much of the cell the glyph covers), and added over the screen by the GPU's blending.
+//
+// Bloom: the bright parts of the 1/4 picture (judged by the brightest channel, so a pure red neon glows as much as
+// a white lamp; and only lights: see the glow weights below) are blurred, taken down to 1/8 for a wider halo,
+// blurred, and screen-blended over the frame. Screen blending, not adding, so a lit sky can't clip to white, and
+// damped over what's already bright, so a big lit surface keeps its colour and only its edges glow.
 // Rain streaks: in rain, and on wet streets after it, the same bright parts are also smeared up and down, the way
 // lights run on a wet lens and stretch over wet tarmac.
 // Colour grade: cool shadows and warm lights at night, warm at dusk, a touch of contrast by day, flatter in fog.
@@ -18,19 +21,33 @@
 // a lamp's frame, leaves a darker shaft between brighter ones.
 // Minigames get only the vignette and grain: grading or smearing them would just muddy their colours.
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
-// box-filter a texture down; threshold > 0 keeps only what's bright (soft knee, so nothing pops in or out)
-const POSTFX_DOWN = `precision highp float;
-uniform sampler2D src, mask; uniform vec2 srcSize, dstSize, canvas, cell, grid; uniform float spread, threshold, knee;
-vec3 tap(vec2 uv) { return texture2D(src, uv).rgb; }
+// the frame at 1/4 size, from the cells: as the grid shader (render.js), with a glyph's average cover for its shape
+const POSTFX_LOW = `precision highp float;
+uniform sampler2D cells, pal, cover; uniform vec2 grid, cell, canvas, size; uniform vec3 fog;
+vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
 void main() {
-  vec2 uv = gl_FragCoord.xy / dstSize, t = spread / srcSize;
-  vec3 c = (tap(uv + vec2(-t.x, -t.y)) + tap(uv + vec2(t.x, -t.y)) + tap(uv + vec2(-t.x, t.y)) + tap(uv + t)) * 0.25;
-  if (threshold > 0.0) {
-    float b = max(c.r, max(c.g, c.b)); c *= smoothstep(threshold, threshold + knee, b);
-    vec2 px = uv * canvas; c *= texture2D(mask, vec2(px.x, canvas.y - px.y) / cell / grid).r; // (per cell: how much it may glow)
-  }
+  vec2 uv = gl_FragCoord.xy / size, p = vec2(uv.x * canvas.x, canvas.y - uv.y * canvas.y), c = floor(p / cell);
+  if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
+  float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
+  vec3 col = mix(palette(d.b), fog, fb / 8.0);
+  if (d.r < 254.5 && fs < 7.5) col = mix(col, mix(palette(d.g), fog, fs / 8.0), texture2D(cover, vec2((d.r + 0.5) / 128.0, 0.5)).r);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+// keep only what's bright (soft knee, so nothing pops in or out), weighted per cell by the glow mask
+const POSTFX_BRIGHT = `precision highp float;
+uniform sampler2D src, mask; uniform vec2 size, canvas, cell, grid; uniform float threshold, knee;
+void main() {
+  vec2 uv = gl_FragCoord.xy / size;
+  vec3 c = texture2D(src, uv).rgb;
+  float b = max(c.r, max(c.g, c.b)); c *= smoothstep(threshold, threshold + knee, b);
+  vec2 px = uv * canvas; c *= texture2D(mask, vec2(px.x, canvas.y - px.y) / cell / grid).r; // (per cell: how much it may glow)
   gl_FragColor = vec4(c, 1.0);
 }`;
+// halve a texture's size (one bilinear tap at the corner between four texels is their average)
+const POSTFX_HALF = `precision highp float;
+uniform sampler2D src; uniform vec2 size;
+void main() { gl_FragColor = vec4(texture2D(src, gl_FragCoord.xy / size).rgb, 1.0); }`;
 // one direction of a 9-tap gaussian, in 5 linear samples (dir longer than 1 spreads the taps for a longer smear)
 const POSTFX_BLUR = `precision highp float;
 uniform sampler2D src; uniform vec2 size, dir;
@@ -53,35 +70,28 @@ void main() {
   for (int i = 1; i <= 16; i++) { float w = 1.0 - float(i) / 17.0; sum += texture2D(src, uv + step * float(i)).rgb * w; tot += w; }
   gl_FragColor = vec4(sum / tot, 1.0);
 }`;
-const POSTFX_COMPOSE = `precision highp float;
-uniform sampler2D scene, near, wide, streak, rayTex; uniform vec2 size;
-uniform float bloom, streaks, rays, exposure, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
-float hash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
+// the glows added up at 1/4 size, damped over what's already bright, ready to be blended over the screen
+const POSTFX_GLOW = `precision highp float;
+uniform sampler2D low, near, wide, streak, rayTex; uniform vec2 size; uniform float bloom, streaks, rays;
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
-  vec3 s = texture2D(scene, uv).rgb;
-  if (abs(exposure - 1.0) > 0.001) s = 1.0 - pow(1.0 - clamp(s, 0.0, 1.0), vec3(exposure)); // (no hard clip either way)
-  if (bloom > 0.0 || streaks > 0.0 || rays > 0.0) {
-    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks
-      + texture2D(rayTex, uv).rgb * 0.8 * rays;
-    b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
-    s = 1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0));
-  }
-  if (grade > 0.0) {
-    float l = dot(s, vec3(0.299, 0.587, 0.114));
-    vec3 g = mix(vec3(l), s, sat) * mix(shadowTint, lightTint, smoothstep(0.05, 0.6, l));
-    s = mix(s, clamp(g, 0.0, 1.0), grade);
-  }
-  if (vignette > 0.0) {
-    vec2 d = (uv - 0.5) * vec2(size.x / size.y, 1.0);
-    s *= 1.0 - vignette * smoothstep(0.35, 1.0, length(d));
-  }
-  if (grain > 0.0) {
-    float l = max(s.r, max(s.g, s.b));
-    float n = hash(gl_FragCoord.xy + seed) + hash(gl_FragCoord.xy * 1.37 + seed * 0.71) - 1.0; // (triangular: no visible bias)
-    s += n * grain * (0.0125 * (1.0 - l) + 0.003);
-  }
-  gl_FragColor = vec4(s, 1.0);
+  vec3 b = vec3(0.0);
+  // (mostly the tight 1/4 halo; the wide 1/8 one only a little, or a light you're close to hazes a whole wall)
+  if (bloom > 0.0) b += (texture2D(near, uv).rgb * 1.1 + texture2D(wide, uv).rgb * 0.6) * bloom;
+  if (streaks > 0.0) b += texture2D(streak, uv).rgb * 0.7 * streaks;
+  if (rays > 0.0) b += texture2D(rayTex, uv).rgb * 0.8 * rays;
+  vec3 s = texture2D(low, uv).rgb;
+  b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
+  gl_FragColor = vec4(min(b, vec3(0.45)), 1.0); // (a glow never more than about half way to white)
+}`;
+// over the screen, blended as src + dst * (1 - src): a screen blend. Vignetted like the frame under it.
+const POSTFX_OVER = `precision highp float;
+uniform sampler2D glow; uniform vec2 size; uniform float vignette;
+void main() {
+  vec2 uv = gl_FragCoord.xy / size;
+  vec3 b = texture2D(glow, uv).rgb;
+  if (vignette > 0.0) b *= 1.0 - vignette * smoothstep(0.35, 1.0, length((uv - 0.5) * vec2(size.x / size.y, 1.0)));
+  gl_FragColor = vec4(b, 1.0);
 }`;
 const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
 // How much each cell may feed the bloom: puddles (FL 2) mirror the lamps and signs above them, and blooming the
@@ -136,7 +146,9 @@ function postFxSceneLum() {
 // towards brighter and more slowly towards dark. 1 once settled; a pause or a jump of more than half a second resets.
 function postFxExposure(fx) {
   if (!settings.eyeAdapt) { fx.adapt = null; return 1; }
-  const now = performance.now() / 1000, cur = postFxSceneLum(), dt = now - (fx.adaptT || 0);
+  // (the brightness itself is measured every third frame: it changes slowly, and the scan is the costly part)
+  if (!fx.lumN-- || fx.lum == null) { fx.lum = postFxSceneLum(); fx.lumN = 2; }
+  const now = performance.now() / 1000, cur = fx.lum, dt = now - (fx.adaptT || 0);
   fx.adaptT = now;
   if (fx.adapt == null || dt > 0.5 || dt < 0) { fx.adapt = cur; return 1; }
   const tau = cur > fx.adapt ? 0.45 : 1.1;
@@ -154,12 +166,6 @@ function postFxGrade() {
   if (f) { sat *= 1 - 0.15 * f; shadow = shadow.map(x => x + (1 - x) * f * 0.5); }
   return { shadow, light, sat };
 }
-// is any effect on for this frame? (minigames: only the ones that suit a flat screen of text)
-function postFxWanted(world) {
-  if (POSTFX_OFF) return false;
-  if (settings.vignette || settings.grain) return true;
-  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || postFxRays() > 0 || !!settings.colorGrade || !!settings.eyeAdapt);
-}
 
 function postFxInit(st) {
   const { gl } = st;
@@ -172,19 +178,23 @@ function postFxInit(st) {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return null;
     const loc = {}; return { p, U: n => loc[n] ??= gl.getUniformLocation(p, n) };
   };
-  const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE), rays = program(POSTFX_RAYS);
-  if (!down || !blur || !compose || !rays) return null;
-  // (units 3-7: WebGL only promises 8. The mask and the rays' guide borrow unit 4 for their own passes.)
-  gl.useProgram(compose.p);
-  ['scene', 'near', 'wide', 'streak', 'rayTex'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
-  gl.useProgram(rays.p); gl.uniform1i(rays.U('src'), POSTFX_UNIT); gl.uniform1i(rays.U('guide'), POSTFX_UNIT + 1);
-  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 1);
-  gl.useProgram(blur.p); gl.uniform1i(blur.U('src'), POSTFX_UNIT);
+  const P = { low: POSTFX_LOW, bright: POSTFX_BRIGHT, half: POSTFX_HALF, blur: POSTFX_BLUR, rays: POSTFX_RAYS, glow: POSTFX_GLOW, over: POSTFX_OVER };
+  const fx = { key: '' };
+  for (const k in P) if (!(fx[k] = program(P[k]))) return null;
+  // texture units: 0-2 are the grid shader's (cells, palette, glyphs), which the 1/4 picture reads too; 3-7 here
+  const U = POSTFX_UNIT, set = (prog, names) => { gl.useProgram(prog.p); for (const n in names) gl.uniform1i(prog.U(n), names[n]); };
+  set(fx.low, { cells: 0, pal: 1, cover: U });
+  set(fx.bright, { src: U, mask: U + 1 });
+  set(fx.half, { src: U }); set(fx.blur, { src: U }); set(fx.over, { glow: U });
+  set(fx.rays, { src: U, guide: U + 1 });
+  set(fx.glow, { low: U, near: U + 1, wide: U + 2, streak: U + 3, rayTex: U + 4 });
   gl.useProgram(st.prog);
-  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, mask);
-  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const tex = () => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + U); gl.bindTexture(gl.TEXTURE_2D, t);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    return t; };
+  fx.mask = tex(); fx.cover = tex();
   gl.activeTexture(gl.TEXTURE0);
-  return { down, blur, compose, rays, mask, key: '' };
+  return fx;
 }
 
 // a colour texture and a framebuffer drawing into it
@@ -198,89 +208,107 @@ function postFxTarget(gl, w, h) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return ok ? { tex, fb, w, h } : null;
 }
-const POSTFX_TARGETS = ['scene', 'p4', 'a4', 'b4', 's4', 'r4', 'a8', 'b8'];
+// l4: the frame at 1/4; p4: its bright parts; a4/b4 bloom; s4 rain streaks; r4 fog rays; g4 the glows summed; a8/b8 wide bloom
+const POSTFX_TARGETS = ['l4', 'p4', 'a4', 'b4', 's4', 'r4', 'g4', 'a8', 'b8'];
 function postFxSize(st, fx) {
-  const { gl } = st, W = cv.width, H = cv.height, key = W + 'x' + H;
-  if (fx.key === key && fx.maskKey === cols + 'x' + rows) return true;
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); // (the mask's rows are one byte a cell, any width)
-  fx.maskData = new Uint8Array(cols * rows); fx.maskKey = cols + 'x' + rows;
-  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, cols, rows, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, fx.maskData);
+  const { gl } = st, W = cv.width, H = cv.height;
+  if (fx.maskKey !== cols + 'x' + rows) { // the per-cell glow mask
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); // (one byte a cell, rows of any width)
+    fx.maskData = new Uint8Array(cols * rows); fx.maskKey = cols + 'x' + rows;
+    gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, cols, rows, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, fx.maskData);
+  }
+  if (fx.coverKey !== st.key && st.atlas2d) { // each glyph's average cover of its cell, from the grid shader's atlas
+    const { canvas: at, slotW } = st.atlas2d, A = at.getContext('2d').getImageData(0, 0, at.width, at.height).data, C = new Uint8Array(128), w = Math.max(1, Math.round(cw));
+    for (let k = 0; k * slotW < at.width && k < 128; k++) {
+      let sum = 0; for (let y = 0; y < at.height; y++) for (let x = 0; x < w; x++) sum += A[(y * at.width + k * slotW + x) * 4 + 3];
+      C[k] = Math.round(sum / (w * at.height));
+    }
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT); gl.bindTexture(gl.TEXTURE_2D, fx.cover);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 128, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, C);
+    fx.coverKey = st.key;
+  }
+  const key = W + 'x' + H;
   if (fx.key === key) return true;
   for (const n of POSTFX_TARGETS) if (fx[n]) { gl.deleteTexture(fx[n].tex); gl.deleteFramebuffer(fx[n].fb); }
   const q = n => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
-  fx.scene = postFxTarget(gl, W, H);
-  for (const n of ['p4', 'a4', 'b4', 's4', 'r4']) fx[n] = postFxTarget(gl, ...q(4)); // (p4: the bright parts, unblurred)
-  fx.a8 = postFxTarget(gl, ...q(8)); fx.b8 = postFxTarget(gl, ...q(8));
+  for (const n of POSTFX_TARGETS) fx[n] = postFxTarget(gl, ...q(n.endsWith('8') ? 8 : 4));
   fx.key = key;
   return POSTFX_TARGETS.every(n => fx[n]);
 }
 
-// Before the grid shader draws: point it at the scene texture if any effect is on. Returns whether post runs.
-// A GPU that can't build the passes just doesn't get them (POSTFX_OFF), and the frame goes straight to the screen.
-// world: false for a minigame's screen.
+// Before the grid shader draws: the per-pixel effects for this frame, as the uniforms of its PF program (render.js).
+// Returns whether any is on, and so which program draws. world: false for a minigame's screen (vignette and grain only).
 let POSTFX_OFF = false;
-function postFxBegin(st, world = true) {
-  const { gl } = st;
-  if (!postFxWanted(world)) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
-  if (!st.fx) { try { st.fx = postFxInit(st); } catch (e) { st.fx = null; } if (!st.fx) { POSTFX_OFF = true; return false; } }
-  if (!postFxSize(st, st.fx)) { POSTFX_OFF = true; gl.bindFramebuffer(gl.FRAMEBUFFER, null); return false; }
-  st.fx.world = world;
-  gl.bindFramebuffer(gl.FRAMEBUFFER, st.fx.scene.fb); gl.viewport(0, 0, cv.width, cv.height);
+function postFxGrid(st, world = true) {
+  const { gl } = st, U = st.pf.U, vignette = settings.vignette ? 0.22 : 0, grain = settings.grain ? 1 : 0;
+  const exposure = world && settings.eyeAdapt ? postFxExposure(st.fxState ||= {}) : 1;
+  if (!world || !settings.eyeAdapt) { if (st.fxState) st.fxState.adapt = null; }
+  const grade = world && settings.colorGrade ? postFxGrade() : null;
+  const on = vignette || grain || grade || Math.abs(exposure - 1) > 0.001;
+  if (!on) return false;
+  gl.useProgram(st.pf.prog);
+  gl.uniform1f(U('exposure'), exposure); gl.uniform1f(U('grade'), grade ? 1 : 0);
+  if (grade) { gl.uniform3fv(U('shadowTint'), grade.shadow); gl.uniform3fv(U('lightTint'), grade.light); gl.uniform1f(U('sat'), grade.sat); }
+  gl.uniform1f(U('vignette'), vignette); gl.uniform1f(U('grain'), grain); gl.uniform1f(U('seed'), (T * 60 % 997) | 0);
   return true;
 }
-// After it: the bloom and streak passes, and the frame composited to the screen with the grade, vignette and grain
-function postFxEnd(st) {
-  const { gl } = st, fx = st.fx, world = fx.world, bind = (unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t.tex); };
-  const into = t => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fb : null); t ? gl.viewport(0, 0, t.w, t.h) : gl.viewport(0, 0, cv.width, cv.height); };
-  const down = (src, dst, spread, threshold) => {
-    into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
-    if (threshold > 0) {
-      const M = fx.maskData, BW = POSTFX_BASE_GLOW;
-      const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
-      for (let i = 0, n = M.length; i < n; i++) {
-        const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
-        // the colour that would make this cell bright: its glyph's, if that outshines the background
-        const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
-        let w = k === NONE ? 1 : BW[k >> 4];
-        if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
-        if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
-        M[i] = w * 255 + 0.5 | 0;
-      }
-      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
-      gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
-    }
-    gl.uniform2f(U('srcSize'), src.w, src.h); gl.uniform2f(U('dstSize'), dst.w, dst.h);
-    gl.uniform1f(U('spread'), spread); gl.uniform1f(U('threshold'), threshold); gl.uniform1f(U('knee'), 0.25);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-  };
-  const pass = (src, dst, x, y) => { into(dst); bind(POSTFX_UNIT, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); gl.drawArrays(gl.TRIANGLES, 0, 3); };
+
+// After it: the glows, from the cells at 1/4 size, blended over the screen. Nothing to do when none is on.
+// A GPU that can't build the passes just doesn't get them (POSTFX_OFF).
+function postFxGlow(st, world = true) {
   const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0, rays = world ? postFxRays() : 0;
-  const exposure = world ? postFxExposure(fx) : 1;
-  if (bloom || streaks || rays) {
-    // (fog scatters light: in fog, dimmer lights count as bright too, and fog dims the distant ones)
-    down(fx.scene, fx.p4, 1, postFxThreshold() - 0.04 * rays); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
-    gl.useProgram(fx.blur.p);
-    if (streaks) { pass(fx.p4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
-    pass(fx.p4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
-    if (bloom || rays) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
-    if (rays) {
-      into(fx.r4); gl.useProgram(fx.rays.p); bind(POSTFX_UNIT, fx.p4); bind(POSTFX_UNIT + 1, fx.a8); const R = fx.rays.U;
-      gl.uniform2f(R('size'), fx.r4.w, fx.r4.h); gl.uniform2f(R('guideSize'), fx.a8.w, fx.a8.h); gl.uniform1f(R('len'), fx.r4.h * 0.14);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.useProgram(fx.blur.p); pass(fx.r4, fx.b4, 0.5, 0); pass(fx.b4, fx.r4, 0, 0.5); // (just enough to hide the 1/4 size)
-    }
+  if (POSTFX_OFF || !(bloom || streaks || rays)) return;
+  const { gl } = st;
+  if (!st.fx) { try { st.fx = postFxInit(st); } catch (e) { st.fx = null; } if (!st.fx) { POSTFX_OFF = true; gl.useProgram(st.prog); return; } }
+  const fx = st.fx;
+  if (!postFxSize(st, fx)) { POSTFX_OFF = true; gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.useProgram(st.prog); gl.activeTexture(gl.TEXTURE0); return; }
+  const UN = POSTFX_UNIT, bind = (unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t.tex || t); };
+  const into = t => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fb : null); t ? gl.viewport(0, 0, t.w, t.h) : gl.viewport(0, 0, cv.width, cv.height); };
+  const draw = () => gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // the frame at 1/4, from the cells (the grid shader's own textures, units 0-1)
+  into(fx.l4); gl.useProgram(fx.low.p); bind(UN, fx.cover); let U = fx.low.U;
+  gl.uniform2f(U('grid'), cols, rows); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('canvas'), cv.width, cv.height);
+  gl.uniform2f(U('size'), fx.l4.w, fx.l4.h); gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255); draw();
+  // its bright parts, each cell weighted by how much it may glow
+  const M = fx.maskData, BW = POSTFX_BASE_GLOW;
+  const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
+  for (let i = 0, n = M.length; i < n; i++) {
+    const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
+    // the colour that would make this cell bright: its glyph's, if that outshines the background
+    const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
+    let w = k === NONE ? 1 : BW[k >> 4];
+    if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
+    if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
+    M[i] = w * 255 + 0.5 | 0;
   }
-  into(null); gl.useProgram(fx.compose.p); const U = fx.compose.U;
-  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4); bind(POSTFX_UNIT + 4, fx.r4);
-  gl.uniform2f(U('size'), cv.width, cv.height);
-  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks); gl.uniform1f(U('rays'), rays); gl.uniform1f(U('exposure'), exposure);
-  const grade = world && settings.colorGrade ? postFxGrade() : null;
-  gl.uniform1f(U('grade'), grade ? 1 : 0);
-  if (grade) { gl.uniform3fv(U('shadowTint'), grade.shadow); gl.uniform3fv(U('lightTint'), grade.light); gl.uniform1f(U('sat'), grade.sat); }
-  gl.uniform1f(U('vignette'), settings.vignette ? 0.22 : 0);
-  gl.uniform1f(U('grain'), settings.grain ? 1 : 0); gl.uniform1f(U('seed'), (T * 60 % 997) | 0);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  bind(UN + 1, fx.mask); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
+  into(fx.p4); gl.useProgram(fx.bright.p); bind(UN, fx.l4); U = fx.bright.U;
+  gl.uniform2f(U('size'), fx.p4.w, fx.p4.h); gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
+  // (fog scatters light: in fog, dimmer lights count as bright too, and fog dims the distant ones)
+  gl.uniform1f(U('threshold'), postFxThreshold() - 0.04 * rays); gl.uniform1f(U('knee'), 0.25); draw();
+  // blurs
+  gl.useProgram(fx.blur.p);
+  const pass = (src, dst, x, y) => { into(dst); bind(UN, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); draw(); };
+  if (streaks) { pass(fx.p4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
+  pass(fx.p4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
+  if (bloom || rays) {
+    into(fx.a8); gl.useProgram(fx.half.p); bind(UN, fx.a4); gl.uniform2f(fx.half.U('size'), fx.a8.w, fx.a8.h); draw();
+    gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); }
+  }
+  if (rays) {
+    into(fx.r4); gl.useProgram(fx.rays.p); bind(UN, fx.p4); bind(UN + 1, fx.a8); U = fx.rays.U;
+    gl.uniform2f(U('size'), fx.r4.w, fx.r4.h); gl.uniform2f(U('guideSize'), fx.a8.w, fx.a8.h); gl.uniform1f(U('len'), fx.r4.h * 0.14); draw();
+    gl.useProgram(fx.blur.p); pass(fx.r4, fx.b4, 0.5, 0); pass(fx.b4, fx.r4, 0, 0.5); // (just enough to hide the 1/4 size)
+  }
+  // summed, damped, and blended over the screen
+  into(fx.g4); gl.useProgram(fx.glow.p); U = fx.glow.U;
+  bind(UN, fx.l4); bind(UN + 1, fx.a4); bind(UN + 2, fx.a8); bind(UN + 3, fx.s4); bind(UN + 4, fx.r4);
+  gl.uniform2f(U('size'), fx.g4.w, fx.g4.h); gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks); gl.uniform1f(U('rays'), rays); draw();
+  into(null); gl.useProgram(fx.over.p); bind(UN, fx.g4); U = fx.over.U;
+  gl.uniform2f(U('size'), cv.width, cv.height); gl.uniform1f(U('vignette'), settings.vignette ? 0.22 : 0);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR); draw(); gl.disable(gl.BLEND);
   gl.useProgram(st.prog); gl.activeTexture(gl.TEXTURE0);
 }
