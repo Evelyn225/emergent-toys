@@ -71,7 +71,7 @@ async function netJoin(codeIn, nameIn) {
   try { tx = NET_TRANSPORT === 'local' ? netLocalTransport(code) : await netTrysteroTransport(code); }
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
-  Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
+  Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: playerAppearance || netLookFor(name), peers: new Map(), clockOwner: true,
     cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, peaceful: !!netLoadPrefs().peaceful, knocked: null, picking: null, picked: null, pickCool: new Map(), runT: new Map(), balls: new Map(), ballGone: new Map(), myBallT: 0, myBall: null, gifts: new Map(), invites: new Map(), dropTaken: new Map(), dropsT: 0,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
@@ -135,7 +135,7 @@ function netReceive(type, data, from) {
     if (!h) return;
     const first = !p.hello;
     if (data.ask) net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, from); // (they've only just got us back: introduce ourselves again)
-    p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null;
+    p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null; p.figSpr = null; p.figS = 0;
     if (first) netLog(p.mismatch ? `${p.name} is on a different version of the game. Both of you refresh the page.` : `${p.name} joined.`, null, p.mismatch ? '#f96' : '#9ab');
     if (net.clockOwner) net.clockT = 0;
     if (p.tags) reindexTags(); // (any that came before their hello)
@@ -1033,9 +1033,7 @@ function netChatKey(e) {
 // ---- drawing the others: in the street (or the same room as you), on the ground, facing where they're going
 function netFigLook(p) {
   if (p.figLook) return p.figLook;
-  const l = p.hello.look, bot = [[BLUE, 5], [GRAY, 3], [BRICK, 4]][l.bot];
-  return p.figLook = figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
-    col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [NET_COLOURS[l.hat], 11], hatD: [NET_COLOURS[l.hat], 7], top: [NET_COLOURS[l.top], 7], bot, shoe: [WHITE, 13], belt: [GRAY, 2] } });
+  return p.figLook = figLook(netAppearanceOptions(p.hello.look));
 }
 const NET_ON_FOOT = new Set(['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'fair', 'ladder']);
 function netVisible(p, s) { return s && s.rk === netRoomKey() && (mode === 'room' || Math.abs(rel(s.x - px)) < vis + 1 && Math.abs(rel(s.y - py)) < vis + 1); }
@@ -1493,6 +1491,7 @@ function buildNetMenu() {
       <p class="sub" data-net="about"></p>
       ${field('name', 'Your name', NET_NAME_MAX, prefs.name || '')}
       ${field('code', 'Room code', NET_CODE_MAX, net.code || netPendingCode || netSuggestCode())}
+      <button class="item" data-net-act="appearance">Customize character</button>
       <button class="item" data-net-act="join">Join room</button>
       <button class="item" data-net-act="copy">Copy invite link</button>
       <button class="item" data-net-act="leave">Leave room</button>
@@ -1511,6 +1510,7 @@ function buildNetMenu() {
     const b = e.target.closest('[data-net-act]');
     if (!b) return;
     const name = el.querySelector('[data-net="name"]').value, code = el.querySelector('[data-net="code"]').value;
+    if (b.dataset.netAct === 'appearance') openAppearance('multiplayer');
     if (b.dataset.netAct === 'join') netJoin(code, name);
     if (b.dataset.netAct === 'leave') netLeave();
     if (b.dataset.netAct === 'peaceful') { net.peaceful = !net.peaceful; netSavePrefs({ peaceful: net.peaceful }); netMenuShow(); }

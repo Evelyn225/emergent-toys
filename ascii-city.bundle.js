@@ -13792,7 +13792,11 @@ function netLookFor(name) {
 }
 function netCheckLook(l) {
   const ok = v => Number.isInteger(v) && v >= 0 && v < NET_COLOURS.length;
-  return l && ok(l.hat) && ok(l.top) && Number.isInteger(l.bot) && l.bot >= 0 && l.bot < 3 ? { hat: l.hat, top: l.top, bot: l.bot } : { hat: 0, top: 1, bot: 0 };
+  const base=l && ok(l.hat) && ok(l.top) && Number.isInteger(l.bot) && l.bot >= 0 && l.bot < 3 ? { hat: l.hat, top: l.top, bot: l.bot } : { hat: 0, top: 1, bot: 0 };
+  if(l?.custom!==1)return base; // old clients keep their original outfit
+  const out={...base,custom:1};
+  for(const [key,choices]of Object.entries(PLAYER_STYLE_CHOICES))out[key]=Number.isInteger(l[key])&&l[key]>=0&&l[key]<choices.length?l[key]:0;
+  return out;
 }
 function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
@@ -13953,6 +13957,23 @@ function netWrap(text, width = 24, rows = 3) {
   return lines;
 }
 const netBubbleTime = text => 4 + text.length / 15; // seconds a speech bubble stays up
+
+// Optional appearance fields extend hello without changing older peers' colours.
+const PLAYER_STYLE_CHOICES={
+ skin:['Porcelain','Light','Warm','Tan','Brown','Deep brown','Dark'],
+ hairStyle:['Short','Buzz cut','Long','Bob','Bun','Ponytail','Afro','Bald'],
+ hairColour:['Black','Dark brown','Brown','Auburn','Blond','Silver'],
+ headwear:['Beanie','Cap','None'],
+ shirtStyle:['Long sleeves','T-shirt','Tank top','Jacket'],
+ shoes:['White','Black','Brown','Red']
+};
+const PLAYER_HAIRS=['short','buzz','long','bob','bun','pony','afro','bald'];
+const PLAYER_HAIR_COLOURS=[[GRAY,2],[BRICK,4],[BRICK,6],[ORANGE,7],[YEL,11],[GRAY,8]];
+function netAppearanceOptions(raw){
+ const l=netCheckLook(raw),custom=l.custom===1;
+ return {hair:custom?PLAYER_HAIRS[l.hairStyle]:'short',hat:custom?['beanie','cap',null][l.headwear]:'beanie',top:custom?['long','tee','tank','jacket'][l.shirtStyle]:'long',bot:'pants',bw:1,
+ col:{hair:custom?PLAYER_HAIR_COLOURS[l.hairColour]:[BRICK,4],skin:custom?FIG_SKINS[l.skin]:[SKIN,11],hat:[NET_COLOURS[l.hat],11],hatD:[NET_COLOURS[l.hat],7],top:[NET_COLOURS[l.top],7],inner:[WHITE,12],bot:[[BLUE,5],[GRAY,3],[BRICK,4]][l.bot],shoe:custom?[[WHITE,13],[GRAY,2],[BRICK,4],[RED,7]][l.shoes]:[WHITE,13],belt:[GRAY,2]}};
+}
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
 let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL, NOGLOW; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
@@ -33145,6 +33166,7 @@ function buildPause() {
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
+      <button class="item" data-act="appearance">Customize character</button>
       <button class="item" data-act="multiplayer">Multiplayer <span class="k" data-net-badge style="margin-left:auto"></span></button>
       <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
       <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
@@ -33223,6 +33245,7 @@ function buildPause() {
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
+    if (b.dataset.act === 'appearance') openAppearance('pause');
     if (b.dataset.act === 'multiplayer') openNetMenu(); // (net.js)
     if (b.dataset.act === 'cancel-courier' && cancelCourier()) { saveGame(); say('You call dispatch and hand the parcel back. No pay, no hard feelings.', 4); closePause(true); }
     if (b.dataset.act === 'cancel-fare' && cancelFare()) { say('You call it off. The light goes back on: someone else will flag you down soon.', 4); closePause(true); }
@@ -33369,6 +33392,7 @@ function openPause() {
 function closePause(lock) {
   if (!paused) return;
   if (controlsOpen()) closeControls();
+  if(appearanceOpen())closeAppearance();
   resetStartOver();
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) lockMouse(); // resuming with the mouse: take it straight back
@@ -35628,7 +35652,7 @@ function drawHand(cx, top, size) {
   const { x0, reach } = handGeometry(cx, size);
   g.font = size + 'px monospace';
   const art = HAND_ART.map(line => line.endsWith('-') ? line.padEnd(reach, '-') : line);
-  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
+  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? playerSkinColour(-2,11) : playerSkinColour(0,13));
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
 function charLine(x0, y0, x1, y1, w, size, col) {
@@ -38646,7 +38670,7 @@ function drawRevolver(it) {
     const [art,col]=revolverPicture(open,rounds);artText(art,gx,gy,G.s,col);
     if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
       artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
-        () => C(SKIN, 12));
+        () => playerSkinColour(-1,12));
     }
     if (gun.kick > 0.55) { // the flash, off the end of the barrel
       const size=Math.round(G.u*(.8+gun.kick*.5)*.5),[flash,col]=heldMuzzleFlash(gun.kick);
@@ -42616,10 +42640,11 @@ const TATTOO_INK = { tattoo_swallow: [BLUE, 6], tattoo_anchor: [BLUE, 5], tattoo
 // whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers. Got some ink? Then
 // a short-sleeved tee, to show it off: the more hours you've sat for, the more of your arms it covers
 function skaterLook() {
-  const key = tattoos.join(',');
+  const key = tattoos.join(',')+'|'+JSON.stringify(playerAppearance);
   if (skaterLookMemo && key === skaterLookKey) return skaterLookMemo;
   const hours = tattoos.reduce((s, id) => s + ITEMS[id].hours, 0);
   skaterLookKey = key;
+  if(playerAppearance){const options=netAppearanceOptions(playerAppearance);options.ink=hours?Math.round(clamp(hours/10,.2,1)*10)/10:0;options.col.ink=hours?TATTOO_INK[tattoos[tattoos.length-1]]:undefined;return skaterLookMemo=figLook(options);}
   return skaterLookMemo = figLook({ hair: 'short', hat: 'beanie', top: hours ? 'tee' : 'long', bot: 'pants', bw: 1, ink: hours ? Math.round(clamp(hours / 10, 0.2, 1) * 10) / 10 : 0,
     col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2],
            ink: hours ? TATTOO_INK[tattoos[tattoos.length - 1]] : undefined } });
@@ -56924,7 +56949,7 @@ async function netJoin(codeIn, nameIn) {
   try { tx = NET_TRANSPORT === 'local' ? netLocalTransport(code) : await netTrysteroTransport(code); }
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
-  Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
+  Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: playerAppearance || netLookFor(name), peers: new Map(), clockOwner: true,
     cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, peaceful: !!netLoadPrefs().peaceful, knocked: null, picking: null, picked: null, pickCool: new Map(), runT: new Map(), balls: new Map(), ballGone: new Map(), myBallT: 0, myBall: null, gifts: new Map(), invites: new Map(), dropTaken: new Map(), dropsT: 0,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
@@ -56988,7 +57013,7 @@ function netReceive(type, data, from) {
     if (!h) return;
     const first = !p.hello;
     if (data.ask) net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, from); // (they've only just got us back: introduce ourselves again)
-    p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null;
+    p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null; p.figSpr = null; p.figS = 0;
     if (first) netLog(p.mismatch ? `${p.name} is on a different version of the game. Both of you refresh the page.` : `${p.name} joined.`, null, p.mismatch ? '#f96' : '#9ab');
     if (net.clockOwner) net.clockT = 0;
     if (p.tags) reindexTags(); // (any that came before their hello)
@@ -57886,9 +57911,7 @@ function netChatKey(e) {
 // ---- drawing the others: in the street (or the same room as you), on the ground, facing where they're going
 function netFigLook(p) {
   if (p.figLook) return p.figLook;
-  const l = p.hello.look, bot = [[BLUE, 5], [GRAY, 3], [BRICK, 4]][l.bot];
-  return p.figLook = figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
-    col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [NET_COLOURS[l.hat], 11], hatD: [NET_COLOURS[l.hat], 7], top: [NET_COLOURS[l.top], 7], bot, shoe: [WHITE, 13], belt: [GRAY, 2] } });
+  return p.figLook = figLook(netAppearanceOptions(p.hello.look));
 }
 const NET_ON_FOOT = new Set(['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'fair', 'ladder']);
 function netVisible(p, s) { return s && s.rk === netRoomKey() && (mode === 'room' || Math.abs(rel(s.x - px)) < vis + 1 && Math.abs(rel(s.y - py)) < vis + 1); }
@@ -58346,6 +58369,7 @@ function buildNetMenu() {
       <p class="sub" data-net="about"></p>
       ${field('name', 'Your name', NET_NAME_MAX, prefs.name || '')}
       ${field('code', 'Room code', NET_CODE_MAX, net.code || netPendingCode || netSuggestCode())}
+      <button class="item" data-net-act="appearance">Customize character</button>
       <button class="item" data-net-act="join">Join room</button>
       <button class="item" data-net-act="copy">Copy invite link</button>
       <button class="item" data-net-act="leave">Leave room</button>
@@ -58364,6 +58388,7 @@ function buildNetMenu() {
     const b = e.target.closest('[data-net-act]');
     if (!b) return;
     const name = el.querySelector('[data-net="name"]').value, code = el.querySelector('[data-net="code"]').value;
+    if (b.dataset.netAct === 'appearance') openAppearance('multiplayer');
     if (b.dataset.netAct === 'join') netJoin(code, name);
     if (b.dataset.netAct === 'leave') netLeave();
     if (b.dataset.netAct === 'peaceful') { net.peaceful = !net.peaceful; netSavePrefs({ peaceful: net.peaceful }); netMenuShow(); }
@@ -58405,6 +58430,87 @@ function closeNetMenu() {
 let netPendingCode = '';
 try { netPendingCode = netCode(new URLSearchParams(location.search).get('room') || ''); } catch (e) { /* no query */ }
 if (netPendingCode) setTimeout(() => say(`You've been invited to room "${netPendingCode}". Esc, then Multiplayer, to join.`, 10), 1500);
+// Appearance belongs to the player, across saved games and multiplayer names.
+const PLAYER_APPEARANCE_KEY='asciiCity.appearance.v1';
+let playerAppearance=null;
+try{const saved=JSON.parse(localStorage.getItem(PLAYER_APPEARANCE_KEY));if(saved?.custom===1)playerAppearance=netCheckLook(saved);}catch(e){/* use the original outfit */}
+let appearanceEl=null,appearanceView=0,appearanceReturn='pause';
+const appearanceOpen=()=>!!appearanceEl&&appearanceEl.style.display==='flex';
+function setPlayerAppearance(raw){
+ playerAppearance=netCheckLook({...raw,custom:1});
+ let saved=true;try{localStorage.setItem(PLAYER_APPEARANCE_KEY,JSON.stringify(playerAppearance));}catch(e){saved=false;}
+ skaterLookMemo=null;
+ if(net.on){net.look={...playerAppearance};net.tx.send('hello',{name:net.name,ver:netBuildId(),look:net.look});}
+ return saved;
+}
+function appearanceDefault(){
+ return netCheckLook({...((net.on&&net.look)||{hat:3,top:2,bot:0}),skin:2,hairStyle:0,hairColour:1,headwear:0,shirtStyle:0,shoes:0,custom:1});
+}
+function appearancePreview(){
+ const canvas=appearanceEl.querySelector('canvas'),ctx=canvas.getContext('2d'),look=figLook(netAppearanceOptions(playerAppearance||appearanceDefault()));
+ const spr=figSprite(look,appearanceView,'stand'),scale=7,left=(canvas.width-FIG_W*scale)/2,top=8;
+ ctx.fillStyle='#101719';ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle='#34433d';ctx.fillRect(36,canvas.height-12,canvas.width-72,1);
+ for(let y=0;y<FIG_H;y++)for(let x=0;x<FIG_W;x++){
+  const role=spr[y*FIG_W+x];if(!role)continue;
+  ctx.fillStyle=PAL[C(look.base[role],look.lvl[role])];ctx.fillRect(left+x*scale,top+y*scale,scale,scale);
+ }
+ appearanceEl.querySelector('[data-view-label]').textContent=['Front','Front quarter','Side','Back quarter','Back','Back quarter','Side','Front quarter'][Math.floor(appearanceView/2)%8];
+}
+function buildAppearance(){
+ const colors=['Red','Blue','Green','Orange','Yellow','Purple','Cyan','White','Grey','Rust'];
+ const fields=[['skin','Skin tone',PLAYER_STYLE_CHOICES.skin],['hairStyle','Hair',PLAYER_STYLE_CHOICES.hairStyle],['hairColour','Hair colour',PLAYER_STYLE_CHOICES.hairColour],['headwear','Headwear',PLAYER_STYLE_CHOICES.headwear],['hat','Hat colour',colors],['shirtStyle','Top style',PLAYER_STYLE_CHOICES.shirtStyle],['top','Top colour',colors],['bot','Trousers',['Blue jeans','Charcoal','Brown']],['shoes','Shoes',PLAYER_STYLE_CHOICES.shoes]];
+ const el=menuEl('appearance',540,`<div class="panel" role="dialog" aria-label="Customize character" style="width:min(700px,calc(100vw - 24px))">
+ <div class="panel-heading"><h1>Your character</h1><button class="panel-close" data-appearance-back aria-label="Close character customization">×</button></div>
+ <p class="sub">Changes save automatically. Wear the same look in every room.</p>
+ <div class="appearance-layout"><div class="appearance-preview"><canvas width="232" height="260" role="img" aria-label="Preview of your character"></canvas>
+ <div class="appearance-turn"><button data-turn="-2" aria-label="Turn character left">←</button><span data-view-label>Front</span><button data-turn="2" aria-label="Turn character right">→</button></div></div>
+ <div class="appearance-fields">${fields.map(([key,label,choices])=>`<label><span>${label}</span><select data-look="${key}" aria-label="${label}">${choices.map((text,i)=>`<option value="${i}">${text}</option>`).join('')}</select></label>`).join('')}</div></div>
+ <p class="sub" data-appearance-status role="status">Choose an outfit, then head back into the city.</p>
+ <button class="item" data-appearance-random>Shuffle outfit</button><button class="item" data-appearance-back>Done</button></div>`);
+ const style=document.createElement('style');style.textContent=`#appearance .appearance-layout{display:grid;grid-template-columns:232px minmax(0,1fr);gap:24px;align-items:start}#appearance .appearance-preview{position:sticky;top:55px;border:1px solid #465452;background:#101719}#appearance canvas{position:static;inset:auto;z-index:auto;display:block;width:100%;height:auto;image-rendering:pixelated}#appearance .appearance-turn{display:flex;align-items:center;justify-content:space-between;padding:8px;color:#bdcdc4}#appearance .appearance-turn button{min-width:44px;min-height:36px;border:1px solid #64756e}#appearance .appearance-fields label{display:grid;grid-template-columns:1fr 1.15fr;align-items:center;gap:12px;min-height:42px;color:#b8c8c0}#appearance select{width:100%;min-width:0;min-height:36px;padding:5px;color:#edf0df;background:#18241f;border:1px solid #64756e;font:inherit}#appearance select:focus-visible{outline:2px solid #b9e7d5}#appearance select:disabled{opacity:.45}@media(max-width:580px){#appearance .appearance-layout{grid-template-columns:1fr;gap:12px}#appearance .appearance-preview{position:static;width:174px;justify-self:center}#appearance .appearance-fields label{min-height:44px}}`;
+ document.head.appendChild(style);
+ el.addEventListener('change',e=>{const key=e.target.dataset.look;if(!key)return;const look={...(playerAppearance||appearanceDefault()),[key]:Number(e.target.value)};appearanceApply(look);});
+ el.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.hasAttribute('data-appearance-back'))closeAppearance();
+  if(b.dataset.turn){appearanceView=mod(appearanceView+Number(b.dataset.turn),FIG_VIEWS);appearancePreview();}
+  if(b.hasAttribute('data-appearance-random')){
+   const look={...(playerAppearance||appearanceDefault())};
+   for(const [key,,choices]of fields)if(['headwear','hat','shirtStyle','top','bot','shoes'].includes(key))look[key]=Math.floor(Math.random()*choices.length);
+   appearanceApply(look);
+  }
+ });
+ el.addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();closeAppearance();}e.stopPropagation();});
+ el.addEventListener('keyup',e=>e.stopPropagation());
+ return el;
+}
+function appearanceApply(look){
+ const saved=setPlayerAppearance(look);appearanceShow();
+ appearanceEl.querySelector('[data-appearance-status]').textContent=saved?'Saved. Your new look is ready.':'Applied for this session.';
+}
+function appearanceShow(){
+ const look=playerAppearance||appearanceDefault();
+ for(const select of appearanceEl.querySelectorAll('[data-look]'))select.value=look[select.dataset.look];
+ appearanceEl.querySelector('[data-look="hat"]').disabled=look.headwear===2;
+ appearanceEl.querySelector('[data-look="hairColour"]').disabled=look.hairStyle===7;
+ appearancePreview();
+}
+function openAppearance(from='pause'){
+ if(!paused)openPause();
+ appearanceReturn=from;appearanceEl=appearanceEl||buildAppearance();appearanceView=0;
+ appearanceEl.style.display='flex';appearanceShow();
+ appearanceEl.querySelector('[data-look="skin"]').focus();
+}
+function closeAppearance(){
+ if(!appearanceEl)return;appearanceEl.style.display='none';
+ (appearanceReturn==='multiplayer'?netMenuEl?.querySelector('[data-net-act="appearance"]'):pauseEl?.querySelector('[data-act="appearance"]'))?.focus();
+}
+
+function playerSkinColour(delta=0,fallback=13){
+ if(!playerAppearance)return C(SKIN,fallback);
+ const [base,level]=FIG_SKINS[playerAppearance.skin];return C(base,level+delta);
+}
 // Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
   if(typeof CONTROLLER!=='undefined'&&CONTROLLER.dispatching)return;
@@ -59316,6 +59422,7 @@ function controllerMenuBack(root){
   if(root===CONTROLLER.keyboard)return controllerCloseKeyboard();
   if(root===CONTROLLER.sheet)return controllerCloseSheet();
   if(bigMapOpen()){if(BIGMAP.selected){BIGMAP.selected=null;mapDirectoryUI();bigMapDraw();return;}return closeBigMap();}
+  if(root===appearanceEl)return closeAppearance();
   if(root===pauseEl)return closePause(false);
   controllerTap('Escape');
 }

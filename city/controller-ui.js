@@ -101,6 +101,7 @@ function controllerMenuBack(root){
   if(root===CONTROLLER.keyboard)return controllerCloseKeyboard();
   if(root===CONTROLLER.sheet)return controllerCloseSheet();
   if(bigMapOpen()){if(BIGMAP.selected){BIGMAP.selected=null;mapDirectoryUI();bigMapDraw();return;}return closeBigMap();}
+  if(root===appearanceEl)return closeAppearance();
   if(root===pauseEl)return closePause(false);
   controllerTap('Escape');
 }

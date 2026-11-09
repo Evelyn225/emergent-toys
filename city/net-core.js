@@ -86,7 +86,11 @@ function netLookFor(name) {
 }
 function netCheckLook(l) {
   const ok = v => Number.isInteger(v) && v >= 0 && v < NET_COLOURS.length;
-  return l && ok(l.hat) && ok(l.top) && Number.isInteger(l.bot) && l.bot >= 0 && l.bot < 3 ? { hat: l.hat, top: l.top, bot: l.bot } : { hat: 0, top: 1, bot: 0 };
+  const base=l && ok(l.hat) && ok(l.top) && Number.isInteger(l.bot) && l.bot >= 0 && l.bot < 3 ? { hat: l.hat, top: l.top, bot: l.bot } : { hat: 0, top: 1, bot: 0 };
+  if(l?.custom!==1)return base; // old clients keep their original outfit
+  const out={...base,custom:1};
+  for(const [key,choices]of Object.entries(PLAYER_STYLE_CHOICES))out[key]=Number.isInteger(l[key])&&l[key]>=0&&l[key]<choices.length?l[key]:0;
+  return out;
 }
 function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
@@ -247,3 +251,20 @@ function netWrap(text, width = 24, rows = 3) {
   return lines;
 }
 const netBubbleTime = text => 4 + text.length / 15; // seconds a speech bubble stays up
+
+// Optional appearance fields extend hello without changing older peers' colours.
+const PLAYER_STYLE_CHOICES={
+ skin:['Porcelain','Light','Warm','Tan','Brown','Deep brown','Dark'],
+ hairStyle:['Short','Buzz cut','Long','Bob','Bun','Ponytail','Afro','Bald'],
+ hairColour:['Black','Dark brown','Brown','Auburn','Blond','Silver'],
+ headwear:['Beanie','Cap','None'],
+ shirtStyle:['Long sleeves','T-shirt','Tank top','Jacket'],
+ shoes:['White','Black','Brown','Red']
+};
+const PLAYER_HAIRS=['short','buzz','long','bob','bun','pony','afro','bald'];
+const PLAYER_HAIR_COLOURS=[[GRAY,2],[BRICK,4],[BRICK,6],[ORANGE,7],[YEL,11],[GRAY,8]];
+function netAppearanceOptions(raw){
+ const l=netCheckLook(raw),custom=l.custom===1;
+ return {hair:custom?PLAYER_HAIRS[l.hairStyle]:'short',hat:custom?['beanie','cap',null][l.headwear]:'beanie',top:custom?['long','tee','tank','jacket'][l.shirtStyle]:'long',bot:'pants',bw:1,
+ col:{hair:custom?PLAYER_HAIR_COLOURS[l.hairColour]:[BRICK,4],skin:custom?FIG_SKINS[l.skin]:[SKIN,11],hat:[NET_COLOURS[l.hat],11],hatD:[NET_COLOURS[l.hat],7],top:[NET_COLOURS[l.top],7],inner:[WHITE,12],bot:[[BLUE,5],[GRAY,3],[BRICK,4]][l.bot],shoe:custom?[[WHITE,13],[GRAY,2],[BRICK,4],[RED,7]][l.shoes]:[WHITE,13],belt:[GRAY,2]}};
+}

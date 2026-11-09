@@ -289,7 +289,7 @@ function drawHand(cx, top, size) {
   const { x0, reach } = handGeometry(cx, size);
   g.font = size + 'px monospace';
   const art = HAND_ART.map(line => line.endsWith('-') ? line.padEnd(reach, '-') : line);
-  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
+  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? playerSkinColour(-2,11) : playerSkinColour(0,13));
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
 function charLine(x0, y0, x1, y1, w, size, col) {
