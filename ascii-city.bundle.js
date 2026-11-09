@@ -15029,7 +15029,7 @@ function floorBaseCell(i, r, x, rx, ry) {
         // wet sand outside the resting coastline instead of drawing a stripe
         // over water that never retreats.
         if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
-          BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
+          BG[i]=C(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f);
           set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return surface.water;
         }
       }
@@ -15111,7 +15111,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (surf) { ch = ' '; BG[i] = C(surf[0], clamp(surf[1], .6, 15)); } // a built surface: no dither, lit by itself (so it stays visible at night)
-  if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
+  if(islandTexture)BG[i]=C(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
@@ -28441,7 +28441,9 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0)+(1-day)*(surface?.night||0); // (foam and wash catch the moon)
-  BG[i] = bgAt(background, brightness * fog * (surface?.water ? 1 : light), depth); // (water's surface is level: the hillside's slope doesn't shade it)
+  const level=brightness*fog*(surface?.water?1:light);
+  // Colour surfaces stay opaque below one palette step; NONE exposes black.
+  BG[i] = surface ? C(background,level) : bgAt(background,level); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0 && !surface?.water) paintSettledSnow(i, x, y, L, 1, 0);
 }
@@ -30249,6 +30251,15 @@ function tipDriver() {
 }
 // the driver of a car you've just taken: out onto the sidewalk beside it, shouting (someone from far off stands in)
 function ejectDriver(c) {
+  // A manned cruiser ejects its officer into the real foot-pursuit system.
+  // A unit which already deployed its officer must not create another one.
+  if(c.kind==='police'){
+    if(c.dropped)return;
+    const at=cruiserOfficerExit(c);if(!at)return;
+    c.dropped=true;
+    const officer={x:at[0],y:at[1],car:null,returnCar:null,corner:null,dir:0,goal:null,chase:true,ph:0,extra:true,burst:T+5};
+    footCops.push(officer);return officer;
+  }
   const p = people.find(q => !q.follow && !q.hailing && Math.hypot(rel(q.x - px), rel(q.y - py)) > 40);
   if (!p) return;
   const [x, y] = curbOf(c);
@@ -30548,7 +30559,7 @@ function interact() {
       else {
         c.mine = true; ejectDriver(c);
         const w = crime('steal', c.x, c.y);
-        say(w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
+        say(c.kind==='police'?'The officer scrambles out, radios it in and comes straight after you.':w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
       }
     }
     px = c.ex; py = c.ey;
@@ -56788,7 +56799,7 @@ buildStreetScenes();
 // Close detail uses the cabin's analytic rounded solids and vessels. Models
 // prepare once; the pump, water and wind cups are the only moving pieces.
 function quietPart(s,role,u,v,hl,hw,z0,z1,material='stone',block=false,extra={}){
- const p={role,x:s.x+u,y:s.y+v,c:1,s:0,hl,hw,z0:s.base+z0,z1:s.base+z1,textureU:u,textureV:v,textureZ:s.base,material,block,walkSurface:['court-paver','station-floor','path-paver','door-threshold'].includes(role),...extra};
+ const p={role,x:s.x+u,y:s.y+v,c:1,s:0,hl,hw,z0:s.base+z0,z1:s.base+z1,textureU:u,textureV:v,textureZ:s.base,material,block,walkSurface:['court-paver','court-subbase','station-floor','path-paver','door-threshold'].includes(role),...extra};
  s.parts.push(p);return p;
 }
 function quietVessel(s,role,u,v,z,profile,material='clay',block=false){
@@ -56796,6 +56807,35 @@ function quietVessel(s,role,u,v,z,profile,material='clay',block=false){
  return quietPart(s,role,u,v,r,r,z,z+Math.max(...profile.map(p=>p[0])),material,block,{profile:profile.map(([h,r])=>[s.base+z+h,r])});
 }
 function quietTimber(s,role,u,v,hl,hw,z0,z1,block=false){return quietPart(s,role,u,v,hl,hw,z0,z1,'wood',block,{round:.001});}
+function quietStem(s,role,a,b,r){
+ const p=quietPart(s,role,(a[0]+b[0])/2,(a[1]+b[1])/2,Math.abs(b[0]-a[0])/2+r,Math.abs(b[1]-a[1])/2+r,Math.min(a[2],b[2])-r,Math.max(a[2],b[2])+r,'stem');
+ p.segment={a:[s.x+a[0],s.y+a[1],s.base+a[2]],b:[s.x+b[0],s.y+b[1],s.base+b[2]],r};return p;
+}
+function quietLeaf(s,role,u,v,z,yaw,length,width){
+ const c=Math.cos(yaw),sn=Math.sin(yaw),hl=length/2,hw=width/2,h=s.base+z;
+ const p=quietPart(s,role,u+c*hl,v+sn*hl,hl,hw,z-.004,z+.003,'leaf',false,{c,s:sn,leaf:true});
+ // A folded, pointed blade with notched edges and a raised central rib.
+ const rim=[[-hl,0,h],[-hl*.4,-hw*.65,h],[-hl*.05,-hw,h-.001],[hl*.2,-hw*.5,h-.002],[hl*.6,-hw*.6,h-.003],[hl,0,h-.004],[hl*.6,hw*.6,h-.003],[hl*.2,hw*.5,h-.002],[-hl*.05,hw,h-.001],[-hl*.4,hw*.65,h]];
+ const ridge=[0,0,h+.003],sub=(a,b)=>a.map((v,i)=>v-b[i]);
+ p.triangles=rim.map((a,j)=>{const b=rim[(j+1)%rim.length],e1=sub(a,ridge),e2=sub(b,ridge),n=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]],len=Math.hypot(...n);return {a:ridge,e1,e2,n:n.map(v=>v/len)};});
+ return p;
+}
+function rayQuietLeaf(ox,oy,oz,rx,ry,rz,b){
+ const x=ox-b.x,y=oy-b.y,o=[x*b.c+y*b.s,-x*b.s+y*b.c,oz],d=[rx*b.c+ry*b.s,-rx*b.s+ry*b.c,rz];
+ let nearest=Infinity,normal=null;
+ for(const t of b.triangles){
+  const p=[d[1]*t.e2[2]-d[2]*t.e2[1],d[2]*t.e2[0]-d[0]*t.e2[2],d[0]*t.e2[1]-d[1]*t.e2[0]],det=t.e1[0]*p[0]+t.e1[1]*p[1]+t.e1[2]*p[2];
+  if(Math.abs(det)<1e-12)continue;
+  const q=o.map((v,i)=>v-t.a[i]),u=(q[0]*p[0]+q[1]*p[1]+q[2]*p[2])/det;if(u<0||u>1)continue;
+  const cross=[q[1]*t.e1[2]-q[2]*t.e1[1],q[2]*t.e1[0]-q[0]*t.e1[2],q[0]*t.e1[1]-q[1]*t.e1[0]],v=(d[0]*cross[0]+d[1]*cross[1]+d[2]*cross[2])/det;
+  if(v<0||u+v>1)continue;
+  const hit=(t.e2[0]*cross[0]+t.e2[1]*cross[1]+t.e2[2]*cross[2])/det;
+  if(hit>.01&&hit<nearest){nearest=hit;const sign=t.n[0]*d[0]+t.n[1]*d[1]+t.n[2]*d[2]>0?-1:1;normal=t.n.map(v=>v*sign);}
+ }
+ if(!normal)return -1;
+ HIT.u=o[0]+d[0]*nearest;HIT.v=o[1]+d[1]*nearest;HIT.w=oz+rz*nearest;HIT.face=0;
+ HIT.nx=b.c*normal[0]-b.s*normal[1];HIT.ny=b.s*normal[0]+b.c*normal[1];HIT.nz=normal[2];return nearest;
+}
 function quietBench(s,u,v){
  for(const x of [-.067,.067])for(const y of [-.021,.021])quietPart(s,'bench-leg',u+x,v+y,.004,.004,0,.043,'iron',true);
  for(const y of [-.019,0,.019])quietTimber(s,'bench-slat',u,v+y,.095,.008,.043,.049,true);
@@ -56809,12 +56849,19 @@ function quietPlanter(s,u,v,hl=.12,hw=.065,tall=false){
   quietTimber(s,'planter-board',u,v+side*(hw-.003),hl,.003,0,top,true);
   quietTimber(s,'planter-end',u+side*(hl-.003),v,.003,hw-.006,0,top,true);
  }
- for(let j=0;j<5;j++){
-  const x=u+(j-2)*hl*.34,y=v+(j%2-.5)*hw*.7,h=top+.035+(j%3)*.012;
-  quietPart(s,'plant-stem',x,y,.001,.001,top-.008,h,'iron');
-  for(const side of [-1,1])quietPart(s,'leaves',x+side*.012,y,.022,.019,h-.025,h+.012,'leaf',false,{ellipsoid:true,seed:j});
-  if(tall){quietPart(s,'plant-stake',x,y+.01,.0015,.0015,top-.005,top+.12,'wood');
-   for(const side of [-1,1])quietPart(s,'fruit',x+side*.012,y-.012,.006,.006,h-.014,h-.002,'fruit',false,{ellipsoid:true});}
+ for(let j=0;j<4;j++){
+  const x=u+(j-1.5)*hl*.42,y=v+(j%2-.5)*hw*.7,h=top+(tall?.105:.055)+(j%3)*.008;
+  quietStem(s,'plant-stem',[x,y,top-.008],[x+.004,y,h],.0011);
+  for(let n=0;n<3;n++){
+   const z=top+.012+n*(h-top-.018)/3,angle=j*1.7+n*2.3;
+   const tip=[x+Math.cos(angle)*.014,y+Math.sin(angle)*.014,z+.006];
+   quietStem(s,'leaf-stalk',[x,y,z],tip,.0006);
+   for(const side of [-1,1])quietLeaf(s,'vegetable-leaf',...tip,angle+side*.6,tall?.036:.026,tall?.017:.02);
+  }
+  if(tall){
+   quietTimber(s,'plant-stake',x-.006,y+.01,.0015,.0015,top-.005,h+.014);
+   for(const side of [-1,1])quietPart(s,'tomato',x+side*.009,y-.009,.005,.005,h-.03,h-.02,'fruit',false,{ellipsoid:true});
+  }
  }
 }
 function quietPlaque(s,u,v,text,width=.14,z=.105){
@@ -56851,6 +56898,9 @@ function quietRoofGarden(s){
 function quietCourtyard(s){
  // Walled garden with a dog-leg entrance: the opening is a real gap, not a
  // door texture. The southern approach and middle of the court stay empty.
+ const ground=Math.min(...[-1,1].flatMap(a=>[-1,1].map(b=>terrainHeight(s.x+a*.965,s.y+b*.855))))-.003;
+ quietPart(s,'court-subbase',0,0,.915,.805,ground-s.base,0,'stone');
+ quietPart(s,'door-threshold',0,.8255,.315,.0295,ground-s.base,.003,'paver');
  for(const u of [-.94,.94])quietPart(s,'garden-wall',u,0,.025,.805,0,.24,'brick',true);
  quietPart(s,'garden-wall',0,-.83,.965,.025,0,.24,'brick',true);
  for(const [u,hl]of [[-.64,.325],[.64,.325]])quietPart(s,'entry-return',u,.83,hl,.025,0,.24,'brick',true);
@@ -56861,26 +56911,35 @@ function quietCourtyard(s){
  quietBench(s,-.5,-.48);quietBench(s,.5,-.48);
  for(const u of [-.62,.62])quietPlanter(s,u,.23,.15,.1);
  // Open stone trough, recessed water surface, brass outlet and iron pump.
+ s.pump={x:0,y:-.66,outlet:[0,-.57,.125],waterZ:.035};
  for(const u of [-.125,.125])quietPart(s,'trough-end',u,-.55,.012,.07,0,.065,'stone',true);
  for(const v of [-.608,-.492])quietPart(s,'trough-side',0,v,.113,.012,0,.065,'stone',true);
  quietPart(s,'trough-bottom',0,-.55,.113,.046,0,.012,'stone',true);
  quietPart(s,'trough-water',0,-.55,.11,.045,.034,.035,'water');
- quietPart(s,'pump-base',0,-.72,.035,.03,0,.018,'iron',true);
- quietPart(s,'pump-body',0,-.72,.014,.014,.018,.17,'paint',true,{round:.004});
- quietPart(s,'pump-head',0,-.72,.025,.02,.15,.176,'paint',false,{round:.005});
- quietPart(s,'pump-spout',0,-.675,.005,.037,.13,.14,'brass');
- quietPart(s,'pump-handle',.033,-.72,.006,.004,.10,.20,'iron',false,{moving:'handle'});
+ quietPart(s,'pump-base',0,s.pump.y,.035,.03,0,.018,'iron',true);
+ quietPart(s,'pump-body',0,s.pump.y,.014,.014,.018,.17,'paint',true,{round:.004});
+ quietPart(s,'pump-head',0,s.pump.y,.025,.02,.15,.176,'paint',false,{round:.005});
+ const start=s.pump.y+.014,end=s.pump.outlet[1];
+ quietPart(s,'pump-spout',0,(start+end)/2,.005,(end-start)/2,.13,.14,'brass');
+ quietVessel(s,'outlet-mouth',0,end,.125,[[0,.003],[0,.006],[.015,.006],[.015,.003],[0,.003]],'brass');
+ quietPart(s,'pump-handle',.033,s.pump.y,.006,.004,.10,.20,'iron',false,{moving:'handle'});
  // Pergola casts an open silhouette; no opaque canopy over the garden.
  for(const u of [-.77,.77])for(const v of [-.68,-.3])quietTimber(s,'pergola-post',u,v,.006,.006,0,.28,true);
  for(const v of [-.68,-.3])quietTimber(s,'pergola-beam',0,v,.8,.009,.265,.28);
  for(let u=-.77;u<=.8;u+=.11)quietTimber(s,'pergola-lath',u,-.49,.005,.28,.28,.288);
- for(let j=0;j<10;j++)quietPart(s,'climber',-.72+j*.16,-.68,.08,.04,.23,.30,'leaf',false,{ellipsoid:true,seed:j});
+ for(const u of [-.77,.77])quietStem(s,'climbing-vine',[u+.008,-.68,.02],[u+.008,-.68,.288],.0018);
+ for(let j=0;j<12;j++){
+  const u=-.77+j*.14,z=.29+Math.sin(j*1.5)*.006;
+  if(j)quietStem(s,'pergola-vine',[u-.14,-.68,.29+Math.sin((j-1)*1.5)*.006],[u,-.68,z],.0015);
+  for(const side of [-1,1])quietLeaf(s,'vine-leaf',u,-.68,z,j*.7+side*1.2,.04,.026);
+ }
  quietPlaque(s,.55,.798,'WELL COURT',.18);
  quietPart(s,'lamp-plate',-.55,-.799,.026,.006,.16,.22,'iron');
  quietPart(s,'lamp-globe',-.55,-.779,.018,.015,.17,.21,'lamp',false,{ellipsoid:true});
  quietPart(s,'lamp-cap',-.55,-.779,.023,.02,.21,.217,'iron');
  s.lamp={x:s.x-.55,y:s.y-.779,z:s.base+.19};
- s.targets.push({u:.033,v:-.7,z0:.1,z1:.2,label:'work the hand pump',action:'pump'});
+ s.targets.push({u:.033,v:-.64,z0:.1,z1:.2,label:'work the hand pump',action:'pump'});
+ for(const p of s.parts)if(['garden-wall','entry-return'].includes(p.role))p.z0=Math.min(p.z0,ground);
  s.targets.push({u:.55,v:.79,z0:.105,z1:.15,label:'read the little plaque',text:'WELL COURT · 1931. A worn plaque: “Maintained by the residents of the adjoining houses.” Under it, in newer paint: “No bookings. No purchases. Just sit a while.”'});
 }
 function quietChartRoom(s){
@@ -56966,14 +57025,25 @@ function buildQuietPlaces(){
   const s=quietSite('roof',x,y,b.h,1.05,.65,'Vale House · rooftop allotment','Raised tomato beds, a potting bench and a rain barrel above the neighbourhood. Enter the apartment lobby and take its existing lift to the roof. A resident tends the beds during the day.');
   s.entry={x:door.x,y:door.y};s.building=b;quietRoofGarden(s);break;
  }
- // An unused yard corner, never a park desire line or a street pavement.
- outer:for(let by=0;by<NB;by++)for(let bx=0;bx<NB;bx++){
-  if(blockKind(bx,by)!=='yard')continue;
-  for(const [u,v]of [[3.5,6.6],[6.5,3.5],[4,4]]){
-   const x=bx*8+u,y=by*8+v,base=quietSiteClear(x,y,1.1,1.12);if(base===null)continue;
-   const s=quietSite('court',x,y,base,1,.9,'Well Court','A small brick enclosure tucked into an open yard. An unmarked entrance opens onto worn paving, a vine pergola and a hand pump over a stone trough.');
-   s.entry={x,y:y+1.03};quietCourtyard(s);break outer;
-  }
+ // A grassy shore clearing, clear of construction yards, paths and fittings.
+ const courts=[];
+ for(let y=74;y<400;y+=2)for(let x=58;x<480;x+=2){
+  if(!naturalCoastAt(x,y)||isWater(x,y))continue;
+  const coast=coastalGround(x,y),kind=blockKind(Math.floor(x/8),Math.floor(y/8));
+  if(['yard','construction'].includes(kind)||coast.depth<2.5||coast.depth>6)continue;
+  const surface=islandShoreSurface(x,y,coast.depth,coast.beach);
+  if(surface.water||surface.background!==GREEN)continue;
+  let roadDistance=Infinity;
+  for(let yy=Math.ceil(y+1.1);yy<=y+4;yy++)for(let xx=Math.floor(x-3);xx<=x+3;xx++)if(ROAD[idx(xx,yy)])roadDistance=Math.min(roadDistance,Math.hypot(xx+.5-x,yy+.5-y));
+  if(roadDistance>4)continue;
+  const base=quietSiteClear(x,y,1.1,1.12);if(base===null)continue;
+  courts.push({x,y,base,score:coast.depth+roadDistance+hash(x,y,2381)*2});
+ }
+ courts.sort((a,b)=>a.score-b.score);
+ if(courts.length){
+  const {x,y,base}=courts[0];
+  const s=quietSite('court',x,y,base,1,.9,'Well Court','A small walled garden in the grass beside the shore. Worn paving, a climbing vine pergola and a hand pump over a stone trough.');
+  s.entry={x,y:y+1.03};quietCourtyard(s);
  }
  // A dry coastal verge: deliberately away from the marina, piers and traffic.
  const shore=[];
@@ -56999,7 +57069,7 @@ function buildQuietPlaces(){
  mapPlaceCache=null;
 }
 function quietMaterial(p,i,t,L,lamp=null){
- const face=HIT.face,curved=p.profile||p.ellipsoid||p.round;
+ const face=HIT.face,curved=p.profile||p.ellipsoid||p.round||p.leaf;
  const nu=face===1?1:face===2?-1:0,nv=face===3?1:face===4?-1:0;
  const nx=curved?HIT.nx:p.c*nu-p.s*nv,ny=curved?HIT.ny:p.s*nu+p.c*nv,nz=curved?HIT.nz:face===5?1:face===6?-1:0;
  const top=nz>.7,fp=t/projY,fine=coveDetail(t,.1);
@@ -57018,7 +57088,7 @@ function quietMaterial(p,i,t,L,lamp=null){
   const mortar=coveGroove(z,.0075,.0008,fp)+coveGroove(along+(row&1)*.012,.024,.001,fp);
   base=mortar>.5?GRAY:BRICK;level=1.3+L*.22+(hash(Math.floor(along/.024),row,2371)-.5)*fine;
  }else if(p.material==='leaf'){
-  const h=(HIT.w-p.z0)/(p.z1-p.z0);base=seasonIdx()===2?ORANGE:GREEN;level=(1.4+L*.27)*(.7+h*.4+leafClump(HIT.u*120,HIT.v*120)*fine*.3);
+  const h=(HIT.w-p.z0)/(p.z1-p.z0);base=seasonIdx()===2?ORANGE:GREEN;level=(1.4+L*.27)*(.7+h*.4+(p.leaf?Math.max(0,1-Math.abs(HIT.v)/Math.max(.0008,fp))*.25:leafClump(HIT.u*120,HIT.v*120)*fine*.3));
  }else if(p.material==='soil'){base=BRICK;level=.5+L*.07+Math.sin(HIT.u*430+HIT.v*330)*fine*.12;}
  else if(p.material==='clay'){base=ORANGE;level=2+L*.27-coveGroove(HIT.w,.006,.0008,fp)*.3;}
  else if(p.material==='fruit'){base=seasonIdx()===3?BRICK:RED;level=2+L*.35;}
@@ -57065,20 +57135,26 @@ function drawQuietPlaces(){
     x=vx+co*u-si*v;y=vy+si*u+co*v;c=Math.cos(angle+turn);sn=Math.sin(angle+turn);
    }
    let b={...p,x,y,c,s:sn};
+   if(p.segment){
+    const {a,b,r}=p.segment,[ax,ay]=R(a[0],a[1]),[bx,by]=R(b[0],b[1]);
+    drawRod(ax,ay,a[2],bx,by,b[2],r,(i,t,L)=>{BG[i]=C(GREEN,1.5+L*.3);set(i,' ',0);return true;});continue;
+   }
    if(p.moving==='handle'){
     const z=s.base+.17+(s.flowUntil>T?Math.sin(T*8)*.03:.018);
-    coveTube(vx+.014,vy-.72,s.base+.17,vx+.085,vy-.72,z,.003,GRAY);
-    coveRound(vx+.085,vy-.72,1,0,.009,.006,z-.006,z+.006,.003,BRICK);continue;
+    coveTube(vx+.014,vy+s.pump.y,s.base+.17,vx+.085,vy+s.pump.y,z,.003,GRAY);
+    coveRound(vx+.085,vy+s.pump.y,1,0,.009,.006,z-.006,z+.006,.003,BRICK);continue;
    }
    const shade=(i,t,L)=>quietMaterial(p,i,t,L,s.lamp);
    if(p.profile)drawBox(b,shade,coveRayLathe);
+   else if(p.leaf)drawBox(b,shade,rayQuietLeaf);
    else if(p.ellipsoid)drawBox(b,shade,homeRayEllipsoid);
    else if(p.round)drawBox(b,shade,coveRayRounded);
    else drawBox(b,shade);
   }
   if(s.type==='court'&&s.flowUntil>T){
-   const p={...boxAt(vx,vy-.64,1,0,.002,.002,s.base+.035,s.base+.131),material:'water'};
-   drawBox(p,(i,t,L)=>quietMaterial(p,i,t,L));
+   const [u,v,z]=s.pump.outlet,low=s.base+s.pump.waterZ,high=s.base+z;
+   const p={...boxAt(vx+u,vy+v,1,0,.002,.002,low,high),material:'water',profile:[[low,0],[low,.002],[high,.002],[high,0]]};
+   drawBox(p,(i,t,L)=>quietMaterial(p,i,t,L),coveRayLathe);
   }
   if(s.type==='roof'&&quietGardenerHere()){
    const look=quietGardenerLook||(quietGardenerLook=figLook({hair:'bun',top:'long',col:{top:[GREEN,7],skin:[SKIN,11]}}));

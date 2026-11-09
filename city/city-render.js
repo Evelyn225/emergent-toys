@@ -695,7 +695,7 @@ function floorBaseCell(i, r, x, rx, ry) {
         // wet sand outside the resting coastline instead of drawing a stripe
         // over water that never retreats.
         if(!surface.water||surface.foam||surface.film) { // (sand, foam and the thin wash: the sea's own shading starts where it's deep enough)
-          BG[i]=bgAt(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f,d);
+          BG[i]=C(surface.background,(day*(surface.foam?11+surface.tone:3*surface.tone+(surface.lift||0)*.4)+(1-day)*(surface.night||0))*f);
           set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return surface.water;
         }
       }
@@ -777,7 +777,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (surf) { ch = ' '; BG[i] = C(surf[0], clamp(surf[1], .6, 15)); } // a built surface: no dither, lit by itself (so it stays visible at night)
-  if(islandTexture)BG[i]=bgAt(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f,d); // (the surf on the sand catches the moon, as on raised ground)
+  if(islandTexture)BG[i]=C(islandTexture.background,(day*(2.6*islandTexture.tone+(islandTexture.lift||0))+(1-day)*(islandTexture.night||0))*f); // (the surf on the sand catches the moon, as on raised ground)
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
