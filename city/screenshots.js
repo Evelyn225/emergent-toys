@@ -1,4 +1,4 @@
-// Capture the rendered game, including the HUD, without DOM menus or OS dialogs.
+// Capture the rendered game, with the HUD but not the top-left info block (its own layer, hud.js), DOM menus or OS dialogs.
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {

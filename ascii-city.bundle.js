@@ -17316,16 +17316,32 @@ function drawTree(t, vx, vy) {
 // leaf clumps scattered over the canopy (nearest of the jittered centres round about, so no grid shows): each a dome lit
 // on its upper side and shaded under, darkening into the gaps between them. Smooth everywhere: the old square grid's
 // lighting jumped at every cell edge and the light came out cut into squares.
+let leafClumpTone = .5; // the last clump leafClump found: its own random 0..1, for its autumn colour
 function leafClump(cu, cz) {
   const gu = Math.floor(cu), gz = Math.floor(cz);
-  let best = 9, rz = 0;
+  let best = 9, rz = 0, bu = 0, bz = 0;
   for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
     const qu = gu + k, qz = gz + j, ou = qu + .5 + (hash(qu, qz, 818) - .5) * .7, oz = qz + .5 + (hash(qu, qz, 819) - .5) * .7;
     const d2 = (cu - ou) ** 2 + (cz - oz) ** 2;
-    if (d2 < best) { best = d2; rz = cz - oz; }
+    if (d2 < best) { best = d2; rz = cz - oz; bu = qu; bz = qz; }
   }
+  leafClumpTone = hash(bu, bz, 823);
   const d = Math.sqrt(best), body = clamp(1 - d / .62, 0, 1); // 1 at a clump's middle, 0 out in the gaps
   return (body * body - .35) * .55 + rz * .55 * body; // the dome, darker between; its top lit, its underside shaded
+}
+// autumn: yellow through orange and red to brown. Each tree leans its own way along that (some mostly yellow, some
+// mostly red), the colour drifts across the canopy in broad patches (smooth noise), turning further up top and on the
+// sunny side, and up close each leaf clump takes one colour with a few stray leaves at the edges. (It used to be a
+// random one of the four for every square of a 12x12 grid: a patchwork of blocks.)
+const FALL_RAMP = [YEL, ORANGE, RED, BRICK];
+function fallColour(u, z, t, clump, near) {
+  const lean = t.fallLean ??= .12 + hash(Math.floor(t.x * 97), Math.floor(t.y * 97), 821) * .62;
+  let v = lean + (noise(u * 7 + t.seed * 31, z * 7, 822) - .5) * .7 + (z - .4) * .55 - u * .25;
+  if (near > 0) {
+    v += (clump - .5) * .3 * near; // a clump's own shade
+    v += (hash(Math.floor(u * 160 + t.seed * 53), Math.floor(z * 160), 824) - .5) * .14 * near; // a stray leaf
+  }
+  return FALL_RAMP[clamp(Math.floor(v * 4), 0, 3)];
 }
 function treeCell(i, u, z, du, dz, L, t) {
   const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
@@ -17354,11 +17370,10 @@ function treeCell(i, u, z, du, dz, L, t) {
   // two clumps overlap it's deep in the tree, and it used to punch square holes there, the buildings showing through
   if (depth < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false;
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
-  const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
   // spring: the blossom tree flowers, pink with white petals in small flecks; everything else puts out new leaves, a
   // brighter green in clumps. (Every tree used to get grey-white patches on a coarse square grid: the squares in the light)
   const fleck = du < .03 ? hash(Math.floor(u * 140 + t.seed * 71), Math.floor(z * 140), 820) : .5, spring = sn === 0 && k !== 'pine';
-  const base = fall || (k === 'blossom' ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  const bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
   if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, ' ', 0), true; } // snow on the pine's boughs
   // leaf clusters: each a rounded clump lit on its upper side and shaded under, the clumps themselves lighter toward
   // the sun; up close you see them, far off the canopy settles to its lit-and-shaded mass
@@ -17366,6 +17381,8 @@ function treeCell(i, u, z, du, dz, L, t) {
   let clump = 0;
   if (k === 'pine') { const tier = fract((z - .12) / .15); clump = (tier > .75 ? -.35 : tier < .3 ? .2 : 0); } // each tier's bough lit above, its underside in shadow
   else if (fineT > 0) clump = leafClump(u * 16 + t.seed * 7, z * 16); // a clump's dome, lit from above
+  const fall = sn === 2 && k !== 'pine' ? fallColour(u, z, t, fineT > 0 ? leafClumpTone : .5, fineT) : 0; // autumn colours
+  const base = fall || (k === 'blossom' ? MAG : GREEN);
   const petal = base === MAG && fleck > 0.86, fresh = spring && base === GREEN && clump > .05 ? .18 : 0;
   BG[i] = C(petal ? WHITE : base, Math.max(0.8, (1.5 + L * 0.3) * lit * bg * (1 + fresh + clump * fineT * cs + (k === 'pine' ? clump * fineT : 0) - (1 - e) * .12) + (petal ? 1.5 : 0)));
   return set(i, ' ', 0), true;
@@ -29373,6 +29390,19 @@ function needMeters() {
   if (needs.health < maxHealth()) out.push(bar('health', needs.health, maxHealth()));
   return out;
 }
+// The layer the top-left block is drawn on: a transparent canvas just over the game's, sized with it and cleared every
+// frame (main.js clears it too, for the frames hud() doesn't run: a cabinet, the free camera)
+let hudTopLayer = null;
+function hudTopContext() {
+  if (!hudTopLayer) {
+    hudTopLayer = document.createElement('canvas'); hudTopLayer.setAttribute('aria-hidden', 'true');
+    hudTopLayer.style.pointerEvents = 'none'; cv.after(hudTopLayer); // (same stacking as the game's canvas, just above it)
+  }
+  if (hudTopLayer.width !== cv.width || hudTopLayer.height !== cv.height) { hudTopLayer.width = cv.width; hudTopLayer.height = cv.height; }
+  const x = hudTopLayer.getContext('2d'); x.clearRect(0, 0, hudTopLayer.width, hudTopLayer.height);
+  return x;
+}
+function clearHudTop() { if (hudTopLayer) hudTopLayer.getContext('2d').clearRect(0, 0, hudTopLayer.width, hudTopLayer.height); }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
@@ -29410,6 +29440,8 @@ function hud() {
   minimap();
   const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
+  { // the top-left block goes on a layer of its own over the game's canvas, so screenshots (frameCanvas) leave it out
+  const g = hudTopContext(); g.font = FS + 'px monospace'; g.textBaseline = 'top';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, top + 3 + k * FS));
@@ -29430,6 +29462,7 @@ function hud() {
     const y = top + FS * (lines.length + 1) + 10 + alertHeight, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
+  }
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
@@ -32464,7 +32497,7 @@ function asciiBar(f) {
   `;
   document.head.appendChild(style);
 }
-// Capture the rendered game, including the HUD, without DOM menus or OS dialogs.
+// Capture the rendered game, with the HUD but not the top-left info block (its own layer, hud.js), DOM menus or OS dialogs.
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {
@@ -57230,6 +57263,7 @@ function loop(t) {
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
+  clearHudTop(); // (hud() draws the top-left block again if this frame has one: hud.js)
   if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;

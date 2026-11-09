@@ -141,7 +141,7 @@ for(const mobile of [false,true])test(`GPS sits below time and controls without 
   await page.setViewportSize({width,height});
   const r=await page.evaluate(()=>{
    resize();tod=12;env(0);render(0);settings.help=true;task=job=courierJob=null;
-   const capture=()=>{const texts=[],old=g.fillText;try{g.fillText=function(s,x,y,...args){texts.push({s,x,y,col:g.fillStyle});return old.call(this,s,x,y,...args);};hud();}finally{g.fillText=old;}return texts;};
+   const capture=()=>{const texts=[],cs=[g,hudTopContext()];try{for(const c of cs)c.fillText=function(s,x,y,...args){texts.push({s,x,y,col:this.fillStyle});return CanvasRenderingContext2D.prototype.fillText.call(this,s,x,y,...args);};hud();}finally{for(const c of cs)delete c.fillText;}return texts;}; // (the top-left block is on its own layer: hud.js)
    setMapWaypoint({id:'hud-order-test',name:'GPS target',x:px+10,y:py});const active=capture(),bottom=hudBottom;
    clearMapWaypoint();const inactive=capture();
    const info=a=>a.filter(t=>t.col==='#bbbbbb'&&t.x===4),before=info(active),after=info(inactive);

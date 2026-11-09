@@ -320,6 +320,7 @@ function loop(t) {
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
+  clearHudTop(); // (hud() draws the top-left block again if this frame has one: hud.js)
   if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
