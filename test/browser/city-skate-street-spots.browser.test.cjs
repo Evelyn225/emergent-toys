@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');
-test('eight street lines fit their sites, share visible ride/grind geometry and appear in map search',async()=>{
+test('fourteen street lines fit their sites, share visible ride/grind geometry and appear in map search',async()=>{
  const b=await chromium.launch(),p=await b.newPage({viewport:{width:1170,height:800}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
  try{await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
  const r=await p.evaluate(()=>{
@@ -8,8 +8,10 @@ test('eight street lines fit their sites, share visible ride/grind geometry and 
   const bad=[],directory=mapDirectory();
   for(const g of GRINDS)if(![g.x,g.y].every(Number.isFinite))bad.push('invalid grind bucket coordinates');
   for(const s of SKATE_STREET_SITES){
+   if(!['park','yard'].includes(blockKind(s.bx,s.by)))bad.push(['not an open lot or park',s.id]);
+   for(const other of SKATE_STREET_SITES)if(other!==s&&Math.hypot(rel(s.x-other.x),rel(s.y-other.y))<12)bad.push(['spots too close',s.id]);
    if(!directory.some(p=>p.id===s.id&&p.category==='activities'))bad.push(['not mapped',s.id]);
-   for(let u=-1.1;u<=1.1001;u+=.22)for(let v=-.52;v<=.5201;v+=.26){const [x,y]=skateStreetPoint(s,u,v),bx=Math.floor(x/8),by=Math.floor(y/8);if(ROAD[idx(Math.floor(x),Math.floor(y))]||map[idx(Math.floor(x),Math.floor(y))]||isWater(x,y))bad.push(['bad ground',s.id]);if(blockKind(bx,by)==='park'&&inPond(mod(x,8),mod(y,8),bx,by,.2))bad.push(['pond',s.id]);}
+   for(let u=-1.1;u<=1.1001;u+=.22)for(let v=-.52;v<=.5201;v+=.26){const [x,y]=skateStreetPoint(s,u,v),bx=Math.floor(x/8),by=Math.floor(y/8);if(ROAD[idx(Math.floor(x),Math.floor(y))]||map[idx(Math.floor(x),Math.floor(y))]||isWater(x,y))bad.push(['bad ground',s.id]);if(blockKind(bx,by)==='park'&&(inPond(mod(x,8),mod(y,8),bx,by,.2)||Math.abs(mod(x,8)-5)<.35||Math.abs(mod(y,8)-5)<.35))bad.push(['pond',s.id]);}
    // A mapped approach must connect to a public street through the existing
    // yard gate/path. Check segment midpoints so thin fences cannot be skipped.
    const entry=directory.find(p=>p.id===s.id);px=entry.x;py=entry.y;body.z=body.vz=0;SK.grind=SK.transition=null;
@@ -58,7 +60,7 @@ test('eight street lines fit their sites, share visible ride/grind geometry and 
   if(Math.max(...speeds)<speeds[0]+.05)bad.push('downhill handrail did not accelerate');
   const count=SKATE_STREET_SITES.length,styles=new Set(SKATE_STREET_SITES.map(s=>s.type)).size,districts=new Set(SKATE_STREET_SITES.map(s=>s.district)).size;
   return {bad,count,styles,districts};
- });assert.deepEqual(r.bad,[]);assert.equal(r.count,8);assert.equal(r.styles,6);assert.ok(r.districts>=3);assert.deepEqual(errors,[]);
+ });assert.deepEqual(r.bad,[]);assert.equal(r.count,14);assert.equal(r.styles,8);assert.ok(r.districts>=3);assert.deepEqual(errors,[]);
  await p.keyboard.press('KeyM');await p.locator('#bigmap input').fill('Four-step');assert.ok(await p.locator('[data-place]').count()>=1);await p.locator('[data-place]').first().click();assert.match(await p.locator('.place-detail').innerText(),/four 18 cm stairs/);await p.locator('[data-map="waypoint"]').click();assert.ok(await p.evaluate(()=>mapWaypoint.id.startsWith('skate-street:')));
  }finally{await b.close();}
 });

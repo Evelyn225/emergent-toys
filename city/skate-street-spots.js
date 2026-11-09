@@ -89,6 +89,8 @@ function buildStreetSkateSpots(){
   }
   const styles=['stairs','dock','banks','manuals','rails','gap'],used=new Set();
   const descriptions={
+    kickers:['Kicker and flat bar','A low launch ramp with a clear landing, plus a parallel steel flat bar. Practise small airs or line up an ollie onto the rail away from the street.'],
+    flatbars:['Twin flat bars','Two low steel rails with separate approaches and room to roll out. A small bank links the lines on this quiet patch of paving.'],
     stairs:['Four-step rail','A roll-up bank reaches a 72 cm landing and four 18 cm stairs. Two steel handrails run flat, down the steps and out onto the approach; line up on the upper deck for a downhill grind or ollie the set.'],
     dock:['Loading dock','A bank reaches a 60 cm loading platform with grindable edges and a sloped steel exit rail. Pop off the dock or carry a manual across the adjacent low pad.'],
     banks:['Bank-to-ledge plaza','Broad banks lead onto a 45 cm deck with steel-edged grind lines. A low ledge and flat bar make alternate exits, with clear run-up and landing space.'],
@@ -96,13 +98,25 @@ function buildStreetSkateSpots(){
     rails:['Angled rail line','Three low steel bars at different angles, with space between them to pop out, steer and transfer. A broad low bank offers another approach.'],
     gap:['Ledge transfer','Two six-metre ledges separated by a three-metre transfer gap, plus a long low manual pad. Build speed on the clear approaches and link the line.']
   };
-  while(SKATE_STREET_SITES.length<8){
+  while(SKATE_STREET_SITES.length<14){
+    // Keep the original eight lines stable; spread the additional small spots
+    // across the remaining open spaces rather than filling one neighbourhood.
+    if(SKATE_STREET_SITES.length>=8)candidates.sort((a,b)=>{
+      const distance=p=>Math.min(...SKATE_STREET_SITES.map(s=>Math.hypot(rel(p.x-s.x),rel(p.y-s.y))));
+      return distance(b)-distance(a);
+    });
     const site=candidates.find(p=>!used.has(p.district)&&skateStreetSiteClear(p.x,p.y,p.c,p.s))||candidates.find(p=>skateStreetSiteClear(p.x,p.y,p.c,p.s));
     if(!site)break;
-    const type=site.district==='industrial'&&!SKATE_STREET_SITES.some(p=>p.type==='dock')?'dock':styles.find(type=>!SKATE_STREET_SITES.some(p=>p.type===type))||styles[SKATE_STREET_SITES.length%styles.length];
+    const type=SKATE_STREET_SITES.length>=8?(SKATE_STREET_SITES.length%2?'flatbars':'kickers'):site.district==='industrial'&&!SKATE_STREET_SITES.some(p=>p.type==='dock')?'dock':styles.find(type=>!SKATE_STREET_SITES.some(p=>p.type===type))||styles[SKATE_STREET_SITES.length%styles.length];
     const id='skate-street:'+SKATE_STREET_SITES.length;Object.assign(site,{id,type});used.add(site.district);SKATE_STREET_SITES.push(site);
     const box=(u,v,hl,hw,h,kind='skateledge',edge=true,extra={})=>{const o=skateStreetFeature(site,u,v,hl,hw,h,kind,extra);if(edge)skateStreetEdges(o);return o;};
-    if(type==='stairs'){
+    if(type==='kickers'){
+      skateStreetBank(site,-.35,-.2,.28,.13,.035);
+      skateStreetRail(site,.22,[[-.65,.03],[.65,.03]]);
+    }else if(type==='flatbars'){
+      for(const v of [-.22,.22])skateStreetRail(site,v,[[-.6,.028],[.6,.028]]);
+      skateStreetBank(site,0,0,.35,.08,.025,.14,'funbox');
+    }else if(type==='stairs'){
       skateStreetBank(site,-.72,0,.25,.22,.072);box(-.26,0,.21,.22,.072);
       for(let i=0;i<4;i++)box(-.05+(i+.5)*.025,0,.0125,.22,.072-i*.018,'skateledge',false,{walkStep:true});
       for(const side of [-1,1])skateStreetRail(site,side*.2,[[-.35,.117],[-.05,.117],[.05,.045],[.35,.045]]);
