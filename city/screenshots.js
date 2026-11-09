@@ -1,4 +1,5 @@
-// Capture the rendered game, with the HUD but not the top-left info block (its own layer, hud.js), DOM menus or OS dialogs.
+// Capture the game as a clean picture: the world only, drawn again for the shot without the HUD, the menus, other
+// players' names and chat, or whatever's in your hand. (A cabinet or a shift on screen is taken as it is.)
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {
@@ -29,12 +30,24 @@ function showScreenshotNotice(text) {
   clearTimeout(screenshotNoticeTimer);
   screenshotNoticeTimer = setTimeout(() => screenshotNotice.hidden = true, 6000);
 }
+// draw the frame once more without the HUD or your hand, copy it, then draw it again as it was (it's what stays on
+// screen while paused). A copy, since frameCanvas() hands back the same canvas every time.
+function cleanFrame() {
+  const draw = () => freecam ? renderFreecam() : renderView(0);
+  const shot = document.createElement('canvas');
+  if (game) { const f = frameCanvas(); shot.width = f.width; shot.height = f.height; shot.getContext('2d').drawImage(f, 0, 0); return shot; }
+  cleanShot = true;
+  try { draw(); const f = frameCanvas(); shot.width = f.width; shot.height = f.height; shot.getContext('2d').drawImage(f, 0, 0); }
+  finally { cleanShot = false; }
+  draw();
+  return shot;
+}
 async function takeScreenshot() {
   if (screenshotBusy) return;
   screenshotBusy = true;
   try {
     const blob = await new Promise((resolve, reject) => {
-      frameCanvas().toBlob(value => { // (the frame and everything drawn over it)
+      cleanFrame().toBlob(value => {
         if (value) resolve(value);
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');

@@ -358,19 +358,6 @@ function needMeters() {
   if (needs.health < maxHealth()) out.push(bar('health', needs.health, maxHealth()));
   return out;
 }
-// The layer the top-left block is drawn on: a transparent canvas just over the game's, sized with it and cleared every
-// frame (main.js clears it too, for the frames hud() doesn't run: a cabinet, the free camera)
-let hudTopLayer = null;
-function hudTopContext() {
-  if (!hudTopLayer) {
-    hudTopLayer = document.createElement('canvas'); hudTopLayer.setAttribute('aria-hidden', 'true');
-    hudTopLayer.style.pointerEvents = 'none'; cv.after(hudTopLayer); // (same stacking as the game's canvas, just above it)
-  }
-  if (hudTopLayer.width !== cv.width || hudTopLayer.height !== cv.height) { hudTopLayer.width = cv.width; hudTopLayer.height = cv.height; }
-  const x = hudTopLayer.getContext('2d'); x.clearRect(0, 0, hudTopLayer.width, hudTopLayer.height);
-  return x;
-}
-function clearHudTop() { if (hudTopLayer) hudTopLayer.getContext('2d').clearRect(0, 0, hudTopLayer.width, hudTopLayer.height); }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
@@ -408,8 +395,6 @@ function hud() {
   minimap();
   const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
-  { // the top-left block goes on a layer of its own over the game's canvas, so screenshots (frameCanvas) leave it out
-  const g = hudTopContext(); g.font = FS + 'px monospace'; g.textBaseline = 'top';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, top + 3 + k * FS));
@@ -430,7 +415,6 @@ function hud() {
     const y = top + FS * (lines.length + 1) + 10 + alertHeight, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
-  }
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
