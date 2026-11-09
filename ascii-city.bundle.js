@@ -28187,6 +28187,8 @@ function drawDeck(x, rx, ry, t0, t1) {
   }
 }
 
+// set for the one render a screenshot takes (screenshots.js): just the world, no HUD and nothing in your hand
+let cleanShot = false;
 function render(dt,sceneOnly=false,mask=null) {
   videoBackroomTick();
   if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
@@ -28296,24 +28298,26 @@ function render(dt,sceneOnly=false,mask=null) {
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if(sceneOnly)return;
-  drawFurnishingPreview();
+  if (!cleanShot) drawFurnishingPreview();
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
     chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
-    if (!stadiumTVOn()) drawHeld(dt); // what's in your hand (or mouth, or under your feet); not on the TV
+    if (!stadiumTVOn() && !cleanShot) drawHeld(dt); // what's in your hand (or mouth, or under your feet); not on the TV
   }
   drawTelescope(); // (the eyepiece, in the grid: held-curios.js)
   present();
   drawDrugVision();
-  if (freecam) freecamHud();
+  if (freecam) { if (!cleanShot) freecamHud(); }
   else {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
     wreckOverlay(); // (going in, in an aircraft: flight.js)
-    hud();
-    netOverlay(); // their names, speech bubbles and the chat (net.js)
+    if (!cleanShot) {
+      hud();
+      netOverlay(); // their names, speech bubbles and the chat (net.js)
+    }
   }
 }
 // paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
@@ -29402,19 +29406,6 @@ function needMeters() {
   if (needs.health < maxHealth()) out.push(bar('health', needs.health, maxHealth()));
   return out;
 }
-// The layer the top-left block is drawn on: a transparent canvas just over the game's, sized with it and cleared every
-// frame (main.js clears it too, for the frames hud() doesn't run: a cabinet, the free camera)
-let hudTopLayer = null;
-function hudTopContext() {
-  if (!hudTopLayer) {
-    hudTopLayer = document.createElement('canvas'); hudTopLayer.setAttribute('aria-hidden', 'true');
-    hudTopLayer.style.pointerEvents = 'none'; cv.after(hudTopLayer); // (same stacking as the game's canvas, just above it)
-  }
-  if (hudTopLayer.width !== cv.width || hudTopLayer.height !== cv.height) { hudTopLayer.width = cv.width; hudTopLayer.height = cv.height; }
-  const x = hudTopLayer.getContext('2d'); x.clearRect(0, 0, hudTopLayer.width, hudTopLayer.height);
-  return x;
-}
-function clearHudTop() { if (hudTopLayer) hudTopLayer.getContext('2d').clearRect(0, 0, hudTopLayer.width, hudTopLayer.height); }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   if(!telescopeActive()&&!stadiumTVOn())drawHeldBig(); // (on the TV at the football: just the match)
@@ -29452,8 +29443,6 @@ function hud() {
   minimap();
   const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
-  { // the top-left block goes on a layer of its own over the game's canvas, so screenshots (frameCanvas) leave it out
-  const g = hudTopContext(); g.font = FS + 'px monospace'; g.textBaseline = 'top';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, top + 3 + k * FS));
@@ -29474,7 +29463,6 @@ function hud() {
     const y = top + FS * (lines.length + 1) + 10 + alertHeight, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
-  }
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
@@ -32509,7 +32497,8 @@ function asciiBar(f) {
   `;
   document.head.appendChild(style);
 }
-// Capture the rendered game, with the HUD but not the top-left info block (its own layer, hud.js), DOM menus or OS dialogs.
+// Capture the game as a clean picture: the world only, drawn again for the shot without the HUD, the menus, other
+// players' names and chat, or whatever's in your hand. (A cabinet or a shift on screen is taken as it is.)
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
 let screenshotFolderBusy = false;
 async function openScreenshotFolder() {
@@ -32540,12 +32529,24 @@ function showScreenshotNotice(text) {
   clearTimeout(screenshotNoticeTimer);
   screenshotNoticeTimer = setTimeout(() => screenshotNotice.hidden = true, 6000);
 }
+// draw the frame once more without the HUD or your hand, copy it, then draw it again as it was (it's what stays on
+// screen while paused). A copy, since frameCanvas() hands back the same canvas every time.
+function cleanFrame() {
+  const draw = () => freecam ? renderFreecam() : renderView(0);
+  const shot = document.createElement('canvas');
+  if (game) { const f = frameCanvas(); shot.width = f.width; shot.height = f.height; shot.getContext('2d').drawImage(f, 0, 0); return shot; }
+  cleanShot = true;
+  try { draw(); const f = frameCanvas(); shot.width = f.width; shot.height = f.height; shot.getContext('2d').drawImage(f, 0, 0); }
+  finally { cleanShot = false; }
+  draw();
+  return shot;
+}
 async function takeScreenshot() {
   if (screenshotBusy) return;
   screenshotBusy = true;
   try {
     const blob = await new Promise((resolve, reject) => {
-      frameCanvas().toBlob(value => { // (the frame and everything drawn over it)
+      cleanFrame().toBlob(value => {
         if (value) resolve(value);
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');
@@ -57275,7 +57276,6 @@ function loop(t) {
   if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  clearHudTop(); // (hud() draws the top-left block again if this frame has one: hud.js)
   if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
@@ -57383,6 +57383,13 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   stepTransitAnnouncements();
+  renderView(dt);
+  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
+  requestAnimationFrame(loop);
+}
+// the view from wherever the camera is this frame (behind the car, the plane, the board; the TV at the football; or your
+// own eyes, swaying if you've had a drink), drawn with render(). Also run with dt 0 for a screenshot (screenshots.js)
+function renderView(dt) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
@@ -57411,8 +57418,6 @@ function loop(t) {
     if (wob > 0.08) drunkVision(wob);
     };if(skatingNow())skateFixedRender(draw);else draw();
   }
-  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
-  requestAnimationFrame(loop);
 }
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
 function drunkVision(wob) {
