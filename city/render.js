@@ -20,18 +20,18 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
       if (depth * (solid && FL[i] === 1 ? 0.97 : 1) >= ZB[i]) continue; // only the ground gets a subpixel contact allowance; walls and props always occlude
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
-      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }
+      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue; }
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
       if (word && cellW >= LETTER_MIN_COLS && cellH >= LETTER_MIN_ROWS && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
         const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
-        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue;
       }
       if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
-        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue;
       }
-      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
+      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0;
     }
   }
 }
@@ -41,6 +41,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
 // it paints the cell and returns true, or false to leave it see-through.
 // behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
 // depthOffset supplies a seated sprite's surface depth relative to its hip plane.
+let drawNoGlow = 0; // (1 while drawFigure paints: what drawShape draws then is marked NOGLOW)
 function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = null) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
@@ -63,7 +64,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = 
       const drew = fn(i, u, z, du, dz, L);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = surfaceDepth; // (a background it paints is its own, for the fog)
       if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
-      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; }
+      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; NOGLOW[i] = drawNoGlow; }
     }
   }
 }
@@ -124,7 +125,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const bg = BG[i]; BG[i] = BG_UNSET;
       const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
-      if (drew) { ZB[i] = t; FL[i] = 0; }
+      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = 0; }
     }
   }
 }
@@ -185,7 +186,7 @@ function render(dt,sceneOnly=false,mask=null) {
     if(mask&&!mask.columns[x])continue;
     const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
-    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; NOGLOW[i] = 0; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
     // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
     // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA

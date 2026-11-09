@@ -34,8 +34,9 @@ function worldBlock(value) { return worldReady ? value : value & (NB - 1); }
 
 // ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
 const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],
-               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0],[240,222,190]];
-const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK, STONE] = BASES.keys();
+               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0],[240,222,190],
+               [120,140,190]]; // (WET, last: its level 15 is index 255, NONE, so it only goes to 14)
+const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK, STONE, WET] = BASES.keys();
 const PAL = [], PALRGB = [];
 for (const [r, gg, b] of BASES) for (let i = 0; i < 16; i++) {
   const f = 0.1 + i / 15 * 0.9, c = [r * f | 0, gg * f | 0, b * f | 0];
@@ -350,7 +351,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
@@ -1339,7 +1340,8 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     if (c < 0 || c >= W || r < 0 || r >= H || !s[r * W + c] || !s.near) return 0;
     return -s.near[r * W + c] * unit * (dx * rx + dy * ry) / Math.max(.001, Math.hypot(rx, ry));
   } : null;
-  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+  drawNoGlow = 1; // (a person or an animal: never a light, for the bloom)
+  try { drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
     // Standing sprites remain lazy; seated sprites are also requested by the surface-depth sampler.
     sprite(dz);
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
@@ -1355,7 +1357,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  }, true, seatedDepth); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
+  }, true, seatedDepth); } finally { drawNoGlow = 0; } // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
@@ -13685,7 +13687,8 @@ function netWrap(text, width = 24, rows = 3) {
 const netBubbleTime = text => 4 + text.length / 15; // seconds a speech bubble stays up
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
-let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
+let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL, NOGLOW; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
+// NOGLOW: the cell shows a person or an animal, which however brightly lit isn't a light: the bloom leaves it out (post-fx.js)
 function resize() {
   cv.width = innerWidth; cv.height = innerHeight;
   g.font = FS + 'px monospace'; g.textBaseline = 'top';
@@ -13693,7 +13696,7 @@ function resize() {
   cols = Math.floor(innerWidth / cw); rows = Math.floor(innerHeight / FS);
   const n = cols * rows;
   CH = new Array(n); COL = new Uint8Array(n); BG = new Uint8Array(n); ZB = new Float32Array(n); ZBG = new Float32Array(n); FL = new Uint8Array(n);
-  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n); LAMPL = new Uint8Array(n);
+  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n); LAMPL = new Uint8Array(n); NOGLOW = new Uint8Array(n);
   BASE = new Int32Array(cols);
 }
 addEventListener('resize', resize); resize();
@@ -14897,6 +14900,21 @@ function sunMoon() { // sun rises in +x, sets in -x
   disc(az + Math.PI, Math.asin(-sunEl), C(WHITE, 13), C(BLUE, 2), 1.4, true);
 }
 
+// A puddle with nothing to mirror: the ground under it, darker and a little blue (WET, a blue-grey), as bright as
+// the ground would be a couple of shades down. Under a streetlamp (lamp: its light there, 0-13) it shades into the
+// lamp's warm pool rather than stopping at an edge: a little light brightens the wet, where the two are about even
+// every other cell is warm, and where the lamp is strong it's all warm.
+const WET_LUM = (() => { const [r, g, b] = BASES[WET]; return 0.2126 * r + 0.7152 * g + 0.0722 * b; })();
+function wetGround(g, lamp = 0, i = 0) {
+  let lw;
+  if (g === NONE) lw = 1 + day * 2;
+  else { const [r, gg, b] = PALRGB[g], f = (0.2126 * r + 0.7152 * gg + 0.0722 * b) * 0.72 / WET_LUM; lw = Math.round((f - 0.1) / 0.9 * 15); } // (0.72: about two shades darker)
+  if (!lamp) return C(WET, Math.min(14, lw));
+  const warm = Math.max(3 + day * 3, lamp), t = lamp / (lamp + lw + 1);
+  if (t > 0.62) return C(WARM, warm);
+  if (t > 0.38 && ((i % cols) + (i / cols | 0)) & 1) return C(WARM, warm * 0.85);
+  return C(WET, Math.min(14, lw + lamp * 0.35));
+}
 // puddles (FL 2) and open water (FL 3) mirror whatever is above them, about the base of the nearest wall in that column
 function reflect() {
   for (let x = 0; x < cols; x++) {
@@ -14909,8 +14927,8 @@ function reflect() {
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
         const lv = (COL[j] & 15) * 0.55;
         CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
-      }else if(f===2){set(i,' ',0);BG[i]=C(lamp?WARM:BLUE,lamp?Math.max(3+day*3,lamp):3+day*3);}
-      if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
+        if (f === 2) BG[i] = wetGround(BG[i], lamp * 0.4, i); // (the wet ground under it; a lamp's pool kept soft, so the reflection still reads)
+      }else if(f===2){set(i,' ',0);BG[i]=wetGround(BG[i],lamp,i);} // nothing to mirror: the wet ground, shading into a lamp's light
     }
   }
 }
@@ -28001,18 +28019,18 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
       if (depth * (solid && FL[i] === 1 ? 0.97 : 1) >= ZB[i]) continue; // only the ground gets a subpixel contact allowance; walls and props always occlude
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
-      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }
+      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue; }
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
       if (word && cellW >= LETTER_MIN_COLS && cellH >= LETTER_MIN_ROWS && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
         const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
-        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue;
       }
       if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
-        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue;
       }
-      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
+      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0;
     }
   }
 }
@@ -28022,6 +28040,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
 // it paints the cell and returns true, or false to leave it see-through.
 // behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
 // depthOffset supplies a seated sprite's surface depth relative to its hip plane.
+let drawNoGlow = 0; // (1 while drawFigure paints: what drawShape draws then is marked NOGLOW)
 function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = null) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
@@ -28044,7 +28063,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = 
       const drew = fn(i, u, z, du, dz, L);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = surfaceDepth; // (a background it paints is its own, for the fog)
       if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
-      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; }
+      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; NOGLOW[i] = drawNoGlow; }
     }
   }
 }
@@ -28105,7 +28124,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const bg = BG[i]; BG[i] = BG_UNSET;
       const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
-      if (drew) { ZB[i] = t; FL[i] = 0; }
+      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = 0; }
     }
   }
 }
@@ -28166,7 +28185,7 @@ function render(dt,sceneOnly=false,mask=null) {
     if(mask&&!mask.columns[x])continue;
     const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
-    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; NOGLOW[i] = 0; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
     // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
     // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA
@@ -28419,6 +28438,11 @@ function present2D() {
 // lights run on a wet lens and stretch over wet tarmac.
 // Colour grade: cool shadows and warm lights at night, warm at dusk, a touch of contrast by day, flatter in fog.
 // Vignette: the corners a little darker. Grain: a fine moving noise, mostly in the dark, that hides banding.
+// Eye adjustment: the frame's average brightness is followed slowly, so stepping from the dark street into a lit
+// shop starts a little over-exposed and settles in about a second (the other way, a little dark, more slowly).
+// Fog light rays: in fog, each light throws soft rays outward. The bright parts are gathered along the direction
+// towards the nearest light (the slope of the wide bloom), so anything in the way of a light, a window's bars,
+// a lamp's frame, leaves a darker shaft between brighter ones.
 // Minigames get only the vignette and grain: grading or smearing them would just muddy their colours.
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 // box-filter a texture down; threshold > 0 keeps only what's bright (soft knee, so nothing pops in or out)
@@ -28444,15 +28468,29 @@ void main() {
     + (texture2D(src, uv + o2).rgb + texture2D(src, uv - o2).rgb) * 0.0702702703;
   gl_FragColor = vec4(c, 1.0);
 }`;
+const POSTFX_RAYS = `precision highp float;
+uniform sampler2D src, guide; uniform vec2 size, guideSize; uniform float len;
+float lum(vec2 uv) { vec3 c = texture2D(guide, uv).rgb; return max(c.r, max(c.g, c.b)); }
+void main() {
+  vec2 uv = gl_FragCoord.xy / size, t = 1.0 / guideSize;
+  vec2 g = vec2(lum(uv + vec2(t.x, 0.0)) - lum(uv - vec2(t.x, 0.0)), lum(uv + vec2(0.0, t.y)) - lum(uv - vec2(0.0, t.y)));
+  if (dot(g, g) < 1e-8) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec2 step = normalize(g) * len / 16.0 / size; // (towards the light, a sixteenth of the ray at a time)
+  vec3 sum = vec3(0.0); float tot = 0.0;
+  for (int i = 1; i <= 16; i++) { float w = 1.0 - float(i) / 17.0; sum += texture2D(src, uv + step * float(i)).rgb * w; tot += w; }
+  gl_FragColor = vec4(sum / tot, 1.0);
+}`;
 const POSTFX_COMPOSE = `precision highp float;
-uniform sampler2D scene, near, wide, streak; uniform vec2 size;
-uniform float bloom, streaks, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
+uniform sampler2D scene, near, wide, streak, rayTex; uniform vec2 size;
+uniform float bloom, streaks, rays, exposure, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
 float hash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
   vec3 s = texture2D(scene, uv).rgb;
-  if (bloom > 0.0 || streaks > 0.0) {
-    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks;
+  if (abs(exposure - 1.0) > 0.001) s = 1.0 - pow(1.0 - clamp(s, 0.0, 1.0), vec3(exposure)); // (no hard clip either way)
+  if (bloom > 0.0 || streaks > 0.0 || rays > 0.0) {
+    vec3 b = (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom + texture2D(streak, uv).rgb * 0.7 * streaks
+      + texture2D(rayTex, uv).rgb * 0.8 * rays;
     b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
     s = 1.0 - (1.0 - s) * (1.0 - clamp(b, 0.0, 1.0));
   }
@@ -28476,6 +28514,16 @@ const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
 // How much each cell may feed the bloom: puddles (FL 2) mirror the lamps and signs above them, and blooming the
 // reflection as well as the light doubled every glow into a big smear across the road; they keep a little.
 const POSTFX_PUDDLE_GLOW = 0.25;
+// Only lights should glow. People and animals (NOGLOW, set by drawFigure) are bright when lit, not lights: they keep
+// very little. And by the palette base of a cell's brighter colour: materials that are only ever lit surfaces (skin,
+// brick, stone, concrete grey) keep little; the colours lamps, neon, windows and signs are drawn in keep it all.
+const POSTFX_FIGURE_GLOW = 0.12;
+const POSTFX_BASE_GLOW = (() => {
+  const w = new Float32Array(16).fill(1);
+  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8; w[WET] = 0.3;
+  return w;
+})();
+let postFxPalLumGlow = null; // (palette luminance, to tell which of a cell's colours is the bright one)
 
 // how much of the night look: outdoors the sky's; a room is lit by its own lamps, so it reads as evening at least
 const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
@@ -28490,6 +28538,37 @@ const postFxThreshold = () => 0.62 - 0.24 * postFxNight();
 function postFxStreaks() {
   if (!settings.rainStreaks || mode === 'room') return 0;
   return clamp(Math.max(rain || 0, (wet || 0) * 0.2), 0, 1) * (0.5 + 0.5 * postFxNight());
+}
+// fog light rays: how foggy, outdoors only, stronger at night when there are lights to see
+function postFxRays() {
+  if (!settings.fogRays || mode === 'room') return 0;
+  return clamp(fogAmt || 0, 0, 1) * (0.35 + 0.65 * postFxNight());
+}
+// Eye adjustment. The frame's brightness is worked out from the grid itself (cells' palette colours with their
+// fog, a glyph counting for a quarter of its cell), so there's no pixel readback.
+let postFxPalLum = null;
+function postFxSceneLum() {
+  if (!postFxPalLum) { postFxPalLum = new Float32Array(256); for (let k = 0; k < 256; k++) { const c = PALRGB[k]; postFxPalLum[k] = c ? (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255 : 0; } }
+  const P = postFxPalLum, fl = (0.2126 * fogRGB[0] + 0.7152 * fogRGB[1] + 0.0722 * fogRGB[2]) / 255;
+  let sum = 0, n = 0;
+  for (let i = 0, N = cols * rows; i < N; i += 2) {
+    const fb = FOGB[i] / 8, fs = Math.min(1, FOGS[i] / 8);
+    let l = (BG[i] === NONE ? 0 : P[BG[i]]) * (1 - fb) + fl * fb;
+    if (CH[i] && CH[i] !== ' ' && fs < 1) l = l * 0.75 + (P[COL[i]] * (1 - fs) + fl * fs) * 0.25;
+    sum += Math.log(l + 0.02); n++;
+  }
+  return n ? Math.exp(sum / n) : 0.1;
+}
+// how exposed this frame is: the brightness now against what the eye has got used to, which follows it, quickly
+// towards brighter and more slowly towards dark. 1 once settled; a pause or a jump of more than half a second resets.
+function postFxExposure(fx) {
+  if (!settings.eyeAdapt) { fx.adapt = null; return 1; }
+  const now = performance.now() / 1000, cur = postFxSceneLum(), dt = now - (fx.adaptT || 0);
+  fx.adaptT = now;
+  if (fx.adapt == null || dt > 0.5 || dt < 0) { fx.adapt = cur; return 1; }
+  const tau = cur > fx.adapt ? 0.45 : 1.1;
+  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-dt / tau));
+  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.35), 0.7, 1.45);
 }
 // the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
 function postFxGrade() {
@@ -28506,7 +28585,7 @@ function postFxGrade() {
 function postFxWanted(world) {
   if (POSTFX_OFF) return false;
   if (settings.vignette || settings.grain) return true;
-  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || !!settings.colorGrade);
+  return world && (postFxBloom() > 0 || postFxStreaks() > 0 || postFxRays() > 0 || !!settings.colorGrade || !!settings.eyeAdapt);
 }
 
 function postFxInit(st) {
@@ -28520,17 +28599,19 @@ function postFxInit(st) {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return null;
     const loc = {}; return { p, U: n => loc[n] ??= gl.getUniformLocation(p, n) };
   };
-  const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE);
-  if (!down || !blur || !compose) return null;
+  const down = program(POSTFX_DOWN), blur = program(POSTFX_BLUR), compose = program(POSTFX_COMPOSE), rays = program(POSTFX_RAYS);
+  if (!down || !blur || !compose || !rays) return null;
+  // (units 3-7: WebGL only promises 8. The mask and the rays' guide borrow unit 4 for their own passes.)
   gl.useProgram(compose.p);
-  ['scene', 'near', 'wide', 'streak'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
-  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 4);
+  ['scene', 'near', 'wide', 'streak', 'rayTex'].forEach((n, k) => gl.uniform1i(compose.U(n), POSTFX_UNIT + k));
+  gl.useProgram(rays.p); gl.uniform1i(rays.U('src'), POSTFX_UNIT); gl.uniform1i(rays.U('guide'), POSTFX_UNIT + 1);
+  gl.useProgram(down.p); gl.uniform1i(down.U('src'), POSTFX_UNIT); gl.uniform1i(down.U('mask'), POSTFX_UNIT + 1);
   gl.useProgram(blur.p); gl.uniform1i(blur.U('src'), POSTFX_UNIT);
   gl.useProgram(st.prog);
-  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, mask);
+  const mask = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, mask);
   for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
   gl.activeTexture(gl.TEXTURE0);
-  return { down, blur, compose, mask, key: '' };
+  return { down, blur, compose, rays, mask, key: '' };
 }
 
 // a colour texture and a framebuffer drawing into it
@@ -28544,19 +28625,19 @@ function postFxTarget(gl, w, h) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return ok ? { tex, fb, w, h } : null;
 }
-const POSTFX_TARGETS = ['scene', 'a4', 'b4', 's4', 'a8', 'b8'];
+const POSTFX_TARGETS = ['scene', 'p4', 'a4', 'b4', 's4', 'r4', 'a8', 'b8'];
 function postFxSize(st, fx) {
   const { gl } = st, W = cv.width, H = cv.height, key = W + 'x' + H;
   if (fx.key === key && fx.maskKey === cols + 'x' + rows) return true;
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); // (the mask's rows are one byte a cell, any width)
   fx.maskData = new Uint8Array(cols * rows); fx.maskKey = cols + 'x' + rows;
-  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+  gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, cols, rows, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, fx.maskData);
   if (fx.key === key) return true;
   for (const n of POSTFX_TARGETS) if (fx[n]) { gl.deleteTexture(fx[n].tex); gl.deleteFramebuffer(fx[n].fb); }
   const q = n => [Math.max(1, Math.ceil(W / n)), Math.max(1, Math.ceil(H / n))];
   fx.scene = postFxTarget(gl, W, H);
-  fx.a4 = postFxTarget(gl, ...q(4)); fx.b4 = postFxTarget(gl, ...q(4)); fx.s4 = postFxTarget(gl, ...q(4));
+  for (const n of ['p4', 'a4', 'b4', 's4', 'r4']) fx[n] = postFxTarget(gl, ...q(4)); // (p4: the bright parts, unblurred)
   fx.a8 = postFxTarget(gl, ...q(8)); fx.b8 = postFxTarget(gl, ...q(8));
   fx.key = key;
   return POSTFX_TARGETS.every(n => fx[n]);
@@ -28582,9 +28663,18 @@ function postFxEnd(st) {
   const down = (src, dst, spread, threshold) => {
     into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
     if (threshold > 0) {
-      const M = fx.maskData, puddle = POSTFX_PUDDLE_GLOW * 255 | 0;
-      for (let i = 0, n = M.length; i < n; i++) M[i] = FL[i] === 2 ? puddle : 255;
-      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 4); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
+      const M = fx.maskData, BW = POSTFX_BASE_GLOW;
+      const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
+      for (let i = 0, n = M.length; i < n; i++) {
+        const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
+        // the colour that would make this cell bright: its glyph's, if that outshines the background
+        const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
+        let w = k === NONE ? 1 : BW[k >> 4];
+        if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
+        if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
+        M[i] = w * 255 + 0.5 | 0;
+      }
+      gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
       gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
     }
@@ -28593,18 +28683,26 @@ function postFxEnd(st) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
   const pass = (src, dst, x, y) => { into(dst); bind(POSTFX_UNIT, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); gl.drawArrays(gl.TRIANGLES, 0, 3); };
-  const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0;
-  if (bloom || streaks) {
-    down(fx.scene, fx.a4, 1, postFxThreshold()); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
+  const bloom = world ? postFxBloom() : 0, streaks = world ? postFxStreaks() : 0, rays = world ? postFxRays() : 0;
+  const exposure = world ? postFxExposure(fx) : 1;
+  if (bloom || streaks || rays) {
+    // (fog scatters light: in fog, dimmer lights count as bright too, and fog dims the distant ones)
+    down(fx.scene, fx.p4, 1, postFxThreshold() - 0.04 * rays); // (spread 1 at 1/4: four bilinear taps cover each 4x4 block exactly)
     gl.useProgram(fx.blur.p);
-    if (streaks) { pass(fx.a4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
-    pass(fx.a4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
-    if (bloom) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
+    if (streaks) { pass(fx.p4, fx.s4, 0, 1); pass(fx.s4, fx.b4, 0, 2.2); pass(fx.b4, fx.s4, 0, 1); } // (tall and thin: up and down only)
+    pass(fx.p4, fx.b4, 1, 0); pass(fx.b4, fx.a4, 0, 1);
+    if (bloom || rays) { down(fx.a4, fx.a8, 0.5, 0); gl.useProgram(fx.blur.p); for (let k = 0; k < 2; k++) { pass(fx.a8, fx.b8, 1, 0); pass(fx.b8, fx.a8, 0, 1); } }
+    if (rays) {
+      into(fx.r4); gl.useProgram(fx.rays.p); bind(POSTFX_UNIT, fx.p4); bind(POSTFX_UNIT + 1, fx.a8); const R = fx.rays.U;
+      gl.uniform2f(R('size'), fx.r4.w, fx.r4.h); gl.uniform2f(R('guideSize'), fx.a8.w, fx.a8.h); gl.uniform1f(R('len'), fx.r4.h * 0.14);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.useProgram(fx.blur.p); pass(fx.r4, fx.b4, 0.5, 0); pass(fx.b4, fx.r4, 0, 0.5); // (just enough to hide the 1/4 size)
+    }
   }
   into(null); gl.useProgram(fx.compose.p); const U = fx.compose.U;
-  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4);
+  bind(POSTFX_UNIT, fx.scene); bind(POSTFX_UNIT + 1, fx.a4); bind(POSTFX_UNIT + 2, fx.a8); bind(POSTFX_UNIT + 3, fx.s4); bind(POSTFX_UNIT + 4, fx.r4);
   gl.uniform2f(U('size'), cv.width, cv.height);
-  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks);
+  gl.uniform1f(U('bloom'), bloom); gl.uniform1f(U('streaks'), streaks); gl.uniform1f(U('rays'), rays); gl.uniform1f(U('exposure'), exposure);
   const grade = world && settings.colorGrade ? postFxGrade() : null;
   gl.uniform1f(U('grade'), grade ? 1 : 0);
   if (grade) { gl.uniform3fv(U('shadowTint'), grade.shadow); gl.uniform3fv(U('lightTint'), grade.light); gl.uniform1f(U('sat'), grade.sat); }
@@ -32250,7 +32348,7 @@ function buildPause() {
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
-      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}
+      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
