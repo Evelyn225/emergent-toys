@@ -38,11 +38,12 @@ test('overlapping blood pools run together: neither cuts the other out',()=>city
  const r=await p.evaluate(()=>{
   for(const q of people)q.hidden=true;let x=0,y=0;for(let k=0;k<N*N;k++){const X=k%N,Y=k/N|0;if(ROAD[k]===1&&!map[k]&&free(X+.5,Y+.5)){x=X+.5;y=Y+.5;break;}}
   px=x;py=y;a=0;pitch=-.75;
+  for(let k=cars.length-1;k>=0;k--)if(Math.hypot(rel(cars[k].x-x),rel(cars[k].y-y))<2)cars.splice(k,1); // (a car stopped over the spot hid the pools: the test failed now and then)
   const cells=list=>{pools.length=0;for(const q of list)pools.push({x:x+q[0],y:y+q[1],z:outdoorGroundHeight(x+q[0],y+q[1]),t:T-40});render(0);const s=new Set();for(let i=0;i<BG.length;i++){const b=BG[i]>>4;if((b===RED||b===BRICK)&&FL[i]!==undefined)s.add(i);}return s;};
   const A=cells([[.25,0]]),B=cells([[.33,.05]]),AB=cells([[.25,0],[.33,.05]]);
   let lost=0;for(const i of A)if(!AB.has(i))lost++;for(const i of B)if(!AB.has(i))lost++;
   return{a:A.size,b:B.size,ab:AB.size,lost};});
- assert.ok(r.a>50&&r.b>50);assert.ok(r.lost<(r.a+r.b)*.03,'every cell of either pool is still blood with both down: '+JSON.stringify(r));
+ assert.ok(r.a>50&&r.b>50,'both pools show: '+JSON.stringify(r));assert.ok(r.lost<(r.a+r.b)*.03,'every cell of either pool is still blood with both down: '+JSON.stringify(r));
 }));
 
 test('chase camera: the ground behind the car is filtered as it is at the car, not sharper',()=>city(async p=>{
