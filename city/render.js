@@ -300,8 +300,28 @@ function present(world = true) {
 let GLP = null, GLP_OFF = false, GLP_SOFT = false; // (GLP_SOFT: allow a software GL, which is slower than the 2D path; tests only)
 const GLP_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 const GLP_FS = `precision highp float;
-uniform sampler2D cells, pal, atlas; uniform vec2 grid, cell, atlasSize; uniform float slotW, canvasH; uniform vec3 fog;
+uniform sampler2D cells, pal, atlas; uniform vec2 grid, cell, atlasSize; uniform float slotW, canvasW, canvasH; uniform vec3 fog;
 vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+#ifdef PF
+// the per-pixel post effects (post-fx.js postFxGrid sets these). Only in the program built with PF defined, so with
+// them all off the frame is drawn by the plain program, exactly as before (a GPU without real branches would
+// otherwise work them out for every pixel anyway).
+uniform float exposure, grade, sat, vignette, grain, seed; uniform vec3 shadowTint, lightTint;
+float pfHash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
+vec3 postFx(vec3 s) {
+  if (abs(exposure - 1.0) > 0.001) s = 1.0 - pow(1.0 - clamp(s, 0.0, 1.0), vec3(exposure)); // (eye adjustment; no hard clip either way)
+  if (grade > 0.0) {
+    float l = dot(s, vec3(0.299, 0.587, 0.114));
+    s = clamp(mix(vec3(l), s, sat) * mix(shadowTint, lightTint, smoothstep(0.05, 0.6, l)), 0.0, 1.0);
+  }
+  if (vignette > 0.0) s *= 1.0 - vignette * smoothstep(0.35, 1.0, length((gl_FragCoord.xy / vec2(canvasW, canvasH) - 0.5) * vec2(canvasW / canvasH, 1.0)));
+  if (grain > 0.0) {
+    float l = max(s.r, max(s.g, s.b)), n = pfHash(gl_FragCoord.xy + seed) + pfHash(gl_FragCoord.xy * 1.37 + seed * 0.71) - 1.0; // (triangular: no visible bias)
+    s += n * grain * (0.0125 * (1.0 - l) + 0.003);
+  }
+  return s;
+}
+#endif
 void main() {
   vec2 p = vec2(gl_FragCoord.x, canvasH - gl_FragCoord.y), c = floor(p / cell);
   if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
@@ -313,6 +333,9 @@ void main() {
     float a = texture2D(atlas, vec2((d.r * slotW + l.x) / atlasSize.x, l.y / atlasSize.y)).a;
     col = mix(col, mix(palette(d.g), fog, fs / 8.0), a);
   }
+#ifdef PF
+  col = postFx(col);
+#endif
   gl_FragColor = vec4(col, 1.0);
 }`;
 function glPresentInit() {
@@ -322,18 +345,27 @@ function glPresentInit() {
   const dbg = gl.getExtension('WEBGL_debug_renderer_info'), who = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
   if (!GLP_SOFT && /swiftshader|llvmpipe|softpipe|software|basic render/i.test(who)) return null;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
-  const vs = sh(gl.VERTEX_SHADER, GLP_VS), fs = sh(gl.FRAGMENT_SHADER, GLP_FS);
-  if (!vs || !fs) return null;
-  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  const vs = sh(gl.VERTEX_SHADER, GLP_VS);
+  if (!vs) return null;
+  // the grid shader twice: plain, and with the per-pixel post effects (PF) for when any of them is on
+  const build = defs => {
+    const fs = sh(gl.FRAGMENT_SHADER, defs + GLP_FS); if (!fs) return null;
+    const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    const locs = {}; return { prog, U: n => locs[n] ??= gl.getUniformLocation(prog, n) };
+  };
+  const plain = build(''), pf = build('#define PF 1\n');
+  if (!plain || !pf) return null;
+  const prog = plain.prog;
   gl.useProgram(prog);
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); // one triangle over the screen
   const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const tex = unit => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     return t; };
-  const U = n => gl.getUniformLocation(prog, n), st = { glc, gl, prog, U, cells: tex(0), pal: tex(1), atlas: tex(2), key: '' };
-  gl.uniform1i(U('cells'), 0); gl.uniform1i(U('pal'), 1); gl.uniform1i(U('atlas'), 2);
+  const U = plain.U, st = { glc, gl, prog, U, pf, cells: tex(0), pal: tex(1), atlas: tex(2), key: '' };
+  for (const { prog: p, U: u } of [plain, pf]) { gl.useProgram(p); gl.uniform1i(u('cells'), 0); gl.uniform1i(u('pal'), 1); gl.uniform1i(u('atlas'), 2); }
+  gl.useProgram(prog);
   const P = new Uint8Array(256 * 4); PALRGB.forEach((c, k) => P.set([c[0], c[1], c[2], 255], k * 4));
   gl.activeTexture(gl.TEXTURE1); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, P);
   glc.addEventListener('webglcontextlost', () => { GLP_OFF = true; GLP = null; glc.remove(); });
@@ -355,8 +387,13 @@ function glPresentSize(st) {
   st.data = new Uint8Array(cols * rows * 4);
   gl.activeTexture(gl.TEXTURE0); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, st.data);
   st.glc.width = cv.width; st.glc.height = cv.height; gl.viewport(0, 0, cv.width, cv.height);
-  gl.uniform2f(U('grid'), cols, rows); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('atlasSize'), at.width, at.height);
-  gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
+  for (const [p, u] of [[st.prog, U], [st.pf.prog, st.pf.U]]) {
+    gl.useProgram(p);
+    gl.uniform2f(u('grid'), cols, rows); gl.uniform2f(u('cell'), cw, FS); gl.uniform2f(u('atlasSize'), at.width, at.height);
+    gl.uniform1f(u('slotW'), slotW); gl.uniform1f(u('canvasW'), cv.width); gl.uniform1f(u('canvasH'), cv.height);
+  }
+  gl.useProgram(st.prog);
+  st.atlas2d = { canvas: at, slotW }; // (post-fx.js reads each glyph's average cover from it)
   st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
 }
 function glPresent(world = true) {
@@ -372,10 +409,10 @@ function glPresent(world = true) {
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
-  const post = postFxBegin(st, world); // (bloom and the like: post-fx.js; the grid is then drawn into a texture first)
-  gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
+  const grid = postFxGrid(st, world) ? st.pf : st; // (exposure, grade, vignette, grain: in this same pass, post-fx.js)
+  gl.useProgram(grid.prog); gl.uniform3f(grid.U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
-  if (post) postFxEnd(st);
+  postFxGlow(st, world); // (bloom, rain streaks, fog rays: from the cells at 1/4 size, blended over it)
   g.clearRect(0, 0, cv.width, cv.height); // (the game's canvas, clear over the frame for what's drawn on top)
   for (const i of odd) { g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]]; g.fillText(CH[i], (i % cols) * cw, Math.floor(i / cols) * FS, cw); }
   return true;
