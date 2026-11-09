@@ -148,10 +148,11 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], islandRoofHeight(x,y), elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(quietPlaceSurfaceHeight(x,y),map[idx(Math.floor(x), Math.floor(y))], islandRoofHeight(x,y), elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
+  if(quietPlaceBlocked(x,y,.03,base+body.z/10))return false;
   const h = roofHeightAt(x, y), feet = base + body.z / 10;
   if(elPlatformRailAt(x,y,feet)||elTrainBodyAt(x,y,feet))return false;
   if(courierRoofBlocked(x,y,feet)||h>feet&&courierRoofBlocked(x,y,h))return false; // (nor step up through a railing)

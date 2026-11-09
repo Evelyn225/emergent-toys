@@ -208,6 +208,7 @@ function geometrySnowExposed(x,y,z,overhead) {
   return true;
 }
 function snowExposed(x,y,z=0) {
+  if(quietPlaceCover(x,y,z))return false;
   if (underEl(y,x) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z || airportIndoors(x,y,z)) return false;
   const cell = idx(Math.floor(x),Math.floor(y)), overhead = streetGeometryCells[cell];
   const canopy = BELLE_ROOF_INFILL[cell] && BELLE_ROOF_CELLS[cell];

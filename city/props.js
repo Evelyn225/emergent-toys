@@ -427,6 +427,7 @@ function benchAt(x, y, pad, feet = -Infinity) {
 }
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad, feet = -Infinity) { // feet: how high your feet are (cells); a low thing (o.low) below them you clear
+  if(quietPlaceBlocked(x,y,pad,feet===-Infinity?0:feet))return true;
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
     if (o.walkStep) continue;
     if(o.bowl){if(skateBowlOuterWall(o,x,y,pad,feet))return true;continue;}

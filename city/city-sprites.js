@@ -174,6 +174,7 @@ function citySprites() {
   drawLandmarks();
   drawPavilions();
   drawStreetScenes();
+  drawQuietPlaces();
   drawCoastLife();
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
