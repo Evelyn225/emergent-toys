@@ -319,7 +319,7 @@ test('freehand spray paint: what Bob sprays is on Ann\'s walls (and kept), someo
   } finally { await browser.close(); }
 });
 
-test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in hospital and lying in the street for her, friendly fire off spares him, and indoors too', async () => {
+test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in hospital and lying in the street for her, peaceful (either of them) spares him, and indoors too', async () => {
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
@@ -350,15 +350,19 @@ test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in 
     await until(A, () => net.chat.some(m => m.text === 'Bob went down, shot by you.'), null, 'Ann told');
     assert.equal(await A.evaluate(() => { const f = [...net.peers.values()][0].fallen; return !!f && f.until > netNow(); }), true, 'lying where he fell, for her');
 
-    // friendly fire off, on Bob's side: hit, not hurt
-    await B.evaluate(() => { leaveRoom(); net.ff = false; }); await B.evaluate(facing, spot);
+    // peaceful, on either side: the round goes past, and he's unhurt
+    await B.evaluate(() => { leaveRoom(); net.peaceful = true; }); await B.evaluate(facing, spot);
     await inFront();
-    assert.equal(await fire(), 'player');
+    await until(A, () => netViewOf([...net.peers.values()][0])?.peaceful, null, 'Bob peaceful');
+    assert.equal(await fire(), 'air', 'Bob peaceful: it goes past');
+    await B.evaluate(() => { net.peaceful = false; }); await A.evaluate(() => { net.peaceful = true; });
+    await until(A, () => !netViewOf([...net.peers.values()][0])?.peaceful, null, 'Bob not peaceful');
+    assert.equal(await fire(), 'air', 'Ann peaceful: no player to hit');
     await A.waitForTimeout(600);
-    assert.equal(await B.evaluate(() => needs.health), 100, 'friendly fire off: unhurt');
+    assert.equal(await B.evaluate(() => needs.health), 100, 'unhurt');
+    await A.evaluate(() => { net.peaceful = false; });
 
     // indoors: the same, in the same room
-    await B.evaluate(() => { net.ff = true; });
     const enter = (P, s) => P.evaluate(s => { mode = 'walk'; room = null; px = LIGHTHOUSE.x; py = LIGHTHOUSE.y; enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [LIGHTHOUSE.x, LIGHTHOUSE.y, 0], line: 'hi' }, s); }, s);
     await enter(A, [4, 6.2, -Math.PI / 2]); await enter(B, [4, 4.0, Math.PI / 2]);
     await until(A, () => { render(0); const p = [...net.peers.values()][0]; return p.view && p.view.rk === netRoomKey(); }, null, 'same room');
@@ -541,6 +545,84 @@ test('what else others see: paused (can\'t be shot, says so), spraying, a bail, 
     // phones and pads: Chat in the More sheet (and so in a controller's Actions)
     assert.equal(await A.evaluate(() => SHEET.some(([l, k, w]) => l === 'Chat' && k === 'KeyT' && (!w || w()))), true);
     for (const P of [A, B, C]) await P.evaluate(() => netLeave());
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('car hits, pickpocketing and soccer balls between players: knocked flat then hospital; a clean lift and a caught one; a ball passed on, only its owner picks it up', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'pvp-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 80; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const seeB = (cond, what) => until(A, new Function('const v = netViewOf([...net.peers.values()][0]); return v && (' + cond + ');'), null, what);
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; for (const p of people) p.hidden = true; }, spot);
+    await B.evaluate(s => { mode = 'walk'; room = null; px = worldCoord(s.x + Math.cos(s.a) * 0.6); py = worldCoord(s.y + Math.sin(s.a) * 0.6); a = s.a + Math.PI; needs.health = 100; wakeT = 0; }, spot);
+    await seeB('Math.abs(Math.hypot(rel(v.x - px), rel(v.y - py)) - 0.6) < 0.02', 'Bob in front');
+
+    // hit by Ann's car (as drive() finds him at the bumper): hurt and flat for a moment, which Ann sees; then hard enough for hospital
+    await A.evaluate(() => { const c = cars.find(c => c.kind === 'car' && !c.patrol && !c.ev && c.body !== TAXI && !c.remote); me = c; mode = 'drive'; c.player = true; c.parked = false; c.v = 1.2; window.myCar = c; });
+    assert.equal(await A.evaluate(() => { myCar.v = 1.2; const v = netViewOf([...net.peers.values()][0]); return netCarHitsPlayer(myCar, v.x, v.y); }), true); // (the speed set here: her own driving would slow the car between steps)
+    await until(B, () => !!net.knocked && needs.health < 100 && needs.health > 0, null, 'Bob knocked flat, hurt');
+    await seeB("v.pose === 'down'", 'Ann sees him down');
+    await until(B, () => !net.knocked, null, 'up again');
+    await A.evaluate(() => { net.runT.clear(); myCar.v = 2.2; }); await B.evaluate(() => { needs.health = 20; });
+    await seeB("v.pose !== 'down'", 'up, for Ann');
+    for (let k = 0; k < 10 && !(await B.evaluate(() => mode === 'room')); k++) { // (till Ann's view of him has caught up with where the first hit left him)
+      await A.evaluate(() => { net.runT.clear(); myCar.v = 2.2; const v = netViewOf([...net.peers.values()][0]); netCarHitsPlayer(myCar, v.x, v.y); });
+      await A.waitForTimeout(300);
+    }
+    await until(B, () => mode === 'room' && room.kind === 'hospital', null, 'Bob in hospital');
+    await until(A, () => net.chat.some(m => m.text === 'Bob went down, hit by your car.'), null, 'Ann told');
+    await A.evaluate(() => { clearWanted(); leaveCar(); }); await B.evaluate(() => leaveRoom());
+
+    // pickpocketing: Ann right behind Bob, who faces away
+    await A.evaluate(s => { mode = 'walk'; me = null; px = s.x; py = s.y; a = s.a; money = 0; }, spot);
+    await B.evaluate(s => { mode = 'walk'; room = null; px = worldCoord(s.x + Math.cos(s.a) * 0.2); py = worldCoord(s.y + Math.sin(s.a) * 0.2); a = s.a; money = 200; }, spot);
+    await seeB('Math.abs(Math.hypot(rel(v.x - px), rel(v.y - py)) - 0.2) < 0.02 && Math.abs(v.a - a) < 0.1', 'Bob ahead, facing away');
+    assert.equal(await A.evaluate(() => crimePrompt()), 'G: pick Bob\'s pocket');
+    await A.evaluate(() => netPickpocket(netPickTarget()));
+    await until(B, () => !!net.picked, null, 'a hand in Bob\'s pocket');
+    await A.evaluate(() => { const cb = game.onDone; game = null; cb(true); }); // (Ann wins the minigame before he notices)
+    await until(A, () => money === 20, null, 'Ann lifts a tenth');
+    assert.equal(await B.evaluate(() => money), 180, 'out of Bob\'s pocket');
+    await B.evaluate(() => net.pickCool.clear());
+    await A.evaluate(() => netPickpocket(netPickTarget()));
+    await until(B, () => net.picked && net.picked.noticed, null, 'Bob feels it');
+    await B.evaluate(() => { a += Math.PI; }); // (and turns round)
+    await until(A, () => !net.picking && !game && /catches you|grabs your wrist/.test(msgText), null, 'Ann caught, the game over');
+    assert.equal(await A.evaluate(() => money), 20, 'nothing more');
+    // peaceful: not a target
+    await B.evaluate(() => { a -= Math.PI; net.peaceful = true; });
+    await seeB('v.peaceful', 'Bob peaceful');
+    assert.equal(await A.evaluate(() => netPickTarget()), null, 'a peaceful player can\'t be pickpocketed');
+    await B.evaluate(() => { net.peaceful = false; });
+    await A.evaluate(() => clearWanted());
+
+    // a ball: Bob's, kicked; Ann walks into it and runs it; she can't pick it up, he can, and then it's gone for her
+    await B.evaluate(s => { a = s.a; kickBall(px, py, a, 0.3); }, spot);
+    await until(A, () => net.balls.size === 1 && [...net.balls.values()][0].runner !== net.selfId, null, 'Ann sees Bob\'s ball');
+    await A.evaluate(() => { const b = [...net.balls.values()][0]; px = b.x; py = b.y; netBallFrame(0.016, netNow()); });
+    assert.equal(await A.evaluate(() => [...net.balls.values()][0].runner === net.selfId), true, 'touched: Ann runs it');
+    await until(B, () => !ball && net.balls.has(netMyBallId()), null, 'Bob\'s game hands it over');
+    assert.deepEqual(await A.evaluate(() => [pickUpBall(), inv.some(i => i.id === 'ball')]), [false, false], 'not hers to pick up');
+    await B.evaluate(() => { const b = net.balls.get(netMyBallId()); px = worldCoord(b.x + 0.2); py = b.y; }); // (by his own copy of it)
+    assert.equal(await B.evaluate(() => promptText()), 'E: pick up the ball');
+    assert.deepEqual(await B.evaluate(() => [pickUpBall(), inv.some(i => i.id === 'ball')]), [true, true], 'his to pick up');
+    await until(A, () => net.balls.size === 0, null, 'gone for Ann');
+    for (const P of [A, B]) await P.evaluate(() => { clearWanted(); netLeave(); });
     await A.evaluate(() => localStorage.clear());
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

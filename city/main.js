@@ -276,6 +276,7 @@ function drive(dt) {
     });
     if(officer){hitPerson=officer;break;}
   }
+  if (!hitPerson && !bodyHit && !hitCar && Math.abs(c.v) > 0.4 && netCarHitsPlayer(c, fx, fy)) c.v *= 0.6; // (another player in the road: net.js)
   if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
     const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson), fatal = sp > FATAL_V && !hitPerson.dead;
     if (fatal) { // too fast to survive: thrown down the road and still, as a shooting's victim (gun.js)
