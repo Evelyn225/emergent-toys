@@ -150,10 +150,13 @@ function postFxExposure(fx) {
   if (!fx.lumN-- || fx.lum == null) { fx.lum = postFxSceneLum(); fx.lumN = 2; }
   const now = performance.now() / 1000, cur = fx.lum, dt = now - (fx.adaptT || 0);
   fx.adaptT = now;
-  if (fx.adapt == null || dt > 0.5 || dt < 0) { fx.adapt = cur; return 1; }
-  const tau = cur > fx.adapt ? 0.45 : 1.1;
-  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-dt / tau));
-  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.35), 0.7, 1.45);
+  if (fx.adapt == null) { fx.adapt = cur; return 1; }
+  // (a long gap counts as one short step, not a reset: building a room as you walk in can take a moment, and that's
+  // just when the eye should still be used to outside)
+  const step = clamp(dt, 0, 0.1), tau = cur > fx.adapt ? 0.6 : 1.6;
+  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-step / tau));
+  // (a street and a shop differ by under 2x in this palette: the strong curve makes that step through the door show)
+  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.7), 0.55, 1.8);
 }
 // the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
 function postFxGrade() {

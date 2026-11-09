@@ -26807,6 +26807,7 @@ ROOM_FLOORS.casinoCarpet = (i, f, wx, wy, r) => casinoFloor(i, f, wx, wy, homeBa
 function casinoCeil(i, wx, wy) { // chandeliers: bright drops round a gilt rose, on a dark ceiling
   const d = Math.hypot(fract(wx / 4) - 0.5, fract(wy / 4) - 0.5) * 4;
   set(i, ' ', 0);
+  if (!ceilLit()) { BG[i] = d < 0.15 ? C(GRAY, 1.3) : d < 0.32 ? C(YEL, 1.4) : C(GRAY, 0.9); return; } // (switched off: dull glass, a dull rose, no pool of light)
   BG[i] = d < 0.15 ? C(WHITE, 13) : d < 0.32 ? C(YEL, 6) : d < 0.7 ? C(YEL, 1.6) : C(GRAY, 0.9);
 }
 // cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
@@ -28649,10 +28650,13 @@ function postFxExposure(fx) {
   if (!fx.lumN-- || fx.lum == null) { fx.lum = postFxSceneLum(); fx.lumN = 2; }
   const now = performance.now() / 1000, cur = fx.lum, dt = now - (fx.adaptT || 0);
   fx.adaptT = now;
-  if (fx.adapt == null || dt > 0.5 || dt < 0) { fx.adapt = cur; return 1; }
-  const tau = cur > fx.adapt ? 0.45 : 1.1;
-  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-dt / tau));
-  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.35), 0.7, 1.45);
+  if (fx.adapt == null) { fx.adapt = cur; return 1; }
+  // (a long gap counts as one short step, not a reset: building a room as you walk in can take a moment, and that's
+  // just when the eye should still be used to outside)
+  const step = clamp(dt, 0, 0.1), tau = cur > fx.adapt ? 0.6 : 1.6;
+  fx.adapt += (cur - fx.adapt) * (1 - Math.exp(-step / tau));
+  // (a street and a shop differ by under 2x in this palette: the strong curve makes that step through the door show)
+  return clamp(Math.pow(cur / Math.max(fx.adapt, 1e-4), 0.7), 0.55, 1.8);
 }
 // the grade's tints for now: night, dusk and day mixed by the sky, then flattened by fog
 function postFxGrade() {
@@ -45823,6 +45827,7 @@ function sharedPendantCeil(i,on){BG[i]=on?ceilLit()?C(WARM,14):C(GRAY,CEIL_OFF_L
 // Coloured spots sweeping over a dark ceiling: they're big enough to read, and
 // their hue changes as a whole so nothing flickers cell by cell.
 function sharedDiscoCeil(i,wx,wy) {
+  if(!ceilLit())return sharedDarkCeil(i); // (the lights off: the spots too)
   const on=hash(Math.floor(wx),Math.floor(wy),9)>.72;
   BG[i]=on?C(NEON[Math.floor(wx+wy*2+T*1.5)&3],4):C(GRAY,.5);set(i,' ',0);
 }
@@ -51474,9 +51479,10 @@ function PAPER_LANTERN(x,y,{ceiling=3,top=2.35,height=.45,radius=.17}={}) {
     const rib=coveGroove(HIT.w-base,height/12,.005,footprint),fine=coveDetail(t,.035);
     const fibre=fine?Math.sin(HIT.u*640)*Math.sin(HIT.w*710)*fine*.08:0;
     const warmth=1-Math.abs((HIT.w-base)/height-.5)*1.2;
+    if(!ceilLit()){BG[i]=C(RED,1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*.6+fibre);set(i,' ',0);return true;} // (switched off: just paper)
     BG[i]=C(inside?ORANGE:RED,(inside?6:5.6)+Math.max(.3,night)*1.3+warmth*1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*3+fibre);set(i,' ',0);return true;
   };
-  const glow=(i,t,L)=>{BG[i]=C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const glow=(i,t,L)=>{BG[i]=ceilLit()?C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz)):C(GRAY,CEIL_OFF_LAMP);set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const p of parts)drawBox({...p.box,x:vx,y:vy,lanternRole:p.role},p.role==='paper'?paper:p.role==='bulb'?glow:dark,coveRayLathe);
     for(const [ax,ay,bx,by]of [[-ringRadius+.002,0,ringRadius-.002,0],[0,-ringRadius+.002,0,ringRadius-.002]]){
