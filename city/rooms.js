@@ -1087,7 +1087,7 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
       const stone = STY[cell] === 24 || STY[cell] === 25, base = stone ? STONE : FACADE_BG[STY[cell]] ?? BRICK;
       const light = (0.25 + day * 0.75) * (side ? 0.8 : 1) * Math.max(0.35, 1 - depth / 40), along = side ? wx : wy;
       const bay = fract(along * 2), floor = fract((z + vz * depth) * 2.5);
-      BG[i] = C(top && stone ? GREEN : base, 1 + light * 4);
+      BG[i] = C(top && stone ? GREEN : base, 1 + light * 6);
       if (!top && bay > 0.27 && bay < 0.73 && floor > 0.22 && floor < 0.8) {
         const lit = hash(Math.floor(along * 2), Math.floor((z + vz * depth) * 2.5), sk0(SEED[cell])) > 0.4 + day * 0.5;
         BG[i] = lit ? C(WARM, 3 + night * 4) : C(CYAN, 1 + day * 2);
@@ -1098,15 +1098,20 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
     if (ground < next) {
       const wx = x + vx * ground, wy = y + vy * ground, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
       if(seaAt(wx,wy)&&!onPier(wx,wy)) {
-        BG[i]=C(BLUE,1+day*3);
+        BG[i]=C(BLUE,1+day*6);
         return set(i,noise(wx*2+T*.2,wy*2,91)>.6?'~':' ',C(CYAN,3+day*6));
       }
-      BG[i] = C(road ? GRAY : GREEN, 1 + day * 2);
+      BG[i] = C(road ? GRAY : GREEN, 1 + day * 4);
       return set(i, road && Math.abs(fract(road === 1 ? wx : wy) - 0.5) < 0.04 ? '-' : ' ', C(YEL, day * 8));
     }
     if (tx < ty) { t = tx; tx += stepx; mx += sx; side = false; } else { t = ty; ty += stepy; my += sy; side = true; }
   }
-  BG[i] = C(day > 0.25 ? BLUE : GRAY, day > 0.25 ? 2 + day * 4 : 0);
+  // the sky, as outdoors (city-render.js skyCell): cyan to blue by day, grey in rain or fog, gold low down at dusk, navy
+  // at night with the city's glow along the horizon
+  BG[i] = rain > 0.5 ? C(GRAY, 1 + day * 6) : fogAmt > 0.5 ? bgAt(GRAY, day * 4)
+        : dusk > 0.35 && vz < 0.25 && day < 0.7 ? C(vz < 0.1 ? ORANGE : MAG, 2 + dusk * 5)
+        : day > 0.15 ? bgAt(vz < 0.08 ? CYAN : BLUE, day * (9 - Math.min(4, Math.max(0, vz) * 8)), 0)
+        : vz < 0.05 ? C(ORANGE, 1) : C(BLUE, vz < 0.35 ? 1 : 0);
   return set(i, day < 0.2 && hash(Math.floor(Math.atan2(vy, vx) * 100), Math.floor(vz * 100), 889) > 0.985 ? '.' : ' ', C(WHITE, 12));
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
