@@ -62,6 +62,7 @@ ROOM_FLOORS.casinoCarpet = (i, f, wx, wy, r) => casinoFloor(i, f, wx, wy, homeBa
 function casinoCeil(i, wx, wy) { // chandeliers: bright drops round a gilt rose, on a dark ceiling
   const d = Math.hypot(fract(wx / 4) - 0.5, fract(wy / 4) - 0.5) * 4;
   set(i, ' ', 0);
+  if (!ceilLit()) { BG[i] = d < 0.15 ? C(GRAY, 1.3) : d < 0.32 ? C(YEL, 1.4) : C(GRAY, 0.9); return; } // (switched off: dull glass, a dull rose, no pool of light)
   BG[i] = d < 0.15 ? C(WHITE, 13) : d < 0.32 ? C(YEL, 6) : d < 0.7 ? C(YEL, 1.6) : C(GRAY, 0.9);
 }
 // cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]

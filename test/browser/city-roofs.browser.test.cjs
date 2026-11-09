@@ -30,3 +30,42 @@ test('roofs from above: each building its own surface, a lit coping on the parap
   assert.deepEqual(r.bad,[]);assert.deepEqual(errors,[]);
  }finally{await p.close();}
 });
+
+test('stepped roofs and neighbouring towers occlude at the nearest cell-centre surface',async()=>{
+ const p=await browser.newPage({viewport:{width:1170,height:800}});
+ try{
+  await p.addInitScript(()=>{requestAnimationFrame=()=>0;});
+  await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
+  const result=await p.evaluate(()=>{
+   paused=false;mode='walk';room=me=null;body.z=body.vz=body.crouch=0;tod=14;env(0);
+   const blocks=[{x:103,y:100,h:.8},{x:104,y:100,h:1.4},{x:103,y:101,h:1.1},{x:105,y:102,h:2.2}];
+   const original={...CITY},terrain=drawTerrainColumn;
+   const bad=[];let checked=0;
+   try{
+    CITY.cell=(x,y)=>blocks.find(b=>x===b.x&&y===b.y)?.h||0;
+    CITY.deck=null;drawTerrainColumn=()=>false;
+    CITY.wall=CITY.roof=()=>{};
+    CITY.sky=CITY.floor=()=>{};
+    CITY.sprites=()=>{
+     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const cx=2*(c+.5)/cols-1,rx=dx-dy*tf*cx,ry=dy+dx*tf*cx,rz=(hor-r-.5)/projY;
+      let nearest=Infinity;
+      for(const b of blocks){
+       const t=rayBox(0,0,eye,rx,ry,rz,boxAt(b.x+.5-px,b.y+.5-py,1,0,.5,.5,0,b.h));
+       if(t>0&&t<nearest)nearest=t;
+      }
+      if(nearest>vis)continue;
+      checked++;
+      const actual=ZB[r*cols+c];
+      if(Math.abs(actual-nearest)>1e-5&&bad.length<8)bad.push({r,c,actual,nearest});
+     }
+    };
+    for(const [x,y,z,yaw,tilt] of [[100.3,100.4,.17,.18,.1],[100.3,100.4,2.6,.18,-.25],[106.7,103.6,1.7,-2.6,-.1]]){
+     px=x;py=y;a=yaw;pitch=tilt;freecam={x,y,z};render(0,true);
+    }
+   }finally{Object.assign(CITY,original);drawTerrainColumn=terrain;}
+   return {bad,checked};
+  });
+  assert.ok(result.checked>1000);assert.deepEqual(result.bad,[]);
+ }finally{await p.close();}
+});

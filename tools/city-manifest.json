@@ -119,6 +119,7 @@
     "city/render.js",
     "city/post-fx.js",
     "city/particles.js",
+    "city/room-light.js",
     "city/drug-vision.js",
     "city/hud.js",
     "city/interactions.js",

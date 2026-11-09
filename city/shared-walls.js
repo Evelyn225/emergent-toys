@@ -20,6 +20,7 @@ function sharedPendantCeil(i,on){BG[i]=on?ceilLit()?C(WARM,14):C(GRAY,CEIL_OFF_L
 // Coloured spots sweeping over a dark ceiling: they're big enough to read, and
 // their hue changes as a whole so nothing flickers cell by cell.
 function sharedDiscoCeil(i,wx,wy) {
+  if(!ceilLit())return sharedDarkCeil(i); // (the lights off: the spots too)
   const on=hash(Math.floor(wx),Math.floor(wy),9)>.72;
   BG[i]=on?C(NEON[Math.floor(wx+wy*2+T*1.5)&3],4):C(GRAY,.5);set(i,' ',0);
 }
