@@ -145,3 +145,15 @@ test('every message the game sends is one Trystero was told about up front', () 
   assert.ok(sent.length > 20);
   assert.deepEqual(sent.filter(t => !types.includes(t)), []);
 });
+
+test('custom player appearances accept only bounded choices and keep legacy colours compatible',()=>{
+ const {ev}=loadCity();
+ const raw={hat:3,top:5,bot:2,custom:1,skin:6,hairStyle:6,hairColour:4,headwear:2,shirtStyle:3,shoes:3};
+ assert.deepStrictEqual(j(ev,`netCheckLook(${JSON.stringify(raw)})`),raw);
+ const invalid=j(ev,`netCheckLook({hat:3,top:5,bot:2,custom:1,skin:-1,hairStyle:'long',hairColour:999,headwear:null,shirtStyle:NaN,shoes:Infinity,unknown:'ignored'})`);
+ assert.deepStrictEqual(invalid,{hat:3,top:5,bot:2,custom:1,skin:0,hairStyle:0,hairColour:0,headwear:0,shirtStyle:0,shoes:0});
+ assert.deepStrictEqual(j(ev,'netCheckLook({hat:2,top:4,bot:1})'),{hat:2,top:4,bot:1});
+ assert.deepStrictEqual(j(ev,`netAppearanceOptions(${JSON.stringify(raw)}).col.skin`),j(ev,'FIG_SKINS[6]'));
+ assert.equal(ev(`netAppearanceOptions(${JSON.stringify(raw)}).hat`),null);
+ assert.equal(ev(`netAppearanceOptions(${JSON.stringify(raw)}).top`),'jacket');
+});

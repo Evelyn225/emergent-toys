@@ -52,6 +52,7 @@ function buildPause() {
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="controls">Controls <span class="k" style="margin-left:auto">reference</span></button>
       <button class="item" data-act="map">Map of the city</button>
+      <button class="item" data-act="appearance">Customize character</button>
       <button class="item" data-act="multiplayer">Multiplayer <span class="k" data-net-badge style="margin-left:auto"></span></button>
       <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
       <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
@@ -130,6 +131,7 @@ function buildPause() {
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
+    if (b.dataset.act === 'appearance') openAppearance('pause');
     if (b.dataset.act === 'multiplayer') openNetMenu(); // (net.js)
     if (b.dataset.act === 'cancel-courier' && cancelCourier()) { saveGame(); say('You call dispatch and hand the parcel back. No pay, no hard feelings.', 4); closePause(true); }
     if (b.dataset.act === 'cancel-fare' && cancelFare()) { say('You call it off. The light goes back on: someone else will flag you down soon.', 4); closePause(true); }
@@ -276,6 +278,7 @@ function openPause() {
 function closePause(lock) {
   if (!paused) return;
   if (controlsOpen()) closeControls();
+  if(appearanceOpen())closeAppearance();
   resetStartOver();
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) lockMouse(); // resuming with the mouse: take it straight back

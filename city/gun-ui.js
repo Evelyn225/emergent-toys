@@ -138,7 +138,7 @@ function drawRevolver(it) {
     const [art,col]=revolverPicture(open,rounds);artText(art,gx,gy,G.s,col);
     if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
       artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
-        () => C(SKIN, 12));
+        () => playerSkinColour(-1,12));
     }
     if (gun.kick > 0.55) { // the flash, off the end of the barrel
       const size=Math.round(G.u*(.8+gun.kick*.5)*.5),[flash,col]=heldMuzzleFlash(gun.kick);

@@ -347,6 +347,7 @@
     "city/el-life.js",
     "city/ferry-render.js",
     "city/net.js",
+    "city/player-appearance.js",
     "city/main.js",
     "city/spawn-points.js",
     "city/touch.js",

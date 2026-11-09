@@ -289,10 +289,11 @@ const TATTOO_INK = { tattoo_swallow: [BLUE, 6], tattoo_anchor: [BLUE, 5], tattoo
 // whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers. Got some ink? Then
 // a short-sleeved tee, to show it off: the more hours you've sat for, the more of your arms it covers
 function skaterLook() {
-  const key = tattoos.join(',');
+  const key = tattoos.join(',')+'|'+JSON.stringify(playerAppearance);
   if (skaterLookMemo && key === skaterLookKey) return skaterLookMemo;
   const hours = tattoos.reduce((s, id) => s + ITEMS[id].hours, 0);
   skaterLookKey = key;
+  if(playerAppearance){const options=netAppearanceOptions(playerAppearance);options.ink=hours?Math.round(clamp(hours/10,.2,1)*10)/10:0;options.col.ink=hours?TATTOO_INK[tattoos[tattoos.length-1]]:undefined;return skaterLookMemo=figLook(options);}
   return skaterLookMemo = figLook({ hair: 'short', hat: 'beanie', top: hours ? 'tee' : 'long', bot: 'pants', bw: 1, ink: hours ? Math.round(clamp(hours / 10, 0.2, 1) * 10) / 10 : 0,
     col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2],
            ink: hours ? TATTOO_INK[tattoos[tattoos.length - 1]] : undefined } });
