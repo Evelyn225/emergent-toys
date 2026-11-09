@@ -10202,7 +10202,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
                  copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
                  roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true },
-                 shotdown: { stars: 3, name: 'gunning someone down', least: 0 } }; // (another player, in multiplayer: net.js) // (hit too fast to survive: main.js)
+                 shotdown: { stars: 3, name: 'gunning someone down', least: 0 }, // (another player, in multiplayer: net.js)
+                 accomplice: { stars: 1, name: 'riding with a wanted driver' } }; // (their passenger when they're busted: net.js) // (hit too fast to survive: main.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -10811,7 +10812,7 @@ function applyRespray(c) {
   return lost;
 }
 
-const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < DISPATCH_R) || footCops.some(c => near(c.x, c.y, x, y) < DISPATCH_R);
+const policeNear = (x, y) => cars.some(c => c.patrol && !playerCar(c) && near(c.x, c.y, x, y) < DISPATCH_R) || footCops.some(c => near(c.x, c.y, x, y) < DISPATCH_R);
 
 // ---- every frame
 function stepCrime(dt) {
@@ -10997,6 +10998,8 @@ const NEWS = {
   gunfire: (w, n) => n > 1 ? `Gunshots reported in ${w}, ${n} times in one day. Police ask residents to stop describing them as fireworks.` : `A gunshot was reported in ${w}. Residents who thought it was a car backfiring have been asked to think again.`,
   murder: (w, n) => n > 1 ? `${inWords(n)} people shot dead in ${w} in one day. Police describe the suspect as armed, and the day as long.` : `A pedestrian was shot dead in ${w}. Police say the suspect is armed, and that this is the main thing to know about them.`,
   roadkill: (w, n) => n > 1 ? `${inWords(n)} pedestrians killed by the same car in ${w}. Police say the driver did not stop, any of the times.` : `A pedestrian was killed by a speeding car in ${w}. The driver did not stop. Police would like a word, and then several more.`,
+  shotdown: (w, n) => n > 1 ? `${inWords(n)} people shot in ${w} in one day, all of them treated and released. Police call it a feud; the hospital calls it Tuesday.` : `A person was shot in ${w} and taken to hospital, where they are said to be furious. Police are looking for whoever did it.`, // (multiplayer: net.js)
+  accomplice: w => `A passenger fled when police stopped a car in ${w}. Officers would like to know who they were, and why they ran.`, // (multiplayer: net.js)
   copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has cancelled all leave, and most of its patience.`,
   // the football (league.js): a match you were at, the cup final, the champions, a thrashing
   match: (w, n, e) => !e.score ? 'Football at the Yards. Both teams turned up.' : footballLine(e) + (e.scorers?.length ? ` ${footballScorers(e)}` : ' Neither side found the net, though both looked.') + ` ${newsPick(e.score[0] * 7 + e.score[1], ['The crowd went home.', 'A decent crowd saw it, and will say so.', 'The pies were described as hot.', 'Fans are already discussing the referee.'])}`,
@@ -13451,7 +13454,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 6; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks)
+const NET_PROTOCOL = 7; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -13465,7 +13468,7 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true, police: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { ff: true, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -13503,6 +13506,7 @@ function netCheckTick(d) {
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
+  if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
   if (d.sk && typeof d.sk === 'object' && netNum(d.sk.yaw) && netNum(d.sk.nose) && netNum(d.sk.roll)) // on the board: which way it points, tipped how, and which foot forward
     out.sk = { yaw: d.sk.yaw, nose: clamp(d.sk.nose, -Math.PI, Math.PI), roll: clamp(d.sk.roll, -Math.PI, Math.PI), st: d.sk.st < 0 ? -1 : 1 };
   return out;
@@ -13525,6 +13529,20 @@ function netCheckLook(l) {
 function netCheckClock(d) {
   if (!d || !netNum(d.tod) || !netNum(d.dayNum) || typeof d.weather !== 'string' || !WEATHER_NEXT[d.weather]) return null;
   return { tod: mod(d.tod, 24), dayNum: Math.max(0, d.dayNum | 0), weather: d.weather, seasonShift: mod(d.seasonShift | 0, 4) };
+}
+
+// ---- police: the ones after a wanted player, as that player's game has them (car: a cruiser in pursuit; foot: an officer
+// running; roof: one up on the roofs; room: one in the same building)
+const NET_COP_KINDS = ['car', 'foot', 'roof', 'room'], NET_COPS_MAX = 12;
+function netCheckCops(d) {
+  const out = [];
+  for (const c of d.slice(0, NET_COPS_MAX)) {
+    if (!c || !NET_COP_KINDS.includes(c.k) || !Number.isInteger(c.id) || c.id < 0 || !netNum(c.x) || !netNum(c.y) || !netNum(c.a)) continue;
+    const o = { k: c.k, id: c.id, x: c.x, y: c.y, a: c.a, z: netNum(c.z) ? clamp(c.z, 0, 50) : 0 };
+    if (c.k === 'car') { if (typeof c.kind !== 'string' || c.kind.length > 15 || !netNum(c.body)) continue; o.kind = c.kind; o.body = c.body | 0; o.v = netNum(c.v) ? c.v : 0; }
+    out.push(o);
+  }
+  return out;
 }
 
 // ---- cars: one a player's driven is theirs to share (net.js). Its id is theirs too: their peer id and a count, so two
@@ -13632,6 +13650,13 @@ function netSample(p, now) {
   const ddx = rel(s1.x - s0.x), ddy = rel(s1.y - s0.y);
   if (Math.hypot(ddx, ddy) > NET_SNAP) return { ...(f < 0.5 ? s0 : s1) };
   const out = { ...s1, x: worldCoord(s0.x + ddx * f), y: worldCoord(s0.y + ddy * f), z: s0.z + (s1.z - s0.z) * f, a: netLerpAngle(s0.a, s1.a, f) };
+  if (s0.cops && s1.cops) out.cops = s1.cops.map(c1 => { // (each officer between their two places, as for the player)
+    const c0 = s0.cops.find(c => c.k === c1.k && c.id === c1.id);
+    if (!c0) return c1;
+    const ex = c1.k === 'room' ? c1.x - c0.x : rel(c1.x - c0.x), ey = c1.k === 'room' ? c1.y - c0.y : rel(c1.y - c0.y);
+    if (Math.hypot(ex, ey) > NET_SNAP) return c1;
+    return { ...c1, x: c1.k === 'room' ? c0.x + ex * f : worldCoord(c0.x + ex * f), y: c1.k === 'room' ? c0.y + ey * f : worldCoord(c0.y + ey * f), z: c0.z + (c1.z - c0.z) * f, a: netLerpAngle(c0.a, c1.a, f) };
+  });
   if (s0.sk && s1.sk) out.sk = { ...s1.sk, yaw: netLerpAngle(s0.sk.yaw, s1.sk.yaw, f), nose: s0.sk.nose + (s1.sk.nose - s0.sk.nose) * f, roll: s0.sk.roll + (s1.sk.roll - s0.sk.roll) * f };
   return out;
 }
@@ -17443,6 +17468,7 @@ function citySprites() {
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
+    if (m.patrol && !playerCar(m) && netCopCarNear(m)) continue; // (another player's chase is right here: theirs is drawn, not yours too, net.js)
     const [vx, vy] = R(m.ex, m.ey), steering = m.kind === 'taxi' && !playerCar(m) && !m.parked && m.laneYaw != null;
     const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -55736,6 +55762,10 @@ function netFrame(t, fromTimer = false) {
     if ((net.parkedT -= dt) <= 0) { net.parkedT = 1; netSendParked(); }
     if (net.claiming && now - net.claiming.t > 4) { net.claiming = null; say('Nothing. It won\'t open.', 2); }
     if (net.asking && now - net.asking.t > 4) { net.asking = null; say('No answer from the driver.', 2); }
+    if (net.riders.size && wanted.busted) { // busted at the wheel: they pull your passengers out too
+      for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'busted' }, id);
+      net.riders.clear();
+    }
     if (net.riders.size && !(mode === 'drive' && me && me.netId === net.riderCar)) { // out of the car (or in another): your passengers get out too
       for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'parked' }, id);
       net.riders.clear();
@@ -55776,6 +55806,7 @@ function netSendTick(now) {
   const speed = last && gap > 0 && last.rk === netRoomKey() ? Math.hypot(rel(x - last.x), rel(y - last.y)) / gap : 0;
   const it = heldItem();
   const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
+  if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
   if (skatingNow() && !car) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
   if (car) s.veh = { id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
@@ -55811,13 +55842,16 @@ function netSyncCars(now) {
     if (p.stale) continue;
     const s = netSample(p, now);
     if (s && s.veh && s.veh.id && s.rk === 'out' && VEHICLES[s.veh.kind]) want.set(s.veh.id, { ...s.veh, x: s.x, y: s.y, a: s.a, owner: p.id, parked: false });
+    if (s && s.cops && NET_FEATURES.police) for (const c of s.cops) if (c.k === 'car' && VEHICLES[c.kind]) // (the cruisers after them: lights and siren, but not after you)
+      want.set('cop:' + p.id + ':' + c.id, { kind: c.kind, body: c.body, x: c.x, y: c.y, a: c.a, v: c.v, owner: p.id, parked: false, patrol: true, cop: true });
   }
   for (const c of [...net.cars.values()]) if (!want.has(c.netId)) netDropCar(c);
   for (const [id, w] of want) {
     let c = net.cars.get(id);
     if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
     Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
-      brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev });
+      brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev, cop: !!w.cop,
+      state: w.cop ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
   }
   for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
 }
@@ -55828,7 +55862,7 @@ function netDropCar(c) {
   if (k >= 0) cars.splice(k, 1);
 }
 function netDropCars() { if (net.cars) for (const c of [...net.cars.values()]) netDropCar(c); }
-const netCarNear = (r = 0.5) => { let best = null, bd = r; if (net.on && net.cars) for (const c of net.cars.values()) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } return best; };
+const netCarNear = (r = 0.5) => { let best = null, bd = r; if (net.on && net.cars) for (const c of net.cars.values()) { if (c.cop) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } return best; };
 const netOwnerName = c => net.peers.get(c.owner)?.name || 'someone';
 function netCarPrompt() { // (hud.js, for E)
   const c = mode === 'walk' && NET_FEATURES.cars ? netCarNear() : null;
@@ -55849,7 +55883,7 @@ function netCarUse() { // (actions.js, on E: true if it was about another player
 }
 // your car (or your bullet) hurt one of theirs: tell them, and they dent it (damageCar sends it here, damage.js)
 function netHurtCar(c, n) {
-  if (!net.on || !c.owner || !c.netId) return;
+  if (!net.on || !c.owner || !c.netId || c.cop) return; // (their police car: it shrugs it off, as far as you can tell)
   const at = me && me !== c ? me : { x: px, y: py }, dx = rel(c.x - at.x), dy = rel(c.y - at.y), d = Math.hypot(dx, dy) || 1;
   const crash = mode === 'drive' && !!me && Math.hypot(rel(me.x - c.x), rel(me.y - c.y)) < 0.7;
   if (crash) net.hitT.set(c.owner, netNow());
@@ -55940,7 +55974,10 @@ function netCarMessage(type, data, from, p, now) {
   }
   if (type === 'rideOut') {
     if (net.riders.get(from) !== undefined && id === net.riderCar) { net.riders.delete(from); netLog(`${p.name} got out.`); return true; } // (a passenger, getting out)
-    if (mode === 'ride' && net.ride && net.ride.id === id) netEject(data.why === 'parked' ? `${p.name} parks up. You get out.` : 'You get out.'); // (the driver's done)
+    if (mode === 'ride' && net.ride && net.ride.id === id) {
+      if (data.why === 'busted') { netEject(`The police drag ${p.name} out of the car, and you with them. You run.`); if (NET_FEATURES.police) addWanted('accomplice', px, py, true); }
+      else netEject(data.why === 'parked' ? `${p.name} parks up. You get out.` : 'You get out.'); // (the driver's done)
+    }
     return true;
   }
   if (type === 'claimed') {
@@ -56176,6 +56213,7 @@ function drawPeers() {
     }
     if (!p.hello || p.mismatch || p.stale) { p.drawn = false; continue; }
     const s = p.view = netSample(p, now);
+    if (s && s.cops && s.rk === netRoomKey()) netDrawCops(p, s, inRoom);
     if (!netVisible(p, s)) { p.drawn = false; continue; }
     const vx = inRoom ? s.x - px : rel(s.x - px), vy = inRoom ? s.y - py : rel(s.y - py), fx = Math.cos(s.a), fy = Math.sin(s.a);
     if (p.lastX !== undefined && p.lastRk === s.rk) p.ph += Math.hypot(rel(s.x - p.lastX), rel(s.y - p.lastY)) * (inRoom ? 3 : 30);
@@ -56198,6 +56236,30 @@ function drawPeers() {
     else drawFigure(vx, vy, s.z, 0.175, fx, fy, netFigLook(p), gait, { light: 6, hold: p });
   }
 }
+
+// ---- police: yours, sent while you're wanted (the cruisers go into everyone's traffic as stand-ins, netSyncCars), and
+// theirs drawn on foot. Your own patrol cars aren't drawn right where someone else's chase is, so they don't double up.
+function netMyCops() {
+  const out = [], add = o => out.length < NET_COPS_MAX && out.push(o);
+  if (mode === 'room') roomCops.forEach((c, k) => { if (!c.dead) add({ k: 'room', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  for (const c of cars) if (c.pursuit && c.patrol && !playerCar(c) && !c.wrecked && near(c.x, c.y, px, py) < 40) add({ k: 'car', id: c.id, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), v: c.v });
+  footCops.forEach((c, k) => { if (c.chase && !c.dead && !c.down) add({ k: 'foot', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  roofCops.forEach((c, k) => { if (!c.dead) add({ k: 'roof', id: k, x: c.x, y: c.y, z: policeRoofHeight(c.x, c.y), a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  return out;
+}
+function netDrawCops(p, s, inRoom) {
+  const objs = p.copObjs ||= {};
+  for (const c of s.cops) {
+    if (c.k === 'car' || (c.k === 'room') !== inRoom) continue;
+    const o = objs[c.k + c.id] ||= { seed: (hash(c.id, c.k.length, 6113) * 1e9) | 0 };
+    const vx = inRoom ? c.x - px : rel(c.x - px), vy = inRoom ? c.y - py : rel(c.y - py);
+    if (!inRoom && Math.hypot(vx, vy) > vis) continue;
+    const z = inRoom ? 0 : c.k === 'roof' ? c.z : walkGround(c.x, c.y);
+    drawFigure(vx, vy, z, inRoom ? 1.8 : 0.18, Math.cos(c.a), Math.sin(c.a), copLook(o), 'run' + (Math.floor(T * 10 + c.id) & 7), { light: inRoom ? 9 : 7 });
+    if (!inRoom && fract(T * 3) < 0.5) drawArt(vx, vy, z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+  }
+}
+const netCopCarNear = m => { if (!net.on || !net.cars) return false; for (const c of net.cars.values()) if (c.cop && Math.hypot(rel(c.x - m.x), rel(c.y - m.y)) < 1.5) return true; return false; };
 
 // ---- over the frame: their names, their speech bubbles (and yours, when you can see yourself), the chat log
 function netProject(vx, vy, z) {

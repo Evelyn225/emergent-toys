@@ -199,6 +199,10 @@ function netFrame(t, fromTimer = false) {
     if ((net.parkedT -= dt) <= 0) { net.parkedT = 1; netSendParked(); }
     if (net.claiming && now - net.claiming.t > 4) { net.claiming = null; say('Nothing. It won\'t open.', 2); }
     if (net.asking && now - net.asking.t > 4) { net.asking = null; say('No answer from the driver.', 2); }
+    if (net.riders.size && wanted.busted) { // busted at the wheel: they pull your passengers out too
+      for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'busted' }, id);
+      net.riders.clear();
+    }
     if (net.riders.size && !(mode === 'drive' && me && me.netId === net.riderCar)) { // out of the car (or in another): your passengers get out too
       for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'parked' }, id);
       net.riders.clear();
@@ -239,6 +243,7 @@ function netSendTick(now) {
   const speed = last && gap > 0 && last.rk === netRoomKey() ? Math.hypot(rel(x - last.x), rel(y - last.y)) / gap : 0;
   const it = heldItem();
   const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
+  if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
   if (skatingNow() && !car) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
   if (car) s.veh = { id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
@@ -274,13 +279,16 @@ function netSyncCars(now) {
     if (p.stale) continue;
     const s = netSample(p, now);
     if (s && s.veh && s.veh.id && s.rk === 'out' && VEHICLES[s.veh.kind]) want.set(s.veh.id, { ...s.veh, x: s.x, y: s.y, a: s.a, owner: p.id, parked: false });
+    if (s && s.cops && NET_FEATURES.police) for (const c of s.cops) if (c.k === 'car' && VEHICLES[c.kind]) // (the cruisers after them: lights and siren, but not after you)
+      want.set('cop:' + p.id + ':' + c.id, { kind: c.kind, body: c.body, x: c.x, y: c.y, a: c.a, v: c.v, owner: p.id, parked: false, patrol: true, cop: true });
   }
   for (const c of [...net.cars.values()]) if (!want.has(c.netId)) netDropCar(c);
   for (const [id, w] of want) {
     let c = net.cars.get(id);
     if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
     Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
-      brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev });
+      brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev, cop: !!w.cop,
+      state: w.cop ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
   }
   for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
 }
@@ -291,7 +299,7 @@ function netDropCar(c) {
   if (k >= 0) cars.splice(k, 1);
 }
 function netDropCars() { if (net.cars) for (const c of [...net.cars.values()]) netDropCar(c); }
-const netCarNear = (r = 0.5) => { let best = null, bd = r; if (net.on && net.cars) for (const c of net.cars.values()) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } return best; };
+const netCarNear = (r = 0.5) => { let best = null, bd = r; if (net.on && net.cars) for (const c of net.cars.values()) { if (c.cop) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } return best; };
 const netOwnerName = c => net.peers.get(c.owner)?.name || 'someone';
 function netCarPrompt() { // (hud.js, for E)
   const c = mode === 'walk' && NET_FEATURES.cars ? netCarNear() : null;
@@ -312,7 +320,7 @@ function netCarUse() { // (actions.js, on E: true if it was about another player
 }
 // your car (or your bullet) hurt one of theirs: tell them, and they dent it (damageCar sends it here, damage.js)
 function netHurtCar(c, n) {
-  if (!net.on || !c.owner || !c.netId) return;
+  if (!net.on || !c.owner || !c.netId || c.cop) return; // (their police car: it shrugs it off, as far as you can tell)
   const at = me && me !== c ? me : { x: px, y: py }, dx = rel(c.x - at.x), dy = rel(c.y - at.y), d = Math.hypot(dx, dy) || 1;
   const crash = mode === 'drive' && !!me && Math.hypot(rel(me.x - c.x), rel(me.y - c.y)) < 0.7;
   if (crash) net.hitT.set(c.owner, netNow());
@@ -403,7 +411,10 @@ function netCarMessage(type, data, from, p, now) {
   }
   if (type === 'rideOut') {
     if (net.riders.get(from) !== undefined && id === net.riderCar) { net.riders.delete(from); netLog(`${p.name} got out.`); return true; } // (a passenger, getting out)
-    if (mode === 'ride' && net.ride && net.ride.id === id) netEject(data.why === 'parked' ? `${p.name} parks up. You get out.` : 'You get out.'); // (the driver's done)
+    if (mode === 'ride' && net.ride && net.ride.id === id) {
+      if (data.why === 'busted') { netEject(`The police drag ${p.name} out of the car, and you with them. You run.`); if (NET_FEATURES.police) addWanted('accomplice', px, py, true); }
+      else netEject(data.why === 'parked' ? `${p.name} parks up. You get out.` : 'You get out.'); // (the driver's done)
+    }
     return true;
   }
   if (type === 'claimed') {
@@ -639,6 +650,7 @@ function drawPeers() {
     }
     if (!p.hello || p.mismatch || p.stale) { p.drawn = false; continue; }
     const s = p.view = netSample(p, now);
+    if (s && s.cops && s.rk === netRoomKey()) netDrawCops(p, s, inRoom);
     if (!netVisible(p, s)) { p.drawn = false; continue; }
     const vx = inRoom ? s.x - px : rel(s.x - px), vy = inRoom ? s.y - py : rel(s.y - py), fx = Math.cos(s.a), fy = Math.sin(s.a);
     if (p.lastX !== undefined && p.lastRk === s.rk) p.ph += Math.hypot(rel(s.x - p.lastX), rel(s.y - p.lastY)) * (inRoom ? 3 : 30);
@@ -661,6 +673,30 @@ function drawPeers() {
     else drawFigure(vx, vy, s.z, 0.175, fx, fy, netFigLook(p), gait, { light: 6, hold: p });
   }
 }
+
+// ---- police: yours, sent while you're wanted (the cruisers go into everyone's traffic as stand-ins, netSyncCars), and
+// theirs drawn on foot. Your own patrol cars aren't drawn right where someone else's chase is, so they don't double up.
+function netMyCops() {
+  const out = [], add = o => out.length < NET_COPS_MAX && out.push(o);
+  if (mode === 'room') roomCops.forEach((c, k) => { if (!c.dead) add({ k: 'room', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  for (const c of cars) if (c.pursuit && c.patrol && !playerCar(c) && !c.wrecked && near(c.x, c.y, px, py) < 40) add({ k: 'car', id: c.id, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), v: c.v });
+  footCops.forEach((c, k) => { if (c.chase && !c.dead && !c.down) add({ k: 'foot', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  roofCops.forEach((c, k) => { if (!c.dead) add({ k: 'roof', id: k, x: c.x, y: c.y, z: policeRoofHeight(c.x, c.y), a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  return out;
+}
+function netDrawCops(p, s, inRoom) {
+  const objs = p.copObjs ||= {};
+  for (const c of s.cops) {
+    if (c.k === 'car' || (c.k === 'room') !== inRoom) continue;
+    const o = objs[c.k + c.id] ||= { seed: (hash(c.id, c.k.length, 6113) * 1e9) | 0 };
+    const vx = inRoom ? c.x - px : rel(c.x - px), vy = inRoom ? c.y - py : rel(c.y - py);
+    if (!inRoom && Math.hypot(vx, vy) > vis) continue;
+    const z = inRoom ? 0 : c.k === 'roof' ? c.z : walkGround(c.x, c.y);
+    drawFigure(vx, vy, z, inRoom ? 1.8 : 0.18, Math.cos(c.a), Math.sin(c.a), copLook(o), 'run' + (Math.floor(T * 10 + c.id) & 7), { light: inRoom ? 9 : 7 });
+    if (!inRoom && fract(T * 3) < 0.5) drawArt(vx, vy, z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+  }
+}
+const netCopCarNear = m => { if (!net.on || !net.cars) return false; for (const c of net.cars.values()) if (c.cop && Math.hypot(rel(c.x - m.x), rel(c.y - m.y)) < 1.5) return true; return false; };
 
 // ---- over the frame: their names, their speech bubbles (and yours, when you can see yourself), the chat log
 function netProject(vx, vy, z) {

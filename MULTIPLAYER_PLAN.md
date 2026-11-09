@@ -40,7 +40,13 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   and over works it loose, and it slips out by itself after 6 s if you don't reel. Q reels: their game walks them in,
   snagging on a corner as an NPC would; at your feet the hook comes out. Either end lets go if the other's gone, gets
   in a car, goes indoors, or the line runs past 1.5x a full cast.
-- **Next**: try phases 3-5, chat and the clock with real players; then 6 (police). Smaller
+- **Phase 6 (flag `police`, on)**: while you're wanted, your updates carry the police after you (up to 12: pursuing
+  cruisers, officers on foot, on the roofs, or in the building with you). Others get your cruisers as stand-ins in their
+  traffic (`cop: true`, `state: 'out'` so they're lit and wail; never `pursuit`, which their police code would count as
+  their own), and see your officers running. Their own patrol cars aren't drawn within 1.5 cells of one of yours.
+  Busted at the wheel: your passengers are pulled out and get a star (`accomplice`). Not done: the 5-star helicopter
+  isn't shared.
+- **Next**: try everything with real players. Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
   rotation in the air, no bail sprawl.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
