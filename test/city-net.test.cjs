@@ -65,7 +65,7 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
   assert.deepStrictEqual(j(ev, `[0, 0, 0, 0].map(() => netAllow(B, 5, 1, 3))`), [true, true, true, false], 'three at once, then wait');
   assert.strictEqual(ev(`netAllow(B, 6.1, 1, 3)`), true, 'a second later: one more');
   assert.strictEqual(ev('netBuildId()'), ev('netBuildId()'));
-  assert.match(ev('netBuildId()'), /^4-[0-9a-z]+$/);
+  assert.match(ev('netBuildId()'), /^5-[0-9a-z]+$/);
   const look = j(ev, `netLookFor('Ann')`);
   assert.deepStrictEqual(j(ev, `netLookFor('Ann')`), look, 'the same name, the same colours, on every machine');
 });
@@ -122,4 +122,11 @@ test('spray paint from other players: only well-formed dots, rounded the same wa
     assert.strictEqual(ev(`netCheckDots([${bad}], 9).length`), 0, bad);
   assert.strictEqual(ev(`netCheckDots(Array.from({ length: 3000 }, () => ${good}), 9).length`), ev('NET_PAINT_MSG'), 'capped per message');
   assert.strictEqual(ev(`netDotKey(${good})`), ev(`netDotKey(netDotOut(${good}))`), 'a dot and its sent (rounded) form are the same dot');
+});
+
+test('guns: nobody to hit when you\'re not in a room, and shooting a player down is a crime of its own', () => {
+  const { ev } = loadCity();
+  assert.strictEqual(ev('netShotTargets(0, 0).length'), 0);
+  assert.strictEqual(ev(`CRIMES.shotdown.stars`), 3);
+  assert.ok(ev('NET_SHOT_HURT[0] * 3 < 100 && NET_SHOT_HURT[1] * 3 >= 100'), 'three rounds can put someone down, two can\'t');
 });

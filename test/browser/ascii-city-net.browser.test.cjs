@@ -318,3 +318,54 @@ test('freehand spray paint: what Bob sprays is on Ann\'s walls (and kept), someo
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in hospital and lying in the street for her, friendly fire off spares him, and indoors too', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'guns-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 80; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    const facing = s => { mode = 'walk'; room = null; px = mod(s.x + Math.cos(s.a) * 0.6, N); py = mod(s.y + Math.sin(s.a) * 0.6, N); a = s.a + Math.PI; needs.health = 100; wakeT = 0; };
+    const inFront = () => until(A, () => { render(0); const p = [...net.peers.values()][0]; return p.view && p.view.rk === 'out' && Math.abs(Math.hypot(rel(p.view.x - px), rel(p.view.y - py)) - 0.6) < 0.02; }, null, 'Bob in front of Ann');
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; clearInventory(); carryItem({ id: 'revolver', uses: 6 }); held = 0; for (const p of people) p.hidden = true; }, spot);
+    await B.evaluate(facing, spot);
+    await inFront();
+    const fire = (indoors = false) => A.evaluate(i => { inv[0].uses = 6; gun.cool = 0; gun.reload = 0; render(0); const r = fireGun(px, py, i ? eye - 0.3 : eye, a, 0, i); return r && r.what; }, indoors);
+
+    assert.equal(await fire(), 'player', 'the round stops at Bob');
+    await until(B, () => needs.health < 100 && gun.copShots.some(s => s.hit), null, 'Bob hit, on his side');
+    for (let k = 0; k < 5 && !(await B.evaluate(() => mode === 'room')); k++) { await fire(); await A.waitForTimeout(150); }
+    await until(B, () => mode === 'room' && room.kind === 'hospital', null, 'Bob in hospital');
+    await until(A, () => net.chat.some(m => m.text === 'Bob went down, shot by you.'), null, 'Ann told');
+    assert.equal(await A.evaluate(() => { const f = [...net.peers.values()][0].fallen; return !!f && f.until > netNow(); }), true, 'lying where he fell, for her');
+
+    // friendly fire off, on Bob's side: hit, not hurt
+    await B.evaluate(() => { leaveRoom(); net.ff = false; }); await B.evaluate(facing, spot);
+    await inFront();
+    assert.equal(await fire(), 'player');
+    await A.waitForTimeout(600);
+    assert.equal(await B.evaluate(() => needs.health), 100, 'friendly fire off: unhurt');
+
+    // indoors: the same, in the same room
+    await B.evaluate(() => { net.ff = true; });
+    const enter = (P, s) => P.evaluate(s => { mode = 'walk'; room = null; px = LIGHTHOUSE.x; py = LIGHTHOUSE.y; enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [LIGHTHOUSE.x, LIGHTHOUSE.y, 0], line: 'hi' }, s); }, s);
+    await enter(A, [4, 6.2, -Math.PI / 2]); await enter(B, [4, 4.0, Math.PI / 2]);
+    await until(A, () => { render(0); const p = [...net.peers.values()][0]; return p.view && p.view.rk === netRoomKey(); }, null, 'same room');
+    assert.equal(await fire(true), 'player');
+    await until(B, () => needs.health < 100, null, 'hurt indoors');
+    for (const P of [A, B]) await P.evaluate(() => netLeave());
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

@@ -39,7 +39,7 @@ function traceRoomShot(x,y,z,hx,hy,slope) {
     const hit=rayBox(x,y,z,hx,hy,slope,p.box);if(hit>0&&hit<end){end=hit;what='wall';}
   }
   let who=null;
-  for(const p of [...room.props,...roomCops]){
+  for(const p of [...room.props,...roomCops,...(typeof netRoomShotTargets==='function'?netRoomShotTargets():[])]){ // (and other players in here: net.js)
     const cop=roomCops.includes(p);
     if((!cop&&(!p.fig||p.fig.build||p.still||p.cutout))||p.dead||p.hidden)continue;
     const h=p.h||1.8,ox=p.x-x,oy=p.y-y,d=ox*hx+oy*hy,across=Math.abs(oy*hx-ox*hy),zz=z+slope*d-(p.z||0);
@@ -97,6 +97,7 @@ function pullTrigger() {
   if (r.what === 'person' || r.what === 'cop') say(pick(r.what === 'cop' ? ['The officer drops. Somebody on the radio is asking for them.', 'The officer goes down and stays down.']
     : ['They go down and don\'t get up.', 'They drop where they stood.', 'They fall. Nobody near them moves to help.']), 2.5);
   else if (r.what === 'car') say(pick(['The round punches through a door panel.', '*PANG* off the car.']), 1.5);
+  else if (r.what === 'player') say(pick([`You hit ${r.who.name}.`, `${r.who.name} staggers.`]), 1.5); // (another player: net.js)
   else if (heldGun().uses === 0) say(ammoLeft() ? 'That\'s six. R to reload.' : 'That\'s six, and no more rounds.', 2);
 }
 function reloadKey() {
@@ -220,6 +221,7 @@ function drawShots() {
       if (p0 && p1) fishSeg(p0,p1,C(YEL,14),true);
     }
   }
+  netDrawShots(); // (other players' shots: net.js)
 }
 // pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries

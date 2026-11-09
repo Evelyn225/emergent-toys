@@ -10201,7 +10201,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
                  copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
-                 roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true } }; // (hit too fast to survive: main.js)
+                 roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true },
+                 shotdown: { stars: 3, name: 'gunning someone down', least: 0 } }; // (another player, in multiplayer: net.js) // (hit too fast to survive: main.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -12127,6 +12128,7 @@ function traceShot(x, y, z, hx, hy, slope) {
   for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
   for(const c of roofCops)if(!c.dead)figure(c,'cop',{x:c.x,y:c.y,z:policeRoofHeight(c.x,c.y),h:.18});
   if(typeof gunSceneFigures==='function')for(const target of gunSceneFigures())figure(target.who,'person',target);
+  for (const target of netShotTargets(x, y)) figure(target.who, 'player', target); // (other players, in multiplayer: net-core.js)
   for (const c of cars) { // a car: where the line goes into its box, if that's below its roof
     if (c.player || near(c.x, c.y, x, y) > SHOT_RANGE + 0.4) continue;
     const [hl, hw, h] = CAR_HIT[c.kind] || CAR_DEFAULT, ox = rel(x - c.x), oy = rel(y - c.y);
@@ -12154,13 +12156,14 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
   wanted.fired = true; // (and now they'll shoot back)
   if (indoors) {
     const hx=Math.cos(yaw),hy=Math.sin(yaw),hit=typeof traceRoomShot==='function'?traceRoomShot(x,y,z,hx,hy,slope):{d:3,x:x+hx*3,y:y+hy*3,z:z+slope*3,what:'wall'};
+    if(hit.who&&hit.who.netPeer)hit.what='player'; // (another player in here with you: it's theirs to be hurt, net.js)
     const [rx,ry]=crimePos();
     if(hit.what==='person'||hit.what==='cop')killRoomFigure(hit.who,hx,hy);
     if(hit.what==='cop')addWanted('copkill',rx,ry,true);
     const witnesses=typeof room!=='undefined'&&room?.props.some(p=>p.fig&&!p.fig.build&&!p.still&&!p.dead&&!p.hidden);
     if(witnesses)reports.push({t:T+reportDelay(),x:rx,y:ry,kind:hit.what==='person'?'murder':'gunfire'});
     else gunCrime('gunfire',rx,ry);
-    const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);return shot;
+    const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);if(typeof netShotFired==='function')netShotFired(shot,true);return shot;
   }
   const hx = Math.cos(yaw), hy = Math.sin(yaw), hit = traceShot(x, y, z, hx, hy, slope);
   const shot = { x0: x, y0: y, z0: z, ...hit, t: T };
@@ -12178,6 +12181,7 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
     }
   }
   panicAt(x, y);
+  if (typeof netShotFired === 'function') netShotFired(shot, false); // (everyone in a multiplayer room sees and hears it: net.js)
   return shot;
 }
 // who saw it, or heard it: a cop who can see you puts you on the list straight away; a shot is heard by anybody in
@@ -13445,7 +13449,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 4; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint)
+const NET_PROTOCOL = 5; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -13459,10 +13463,10 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
-const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
+const net = { ff: true, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
 const netShared = () => net.on && net.peers.size > 0; // somebody else is here
 const netClockShared = () => NET_FEATURES.clock && netShared(); // the clock isn't yours alone
 const netFollowsClock = () => netClockShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
@@ -13567,6 +13571,21 @@ function netCheckDots(d, colours) {
 }
 const netDotKey = d => d[0] + ',' + d[1] + ',' + (+d[2]).toFixed(4) + ',' + (+d[3]).toFixed(4) + ',' + d[6];
 const netDotOut = d => [d[0], d[1], +(+d[2]).toFixed(4), +(+d[3]).toFixed(4), +(+d[4]).toFixed(4), d[5], d[6]];
+
+// other players out in the street as something a bullet can hit (gun.js's traceShot): standing where they're drawn
+const NET_SHOOTABLE = new Set(['walk', 'roof', 'elplat', 'fair']);
+function netShotTargets(x, y) {
+  if (!net.on || !NET_FEATURES.guns || mode === 'room') return [];
+  const out = [];
+  for (const p of net.peers.values()) {
+    const s = p.view;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || !NET_SHOOTABLE.has(s.mode)) continue;
+    if (Math.hypot(rel(s.x - x), rel(s.y - y)) > SHOT_RANGE) continue;
+    out.push({ who: p, x: s.x, y: s.y, z: s.z, h: 0.175 });
+  }
+  return out;
+}
+const NET_SHOT_HURT = [22, 36]; // what a round from another player takes off you (health's out of 100: three will do)
 
 // ---- smoothing: an update arrives every 80 ms or so, a little early or late; others are drawn NET_DELAY behind the
 // newest, between the two updates either side of then, so they glide instead of hopping
@@ -37541,7 +37560,7 @@ function traceRoomShot(x,y,z,hx,hy,slope) {
     const hit=rayBox(x,y,z,hx,hy,slope,p.box);if(hit>0&&hit<end){end=hit;what='wall';}
   }
   let who=null;
-  for(const p of [...room.props,...roomCops]){
+  for(const p of [...room.props,...roomCops,...(typeof netRoomShotTargets==='function'?netRoomShotTargets():[])]){ // (and other players in here: net.js)
     const cop=roomCops.includes(p);
     if((!cop&&(!p.fig||p.fig.build||p.still||p.cutout))||p.dead||p.hidden)continue;
     const h=p.h||1.8,ox=p.x-x,oy=p.y-y,d=ox*hx+oy*hy,across=Math.abs(oy*hx-ox*hy),zz=z+slope*d-(p.z||0);
@@ -37599,6 +37618,7 @@ function pullTrigger() {
   if (r.what === 'person' || r.what === 'cop') say(pick(r.what === 'cop' ? ['The officer drops. Somebody on the radio is asking for them.', 'The officer goes down and stays down.']
     : ['They go down and don\'t get up.', 'They drop where they stood.', 'They fall. Nobody near them moves to help.']), 2.5);
   else if (r.what === 'car') say(pick(['The round punches through a door panel.', '*PANG* off the car.']), 1.5);
+  else if (r.what === 'player') say(pick([`You hit ${r.who.name}.`, `${r.who.name} staggers.`]), 1.5); // (another player: net.js)
   else if (heldGun().uses === 0) say(ammoLeft() ? 'That\'s six. R to reload.' : 'That\'s six, and no more rounds.', 2);
 }
 function reloadKey() {
@@ -37722,6 +37742,7 @@ function drawShots() {
       if (p0 && p1) fishSeg(p0,p1,C(YEL,14),true);
     }
   }
+  netDrawShots(); // (other players' shots: net.js)
 }
 // pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
@@ -55504,7 +55525,7 @@ function drawFerries() {
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -55572,7 +55593,7 @@ async function netJoin(codeIn, nameIn) {
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
-    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null,
+    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], ff: netLoadPrefs().ff !== false,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
@@ -55642,6 +55663,7 @@ function netReceive(type, data, from) {
   }
   if (!p.hello || p.mismatch) return;
   if (netCarMessage(type, data, from, p, now)) return;
+  if (netGunMessage(type, data, from, p, now)) return;
   if (type === 'paint') { // their spray paint, on your walls (anything you've got already, from them or earlier, isn't doubled)
     if (!NET_FEATURES.paint || !netAllow(p.paintBucket ||= {}, now, 0.05, 12)) return;
     const keys = netPaintKeys(), fresh = netCheckDots(data, SPRAY_COLOURS.length).filter(d => { const k = netDotKey(d); if (keys.has(k)) return false; keys.add(k); return true; });
@@ -55918,6 +55940,72 @@ function netCarMessage(type, data, from, p, now) {
   return true;
 }
 
+// ---- guns: your shot goes to everyone (fireGun calls netShotFired): they see the streak and hear it, the street round
+// it scatters on their screens too, and if it hit someone, that player's game takes the damage, as a police round
+// would (gun.js, gun-ui.js). Unless they've switched friendly fire off for themselves (the multiplayer menu).
+function netShotFired(shot, indoors) {
+  if (!net.on || !NET_FEATURES.guns) return;
+  const target = shot.what === 'player' && shot.who ? (shot.who.netPeer || shot.who.id) : '';
+  net.tx.send('shot', { x0: shot.x0, y0: shot.y0, z0: shot.z0, x: shot.x, y: shot.y, z: shot.z, what: shot.what, target, rk: netRoomKey(), indoors: !!indoors });
+}
+function netRoomShotTargets() { // (gun-ui.js's traceRoomShot: who's in this room with you, as something to hit)
+  if (!net.on || !NET_FEATURES.guns || mode !== 'room') return [];
+  const out = [], rk = netRoomKey();
+  for (const p of net.peers.values()) {
+    const s = p.view;
+    if (p.hello && !p.mismatch && !p.stale && s && s.rk === rk && s.mode === 'room') out.push({ x: s.x, y: s.y, z: s.z, h: 1.8, fig: true, netPeer: p.id, name: p.name });
+  }
+  return out;
+}
+function netGunMessage(type, data, from, p, now) {
+  if (type !== 'shot' && type !== 'down') return false;
+  if (!NET_FEATURES.guns || !data) return true;
+  if (type === 'shot') {
+    if (!netAllow(p.shotBucket ||= {}, now, FIRE_GAP * 0.8, 3)) return true;
+    const ok = ['x0', 'y0', 'z0', 'x', 'y', 'z'].every(k => netNum(data[k]));
+    if (!ok || data.rk !== netRoomKey()) return true; // (somewhere else: out of earshot, as far as this goes)
+    const inside = mode === 'room';
+    if (data.target === net.selfId && net.ff && !sleep && !wakeT) { // you: hit
+      gun.copShots.push({ x: data.x0, y: data.y0, hit: true, t: T, room: inside, side: Math.random() < 0.5 ? -1 : 1 }); // (the bang, the flash at them, "you're hit": gun-ui.js)
+      needs.health = Math.max(0, needs.health - (NET_SHOT_HURT[0] + Math.random() * (NET_SHOT_HURT[1] - NET_SHOT_HURT[0])));
+      gun.hurtT = T;
+      if (needs.health <= 0) netShotDown(p);
+      return true;
+    }
+    if (actx) { // somebody else's: heard from where it was fired
+      const d = inside ? Math.hypot(data.x0 - px, data.y0 - py) / 10 : Math.hypot(rel(data.x0 - px), rel(data.y0 - py)), side = inside ? 0 : Math.sin(Math.atan2(rel(data.y0 - py), rel(data.x0 - px)) - a);
+      gunBang(actx.currentTime, clamp(1.1 - d / 9, 0.15, 0.9), clamp(side, -0.8, 0.8), inside ? 'in' : d > 3 ? 'far' : '');
+    }
+    if (!inside) { net.shots.push({ x0: data.x0, y0: data.y0, z0: data.z0, x: data.x, y: data.y, z: data.z, what: data.what, t: T }); panicAt(data.x0, data.y0); }
+    if (net.shots.length > 24) net.shots.shift();
+    return true;
+  }
+  // somebody's gone down: shot by whoever (by), where they fell. You see them lie there a few seconds
+  if (!netNum(data.x) || !netNum(data.y) || !netNum(data.z) || !netNum(data.a)) return true;
+  p.fallen = { x: data.x, y: data.y, z: data.z, a: data.a, rk: typeof data.rk === 'string' ? data.rk : 'out', until: now + 6 };
+  const by = data.by === net.selfId ? 'you' : net.peers.get(data.by)?.name || 'someone';
+  netLog(`${p.name} went down, shot by ${by}.`, null, '#f96');
+  if (data.by === net.selfId) { const [cx, cy] = crimePos(); gunCrime('shotdown', cx, cy); }
+  return true;
+}
+// your health's gone: down where you stand for everyone, and you come to in the hospital (as after the police shoot you,
+// but they keep nothing: it wasn't them)
+function netShotDown(by) {
+  net.tx.send('down', { by: by.id, x: px, y: py, z: netSelfZ(), a, rk: netRoomKey() });
+  passOut(`Gunshot wounds. Someone called ${by.name} did this, they say.`);
+}
+function netDrawShots() { // (gun-ui.js's drawShots: their shots, a streak from them to where it stopped)
+  if (!net.on) return;
+  for (const s of net.shots) {
+    const age = T - s.t;
+    if (age > 0.09 || age < 0) continue;
+    const p0 = fishProj(rel(s.x0 - px), rel(s.y0 - py), s.z0 - 0.02), p1 = fishProj(rel(s.x - px), rel(s.y - py), s.z);
+    if (p0 && p1) fishSeg(p0, p1, C(age < .04 ? WHITE : YEL, 15), true);
+    if (p0) fishSurface(p0.c, p0.r, p0.depth, C(YEL, 15)); // (the flash at the gun)
+    if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishSurface(p1.c, p1.r, p1.depth, C(s.what === 'car' ? YEL : WHITE, 14));
+  }
+}
+
 // ---- spray paint (spray-paint.js): what you spray goes out as you spray it (PAINT_LISTENERS); someone arriving gets your
 // most recent. The keys are every dot you've got, so nothing's painted twice when it comes round again.
 function netPaintKeys() {
@@ -55996,6 +56084,11 @@ function drawPeers() {
   if (!net.on || !net.peers.size) return;
   const now = netNow(), inRoom = mode === 'room';
   for (const p of net.peers.values()) {
+    const f = p.fallen; // (shot down a moment ago: lying where they fell, till the ambulance has them)
+    if (f && f.until > now && f.rk === netRoomKey() && p.hello) {
+      const fx = inRoom ? f.x - px : rel(f.x - px), fy = inRoom ? f.y - py : rel(f.y - py);
+      if (inRoom || Math.hypot(fx, fy) < vis) drawFigure(fx, fy, f.z, inRoom ? 1.8 : 0.175, -Math.cos(f.a), -Math.sin(f.a), netFigLook(p), 'dead', { light: inRoom ? 9 : 6 });
+    }
     if (!p.hello || p.mismatch || p.stale) { p.drawn = false; continue; }
     const s = p.view = netSample(p, now);
     if (!netVisible(p, s)) { p.drawn = false; continue; }
@@ -56125,6 +56218,7 @@ function buildNetMenu() {
       <button class="item" data-net-act="join">Join room</button>
       <button class="item" data-net-act="copy">Copy invite link</button>
       <button class="item" data-net-act="leave">Leave room</button>
+      <button class="item" data-net-act="ff">Friendly fire <span class="k" data-net="ff" style="margin-left:auto"></span></button>
       <p class="sub" data-net="status"></p>
       <div data-net="peers" style="margin:6px 0 12px"></div>
       <p class="sub" data-net="chathelp" style="display:${NET_FEATURES.chat ? 'block' : 'none'}">In a room: T or Enter to chat.</p>
@@ -56141,6 +56235,7 @@ function buildNetMenu() {
     const name = el.querySelector('[data-net="name"]').value, code = el.querySelector('[data-net="code"]').value;
     if (b.dataset.netAct === 'join') netJoin(code, name);
     if (b.dataset.netAct === 'leave') netLeave();
+    if (b.dataset.netAct === 'ff') { net.ff = !net.ff; netSavePrefs({ ff: net.ff }); netMenuShow(); }
     if (b.dataset.netAct === 'back') closeNetMenu();
     if (b.dataset.netAct === 'copy') {
       const link = netInviteLink(netCode(code) || net.code);
@@ -56153,6 +56248,8 @@ function netMenuShow() {
   if (!netMenuOpen()) return;
   const el = netMenuEl;
   el.querySelector('[data-net="about"]').textContent = `Your friends walking and driving about in your city${NET_FEATURES.clock ? ', at the same time and in the same weather' : ''}. Everyone keeps their own city, money, things and saves.`;
+  el.querySelector('[data-net="ff"]').textContent = net.ff ? '[x] on: their shots hurt you' : '[ ] off: their shots pass you by';
+  el.querySelector('[data-net-act="ff"]').style.display = NET_FEATURES.guns ? 'flex' : 'none';
   el.querySelector('[data-net="status"]').textContent = net.status || (net.on ? `In room "${net.code}".` : 'Not connected.');
   el.querySelector('[data-net-act="leave"]').style.display = net.on || net.joining ? 'flex' : 'none';
   el.querySelector('[data-net-act="join"]').firstChild.textContent = net.on ? 'Join a different room' : 'Join room';

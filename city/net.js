@@ -4,7 +4,7 @@
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -72,7 +72,7 @@ async function netJoin(codeIn, nameIn) {
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
-    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null,
+    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], ff: netLoadPrefs().ff !== false,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
@@ -142,6 +142,7 @@ function netReceive(type, data, from) {
   }
   if (!p.hello || p.mismatch) return;
   if (netCarMessage(type, data, from, p, now)) return;
+  if (netGunMessage(type, data, from, p, now)) return;
   if (type === 'paint') { // their spray paint, on your walls (anything you've got already, from them or earlier, isn't doubled)
     if (!NET_FEATURES.paint || !netAllow(p.paintBucket ||= {}, now, 0.05, 12)) return;
     const keys = netPaintKeys(), fresh = netCheckDots(data, SPRAY_COLOURS.length).filter(d => { const k = netDotKey(d); if (keys.has(k)) return false; keys.add(k); return true; });
@@ -418,6 +419,72 @@ function netCarMessage(type, data, from, p, now) {
   return true;
 }
 
+// ---- guns: your shot goes to everyone (fireGun calls netShotFired): they see the streak and hear it, the street round
+// it scatters on their screens too, and if it hit someone, that player's game takes the damage, as a police round
+// would (gun.js, gun-ui.js). Unless they've switched friendly fire off for themselves (the multiplayer menu).
+function netShotFired(shot, indoors) {
+  if (!net.on || !NET_FEATURES.guns) return;
+  const target = shot.what === 'player' && shot.who ? (shot.who.netPeer || shot.who.id) : '';
+  net.tx.send('shot', { x0: shot.x0, y0: shot.y0, z0: shot.z0, x: shot.x, y: shot.y, z: shot.z, what: shot.what, target, rk: netRoomKey(), indoors: !!indoors });
+}
+function netRoomShotTargets() { // (gun-ui.js's traceRoomShot: who's in this room with you, as something to hit)
+  if (!net.on || !NET_FEATURES.guns || mode !== 'room') return [];
+  const out = [], rk = netRoomKey();
+  for (const p of net.peers.values()) {
+    const s = p.view;
+    if (p.hello && !p.mismatch && !p.stale && s && s.rk === rk && s.mode === 'room') out.push({ x: s.x, y: s.y, z: s.z, h: 1.8, fig: true, netPeer: p.id, name: p.name });
+  }
+  return out;
+}
+function netGunMessage(type, data, from, p, now) {
+  if (type !== 'shot' && type !== 'down') return false;
+  if (!NET_FEATURES.guns || !data) return true;
+  if (type === 'shot') {
+    if (!netAllow(p.shotBucket ||= {}, now, FIRE_GAP * 0.8, 3)) return true;
+    const ok = ['x0', 'y0', 'z0', 'x', 'y', 'z'].every(k => netNum(data[k]));
+    if (!ok || data.rk !== netRoomKey()) return true; // (somewhere else: out of earshot, as far as this goes)
+    const inside = mode === 'room';
+    if (data.target === net.selfId && net.ff && !sleep && !wakeT) { // you: hit
+      gun.copShots.push({ x: data.x0, y: data.y0, hit: true, t: T, room: inside, side: Math.random() < 0.5 ? -1 : 1 }); // (the bang, the flash at them, "you're hit": gun-ui.js)
+      needs.health = Math.max(0, needs.health - (NET_SHOT_HURT[0] + Math.random() * (NET_SHOT_HURT[1] - NET_SHOT_HURT[0])));
+      gun.hurtT = T;
+      if (needs.health <= 0) netShotDown(p);
+      return true;
+    }
+    if (actx) { // somebody else's: heard from where it was fired
+      const d = inside ? Math.hypot(data.x0 - px, data.y0 - py) / 10 : Math.hypot(rel(data.x0 - px), rel(data.y0 - py)), side = inside ? 0 : Math.sin(Math.atan2(rel(data.y0 - py), rel(data.x0 - px)) - a);
+      gunBang(actx.currentTime, clamp(1.1 - d / 9, 0.15, 0.9), clamp(side, -0.8, 0.8), inside ? 'in' : d > 3 ? 'far' : '');
+    }
+    if (!inside) { net.shots.push({ x0: data.x0, y0: data.y0, z0: data.z0, x: data.x, y: data.y, z: data.z, what: data.what, t: T }); panicAt(data.x0, data.y0); }
+    if (net.shots.length > 24) net.shots.shift();
+    return true;
+  }
+  // somebody's gone down: shot by whoever (by), where they fell. You see them lie there a few seconds
+  if (!netNum(data.x) || !netNum(data.y) || !netNum(data.z) || !netNum(data.a)) return true;
+  p.fallen = { x: data.x, y: data.y, z: data.z, a: data.a, rk: typeof data.rk === 'string' ? data.rk : 'out', until: now + 6 };
+  const by = data.by === net.selfId ? 'you' : net.peers.get(data.by)?.name || 'someone';
+  netLog(`${p.name} went down, shot by ${by}.`, null, '#f96');
+  if (data.by === net.selfId) { const [cx, cy] = crimePos(); gunCrime('shotdown', cx, cy); }
+  return true;
+}
+// your health's gone: down where you stand for everyone, and you come to in the hospital (as after the police shoot you,
+// but they keep nothing: it wasn't them)
+function netShotDown(by) {
+  net.tx.send('down', { by: by.id, x: px, y: py, z: netSelfZ(), a, rk: netRoomKey() });
+  passOut(`Gunshot wounds. Someone called ${by.name} did this, they say.`);
+}
+function netDrawShots() { // (gun-ui.js's drawShots: their shots, a streak from them to where it stopped)
+  if (!net.on) return;
+  for (const s of net.shots) {
+    const age = T - s.t;
+    if (age > 0.09 || age < 0) continue;
+    const p0 = fishProj(rel(s.x0 - px), rel(s.y0 - py), s.z0 - 0.02), p1 = fishProj(rel(s.x - px), rel(s.y - py), s.z);
+    if (p0 && p1) fishSeg(p0, p1, C(age < .04 ? WHITE : YEL, 15), true);
+    if (p0) fishSurface(p0.c, p0.r, p0.depth, C(YEL, 15)); // (the flash at the gun)
+    if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishSurface(p1.c, p1.r, p1.depth, C(s.what === 'car' ? YEL : WHITE, 14));
+  }
+}
+
 // ---- spray paint (spray-paint.js): what you spray goes out as you spray it (PAINT_LISTENERS); someone arriving gets your
 // most recent. The keys are every dot you've got, so nothing's painted twice when it comes round again.
 function netPaintKeys() {
@@ -496,6 +563,11 @@ function drawPeers() {
   if (!net.on || !net.peers.size) return;
   const now = netNow(), inRoom = mode === 'room';
   for (const p of net.peers.values()) {
+    const f = p.fallen; // (shot down a moment ago: lying where they fell, till the ambulance has them)
+    if (f && f.until > now && f.rk === netRoomKey() && p.hello) {
+      const fx = inRoom ? f.x - px : rel(f.x - px), fy = inRoom ? f.y - py : rel(f.y - py);
+      if (inRoom || Math.hypot(fx, fy) < vis) drawFigure(fx, fy, f.z, inRoom ? 1.8 : 0.175, -Math.cos(f.a), -Math.sin(f.a), netFigLook(p), 'dead', { light: inRoom ? 9 : 6 });
+    }
     if (!p.hello || p.mismatch || p.stale) { p.drawn = false; continue; }
     const s = p.view = netSample(p, now);
     if (!netVisible(p, s)) { p.drawn = false; continue; }
@@ -625,6 +697,7 @@ function buildNetMenu() {
       <button class="item" data-net-act="join">Join room</button>
       <button class="item" data-net-act="copy">Copy invite link</button>
       <button class="item" data-net-act="leave">Leave room</button>
+      <button class="item" data-net-act="ff">Friendly fire <span class="k" data-net="ff" style="margin-left:auto"></span></button>
       <p class="sub" data-net="status"></p>
       <div data-net="peers" style="margin:6px 0 12px"></div>
       <p class="sub" data-net="chathelp" style="display:${NET_FEATURES.chat ? 'block' : 'none'}">In a room: T or Enter to chat.</p>
@@ -641,6 +714,7 @@ function buildNetMenu() {
     const name = el.querySelector('[data-net="name"]').value, code = el.querySelector('[data-net="code"]').value;
     if (b.dataset.netAct === 'join') netJoin(code, name);
     if (b.dataset.netAct === 'leave') netLeave();
+    if (b.dataset.netAct === 'ff') { net.ff = !net.ff; netSavePrefs({ ff: net.ff }); netMenuShow(); }
     if (b.dataset.netAct === 'back') closeNetMenu();
     if (b.dataset.netAct === 'copy') {
       const link = netInviteLink(netCode(code) || net.code);
@@ -653,6 +727,8 @@ function netMenuShow() {
   if (!netMenuOpen()) return;
   const el = netMenuEl;
   el.querySelector('[data-net="about"]').textContent = `Your friends walking and driving about in your city${NET_FEATURES.clock ? ', at the same time and in the same weather' : ''}. Everyone keeps their own city, money, things and saves.`;
+  el.querySelector('[data-net="ff"]').textContent = net.ff ? '[x] on: their shots hurt you' : '[ ] off: their shots pass you by';
+  el.querySelector('[data-net-act="ff"]').style.display = NET_FEATURES.guns ? 'flex' : 'none';
   el.querySelector('[data-net="status"]').textContent = net.status || (net.on ? `In room "${net.code}".` : 'Not connected.');
   el.querySelector('[data-net-act="leave"]').style.display = net.on || net.joining ? 'flex' : 'none';
   el.querySelector('[data-net-act="join"]').firstChild.textContent = net.on ? 'Join a different room' : 'Join room';

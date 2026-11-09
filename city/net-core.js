@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 4; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint)
+const NET_PROTOCOL = 5; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -16,10 +16,10 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
-const net = { on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
+const net = { ff: true, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
 const netShared = () => net.on && net.peers.size > 0; // somebody else is here
 const netClockShared = () => NET_FEATURES.clock && netShared(); // the clock isn't yours alone
 const netFollowsClock = () => netClockShared() && !net.clockOwner; // their clock, not yours: the weather and the time come from them
@@ -124,6 +124,21 @@ function netCheckDots(d, colours) {
 }
 const netDotKey = d => d[0] + ',' + d[1] + ',' + (+d[2]).toFixed(4) + ',' + (+d[3]).toFixed(4) + ',' + d[6];
 const netDotOut = d => [d[0], d[1], +(+d[2]).toFixed(4), +(+d[3]).toFixed(4), +(+d[4]).toFixed(4), d[5], d[6]];
+
+// other players out in the street as something a bullet can hit (gun.js's traceShot): standing where they're drawn
+const NET_SHOOTABLE = new Set(['walk', 'roof', 'elplat', 'fair']);
+function netShotTargets(x, y) {
+  if (!net.on || !NET_FEATURES.guns || mode === 'room') return [];
+  const out = [];
+  for (const p of net.peers.values()) {
+    const s = p.view;
+    if (!p.hello || p.mismatch || p.stale || !s || s.rk !== 'out' || s.veh || !NET_SHOOTABLE.has(s.mode)) continue;
+    if (Math.hypot(rel(s.x - x), rel(s.y - y)) > SHOT_RANGE) continue;
+    out.push({ who: p, x: s.x, y: s.y, z: s.z, h: 0.175 });
+  }
+  return out;
+}
+const NET_SHOT_HURT = [22, 36]; // what a round from another player takes off you (health's out of 100: three will do)
 
 // ---- smoothing: an update arrives every 80 ms or so, a little early or late; others are drawn NET_DELAY behind the
 // newest, between the two updates either side of then, so they glide instead of hopping
