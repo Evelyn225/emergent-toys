@@ -14550,6 +14550,8 @@ function floorCell(i, r, x, rx, ry) {
   if (snowCover <= 0 || water || FL[i] >= 3) return; // open water remains open water
   const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
   if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
+  const mh = (road === 1 || road === 2) && manholeAt(wx, wy); // (warm from the pipes under it: snow melts off a manhole cover)
+  if (mh && Math.hypot(rel(wx - mh[0]), rel(wy - mh[1])) <= 0.031) return;
   const lx = mod(wx, 8), ly = mod(wy, 8);
   let wear = 0;
   if (road === 1) wear = snowRoadWear(lx);
@@ -28846,22 +28848,32 @@ const partSheltered = (x, y, z) => (typeof arcadeAt === 'function' && z < ARCADE
 // ---- moths: a few round each lamp near you, after dark, in spring and summer, not in rain or snow. Worked out from
 // the time alone (no state): each loops its lamp at its own speed and wobble. Black: seen only as specks against the
 // lit glass and its glow, as moths are at night. They draw over their own lamp (it's no further than their orbit).
+// the moths round one light at (hx, hy, hz): r0..r0+dr out, wobbling dz up and down; key: a seed for this light
+function mothsRound(hx, hy, hz, key, r0, dr, dz) {
+  if (Math.hypot(rel(hx - px), rel(hy - py)) > 2.5 || !inView(rel(hx - px), rel(hy - py), 0.1)) return;
+  const n = 6 + (hash(key, 1, 3301) * 5 | 0);
+  for (let k = 0; k < n; k++) {
+    const a = hash(key + k * 17, 2, 3302), b = hash(key, 3 + k * 23, 3303);
+    const t = T * (2.2 + a * 2.4) * (b > 0.5 ? 1 : -1) + a * 40, r = r0 + b * dr; // (out round the light, not hidden behind it)
+    const x = hx + Math.cos(t) * r + Math.sin(t * 2.7 + b * 9) * 0.005, y = hy + Math.sin(t) * r * 0.85 + Math.cos(t * 3.1 + a * 7) * 0.005;
+    const z = hz + Math.sin(t * 1.6 + b * 11) * dz + Math.sin(T * 9 + a * 50) * 0.003;
+    speck(x, y, z, Math.sin(T * 26 + a * 90) > 0 ? 'v' : '^', C(BLACK, 0), 1, 0.12); // (wings flapping)
+  }
+}
+// round the street lamps (the Belle Époque quarter's have two globes each) and the Botanical Gardens' path lamps
 function drawMoths() {
   const s = season();
   if (lampsOn < 0.3 || rain > 0.08 || snow > 0.02 || (s !== 'spring' && s !== 'summer')) return;
+  const key = (x, y) => Math.floor(x * 10) * 7919 + Math.floor(y * 10);
   forNear(lampsB, l => {
-    if (districtAt(l.x, l.y) === 'belle') return;
-    const hx = l.x + l.ax * REACH, hy = l.y + l.ay * REACH, hz = (l.top ?? LAMP_TOP) - 0.075; // (the lantern's glass, hanging under the arm)
-    if (Math.hypot(rel(hx - px), rel(hy - py)) > 2.5 || !inView(rel(hx - px), rel(hy - py), 0.1)) return;
-    const n = 6 + (hash(Math.floor(l.x * 10), Math.floor(l.y * 10), 3301) * 5 | 0);
-    for (let k = 0; k < n; k++) {
-      const a = hash(Math.floor(l.x * 10) + k * 17, Math.floor(l.y * 10), 3302), b = hash(Math.floor(l.x * 10), Math.floor(l.y * 10) + k * 23, 3303);
-      const t = T * (2.2 + a * 2.4) * (b > 0.5 ? 1 : -1) + a * 40, r = 0.035 + b * 0.04; // (out round the lantern, not hidden behind it)
-      const x = hx + Math.cos(t) * r + Math.sin(t * 2.7 + b * 9) * 0.005, y = hy + Math.sin(t) * r * 0.85 + Math.cos(t * 3.1 + a * 7) * 0.005;
-      const z = hz + Math.sin(t * 1.6 + b * 11) * 0.03 + Math.sin(T * 9 + a * 50) * 0.003;
-      speck(x, y, z, Math.sin(T * 26 + a * 90) > 0 ? 'v' : '^', C(BLACK, 0), 1, 0.12); // (wings flapping)
+    if (districtAt(l.x, l.y) === 'belle') { // (belle-geometry.js: a globe each side of the post, .11 out, .505-.605 up)
+      for (const side of [-1, 1]) { const gx = l.x - l.ay * side * 0.11, gy = l.y + l.ax * side * 0.11; mothsRound(gx, gy, 0.555, key(gx, gy), 0.05, 0.04, 0.025); }
+      return;
     }
+    const hx = l.x + l.ax * REACH, hy = l.y + l.ay * REACH;
+    mothsRound(hx, hy, (l.top ?? LAMP_TOP) - 0.075, key(hx, hy), 0.035, 0.04, 0.03); // (the lantern's glass, hanging under the arm)
   });
+  forNear(extrasB, o => { if (o.parkLamp) mothsRound(o.x, o.y, 0.324, key(o.x, o.y), 0.03, 0.03, 0.02); }); // (city-sprites.js drawParkLamp: its globe)
 }
 
 // ---- rain: splashes where drops land near you, rings in the puddles
