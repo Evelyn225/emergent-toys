@@ -998,7 +998,7 @@ const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
   const cabin=!freecam&&!chaseOn&&((me&&(mode==='drive'||mode==='taxi'))||(pilot&&mode==='air'));
-  const roofed = cabin || mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && (shelterRoofAt(px, py, eye)||waterWeatherCoverAt(px,py,eye)); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
+  const roofed = quietPlaceCover(px,py,eye) || cabin || mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye) || mode === 'walk' && (shelterRoofAt(px, py, eye)||waterWeatherCoverAt(px,py,eye)); // covered ferry lounge, Shotengai, airport or a street shelter (kerb-fixtures.js)
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];

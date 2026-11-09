@@ -139,3 +139,17 @@ function buildStreetSkateSpots(){
     SKATE_SPOTS.push({id,name:cap(site.district.replace(/[-_]/g,' '))+' · '+name,x,y,line:{x:site.x,y:site.y},description,street:true,district:site.district});
   }
 }
+
+// Square steel remains exact up close. Below a character in thickness, use
+// the city's measured rod renderer so a rail stays a line rather than dots.
+function drawStreetSkateRail(o){
+ const [x,y]=R(o.x,o.y),depth=dx*x+dy*y;
+ if(Math.hypot(x,y)>vis+1||!inView(x,y,o.hl+.1))return;
+ if(.006*projX/Math.max(.02,depth)>1.5){
+  drawBox(boxAt(x,y,o.c,o.s,o.hl,o.hw,o.z0,o.z1),SOLID_SHADE.skatestreetrail(o),o.ray);return;
+ }
+ const point=([u,z])=>[x+o.c*u,y+o.s*u,z-.003],points=o.streetRail.map(point);
+ const steel=(i,t,L)=>{BG[i]=SK_STEEL(L,true);set(i,' ',0);return true;};
+ for(let j=1;j<points.length;j++)drawRod(...points[j-1],...points[j],.003,steel);
+ for(const [xx,yy,z]of points)drawRod(xx,yy,o.z0,xx,yy,z,.003,steel);
+}

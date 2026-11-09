@@ -14,7 +14,7 @@ function interactionClear(x,y,z,ignore=null) {
     const f=k/n,xx=px+ex*f,yy=py+ey*f,zz=eye+ez*f;
     const h=inside?ROOMW.cell(Math.floor(xx),Math.floor(yy)):CITY.cell(Math.floor(xx),Math.floor(yy));
     if(h>zz+.015)return false;
-    if(!inside&&terrainHeight(xx,yy)>zz+.003)return false;
+    if(!inside&&(terrainHeight(xx,yy)>zz+.003||quietPlaceOccludes(xx,yy,zz)))return false;
   }
   if(!inside)for(let by=-1;by<=1;by++)for(let bx=-1;bx<=1;bx++)for(const solid of solidsB[bi(Math.floor(px/8)+bx,Math.floor(py/8)+by)]) {
     const sx=rel(solid.x-px),sy=rel(solid.y-py);
@@ -55,6 +55,7 @@ function interactionFocus() {
     const value=interactionScore(x,y,z0,z1,radius,reach,ignore,strict);
     if(value<score){score=value;best={kind,who};}
   };
+  if(!inside)for(const t of quietPlaceTargets())offer('quiet-place',t,t.x,t.y,t.z0,t.z1,.035,.32);
   const at=placeKey();
   if(at!==null)for(const d of dropped)if(d.at===at&&Math.abs((d.z||0)-(inside?0:mode==='roof'?roofH:outdoorGroundHeight(px,py)))<.08) {
     const z=d.displayZ??(inside?0:d.z||0);
@@ -88,6 +89,7 @@ function interactionFocus() {
   return best;
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
+  if(target?.kind==='quiet-place')return `E: ${target.who.label}`;
   if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
   if(target?.kind==='home-display')return `E: take ${itemName(target.who.it)}`;
   if(target?.kind==='home-shelf')return heldItem()?'E: put on shelf':'E: display shelves';
@@ -99,6 +101,7 @@ function focusedInteractionPrompt(target=interactionFocus()) {
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
+  if(target?.kind==='quiet-place'){quietPlaceUse(target.who);return true;}
   if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
   if(target?.kind==='home-display'){homeShelfTake(target.who);return true;}
   if(target?.kind==='home-shelf'){homeShelfUse(target.who);return true;}
