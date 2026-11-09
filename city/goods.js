@@ -567,6 +567,7 @@ function stepBall(dt) {
   return null;
 }
 function pickUpBall() {
+  if (!ball && typeof netReclaimBall === 'function') netReclaimBall(); // (yours, run by another player a moment ago: net.js)
   if (!ball || Math.hypot(rel(ball.x - px), rel(ball.y - py)) > 0.3 || inv.length >= INV_SIZE) return false;
-  ball = null; carryItem({ id: 'ball', uses: 0 }); return true;
+  ball = null; carryItem({ id: 'ball', uses: 0 }); if (typeof netBallGone === 'function' && net.on) netBallGone(netMyBallId()); return true; // (gone for the other players too: net.js)
 }

@@ -53,7 +53,8 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
   car (on its tag), and everyone on the minimap and the big map (inside: at the door they went in by). Other players'
   skaters are drawn as plain solid figures: skate.js's per-pixel skater is made for the chase camera and comes apart up
   close. Flips and spins already came through (the board's yaw, pitch and roll are sent).
-- **Next**: the section at the end (peaceful mode, car hits, pickpocketing, soccer balls), once its decisions are made. Smaller
+- **Next**: try it all with real players: peaceful mode, car hits, pickpocketing and soccer balls are tested only in
+  tabs on one machine (see the sections at the end). Smaller
   gaps in the ghosts: nothing drawn for boats, the swan, planes or the helicopter (name tag only), no flip/spin
   rotation in the air, no bail sprawl.
 - **Decided while building**: a follower's clock is set to the keeper's on every sync (both run the same clock between
@@ -325,7 +326,26 @@ Phases 1, 2, 4, 5 can happen in any order after 0. Do 3 before 6 (chases are car
 - No authority: a modified client can teleport, one-shot people, or fake claims. Acceptable for friends only; if it
   ever goes public, move to Cloudflare Durable Objects behind the same transport interface.
 
-## Next: pickpocketing players, hitting them with cars, peaceful mode, soccer balls (planned, not built)
+## Built: pickpocketing players, hitting them with cars, peaceful mode, soccer balls
+
+Decisions (from the user): pickpockets take cash only, and the victim can notice and stop it; peaceful or paused players
+can't be pickpocketed. Being run over hurts a bit, and puts you in hospital if it takes you to 0. Peaceful is per player
+and replaces the friendly-fire toggle. Only a ball's owner can pick it up. As built:
+
+- **Peaceful** (`net.peaceful`, Esc > Multiplayer, kept between sessions): sent as `peaceful`; `netCanTouch(s)` is false
+  if either side is peaceful or the other is away, and guns, hooks, car hits and pickpocketing all check it, on both
+  sides. A `~` after their name.
+- **Car hits** (`netCarHitsPlayer` in `drive()`): the victim takes 10 + 22 x speed (10-60) and lies flat for 1.2-2.7 s
+  (pose `down`, can't move); at 0, hospital (`netShotDown(by, 'car')`). The driver gets `hit` for the hit and `roadkill`
+  if it put them in hospital, from their own witnesses.
+- **Pickpocketing** (`netPickTarget`, `netPickpocket`): within 0.3 cells and behind them. The thief plays the NPC
+  minigame; 0.6-1.5 s in, the victim feels it, and turning to face the thief or stepping 0.45 away stops it (the
+  thief's minigame ends there and they're caught). Success: the victim's game hands over a tenth of their cash, at
+  most $50; they find out a moment later. One try per thief per minute.
+- **Soccer balls** (`netBallFrame` and friends): as planned below; the ball physics are goods.js's own `stepBall`, run on
+  other balls by swapping them in.
+
+## The plan as written (kept for the reasoning)
 
 Same rule as everything else: the game of the player it happens *to* decides what happens to them; the other side
 only asks. So no player's money, items or health is ever changed by someone else's game.
