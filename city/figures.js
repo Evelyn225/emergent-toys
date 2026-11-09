@@ -546,7 +546,8 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     if (c < 0 || c >= W || r < 0 || r >= H || !s[r * W + c] || !s.near) return 0;
     return -s.near[r * W + c] * unit * (dx * rx + dy * ry) / Math.max(.001, Math.hypot(rx, ry));
   } : null;
-  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+  drawNoGlow = 1; // (a person or an animal: never a light, for the bloom)
+  try { drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
     // Standing sprites remain lazy; seated sprites are also requested by the surface-depth sampler.
     sprite(dz);
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
@@ -562,7 +563,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  }, true, seatedDepth); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
+  }, true, seatedDepth); } finally { drawNoGlow = 0; } // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as

@@ -87,6 +87,16 @@ const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
 // How much each cell may feed the bloom: puddles (FL 2) mirror the lamps and signs above them, and blooming the
 // reflection as well as the light doubled every glow into a big smear across the road; they keep a little.
 const POSTFX_PUDDLE_GLOW = 0.25;
+// Only lights should glow. People and animals (NOGLOW, set by drawFigure) are bright when lit, not lights: they keep
+// very little. And by the palette base of a cell's brighter colour: materials that are only ever lit surfaces (skin,
+// brick, stone, concrete grey) keep little; the colours lamps, neon, windows and signs are drawn in keep it all.
+const POSTFX_FIGURE_GLOW = 0.12;
+const POSTFX_BASE_GLOW = (() => {
+  const w = new Float32Array(16).fill(1);
+  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8;
+  return w;
+})();
+let postFxPalLumGlow = null; // (palette luminance, to tell which of a cell's colours is the bright one)
 
 // how much of the night look: outdoors the sky's; a room is lit by its own lamps, so it reads as evening at least
 const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
@@ -226,8 +236,17 @@ function postFxEnd(st) {
   const down = (src, dst, spread, threshold) => {
     into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
     if (threshold > 0) {
-      const M = fx.maskData, puddle = POSTFX_PUDDLE_GLOW * 255 | 0;
-      for (let i = 0, n = M.length; i < n; i++) M[i] = FL[i] === 2 ? puddle : 255;
+      const M = fx.maskData, BW = POSTFX_BASE_GLOW;
+      const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
+      for (let i = 0, n = M.length; i < n; i++) {
+        const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
+        // the colour that would make this cell bright: its glyph's, if that outshines the background
+        const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
+        let w = k === NONE ? 1 : BW[k >> 4];
+        if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
+        if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
+        M[i] = w * 255 + 0.5 | 0;
+      }
       gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
       gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);

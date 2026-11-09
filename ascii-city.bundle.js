@@ -1339,7 +1339,8 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     if (c < 0 || c >= W || r < 0 || r >= H || !s[r * W + c] || !s.near) return 0;
     return -s.near[r * W + c] * unit * (dx * rx + dy * ry) / Math.max(.001, Math.hypot(rx, ry));
   } : null;
-  drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+  drawNoGlow = 1; // (a person or an animal: never a light, for the bloom)
+  try { drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
     // Standing sprites remain lazy; seated sprites are also requested by the surface-depth sampler.
     sprite(dz);
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
@@ -1355,7 +1356,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  }, true, seatedDepth); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
+  }, true, seatedDepth); } finally { drawNoGlow = 0; } // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
@@ -13685,7 +13686,8 @@ function netWrap(text, width = 24, rows = 3) {
 const netBubbleTime = text => 4 + text.length / 15; // seconds a speech bubble stays up
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
-let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
+let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL, NOGLOW; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
+// NOGLOW: the cell shows a person or an animal, which however brightly lit isn't a light: the bloom leaves it out (post-fx.js)
 function resize() {
   cv.width = innerWidth; cv.height = innerHeight;
   g.font = FS + 'px monospace'; g.textBaseline = 'top';
@@ -13693,7 +13695,7 @@ function resize() {
   cols = Math.floor(innerWidth / cw); rows = Math.floor(innerHeight / FS);
   const n = cols * rows;
   CH = new Array(n); COL = new Uint8Array(n); BG = new Uint8Array(n); ZB = new Float32Array(n); ZBG = new Float32Array(n); FL = new Uint8Array(n);
-  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n); LAMPL = new Uint8Array(n);
+  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n); LAMPL = new Uint8Array(n); NOGLOW = new Uint8Array(n);
   BASE = new Int32Array(cols);
 }
 addEventListener('resize', resize); resize();
@@ -28001,18 +28003,18 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
       if (depth * (solid && FL[i] === 1 ? 0.97 : 1) >= ZB[i]) continue; // only the ground gets a subpixel contact allowance; walls and props always occlude
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
-      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }
+      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue; }
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
       if (word && cellW >= LETTER_MIN_COLS && cellH >= LETTER_MIN_ROWS && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
         const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
-        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, blockGlyph(ch, fx, fy, 1 / cellW, 1 / cellH), colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue;
       }
       if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
-        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
+        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0; continue;
       }
-      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
+      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; NOGLOW[i] = 0;
     }
   }
 }
@@ -28022,6 +28024,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
 // it paints the cell and returns true, or false to leave it see-through.
 // behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
 // depthOffset supplies a seated sprite's surface depth relative to its hip plane.
+let drawNoGlow = 0; // (1 while drawFigure paints: what drawShape draws then is marked NOGLOW)
 function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = null) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
@@ -28044,7 +28047,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false, depthOffset = 
       const drew = fn(i, u, z, du, dz, L);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = surfaceDepth; // (a background it paints is its own, for the fog)
       if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
-      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; }
+      else if (drew) { ZB[i] = surfaceDepth; FL[i] = 0; NOGLOW[i] = drawNoGlow; }
     }
   }
 }
@@ -28105,7 +28108,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const bg = BG[i]; BG[i] = BG_UNSET;
       const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
-      if (drew) { ZB[i] = t; FL[i] = 0; }
+      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = 0; }
     }
   }
 }
@@ -28166,7 +28169,7 @@ function render(dt,sceneOnly=false,mask=null) {
     if(mask&&!mask.columns[x])continue;
     const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
-    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; NOGLOW[i] = 0; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
     // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
     // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA
@@ -28495,6 +28498,16 @@ const POSTFX_UNIT = 3; // texture units 0-2 are the grid shader's
 // How much each cell may feed the bloom: puddles (FL 2) mirror the lamps and signs above them, and blooming the
 // reflection as well as the light doubled every glow into a big smear across the road; they keep a little.
 const POSTFX_PUDDLE_GLOW = 0.25;
+// Only lights should glow. People and animals (NOGLOW, set by drawFigure) are bright when lit, not lights: they keep
+// very little. And by the palette base of a cell's brighter colour: materials that are only ever lit surfaces (skin,
+// brick, stone, concrete grey) keep little; the colours lamps, neon, windows and signs are drawn in keep it all.
+const POSTFX_FIGURE_GLOW = 0.12;
+const POSTFX_BASE_GLOW = (() => {
+  const w = new Float32Array(16).fill(1);
+  w[GRAY] = 0.35; w[SKIN] = 0.15; w[BRICK] = 0.2; w[STONE] = 0.3; w[BLACK] = 0; w[BLUE] = 0.8;
+  return w;
+})();
+let postFxPalLumGlow = null; // (palette luminance, to tell which of a cell's colours is the bright one)
 
 // how much of the night look: outdoors the sky's; a room is lit by its own lamps, so it reads as evening at least
 const postFxNight = () => typeof night === 'number' ? (mode === 'room' ? Math.max(night, 0.6) : night) : 1;
@@ -28634,8 +28647,17 @@ function postFxEnd(st) {
   const down = (src, dst, spread, threshold) => {
     into(dst); bind(POSTFX_UNIT, src); gl.useProgram(fx.down.p); const U = fx.down.U;
     if (threshold > 0) {
-      const M = fx.maskData, puddle = POSTFX_PUDDLE_GLOW * 255 | 0;
-      for (let i = 0, n = M.length; i < n; i++) M[i] = FL[i] === 2 ? puddle : 255;
+      const M = fx.maskData, BW = POSTFX_BASE_GLOW;
+      const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
+      for (let i = 0, n = M.length; i < n; i++) {
+        const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
+        // the colour that would make this cell bright: its glyph's, if that outshines the background
+        const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
+        let w = k === NONE ? 1 : BW[k >> 4];
+        if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
+        if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
+        M[i] = w * 255 + 0.5 | 0;
+      }
       gl.activeTexture(gl.TEXTURE0 + POSTFX_UNIT + 1); gl.bindTexture(gl.TEXTURE_2D, fx.mask);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
       gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
