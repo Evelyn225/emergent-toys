@@ -166,6 +166,7 @@
     "city/fishing-competition-ui.js",
     "city/cooking-ui.js",
     "city/gun-ui.js",
+    "city/room-panic.js",
     "city/smoke.js",
     "city/pee.js",
     "city/ambient.js",

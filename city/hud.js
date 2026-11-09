@@ -130,7 +130,7 @@ const homeSpot = () => {
   }
   return best;
 };
-const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2&&interactionClear(k[0],k[1],1.5); };
+const nearKeeper = () => { if(room.keeperDead||room.evacuating)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2&&interactionClear(k[0],k[1],1.5); };
 function promptText() {
   if (mode === 'ride') return netRidePrompt(); // (in another player's car: net.js)
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';

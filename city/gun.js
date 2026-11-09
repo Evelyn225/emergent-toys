@@ -117,8 +117,8 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
     const [rx,ry]=crimePos();
     if(hit.what==='person'||hit.what==='cop')killRoomFigure(hit.who,hx,hy);
     if(hit.what==='cop')addWanted('copkill',rx,ry,true);
-    const witnesses=typeof room!=='undefined'&&room?.props.some(p=>p.fig&&!p.fig.build&&!p.still&&!p.dead&&!p.hidden);
-    if(witnesses)reports.push({t:T+reportDelay(),x:rx,y:ry,kind:hit.what==='person'?'murder':'gunfire'});
+    const witnesses=typeof panicInRoom==='function'?panicInRoom(hit.what==='person'?'murder':'gunfire'):typeof room!=='undefined'&&room?.props.some(p=>p.fig&&!p.fig.build&&!p.still&&!p.dead&&!p.hidden);
+    if(witnesses){if(typeof panicInRoom!=='function')reports.push({t:T+reportDelay(),x:rx,y:ry,kind:hit.what==='person'?'murder':'gunfire'});}
     else gunCrime('gunfire',rx,ry);
     const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);if(typeof netShotFired==='function')netShotFired(shot,true);return shot;
   }
@@ -198,6 +198,7 @@ function removeBody(k) {
 // every frame: the reload, the bodies and their ambulances, the panic dying down, and the police shooting back.
 // Returns 'down' when they've put you on the ground
 function stepGun(dt) {
+  if(typeof stepRoomPanic==='function')stepRoomPanic(dt);
   gun.aim += ((gun.aimHeld && canAimGun() ? 1 : 0) - gun.aim) * (1 - Math.exp(-14 * dt));
   gun.cool = Math.max(0, gun.cool - dt); gun.kick = Math.max(0, gun.kick - dt * 5);
   if (gun.reload > 0) { if (!heldGun()) gun.reload = 0; else if ((gun.reload -= dt) <= 0) { gun.reload = 0; finishReload(); } }

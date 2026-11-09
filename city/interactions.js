@@ -74,11 +74,11 @@ function interactionFocus() {
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     for(const t of roomFixtureTargets())offer('room-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part||null,t.kind==='lamp'); // (taps, switches: room-fixtures.js)
     const keeper=room.def.keeper;
-    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
+    for(const p of room.props)if(isRoomPerson(p)&&!p.roomFlee&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
       const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
       offer(p.service?'service':'room-person',p,p.x,p.y,.3,seated?(p.seatZ??.45)+1.05:1.8,.28,1.8);
     }
-    if(keeper&&!room.keeperDead)offer('keeper',keeper,...keeper,.7,1.8,.28,2);
+    if(keeper&&!room.keeperDead&&!room.evacuating)offer('keeper',keeper,...keeper,.7,1.8,.28,2);
   }else if(mode==='walk') {
     for(const p of [...people,...fairFolk])if(!p.hidden&&!p.dead&&!p.flee&&!p.down) {
       if(near(px,py,p.x,p.y)>.45)continue;

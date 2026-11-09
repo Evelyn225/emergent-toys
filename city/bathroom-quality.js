@@ -249,8 +249,9 @@ function stepBathroomDoors(dt) {
   if(mode!=='room'||!room.bathroomDoors)return;
   for(const prop of room.bathroomDoors) {
     const d=prop.bathroomDoor;
+    if(room.evacuating)d.target=1;
     if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
-    if(d.pub&&d.target===1&&d.open===1&&Math.hypot(px-prop.x,py-prop.y)>BATHROOM_DOOR_CLOSE&&!inWc(px,py))d.target=0; // (left open, it slides shut once you're well clear)
+    if(!room.evacuating&&d.pub&&d.target===1&&d.open===1&&Math.hypot(px-prop.x,py-prop.y)>BATHROOM_DOOR_CLOSE&&!inWc(px,py))d.target=0; // (left open, it slides shut once you're well clear)
     if(d.open===d.target)continue;
     const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
     if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {

@@ -471,7 +471,7 @@ function figMotion(o) {
 function drawFigProp(s, rx, ry) {
   figMotion(s);
   const unit = s.h / FIG_TALL;
-  let key = s.dead ? 'dead' : typeof s.pose === 'function' ? s.pose(s) : s.pose;
+  let key = s.dead ? 'dead' : s.roomFlee ? (s.roomFlee.path.length?'run'+(Math.floor(s.ph*2)&7):'crouch') : typeof s.pose === 'function' ? s.pose(s) : s.pose;
   if (key === 'sit' || key === 'sitfold') key += Math.round((s.seatZ ?? 0.45) / unit);
   else if (key === 'stand' && s._moving) key = 'walk' + Math.floor(s._dist / (s.h * 0.85) * 8) % 8; // a stride every 1.5m or so
   const [fx, fy] = s.dead&&s.down?[-s.down.fx,-s.down.fy]:s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
