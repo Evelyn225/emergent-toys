@@ -13457,7 +13457,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 9; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls)
+const NET_PROTOCOL = 10; // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
 const NET_SNAP = 4; // cells: further than this between two updates is a teleport (a door, a taxi ride), not a walk
@@ -13471,7 +13471,7 @@ const NET_POSES = /^(stand|walk|run|sit|crouch|ride|push|aim|wave|skateair|dance
 // them (riding, guns, hooks, police) get a flag each as they land, off until they've been tried. Everyone in a room
 // needs the same set, so the set is part of netBuildId(). (?netfeatures=a,b sets exactly that list, and
 // ?netfeatures=none switches them all off, for trying things out: net.js)
-const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true, police: true, balls: true };
+const NET_FEATURES = { chat: true, clock: true, tags: true, cars: true, paint: true, guns: true, hooks: true, police: true, balls: true, gifts: true };
 const netFeatureKey = () => Object.keys(NET_FEATURES).filter(k => NET_FEATURES[k]).join(',');
 // everything multiplayer, while you're in a room (on: true) and not
 const net = { peaceful: false, shots: [], on: false, code: '', name: '', selfId: '', status: '', peers: new Map(), chat: [], clockOwner: true, sendT: 0, clockT: 0, lastBolt: null, ph: 0 };
@@ -13496,6 +13496,8 @@ const netCode = s => netClean(s, NET_CODE_MAX).toLowerCase().replace(/[^a-z0-9-]
 // its own, so two players are only in the same one if they came in by the same door.
 function netRoomKey(m = mode, r = room) {
   if (m !== 'room' || !r) return 'out';
+  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
+  if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 2)); // (a carriage has no street door: the station it left and the half hour you got on, by the shared clock)
   const ret = r.ret ? r.ret.slice(0, 2).map(v => (+v).toFixed(1)).join(',') : '';
   return r.kind + ':' + ret;
 }
@@ -13508,7 +13510,7 @@ function netCheckTick(d) {
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
-    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev };
+    out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, shift: !!d.veh.shift };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
   if (d.away) out.away = true; // (in the pause menu or another tab)
   if (d.peaceful) out.peaceful = true; // (peaceful mode: can't hurt or rob anyone, nor be hurt or robbed)
@@ -20766,6 +20768,7 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
 }
 const HOME_SHELF_CAPACITY = 48;
 function homeRecord(r = room) {
+  if (r && r.guestHome) return r.guestHome; // (a friend's place you're visiting: their copy, net.js)
   if (!r || !r.cell || !['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return null;
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
   return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
@@ -28204,6 +28207,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if (freecam) eye = freecam.z;
   else if(mode==='ferry')eye=ferryGround()+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
+  else if (mode === 'ride' && netRideEye() !== null) eye = netRideEye(); // (in another player's boat or aircraft: net.js)
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if (stadiumView) eye = stadiumView.eye; // (the football on TV: stadium.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
@@ -29171,6 +29175,7 @@ const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px
 const homeSpot = () => {
   const s=room.def.spots;if(!s)return null;let best=null,bd=1.3;
   for(const k in s) {
+    if(room.guestHome&&k!=='tv'&&k!=='terrace')continue; // (a friend's place: their bed, closet and kitchen aren't yours to use, net.js)
     let d=Math.hypot(px-s[k][0],py-s[k][1]);
     if(k==='bed' && room.def.bedBounds) {
       const [x,y,hx,hy]=room.def.bedBounds;
@@ -29269,6 +29274,7 @@ function promptText() {
   const dr = droppedHere();
   if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+  { const nd = netDropPrompt(); if (nd) return nd; } // (another player's: net.js)
   if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
@@ -29276,7 +29282,7 @@ function promptText() {
   if (gp) return gp;
   const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
   if (ev) return ev;
-  const shared = netCarPrompt(); // (another player's car: net.js)
+  const shared = netCarPrompt() || netCraftPrompt(); // (another player's car, boat or aircraft: net.js)
   if (shared) return shared;
   if (c && c.v < 0.6 && c.ev && c.mine) return `E: get back in the ${EV_NAME[c.kind]}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
@@ -29887,6 +29893,7 @@ function interact() {
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
   if (mode === 'air') { if (wreckCam) return; if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
+  if (netDropUse()) return; // (something another player put down: net.js)
   const dr = droppedHere();
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
@@ -29895,7 +29902,7 @@ function interact() {
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   if (takeEmergencyVehicle()) return; // (an ambulance, fire engine or police car: emergency-theft.js)
-  if (netCarUse()) return; // (another player's car, in multiplayer: net.js)
+  if (netCarUse() || netCraftUse()) return; // (another player's car, boat or aircraft, in multiplayer: net.js)
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -29959,7 +29966,8 @@ function interact() {
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
-    const home = homeAt(sh);
+    const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
+    if (guest) return netEnterAsGuest(guest);
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
@@ -33234,7 +33242,10 @@ const roundOf = n => n % ((MatchEngine.CLUBS.length - 1) * 2);
 const groundPair = n => roundPairs(roundOf(n))[Math.floor(n / ((MatchEngine.CLUBS.length - 1) * 2) + n) % 4];
 const clubName = id => MatchEngine.CLUBS.find(c => c.id === id)?.name || id;
 const clubShort = id => MatchEngine.CLUBS.find(c => c.id === id)?.short || id;
-const fixtureSeed = (n, k) => ((n + 1) * 7919 + k * 104729 + league.season * 31) >>> 0;
+// (in multiplayer the season comes from the slot, which everyone agrees on through the shared clock, not from your save,
+// which can be a season ahead if you joined someone earlier in the calendar: so you all see the same match. They're the
+// same number in a game played straight through: net.js)
+const fixtureSeed = (n, k) => ((n + 1) * 7919 + k * 104729 + (typeof netClockShared === 'function' && netClockShared() ? Math.floor(n / SEASON_SLOTS()) + 1 : league.season) * 31) >>> 0;
 // the next fixture at the ground (now, if it's on): { n, when, short, home, away, kick (hours), live, open, seed, cup }
 // A league match has its slot for n; a cup tie a negative n (cupId), and cup: the round's name
 function stadiumNextFixture() {
@@ -35330,7 +35341,7 @@ const placeKey = () => mode === 'walk' || mode === 'roof' ? '' : mode === 'room'
 function dropHere() {
   const at = placeKey();
   if (!heldItem()) return;
-  if(mode==='room'&&homeRecord()&&isHomeDecor(heldItem())){const target=homeShelfAim()[0];if(target)return say(homeShelfStore(held,target)[1],3);}
+  if(mode==='room'&&homeRecord()&&!room.guestHome&&isHomeDecor(heldItem())){const target=homeShelfAim()[0];if(target)return say(homeShelfStore(held,target)[1],3);}
   if (at === null) return say('Not up here.');
   const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
   const x = mode === 'room' ? px + Math.cos(a) * reach : worldCoord(px + Math.cos(a) * reach), y = mode === 'room' ? py + Math.sin(a) * reach : worldCoord(py + Math.sin(a) * reach);
@@ -35582,7 +35593,7 @@ function useHeldItem() {
   if(wanted.busted)return;
   if(furnishingPlacement){furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return;}
   if(heldItem()?.id==='camera')return takeHomePhoto();
-  if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
+  if(HOME_FURNITURE[heldItem()?.id]&&!room?.guestHome&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return; // (held down, Q sprays: spray-paint.js)
@@ -39471,7 +39482,7 @@ function stepNewsUI(dt) {
 const tellyNews = () => { const l = newsLines(true); return l.length ? ` The local news is on. ${pick(l)}` : ''; };
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
-const workshopHome = () => mode === 'room' ? homeRecord(room) : null;
+const workshopHome = () => mode === 'room' && !room.guestHome ? homeRecord(room) : null; // (not at a friend's place: net.js)
 // Keep the original placement/collision envelope; the fan has a real open
 // front, rear plate, supported shaft and separate blades behind its guard.
 function workshopFan(p,w,running){
@@ -53176,7 +53187,7 @@ function confirmFurnishingPlacement() {
   cancelFurnishingPlacement();refreshFurnishedRoom();saveGame();say('Placed. F: arrange furnishings.',3);
 }
 function homeFurnishingKey(e) {
-  if(mode!=='room'||paused||game||sleep||!homeRecord(room))return false;
+  if(mode!=='room'||paused||game||sleep||!homeRecord(room)||room.guestHome)return false;
   if(furnishingPlacement) {
     if(e.code==='Escape'){cancelFurnishingPlacement();return true;}
     if(e.code==='KeyE'){if(!e.repeat)confirmFurnishingPlacement();return true;}
@@ -55981,7 +55992,7 @@ function drawFerries() {
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -56006,7 +56017,7 @@ function netLocalTransport(code) {
   };
   const beat = setInterval(() => { // a heartbeat, and anyone not heard from in a while has gone (a closed tab says nothing)
     post('~beat');
-    for (const [id, t] of seen) if (netNow() - t > 4) { seen.delete(id); tx.onLeave?.(id); }
+    for (const [id, t] of seen) if (netNow() - t > 10) { seen.delete(id); tx.onLeave?.(id); } // (generous: a busy machine starves background tabs' timers)
   }, 1000);
   tx.send = (type, data, to) => post(type, data, to);
   tx.leave = () => { post('~bye'); clearInterval(beat); ch.close(); };
@@ -56049,7 +56060,7 @@ async function netJoin(codeIn, nameIn) {
   catch (e) { net.joining = false; return netStatus('Could not start multiplayer: ' + (e && e.message || e)); }
   if (!net.joining) { tx.leave(); return; } // (left again while it was connecting)
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: netLookFor(name), peers: new Map(), clockOwner: true,
-    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, peaceful: !!netLoadPrefs().peaceful, knocked: null, picking: null, picked: null, pickCool: new Map(), runT: new Map(), balls: new Map(), ballGone: new Map(), myBallT: 0, myBall: null,
+    cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, peaceful: !!netLoadPrefs().peaceful, knocked: null, picking: null, picked: null, pickCool: new Map(), runT: new Map(), balls: new Map(), ballGone: new Map(), myBallT: 0, myBall: null, gifts: new Map(), invites: new Map(), dropTaken: new Map(), dropsT: 0,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
@@ -56077,9 +56088,10 @@ function netPeerJoined(id) {
   if (!net.on || net.peers.has(id)) return;
   if (net.peers.size >= NET_MAX_PEERS) return; // the room's full: they're not drawn or listened to
   net.peers.set(id, { id, name: '', hello: null, snaps: [], seenT: netNow(), ph: 0, chatBucket: {}, bubble: null });
-  net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, id);
+  net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look, ask: true }, id); // (ask: say hello back, even if they never lost sight of us)
   netSendTags(id); // (your tags, for their walls)
   netSendParked(id); // (and where you've left cars)
+  netSendDrops(id); // (and what you've put down in the street)
   netSendPaint(sprayDots.slice(-NET_PAINT_JOIN), id); // (and your most recent spray paint)
   netReclock();
 }
@@ -56089,6 +56101,8 @@ function netPeerLeft(id) {
   net.peers.delete(id);
   if (p.hello) netLog(`${p.name} left.`);
   if (p.tags) reindexTags();
+  for (const [gid, g] of [...net.gifts]) if (g.to === id) { net.gifts.delete(gid); netGiftBack(g, 'left'); } // (a gift they never took: yours again)
+  net.invites.delete(id);
   for (const b of [...net.balls.values()]) { if (b.owner === id) net.balls.delete(b.id); else if (b.runner === id) { b.runner = ''; b.vx = b.vy = b.vz = 0; } } // (theirs go with them; the rest stop where they are)
   if (net.riders?.delete(id)) netLog(`${p.name} is gone from your car.`);
   netReclock(); netMenuShow();
@@ -56108,6 +56122,7 @@ function netReceive(type, data, from) {
     const h = netCheckHello(data);
     if (!h) return;
     const first = !p.hello;
+    if (data.ask) net.tx.send('hello', { name: net.name, ver: netBuildId(), look: net.look }, from); // (they've only just got us back: introduce ourselves again)
     p.hello = h; p.name = h.name; p.mismatch = h.ver !== netBuildId(); p.figLook = null;
     if (first) netLog(p.mismatch ? `${p.name} is on a different version of the game. Both of you refresh the page.` : `${p.name} joined.`, null, p.mismatch ? '#f96' : '#9ab');
     if (net.clockOwner) net.clockT = 0;
@@ -56124,6 +56139,7 @@ function netReceive(type, data, from) {
   if (netCarMessage(type, data, from, p, now)) return;
   if (netGunMessage(type, data, from, p, now)) return;
   if (netCrimeMessage(type, data, from, p, now)) return;
+  if (netSocialMessage(type, data, from, p, now)) return;
   if (netHookMessage(type, data, from, p, now)) return;
   if (type === 'paint') { // their spray paint, on your walls (anything you've got already, from them or earlier, isn't doubled)
     if (!NET_FEATURES.paint || !netAllow(p.paintBucket ||= {}, now, 0.05, 12)) return;
@@ -56185,14 +56201,17 @@ function netFrame(t, fromTimer = false) {
       for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'busted' }, id);
       net.riders.clear();
     }
-    if (net.riders.size && !(mode === 'drive' && me && me.netId === net.riderCar)) { // out of the car (or in another): your passengers get out too
+    if (net.riders.size && netMyVehicleId() !== net.riderCar) { // out of the car, boat or aircraft (or in another): your passengers get out too
       for (const id of net.riders.keys()) net.tx.send('rideOut', { id: net.riderCar, why: 'parked' }, id);
       net.riders.clear();
     }
   }
   netSyncCars(now);
   netPeeFrame(dt);
-  netKnockFrame(dt); netPickFrame(dt); netBallFrame(dt, now);
+  netKnockFrame(dt); netPickFrame(dt); netBallFrame(dt, now); netGiftFrame(now);
+  if (NET_FEATURES.gifts && (net.dropsT -= dt) <= 0) { net.dropsT = 1; netSendDrops(); }
+  for (const [id, t] of net.dropTaken) if (now > t) net.dropTaken.delete(id);
+  if (netPlayersOpen() && (netPlayersT -= dt) <= 0) { netPlayersT = 0.5; netPlayersShow(); } // (the list: where everyone is now)
   if (mode === 'ride') netRideStep();
   netHookFrame(dt);
 }
@@ -56247,7 +56266,7 @@ function netSendTick(now) {
   }
   if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
   if (skatingNow() && !car && !SK.bailAt) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
-  if (car) s.veh = { id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
+  if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev };
   net.lastSent = s;
   net.tx.send('tick', s);
 }
@@ -56329,10 +56348,21 @@ function netHurtCar(c, n) {
   net.tx.send('bump', { id: c.netId, dmg: Math.min(n, 100), dx: dx / d, dy: dy / d, crash }, c.owner);
 }
 
-// ---- riding in someone else's car: you ask, the driver's game says yes if there's a seat; you're in their car's
-// stand-in from then on, carried along with it (mode 'ride'), looking about with the mouse; E gets you out
+// ---- riding with someone: in their car, their boat, their swan or their aircraft. You ask; their game says yes if
+// there's a seat; you're carried along with it (mode 'ride'), looking about with the mouse; E gets you out (or, up in
+// the air, out with a parachute). Riding with someone on a taxi shift, you pay the fare when you get out.
+const NET_CRAFT_RE = /^craft:[A-Za-z0-9_-]{1,40}:(sea|air|swan)$/;
+const netRideId = v => netCarId(v) || (typeof v === 'string' && NET_CRAFT_RE.test(v) ? v : '');
 const netSeats = kind => kind === 'car' || kind === 'taxi' ? 3 : 1; // (behind the driver: the front seat and two in the back)
-function netFreeSeat() { const n = me ? netSeats(me.kind) : 0, used = new Set(net.riders.values()); for (let k = 1; k <= n; k++) if (!used.has(k)) return k; return 0; }
+function netMyVehicleId() { // what you're at the controls of, as riders name it
+  if (mode === 'drive' && me) return netMyCarId(me);
+  if (mode === 'sea' && sea) return 'craft:' + net.selfId + ':sea';
+  if (mode === 'air' && pilot) return 'craft:' + net.selfId + ':air';
+  if (mode === 'boat') return 'craft:' + net.selfId + ':swan';
+  return '';
+}
+function netMySeats() { return mode === 'drive' && me ? netSeats(me.kind) : mode === 'sea' ? 3 : mode === 'air' && pilot ? (PLANE_TYPES[pilot.type]?.heli ? 3 : 2) : mode === 'boat' ? 1 : 0; }
+function netFreeSeat() { const n = netMySeats(), used = new Set(net.riders.values()); for (let k = 1; k <= n; k++) if (!used.has(k)) return k; return 0; }
 function netAskRide(c) {
   if (c.v >= 0.6) return say('Not while it\'s moving.', 2);
   if (c.wrecked) return say('It\'s a wreck.', 2);
@@ -56341,36 +56371,114 @@ function netAskRide(c) {
   net.tx.send('ride', { id: c.netId }, c.owner);
   say(`You knock on ${netOwnerName(c)}'s window...`, 2);
 }
+// someone's boat, swan or aircraft, close enough to climb into and stopped (an aircraft: down on the ground beside you)
+function netCraftNear() {
+  if (!net.on || mode !== 'walk' || !NET_FEATURES.cars) return null;
+  for (const p of net.peers.values()) {
+    const s = netViewOf(p), c = s && s.craft;
+    if (!p.hello || p.mismatch || p.stale || !c || s.rk !== 'out') continue;
+    const d = Math.hypot(rel(s.x - px), rel(s.y - py)), reach = c.k === 'sea' ? (BOAT_KINDS[c.kind]?.hl || 0.15) + 0.25 : c.k === 'air' ? 0.5 : 0.3;
+    if (d > reach) continue;
+    const stopped = c.k === 'air' ? Math.abs(s.z - netSelfZ()) < 0.15 : Math.abs(c.v || 0) < 0.3;
+    return { p, s, k: c.k, stopped, what: c.k === 'sea' ? 'boat' : c.k === 'air' ? (PLANE_TYPES[c.kind]?.heli ? 'helicopter' : 'plane') : 'swan' };
+  }
+  return null;
+}
+function netCraftPrompt() { const n = netCraftNear(); return n ? (n.stopped ? `E: ride in ${n.p.name}'s ${n.what}` : `${n.p.name}'s ${n.what}`) : ''; }
+function netCraftUse() {
+  const n = netCraftNear();
+  if (!n) return false;
+  if (!n.stopped) return say(n.k === 'air' ? 'Not while it\'s up there.' : 'Not while it\'s moving.', 2), true;
+  if (net.asking) return true;
+  const id = 'craft:' + n.p.id + ':' + n.k;
+  net.asking = { id, t: netNow() };
+  net.tx.send('ride', { id }, n.p.id);
+  say(`You wave to ${n.p.name}...`, 2);
+  return true;
+}
 const NET_SEAT_AT = [null, [0.02, 0.045], [-0.08, -0.045], [-0.08, 0.045]]; // seat: [forward, right] of the car's middle
 function netRideStep() {
-  const c = net.ride && net.cars.get(net.ride.id);
+  const R_ = net.ride;
+  if (R_ && R_.craft) { // in their boat, swan or aircraft
+    const p = net.peers.get(R_.peer), s = p && netViewOf(p);
+    if (!s || !s.craft || s.craft.k !== R_.craft) return netEject(p ? `${p.name} is off without you.` : 'They\'re gone. You climb out.');
+    const back = R_.craft === 'air' ? 0.06 * R_.seat : R_.craft === 'sea' ? 0.04 * R_.seat : 0.03, side = R_.seat === 2 ? -0.03 : R_.seat === 3 ? 0.03 : 0;
+    const hx = Math.cos(s.a), hy = Math.sin(s.a);
+    px = worldCoord(s.x - hx * back - hy * side); py = worldCoord(s.y - hy * back + hx * side);
+    R_.z = s.z; a = s.a + look;
+    return;
+  }
+  const c = R_ && net.cars.get(R_.id);
   if (!c) return netEject('The car pulls away without you.');
   if (c.wrecked) return netEject('You scramble out of the wreck.');
-  const [f, r] = NET_SEAT_AT[net.ride.seat] || NET_SEAT_AT[1], yaw = carYaw(c);
+  const [f, r] = NET_SEAT_AT[R_.seat] || NET_SEAT_AT[1], yaw = carYaw(c);
+  const ox = px, oy = py;
   px = worldCoord(c.x + c.hx * f - c.hy * r); py = worldCoord(c.y + c.hy * f + c.hx * r);
+  if (R_.lastX !== undefined) R_.dist += Math.min(1, Math.hypot(rel(px - ox), rel(py - oy))); // (how far, for a fare)
+  R_.lastX = px;
   a = yaw + look; // (where the car's pointing, and wherever you're looking)
 }
+function netRideEye() { // (render.js: how high your eye is, riding in a boat or an aircraft; null in a car)
+  const R_ = net.ride;
+  if (mode !== 'ride' || !R_ || !R_.craft) return null;
+  if (R_.craft === 'air') return (R_.z || 0) + 0.14;
+  if (R_.craft === 'sea') { const p = net.peers.get(R_.peer), k = p && netViewOf(p)?.craft?.kind; return (BOAT_KINDS[k]?.fb ?? 0.05) + 0.12; }
+  return 0.11;
+}
+function netLandNear(x, y, r) { // a spot of dry, open ground within r (cells) of (x, y), nearest first
+  for (let d = 0; d <= r; d += 0.05) for (let k = 0; k < 16; k++) {
+    const an = k / 16 * Math.PI * 2, nx = worldCoord(x + Math.cos(an) * d), ny = worldCoord(y + Math.sin(an) * d);
+    if (!isWater(nx, ny) && free(nx, ny)) return [nx, ny];
+  }
+  return null;
+}
 function netEject(text) {
-  const c = me;
-  if (c) { c.rider = false; try { [px, py] = exitSpot(c); } catch (e) { /* stay put */ } a = Math.atan2(c.hy, c.hx); }
+  const c = me, R_ = net.ride;
+  if (c && !(R_ && R_.craft)) { c.rider = false; try { [px, py] = exitSpot(c); } catch (e) { /* stay put */ } a = Math.atan2(c.hy, c.hx); }
   me = null; mode = 'walk'; look = 0; net.ride = null;
+  if (R_ && R_.craft === 'air' && (R_.z || 0) - walkGround(px, py) > 0.3) { // up in the air: out you go, with a parachute
+    body.z = Math.max(0.5, (R_.z - walkGround(px, py)) * 10 - 1); body.vz = 0; body.seat = null; chute = { open: false, t: 0 };
+    return say((text ? text + ' ' : '') + 'You jump. SPACE: pull the cord!', 4);
+  }
+  if (R_ && R_.craft && (isWater(px, py) || !free(px, py))) { const at = netLandNear(px, py, 3); if (at) [px, py] = at; } // (off a boat: onto the nearest dry ground)
   if (text) say(text, 3);
+}
+function netPayFare() { // (out of a taxi on someone's shift: what the meter says, or what you've got)
+  const R_ = net.ride, c = R_ && net.cars.get(R_.id), p = c && net.peers.get(c.owner), s = p && netViewOf(p);
+  if (!c || !s || !s.veh || !s.veh.shift || !(R_.dist > 0.2)) return;
+  const fare = Math.min(money, Math.round(taxiFare(R_.dist) * 100) / 100);
+  if (fare <= 0) return say('You can\'t pay the fare. You get a look.', 3);
+  pay(fare); net.tx.send('fare', { cash: fare }, c.owner);
+  say(`Fare: ${fmt$(fare)}. ${p.name} thanks you.`, 3);
 }
 function netGetOut() {
   if (mode !== 'ride' || !net.ride) return;
-  const c = net.cars.get(net.ride.id);
+  const R_ = net.ride;
+  if (R_.craft) {
+    const p = net.peers.get(R_.peer), s = p && netViewOf(p);
+    if (R_.craft !== 'air' && !netLandNear(px, py, 0.6)) return say('Not out here. Wait till they pull in to the side.', 2);
+    if (p) net.tx.send('rideOut', { id: R_.id }, p.id);
+    return netEject(R_.craft === 'air' && s && s.z - walkGround(px, py) > 0.3 ? '' : 'You climb out.');
+  }
+  const c = net.cars.get(R_.id);
   if (c && c.v > 0.6) return say('Not at this speed.', 2);
-  if (c) net.tx.send('rideOut', { id: net.ride.id }, c.owner);
+  if (c) { netPayFare(); net.tx.send('rideOut', { id: R_.id }, c.owner); }
   netEject('You get out.');
 }
-const netRidePrompt = () => { const c = net.ride && net.cars.get(net.ride.id); return c ? `In ${netOwnerName(c)}'s car. ` + (c.v > 0.6 ? 'V: camera' : 'E: get out   V: camera') : ''; };
+const netRidePrompt = () => {
+  const R_ = net.ride;
+  if (R_ && R_.craft) { const p = net.peers.get(R_.peer); return p ? `With ${p.name}. E: ${R_.craft === 'air' ? 'get out (in the air: jump)' : 'get out (near land)'}` : ''; }
+  const c = R_ && net.cars.get(R_.id);
+  return c ? `In ${netOwnerName(c)}'s car. ` + (c.v > 0.6 ? 'V: camera' : 'E: get out   V: camera') : '';
+};
 
 // the car messages (true if it was one)
 function netCarMessage(type, data, from, p, now) {
-  if (!['parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump'].includes(type)) return false;
+  if (!['parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'fare'].includes(type)) return false;
   if (!NET_FEATURES.cars) return true;
   if (type === 'parked') { if (netAllow(p.parkedBucket ||= {}, now, 0.5, 4)) p.parked = netCheckParked(data) || []; return true; }
-  const id = netCarId(data && data.id);
+  const id = netRideId(data && data.id);
+  if (type === 'fare') { if (data && netNum(data.cash) && data.cash > 0 && net.riders.has(from)) { const cash = Math.min(data.cash, 500); earn(cash); if (job) job.earned = (job.earned || 0) + cash; netLog(`${p.name} pays the fare: ${fmt$(cash)}.`, null, '#9e9'); } return true; }
   if (type === 'claim') { // someone wants a car you left: theirs, if it's still there and not one you bought
     const c = [...net.mine].find(c => c.netId === id);
     const ok = !!c && c.parked && !c.player && !c.owned && !c.wrecked && c.fireT == null && cars.includes(c);
@@ -56393,7 +56501,8 @@ function netCarMessage(type, data, from, p, now) {
     return true;
   }
   if (type === 'ride') { // someone wants a lift: in, if you're driving the car they mean and there's a seat
-    const seat = netFreeSeat(), ok = mode === 'drive' && !!me && me.netId === id && seat > 0 && !net.riders.has(from);
+    if (net.riders.size && netMyVehicleId() !== net.riderCar) net.riders.clear(); // (riders from what you were in before)
+    const seat = netFreeSeat(), ok = !!id && netMyVehicleId() === id && seat > 0 && !net.riders.has(from);
     if (ok) { net.riders.set(from, seat); net.riderCar = id; netLog(`${p.name} got in.`); }
     net.tx.send('rideOk', { id, ok, seat }, from);
     return true;
@@ -56401,12 +56510,13 @@ function netCarMessage(type, data, from, p, now) {
   if (type === 'rideOk') {
     if (!net.asking || net.asking.id !== id) return true;
     net.asking = null;
-    const c = net.cars.get(id);
-    if (!data.ok || !c) return say(c ? 'No room in there.' : 'They drove off.', 2), true;
-    if (mode !== 'walk' || Math.hypot(rel(c.x - px), rel(c.y - py)) > 0.8) { net.tx.send('rideOut', { id }, from); return true; } // (walked off meanwhile)
+    const craft = id.startsWith('craft:') ? id.slice(id.lastIndexOf(':') + 1) : '', c = craft ? null : net.cars.get(id);
+    if (!data.ok || !craft && !c) return say(data.ok ? 'They drove off.' : 'No room in there.', 2), true;
+    const s = craft && netViewOf(p), far = craft ? !s || Math.hypot(rel(s.x - px), rel(s.y - py)) > 0.8 : Math.hypot(rel(c.x - px), rel(c.y - py)) > 0.8;
+    if (mode !== 'walk' || far) { net.tx.send('rideOut', { id }, from); return true; } // (walked off meanwhile)
     body.seat = null; fx.skating = false;
-    me = c; c.rider = true; mode = 'ride'; look = 0; pitch = 0; camYaw = carYaw(c);
-    net.ride = { id, seat: clamp(data.seat | 0, 1, 3) };
+    if (craft) { me = null; mode = 'ride'; look = 0; pitch = 0; net.ride = { id, craft, peer: from, seat: clamp(data.seat | 0, 1, 3) }; }
+    else { me = c; c.rider = true; mode = 'ride'; look = 0; pitch = 0; camYaw = carYaw(c); net.ride = { id, seat: clamp(data.seat | 0, 1, 3), dist: 0 }; }
     netRideStep();
     say(`You climb in with ${p.name}. E: get out`, 3);
     return true;
@@ -56415,7 +56525,7 @@ function netCarMessage(type, data, from, p, now) {
     if (net.riders.get(from) !== undefined && id === net.riderCar) { net.riders.delete(from); netLog(`${p.name} got out.`); return true; } // (a passenger, getting out)
     if (mode === 'ride' && net.ride && net.ride.id === id) {
       if (data.why === 'busted') { netEject(`The police drag ${p.name} out of the car, and you with them. You run.`); if (NET_FEATURES.police) addWanted('accomplice', px, py, true); }
-      else netEject(data.why === 'parked' ? `${p.name} parks up. You get out.` : 'You get out.'); // (the driver's done)
+      else { if (data.why === 'parked') netPayFare(); netEject(data.why === 'parked' ? `${p.name} ${net.ride?.craft ? 'is done.' : 'parks up.'} You get out.` : 'You get out.'); } // (the driver's done)
     }
     return true;
   }
@@ -56569,6 +56679,275 @@ function netHookFrame(dt) { // every frame: both ends of a line
   } else if (d > h.d0 + .08) { px = worldCoord(px + ex / d * (d - h.d0 - .08)); py = worldCoord(py + ey / d * (d - h.d0 - .08)); } // (held at the end of the line)
 }
 
+// ---- the players menu (hold Tab): everyone in the room, where they are, and things to do with them: whisper (a message
+// only they see), give them money or something from your bag, invite them to your home, or head to one they've invited
+// you to. Hold Tab to look; click something and it stays open till you're done (Esc or Done).
+const NET_GIFT_WAIT = 10; // seconds for a gift to be taken before it comes back to you
+let netPlayersEl = null, netPlayersPinned = false, netPlayersForm = null, netPlayersT = 0;
+const netPlayersOpen = () => !!netPlayersEl && netPlayersEl.style.display === 'flex';
+function netPlayersKey(e) { // (main.js, on a key going down)
+  if (e.code !== 'Tab') return false;
+  e.preventDefault?.();
+  if (net.on && !e.repeat && !netPlayersOpen()) openNetPlayers();
+  return true;
+}
+function netPlayersKeyUp(e) { if (e.code === 'Tab' && netPlayersOpen() && !netPlayersPinned) closeNetPlayers(); } // (main.js, on a key going up)
+function buildNetPlayers() {
+  const el = menuEl('netplayers', 530, `
+    <div class="panel" role="dialog" aria-label="Players" style="width:min(560px, calc(100vw - 32px))">
+      <h1>Players</h1>
+      <p class="sub" data-np="room"></p>
+      <div data-np="list"></div>
+      <div data-np="form" style="margin-top:12px"></div>
+      <button class="item" data-np-act="done" style="margin-top:12px">Done <span class="k" style="margin-left:auto">Esc</span></button>
+    </div>`);
+  el.addEventListener('keydown', e => {
+    if (e.code === 'Escape') { e.preventDefault(); closeNetPlayers(); }
+    else if (e.code === 'Enter' && e.target.matches('input')) { e.preventDefault(); el.querySelector('[data-np-act="send"]')?.click(); }
+    e.stopPropagation();
+  });
+  el.addEventListener('keyup', e => { if (e.code === 'Tab') netPlayersKeyUp(e); e.stopPropagation(); });
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-np-act]');
+    if (!b) return;
+    const act = b.dataset.npAct, id = b.dataset.id, p = id && net.peers.get(id);
+    if (act === 'done') return closeNetPlayers();
+    netPlayersPinned = true; // (doing something: it stays open)
+    if (act === 'whisper' || act === 'cash' || act === 'item') { netPlayersForm = { act, id }; return netPlayersShow(true); }
+    if (act === 'invite' && p) { netInvite(p); return netPlayersShow(true); }
+    if (act === 'go' && p) { netGoToInvite(p); return closeNetPlayers(); }
+    if (act === 'cancel') { netPlayersForm = null; return netPlayersShow(true); }
+    if (act === 'send' && netPlayersForm) {
+      const f = netPlayersForm, q = net.peers.get(f.id), input = el.querySelector('[data-np="input"]');
+      if (q && f.act === 'whisper' && netWhisper(q, input.value)) { input.value = ''; input.focus(); }
+      if (q && f.act === 'cash' && netGiveCash(q, +input.value)) { netPlayersForm = null; netPlayersShow(true); }
+      return;
+    }
+    if (act === 'give' && netPlayersForm) { const q = net.peers.get(netPlayersForm.id); if (q && netGiveItem(q, +b.dataset.k)) { netPlayersForm = null; netPlayersShow(true); } }
+  });
+  return el;
+}
+function openNetPlayers() {
+  netPlayersEl = netPlayersEl || buildNetPlayers();
+  netPlayersPinned = false; netPlayersForm = null;
+  for (const k in K) K[k] = 0;
+  releaseHeldMouse(); releaseMouse();
+  netPlayersEl.style.display = 'flex';
+  netPlayersShow(true);
+}
+function closeNetPlayers() {
+  if (!netPlayersEl) return;
+  netPlayersEl.style.display = 'none'; netPlayersPinned = false; netPlayersForm = null;
+  if (!paused) lockMouse();
+}
+function netWhere(p) { // where someone is, in a few words
+  const s = netViewOf(p);
+  if (!s) return '';
+  if (s.rk !== 'out') return 'inside, ' + (s.rk === netRoomKey() ? 'here with you' : (s.rk.split(':')[0] || 'somewhere'));
+  const d = Math.hypot(rel(s.x - px), rel(s.y - py)) * 10, place = typeof streetName === 'function' ? streetName(s.x, s.y) : '';
+  const how = s.veh ? 'driving' : s.ride ? 'riding' : s.craft ? (s.craft.k === 'air' ? 'flying' : 'on the water') : s.sk ? 'skating' : '';
+  return [how, place, mode === 'room' ? '' : d < 1000 ? Math.round(d) + 'm away' : (d / 1000).toFixed(1) + 'km away'].filter(Boolean).join(', ');
+}
+function netPlayersShow(all = false) {
+  if (!netPlayersOpen()) return;
+  const el = netPlayersEl, others = [...net.peers.values()].filter(p => p.hello && !p.mismatch);
+  el.querySelector('[data-np="room"]').textContent = net.on ? `Room "${net.code}": you and ${others.length} other${others.length === 1 ? '' : 's'}.` : 'Not in a room. Esc, then Multiplayer, to join one.';
+  const canInvite = owned.homes.length > 0;
+  el.querySelector('[data-np="list"]').innerHTML = others.length ? others.map(p => {
+    const s = netViewOf(p), tags = [s?.peaceful ? 'peaceful' : '', s?.away ? 'paused' : '', s?.stars ? '*'.repeat(s.stars) : ''].filter(Boolean).join(' · ');
+    const inv = net.invites.get(p.id), btn = (act, label) => `<button class="opt" data-np-act="${act}" data-id="${netEsc(p.id)}">${label}</button>`;
+    return `<div style="padding:8px 0;border-top:1px solid #2a3338">
+      <div><b style="color:${NET_CSS[p.hello.look.top]}">${netEsc(p.name)}</b> <span style="color:#89a">${netEsc(netWhere(p))}${tags ? ' · ' + netEsc(tags) : ''}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btn('whisper', 'Whisper')}${btn('cash', 'Give money')}${btn('item', 'Give item')}${canInvite ? btn('invite', 'Invite home') : ''}${inv && inv.until > netNow() ? btn('go', 'Go to their home') : ''}</div>
+    </div>`;
+  }).join('') : '<div style="color:#789">Nobody else here yet.</div>';
+  if (!all) return;
+  const f = netPlayersForm, q = f && net.peers.get(f.id), form = el.querySelector('[data-np="form"]');
+  if (!q) { form.innerHTML = ''; return; }
+  const input = (ph, type = 'text', max = NET_CHAT_MAX) => `<input data-np="input" type="${type}" maxlength="${max}" placeholder="${ph}" autocomplete="off" spellcheck="false" style="flex:1;font:inherit;color:#eee;background:#000;border:1px solid #567;padding:6px 8px">`;
+  const bar = inner => `<div style="display:flex;gap:8px;align-items:center">${inner}<button class="opt" data-np-act="cancel">Cancel</button></div>`;
+  if (f.act === 'whisper') form.innerHTML = `<p class="sub">Whisper to ${netEsc(q.name)} (only they see it)</p>` + bar(input('Say something...') + '<button class="opt" data-np-act="send">Send</button>');
+  if (f.act === 'cash') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} money (you have ${fmt$(money)})</p>` + bar(input('Amount', 'number', 8) + '<button class="opt" data-np-act="send">Give</button>');
+  if (f.act === 'item') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} something from your bag</p>` + (inv.length
+    ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${inv.map((it, k) => `<button class="opt" data-np-act="give" data-k="${k}">${netEsc(itemName(it))}</button>`).join('')}</div>`
+    : '<div style="color:#789">Your bag is empty.</div>') + `<div style="margin-top:6px">${bar('')}</div>`;
+  form.querySelector('[data-np="input"]')?.focus();
+}
+// whispers: to one player only, in the chat log in pink, no speech bubble
+function netWhisper(p, textIn) {
+  const text = netClean(textIn, NET_CHAT_MAX);
+  if (!text || !net.on) return false;
+  if (!netAllow(net.chatBucket, netNow(), 1, 3)) { netLog('Slow down a little.', null, '#f96'); return false; }
+  net.tx.send('dm', { text }, p.id);
+  netLog(text, `(to ${p.name})`, '#f9c');
+  return true;
+}
+// gifts: out of your money or bag now; if they haven't taken it in NET_GIFT_WAIT seconds (gone, or their bag's full) it's yours again
+function netGiveCash(p, amount) {
+  amount = Math.round((+amount || 0) * 100) / 100;
+  if (!(amount > 0)) return say('How much?', 2), false;
+  if (amount > money) return say(`You've only got ${fmt$(money)}.`, 2), false;
+  pay(amount);
+  netSendGift(p, { cash: amount });
+  netLog(`You give ${p.name} ${fmt$(amount)}.`);
+  return true;
+}
+function netGiveItem(p, k) {
+  const it = inv[k];
+  if (!it) return false;
+  const copy = JSON.parse(JSON.stringify(it));
+  takeSlot(k);
+  netSendGift(p, { item: copy });
+  netLog(`You give ${p.name} the ${itemName(copy)}.`);
+  return true;
+}
+function netSendGift(p, what) {
+  const gid = netRandomId();
+  net.gifts.set(gid, { to: p.id, name: p.name, ...what, t: netNow() });
+  net.tx.send('gift', { gid, ...what }, p.id);
+}
+function netGiftBack(g, why) { // (not taken: back to you)
+  if (g.cash) earn(g.cash); else if (g.item) carryItem(g.item, false);
+  netLog(`${g.name} ${why}, so ${g.cash ? 'you keep the ' + fmt$(g.cash) : 'you keep the ' + itemName(g.item)}.`, null, '#f96');
+}
+function netGiftFrame(now) {
+  for (const [gid, g] of net.gifts) if (now - g.t > NET_GIFT_WAIT) { net.gifts.delete(gid); netGiftBack(g, 'never took it'); }
+}
+// home invitations: they get a copy of your place as it is (the furniture, the shelves), and the way in by your door
+function netInvite(p) {
+  const near = h => { const d = h.door || [h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5]; return Math.hypot(rel(d[0] - px), rel(d[1] - py)); };
+  const home = homeRecord(room) || [...owned.homes].sort((a_, b) => near(a_) - near(b))[0];
+  if (!home) return say('You need a home of your own to invite anyone over.', 3);
+  net.tx.send('invite', { cell: home.cell, kind: home.kind, door: home.door || null, rec: JSON.parse(JSON.stringify(home)) }, p.id);
+  netLog(`You invite ${p.name} over to your place.`);
+}
+function netGuestHome(d) { // (their home record, made safe the way save.js loads your own)
+  const h = d.rec && typeof d.rec === 'object' ? d.rec : {};
+  return { cell: d.cell, kind: d.kind, door: null,
+    decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY).map(restoreShelfItem),
+    fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
+    workshop: restoreWorkshop(h.workshop, d.kind), furnishings: restoreHomeFurnishings(h.furnishings, d.kind),
+    lights: Object.fromEntries(Object.entries(h.lights || {}).filter(([k, v]) => /^fixed[0-9]{1,2}$/.test(k) && typeof v === 'boolean')),
+    ...(h.bathroomDoors !== undefined ? { bathroomDoors: Array.isArray(h.bathroomDoors) ? h.bathroomDoors.slice(0, 8).map(v => v !== false) : [] } : {}),
+    pets: (Array.isArray(h.pets) ? h.pets : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) };
+}
+function netGoToInvite(p) {
+  const v = net.invites.get(p.id);
+  if (!v) return;
+  const [x, y] = v.door || [v.cell % N + 0.5, Math.floor(v.cell / N) + 0.5];
+  setMapWaypoint({ id: 'invite:' + p.id, name: `${p.name}'s home`, x, y });
+  say(`${p.name}'s place is marked on your map. Go in by their door.`, 4);
+}
+function netInviteAt(sh) { // (actions.js, at a door: a home you've been invited to, behind it)
+  if (!net.on) return null;
+  const now = netNow();
+  for (const [from, v] of net.invites) if (v.until > now && SHOP[v.cell] === sh && net.peers.has(from)) return { ...v, from };
+  return null;
+}
+function netEnterAsGuest(v) {
+  const kind = homeRoomKind(v.kind), def = ROOM_DEFS[kind];
+  enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [v.cell % N, Math.floor(v.cell / N)], guestHome: v.home, guestOf: v.from, guestName: v.name }, def.entry);
+  say(`You let yourself into ${v.name}'s place.`, 3);
+}
+// ---- things put down in the street: yours go out to everyone (each second, like cars you've left); theirs show where
+// they put them, and picking one up asks them for it, so it's only ever in one bag
+const NET_DROPS_MAX = 20;
+function netMyDrops() {
+  const out = [];
+  for (const d of dropped) if (d.at === '' && out.length < NET_DROPS_MAX) {
+    d.netId ||= net.selfId + ':' + (++net.carN);
+    const { x, y, z, at, displayZ, displaySize, netId, ...it } = d;
+    out.push({ id: netId, x, y, z: z || 0, it: JSON.parse(JSON.stringify(it)) });
+  }
+  return out;
+}
+function netSendDrops(to) { if (net.on && NET_FEATURES.gifts) net.tx.send('drops', netMyDrops(), to); }
+function netCheckDrops(d) {
+  if (!Array.isArray(d)) return [];
+  return d.slice(0, NET_DROPS_MAX).filter(o => o && netCarId(o.id) && netNum(o.x) && netNum(o.y) && netNum(o.z) && o.it && typeof o.it.id === 'string' && ITEMS[o.it.id])
+    .map(o => ({ id: o.id, x: worldCoord(o.x), y: worldCoord(o.y), z: clamp(o.z, -5, 50), it: o.it }));
+}
+function netDrawDrops() {
+  if (!net.on || mode === 'room') return;
+  for (const p of net.peers.values()) for (const d of p.drops || []) {
+    if (net.dropTaken.has(d.id)) continue;
+    const vx = rel(d.x - px), vy = rel(d.y - py);
+    if (Math.hypot(vx, vy) < 12) drawDropped({ ...d.it, x: d.x, y: d.y, z: d.z, at: '' }, vx, vy, 0.1);
+  }
+}
+function netDropNear() {
+  if (!net.on || mode !== 'walk') return null;
+  let best = null, bd = 0.15;
+  for (const p of net.peers.values()) for (const d of p.drops || []) {
+    if (net.dropTaken.has(d.id)) continue;
+    const dd = Math.hypot(rel(d.x - px), rel(d.y - py));
+    if (dd < bd) { bd = dd; best = { ...d, owner: p }; }
+  }
+  return best;
+}
+const netDropPrompt = () => { const d = netDropNear(); return d ? `E: pick up the ${itemName(d.it)} (${d.owner.name} put it down)` : ''; };
+function netDropUse() { // (actions.js, on E: true if it was about someone else's thing in the street)
+  const d = netDropNear();
+  if (!d) return false;
+  if (inv.length >= INV_SIZE) return say('Your bag is full.'), true;
+  net.dropTaken.set(d.id, netNow() + 5); // (gone from your street at once; theirs says yes or no)
+  net.tx.send('dropClaim', { id: d.id }, d.owner.id);
+  return true;
+}
+function netSocialMessage(type, data, from, p, now) {
+  if (!['dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven'].includes(type)) return false;
+  if (!NET_FEATURES.gifts && type !== 'dm') return true;
+  if (type === 'dm') {
+    if (!netAllow(p.chatBucket, now, 1, 3)) return true;
+    const text = netClean(data && data.text, NET_CHAT_MAX);
+    if (text) { netLog(text, `${p.name} (whispers)`, '#f9c'); if (actx) tone(actx.currentTime, 880, 0.06, 0.05); }
+    return true;
+  }
+  if (type === 'gift') {
+    if (!data || typeof data.gid !== 'string' || !netAllow(p.giftBucket ||= {}, now, 0.5, 5)) return true;
+    if (netNum(data.cash) && data.cash > 0) {
+      const cash = Math.min(Math.round(data.cash * 100) / 100, 1e6);
+      earn(cash); netLog(`${p.name} gives you ${fmt$(cash)}.`, null, '#9e9');
+      net.tx.send('giftAck', { gid: data.gid }, from);
+    } else if (data.item && typeof data.item.id === 'string' && ITEMS[data.item.id]) {
+      if (inv.length >= INV_SIZE) { net.tx.send('giftAck', { gid: data.gid, back: 'full' }, from); netLog(`${p.name} tried to give you something, but your bag is full.`, null, '#f96'); return true; }
+      const it = { ...data.item, uses: netNum(data.item.uses) ? data.item.uses : ITEMS[data.item.id].uses || 0 };
+      carryItem(it, false); netLog(`${p.name} gives you the ${itemName(it)}.`, null, '#9e9');
+      net.tx.send('giftAck', { gid: data.gid }, from);
+    }
+    return true;
+  }
+  if (type === 'giftAck') {
+    const g = data && net.gifts.get(data.gid);
+    if (!g || g.to !== from) return true;
+    net.gifts.delete(data.gid);
+    if (data.back) netGiftBack(g, 'has no room for it');
+    return true;
+  }
+  if (type === 'invite') {
+    if (!data || !Number.isInteger(data.cell) || !SHOP[data.cell] || typeof data.kind !== 'string' || ITEMS[data.kind]?.kind !== 'home') return true;
+    const door = Array.isArray(data.door) && data.door.length === 2 && data.door.every(netNum) ? data.door.map(v => worldCoord(v)) : null;
+    net.invites.set(from, { cell: data.cell, kind: data.kind, door, home: netGuestHome(data), name: p.name, until: now + 1800 });
+    netLog(`${p.name} invites you over to their place. (Hold Tab: Go to their home)`, null, '#9e9');
+    netPlayersShow();
+    return true;
+  }
+  if (type === 'drops') { if (netAllow(p.dropsBucket ||= {}, now, 0.5, 4)) p.drops = netCheckDrops(data); return true; }
+  if (type === 'dropClaim') { // someone's picking up a thing you put down: theirs, if it's still there
+    const id = data && data.id, d = dropped.find(o => o.netId === id && o.at === '');
+    if (d) { const { x, y, at, z, displayZ, displaySize, netId, ...it } = d; dropped.splice(dropped.indexOf(d), 1); net.tx.send('dropGiven', { id, it: JSON.parse(JSON.stringify(it)) }, from); netSendDrops(); }
+    else net.tx.send('dropGiven', { id, it: null }, from);
+    return true;
+  }
+  if (type === 'dropGiven') {
+    const it = data && data.it;
+    if (it && typeof it.id === 'string' && ITEMS[it.id]) { carryItem(it, false); say(`You pick up the ${itemName(it)}.`); }
+    else say('Someone got there first.', 2);
+    return true;
+  }
+  return true;
+}
+
 // ---- spray paint (spray-paint.js): what you spray goes out as you spray it (PAINT_LISTENERS); someone arriving gets your
 // most recent. The keys are every dot you've got, so nothing's painted twice when it comes round again.
 function netPaintKeys() {
@@ -56650,7 +57029,7 @@ const NET_ON_FOOT = new Set(['walk', 'room', 'roof', 'elplat', 'el', 'ferry', 'f
 function netVisible(p, s) { return s && s.rk === netRoomKey() && (mode === 'room' || Math.abs(rel(s.x - px)) < vis + 1 && Math.abs(rel(s.y - py)) < vis + 1); }
 function drawPeers() {
   if (!net.on || !net.peers.size) return;
-  netDrawBalls();
+  netDrawBalls(); netDrawDrops();
   const now = netNow(), inRoom = mode === 'room';
   for (const p of net.peers.values()) {
     const f = p.fallen; // (shot down a moment ago: lying where they fell, till the ambulance has them)
@@ -57169,6 +57548,7 @@ function relock(e) {
 }
 onkeydown = e => {
   if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
+  if (netPlayersKey(e)) { if (!e.isTrusted && netPlayersOpen()) netPlayersPinned = true; return; } // (Tab: the players menu, net.js; from a phone's or pad's button it stays open)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
@@ -57243,7 +57623,7 @@ onkeydown = e => {
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; transitSubwayDeparted(); }
 };
-onkeyup = e => { K[e.code] = 0; if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
+onkeyup = e => { K[e.code] = 0; netPlayersKeyUp(e); if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
 cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 // how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
@@ -57836,7 +58216,7 @@ function touchActions() {
   }
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
-    if(mode==='room'&&homeRecord(room))out.push(['Furnish','KeyF','pop']);
+    if(mode==='room'&&homeRecord(room)&&!room.guestHome)out.push(['Furnish','KeyF','pop']);
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
@@ -57856,6 +58236,7 @@ const SHEET = [
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Lights & siren', 'KeyH', () => mode === 'drive' && !!me?.ev], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
   ['Chat', 'KeyT', () => net.on && NET_FEATURES.chat], // (in a multiplayer room: net.js; a controller gets it in its Actions too)
+  ['Players', 'Tab', () => net.on], // (the players menu: whisper, give, invite)
 ];
 
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched

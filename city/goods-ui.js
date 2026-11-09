@@ -505,7 +505,7 @@ const placeKey = () => mode === 'walk' || mode === 'roof' ? '' : mode === 'room'
 function dropHere() {
   const at = placeKey();
   if (!heldItem()) return;
-  if(mode==='room'&&homeRecord()&&isHomeDecor(heldItem())){const target=homeShelfAim()[0];if(target)return say(homeShelfStore(held,target)[1],3);}
+  if(mode==='room'&&homeRecord()&&!room.guestHome&&isHomeDecor(heldItem())){const target=homeShelfAim()[0];if(target)return say(homeShelfStore(held,target)[1],3);}
   if (at === null) return say('Not up here.');
   const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
   const x = mode === 'room' ? px + Math.cos(a) * reach : worldCoord(px + Math.cos(a) * reach), y = mode === 'room' ? py + Math.sin(a) * reach : worldCoord(py + Math.sin(a) * reach);
@@ -757,7 +757,7 @@ function useHeldItem() {
   if(wanted.busted)return;
   if(furnishingPlacement){furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return;}
   if(heldItem()?.id==='camera')return takeHomePhoto();
-  if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
+  if(HOME_FURNITURE[heldItem()?.id]&&!room?.guestHome&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return; // (held down, Q sprays: spray-paint.js)

@@ -11,10 +11,13 @@ const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
 const BASE = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href + '?net=local';
-const URL_ = BASE; // (chat and the shared clock: on as released)
+const URL_ = BASE;
+// several players are several tabs in one browser: none of them may be throttled for being in the background, or a busy
+// machine starves their timers and a player looks to have left
+const NET_ARGS = ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows']; // (chat and the shared clock: on as released)
 
 test('two players: seen in the street, chat in a bubble, one clock, the same room, a car, and leaving', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async (url = URL_) => {
@@ -99,7 +102,7 @@ test('two players: seen in the street, chat in a bubble, one clock, the same roo
 });
 
 test('ghosts only (?netfeatures=none): each sees the other (on a skateboard too), but T is just T and each keeps their own clock', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -151,7 +154,7 @@ test('ghosts only (?netfeatures=none): each sees the other (on a skateboard too)
 });
 
 test('spray paint: a tag one player sprays is on everyone\'s wall, a late arrival gets it, it blocks the spot, and goes when they leave', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -207,7 +210,7 @@ test('spray paint: a tag one player sprays is on everyone\'s wall, a late arriva
 });
 
 test('shared cars: Bob\'s car in Ann\'s traffic, a lift (carried along, out by E, out when he parks, out when he goes), dents and bullets to the owner, and taking one he left', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -281,7 +284,7 @@ test('shared cars: Bob\'s car in Ann\'s traffic, a lift (carried along, out by E
 });
 
 test('freehand spray paint: what Bob sprays is on Ann\'s walls (and kept), someone arriving later gets it, and nothing doubles', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -320,7 +323,7 @@ test('freehand spray paint: what Bob sprays is on Ann\'s walls (and kept), someo
 });
 
 test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in hospital and lying in the street for her, peaceful (either of them) spares him, and indoors too', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -375,7 +378,7 @@ test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in 
 });
 
 test('rod hooks: Ann\'s cast catches Bob, he\'s held at the end of her line, Q reels him in to her feet; again, and he struggles free', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -423,7 +426,7 @@ test('rod hooks: Ann\'s cast catches Bob, he\'s held at the end of her line, Q r
 });
 
 test('police: the chase after Bob is in Ann\'s street (lights, siren, the officer running) but never after her; busted with her aboard, she\'s out with a star', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -468,7 +471,7 @@ test('police: the chase after Bob is in Ann\'s street (lights, siren, the office
 });
 
 test('what else others see: paused (can\'t be shot, says so), spraying, a bail, peeing, a boat, an aircraft, who\'s riding in a car, and everyone on the maps; Chat for phones and pads', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -551,7 +554,7 @@ test('what else others see: paused (can\'t be shot, says so), spraying, a bail, 
 });
 
 test('car hits, pickpocketing and soccer balls between players: knocked flat then hospital; a clean lift and a caught one; a ball passed on, only its owner picks it up', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: NET_ARGS });
   try {
     const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
     const open = async () => {
@@ -623,6 +626,98 @@ test('car hits, pickpocketing and soccer balls between players: knocked flat the
     assert.deepEqual(await B.evaluate(() => [pickUpBall(), inv.some(i => i.id === 'ball')]), [true, true], 'his to pick up');
     await until(A, () => net.balls.size === 0, null, 'gone for Ann');
     for (const P of [A, B]) await P.evaluate(() => { clearWanted(); netLeave(); });
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('the players menu and visiting: Tab shows everyone, whisper, give money and an item, pick up what they put down, invite home and visit; ride in their boat and their aircraft; a taxi fare', async () => {
+  const browser = await chromium.launch({ args: NET_ARGS });
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'soc-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 80; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; money = 100; clearInventory(); carryItem({ id: 'candy', uses: 1 }); }, spot);
+    await B.evaluate(s => { mode = 'walk'; room = null; px = worldCoord(s.x + 0.5); py = s.y; money = 100; clearInventory(); }, spot);
+
+    // Tab: open while held, gone when let go; click something and it stays
+    await A.bringToFront(); await A.keyboard.down('Tab');
+    assert.equal(await A.evaluate(() => netPlayersOpen()), true);
+    assert.match(await A.evaluate(() => netPlayersEl.textContent), /Bob/);
+    await A.keyboard.up('Tab');
+    assert.equal(await A.evaluate(() => netPlayersOpen()), false, 'let go: gone');
+    await A.keyboard.down('Tab'); await A.click('[data-np-act="whisper"]'); await A.keyboard.up('Tab');
+    assert.equal(await A.evaluate(() => netPlayersOpen()), true, 'doing something: it stays');
+    await A.fill('[data-np="input"]', 'psst bob'); await A.click('[data-np-act="send"]');
+    await until(B, () => net.chat.some(m => m.who === 'Ann (whispers)' && m.text === 'psst bob'), null, 'Bob gets the whisper');
+    assert.equal(await B.evaluate(() => !!net.peers.values().next().value.bubble), false, 'a whisper: no speech bubble');
+    await A.click('[data-np-act="cancel"]'); await A.click('[data-np-act="cash"]'); await A.fill('[data-np="input"]', '25'); await A.click('[data-np-act="send"]');
+    await until(B, () => money === 125, null, 'Bob gets $25');
+    assert.equal(await A.evaluate(() => money), 75);
+    await A.click('[data-np-act="item"]'); await A.click('[data-np-act="give"]');
+    await until(B, () => inv.some(i => i.id === 'candy'), null, 'Bob gets the candy');
+    await until(A, () => net.gifts.size === 0 && inv.length === 0, null, 'and it\'s gone from Ann\'s bag for good');
+    await A.click('[data-np-act="done"]');
+
+    // something Ann puts down: Bob sees it, and picking it up takes it out of her street
+    await A.evaluate(() => { carryItem({ id: 'candy', uses: 1 }); held = 0; dropHere(); netSendDrops(); });
+    const dpos = await A.evaluate(() => { const d = dropped.find(d => d.at === ''); return [d.x, d.y]; });
+    await until(B, () => [...net.peers.values()][0].drops?.length === 1, null, 'Bob sees it');
+    await B.evaluate(d => { px = d[0]; py = d[1]; }, dpos);
+    assert.match(await B.evaluate(() => promptText()), /pick up the candy bar \(Ann put it down\)/);
+    await B.evaluate(() => interact());
+    await until(B, () => inv.filter(i => i.id === 'candy').length === 2, null, 'in Bob\'s bag');
+    assert.equal(await A.evaluate(() => dropped.filter(d => d.at === '').length), 0, 'gone from Ann\'s street');
+
+    // invited home: Bob gets in as a guest, in the same room as Ann in her own flat; her bed and closet aren't his
+    await A.evaluate(() => { const sh = Object.values(SHOP).find(x => x && x.kind === SHOP_APTS), cell = Object.keys(SHOP).map(Number).find(k => SHOP[k] === sh); owned.homes.push({ cell, kind: Object.keys(ITEMS).find(k => ITEMS[k].kind === 'home'), decor: [], fridge: [], pet: null }); netInvite([...net.peers.values()][0]); });
+    await until(B, () => net.invites.size === 1, null, 'Bob invited');
+    const guest = await B.evaluate(() => { const [from, v] = [...net.invites][0]; netEnterAsGuest({ ...v, from }); return { rk: netRoomKey(), guest: !!room.guestHome, spot: homeSpot() }; });
+    assert.equal(guest.guest, true);
+    assert.equal(guest.spot, null, 'nothing of hers to use');
+    const host = await A.evaluate(() => { const h = owned.homes[0], kind = homeRoomKind(h.kind); enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [h.cell % N, Math.floor(h.cell / N)] }, ROOM_DEFS[kind].entry); return netRoomKey(); });
+    assert.equal(host, guest.rk, 'the same flat');
+    await until(A, () => { render(0); return [...net.peers.values()][0].drawn; }, null, 'Ann sees Bob in her flat');
+    await A.evaluate(() => leaveRoom()); await B.evaluate(() => leaveRoom());
+
+    // in Ann's boat, put out when she leaves the helm
+    await A.evaluate(s => { const b = { kind: Object.keys(BOAT_KINDS)[0], x: worldCoord(s.x + 0.3), y: s.y, hx: 1, hy: 0, v: 0, col: RED }; sea = b; mode = 'sea'; px = b.x; py = b.y; }, spot);
+    await B.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; }, spot);
+    await until(B, () => /ride in Ann's boat/.test(promptText()), null, 'by the boat');
+    await B.evaluate(() => netCraftUse()); await until(B, () => mode === 'ride' && net.ride.craft === 'sea', null, 'aboard');
+    await A.evaluate(() => { sea = null; mode = 'walk'; });
+    await until(B, () => mode === 'walk', null, 'off when she is');
+    // in her helicopter; out at 30m: with a parachute
+    await A.evaluate(s => { const ac = aircraft.find(c => PLANE_TYPES[c.type].heli) || aircraft[0]; ac.x = worldCoord(s.x + 0.3); ac.y = s.y; ac.z = walkGround(ac.x, ac.y); px = ac.x; py = ac.y; enterAircraft(ac); }, spot);
+    await B.evaluate(s => { mode = 'walk'; px = s.x; py = s.y; }, spot);
+    await until(B, () => netCraftNear()?.k === 'air' && netCraftNear().stopped, null, 'by the aircraft, down on the ground');
+    await B.evaluate(() => netCraftUse()); await until(B, () => mode === 'ride' && net.ride.craft === 'air', null, 'aboard the aircraft');
+    assert.deepEqual(await B.evaluate(() => { net.ride.z = walkGround(px, py) + 3; netGetOut(); return [mode, !!chute, body.z > 20]; }), ['walk', true, true], 'out up there: falling, the cord to pull');
+    await B.evaluate(() => { chute = null; body.z = 0; });
+    await A.evaluate(() => { pilot.state = 'parked'; pilot = null; mode = 'walk'; });
+
+    // a cab on Ann's shift: Bob rides, and pays the fare when he gets out
+    await A.evaluate(s => { const c = cars.find(c => c.body === TAXI && !c.remote); startTaxiShift(c); c.x = worldCoord(s.x + 0.3); c.y = s.y; c.ex = c.x; c.ey = c.y; c.v = 0; px = c.x; py = c.y; money = 0; }, spot);
+    await B.evaluate(s => { mode = 'walk'; px = s.x; py = s.y; money = 50; }, spot);
+    await until(B, () => !!netCarNear() && !netCarNear().parked, null, 'the cab by Bob');
+    await B.evaluate(() => netCarUse()); await until(B, () => mode === 'ride', null, 'in the cab');
+    for (let k = 0; k < 6; k++) { await A.evaluate(() => { me.x = worldCoord(me.x + me.hx * 0.5); me.y = worldCoord(me.y + me.hy * 0.5); me.ex = me.x; me.ey = me.y; px = me.x; py = me.y; }); await B.waitForTimeout(250); }
+    await B.waitForTimeout(500);
+    await B.evaluate(() => netGetOut());
+    await until(A, () => money > 0, null, 'Ann paid');
+    assert.equal(await A.evaluate(() => money), await B.evaluate(() => Math.round((50 - money) * 100) / 100), 'what he paid, she got');
+    for (const P of [A, B]) await P.evaluate(() => netLeave());
     await A.evaluate(() => localStorage.clear());
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

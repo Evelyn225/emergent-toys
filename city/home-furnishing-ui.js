@@ -187,7 +187,7 @@ function confirmFurnishingPlacement() {
   cancelFurnishingPlacement();refreshFurnishedRoom();saveGame();say('Placed. F: arrange furnishings.',3);
 }
 function homeFurnishingKey(e) {
-  if(mode!=='room'||paused||game||sleep||!homeRecord(room))return false;
+  if(mode!=='room'||paused||game||sleep||!homeRecord(room)||room.guestHome)return false;
   if(furnishingPlacement) {
     if(e.code==='Escape'){cancelFurnishingPlacement();return true;}
     if(e.code==='KeyE'){if(!e.repeat)confirmFurnishingPlacement();return true;}

@@ -1,6 +1,6 @@
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
-const workshopHome = () => mode === 'room' ? homeRecord(room) : null;
+const workshopHome = () => mode === 'room' && !room.guestHome ? homeRecord(room) : null; // (not at a friend's place: net.js)
 // Keep the original placement/collision envelope; the fan has a real open
 // front, rear plate, supported shaft and separate blades behind its guard.
 function workshopFan(p,w,running){

@@ -119,6 +119,7 @@ const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px
 const homeSpot = () => {
   const s=room.def.spots;if(!s)return null;let best=null,bd=1.3;
   for(const k in s) {
+    if(room.guestHome&&k!=='tv'&&k!=='terrace')continue; // (a friend's place: their bed, closet and kitchen aren't yours to use, net.js)
     let d=Math.hypot(px-s[k][0],py-s[k][1]);
     if(k==='bed' && room.def.bedBounds) {
       const [x,y,hx,hy]=room.def.bedBounds;
@@ -217,6 +218,7 @@ function promptText() {
   const dr = droppedHere();
   if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+  { const nd = netDropPrompt(); if (nd) return nd; } // (another player's: net.js)
   if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
@@ -224,7 +226,7 @@ function promptText() {
   if (gp) return gp;
   const ev = evPrompt(); // (an ambulance, fire engine or police car you could take: emergency-theft.js)
   if (ev) return ev;
-  const shared = netCarPrompt(); // (another player's car: net.js)
+  const shared = netCarPrompt() || netCraftPrompt(); // (another player's car, boat or aircraft: net.js)
   if (shared) return shared;
   if (c && c.v < 0.6 && c.ev && c.mine) return `E: get back in the ${EV_NAME[c.kind]}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';

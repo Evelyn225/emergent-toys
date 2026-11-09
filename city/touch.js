@@ -110,7 +110,7 @@ function touchActions() {
   }
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
-    if(mode==='room'&&homeRecord(room))out.push(['Furnish','KeyF','pop']);
+    if(mode==='room'&&homeRecord(room)&&!room.guestHome)out.push(['Furnish','KeyF','pop']);
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
@@ -130,6 +130,7 @@ const SHEET = [
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Lights & siren', 'KeyH', () => mode === 'drive' && !!me?.ev], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
   ['Chat', 'KeyT', () => net.on && NET_FEATURES.chat], // (in a multiplayer room: net.js; a controller gets it in its Actions too)
+  ['Players', 'Tab', () => net.on], // (the players menu: whisper, give, invite)
 ];
 
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched
