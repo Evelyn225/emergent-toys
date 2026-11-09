@@ -76,12 +76,13 @@ uniform sampler2D low, near, wide, streak, rayTex; uniform vec2 size; uniform fl
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
   vec3 b = vec3(0.0);
-  if (bloom > 0.0) b += (texture2D(near, uv).rgb * 1.0 + texture2D(wide, uv).rgb * 1.8) * bloom;
+  // (mostly the tight 1/4 halo; the wide 1/8 one only a little, or a light you're close to hazes a whole wall)
+  if (bloom > 0.0) b += (texture2D(near, uv).rgb * 1.1 + texture2D(wide, uv).rgb * 0.6) * bloom;
   if (streaks > 0.0) b += texture2D(streak, uv).rgb * 0.7 * streaks;
   if (rays > 0.0) b += texture2D(rayTex, uv).rgb * 0.8 * rays;
   vec3 s = texture2D(low, uv).rgb;
   b *= 1.0 - 0.75 * max(s.r, max(s.g, s.b)); // (a halo round a light, not a white-out over a lit wall)
-  gl_FragColor = vec4(clamp(b, 0.0, 1.0), 1.0);
+  gl_FragColor = vec4(min(b, vec3(0.45)), 1.0); // (a glow never more than about half way to white)
 }`;
 // over the screen, blended as src + dst * (1 - src): a screen blend. Vignetted like the frame under it.
 const POSTFX_OVER = `precision highp float;

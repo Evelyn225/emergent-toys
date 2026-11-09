@@ -260,7 +260,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
-  if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); drawParticles(dt); fogSteps(); drawFireworks(); rainFx(dt); } // (particles.js, after the puddles' reflections, before the fog) else { FOGS.fill(0); FOGB.fill(0); }
   if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
   if (city) drawAnglerLines(); // (the regulars' lines too)
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above

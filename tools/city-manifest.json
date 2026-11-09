@@ -118,6 +118,7 @@
     "city/world-bridges-render.js",
     "city/render.js",
     "city/post-fx.js",
+    "city/particles.js",
     "city/drug-vision.js",
     "city/hud.js",
     "city/interactions.js",
