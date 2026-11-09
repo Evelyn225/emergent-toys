@@ -161,7 +161,7 @@ const free = (x, y) => {
   } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !(skatingNow()&&skateBowlEntryBlocked(x,y,walkGround(px,py)+body.z/10)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !(mode === 'walk' && benchAt(x, y, 0.02, walkGround(px, py) + body.z / 10)) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && (!isWater(x, y) || mode === 'walk' && oceanIceAt(x,y)) && !winterShopBlocked(x,y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && kerbAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !(skatingNow()&&skateBowlEntryBlocked(x,y,walkGround(px,py)+body.z/10)) && !solidAt(x, y, 0.03, walkGround(px, py) + body.z / 10) && !(mode === 'walk' && benchAt(x, y, 0.02, walkGround(px, py) + body.z / 10)) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03, skatingNow() ? walkGround(px,py)+body.z/10 : -Infinity) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 // Blocked by an edge that isn't square to the grid (a curving shoreline, a round planter): feel round you for which way the
@@ -329,6 +329,7 @@ function loop(t) {
   if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
   updateMapNavigation();
   env(dt);
+  stepWinterOcean();
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
@@ -354,7 +355,9 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (!airborne && dt > 0) {
+      const ice = mode === 'walk' && oceanIceAt(px,py);
+      if (!airborne && ice) stepIceMotion(f,s,run,dt);
+      else if (!airborne && dt > 0) {
         const wx = ix / dt, wy = iy / dt, vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy), w = Math.hypot(wx, wy);
         if (body.hop > 1.001 && v > 1e-6 && w > 0) { // carrying speed from hopping: at that speed, but swinging round to where you're going (not snapping), and a sharp turn costs the speed
           body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
@@ -362,7 +365,8 @@ function loop(t) {
           body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
         } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
       } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, HOP_TURN_RATE, dt); }
-      move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
+      if(ice)moveOnIce(dt);
+      else move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
   else if (mode === 'drive') { if (!sleep) drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (not while the respray's under way) // (eyes back on the road a moment after you stop looking about)

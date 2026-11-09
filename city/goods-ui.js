@@ -160,6 +160,7 @@ const DROPPED_ART = {
     (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
+  iceskates: () => [['  __     __', ' |==|   |==|', ' |  |__ |  |__', ' |_____)|_____)', ' _|___|__|___|_'], (c,r) => C(r===4?GRAY:WHITE, r===4?12:14)],
   skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
     (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
@@ -197,6 +198,7 @@ function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k)
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
   if (skatingNow() && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
+  drawWornIceSkates();
   drawSeatedLegs(); // sat down: your legs, when you look down at them (seated-legs.js)
 }
 
@@ -304,7 +306,7 @@ function drawHeldBig() {
   drawVapeCloud();
   const it = heldItem();
   const rodAfloat = it && ITEMS[it.id].rod && afloat() && !third; // (fishing from a boat: the rod, nothing else)
-  if (!it || !(onFoot || rodAfloat) || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
+  if (!it || !(onFoot || rodAfloat) || it.id === 'iceskates' && iceSkatesOn() || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
   if (ITEMS[it.id].kind === 'gun') {
     drawRevolver(it); handDrawn = { id: it.id, t: T }; return;
   }
@@ -624,7 +626,7 @@ function hotbar() {
     }
     bottom = y - 4;
   }
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', ...drugEffectTags(), fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', ...drugEffectTags(), fx.iceSkating && 'ice skates on', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) {
     const lines = wrapText(tags.join('  '), width - 12), h = lines.length * (FS + 4) + 4;
     bottom -= h;

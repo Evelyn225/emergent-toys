@@ -150,7 +150,7 @@ function buildFerryNetwork() {
 }
 function ferryShip(id,time=T) {
   if(!FERRY.cycle)return null;
-  const phase=mod(time+ferryClockOffset+id*FERRY.cycle/FERRY.count,FERRY.cycle);
+  const phase=oceanFrozen()?FERRY_LEGS[id%FERRY_LEGS.length].start:mod(time+ferryClockOffset+id*FERRY.cycle/FERRY.count,FERRY.cycle);
   const leg=FERRY_LEGS.find(l=>phase<l.start+FERRY.dwell+l.seconds)||FERRY_LEGS.at(-1),stop=FERRY_STOPS[leg.from];
   const elapsed=phase-leg.start,stopped=elapsed<FERRY.dwell;
   let x=stop.x,y=stop.y,yaw=stop.yaw;
@@ -242,11 +242,12 @@ function ferryHullAt(x,y,time=T) {
 }
 function ferryPrompt() {
   if(mode==='ferry'&&ferryRide) {
-    const ship=ferryShip(ferryRide.id),status=ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
+    const ship=ferryShip(ferryRide.id),status=oceanFrozen()?`Tied up for winter · ${FERRY_STOPS[ship.stop].name}`:ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
     const gate=Math.hypot(ferryRide.u+.98,ferryRide.v+.53)<.36;
-    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | Walk ashore':''}`;
+    return `${status} | C: sit / stand${ferryRide.seat!=null&&!oceanFrozen()?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | Walk ashore':''}`;
   }
   const stop=nearFerryTerminal();if(!stop)return '';
+  if(oceanFrozen())return 'ISLAND FERRY · winter ice · service resumes in spring';
   const next=nextFerry(stop);
   return `ISLAND FERRY · all five outer islands | E: ${next.wait<.1?'board':'wait & board'} · ${fmt$(FERRY.fare)}${next.wait>.1?` · arrives in ${Math.ceil(next.wait)}s`:''}`;
 }
@@ -258,6 +259,7 @@ function advanceFerryTimetable(seconds) {
   if(seconds>.1)for(let n=wakes.length-1;n>=0;n--)if(typeof wakes[n].b==='string'&&wakes[n].b.startsWith('island-ferry:'))wakes.splice(n,1);
 }
 function ferryWaitNextPort() {
+  if(oceanFrozen())return say('The ferry is tied up for winter. You can walk ashore.',3);
   if(!ferryRide||ferryRide.seat==null)return say('Sit on a window seat or deck bench to wait until the next island.',3);
   const ship=ferryShip(ferryRide.id),seconds=ship.left+(ship.stopped?FERRY_LEGS[ship.stop].seconds:0)+.1;
   advanceFerryTimetable(seconds);ferrySync();
@@ -272,6 +274,7 @@ function useFerry() {
     ferryStepAshore(FERRY_STOPS[ship.stop]);return true;
   }
   const stop=nearFerryTerminal();if(!stop)return false;
+  if(oceanFrozen()){say('The ocean is frozen. The island ferry returns in spring.',3);return true;}
   if(!pay(FERRY.fare)){say(`The island ferry costs ${fmt$(FERRY.fare)}.`,3);return true;}
   const next=nextFerry(stop);noteStreet();
   advanceFerryTimetable(next.wait);

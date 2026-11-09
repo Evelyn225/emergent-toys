@@ -24,6 +24,7 @@ function trailWake(b, x, y, hw, moving) {
 // every frame, seen or not (a trail laid only while she's drawn dies whenever you look away): the bay boats going
 // round, and the one you're driving
 function stepWakes() {
+  if(oceanFrozen()){wakes.length=0;return;}
   const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, worldCoord(x - hx * hl * 0.9), worldCoord(y - hy * hl * 0.9), hw, moving); };
   for (const b of boats) {
     const p = boatAt(b, T);
@@ -59,7 +60,7 @@ function wakeAt(wx, wy, foot = 0) {
   }
   return WAKE_HIT.k;
 }
-const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
+const boatBob = (x, y) => oceanFrozen() ? 0 : Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
 // b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
 function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
   const k = BOAT_KINDS[b.kind], { hl, hw, fb } = k, z = boatBob(vx + px, vy + py), lit = Math.max(night, overcast * 0.5);
@@ -155,6 +156,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
 }
 // the boats going round the bay: heading from where they'll be a moment from now
 function bayBoats() {
+  if(oceanFrozen())return; // laid up for winter
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) continue;
@@ -201,6 +203,7 @@ function drawMarinaBoard(vx, vy) {
   });
 }
 function marinaSprites() {
+  drawWinterSkateShops();
   for (const b of fleet) {
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) > vis + 1 || !inView(vx, vy, 1)) continue;

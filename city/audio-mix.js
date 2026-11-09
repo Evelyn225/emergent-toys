@@ -134,6 +134,7 @@ function surfaceAt(mode, room, x, y) {
     return f === 'carpet' ? 'carpet' : ['wood','home','hotel','cove','islandwood','fernwood'].includes(f) ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
   }
   if (mode === 'elplat' || mode === 'roof') return mode === 'roof' ? 'gravel' : 'metal';
+  if(oceanIceAt(x,y))return 'ice';
   if (onPier(x, y)) return 'wood';
   const k = ROAD[idx(Math.floor(x), Math.floor(y))], bx = Math.floor(x / 8), by = Math.floor(y / 8);
   if (k === 1 && onBridge(bx, by)) return 'metal';
