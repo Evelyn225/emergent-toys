@@ -318,3 +318,147 @@ test('freehand spray paint: what Bob sprays is on Ann\'s walls (and kept), someo
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('guns: Ann\'s shot hits Bob (his game takes the damage), enough put him in hospital and lying in the street for her, friendly fire off spares him, and indoors too', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'guns-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 80; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    const facing = s => { mode = 'walk'; room = null; px = mod(s.x + Math.cos(s.a) * 0.6, N); py = mod(s.y + Math.sin(s.a) * 0.6, N); a = s.a + Math.PI; needs.health = 100; wakeT = 0; };
+    const inFront = () => until(A, () => { render(0); const p = [...net.peers.values()][0]; return p.view && p.view.rk === 'out' && Math.abs(Math.hypot(rel(p.view.x - px), rel(p.view.y - py)) - 0.6) < 0.02; }, null, 'Bob in front of Ann');
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; clearInventory(); carryItem({ id: 'revolver', uses: 6 }); held = 0; for (const p of people) p.hidden = true; }, spot);
+    await B.evaluate(facing, spot);
+    await inFront();
+    const fire = (indoors = false) => A.evaluate(i => { inv[0].uses = 6; gun.cool = 0; gun.reload = 0; render(0); const r = fireGun(px, py, i ? eye - 0.3 : eye, a, 0, i); return r && r.what; }, indoors);
+
+    assert.equal(await fire(), 'player', 'the round stops at Bob');
+    await until(B, () => needs.health < 100 && gun.copShots.some(s => s.hit), null, 'Bob hit, on his side');
+    for (let k = 0; k < 5 && !(await B.evaluate(() => mode === 'room')); k++) { await fire(); await A.waitForTimeout(150); }
+    await until(B, () => mode === 'room' && room.kind === 'hospital', null, 'Bob in hospital');
+    await until(A, () => net.chat.some(m => m.text === 'Bob went down, shot by you.'), null, 'Ann told');
+    assert.equal(await A.evaluate(() => { const f = [...net.peers.values()][0].fallen; return !!f && f.until > netNow(); }), true, 'lying where he fell, for her');
+
+    // friendly fire off, on Bob's side: hit, not hurt
+    await B.evaluate(() => { leaveRoom(); net.ff = false; }); await B.evaluate(facing, spot);
+    await inFront();
+    assert.equal(await fire(), 'player');
+    await A.waitForTimeout(600);
+    assert.equal(await B.evaluate(() => needs.health), 100, 'friendly fire off: unhurt');
+
+    // indoors: the same, in the same room
+    await B.evaluate(() => { net.ff = true; });
+    const enter = (P, s) => P.evaluate(s => { mode = 'walk'; room = null; px = LIGHTHOUSE.x; py = LIGHTHOUSE.y; enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [LIGHTHOUSE.x, LIGHTHOUSE.y, 0], line: 'hi' }, s); }, s);
+    await enter(A, [4, 6.2, -Math.PI / 2]); await enter(B, [4, 4.0, Math.PI / 2]);
+    await until(A, () => { render(0); const p = [...net.peers.values()][0]; return p.view && p.view.rk === netRoomKey(); }, null, 'same room');
+    assert.equal(await fire(true), 'player');
+    await until(B, () => needs.health < 100, null, 'hurt indoors');
+    for (const P of [A, B]) await P.evaluate(() => netLeave());
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('rod hooks: Ann\'s cast catches Bob, he\'s held at the end of her line, Q reels him in to her feet; again, and he struggles free', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'hook-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 100; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    const place = async () => {
+      await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; clearInventory(); carryItem({ id: 'rod', uses: 0 }); held = 0; fishing = null; for (const p of people) p.hidden = true; }, spot);
+      await B.evaluate(s => { mode = 'walk'; room = null; px = mod(s.x + Math.cos(s.a) * 0.6, N); py = mod(s.y + Math.sin(s.a) * 0.6, N); a = s.a + Math.PI; }, spot);
+      await until(A, () => { render(0); const p = [...net.peers.values()][0]; return p.view && Math.abs(Math.hypot(rel(p.view.x - px), rel(p.view.y - py)) - 0.6) < 0.02; }, null, 'Bob in front of Ann');
+      await until(B, () => { const v = netViewOf([...net.peers.values()][0]); return v && Math.abs(Math.hypot(rel(v.x - px), rel(v.y - py)) - 0.6) < 0.02; }, null, 'and Ann where Bob sees her'); // (she was moved here: let it reach him)
+    };
+    // a short cast (as letting go of Q does), stepped through its flight
+    const cast = () => A.evaluate(() => { fishing = { st: 'wind', t: 0, power: 0.2, rod: 'rod' }; castLine(); for (let k = 0; k < 60 && fishing && fishing.st === 'fly'; k++) { T += 0.02; stepFishing(0.02); } return fishing && fishing.st; });
+
+    await place();
+    assert.equal(await cast(), 'hooked', 'the lure catches Bob');
+    await until(B, () => !!net.hooked, null, 'Bob on the line, in his game');
+    const held = await B.evaluate(() => { const s = netViewOf([...net.peers.values()][0]); px = mod(px + (px - s.x) * 2, N); py = mod(py + (py - s.y) * 2, N); netHookFrame(0.016); return Math.hypot(rel(px - s.x), rel(py - s.y)); });
+    assert.ok(held < 0.75, 'walking off, he\'s held at the end of the line: ' + held);
+    await A.evaluate(() => rodUse({ indoors: false })); // (Q)
+    await until(B, () => net.hooked && net.hooked.haul, null, 'reeling');
+    await until(B, () => !net.hooked, null, 'reeled in to her feet');
+    await until(A, () => !net.hooking && /at your feet/.test(msgText), null, 'Ann told');
+
+    await A.evaluate(() => { fishing = null; }); await place();
+    assert.equal(await cast(), 'hooked');
+    await until(B, () => !!net.hooked, null, 'hooked again');
+    await B.evaluate(() => { for (let k = 0; k < 8; k++) { K.Space = 1; netHookFrame(0.016); K.Space = 0; netHookFrame(0.016); } });
+    assert.equal(await B.evaluate(() => !!net.hooked), false, 'mashing Space works it loose');
+    await until(A, () => !net.hooking && /works the hook loose/.test(msgText), null, 'Ann told he got free');
+    for (const P of [A, B]) await P.evaluate(() => netLeave());
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('police: the chase after Bob is in Ann\'s street (lights, siren, the officer running) but never after her; busted with her aboard, she\'s out with a star', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1170, height: 720 } }), errors = [];
+    const open = async () => {
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(URL_);
+      await page.waitForFunction(() => typeof netJoin === 'function' && Number.isFinite(eye));
+      return page;
+    };
+    const A = await open(), B = await open(), room = 'cops-' + Date.now().toString(36);
+    await A.evaluate(() => localStorage.clear());
+    await A.evaluate(r => netJoin(r, 'Ann'), room); await B.evaluate(r => netJoin(r, 'Bob'), room);
+    await A.waitForFunction(() => [...net.peers.values()].some(p => p.hello), null, { timeout: 8000, polling: 100 });
+    const until = async (P, f, arg, what) => { for (let k = 0; k < 100; k++) { if (await P.evaluate(f, arg)) return; await P.waitForTimeout(100); } assert.fail(what); };
+    const spot = await A.evaluate(() => { const d = doors.find(d => d.use === 'shop' && d.dist === 'midtown'); return { x: d.x, y: d.y, a: d.ny ? 0 : Math.PI / 2 }; });
+    await A.evaluate(s => { mode = 'walk'; room = null; px = s.x; py = s.y; a = s.a; pitch = 0; clearWanted(); }, spot);
+    // Bob, wanted: a cruiser and an officer on foot after him (as crime.js sends them)
+    await B.evaluate(s => { mode = 'walk'; room = null; px = mod(s.x + Math.cos(s.a) * 1.2, N); py = mod(s.y + Math.sin(s.a) * 1.2, N);
+      addWanted('gunfire', px, py, true);
+      const c = cars.find(c => c.patrol && !playerCar(c)); c.pursuit = true; c.x = mod(px + 0.6, N); c.y = py; c.ex = c.x; c.ey = c.y;
+      const f = footCops[0]; f.chase = true; f.x = mod(px - 0.3, N); f.y = py; }, spot);
+    await until(A, () => [...net.cars.values()].some(c => c.cop), null, 'Bob\'s cruiser in Ann\'s traffic');
+    assert.deepEqual(await A.evaluate(() => { const c = [...net.cars.values()].find(c => c.cop); return { inCars: cars.includes(c), lightsAndSiren: code(c), pursuit: !!c.pursuit }; }),
+      { inCars: true, lightsAndSiren: true, pursuit: false }, 'lit up and wailing, and never one of hers');
+    assert.ok(await A.evaluate(() => { let n = 0; const o = drawFigure; drawFigure = (...x) => { if (x[6]?.shape?.includes('copcap')) n++; return o(...x); }; try { render(0); } finally { drawFigure = o; } return n > 0; }), 'his officer on foot, running');
+    for (let k = 0; k < 20; k++) await A.evaluate(() => stepCrime(0.05));
+    assert.deepEqual(await A.evaluate(() => ({ stars: wanted.stars, busted: wanted.busted, mine: cars.filter(c => c.pursuit).length })), { stars: 0, busted: false, mine: 0 }, 'Ann\'s police don\'t want her for it');
+    assert.equal(await A.evaluate(() => netCopCarNear({ x: [...net.cars.values()].find(c => c.cop).x, y: [...net.cars.values()].find(c => c.cop).y })), true, 'her own patrol car there would be hidden');
+
+    // Bob drives, Ann rides, Bob's busted: she's put out, and wanted
+    const car = await B.evaluate(() => { clearWanted(); const c = cars.find(c => c.kind === 'car' && !c.patrol && !c.ev && c.body !== TAXI && !c.remote); px = c.x; py = c.y; me = c; mode = 'drive'; c.player = true; c.parked = false; c.v = 0; a = Math.atan2(c.hy, c.hx); return { x: c.x, y: c.y, hx: c.hx, hy: c.hy }; });
+    await A.evaluate(c => { clearWanted(); mode = 'walk'; room = null; me = null; px = mod(c.x - c.hy * 0.3, N); py = mod(c.y + c.hx * 0.3, N); }, car);
+    await until(A, () => !!netCarNear(), null, 'Bob\'s car near'); await A.evaluate(() => netCarUse());
+    await until(A, () => mode === 'ride', null, 'Ann rides');
+    await B.evaluate(() => { addWanted('gunfire', px, py, true); wanted.busted = true; });
+    await until(A, () => mode === 'walk', null, 'Ann put out');
+    assert.deepEqual(await A.evaluate(() => ({ stars: wanted.stars, crime: wanted.crime })), { stars: 1, crime: 'riding with a wanted driver' });
+    for (const P of [A, B]) await P.evaluate(() => { clearWanted(); netLeave(); });
+    await A.evaluate(() => localStorage.clear());
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

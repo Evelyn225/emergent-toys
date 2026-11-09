@@ -20,7 +20,7 @@ the `WORLD_QUALITY.md` chunk note. Don't let it grow back into a log.
   (market streets and the Shotengai's roofs, stalls and frontage), then 15 and the rest of 16. The user cleared Claude to edit facades and lettering. One branch and PR per chunk. Merging after green CI is
   authorised by the user. Another Claude session is working on skate parks, grinding and then ocean waves: check
   open PRs before touching `city/skate*.js`, `city/skatepark*.js` or the sea.
-- **Multiplayer (Claude):** branch `multiplayer`, see `MULTIPLAYER_PLAN.md`. Owns `city/net-core.js`, `city/net.js`, `vendor/`; small hooks in `main.js`, `render.js`, `pause.js`, `state.js` (env) and `actions.js` (sleep). Not merged; the user hasn't cleared it for main.
+- **Multiplayer (Claude):** branch `multiplayer`, see `MULTIPLAYER_PLAN.md`. Owns `city/net-core.js`, `city/net.js`, `vendor/`; small hooks in `main.js`, `render.js`, `pause.js`, `state.js` (env) and `actions.js` (sleep). Phases 0-3 merged in #509; phases 4-6 (guns, rod hooks, police) on the branch, PR #510.
 - **Reserved, don't edit without agreement:** `city/bathroom-quality.js`, DINER,
   `city/world-bootstrap.js`. (Facades and lettering: released to Claude by the user, 2 November.)
 
