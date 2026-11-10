@@ -1,6 +1,6 @@
 // Searchable places are data; the map, list, contacts and waypoints share the same records.
-const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
-const MAP_COLORS={contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
+const MAP_CATEGORIES={all:'All',players:'Players',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
+const MAP_COLORS={players:'#a9ffb0',contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
 const MAP_NAV={path:null,next:0,lastT:-99,routeFrom:null,nearby:false};
 let mapPlaceCache=null,mapRenderPosition=null;
 function mapPlayerLocation() {
@@ -96,9 +96,10 @@ function mapDirectory() {
   for(const [id,p,name] of [['task',task,'Current favor'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
     if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
   }
-  return out;
+  return out.concat(netPlayerPlaces());
 }
 function mapFilteredPlaces() {
+  if(net.on||BIGMAP.places.some(p=>p.kind==='player'))netRefreshMapPlaces();
   const q=BIGMAP.query.trim().toLowerCase(),origin=mapPlayerLocation();
   const key=`${q}|${BIGMAP.category}|${origin.x}|${origin.y}`;
   if(mapPlaceCache?.places===BIGMAP.places&&mapPlaceCache.key===key)return mapPlaceCache.results;
@@ -182,6 +183,7 @@ function clearMapWaypoint() {
 }
 function updateMapNavigation(force=false) {
   if(!mapWaypoint)return;
+  if(mapWaypoint.id.startsWith('player:')&&(!net.on||!net.peers.has(mapWaypoint.id.slice(7)))){mapWaypoint=null;MAP_NAV.path=null;return;}
   if(mapWaypoint.id==='supplier'&&!supplierVisit){mapWaypoint=null;MAP_NAV.path=null;return;}
   if(mapWaypoint.id.startsWith('buyer:')&&!drugBuyer){mapWaypoint=null;MAP_NAV.path=null;return;}
   if(!force&&T-MAP_NAV.lastT<.3)return;MAP_NAV.lastT=T;

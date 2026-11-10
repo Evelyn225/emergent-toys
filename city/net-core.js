@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 12; // 12: persistent returning police and visible held/smoking props
+const NET_PROTOCOL = 13; // shared homes/transit plus returning police and visible held/smoking props
 // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
@@ -42,8 +42,22 @@ const netCode = s => netClean(s, NET_CODE_MAX).toLowerCase().replace(/[^a-z0-9-]
 // its own, so two players are only in the same one if they came in by the same door.
 function netRoomKey(m = mode, r = room) {
   if (m !== 'room' || !r) return 'out';
-  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
-  if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 2)); // (a carriage has no street door: the station it left and the half hour you got on, by the shared clock)
+  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + (net.on ? (r.guestOf || net.selfId) + ':' : '') + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
+  if (r.kind === 'station') return 'station:' + r.st;
+  if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 20 / 45)); // (a carriage has no street door: the station it left and the shared 45-second arrival cycle)
+  if (r.kind === 'stadium' || r.kind === 'terminal' || r.kind === 'lighthouse' || r.kind === 'lamproom') return r.kind + ':shared';
+  if (r.tower) return r.kind + ':' + r.tower.join(',');
+  if (r.cell) {
+    const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1])), sh = SHOP[cell];
+    const site = r.netSite ??= sh ? SHOP.indexOf(sh) : cell;
+    return r.kind + ':site:' + site;
+  }
+  if (r.lobby) return r.kind + ':' + netRoomKey('room', r.lobby);
+  if(r.netDoorSite)return r.netDoorSite;
+  if (r.ret && typeof doors !== 'undefined') {
+    const nearDoor = doors.filter(d => Math.hypot(rel(d.x-r.ret[0]),rel(d.y-r.ret[1])) < 1).sort((a,b)=>Math.hypot(rel(a.x-r.ret[0]),rel(a.y-r.ret[1]))-Math.hypot(rel(b.x-r.ret[0]),rel(b.y-r.ret[1])))[0];
+    if(nearDoor) return r.netDoorSite = r.kind + ':site:' + SHOP.indexOf(nearDoor.sh);
+  }
   const ret = r.ret ? r.ret.slice(0, 2).map(v => (+v).toFixed(1)).join(',') : '';
   return r.kind + ':' + ret;
 }
@@ -55,6 +69,7 @@ function netCheckTick(d) {
   if (!NET_MODES.includes(d.mode) || typeof d.rk !== 'string' || d.rk.length > 80) return null;
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
+  if (d.loc && netNum(d.loc.x) && netNum(d.loc.y)) out.loc = { x: worldCoord(d.loc.x), y: worldCoord(d.loc.y), inside: !!d.loc.inside };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, siren:!!d.veh.siren, shift: !!d.veh.shift };
   if(['cigarette','joint','pipe'].includes(d.smoking))out.smoking=d.smoking;

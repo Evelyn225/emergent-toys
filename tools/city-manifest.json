@@ -354,6 +354,8 @@
     "city/el-life.js",
     "city/ferry-render.js",
     "city/net.js",
+    "city/net-homes.js",
+    "city/net-teleport.js",
     "city/player-appearance.js",
     "city/emergency-net.js",
     "city/main.js",

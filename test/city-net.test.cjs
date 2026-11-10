@@ -65,7 +65,7 @@ test('rules instead of a server: who keeps the clock, the room key, the rate lim
   assert.deepStrictEqual(j(ev, `[0, 0, 0, 0].map(() => netAllow(B, 5, 1, 3))`), [true, true, true, false], 'three at once, then wait');
   assert.strictEqual(ev(`netAllow(B, 6.1, 1, 3)`), true, 'a second later: one more');
   assert.strictEqual(ev('netBuildId()'), ev('netBuildId()'));
-  assert.match(ev('netBuildId()'), /^12-[0-9a-z]+$/);
+  assert.match(ev('netBuildId()'), /^13-[0-9a-z]+$/);
   const look = j(ev, `netLookFor('Ann')`);
   assert.deepStrictEqual(j(ev, `netLookFor('Ann')`), look, 'the same name, the same colours, on every machine');
 });
@@ -131,15 +131,16 @@ test('guns: nobody to hit when you\'re not in a room, and shooting a player down
   assert.ok(ev('NET_SHOT_HURT[0] * 3 < 100 && NET_SHOT_HURT[1] * 3 >= 100'), 'three rounds can put someone down, two can\'t');
 });
 
-test('rooms and rides: a subway carriage is keyed by its station and the half hour you boarded; ride ids for cars and craft', () => {
+test('rooms and rides: a subway carriage is keyed by its station and shared train cycle; ride ids for cars and craft', () => {
   const { ev } = loadCity();
-  const keys = j(ev, `(() => { dayNum = 4; tod = 9.2; const k1 = netRoomKey('room', { kind: 'train', st: 3 }); tod = 9.6; const k2 = netRoomKey('room', { kind: 'train', st: 3 }); const k3 = netRoomKey('room', { kind: 'train', st: 5 }); return [k1, k2, k3]; })()`);
-  assert.strictEqual(new Set(keys).size, 3, 'another half hour, or another station: another train');
+  const keys = j(ev, `(() => { dayNum = 4; tod = 9.2; const k1 = netRoomKey('room', { kind: 'train', st: 3 }); tod = 11.6; const k2 = netRoomKey('room', { kind: 'train', st: 3 }); const k3 = netRoomKey('room', { kind: 'train', st: 5 }); return [k1, k2, k3]; })()`);
+  assert.strictEqual(new Set(keys).size, 3, 'another train cycle, or another station: another train');
   assert.strictEqual(ev(`netRoomKey('room', { kind: 'home', cell: [12.7, 40.2], ret: [1, 2] })`), 'home:12,40', 'a home: by its cell, whoever came in');
 });
 
 test('every message the game sends is one Trystero was told about up front', () => {
-  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'city', 'net.js'), 'utf8');
+  const fs = require('node:fs'), path = require('node:path'), dir = path.join(__dirname, '..', 'city');
+  const src = fs.readdirSync(dir).filter(f=>/^net(?:-.*)?\.js$/.test(f)).map(f=>fs.readFileSync(path.join(dir,f),'utf8')).join('\n');
   const types = JSON.parse(src.match(/const NET_TYPES = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
   const sent = [...new Set([...src.matchAll(/tx\.send\('([A-Za-z]+)'/g)].map(m => m[1]))];
   assert.ok(sent.length > 20);
@@ -157,3 +158,23 @@ test('custom player appearances accept only bounded choices and keep legacy colo
  assert.equal(ev(`netAppearanceOptions(${JSON.stringify(raw)}).hat`),null);
  assert.equal(ev(`netAppearanceOptions(${JSON.stringify(raw)}).top`),'jacket');
 });
+
+ test('stations and a boarding window have stable multiplayer identities',()=>{
+ const {ev}=loadCity();
+ assert.equal(ev("netRoomKey('room',{kind:'station',st:2,ret:[1,2]})"),ev("netRoomKey('room',{kind:'station',st:2,ret:[1.2,2.1]})"));
+ const result=j(ev,`(()=>{dayNum=4;tod=9.49;const a=netRoomKey('room',{kind:'train',st:2});tod=9.51;const b=netRoomKey('room',{kind:'train',st:2});tod+=45/20;const c=netRoomKey('room',{kind:'train',st:2});return [a,b,c];})()`);
+ assert.equal(result[0],result[1]);assert.notEqual(result[1],result[2]);
+ });
+
+ test('map locations remain world coordinates when the avatar enters a room',()=>{
+ const {ev}=loadCity();
+ const d={t:1,x:4,y:6,z:0,a:0,mode:'room',rk:'station:2',loc:{x:120,y:90,inside:true}};
+ assert.deepEqual(j(ev,`netCheckTick(${JSON.stringify(d)}).loc`),d.loc);
+ assert.equal(ev(`netCheckTick(${JSON.stringify({...d,loc:{x:null,y:90}})}).loc`),undefined);
+ });
+
+ test('online flats distinguish owners while an invited guest shares the host room',()=>{
+ const {ev}=loadCity();
+ const keys=j(ev,`(()=>{net.on=true;net.selfId='ann';const host=netRoomKey('room',{kind:'home',cell:[12,40]});net.selfId='bob';return [host,netRoomKey('room',{kind:'home',cell:[12,40]}),netRoomKey('room',{kind:'home',cell:[12,40],guestOf:'ann'})];})()`);
+ assert.notEqual(keys[0],keys[1]);assert.equal(keys[0],keys[2]);
+ });
