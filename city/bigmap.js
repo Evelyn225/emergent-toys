@@ -145,7 +145,7 @@ function bigMapDraw() {
   }
   const onScreen = (X, Y, m = 40) => X > -m && Y > -m && X < W + m && Y < H + m;
   const dot = (wx, wy, ch, col, size = 12) => {
-    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y)) return;
+    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y)) return;size*=uiScale();
     x.font = `bold ${size}px monospace`; const w = x.measureText(ch).width + 4;
     x.fillStyle = 'rgba(0,0,0,0.8)'; x.fillRect(X - w / 2, Y - size / 2 - 1, w, size + 2);
     x.fillStyle = col; x.fillText(ch, X, Y + 1);
@@ -154,7 +154,7 @@ function bigMapDraw() {
   // names: biggest first, and nothing drawn over something already written
   const taken = [];
   const label = (wx, wy, t, col, size, bold, force=false) => {
-    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y, 120)) return;
+    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y, 120)) return;size*=uiScale();
     x.font = `${bold ? 'bold ' : ''}${size}px monospace`;
     const w = x.measureText(t).width, r = [X - w / 2 - 3, Y - size / 2 - 2, X + w / 2 + 3, Y + size / 2 + 2];
     if (!force&&taken.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) return;

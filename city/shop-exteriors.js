@@ -20,10 +20,24 @@ const shopExteriorList = () => SHOP_EXTERIORS_B ||= (() => {
     const tx = o.c, ty = o.s, end = o.hl + .045; // along the board; past its end, where the door usually is
     out.push({ kind, sh, x: o.x + tx * end - o.nx * o.hw, y: o.y + ty * end - o.ny * o.hw, nx: o.nx, ny: o.ny, tx, ty, hl: o.hl, cx: o.x - o.nx * o.hw, cy: o.y - o.ny * o.hw, seed: o.seed, z0: o.z0 });
   }
+  SOLID_SHADE.shopboard=()=>()=>false; // Render the closed panels above; collision follows their feet.
+  for(const e of out)if(e.kind==='board'){
+    const o={x:e.x-e.tx*e.hl*.6+e.nx*.3,y:e.y-e.ty*e.hl*.6+e.ny*.3,c:e.tx,s:e.ty,
+      hl:SHOP_BOARD.half,hw:SHOP_BOARD.foot+SHOP_BOARD.thickness,z0:0,z1:SHOP_BOARD.height,kind:'shopboard',k:0};
+    solids.push(o);(solidsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))]||=[]).push(o);
+  }
   return bucketed(out);
 })();
 // a cylinder standing up, or lying along the normal: drawBox through rayFrustum (hl = hw = r1 = r)
 const extCyl = (x, y, r, z0, z1, shade) => drawBox({ x, y, c: 1, s: 0, hl: r, hw: r, r1: r, z0, z1 }, shade, rayFrustum);
+// Closed, sheared boxes share the hinge and foot measurements on both panels.
+const SHOP_BOARD={half:.03,foot:.025,thickness:.002,height:.1};
+function rayShopBoard(ox,oy,oz,rx,ry,rz,b){
+  const qx=ox-b.x,qy=oy-b.y,sgn=b.boardSign,k=(SHOP_BOARD.foot-SHOP_BOARD.thickness)/SHOP_BOARD.height;
+  const u=qx*b.c+qy*b.s,v=-qx*b.s+qy*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  return rayBox(u,v+sgn*k*oz-sgn*SHOP_BOARD.foot,oz,du,dv+sgn*k*rz,rz,
+    {x:0,y:0,c:1,s:0,hl:SHOP_BOARD.half,hw:SHOP_BOARD.thickness,z0:0,z1:SHOP_BOARD.height});
+}
 function drawShopExterior(e, vx, vy) {
   const lit = Math.max(night, overcast * .6) > .3, open = openAt(e.sh, tod);
   const at = (t, n) => [vx + e.tx * t + e.nx * n, vy + e.ty * t + e.ny * n]; // (t along the wall from the fixture's spot, n out from it)
@@ -61,12 +75,15 @@ function drawShopExterior(e, vx, vy) {
   }
   if (e.kind === 'board') { // a sandwich board on the pavement: two chalkboards leaning together, framed in timber, the menu chalked up
     const [x, y] = at(-e.hl * .6, .3);
-    for (const sgn of [-1, 1]) drawBox({ x: x + e.nx * sgn * .012, y: y + e.ny * sgn * .012, c: e.tx, s: e.ty, hl: .03, hw: .004, z0: 0, z1: .1 }, (i, t, L) => {
+    for (const sgn of [-1, 1]) drawBox({ x, y, c: e.tx, s: e.ty, hl: SHOP_BOARD.half, hw: SHOP_BOARD.foot+SHOP_BOARD.thickness, z0: 0, z1: SHOP_BOARD.height, boardSign:sgn }, (i, t, L) => {
       const u = Math.abs(HIT.u), w = HIT.w, frame = u > .025 || w > .093 || w < .012;
       if (frame) { BG[i] = C(WARM, (1.8 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
       const line = Math.abs(fract((w - .02) / .016) - .5) < .3 && u < .02 && hash(Math.floor(w / .016), Math.floor(HIT.u * 150), 1801) > .3; // (chalked lines of the menu, words with gaps)
       BG[i] = line ? C(WHITE, 4 + L * .2) : C(GREEN, .8 + L * .06); return set(i, ' ', 0), true; // chalk on slate
-    });
+    },rayShopBoard);
+    // A visible hinge closes the apex; a low crossbar holds the legs open.
+    drawBox(boxAt(x,y,e.tx,e.ty,.031,.003,.099,.104),metal);
+    drawBox(boxAt(x,y,e.tx,e.ty,.002,.016,.038,.042),metal);
     return;
   }
   if (e.kind === 'buckets') { // three zinc buckets of flowers by the door

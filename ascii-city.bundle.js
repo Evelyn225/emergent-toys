@@ -351,14 +351,15 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, uiScale: 1, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
+const uiScale=()=>clamp(Number(settings.uiScale)||1,.75,2);
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
     if (!saved.v && saved.fov === 63) delete saved.fov; // the old default: move up to the new one
-    Object.assign(settings, saved, { v: 2 });
+    Object.assign(settings, saved, { v: 2 });settings.uiScale=uiScale();
   } catch (e) { /* private window etc: defaults */ }
 }
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* not saved, still applied */ } }
@@ -5187,10 +5188,24 @@ const shopExteriorList = () => SHOP_EXTERIORS_B ||= (() => {
     const tx = o.c, ty = o.s, end = o.hl + .045; // along the board; past its end, where the door usually is
     out.push({ kind, sh, x: o.x + tx * end - o.nx * o.hw, y: o.y + ty * end - o.ny * o.hw, nx: o.nx, ny: o.ny, tx, ty, hl: o.hl, cx: o.x - o.nx * o.hw, cy: o.y - o.ny * o.hw, seed: o.seed, z0: o.z0 });
   }
+  SOLID_SHADE.shopboard=()=>()=>false; // Render the closed panels above; collision follows their feet.
+  for(const e of out)if(e.kind==='board'){
+    const o={x:e.x-e.tx*e.hl*.6+e.nx*.3,y:e.y-e.ty*e.hl*.6+e.ny*.3,c:e.tx,s:e.ty,
+      hl:SHOP_BOARD.half,hw:SHOP_BOARD.foot+SHOP_BOARD.thickness,z0:0,z1:SHOP_BOARD.height,kind:'shopboard',k:0};
+    solids.push(o);(solidsB[bi(Math.floor(o.x/8),Math.floor(o.y/8))]||=[]).push(o);
+  }
   return bucketed(out);
 })();
 // a cylinder standing up, or lying along the normal: drawBox through rayFrustum (hl = hw = r1 = r)
 const extCyl = (x, y, r, z0, z1, shade) => drawBox({ x, y, c: 1, s: 0, hl: r, hw: r, r1: r, z0, z1 }, shade, rayFrustum);
+// Closed, sheared boxes share the hinge and foot measurements on both panels.
+const SHOP_BOARD={half:.03,foot:.025,thickness:.002,height:.1};
+function rayShopBoard(ox,oy,oz,rx,ry,rz,b){
+  const qx=ox-b.x,qy=oy-b.y,sgn=b.boardSign,k=(SHOP_BOARD.foot-SHOP_BOARD.thickness)/SHOP_BOARD.height;
+  const u=qx*b.c+qy*b.s,v=-qx*b.s+qy*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  return rayBox(u,v+sgn*k*oz-sgn*SHOP_BOARD.foot,oz,du,dv+sgn*k*rz,rz,
+    {x:0,y:0,c:1,s:0,hl:SHOP_BOARD.half,hw:SHOP_BOARD.thickness,z0:0,z1:SHOP_BOARD.height});
+}
 function drawShopExterior(e, vx, vy) {
   const lit = Math.max(night, overcast * .6) > .3, open = openAt(e.sh, tod);
   const at = (t, n) => [vx + e.tx * t + e.nx * n, vy + e.ty * t + e.ny * n]; // (t along the wall from the fixture's spot, n out from it)
@@ -5228,12 +5243,15 @@ function drawShopExterior(e, vx, vy) {
   }
   if (e.kind === 'board') { // a sandwich board on the pavement: two chalkboards leaning together, framed in timber, the menu chalked up
     const [x, y] = at(-e.hl * .6, .3);
-    for (const sgn of [-1, 1]) drawBox({ x: x + e.nx * sgn * .012, y: y + e.ny * sgn * .012, c: e.tx, s: e.ty, hl: .03, hw: .004, z0: 0, z1: .1 }, (i, t, L) => {
+    for (const sgn of [-1, 1]) drawBox({ x, y, c: e.tx, s: e.ty, hl: SHOP_BOARD.half, hw: SHOP_BOARD.foot+SHOP_BOARD.thickness, z0: 0, z1: SHOP_BOARD.height, boardSign:sgn }, (i, t, L) => {
       const u = Math.abs(HIT.u), w = HIT.w, frame = u > .025 || w > .093 || w < .012;
       if (frame) { BG[i] = C(WARM, (1.8 + L * .25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
       const line = Math.abs(fract((w - .02) / .016) - .5) < .3 && u < .02 && hash(Math.floor(w / .016), Math.floor(HIT.u * 150), 1801) > .3; // (chalked lines of the menu, words with gaps)
       BG[i] = line ? C(WHITE, 4 + L * .2) : C(GREEN, .8 + L * .06); return set(i, ' ', 0), true; // chalk on slate
-    });
+    },rayShopBoard);
+    // A visible hinge closes the apex; a low crossbar holds the legs open.
+    drawBox(boxAt(x,y,e.tx,e.ty,.031,.003,.099,.104),metal);
+    drawBox(boxAt(x,y,e.tx,e.ty,.002,.016,.038,.042),metal);
     return;
   }
   if (e.kind === 'buckets') { // three zinc buckets of flowers by the door
@@ -6180,25 +6198,61 @@ function stepCityFires(dt){
     if(f.out&&T-f.outAt>30){if(f.crewCar){const i=cars.indexOf(f.crewCar);if(i>=0)cars.splice(i,1);}if(f.car?.incidentVehicle||f.car?.incidentGhost){const i=cars.indexOf(f.car);if(i>=0)cars.splice(i,1);}cityFires.splice(k,1);}
   }
 }
-// A continuous flame silhouette, sampled by the city's normal depth-tested
-// sprite renderer. Broad overlapping roots flare out, then curl into tapered
-// tips; coherent motion avoids the old cylinders and per-pixel static.
-function cityFlameHeat(u,v,seed,time){
-  if(v<0||v>1||Math.abs(u)>1)return 0;
-  let heat=0;
-  for(let j=0;j<5;j++){
-    const phase=seed*.73+j*2.37,speed=2.3+j*.31;
-    const height=.67+.16*Math.sin(phase+time*speed)+.13*Math.cos(phase*.8-time*1.7);
-    if(v>height)continue;
-    const t=v/height,root=(j-2)*.27;
-    const curl=Math.sin(phase+time*2.2-t*4)*.16*t*t;
-    const center=root*(.75+.55*Math.sin(t*Math.PI))+curl;
-    const width=(.27+.12*Math.sin(t*Math.PI))*(1-t)**.66;
-    const edge=Math.abs(u-center)/Math.max(.001,width);
-    if(edge<1)heat=Math.max(heat,(1-edge*edge)*(1-t*.6));
-  }
-  return heat;
+// Doom-style heat transport: hot fuel feeds the bottom, heat rises, drifts and
+// diffuses into cold air. A fixed clock keeps motion independent of frame rate.
+// No game RNG is consumed; each fire has its own bounded, reproducible field.
+const CITY_FIRE_GRID={width:40,height:52,hz:24},cityFireFields=new Map();
+function cityFireNoise(x,y,seed){
+  let n=(Math.imul(x,374761393)^Math.imul(y,668265263)^seed)|0;
+  n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;
 }
+function cityFireRead(field,x,y){
+  const {width:w,height:h}=CITY_FIRE_GRID;
+  if(x<0||x>w-1||y<0||y>h-1)return 0;
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,b=iy*w+ix;
+  const a=field[b],c=ix+1<w?field[b+1]:0,d=iy+1<h?field[b+w]:0,e=ix+1<w&&iy+1<h?field[b+w+1]:0;
+  return (a+(c-a)*fx)*(1-fy)+(d+(e-d)*fx)*fy;
+}
+function stepCityFireField(f,tick){
+  const {width:w,height:h,hz}=CITY_FIRE_GRID,from=f.heat,to=f.next,time=tick/hz,s=f.seed;
+  const gust=Math.sin(time*.83+s*.001)*.38+Math.sin(time*1.47+s*.003)*.23;
+  for(let y=0;y<h;y++){
+    const v=y/(h-1),curl=Math.sin(v*8-time*2.1+s*.002)*.5*v+Math.sin(v*15-time*3.2)*.18*v;
+    for(let x=0;x<w;x++){
+      const u=(x/(w-1)-.5)*2;
+      if(y<2){
+        const pulse=cityFireNoise(Math.floor(x/3),Math.floor(tick/3),s),fuel=Math.max(0,1-(u/.62)**4);
+        to[y*w+x]=fuel*(.65+pulse*.65);continue;
+      }
+      const spread=u*.35*Math.max(0,1-v*2),sx=x-gust-curl-spread,sy=y-1.9;
+      const heat=cityFireRead(from,sx,sy)*.64+(cityFireRead(from,sx-.85,sy)+cityFireRead(from,sx+.85,sy))*.18;
+      // Cool coherent pockets of air, rather than making unrelated pixels blink.
+      const air=cityFireNoise(Math.floor(x/3),Math.floor((y-tick*1.9)/4),s^7391);
+      to[y*w+x]=Math.max(0,heat-.016-air*.025-Math.max(0,v-.5)*.055);
+    }
+  }
+  f.heat=to;f.next=from;f.tick=tick;
+  let core=0;for(let x=12;x<28;x++)core+=to[w*3+x];
+  f.glow+=(clamp(core/16,.5,1.15)-f.glow)*.12;
+}
+function cityFlameFrame(seed,time){
+  const key=Math.round(seed*65536),tick=Math.floor(time*CITY_FIRE_GRID.hz);let f=cityFireFields.get(key);
+  if(!f){
+    if(cityFireFields.size>=64)cityFireFields.delete(cityFireFields.keys().next().value);
+    const count=CITY_FIRE_GRID.width*CITY_FIRE_GRID.height;
+    f={seed:key,heat:new Float32Array(count),next:new Float32Array(count),tick:tick-60,glow:.8};cityFireFields.set(key,f);
+  }
+  if(tick<f.tick||tick-f.tick>60){f.heat.fill(0);f.next.fill(0);f.tick=tick-60;f.glow=.8;}
+  for(let step=f.tick+1;step<=tick;step++)stepCityFireField(f,step);
+  return f;
+}
+function cityFlameSample(frame,u,v){
+  if(v<0||v>=1||Math.abs(u)>=1)return 0;
+  const heat=cityFireRead(frame.heat,(u*.5+.5)*(CITY_FIRE_GRID.width-1),v*(CITY_FIRE_GRID.height-1));
+  // Lose the last trace of heat before the field boundary, avoiding flat tops.
+  return heat*Math.min(1,(1-v)/.1);
+}
+function cityFlameHeat(u,v,seed,time){return cityFlameSample(cityFlameFrame(seed,time),u,v);}
 // ===== aircraft: everything that flies from the airport (world.js has the airport, aircraft-render.js draws them,
 // flight.js flies the one you're in). Speeds in cells a second (1 = 36 km/h), heights in cells (1 = 10m).
 // The airliners belong to the airport: they sit at the gates, and every few minutes one pushes back, taxis out, rolls
@@ -8021,6 +8075,7 @@ const ITEMS = {
   // drink
   coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
   tea: { name: 'tea', price: 2, kind: 'drink', uses: 3, caffeine: 25 }, soda: { name: 'soda', price: 2, kind: 'drink', uses: 3 },
+  milk: { name: 'milk', price: 3, kind: 'drink', uses: 3, clearsDrugEffects: true },
   water: { name: 'water', price: 1, kind: 'drink', uses: 3 }, energy: { name: 'energy drink', price: 4, kind: 'drink', uses: 3, caffeine: 90 },
   beer: { name: 'beer', price: 6, kind: 'drink', uses: 4, booze: 0.25 }, whiskey: { name: 'whiskey', price: 9, kind: 'drink', uses: 2, booze: 0.4 },
   cocktail: { name: 'cocktail', price: 12, kind: 'drink', uses: 3, booze: 0.3 },
@@ -8103,10 +8158,10 @@ const STOCK_WORD = {
   'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'fortunecookie', 'tigerbalm'], CURIOS: ['mysterybox', 'lantern', 'firecrackers', 'cityglobe'], // (the night market's stalls)
   YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
   KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
-  '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella', 'eggs', 'bread', 'drynoodles'],
-  BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper', 'eggs', 'bread', 'pasta', 'rice'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'],
+  '24/7': ['milk', 'sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella', 'eggs', 'bread', 'drynoodles'],
+  BODEGA: ['milk', 'sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper', 'eggs', 'bread', 'pasta', 'rice'], DELI: ['milk', 'sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'],
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
-  GROCERY: ['apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
+  GROCERY: ['milk', 'apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
   MARKET: ['potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'apple'], FRUIT: ['apple', 'lemon', 'tomatoes'], // (MARKET: the market hall's greengrocer, at the keeper's spot; the other stalls: MARKET_STALL_STOCK)
   PAWN: ['telescope', 'skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
   HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
@@ -8118,7 +8173,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['coat', 'umbrella', 'vinyl', 'book', 'boombox'], BARBER: ['haircut'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
-  DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
+  DELICATESSEN: ['milk', 'sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
   TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
   GAS: ['hotdog', 'coffee', 'candy', 'chips', 'soda', 'energy', 'water', 'cigarettes'], // (the shop, not the pumps: you never need gas)
   'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
@@ -8321,8 +8376,10 @@ function useHeld(near) {
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
     if (d.sober) clearDrugEffects(30);
+    if (d.clearsDrugEffects) clearDrugEffects();
     const done = it.uses <= 0;
     if (done) removeHeld();
+    if (d.clearsDrugEffects) return [(done ? 'You finish the milk.' : 'You sip the milk.') + ' Your vision clears.' + feel, 'sip'];
     if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
     if (d.cooked) { const nm = dishName(it), q = it.q; return [(done ? `You finish the ${nm}.` : q === 'burnt' ? pick([`The ${nm} is burnt. You eat it anyway.`, `Crunchy. Black. ${cap(nm)}, technically.`]) : q === 'perfect' ? pick([`The ${nm} is exactly right.`, `You made this ${nm}, and it's good.`]) : `You take a bite of the ${nm}.`) + feel, 'bite']; }
     return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
@@ -14255,42 +14312,61 @@ function viewOut(i, u, z, near, up) {
   return set(i, night > 0.5 && hash(Math.floor(ang * 120), Math.floor(sz * 120), 886) > 0.96 ? '.' : ' ', C(WHITE, 12));
 }
 
-// fog: at draw time every cell's text and background colors are mixed toward the fog color by distance.
-// 8 blend levels, with a Bayer dither between neighbouring levels so the gradient stays smooth.
+// Fifteen fog levels fit the packed grid's two nibbles. Wisps live in world
+// space, so turning the camera does not drag a noise pattern across the view.
+const FOG_LEVELS=15;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const fogCache = new Map();
-let fogRGB = [0, 0, 0], fogKey = -1;
-// Also always: distance haze, so far scenery fades into a sky-tinted color instead of ending in black at the draw distance.
+let fogRGB = [0, 0, 0], fogKey = '';
 function fogSteps() {
-  const foggy = fogAmt > 0.3, glow = foggy ? 0 : Math.round(dusk * (1 - overcast) * 6), k = (Math.round(day * 16) * 2 + foggy) * 8 + glow;
-  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer, and warm at sunrise and sunset
-    fogKey = k; fogCache.clear(); const v = 22 + day * 150, w = glow / 6 * 0.55;
-    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7 * (1 - w) + 190 * w, v * 0.85 * (1 - w) + 105 * w, Math.min(255, v * 1.15) * (1 - w) + 95 * w];
+  const amount=clamp(fogAmt,0,1),duskGlow=dusk*(1-overcast)*(1-amount),key=[Math.round(day*32),Math.round(amount*32),Math.round(duskGlow*16)].join(':');
+  if(key!==fogKey){
+    fogKey=key;fogCache.clear();const v=22+day*150,w=duskGlow*.55;
+    const clear=[v*.7*(1-w)+190*w,v*.85*(1-w)+105*w,Math.min(255,v*1.15)*(1-w)+95*w],mist=[v*.92,v*.97,v+4];
+    fogRGB=clear.map((c,i)=>c+(mist[i]-c)*amount);
   }
-  const anyFog = fogAmt > 0.03, sky = anyFog ? clamp(Math.floor(fogAmt * 8), 0, 8) : 0; // open sky: only real fog
-  const level = (z, wisp, dith) => {
-    if (z === Infinity) return sky;
-    const haze = clamp((z / vis - 0.5) / 0.5, 0, 1);
-    const f = anyFog ? Math.max(haze, fogAmt * clamp((z / vis - 0.15) / 0.85 * wisp, 0, 1)) : haze;
-    return clamp(Math.floor(f * 8 + dith), 0, 8);
+  const level=(z,row,rx,ry)=>{
+    if(z===Infinity){const horizon=clamp(1-Math.abs(row-hor)/rows*1.5,.25,1);return clamp(Math.floor(amount*(.75+.25*horizon)*FOG_LEVELS+.5),0,FOG_LEVELS);}
+    const edge=clamp((z/vis-.6)/.4,0,1),haze=edge*edge*(3-2*edge);
+    let mist=0;
+    if(amount>.01){
+      const wx=px+rx*z,wy=py+ry*z,height=eye+(hor-row-.5)*z/projY;
+      const wisp=.94+.12*noise(wx*.075+T*.012,wy*.075,51),density=clamp(1.08-height*.12,.65,1.05);
+      mist=1-Math.exp(-Math.max(0,z-.18)*amount*1.9/vis*wisp*density);
+    }
+    return clamp(Math.floor(Math.max(haze,mist)*FOG_LEVELS+.5),0,FOG_LEVELS);
   };
-  for (let r = 0; r < rows; r++) for (let x = 0; x < cols; x++) {
-    const i = r * cols + x, z = ZB[i], zb = ZBG[i], dith = BAYER[(r & 3) * 4 + (x & 3)];
-    const wisp = anyFog && (z !== Infinity || zb !== Infinity) ? 0.85 + 0.3 * noise(x * 0.03 + T * 0.1, r * 0.06, 51) : 0;
-    FOGS[i] = level(z, wisp, dith); FOGB[i] = zb === z ? FOGS[i] : level(zb, wisp, dith);
+  for(let x=0;x<cols;x++){
+    const q=(2*(x+.5)/cols-1)*tf,rx=dx-dy*q,ry=dy+dx*q;
+    for(let r=0;r<rows;r++){
+      const i=r*cols+x,z=ZB[i],zb=ZBG[i];
+      FOGS[i]=level(z,r,rx,ry);FOGB[i]=zb===z?FOGS[i]:level(zb,r,rx,ry);
+    }
   }
 }
-function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the way to the fog color
-  const key = idx * 9 + s;
+function fogged(idx, s) { // palette color (or black for NONE) mixed s/15 of the way to the fog color
+  const key = idx * 16 + s;
   let v = fogCache.get(key);
   if (v === undefined) {
-    const [r, gg, b] = idx === NONE ? [0, 0, 0] : PALRGB[idx], k = s / 8;
+    const [r, gg, b] = idx === NONE ? [0, 0, 0] : PALRGB[idx], k = s / FOG_LEVELS;
     v = `rgb(${r + (fogRGB[0] - r) * k | 0},${gg + (fogRGB[1] - gg) * k | 0},${b + (fogRGB[2] - b) * k | 0})`;
     fogCache.set(key, v);
   }
   return v;
 }
 
+
+// Interpolate atmospheric attenuation between nearby cells, without blurring
+// their colours or bleeding dense sky fog across a close silhouette.
+const FOG_SAMPLE_GLSL=`
+vec2 fogCell(vec2 c){float a=floor(texture2D(cells,(clamp(c,vec2(0.0),grid-1.0)+0.5)/grid).a*255.0+0.5);return vec2(floor(a/16.0),mod(a,16.0))/15.0;}
+vec2 fogNeighbour(vec2 c,vec2 center){vec2 v=fogCell(c);return mix(v,center,step(vec2(0.14),abs(v-center)));}
+vec2 sampleGridFog(vec2 position,vec2 center){
+ if(max(center.x,center.y)<0.001||min(center.x,center.y)>0.999)return center;
+ vec2 at=position-0.5,c=floor(at),f=fract(at);
+ return mix(mix(fogNeighbour(c,center),fogNeighbour(c+vec2(1.0,0.0),center),f.x),mix(fogNeighbour(c+vec2(0.0,1.0),center),fogNeighbour(c+vec2(1.0),center),f.x),f.y);
+}
+`;
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
@@ -15165,7 +15241,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       } else if (ch === ' ') ch = '.';
     }
   }
-  { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
+  {const fg=FIRES.length?fireGlow(wx,wy):0;if(fg>.01){BG[i]=campfireLightColour(BG[i],fg);col=campfireLightColour(col,fg);}}
   if (gunLit()) { const mf = muzzleGlow(wx, wy); if (mf > 0.02) { col = C(mf > 0.4 ? WHITE : YEL, Math.max(L * k, 5 + mf * 10)); BG[i] = C(ORANGE, 1 + mf * 6); if (ch === ' ') ch = '.'; } } // a shot's flash (gun-ui.js)
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
@@ -16292,7 +16368,7 @@ function sfGlass(i, a, z, z0, z1, w, lit, L, fine, seed) {
   const diag = a * .8 + z, streak = Math.max(0, 1 - Math.abs(fract(diag * 2.2 + seed * .37) - .3) / .07), streak2 = Math.max(0, 1 - Math.abs(fract(diag * 2.2 + seed * .37) - .42) / .025);
   const sheen = fine > .2 ? (streak * .7 + streak2 * .5) * fine : 0;
   if (lit) { BG[i] = C(WARM, (1.6 + night * 3.2 + up * .5) * (1 - reveal * .45) + sheen * .4); return; }
-  BG[i] = C(CYAN, (.9 + day * 1.4 + up * (.6 + day)) * (1 - reveal * .5) + sheen);
+  BG[i] = C(WET, (1.5 + day * 2.2 + up * (.8 + day)) * (1 - reveal * .45) + sheen);
 }
 // the opening's parts, top to bottom: head (frame), transom lights, the glass with its bars, the sill, the stallriser
 function shopfrontBay(i, a, w, z, z0, z1, sh, L, fp, lit, d) {
@@ -28483,6 +28559,8 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   BG[i] = surface ? C(background,level) : bgAt(background,level); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0 && !surface?.water) paintSettledSnow(i, x, y, L, 1, 0);
+  const fire=FIRES.length?fireGlow(x,y):0;
+  if(fire>.01){BG[i]=campfireLightColour(BG[i],fire);COL[i]=campfireLightColour(COL[i],fire);}
 }
 function drawRoadBridges() {
   if(!worldReady)return;
@@ -28690,7 +28768,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const bg = BG[i]; BG[i] = BG_UNSET;
       const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
-      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = 0; }
+      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = drawNoGlow; }
     }
   }
 }
@@ -28726,6 +28804,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 // set for the one render a screenshot takes (screenshots.js): just the world, no HUD and nothing in your hand
 let cleanShot = false;
 function render(dt,sceneOnly=false,mask=null) {
+  if(!sceneOnly)hudReadouts.length=0;
   videoBackroomTick();
   if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
@@ -28829,9 +28908,10 @@ function render(dt,sceneOnly=false,mask=null) {
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   if (!city) { roomPools(); tvGlow(); } // pools of light under a room's lamps, dim between; a TV's glow (room-light.js)
-  drawHaze(); // smoke hanging in the air, over everything it's in front of
   // (particles.js: after the puddles' reflections, before the fog)
-  if (city) { reflect(); drawParticles(dt); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); drawParticles(dt); fogSteps(); } else { FOGS.fill(0); FOGB.fill(0); }
+  drawHaze(); // Composite the cloud after atmospheric attenuation, keeping both depth layers.
+  if(city){drawFireworks();rainFx(dt);}
   if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
   if (city) { drawAnglerLines(); netDrawLines(); } // (the regulars' lines too; and other players', net.js)
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
@@ -28875,6 +28955,7 @@ const GLP_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0);
 const GLP_FS = `precision highp float;
 uniform sampler2D cells, pal, atlas; uniform vec2 grid, cell, atlasSize; uniform float slotW, canvasW, canvasH; uniform vec3 fog;
 vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+${FOG_SAMPLE_GLSL}
 #ifdef PF
 // the per-pixel post effects (post-fx.js postFxGrid sets these). Only in the program built with PF defined, so with
 // them all off the frame is drawn by the plain program, exactly as before (a GPU without real branches would
@@ -28900,11 +28981,12 @@ void main() {
   if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
   vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
   float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
-  vec3 col = mix(palette(d.b), fog, fb / 8.0);
-  if (d.r < 254.5 && fs < 7.5) {
+  vec2 mist=sampleGridFog(p/cell,vec2(fs,fb)/15.0);
+  vec3 col = mix(palette(d.b), fog, mist.y);
+  if (d.r < 254.5 && fs < 14.5) {
     vec2 l = p - c * cell;
     float a = texture2D(atlas, vec2((d.r * slotW + l.x) / atlasSize.x, l.y / atlasSize.y)).a;
-    col = mix(col, mix(palette(d.g), fog, fs / 8.0), a);
+    col = mix(col, mix(palette(d.g), fog, mist.x), a);
   }
 #ifdef PF
   col = postFx(col);
@@ -28977,8 +29059,8 @@ function glPresent(world = true) {
   const D = st.data, odd = []; // (cells whose character isn't plain ASCII: drawn over the top after)
   for (let i = 0, n = cols * rows; i < n; i++) {
     const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4, block = code >= 0x2580 ? BLOCK_CELLS.indexOf(ch) : -1;
-    D[j] = FOGS[i] >= 8 ? 255 : code > 32 && code < 127 ? code - 32 : block > 0 ? 95 + block : 255;
-    if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < 8 && !(code > 32 && code < 127)) odd.push(i);
+    D[j] = FOGS[i] >= FOG_LEVELS ? 255 : code > 32 && code < 127 ? code - 32 : block > 0 ? 95 + block : 255;
+    if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < FOG_LEVELS && !(code > 32 && code < 127)) odd.push(i);
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
@@ -29009,7 +29091,7 @@ function present2D() {
   }
   // text: one fillText per run of same-coloured characters on a row (gaps of spaces are allowed inside a run);
   // the font is monospace so a run lines up with the grid, and it's far fewer canvas calls than one per cell
-  const blank = j => CH[j] === ' ' || FOGS[j] === 8; // fully fogged text is invisible
+  const blank = j => CH[j] === ' ' || FOGS[j] === FOG_LEVELS; // fully fogged text is invisible
   const singleWidth = ch => ch.length === 1 && ch.charCodeAt(0) < 128;
   for (let r = 0; r < rows; r++) for (let x = 0; x < cols;) {
     const i = r * cols + x;
@@ -29022,12 +29104,12 @@ function present2D() {
       if (block > 0) drawBlockCell(g, block, x * cw, r * FS); else g.fillText(CH[i],x * cw,r * FS,cw);
       x++; continue;
     }
-    const key = COL[i] * 9 + FOGS[i];
+    const key = COL[i] * 16 + FOGS[i];
     let s = CH[i], x1 = x + 1, end = x1;
     for (; x1 < cols; x1++) {
       const j = r * cols + x1;
       if (blank(j)) { s += ' '; continue; }
-      if (COL[j] * 9 + FOGS[j] !== key) break;
+      if (COL[j] * 16 + FOGS[j] !== key) break;
       if (!singleWidth(CH[j])) break;
       s += CH[j]; end = x1 + 1;
     }
@@ -29061,15 +29143,20 @@ function present2D() {
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 // the frame at 1/4 size, from the cells: as the grid shader (render.js), with a glyph's average cover for its shape
 const POSTFX_LOW = `precision highp float;
-uniform sampler2D cells, pal, cover; uniform vec2 grid, cell, canvas, size; uniform vec3 fog;
+uniform sampler2D cells, pal, cover; uniform vec2 grid, cell, canvas, size; uniform vec3 fog; uniform float emissionOnly;
 vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+${FOG_SAMPLE_GLSL}
 void main() {
   vec2 uv = gl_FragCoord.xy / size, p = vec2(uv.x * canvas.x, canvas.y - uv.y * canvas.y), c = floor(p / cell);
   if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
   vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
   float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
-  vec3 col = mix(palette(d.b), fog, fb / 8.0);
-  if (d.r < 254.5 && fs < 7.5) col = mix(col, mix(palette(d.g), fog, fs / 8.0), texture2D(cover, vec2((d.r + 0.5) / 128.0, 0.5)).r);
+  vec2 mist=sampleGridFog(p/cell,vec2(fs,fb)/15.0);
+  // Bloom sees transmitted source light, never the colour of the fog itself.
+  vec3 bg = emissionOnly > 0.5 ? palette(d.b) * pow(1.0 - mist.y, 1.35) : mix(palette(d.b), fog, mist.y);
+  vec3 fg = emissionOnly > 0.5 ? palette(d.g) * pow(1.0 - mist.x, 1.35) : mix(palette(d.g), fog, mist.x);
+  vec3 col = bg;
+  if (d.r < 254.5 && fs < 14.5) col = mix(bg, fg, texture2D(cover, vec2((d.r + 0.5) / 128.0, 0.5)).r);
   gl_FragColor = vec4(col, 1.0);
 }`;
 // keep only what's bright (soft knee, so nothing pops in or out), weighted per cell by the glow mask
@@ -29163,7 +29250,7 @@ function postFxStreaks() {
 // fog light rays: how foggy, outdoors only, stronger at night when there are lights to see
 function postFxRays() {
   if (!settings.fogRays || mode === 'room') return 0;
-  return clamp(fogAmt || 0, 0, 1) * (0.35 + 0.65 * postFxNight());
+  return clamp(fogAmt || 0, 0, 1) * (.08+.16*postFxNight());
 }
 // Eye adjustment. The frame's brightness is worked out from the grid itself (cells' palette colours with their
 // fog, a glyph counting for a quarter of its cell), so there's no pixel readback.
@@ -29173,7 +29260,7 @@ function postFxSceneLum() {
   const P = postFxPalLum, fl = (0.2126 * fogRGB[0] + 0.7152 * fogRGB[1] + 0.0722 * fogRGB[2]) / 255;
   let sum = 0, n = 0;
   for (let i = 0, N = cols * rows; i < N; i += 2) {
-    const fb = FOGB[i] / 8, fs = Math.min(1, FOGS[i] / 8);
+    const fb = FOGB[i] / FOG_LEVELS, fs = Math.min(1, FOGS[i] / FOG_LEVELS);
     let l = (BG[i] === NONE ? 0 : P[BG[i]]) * (1 - fb) + fl * fb;
     if (CH[i] && CH[i] !== ' ' && fs < 1) l = l * 0.75 + (P[COL[i]] * (1 - fs) + fl * fs) * 0.25;
     sum += Math.log(l + 0.02); n++;
@@ -29250,7 +29337,7 @@ function postFxTarget(gl, w, h) {
   return ok ? { tex, fb, w, h } : null;
 }
 // l4: the frame at 1/4; p4: its bright parts; a4/b4 bloom; s4 rain streaks; r4 fog rays; g4 the glows summed; a8/b8 wide bloom
-const POSTFX_TARGETS = ['l4', 'p4', 'a4', 'b4', 's4', 'r4', 'g4', 'a8', 'b8'];
+const POSTFX_TARGETS = ['l4', 'e4', 'p4', 'a4', 'b4', 's4', 'r4', 'g4', 'a8', 'b8'];
 function postFxSize(st, fx) {
   const { gl } = st, W = cv.width, H = cv.height;
   if (fx.maskKey !== cols + 'x' + rows) { // the per-cell glow mask
@@ -29311,25 +29398,27 @@ function postFxGlow(st, world = true) {
   // the frame at 1/4, from the cells (the grid shader's own textures, units 0-1)
   into(fx.l4); gl.useProgram(fx.low.p); bind(UN, fx.cover); let U = fx.low.U;
   gl.uniform2f(U('grid'), cols, rows); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('canvas'), cv.width, cv.height);
-  gl.uniform2f(U('size'), fx.l4.w, fx.l4.h); gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255); draw();
+  gl.uniform1f(U('emissionOnly'),0);gl.uniform2f(U('size'), fx.l4.w, fx.l4.h); gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255); draw();
+  into(fx.e4);gl.uniform1f(U('emissionOnly'),1);draw();
   // its bright parts, each cell weighted by how much it may glow
   const M = fx.maskData, BW = POSTFX_BASE_GLOW;
   const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
   for (let i = 0, n = M.length; i < n; i++) {
-    const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
+    const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < FOG_LEVELS, b = BG[i];
     // the colour that would make this cell bright: its glyph's, if that outshines the background
     const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
-    let w = k === NONE ? 1 : BW[k >> 4];
+    const sourceDepth=k===COL[i]&&glyph?ZB[i]:ZBG[i];
+    let w = k === NONE||!Number.isFinite(sourceDepth) ? 0 : BW[k >> 4];
     if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
     if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
     M[i] = w * 255 + 0.5 | 0;
   }
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   bind(UN + 1, fx.mask); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
-  into(fx.p4); gl.useProgram(fx.bright.p); bind(UN, fx.l4); U = fx.bright.U;
+  into(fx.p4); gl.useProgram(fx.bright.p); bind(UN, fx.e4); U = fx.bright.U;
   gl.uniform2f(U('size'), fx.p4.w, fx.p4.h); gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
   // (fog scatters light: in fog, dimmer lights count as bright too, and fog dims the distant ones)
-  gl.uniform1f(U('threshold'), postFxThreshold() - 0.04 * rays); gl.uniform1f(U('knee'), 0.25); draw();
+  gl.uniform1f(U('threshold'), postFxThreshold()); gl.uniform1f(U('knee'), 0.25); draw();
   // blurs
   gl.useProgram(fx.blur.p);
   const pass = (src, dst, x, y) => { into(dst); bind(UN, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); draw(); };
@@ -29672,13 +29761,17 @@ function drawDrugVision() {
   g.save();g.fillStyle='#000';g.fillRect(0,0,w,h);
   const breathe=1+weed*(.018+.012*Math.sin(T*.8))+neon*.012;
   g.translate(w/2,h/2);g.scale(breathe,breathe);g.translate(-w/2,-h/2);
-  // Smooth horizontal ribbons bend independently; overscan keeps their edges out of view.
-  const strip=12, pad=26*(weed+neon);
-  for (let y=0;y<h;y+=strip) {
-    const sh=Math.min(strip,h-y), v=y/h;
-    const shift=weed*Math.sin(v*5+T*.8)*8+neon*Math.sin(v*13-T*1.5)*17;
-    const stretch=neon*Math.sin(v*8+T*.9)*.035;
-    g.drawImage(source,0,y,w,sh,shift-pad-w*stretch/2,y,w+pad*2+w*stretch,sh);
+  // One continuous image for weed: breathing and tint without displaced row seams.
+  if (!neon) g.drawImage(source,0,0,w,h);
+  else {
+    const pad=26*(weed+neon);
+    // Neon keeps its independent psychedelic distortion.
+    const strip=12;
+    for (let y=0;y<h;y+=strip) {
+      const sh=Math.min(strip,h-y),v=y/h, shift=neon*Math.sin(v*13-T*1.5)*17;
+      const stretch=neon*Math.sin(v*8+T*.9)*.035;
+      g.drawImage(source,0,y,w,sh,shift-pad-w*stretch/2,y,w+pad*2+w*stretch,sh);
+    }
   }
   if (neon && drugVisionTrailReady) {
     g.globalCompositeOperation='screen';g.globalAlpha=.3*neon;
@@ -29699,7 +29792,8 @@ function drawDrugVision() {
   } else drugVisionTrailReady=false;
 }
 // a readout over the view: its letters stay out of the fog (the street behind them doesn't)
-const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
+let hudReadouts=[];
+const dashText = (r, c, s, col) => { if(uiScale()!==1){hudReadouts.push({r,c,s,col,fs:FS,width:cw,rows,cols});return;} putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
 // rows at the foot of the screen the bonnet and dashboard take from the driver's seat (the prompt and a fire on the bonnet sit above them)
 const DASH_ROWS = 8;
 function dash() {
@@ -29997,9 +30091,9 @@ function mapTile(mx, my) {
 }
 function minimap() {
   if (!showMap || mode === 'room') return;
-  const fs = Math.max(8, Math.round(cv.height / 100)); g.font = fs + 'px monospace'; // ~270px across at 900 tall
+  const fs = Math.max(8, Math.round(cv.height / 100*uiScale())); g.font = fs + 'px monospace'; // ~270px across at 900 tall
   const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14 - (TOUCH && cv.width > cv.height ? TOUCH_PAD_W - 40 : 0)); // (sideways on a phone: left of the buttons)
-  const y0 = TOUCH || cv.width < 700 ? Math.max(56, hudBottom) + fs * 1.2 : 44; // (clear of the buttons and the text on a phone)
+  const y0 = TOUCH || cv.width < 700 || uiScale()>1 ? Math.max(56, hudBottom) + fs * 1.2 : 44; // (clear of the buttons and the text on a phone)
   g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
   const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.fillStyle = mapTile(ox + i - MAP_R, oy + j - MAP_R); g.fillRect(x0 + i * tw, y0 + j * fs, tw + 0.5, fs + 0.5); }
@@ -30074,6 +30168,16 @@ function hud() {
   if(!telescopeActive()&&!stadiumTVOn()){if(emergencyHoseReady())drawHoseHeld();else drawHeldBig();} // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
+  const worldFS=FS,font=g.font;g.save();FS=Math.round(worldFS*uiScale());g.font=FS+'px monospace';
+  try{drawHudInformation(worldFS);}finally{FS=worldFS;g.restore();g.font=font;}
+  for(const q of hudReadouts){
+    const size=Math.round(q.fs*uiScale());g.font=size+'px monospace';const width=g.measureText(q.s).width;
+    const x=q.c>q.cols/2?cv.width-width-3*q.width*uiScale():q.c*q.width*uiScale(),y=q.r>q.rows/2?cv.height-(q.rows-q.r)*size:q.r*size;
+    g.fillStyle=PAL[q.col];g.fillText(q.s,Math.max(4,x),y);
+  }
+  g.font=font;
+}
+function drawHudInformation(worldFS){
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'ASCII City International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
@@ -30104,7 +30208,7 @@ function hud() {
   if (!stadiumTVOn()) hudBottom += drawNavigationCompass(hudBottom); // (the TV picture's just the match)
   wantedHud();
   minimap();
-  const hotbarTop = hotbar();
+  g.font=FS+'px monospace';const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
@@ -30129,7 +30233,7 @@ function hud() {
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
-  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
+  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * worldFS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   if(skatingNow()&&(SK.transition||SK.airRoute))msg.push((SK.airRoute?SK.airRoute.out:skateAirOutHeld())?'AIR OUT: DECK':'AIR: RETURN INSIDE');
   const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);
@@ -31437,13 +31541,12 @@ function stepSpray(dt) { // (stepSleep hands it over: ten minutes in a fade)
   if (sleep.t > 3.2) { sleep = null; fade = 0; }
 }
 function drawFirePlume(vx,vy,z,width,height,seed,strength=1){
-  if(strength<=0)return;
-  const scale=Math.sqrt(strength),w=width*(.35+.65*scale),h=height*(.2+.8*scale);
+  if(strength<=0||dx*vx+dy*vy<.05||dx*vx+dy*vy>vis||!inView(vx,vy,width+.02))return;
+  const scale=Math.sqrt(strength),w=width*(.35+.65*scale),h=height*(.2+.8*scale),frame=cityFlameFrame(seed,T);
   drawShape(vx,vy,z,w,h,(i,u,v)=>{
-    const heat=cityFlameHeat(u/w,v/h,seed,T);
-    if(heat<=.025)return false;
-    const hot=heat>.73&&v/h<.26,core=heat>.43;
-    BG[i]=C(hot?YEL:core?ORANGE:RED,hot?14:core?11+heat*3:7+heat*7);
+    const heat=cityFlameSample(frame,u/w,v/h)*(.55+.45*scale);
+    if(heat<=.075)return false;
+    BG[i]=heat>.96?C(WHITE,15):heat>.72?C(YEL,15):heat>.4?C(ORANGE,13):C(RED,7+heat*13);
     set(i,' ',0);return true;
   });
 }
@@ -31475,17 +31578,37 @@ function stepEmergencyWater(dt){
   }
 }
 function drawWaterStream(from,to){
-  const [x,y,z]=from,ex=rel(to[0]-x),ey=rel(to[1]-y),ez=to[2]-z,[vx,vy]=R(x,y);
-  const shade=(i,t,L)=>{const h=hash(i,Math.floor(T*25),93);BG[i]=C(h>.7?WHITE:CYAN,Math.max(6,L*.6)+h*4);set(i,' ',0);return true;};
-  for(let j=0;j<10;j++){
-    const t=j/10,u=(j+1)/10,at=q=>[vx+ex*q,vy+ey*q,z+ez*q-.035*q*(1-q)];
-    drawRod(...at(t),...at(u),.003+t*.006,shade);
-  }
-  // Breaking droplets at the exact impact point, rather than an opaque cone.
-  for(let j=0;j<5;j++){
-    const q=fract(T*3+j*.21),s=(j-2)*.008;
-    drawRod(vx+ex+s,vy+ey, to[2]+.015,vx+ex+s*2,vy+ey+s,to[2]-.035*q,.002,shade);
-  }
+  const [x,y,z]=from,ex=rel(to[0]-x),ey=rel(to[1]-y),ez=to[2]-z,[vx,vy]=R(x,y),range=Math.hypot(ex,ey),distance=Math.max(.01,range);
+  const sideX=-ey/distance,sideY=ex/distance,arc=.28*(range/2.6)**2,backdrop=BG.slice(),savedGlow=drawNoGlow;
+  const at=q=>[vx+ex*q,vy+ey*q,z+ez*q+arc*q*(1-q)];
+  const shade=(opacity,phase)=>(i,t,L)=>{
+    const shine=.5+.5*Math.sin(T*32-phase+HIT.w*350),tint=C(shine>.87?WHITE:WET,Math.max(4,L*.45)+shine*4);
+    BG[i]=hazeTint(backdrop[i],tint,opacity);set(i,' ',0);return true;
+  };
+  drawNoGlow=1; // Water reflects light; it is not an emissive cyan tube.
+  try{
+    // A narrow continuous pressure core. Surface highlights run towards impact.
+    for(let j=0;j<16;j++)drawRod(...at(j/16),...at((j+1)/16),.0014+j/16*.0007,shade(.62,j*.9));
+    // The outer jet breaks into droplets, moving with the water rather than
+    // blinking at unrelated cells. Its spread grows towards the impact point.
+    for(let j=0;j<22;j++){
+      const q=fract(T*2.1+j*.618),angle=j*2.39996,spread=(.001+.012*q*q)*Math.min(1,range/2.6),p=at(q),tail=at(Math.max(0,q-.022));
+      const across=Math.cos(angle)*spread,up=Math.sin(angle)*spread;
+      drawRod(p[0]+sideX*across,p[1]+sideY*across,p[2]+up,tail[0]+sideX*across,tail[1]+sideY*across,tail[2]+up,.0009,shade(.4,j*1.3));
+    }
+    const ground=to[2]<=terrainHeight(to[0],to[1])+.025;
+    for(let j=0;j<12;j++){
+      const age=fract(T*2.7+j*.618),angle=j*2.39996,spread=.045*age,px_=vx+ex,py_=vy+ey;
+      const sx=ground?Math.cos(angle)*spread:sideX*Math.cos(angle)*spread-ex/distance*.025*age;
+      const sy=ground?Math.sin(angle)*spread:sideY*Math.cos(angle)*spread-ey/distance*.025*age;
+      const lift=ground?Math.sin(age*Math.PI)*.04:Math.sin(angle)*.035*age-.06*age*age;
+      drawRod(px_+sx,py_+sy,to[2]+lift,px_+sx,py_+sy,to[2]+lift-.004,.0009,shade(.38,j));
+    }
+    drawShape(vx+ex,vy+ey,to[2]-.025,.035,.06,(i,u,h)=>{
+      const r=Math.hypot(u/.035,(h-.03)/.03);if(r>1||noise(u*180,h*180-T*.7,97)<.5)return false;
+      BG[i]=hazeTint(backdrop[i],C(GRAY,9),.12*(1-r));set(i,' ',0);return true;
+    });
+  }finally{drawNoGlow=savedGlow;}
 }
 const emergencyCrewLook=figLook({hat:'hardhat',top:'long',bot:'pants',col:{hat:[YEL,13],top:[YEL,9],bot:[GRAY,4],shoe:[GRAY,2]}});
 function emergencySprites(){
@@ -33315,6 +33438,9 @@ const MENU_CSS = `
           font: 16px/1.4 'W95', monospace; color: #d9dfda; }
   .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height:calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box;
                  padding: 26px 30px; background: #13191b; border:1px solid #465452; border-top:3px solid #a9d9ca; box-shadow:0 16px 56px #0008; scrollbar-width: thin; scrollbar-color:#63716d #13191b; }
+  .menu .panel { zoom:var(--city-ui-scale,1); max-width:calc((100vw - 24px)/var(--city-ui-scale,1)); max-height:calc((100dvh - 24px)/var(--city-ui-scale,1)) !important; }
+  #bigmap .bar,#bigmap .directory,#bigmap .tip,#net-chat,#controller-hint { zoom:var(--city-ui-scale,1); }
+  #bigmap .directory { max-width:calc((100vw - 24px)/var(--city-ui-scale,1)); }
   .menu h1 { margin: 0 0 2px; font: inherit; font-size: 32px; line-height: 1.1; color: #fff; letter-spacing: 1px; }
   .menu .sub { margin: 0 0 14px; color: #a1ada8; }
   .menu h2 { display: flex; align-items: center; gap: 10px; margin: 20px 0 6px; font: inherit; color: #a9d9ca; letter-spacing:1px; }
@@ -33547,6 +33673,7 @@ const MOBILE_BROWSER = navigator.userAgentData?.mobile || /Android|iPhone|iPod|i
   (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
 function applySettings() {
+  settings.uiScale=uiScale();document.documentElement.style.setProperty('--city-ui-scale',settings.uiScale);
   FOV = settings.fov * Math.PI / 180;
   if (DETAIL[settings.detail] !== FS) { FS = DETAIL[settings.detail]; resize(); }
   applyVolumes();
@@ -33581,6 +33708,7 @@ function buildPause() {
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
+      ${slider('uiScale', 'UI scale', .75, 2, .05)}
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
@@ -33616,7 +33744,7 @@ function buildPause() {
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
-      s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : k === 'lod' ? (+v).toFixed(1) + 'x' : Math.round(v * 100) + '%';
+      s.textContent = k === 'uiScale' ? Math.round(v*100)+'%' : k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : k === 'lod' ? (+v).toFixed(1) + 'x' : Math.round(v * 100) + '%';
     }
     for (const b of el.querySelectorAll('[data-bar]')) {
       const inp = el.querySelector(`[data-set="${b.dataset.bar}"]`), lo = +inp.min, hi = +inp.max;
@@ -35365,7 +35493,7 @@ function navigationBearing(t) {
 function drawNavigationCompass(top) {
   const targets=navigationTargets();if(!targets.length)return 0;
   const bar=TOUCH?touchBarBox():null,right=bar&&top<bar.bottom&&bar.left>cv.width*.55?bar.left-12:cv.width;
-  const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
+  const width=Math.min(420*uiScale(),right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
   const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
   const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
   const distance=first.routed?mapRouteDistance():first.distance;
@@ -35543,7 +35671,7 @@ function bigMapDraw() {
   }
   const onScreen = (X, Y, m = 40) => X > -m && Y > -m && X < W + m && Y < H + m;
   const dot = (wx, wy, ch, col, size = 12) => {
-    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y)) return;
+    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y)) return;size*=uiScale();
     x.font = `bold ${size}px monospace`; const w = x.measureText(ch).width + 4;
     x.fillStyle = 'rgba(0,0,0,0.8)'; x.fillRect(X - w / 2, Y - size / 2 - 1, w, size + 2);
     x.fillStyle = col; x.fillText(ch, X, Y + 1);
@@ -35552,7 +35680,7 @@ function bigMapDraw() {
   // names: biggest first, and nothing drawn over something already written
   const taken = [];
   const label = (wx, wy, t, col, size, bold, force=false) => {
-    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y, 120)) return;
+    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y, 120)) return;size*=uiScale();
     x.font = `${bold ? 'bold ' : ''}${size}px monospace`;
     const w = x.measureText(t).width, r = [X - w / 2 - 3, Y - size / 2 - 2, X + w / 2 + 3, Y + size / 2 + 2];
     if (!force&&taken.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) return;
@@ -36324,7 +36452,7 @@ const ITEM_SIZE = {
   fries:.18,chicken:.25,sushi:.27,banhmi:.30,padthai:.27,greencurry:.25,mangorice:.22,
   cottoncandy:.36,corndog:.28,popcorn:.24,yakitori:.28,takoyaki:.24,onigiri:.11,bento:.26,
   bao:.10,eggwaffle:.22,stinkytofu:.24,ginseng:.18,
-  coffee:.16,latte:.14,tea:.14,soda:.122,energy:.17,water:.24,beer:.22,whiskey:.10,
+  coffee:.16,latte:.14,tea:.14,soda:.122,energy:.17,water:.24,milk:.21,beer:.22,whiskey:.10,
   cocktail:.20,milkshake:.24,smoothie:.22,thaitea:.22,herbaltea:.14,bubbletea:.22,
   lemonade:.22,sake:.12,melonsoda:.22,
   eggs:.26,bread:.30,butter:.12,cheese:.16,rice:.26,pasta:.25,drynoodles:.24,potatoes:.24,
@@ -36957,6 +37085,22 @@ Object.assign(DENSE, {
   }),
   soda: dCan(RED, 'COLA', WHITE, (x, y) => Math.abs(y - 1.4 - Math.sin(x * 1.3) * .7) < .35 ? ['~', C(WHITE, 14)] : null),
   energy: dCan(GREEN, 'ZAP', YEL, (x, y) => Math.abs(x - (y > 1.5 ? 0.5 : -0.2) + (y - 1.5) * 0.25) < 0.4 && y > -0.6 && y < 4.4 ? ['/', C(YEL, 15)] : null), // a lightning bolt
+  milk: (it, f) => sculptSurface(24, 17, (x, y) => {
+    // Folded gable carton, blue dairy band and a creased paperboard body.
+    const top=-7+(1-f)*.8;
+    if(y<top||y>7||Math.abs(x)>3.8)return null;
+    if(y<top+2){
+      const half=1+(y-top)*1.4;
+      if(Math.abs(x)>half)return null;
+      return ['/',dCol(WHITE,x<0?.95:.65,9)];
+    }
+    if(y>6.4)return ['_',C(BLUE,9)];
+    if(Math.abs(x)>3.25)return ['|',C(WHITE,x<0?14:9)];
+    const t=dText(x,y,0,-.5,'MILK');if(t)return [t,C(WHITE,15),true];
+    if(y>-2&&y<1.2)return dLit(x<1?.85:.55,BLUE,7);
+    if(y>3.3&&y<4.2)return ['~',C(BLUE,9)];
+    return dLit(x<1?.9:.65,WHITE,9);
+  }),
   water: (it, f) => sculptSurface(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
     if (y < -7 && Math.abs(x) < 1.3) return dLit(0.4 + 0.5 * dCyl(x, 1.3), BLUE, 8);
     const hw = yy => yy < -5.2 ? 1.1 : yy < -3 ? 1.1 + (yy + 5.2) * 1.1 : 3.5;
@@ -38796,21 +38940,34 @@ const fireRoar = o => cookCtx && cookCtx.spot === o && game && game.g.id === 'co
 const FIRES = GRILLS.filter(o => o.on === 'fire'); // (campfires added later push themselves: coast-life.js, islands-content.js)
 // a camp's fire burns after dark, and whenever someone's cooking over it
 const fireLit = o => !o.nightOnly || night >= .3 || fireRoar(o) === 1;
+const campfireFlameSeed=o=>hash(Math.floor(o.x*100),Math.floor(o.y*100),1817)*50;
 function fireGlow(wx, wy) {
   let k = 0;
   for (const o of FIRES) {
     if(!fireLit(o))continue;
-    const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
-    if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
+    const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = .3 + fireRoar(o) * .2;
+    if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (.72+.26*cityFlameFrame(campfireFlameSeed(o),T).glow));
   }
   return k * clamp(Math.max(night, overcast * 0.5) * 1.4 - 0.1, 0, 1); // (by day you'd never see it)
+}
+// Add warm light to the material's existing colour. Keep its texture instead
+// of replacing the ground with an orange disc and rows of dot characters.
+const campfireLightLUT=new Uint16Array(255*25).fill(65535);
+function campfireLightColour(index,amount){
+  if(index===NONE||amount<=0)return index;
+  const band=clamp(Math.round(amount*24),0,24);if(!band)return index;
+  const key=index*25+band,known=campfireLightLUT[key];if(known!==65535)return known;
+  const rgb=PALRGB[index],gain=band/24,r=Math.min(255,rgb[0]+gain*90),g=Math.min(255,rgb[1]+gain*42),b=Math.min(255,rgb[2]+gain*12);
+  let best=index,error=Infinity;
+  for(let c=0;c<255;c++){const p=PALRGB[c],e=(p[0]-r)**2+(p[1]-g)**2+(p[2]-b)**2;if(e<error){best=c;error=e;}}
+  campfireLightLUT[key]=best;return best;
 }
 function drawCampfires() {
   for (const o of FIRES) {
     const [vx, vy] = R(o.x, o.y);
     if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
-    const ground=o.z??outdoorGroundHeight(o.x,o.y);
-    const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
+    const ground=o.z??outdoorGroundHeight(o.x,o.y),lit=fireLit(o),seed=campfireFlameSeed(o),glow=lit?cityFlameFrame(seed,T).glow:0;
+    const roar=fireRoar(o),warm=lit ? .35+.65*Math.max(night,overcast*.5) : 0;
     if (!o.ring) for (let k = 0; k < 10; k++) { // the stones (a ring the islands built has its own)
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
       dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i,' ',0),true; });
@@ -38818,25 +38975,20 @@ function drawCampfires() {
     if (!o.ring) for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
       drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
-        const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
-        BG[i]=ember?C(ORANGE,10+warm*3):C(BRICK,1+L*.15);return set(i,' ',0),true;
+        const ember=lit&&HIT.w-ground>.03&&noise(HIT.u*220,HIT.w*120,seed+k)>.5;
+        BG[i]=ember?C(ORANGE,9+glow*4):C(BRICK,1+L*.15);return set(i,' ',0),true;
       });
     }
-    if(!fireLit(o))continue;
-    // the flames and the sparks over them: a billboard, so it's round from every side
-    const H = 0.1 + 0.08 * roar, top = 0.36;
-    drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
-      if (z > H) { // above it: sparks drifting up and fading
-        const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
-        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) {BG[i]=C(z>H+.12?ORANGE:YEL,14-(z-H)*25);return set(i,' ',0),true;}
-        return false;
-      }
-      const h = z / H, n = noise(u * 55, z * 28 - T * 7, 1817), width = 0.055 * (1 - h) ** 0.7 * (0.75 + 0.5 * n); // tongues licking up, flickering
-      const off = Math.abs(u - Math.sin(T * 3 + z * 40) * 0.006 * h);
-      if (off > width) return false;
-      const core = off / Math.max(width, 1e-4) < 0.45 && h < 0.6;
-      BG[i]=C(core?(h<.25?WHITE:YEL):h>.7?RED:ORANGE,core?15:9+(1-h)*4);return set(i,' ',0),true;
-    });
+    // A shallow coal bed sits on the ground inside the logs and stone ring.
+    // Its cracks stay attached to the coals; only their heat pulses slowly.
+    drawBox(boxAt(vx,vy,1,0,.045,.045,ground+.003,ground+.009),(i,t,L)=>{
+      const grain=noise(HIT.u*180,HIT.v*180,seed),hot=lit&&grain>.42;
+      BG[i]=hot?C(grain>.72?YEL:ORANGE,7+glow*6):C(GRAY,1+L*.12);set(i,' ',0);return true;
+    },rayCopperDrum);
+    if(!lit)continue;
+    drawFirePlume(vx,vy,ground+.009,.072,.105+.085*roar,seed);
+    // The shared particle system supplies rising sparks and wind-blown smoke.
+
   }
 }
 // standing at one, out of doors
@@ -39450,12 +39602,12 @@ function drawHaze() {
     const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
     for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth >= ZB[i]) continue;
+      if (depth >= ZB[i] && depth >= ZBG[i]) continue;
       const nx = (c + 0.5 - cx) / rw, ny = (r + 0.5 - cy) / rh, d = Math.hypot(nx, ny);
       if (d >= 1) continue;
       const dens = (1 - d * d) * (0.3 + 0.8 * noise(nx * 2.6 + p.seed, ny * 2.6 - T * 0.25, 991)) * Math.min(1, p.life * 1.6) * (p.kind === 'vape' ? 1.15 : 0.85); // (holds together most of its life, thins out at the end)
       if (dens < 0.22 || dens < 0.4 && hash(c, r, 993) > 0.6) continue; // thin: the world shows through
-      hazeCell(i, dens, p.kind);
+      hazeCell(i, dens, p.kind, depth);
     }
   }
   if (inside > 0.12) for (let i = 0; i < CH.length; i++) { // in the thick of it: the whole view clouds over
@@ -39467,7 +39619,8 @@ function drawHaze() {
 // The bounded cache avoids a nearest-palette search for every cloud cell/frame.
 const HAZE_TINTS=new Map();
 function hazeTint(background,target,opacity){
-  const bg=PALRGB[background]?background:C(GRAY,0),alpha=clamp(Math.round(opacity*8),1,8),key=(bg*256+target)*8+alpha-1;
+  if(opacity<=0)return background;
+  const bg=background!==NONE&&PALRGB[background]?background:C(BLACK,0),alpha=clamp(Math.round(opacity*8),1,8),key=(bg*256+target)*8+alpha-1;
   if(HAZE_TINTS.has(key))return HAZE_TINTS.get(key);
   const a=PALRGB[bg],b=PALRGB[target],f=alpha/8,r=a[0]+(b[0]-a[0])*f,g_=a[1]+(b[1]-a[1])*f,bl=a[2]+(b[2]-a[2])*f;
   let best=0,error=Infinity;
@@ -39475,12 +39628,10 @@ function hazeTint(background,target,opacity){
   if(HAZE_TINTS.size>=8192)HAZE_TINTS.delete(HAZE_TINTS.keys().next().value);
   HAZE_TINTS.set(key,best);return best;
 }
-function hazeCell(i,dens,kind){
+function hazeCell(i,dens,kind,depth=0){
   let target,opacity;
-  if(kind==='breath'){ // cold breath: a faint pale veil, the world (and its lettering) plain through it
-    if(BG[i]!==NONE||dens>.45)BG[i]=hazeTint(BG[i],C(WHITE,(10+dens*4)*Math.max(.6,amb)),dens*.38);FOGS[i]=FOGB[i]=0;return;
-  }
-  if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
+  if(kind==='breath'){target=C(WHITE,(10+dens*4)*Math.max(.6,amb));opacity=dens*.38;}
+  else if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
   else if(kind==='fwsmoke'){
     const flash=Math.exp(-Math.max(0,T-fwLight.t)*2.5),col=flash>.15?fwLight.col:GRAY;
     target=C(col,(2+dens*4)*(.5+flash*2));opacity=dens*.65;
@@ -39488,7 +39639,13 @@ function hazeCell(i,dens,kind){
     const vape=kind==='vape',lit=Math.max(vape?.7:.35,amb)*(kind==='steam'?1.25:1);
     target=C(vape?WARM:GRAY,(8+dens*5)*lit);opacity=dens*(vape?.8:.6);
   }
-  BG[i]=hazeTint(BG[i],target,opacity);set(i,' ',0);FOGS[i]=FOGB[i]=0;
+  opacity=clamp(opacity,0,1);
+  // Keep lettering and the surface behind it at their own depths. Erasing glyphs
+  // turned glazed facades into flat black cutouts whenever a puff crossed them.
+  const smokeFog=mode==='room'?0:clamp((1-Math.exp(-Math.max(0,depth-.18)*fogAmt*1.9/vis))*FOG_LEVELS,0,FOG_LEVELS);
+  if(depth<ZBG[i]){BG[i]=hazeTint(BG[i],target,opacity);FOGB[i]=Math.round(FOGB[i]*(1-opacity)+smokeFog*opacity);}
+  if(depth<ZB[i]){COL[i]=hazeTint(COL[i],target,opacity);FOGS[i]=Math.round(FOGS[i]*(1-opacity)+smokeFog*opacity);}
+
 }
 // ===== peeing, just for fun: P lets it go wherever you're standing. Like Postal 2, it comes up from the bottom of
 // the screen and you aim it with your eyes: look up and it arcs out further, down and it lands at your feet, gravity

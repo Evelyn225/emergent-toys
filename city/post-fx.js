@@ -23,15 +23,20 @@
 const POSTFX_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
 // the frame at 1/4 size, from the cells: as the grid shader (render.js), with a glyph's average cover for its shape
 const POSTFX_LOW = `precision highp float;
-uniform sampler2D cells, pal, cover; uniform vec2 grid, cell, canvas, size; uniform vec3 fog;
+uniform sampler2D cells, pal, cover; uniform vec2 grid, cell, canvas, size; uniform vec3 fog; uniform float emissionOnly;
 vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+${FOG_SAMPLE_GLSL}
 void main() {
   vec2 uv = gl_FragCoord.xy / size, p = vec2(uv.x * canvas.x, canvas.y - uv.y * canvas.y), c = floor(p / cell);
   if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
   vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
   float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
-  vec3 col = mix(palette(d.b), fog, fb / 8.0);
-  if (d.r < 254.5 && fs < 7.5) col = mix(col, mix(palette(d.g), fog, fs / 8.0), texture2D(cover, vec2((d.r + 0.5) / 128.0, 0.5)).r);
+  vec2 mist=sampleGridFog(p/cell,vec2(fs,fb)/15.0);
+  // Bloom sees transmitted source light, never the colour of the fog itself.
+  vec3 bg = emissionOnly > 0.5 ? palette(d.b) * pow(1.0 - mist.y, 1.35) : mix(palette(d.b), fog, mist.y);
+  vec3 fg = emissionOnly > 0.5 ? palette(d.g) * pow(1.0 - mist.x, 1.35) : mix(palette(d.g), fog, mist.x);
+  vec3 col = bg;
+  if (d.r < 254.5 && fs < 14.5) col = mix(bg, fg, texture2D(cover, vec2((d.r + 0.5) / 128.0, 0.5)).r);
   gl_FragColor = vec4(col, 1.0);
 }`;
 // keep only what's bright (soft knee, so nothing pops in or out), weighted per cell by the glow mask
@@ -125,7 +130,7 @@ function postFxStreaks() {
 // fog light rays: how foggy, outdoors only, stronger at night when there are lights to see
 function postFxRays() {
   if (!settings.fogRays || mode === 'room') return 0;
-  return clamp(fogAmt || 0, 0, 1) * (0.35 + 0.65 * postFxNight());
+  return clamp(fogAmt || 0, 0, 1) * (.08+.16*postFxNight());
 }
 // Eye adjustment. The frame's brightness is worked out from the grid itself (cells' palette colours with their
 // fog, a glyph counting for a quarter of its cell), so there's no pixel readback.
@@ -135,7 +140,7 @@ function postFxSceneLum() {
   const P = postFxPalLum, fl = (0.2126 * fogRGB[0] + 0.7152 * fogRGB[1] + 0.0722 * fogRGB[2]) / 255;
   let sum = 0, n = 0;
   for (let i = 0, N = cols * rows; i < N; i += 2) {
-    const fb = FOGB[i] / 8, fs = Math.min(1, FOGS[i] / 8);
+    const fb = FOGB[i] / FOG_LEVELS, fs = Math.min(1, FOGS[i] / FOG_LEVELS);
     let l = (BG[i] === NONE ? 0 : P[BG[i]]) * (1 - fb) + fl * fb;
     if (CH[i] && CH[i] !== ' ' && fs < 1) l = l * 0.75 + (P[COL[i]] * (1 - fs) + fl * fs) * 0.25;
     sum += Math.log(l + 0.02); n++;
@@ -212,7 +217,7 @@ function postFxTarget(gl, w, h) {
   return ok ? { tex, fb, w, h } : null;
 }
 // l4: the frame at 1/4; p4: its bright parts; a4/b4 bloom; s4 rain streaks; r4 fog rays; g4 the glows summed; a8/b8 wide bloom
-const POSTFX_TARGETS = ['l4', 'p4', 'a4', 'b4', 's4', 'r4', 'g4', 'a8', 'b8'];
+const POSTFX_TARGETS = ['l4', 'e4', 'p4', 'a4', 'b4', 's4', 'r4', 'g4', 'a8', 'b8'];
 function postFxSize(st, fx) {
   const { gl } = st, W = cv.width, H = cv.height;
   if (fx.maskKey !== cols + 'x' + rows) { // the per-cell glow mask
@@ -273,25 +278,27 @@ function postFxGlow(st, world = true) {
   // the frame at 1/4, from the cells (the grid shader's own textures, units 0-1)
   into(fx.l4); gl.useProgram(fx.low.p); bind(UN, fx.cover); let U = fx.low.U;
   gl.uniform2f(U('grid'), cols, rows); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('canvas'), cv.width, cv.height);
-  gl.uniform2f(U('size'), fx.l4.w, fx.l4.h); gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255); draw();
+  gl.uniform1f(U('emissionOnly'),0);gl.uniform2f(U('size'), fx.l4.w, fx.l4.h); gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255); draw();
+  into(fx.e4);gl.uniform1f(U('emissionOnly'),1);draw();
   // its bright parts, each cell weighted by how much it may glow
   const M = fx.maskData, BW = POSTFX_BASE_GLOW;
   const P = postFxPalLumGlow ||= Float32Array.from({ length: 256 }, (_, k) => { const c = PALRGB[k]; return c ? Math.max(c[0], c[1], c[2]) : 0; });
   for (let i = 0, n = M.length; i < n; i++) {
-    const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < 8, b = BG[i];
+    const glyph = CH[i] && CH[i] !== ' ' && FOGS[i] < FOG_LEVELS, b = BG[i];
     // the colour that would make this cell bright: its glyph's, if that outshines the background
     const k = glyph && (b === NONE || P[COL[i]] > P[b]) ? COL[i] : b;
-    let w = k === NONE ? 1 : BW[k >> 4];
+    const sourceDepth=k===COL[i]&&glyph?ZB[i]:ZBG[i];
+    let w = k === NONE||!Number.isFinite(sourceDepth) ? 0 : BW[k >> 4];
     if (NOGLOW[i]) w *= POSTFX_FIGURE_GLOW;
     if (FL[i] === 2) w *= POSTFX_PUDDLE_GLOW;
     M[i] = w * 255 + 0.5 | 0;
   }
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   bind(UN + 1, fx.mask); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.LUMINANCE, gl.UNSIGNED_BYTE, M);
-  into(fx.p4); gl.useProgram(fx.bright.p); bind(UN, fx.l4); U = fx.bright.U;
+  into(fx.p4); gl.useProgram(fx.bright.p); bind(UN, fx.e4); U = fx.bright.U;
   gl.uniform2f(U('size'), fx.p4.w, fx.p4.h); gl.uniform2f(U('canvas'), cv.width, cv.height); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('grid'), cols, rows);
   // (fog scatters light: in fog, dimmer lights count as bright too, and fog dims the distant ones)
-  gl.uniform1f(U('threshold'), postFxThreshold() - 0.04 * rays); gl.uniform1f(U('knee'), 0.25); draw();
+  gl.uniform1f(U('threshold'), postFxThreshold()); gl.uniform1f(U('knee'), 0.25); draw();
   // blurs
   gl.useProgram(fx.blur.p);
   const pass = (src, dst, x, y) => { into(dst); bind(UN, src); gl.uniform2f(fx.blur.U('size'), src.w, src.h); gl.uniform2f(fx.blur.U('dir'), x, y); draw(); };

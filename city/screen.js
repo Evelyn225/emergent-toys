@@ -139,42 +139,61 @@ function viewOut(i, u, z, near, up) {
   return set(i, night > 0.5 && hash(Math.floor(ang * 120), Math.floor(sz * 120), 886) > 0.96 ? '.' : ' ', C(WHITE, 12));
 }
 
-// fog: at draw time every cell's text and background colors are mixed toward the fog color by distance.
-// 8 blend levels, with a Bayer dither between neighbouring levels so the gradient stays smooth.
+// Fifteen fog levels fit the packed grid's two nibbles. Wisps live in world
+// space, so turning the camera does not drag a noise pattern across the view.
+const FOG_LEVELS=15;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const fogCache = new Map();
-let fogRGB = [0, 0, 0], fogKey = -1;
-// Also always: distance haze, so far scenery fades into a sky-tinted color instead of ending in black at the draw distance.
+let fogRGB = [0, 0, 0], fogKey = '';
 function fogSteps() {
-  const foggy = fogAmt > 0.3, glow = foggy ? 0 : Math.round(dusk * (1 - overcast) * 6), k = (Math.round(day * 16) * 2 + foggy) * 8 + glow;
-  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer, and warm at sunrise and sunset
-    fogKey = k; fogCache.clear(); const v = 22 + day * 150, w = glow / 6 * 0.55;
-    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7 * (1 - w) + 190 * w, v * 0.85 * (1 - w) + 105 * w, Math.min(255, v * 1.15) * (1 - w) + 95 * w];
+  const amount=clamp(fogAmt,0,1),duskGlow=dusk*(1-overcast)*(1-amount),key=[Math.round(day*32),Math.round(amount*32),Math.round(duskGlow*16)].join(':');
+  if(key!==fogKey){
+    fogKey=key;fogCache.clear();const v=22+day*150,w=duskGlow*.55;
+    const clear=[v*.7*(1-w)+190*w,v*.85*(1-w)+105*w,Math.min(255,v*1.15)*(1-w)+95*w],mist=[v*.92,v*.97,v+4];
+    fogRGB=clear.map((c,i)=>c+(mist[i]-c)*amount);
   }
-  const anyFog = fogAmt > 0.03, sky = anyFog ? clamp(Math.floor(fogAmt * 8), 0, 8) : 0; // open sky: only real fog
-  const level = (z, wisp, dith) => {
-    if (z === Infinity) return sky;
-    const haze = clamp((z / vis - 0.5) / 0.5, 0, 1);
-    const f = anyFog ? Math.max(haze, fogAmt * clamp((z / vis - 0.15) / 0.85 * wisp, 0, 1)) : haze;
-    return clamp(Math.floor(f * 8 + dith), 0, 8);
+  const level=(z,row,rx,ry)=>{
+    if(z===Infinity){const horizon=clamp(1-Math.abs(row-hor)/rows*1.5,.25,1);return clamp(Math.floor(amount*(.75+.25*horizon)*FOG_LEVELS+.5),0,FOG_LEVELS);}
+    const edge=clamp((z/vis-.6)/.4,0,1),haze=edge*edge*(3-2*edge);
+    let mist=0;
+    if(amount>.01){
+      const wx=px+rx*z,wy=py+ry*z,height=eye+(hor-row-.5)*z/projY;
+      const wisp=.94+.12*noise(wx*.075+T*.012,wy*.075,51),density=clamp(1.08-height*.12,.65,1.05);
+      mist=1-Math.exp(-Math.max(0,z-.18)*amount*1.9/vis*wisp*density);
+    }
+    return clamp(Math.floor(Math.max(haze,mist)*FOG_LEVELS+.5),0,FOG_LEVELS);
   };
-  for (let r = 0; r < rows; r++) for (let x = 0; x < cols; x++) {
-    const i = r * cols + x, z = ZB[i], zb = ZBG[i], dith = BAYER[(r & 3) * 4 + (x & 3)];
-    const wisp = anyFog && (z !== Infinity || zb !== Infinity) ? 0.85 + 0.3 * noise(x * 0.03 + T * 0.1, r * 0.06, 51) : 0;
-    FOGS[i] = level(z, wisp, dith); FOGB[i] = zb === z ? FOGS[i] : level(zb, wisp, dith);
+  for(let x=0;x<cols;x++){
+    const q=(2*(x+.5)/cols-1)*tf,rx=dx-dy*q,ry=dy+dx*q;
+    for(let r=0;r<rows;r++){
+      const i=r*cols+x,z=ZB[i],zb=ZBG[i];
+      FOGS[i]=level(z,r,rx,ry);FOGB[i]=zb===z?FOGS[i]:level(zb,r,rx,ry);
+    }
   }
 }
-function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the way to the fog color
-  const key = idx * 9 + s;
+function fogged(idx, s) { // palette color (or black for NONE) mixed s/15 of the way to the fog color
+  const key = idx * 16 + s;
   let v = fogCache.get(key);
   if (v === undefined) {
-    const [r, gg, b] = idx === NONE ? [0, 0, 0] : PALRGB[idx], k = s / 8;
+    const [r, gg, b] = idx === NONE ? [0, 0, 0] : PALRGB[idx], k = s / FOG_LEVELS;
     v = `rgb(${r + (fogRGB[0] - r) * k | 0},${gg + (fogRGB[1] - gg) * k | 0},${b + (fogRGB[2] - b) * k | 0})`;
     fogCache.set(key, v);
   }
   return v;
 }
 
+
+// Interpolate atmospheric attenuation between nearby cells, without blurring
+// their colours or bleeding dense sky fog across a close silhouette.
+const FOG_SAMPLE_GLSL=`
+vec2 fogCell(vec2 c){float a=floor(texture2D(cells,(clamp(c,vec2(0.0),grid-1.0)+0.5)/grid).a*255.0+0.5);return vec2(floor(a/16.0),mod(a,16.0))/15.0;}
+vec2 fogNeighbour(vec2 c,vec2 center){vec2 v=fogCell(c);return mix(v,center,step(vec2(0.14),abs(v-center)));}
+vec2 sampleGridFog(vec2 position,vec2 center){
+ if(max(center.x,center.y)<0.001||min(center.x,center.y)>0.999)return center;
+ vec2 at=position-0.5,c=floor(at),f=fract(at);
+ return mix(mix(fogNeighbour(c,center),fogNeighbour(c+vec2(1.0,0.0),center),f.x),mix(fogNeighbour(c+vec2(0.0,1.0),center),fogNeighbour(c+vec2(1.0),center),f.x),f.y);
+}
+`;
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)

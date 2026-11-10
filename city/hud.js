@@ -1,5 +1,6 @@
 // a readout over the view: its letters stay out of the fog (the street behind them doesn't)
-const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
+let hudReadouts=[];
+const dashText = (r, c, s, col) => { if(uiScale()!==1){hudReadouts.push({r,c,s,col,fs:FS,width:cw,rows,cols});return;} putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
 // rows at the foot of the screen the bonnet and dashboard take from the driver's seat (the prompt and a fire on the bonnet sit above them)
 const DASH_ROWS = 8;
 function dash() {
@@ -297,9 +298,9 @@ function mapTile(mx, my) {
 }
 function minimap() {
   if (!showMap || mode === 'room') return;
-  const fs = Math.max(8, Math.round(cv.height / 100)); g.font = fs + 'px monospace'; // ~270px across at 900 tall
+  const fs = Math.max(8, Math.round(cv.height / 100*uiScale())); g.font = fs + 'px monospace'; // ~270px across at 900 tall
   const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14 - (TOUCH && cv.width > cv.height ? TOUCH_PAD_W - 40 : 0)); // (sideways on a phone: left of the buttons)
-  const y0 = TOUCH || cv.width < 700 ? Math.max(56, hudBottom) + fs * 1.2 : 44; // (clear of the buttons and the text on a phone)
+  const y0 = TOUCH || cv.width < 700 || uiScale()>1 ? Math.max(56, hudBottom) + fs * 1.2 : 44; // (clear of the buttons and the text on a phone)
   g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
   const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.fillStyle = mapTile(ox + i - MAP_R, oy + j - MAP_R); g.fillRect(x0 + i * tw, y0 + j * fs, tw + 0.5, fs + 0.5); }
@@ -374,6 +375,16 @@ function hud() {
   if(!telescopeActive()&&!stadiumTVOn()){if(emergencyHoseReady())drawHoseHeld();else drawHeldBig();} // (on the TV at the football: just the match)
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
+  const worldFS=FS,font=g.font;g.save();FS=Math.round(worldFS*uiScale());g.font=FS+'px monospace';
+  try{drawHudInformation(worldFS);}finally{FS=worldFS;g.restore();g.font=font;}
+  for(const q of hudReadouts){
+    const size=Math.round(q.fs*uiScale());g.font=size+'px monospace';const width=g.measureText(q.s).width;
+    const x=q.c>q.cols/2?cv.width-width-3*q.width*uiScale():q.c*q.width*uiScale(),y=q.r>q.rows/2?cv.height-(q.rows-q.r)*size:q.r*size;
+    g.fillStyle=PAL[q.col];g.fillText(q.s,Math.max(4,x),y);
+  }
+  g.font=font;
+}
+function drawHudInformation(worldFS){
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'ASCII City International Airport' : onCauseway(px, py) ? 'the Airport Bridge' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? (room.kind === 'stadium' ? stadiumScoreLine() : '') : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
@@ -404,7 +415,7 @@ function hud() {
   if (!stadiumTVOn()) hudBottom += drawNavigationCompass(hudBottom); // (the TV picture's just the match)
   wantedHud();
   minimap();
-  const hotbarTop = hotbar();
+  g.font=FS+'px monospace';const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
@@ -429,7 +440,7 @@ function hud() {
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
-  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
+  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' ? (chaseOn ? rows - 5 : rows - DASH_ROWS - 1) : mode === 'air' ? rows - 5 : rows - 2) * worldFS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   if(skatingNow()&&(SK.transition||SK.airRoute))msg.push((SK.airRoute?SK.airRoute.out:skateAirOutHeld())?'AIR OUT: DECK':'AIR: RETURN INSIDE');
   const msgY = Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8);

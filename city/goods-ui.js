@@ -551,7 +551,7 @@ const ITEM_SIZE = {
   fries:.18,chicken:.25,sushi:.27,banhmi:.30,padthai:.27,greencurry:.25,mangorice:.22,
   cottoncandy:.36,corndog:.28,popcorn:.24,yakitori:.28,takoyaki:.24,onigiri:.11,bento:.26,
   bao:.10,eggwaffle:.22,stinkytofu:.24,ginseng:.18,
-  coffee:.16,latte:.14,tea:.14,soda:.122,energy:.17,water:.24,beer:.22,whiskey:.10,
+  coffee:.16,latte:.14,tea:.14,soda:.122,energy:.17,water:.24,milk:.21,beer:.22,whiskey:.10,
   cocktail:.20,milkshake:.24,smoothie:.22,thaitea:.22,herbaltea:.14,bubbletea:.22,
   lemonade:.22,sake:.12,melonsoda:.22,
   eggs:.26,bread:.30,butter:.12,cheese:.16,rice:.26,pasta:.25,drynoodles:.24,potatoes:.24,
