@@ -240,7 +240,7 @@ function figBody(look, key) {
     const face=[point(faceFrom),point(faceTo)];for(const v of face)v[2]+=lift;
     return {parts,decals,face};
   }
-  return { hands,mouth:HU(0,2.85*hs,-.8*hs),parts, decals, face: [faceFrom, faceTo] };
+  return { hands,mouth:HU(0,Math.sqrt(1-.42*.42)*hr[1],-.42*hr[2]),parts, decals, face: [faceFrom, faceTo] };
 }
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
