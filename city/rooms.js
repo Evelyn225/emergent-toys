@@ -713,20 +713,21 @@ function makeRoom(kind, extra = {}) {
 
 // subway trains: arrive (6s), stand with doors open (12s), leave (6s), then the tunnel is empty until the next one
 const TRAIN_CYCLE = 45;
+const trainPhase = r => net.on && NET_FEATURES.clock ? mod((dayNum * 24 + tod) * 20, TRAIN_CYCLE) : mod(T - r.t0, TRAIN_CYCLE);
 function trainX(r) {
-  const p = mod(T - r.t0, TRAIN_CYCLE);
+  const p = trainPhase(r);
   if (p < 6) return -22 + 45 * (1 - (1 - p / 6) ** 2);
   if (p < 18) return 23;
   if (p < 24) return 23 + 60 * ((p - 18) / 6) ** 2;
   return null;
 }
-const trainStopped = r => { const p = mod(T - r.t0, TRAIN_CYCLE); return p >= 6 && p < 18; };
+const trainStopped = r => { const p = trainPhase(r); return p >= 6 && p < 18; };
 
 // The car and its door pockets share one permanent fitted opening at every stop.
 const SUBWAY_CAR={hl:4.1,hw:1.4,spacing:8.6,bottom:-.28,roof:3,floor:.02,head:2.4,
   doors:[-2.6,0,2.6],halfDoor:.5,leafHalf:.25,travel:.54,doorTime:.85,windowLo:1.15,windowHi:2.1};
 function trainDoorAmount(r){
-  const p=mod(T-r.t0,TRAIN_CYCLE);if(p<6||p>=18)return 0;
+  const p=trainPhase(r);if(p<6||p>=18)return 0;
   const q=Math.min(clamp((p-6)/SUBWAY_CAR.doorTime,0,1),clamp((18-p)/SUBWAY_CAR.doorTime,0,1));
   return q*q*(3-2*q);
 }

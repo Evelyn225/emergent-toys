@@ -5662,7 +5662,11 @@ function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null
     if (d > 3 && d < 10) scene = [p.x, p.y];
   }
   if (!scene) return null;
-  if(kind==='fire'&&typeof createCityFire==='function'){fireIncident=fireIncident||createCityFire(scene);if(!fireIncident)return null;scene=[fireIncident.x,fireIncident.y];}
+  if(kind==='fire'&&typeof createCityFire==='function'){
+    fireIncident=fireIncident||createCityFire(scene);if(!fireIncident)return null;
+    // Doorway coordinates describe the fire, not a drivable street segment.
+    const lane=laneNear(fireIncident.x,fireIncident.y);scene=[lane.x,lane.y];
+  }
   const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T, fireIncident };
   if (base && bd < BASE_R) { // out of the station, westbound from the kerb
     base.out = true;
@@ -13885,7 +13889,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 11; // 11: shared emergency incidents, responders and sirens
+const NET_PROTOCOL = 12; // stable interior/transit identities, shared home equipment and teleport consent
 // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
@@ -13925,8 +13929,22 @@ const netCode = s => netClean(s, NET_CODE_MAX).toLowerCase().replace(/[^a-z0-9-]
 // its own, so two players are only in the same one if they came in by the same door.
 function netRoomKey(m = mode, r = room) {
   if (m !== 'room' || !r) return 'out';
-  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
-  if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 2)); // (a carriage has no street door: the station it left and the half hour you got on, by the shared clock)
+  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + (net.on ? (r.guestOf || net.selfId) + ':' : '') + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
+  if (r.kind === 'station') return 'station:' + r.st;
+  if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 20 / 45)); // (a carriage has no street door: the station it left and the shared 45-second arrival cycle)
+  if (r.kind === 'stadium' || r.kind === 'terminal' || r.kind === 'lighthouse' || r.kind === 'lamproom') return r.kind + ':shared';
+  if (r.tower) return r.kind + ':' + r.tower.join(',');
+  if (r.cell) {
+    const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1])), sh = SHOP[cell];
+    const site = r.netSite ??= sh ? SHOP.indexOf(sh) : cell;
+    return r.kind + ':site:' + site;
+  }
+  if (r.lobby) return r.kind + ':' + netRoomKey('room', r.lobby);
+  if(r.netDoorSite)return r.netDoorSite;
+  if (r.ret && typeof doors !== 'undefined') {
+    const nearDoor = doors.filter(d => Math.hypot(rel(d.x-r.ret[0]),rel(d.y-r.ret[1])) < 1).sort((a,b)=>Math.hypot(rel(a.x-r.ret[0]),rel(a.y-r.ret[1]))-Math.hypot(rel(b.x-r.ret[0]),rel(b.y-r.ret[1])))[0];
+    if(nearDoor) return r.netDoorSite = r.kind + ':site:' + SHOP.indexOf(nearDoor.sh);
+  }
   const ret = r.ret ? r.ret.slice(0, 2).map(v => (+v).toFixed(1)).join(',') : '';
   return r.kind + ':' + ret;
 }
@@ -13938,6 +13956,7 @@ function netCheckTick(d) {
   if (!NET_MODES.includes(d.mode) || typeof d.rk !== 'string' || d.rk.length > 80) return null;
   const pose = typeof d.pose === 'string' && NET_POSES.test(d.pose) ? d.pose : 'stand';
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
+  if (d.loc && netNum(d.loc.x) && netNum(d.loc.y)) out.loc = { x: worldCoord(d.loc.x), y: worldCoord(d.loc.y), inside: !!d.loc.inside };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, siren:!!d.veh.siren, shift: !!d.veh.shift };
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
@@ -21016,20 +21035,21 @@ function makeRoom(kind, extra = {}) {
 
 // subway trains: arrive (6s), stand with doors open (12s), leave (6s), then the tunnel is empty until the next one
 const TRAIN_CYCLE = 45;
+const trainPhase = r => net.on && NET_FEATURES.clock ? mod((dayNum * 24 + tod) * 20, TRAIN_CYCLE) : mod(T - r.t0, TRAIN_CYCLE);
 function trainX(r) {
-  const p = mod(T - r.t0, TRAIN_CYCLE);
+  const p = trainPhase(r);
   if (p < 6) return -22 + 45 * (1 - (1 - p / 6) ** 2);
   if (p < 18) return 23;
   if (p < 24) return 23 + 60 * ((p - 18) / 6) ** 2;
   return null;
 }
-const trainStopped = r => { const p = mod(T - r.t0, TRAIN_CYCLE); return p >= 6 && p < 18; };
+const trainStopped = r => { const p = trainPhase(r); return p >= 6 && p < 18; };
 
 // The car and its door pockets share one permanent fitted opening at every stop.
 const SUBWAY_CAR={hl:4.1,hw:1.4,spacing:8.6,bottom:-.28,roof:3,floor:.02,head:2.4,
   doors:[-2.6,0,2.6],halfDoor:.5,leafHalf:.25,travel:.54,doorTime:.85,windowLo:1.15,windowHi:2.1};
 function trainDoorAmount(r){
-  const p=mod(T-r.t0,TRAIN_CYCLE);if(p<6||p>=18)return 0;
+  const p=trainPhase(r);if(p<6||p>=18)return 0;
   const q=Math.min(clamp((p-6)/SUBWAY_CAR.doorTime,0,1),clamp((18-p)/SUBWAY_CAR.doorTime,0,1));
   return q*q*(3-2*q);
 }
@@ -29897,7 +29917,7 @@ const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px
 const homeSpot = () => {
   const s=room.def.spots;if(!s)return null;let best=null,bd=1.3;
   for(const k in s) {
-    if(room.guestHome&&k!=='tv'&&k!=='terrace')continue; // (a friend's place: their bed, closet and kitchen aren't yours to use, net.js)
+    if(room.guestHome&&!['tv','terrace','stove','workshop'].includes(k))continue; // (a friend's place: their bed, closet and kitchen aren't yours to use, net.js)
     let d=Math.hypot(px-s[k][0],py-s[k][1]);
     if(k==='bed' && room.def.bedBounds) {
       const [x,y,hx,hy]=room.def.bedBounds;
@@ -30514,6 +30534,7 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   const residence = homeRecord(room);
+  if(net.on&&residence)netHomeEntered(residence);
   if(residence)updateHomeLights();
   if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
@@ -30544,7 +30565,7 @@ function interact() {
       if (hs === 'workshop') return openWorkshop();
       if (hs === 'terrace') { room.ret = [...FERN_HOUSE.terrace, 0];return leaveRoom(); }
       if(hs==='shelf')return say('Look at the shelf board where you want to put an item.',3);
-      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
+      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', room.guestHome ? null : home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
         home.pets ||= home.pet ? [home.pet] : [];
@@ -30559,6 +30580,7 @@ function interact() {
         }
         return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
+      if (hs === 'tv' && netHomeTVToggle()) return;
       if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The telly flickers on.' + news : 'You switch the telly off.', news ? 6 : 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
@@ -30721,8 +30743,8 @@ function interact() {
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb' && sh.base !== 'fire') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
-    const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
-    if (guest) return netEnterAsGuest(guest);
+    const home = homeAt(sh), guest = netInviteAt(sh); // (a friend's place you've been invited to: net.js)
+    if (guest && (!home || mapWaypoint?.id === 'invite:' + guest.from)) return netEnterAsGuest(guest);
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
@@ -33231,8 +33253,8 @@ function transitSnapshot() {
   }
   // The platform train continues its existing cycle while a rider picks a destination.
   if (mode === 'room' && (room.kind === 'station' || room.kind === 'train' && room.dest == null)) {
-    const phase = mod(T - room.t0, TRAIN_CYCLE);
-    return { phase, cycle: Math.floor((T - room.t0) / TRAIN_CYCLE) };
+    const phase = trainPhase(room);
+    return { phase, cycle: net.on && NET_FEATURES.clock ? Math.floor((dayNum * 24 + tod) * 20 / TRAIN_CYCLE) : Math.floor((T - room.t0) / TRAIN_CYCLE) };
   }
   return null;
 }
@@ -33403,7 +33425,7 @@ function stepTransitAnnouncements() {
     if (before.phase < 6 && now.phase >= 6 && room.kind === 'station') transitReminder('alight');
     if (before.phase < 18 - TRANSIT_PA.doorsLead && now.phase >= 18 - TRANSIT_PA.doorsLead) {
       const stationRoom = room;
-      transitAnnounce('doors', null, () => room === stationRoom && mod(T - room.t0, TRAIN_CYCLE) < 18, 1);
+      transitAnnounce('doors', null, () => room === stationRoom && trainPhase(room) < 18, 1);
     }
   }
 }
@@ -35246,8 +35268,8 @@ function drawMatchDebug(m) {
     row('passes', 'passes'), row('completed', 'passesDone'), row('corners', 'corners'), row('fouls', 'fouls'), row('cards', 'yellow')].join('\n');
 }
 // Searchable places are data; the map, list, contacts and waypoints share the same records.
-const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
-const MAP_COLORS={contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
+const MAP_CATEGORIES={all:'All',players:'Players',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
+const MAP_COLORS={players:'#a9ffb0',contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
 const MAP_NAV={path:null,next:0,lastT:-99,routeFrom:null,nearby:false};
 let mapPlaceCache=null,mapRenderPosition=null;
 function mapPlayerLocation() {
@@ -35343,9 +35365,10 @@ function mapDirectory() {
   for(const [id,p,name] of [['task',task,'Current favour'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
     if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
   }
-  return out;
+  return out.concat(netPlayerPlaces());
 }
 function mapFilteredPlaces() {
+  if(net.on||BIGMAP.places.some(p=>p.kind==='player'))netRefreshMapPlaces();
   const q=BIGMAP.query.trim().toLowerCase(),origin=mapPlayerLocation();
   const key=`${q}|${BIGMAP.category}|${origin.x}|${origin.y}`;
   if(mapPlaceCache?.places===BIGMAP.places&&mapPlaceCache.key===key)return mapPlaceCache.results;
@@ -35429,6 +35452,7 @@ function clearMapWaypoint() {
 }
 function updateMapNavigation(force=false) {
   if(!mapWaypoint)return;
+  if(mapWaypoint.id.startsWith('player:')&&(!net.on||!net.peers.has(mapWaypoint.id.slice(7)))){mapWaypoint=null;MAP_NAV.path=null;return;}
   if(mapWaypoint.id==='supplier'&&!supplierVisit){mapWaypoint=null;MAP_NAV.path=null;return;}
   if(mapWaypoint.id.startsWith('buyer:')&&!drugBuyer){mapWaypoint=null;MAP_NAV.path=null;return;}
   if(!force&&T-MAP_NAV.lastT<.3)return;MAP_NAV.lastT=T;
@@ -35831,7 +35855,7 @@ function openBigMap() {
   paused = true;
   for(const key in K)K[key]=0;
   releaseMouse();bigMapDraw();
-  const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
+  const tick = () => { if (!bigMapOpen()) return; if((net.on||BIGMAP.places.some(p=>p.kind==='player'))&&performance.now()-netMapRefreshT>=500){netRefreshMapPlaces(true);mapDirectoryUI();} bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
 }
 // Typing filters the directory; Enter visits matching results in distance order.
@@ -38892,7 +38916,7 @@ function addFishingCompetitionShop() {
 // ---- out of doors: a kettle grill on its three legs, the coals glowing while you're cooking on it; and a campfire in its
 // ring of stones on Lighthouse Island, always burning a little, roaring while there's something over it
 let cookCtx = null; // what's on, and where: { on: 'stove' | 'grill' | 'fire', spot, recipe, pantry }
-const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : null;
+const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : netHomeCooking() ? 'stove' : null;
 SOLID_SHADE.grill = o => (i,t,L)=>{
   const f=HIT.face,w=HIT.w,lit=cookCtx&&cookCtx.spot===o.spot&&game&&game.g.id==='cook';
   if(w<.06&&f!==5){
@@ -40688,7 +40712,7 @@ function stepNewsUI(dt) {
 const tellyNews = () => { const l = newsLines(true); return l.length ? ` The local news is on. ${pick(l)}` : ''; };
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
-const workshopHome = () => mode === 'room' && !room.guestHome ? homeRecord(room) : null; // (not at a friend's place: net.js)
+const workshopHome = () => mode === 'room' ? homeRecord(room) : null; // (not at a friend's place: net.js)
 // Keep the original placement/collision envelope; the fan has a real open
 // front, rear plate, supported shaft and separate blades behind its guard.
 function workshopFan(p,w,running){
@@ -40767,7 +40791,7 @@ function workshopProps(r, parts = null) { // (parts: draw these instead, as the 
       for (const x of [-.68,.68]) props.push(box(x,-.4,.025,.025,.68,1.82,solid(GRAY)));
       continue;
     }
-    const running = () => workshopRun?.home === home && workshopRun.bench.key === p.bench && game?.kind === 'workshop';
+    const running = () => workshopRun?.home === home && workshopRun.bench.key === p.bench && game?.kind === 'workshop' || netWorkshopRunning(home,p.bench);
     if(p.id==='processor')props.push(box(0,0,.24,.27,.93,1.6,workshopProcessorShade(p,w,running)));
     if (p.id === 'packer') props.push(box(0, 0, .23, .27, .93, 1.23, solid(GRAY, { panel: .2, top: '=' })),
       box(0, 0, .06, .22, 1.23, 1.5, solid(MAG, { top: '_' })));
@@ -40788,6 +40812,7 @@ function nearWorkshopBench() {
 // Buy (Mara's supplies and upgrades), How it works. It opens on Workshop once you have anything, on Buy before.
 let workshopTab = null;
 function openWorkshop(tab) {
+  if(room?.guestHome)return openGuestWorkshop();
   const home = workshopHome(); if (!home) return;
   const w = workshopState(home);
   workshopEl ||= panel('workshop');
@@ -40856,7 +40881,8 @@ function openWorkshop(tab) {
     if (b.dataset.place) return beginWorkshopPlacement(b.dataset.place);
     if (b.dataset.run) return startWorkshopBatch(w.parts.find(p=>p.key===+b.dataset.run));
     if (b.dataset.pack) {
-      const key = +b.dataset.pack;
+      const key = +b.dataset.pack,part=w.parts.find(p=>p.key===key);
+      if(netHomeBenchBusy(home,{key:part?.bench??key}))return say('Someone is using this equipment.',3);
       if (w.parts.find(p=>p.key===key)?.crop) return say('Harvest this plant before packing up the rack.',3);
       w.parts = w.parts.filter(p=>p.key!==key && p.bench!==key); refreshWorkshopRoom();
     }
@@ -40866,6 +40892,7 @@ function openWorkshop(tab) {
   };
 }
 function beginWorkshopPlacement(id) {
+  if(room?.guestHome)return say('Only the homeowner can move equipment.',3);
   const home = workshopHome(), w = home && workshopState(home);
   if (!w || !WORKSHOP_PARTS[id] || w.owned[id] <= w.parts.filter(p=>p.id===id).length) return;
   hidePanel(workshopEl); workshopPlacement = { id, home, a: 0, held }; held = -1;
@@ -40945,6 +40972,8 @@ function tickWorkshopHum() {
   v.o.frequency.setTargetAtTime(55 + heat * 140, now, 0.08); v.lp.frequency.setTargetAtTime(400 + heat * 1400, now, 0.1); v.g.gain.setTargetAtTime(0.035, now, 0.1);
 }
 function startWorkshopBatch(bench) {
+  if(room?.guestHome)return startGuestWorkshopBatch(bench);
+  if(netHomeBenchBusy(workshopHome(),bench))return say('Someone is already using this bench.',3);
   const home=workshopHome(), problem=home && workshopCanRun(home,bench);
   if (!home || problem) return say(problem || 'Use your own workshop.',4);
   hidePanel(workshopEl); workshopRun={home,bench};
@@ -40968,7 +40997,7 @@ function buyerDoor(home) {
 }
 function updateDrugBuyer() {
   if (T<buyerAwayUntil || !owned.homes.length || !drugBuyerInterested()) {drugBuyer=null;return;}
-  const inside=workshopHome(), home=inside || (drugBuyer && owned.homes.find(h=>h.cell===drugBuyer.home)) ||
+  const inside=room?.guestHome?null:workshopHome(), home=inside || (drugBuyer && owned.homes.find(h=>h.cell===drugBuyer.home)) ||
     owned.homes.reduce((b,h)=>near(h.cell%N,Math.floor(h.cell/N),px,py)<near(b.cell%N,Math.floor(b.cell/N),px,py)?h:b);
   const doorKey = home.door?.join(',') || '';
   if (drugBuyer?.home===home.cell && drugBuyer.doorKey===doorKey) return;
@@ -41015,6 +41044,7 @@ function workshopUse() {
   if(nearWorkshopSupplier()){openWorkshopSupplier();return true;}
   if(nearDrugBuyer()){openDrugSale();return true;}
   const b=nearWorkshopBench();
+  if(b&&room?.guestHome){if(b.id==='bench')startGuestWorkshopBatch(b);else if(b.crop?.left===0)netHomeRequest('harvest',{bench:b.key});else openGuestWorkshop();return true;}
   if(b?.id==='growrack') {
     if (b.crop?.left===0) {say(harvestWeed(workshopHome(),b)[1],5);refreshWorkshopRoom();updateDrugBuyer();saveGame();}
     else openWorkshop();
@@ -57713,7 +57743,7 @@ function drawFerries() {
 // transport: two tabs on one machine, no network at all, for development and the browser tests.
 const NET_TRYSTERO_URL = './vendor/trystero.js', NET_APP_ID = 'glyphport-ascii-city';
 const NET_TRANSPORT = (() => { try { return new URLSearchParams(location.search).get('net') === 'local' ? 'local' : 'trystero'; } catch (e) { return 'trystero'; } })();
-const NET_TYPES = ['emergency', 'emergencyAct', 'emergencyWater', 'tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare']; // every message kind (Trystero needs them all up front)
+const NET_TYPES = ['emergency', 'emergencyAct', 'emergencyWater', 'tick', 'hello', 'chat', 'clock', 'bolt', 'tags', 'parked', 'claim', 'claimed', 'ride', 'rideOk', 'rideOut', 'bump', 'paint', 'shot', 'down', 'hook', 'reel', 'unhook', 'runover', 'pickStart', 'pickStop', 'pick', 'picked', 'ballGone', 'dm', 'gift', 'giftAck', 'invite', 'drops', 'dropClaim', 'dropGiven', 'fare', 'homeAction', 'homeState', 'homeReply', 'homeActivity', 'teleport']; // every message kind (Trystero needs them all up front)
 const NET_CSS = ['#e66', '#69f', '#6c6', '#f93', '#ee6', '#e6e', '#6ee', '#eee', '#aaa', '#c86']; // NET_COLOURS, as text colours
 const NET_STORE = 'asciiCity.net';
 try { // ?netfeatures=chat,clock: exactly these switched on (none: all off), to try things out (everyone in the room needs the same)
@@ -57783,6 +57813,7 @@ async function netJoin(codeIn, nameIn) {
   Object.assign(net, { on: true, joining: false, code, name, selfId: tx.selfId, tx, look: playerAppearance || netLookFor(name), peers: new Map(), clockOwner: true,
     cars: new Map(), mine: new Set(), carN: 0, parkedT: 0, taken: new Map(), claiming: null, riders: new Map(), riderCar: '', ride: null, asking: null, hitT: new Map(), paintOut: [], paintKeys: null, shots: [], hooking: '', hooked: null, peaceful: !!netLoadPrefs().peaceful, knocked: null, picking: null, picked: null, pickCool: new Map(), runT: new Map(), balls: new Map(), ballGone: new Map(), myBallT: 0, myBall: null, gifts: new Map(), invites: new Map(), dropTaken: new Map(), dropsT: 0,
     joinedT: performance.now() / 1000, aloneSaid: false, sendT: 0, clockT: 0, lastBolt: bolt, lastWeather: weather, bubble: null, chatBucket: {} });
+  netHomeReset(); netTeleportReset();
   tx.onJoin = netPeerJoined; tx.onLeave = netPeerLeft; tx.onMessage = netReceive;
   tx.onError = text => { netLog('A connection failed (' + text + '). Their network may need a relay server.', null, '#f96'); netMenuShow(); };
   netLog(`You're in room "${code}". Invite friends with the link from the multiplayer menu.`);
@@ -57792,6 +57823,7 @@ function netLeave() {
   net.joining = false;
   if (!net.on) return;
   try { net.tx.leave(); } catch (e) { /* gone */ }
+  netHomeLeave();
   const was = net.clockOwner,emergencySelfBefore=net.selfId;
   if (mode === 'ride') netEject('You get out.');
   netDropCars();
@@ -57804,7 +57836,7 @@ function netLeave() {
   netLog('You left the room.');
   netStatus('Not connected.');
 }
-addEventListener('pagehide', () => { if (net.on) net.tx.leave(); });
+addEventListener('pagehide', () => { if (net.on) { netHomeLeave(); saveGame(); net.tx.leave(); } });
 
 function netPeerJoined(id) {
   if (!net.on || net.peers.has(id)) return;
@@ -57821,6 +57853,7 @@ function netPeerJoined(id) {
 function netPeerLeft(id) {
   const p = net.peers.get(id);
   if (!p) return;
+  netHomePeerLeft(id); netTeleportPeerLeft(id);
   net.peers.delete(id);
   netEmergencyPeerLeft(id);
   if (p.hello) netLog(`${p.name} left.`);
@@ -57864,6 +57897,7 @@ function netReceive(type, data, from) {
   if (netCarMessage(type, data, from, p, now)) return;
   if (netGunMessage(type, data, from, p, now)) return;
   if (netCrimeMessage(type, data, from, p, now)) return;
+  if (netHomeMessage(type, data, from, p, now) || netTeleportMessage(type, data, from, p, now)) return;
   if (netSocialMessage(type, data, from, p, now)) return;
   if (netHookMessage(type, data, from, p, now)) return;
   if (type === 'paint') { // their spray paint, on your walls (anything you've got already, from them or earlier, isn't doubled)
@@ -57900,8 +57934,8 @@ function netFrame(t, fromTimer = false) {
   net.lastT = now;
   if (!fromTimer) net.frameT = now;
   if (!net.on) return;
-  if ((paused || game || fromTimer) && netClockShared()) env(dt); // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
-  netEmergencyFrame(dt);
+  // The main/background simulation loop advances the clock exactly once. // the shared clock keeps going while you're in a menu, at a cabinet or in another tab
+  netEmergencyFrame(dt); netHomeFrame(dt, now, fromTimer); netTeleportFrame(now);
   if ((net.sendT -= dt) <= 0) { net.sendT += 1 / NET_TICK_HZ; if (net.sendT < 0) net.sendT = 1 / NET_TICK_HZ; netSendTick(now); }
   if (netClockShared() && net.clockOwner) {
     if ((net.clockT -= dt) <= 0 || weather !== net.lastWeather) {
@@ -57943,7 +57977,14 @@ function netFrame(t, fromTimer = false) {
 }
 // A tab in the background (or a window covered up, in some browsers) gets no animation frames, so the loop stops: keep
 // sending and listening on a timer meanwhile (otherwise you'd freeze for everyone, and if you keep the clock, so would the time)
-setInterval(() => { if (net.on && performance.now() / 1000 - (net.frameT || 0) > 0.4) netFrame(performance.now(), true); }, 250);
+function netBackgroundTick(){
+  const now=performance.now();if(!net.on||now/1000-(net.frameT||0)<=.4)return;
+  // Catch up in normal 50 ms physics steps; draw only the final step. This also
+  // lets a hidden/paused airborne player land instead of hovering for everyone.
+  t0=Math.max(t0,now-250);
+  while(t0<now-1)loop(Math.min(now,t0+50),true,now-t0<=50);
+}
+setInterval(()=>netBackgroundTick(),250);
 // you, as others see you
 function netSelfZ() {
   try {
@@ -57972,7 +58013,9 @@ function netSendTick(now) {
   const last = net.lastSent, gap = last ? now - last.t : 0;
   const speed = last && gap > 0 && last.rk === netRoomKey() ? Math.hypot(rel(x - last.x), rel(y - last.y)) / gap : 0;
   const it = heldItem();
-  const s = { t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
+  const loc = mapPlayerLocation();
+  const s = { loc: { ...loc, inside: mode === 'room' }, t: now, x, y, z: netSelfZ(), a: a_, mode, rk: netRoomKey(), pose: netSelfPose(speed), held: it ? it.id : '', stars: wanted.stars | 0 };
+  if(game?.g.id==='cook'||game?.kind==='workshop')s.pose='reach';
   if (netAway()) s.away = true;
   if (net.peaceful) s.peaceful = true;
   if (NET_FEATURES.balls) { const bs = netMyBalls(now); if (bs.length) s.balls = bs; }
@@ -58421,9 +58464,10 @@ function netPlayersKey(e) { // (main.js, on a key going down)
 function netPlayersKeyUp(e) { if (e.code === 'Tab' && netPlayersOpen() && !netPlayersPinned) closeNetPlayers(); } // (main.js, on a key going up)
 function buildNetPlayers() {
   const el = menuEl('netplayers', 530, `
-    <div class="panel" role="dialog" aria-label="Players" style="width:min(560px, calc(100vw - 32px))">
+    <div class="panel" role="dialog" aria-label="Players" style="width:min(560px, calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;overflow-wrap:anywhere;box-sizing:border-box">
       <h1>Players</h1>
       <p class="sub" data-np="room"></p>
+      <div data-np="requests"></div>
       <div data-np="list"></div>
       <div data-np="form" style="margin-top:12px"></div>
       <button class="item" data-np-act="done" style="margin-top:12px">Done <span class="k" style="margin-left:auto">Esc</span></button>
@@ -58441,6 +58485,8 @@ function buildNetPlayers() {
     if (act === 'done') return closeNetPlayers();
     netPlayersPinned = true; // (doing something: it stays open)
     if (act === 'whisper' || act === 'cash' || act === 'item') { netPlayersForm = { act, id }; return netPlayersShow(true); }
+    if ((act === 'tp-to' || act === 'tp-here') && p) { netTeleportRequest(p, act === 'tp-to' ? 'to' : 'here'); return netPlayersShow(true); }
+    if (act === 'tp-yes' || act === 'tp-no') { netTeleportAnswer(b.dataset.req, act === 'tp-yes'); return netPlayersShow(true); }
     if (act === 'invite' && p) { netInvite(p); return netPlayersShow(true); }
     if (act === 'go' && p) { netGoToInvite(p); return closeNetPlayers(); }
     if (act === 'cancel') { netPlayersForm = null; return netPlayersShow(true); }
@@ -58479,22 +58525,26 @@ function netPlayersShow(all = false) {
   if (!netPlayersOpen()) return;
   const el = netPlayersEl, others = [...net.peers.values()].filter(p => p.hello && !p.mismatch);
   el.querySelector('[data-np="room"]').textContent = net.on ? `Room "${net.code}": you and ${others.length} other${others.length === 1 ? '' : 's'}.` : 'Not in a room. Esc, then Multiplayer, to join one.';
+  netTeleportShow(el);
+  const balance = el.querySelector('[data-np="balance"]'); if (balance) balance.textContent = 'Available: ' + fmt$(money);
   const canInvite = owned.homes.length > 0;
-  el.querySelector('[data-np="list"]').innerHTML = others.length ? others.map(p => {
-    const s = netViewOf(p), tags = [s?.peaceful ? 'peaceful' : '', s?.away ? 'paused' : '', s?.stars ? '*'.repeat(s.stars) : ''].filter(Boolean).join(' · ');
+  const list = el.querySelector('[data-np="list"]');
+  const listHTML = others.length ? others.map(p => {
     const inv = net.invites.get(p.id), btn = (act, label) => `<button class="opt" data-np-act="${act}" data-id="${netEsc(p.id)}">${label}</button>`;
-    return `<div style="padding:8px 0;border-top:1px solid #2a3338">
-      <div><b style="color:${NET_CSS[p.hello.look.top]}">${netEsc(p.name)}</b> <span style="color:#89a">${netEsc(netWhere(p))}${tags ? ' · ' + netEsc(tags) : ''}</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btn('whisper', 'Whisper')}${btn('cash', 'Give money')}${btn('item', 'Give item')}${canInvite ? btn('invite', 'Invite home') : ''}${inv && inv.until > netNow() ? btn('go', 'Go to their home') : ''}</div>
+    return `<div data-peer="${netEsc(p.id)}" style="padding:8px 0;border-top:1px solid #2a3338">
+      <div><b style="color:${NET_CSS[p.hello.look.top]}">${netEsc(p.name)}</b> <span data-player-status style="color:#89a"></span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btn('whisper', 'Whisper')}${btn('cash', 'Give money')}${btn('item', 'Give item')}${btn('tp-to', 'Request teleport to them')}${btn('tp-here', 'Ask them to teleport here')}${canInvite ? btn('invite', 'Invite home') : ''}${inv && inv.until > netNow() ? btn('go', 'Go to their home') : ''}</div>
     </div>`;
   }).join('') : '<div style="color:#789">Nobody else here yet.</div>';
+  if (list.dataset.html !== listHTML) { list.innerHTML = listHTML; list.dataset.html = listHTML; }
+  for(const p of others){const s=netViewOf(p),tags=[s?.peaceful?'peaceful':'',s?.away?'paused':'',s?.stars?'*'.repeat(s.stars):''].filter(Boolean).join(' · '),row=[...list.children].find(row=>row.dataset.peer===p.id);if(row)row.querySelector('[data-player-status]').textContent=netWhere(p)+(tags?' · '+tags:'');}
   if (!all) return;
   const f = netPlayersForm, q = f && net.peers.get(f.id), form = el.querySelector('[data-np="form"]');
   if (!q) { form.innerHTML = ''; return; }
-  const input = (ph, type = 'text', max = NET_CHAT_MAX) => `<input data-np="input" type="${type}" maxlength="${max}" placeholder="${ph}" autocomplete="off" spellcheck="false" style="flex:1;font:inherit;color:#eee;background:#000;border:1px solid #567;padding:6px 8px">`;
+  const input = (ph, type = 'text', max = NET_CHAT_MAX) => `<input data-np="input" type="${type}" maxlength="${max}" placeholder="${ph}" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;box-sizing:border-box;font:inherit;color:#eee;background:${f.act==='whisper'?'transparent':'#000'};border:${f.act==='whisper'?'0':'1px solid #567'};padding:6px 8px">`;
   const bar = inner => `<div style="display:flex;gap:8px;align-items:center">${inner}<button class="opt" data-np-act="cancel">Cancel</button></div>`;
   if (f.act === 'whisper') form.innerHTML = `<p class="sub">Whisper to ${netEsc(q.name)} (only they see it)</p>` + bar(input('Say something...') + '<button class="opt" data-np-act="send">Send</button>');
-  if (f.act === 'cash') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} money (you have ${fmt$(money)})</p>` + bar(input('Amount', 'number', 8) + '<button class="opt" data-np-act="send">Give</button>');
+  if (f.act === 'cash') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} money</p><p class="sub" data-np="balance">Available: ${fmt$(money)}</p>` + bar(input('Amount', 'number', 8) + '<button class="opt" data-np-act="send">Give</button>');
   if (f.act === 'item') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} something from your bag</p>` + (inv.length
     ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${inv.map((it, k) => `<button class="opt" data-np-act="give" data-k="${k}">${netEsc(itemName(it))}</button>`).join('')}</div>`
     : '<div style="color:#789">Your bag is empty.</div>') + `<div style="margin-top:6px">${bar('')}</div>`;
@@ -58545,6 +58595,7 @@ function netInvite(p) {
   const near = h => { const d = h.door || [h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5]; return Math.hypot(rel(d[0] - px), rel(d[1] - py)); };
   const home = homeRecord(room) || [...owned.homes].sort((a_, b) => near(a_) - near(b))[0];
   if (!home) return say('You need a home of your own to invite anyone over.', 3);
+  netHomeInvite(p, home);
   net.tx.send('invite', { cell: home.cell, kind: home.kind, door: home.door || null, rec: JSON.parse(JSON.stringify(home)) }, p.id);
   netLog(`You invite ${p.name} over to your place.`);
 }
@@ -58709,15 +58760,16 @@ function netSay(textIn) {
   net.bubble = { lines: netWrap(text), until: netNow() + netBubbleTime(text) };
   return true;
 }
-let netChatEl = null;
+let netChatEl = null, netChatPrompt = null;
 const netTyping = () => !!netChatEl && netChatEl.style.display !== 'none';
 function netOpenChat() {
   if (!netChatEl) {
     netChatEl = document.createElement('input');
     netChatEl.id = 'net-chat'; netChatEl.maxLength = NET_CHAT_MAX; netChatEl.autocomplete = 'off'; netChatEl.spellcheck = false;
-    netChatEl.placeholder = 'Say something (Enter to send, Esc to cancel)';
-    Object.assign(netChatEl.style, { position: 'fixed', left: '8px', bottom: '8px', width: 'min(560px, calc(100vw - 16px))', zIndex: 400, display: 'none',
-      font: '14px monospace', color: '#eee', background: 'rgba(0,0,0,0.85)', border: '1px solid #678', padding: '6px 8px', outline: 'none' });
+    netChatEl.placeholder = 'message · Enter to send · Esc to cancel';
+    netChatEl.setAttribute('aria-label', 'Chat message');
+    Object.assign(netChatEl.style, { position: 'fixed', left: '24px', bottom: '8px', width: 'min(544px, calc(100vw - 32px))', zIndex: 400, display: 'none',
+      font: '14px monospace', lineHeight: '20px', color: '#eee', background: 'transparent', border: '0', borderRadius: '0', boxShadow: 'none', padding: '6px 0', outline: 'none', caretColor: '#a9ffb0', textShadow: '0 1px 3px #000, 0 0 5px #000' });
     netChatEl.addEventListener('keydown', e => {
       e.stopPropagation(); // (typing never reaches the game)
       if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); netSay(netChatEl.value); netCloseChat(); }
@@ -58726,16 +58778,18 @@ function netOpenChat() {
     netChatEl.addEventListener('keyup', e => e.stopPropagation());
     netChatEl.addEventListener('blur', () => { if (netTyping() && CONTROLLER.textInput !== netChatEl) netCloseChat(false); }); // (the controller's on-screen keyboard takes the focus while you type)
     netChatEl.addEventListener('change', () => { if (netChatEl.dataset.pad) { delete netChatEl.dataset.pad; netSay(netChatEl.value); netCloseChat(); } }); // (the controller's keyboard: Done sends it)
-    document.body.appendChild(netChatEl);
+    netChatPrompt=document.createElement('span');netChatPrompt.id='net-chat-prompt';netChatPrompt.textContent='>';netChatPrompt.setAttribute('aria-hidden','true');
+    Object.assign(netChatPrompt.style,{position:'fixed',left:'8px',bottom:'14px',zIndex:400,font:'14px monospace',lineHeight:'20px',color:'#a9ffb0',textShadow:'0 1px 3px #000, 0 0 5px #000',display:'none',pointerEvents:'none'});
+    document.body.append(netChatPrompt,netChatEl);
   }
   for (const k in K) K[k] = 0; // (stop walking: the keys are for the message now)
   releaseHeldMouse(); releaseMouse();
-  netChatEl.value = ''; netChatEl.style.display = 'block'; netChatEl.focus();
+  netChatEl.value = ''; netChatEl.style.display = 'block'; netChatPrompt.style.display='block'; netChatEl.focus();
   if (CONTROLLER.active) { netChatEl.dataset.pad = '1'; controllerKeyboard(netChatEl); } // (a controller: type it on the on-screen keyboard)
 }
 function netCloseChat(relockMouse = true) {
   if (!netChatEl) return;
-  netChatEl.style.display = 'none'; netChatEl.blur();
+  netChatEl.style.display = 'none'; if(netChatPrompt)netChatPrompt.style.display='none'; netChatEl.blur();
   if (relockMouse && !paused) lockMouse();
 }
 // from main.js's key handler, once the menus have had theirs: T or Enter opens the chat box (only in a room)
@@ -59090,14 +59144,27 @@ function netMapPlayers() {
   const out = [];
   if (!net.on) return out;
   for (const p of net.peers.values()) {
-    if (!p.hello || p.mismatch || p.stale) continue;
-    const s = netViewOf(p);
+    if (!p.hello || p.mismatch) continue;
+    const s = p.snaps[p.snaps.length - 1] || p.view;
     if (!s) continue;
-    let x = s.x, y = s.y, inside = false;
-    if (s.rk !== 'out') { const m = /:(-?[\d.]+),(-?[\d.]+)$/.exec(s.rk); if (!m) continue; x = +m[1]; y = +m[2]; inside = true; }
-    out.push({ x, y, inside, name: p.name, col: NET_CSS[p.hello.look.top] });
+    let loc = s.loc;
+    if (!loc) {
+      loc = { x: s.x, y: s.y, inside: s.mode === 'room' };
+      if (loc.inside) { const m = /:(-?[\d.]+),(-?[\d.]+)$/.exec(s.rk); if (!m) continue; loc.x = +m[1]; loc.y = +m[2]; }
+    }
+    out.push({ ...loc, id: p.id, name: p.name, col: NET_CSS[p.hello.look.top], status: p.stale ? 'Last seen' : loc.inside ? 'Inside · ' + s.rk.split(':')[0] : s.mode === 'ride' || s.mode === 'taxi' ? 'Riding' : s.veh ? 'Driving' : s.craft ? 'Travelling' : 'On foot' });
   }
   return out;
+}
+function netPlayerPlaces() { return netMapPlayers().map(p => ({ ...p, id: 'player:' + p.id, category: 'players', kind: 'player', color: p.col, description: 'Multiplayer player · ' + p.status })); }
+let netMapRefreshT = -1;
+function netRefreshMapPlaces(force = false) {
+  const now = performance.now();
+  if (!force && now - netMapRefreshT < 500) return;
+  netMapRefreshT = now;
+  BIGMAP.places = BIGMAP.places.filter(p => p.kind !== 'player').concat(netPlayerPlaces());
+  mapPlaceCache = null;
+  if(mapWaypoint?.id.startsWith('player:')){const p=BIGMAP.places.find(p=>p.id===mapWaypoint.id);if(!p){mapWaypoint=null;MAP_NAV.path=null;}else if(mapDistance(p,mapWaypoint)>.2){mapWaypoint={id:p.id,name:p.name,x:p.x,y:p.y};MAP_NAV.path=null;MAP_NAV.routeFrom=null;}}
 }
 
 // ---- over the frame: their names, their speech bubbles (and yours, when you can see yourself), the chat log
@@ -59199,7 +59266,7 @@ function netSuggestCode() { const w = ['harbour', 'neon', 'tram', 'lantern', 'pi
 function buildNetMenu() {
   const prefs = netLoadPrefs();
   const field = (k, label, max, value) => `<label style="display:flex;gap:12px;align-items:center;margin:10px 0"><span style="width:110px;color:#9ab">${label}</span>
-    <input data-net="${k}" maxlength="${max}" value="${netEsc(value)}" autocomplete="off" spellcheck="false" style="flex:1;font:inherit;color:#eee;background:#000;border:1px solid #567;padding:6px 8px"></label>`;
+    <input data-net="${k}" maxlength="${max}" value="${netEsc(value)}" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;box-sizing:border-box;font:inherit;color:#eee;background:${f.act==='whisper'?'transparent':'#000'};border:${f.act==='whisper'?'0':'1px solid #567'};padding:6px 8px"></label>`;
   const el = menuEl('netmenu', 520, `
     <div class="panel" role="dialog" aria-label="Multiplayer" style="width:min(480px, calc(100vw - 32px))">
       <h1>Multiplayer</h1>
@@ -59267,6 +59334,228 @@ function closeNetMenu() {
 let netPendingCode = '';
 try { netPendingCode = netCode(new URLSearchParams(location.search).get('room') || ''); } catch (e) { /* no query */ }
 if (netPendingCode) setTimeout(() => say(`You've been invited to room "${netPendingCode}". Esc, then Multiplayer, to join.`, 10), 1500);
+// Invited homes share their equipment and TV through the homeowner. Guests keep
+// their own bags; the owner's game reserves workshop supplies and awards output.
+let netHomeGuests, netHomeViews, netHomeJobs, netHomePending, netHomeActivity, netHomeTimer;
+const netHomeCell = () => mode === 'room' && room?.cell && homeRecord(room) ? idx(...room.cell.map(Math.floor)) : null;
+const netHomeViewKey = (owner, cell) => owner + ':' + cell;
+function netHomeReset() {
+  netHomeGuests = new Map(); netHomeViews = new Map(); netHomeJobs = new Map(); netHomePending = new Map(); netHomeActivity = new Map(); netHomeTimer = 0;
+}
+function netHomeInvite(p, home) { netHomeGuests.set(p.id, { cell: home.cell, until: netNow() + 1800 }); }
+function netHomeEntered(home){const v=netHomeViews?.get(netHomeViewKey(room.guestOf||net.selfId,home.cell));if(v)room.tv=!!v.tv;}
+function netHomePeerLeft(id) {
+  if(!netHomeGuests)return;
+  netHomeGuests.delete(id); netHomeActivity.delete(id);
+  const before=netHomeJobs.size;
+  for(const [key,j] of netHomeJobs)if(j.by===id){const h=owned.homes.find(h=>h.cell===j.cell);if(h)workshopState(h).supplies++;netHomeJobs.delete(key);}
+  if(netHomeJobs.size!==before)saveGame();
+  for(const [key,q]of netHomePending)if(q.owner===id){netHomePending.delete(key);q.done?.({ok:false,text:'The homeowner disconnected.'});}
+}
+function netHomeLeave(){if(netHomeGuests)for(const id of [...netHomeGuests.keys()])netHomePeerLeft(id);}
+function netHomeView(){const cell=netHomeCell();return cell===null||!netHomeViews?null:netHomeViews.get(netHomeViewKey(room.guestOf||net.selfId,cell));}
+function netHomeBenchBusy(home,bench){return !!(net.on&&home&&bench&&netHomeJobs?.has(home.cell+':'+bench.key));}
+function netWorkshopRunning(home,key){return !!(net.on&&netHomeCell()===home.cell&&netHomeView()?.running?.includes(key));}
+function netHomeCooking(){return !!(net.on&&netHomeView()?.cooking);}
+function netHomeState(home) {
+  const cell=home.cell,local=netHomeCell()===cell&&!room.guestHome;
+  const key=netHomeViewKey(net.selfId,cell),v=netHomeViews.get(key)||{tv:false};
+  if(local)v.tv=!!room.tv;
+  const running=[...netHomeJobs.values()].filter(j=>j.cell===cell).map(j=>j.bench);
+  if(local&&game?.kind==='workshop'&&workshopRun?.home===home)running.push(workshopRun.bench.key);
+  const cooking=!!(local&&game?.g.id==='cook')||[...netHomeActivity.values()].some(v=>v.cell===cell&&v.cooking&&netNow()-v.t<3);
+  Object.assign(v,{tv:!!v.tv,cooking,running});netHomeViews.set(key,v);
+  return {cell,workshop:home.workshop||null,tv:v.tv,cooking,running};
+}
+function netHomeBroadcast(home) {
+  if(!net.on)return;
+  const state=netHomeState(home);
+  for(const [id,g]of netHomeGuests)if(g.cell===home.cell&&g.until>netNow()&&net.peers.has(id))net.tx.send('homeState',state,id);
+}
+function netHomeApply(data,from) {
+  const invite=net.invites.get(from);if(!invite||invite.cell!==data?.cell)return;
+  const h=invite.home,restored=restoreWorkshop(data.workshop?{...data.workshop,parts:Array.isArray(data.workshop.parts)?data.workshop.parts.slice(0,20):[]}:null,h.kind),w=h.workshop||=restored;
+  // Preserve part identities: draw closures and a running minigame may hold them.
+  const old=w.parts||[],parts=restored.parts.map(p=>{const same=old.find(q=>q.key===p.key&&q.id===p.id);if(!same)return p;if(!p.crop)delete same.crop;return Object.assign(same,p);});
+  const changed=old.length!==parts.length||old.some((p,i)=>p!==parts[i]);Object.assign(w,restored,{parts});
+  const view={tv:!!data.tv,cooking:!!data.cooking,running:Array.isArray(data.running)?data.running.filter(Number.isInteger).slice(0,4):[]};
+  netHomeViews.set(netHomeViewKey(from,data.cell),view);
+  if(room?.guestOf===from&&netHomeCell()===data.cell){room.tv=view.tv;if(changed)refreshWorkshopRoom();}
+}
+function netHomeRequest(op,extra={},done=null) {
+  if(!net.on||!room?.guestHome)return false;
+  const owner=room.guestOf;if(!net.peers.has(owner)){say('The homeowner is not connected.',3);return true;}
+  const id=netRandomId(),cell=netHomeCell();netHomePending.set(id,{owner,cell,done,t:netNow()});
+  net.tx.send('homeAction',{id,cell,op,...extra},owner);return true;
+}
+function netHomeTVToggle(){
+  if(!net.on||netHomeCell()===null)return false;
+  if(room.guestHome)return netHomeRequest('tv');
+  room.tv=!room.tv;netHomeBroadcast(homeRecord());say(room.tv?'The telly flickers on.':'You switch the telly off.',3);return true;
+}
+function netHomeFrame(dt,now,fromTimer=false) {
+  if(!netHomePending)return;
+  for(const [id,q]of netHomePending)if(now-q.t>10){netHomePending.delete(id);q.done?.({ok:false,text:'No reply from the homeowner.'});say('No reply from the homeowner.',3);}
+  for(const [key,j]of netHomeJobs)if(now>j.until){const h=owned.homes.find(h=>h.cell===j.cell);if(h)workshopState(h).supplies++;netHomeJobs.delete(key);}
+  if((netHomeTimer-=dt)>0)return;netHomeTimer=.5;
+  const cell=netHomeCell();
+  if(cell!==null&&room.guestHome)net.tx.send('homeActivity',{cell,cooking:game?.g.id==='cook',bench:game?.kind==='workshop'?workshopRun?.bench.key:null},room.guestOf);
+  for(const h of owned.homes)if([...netHomeGuests.values()].some(g=>g.cell===h.cell))netHomeBroadcast(h);
+}
+function netHomeMessage(type,d,from,p,now) {
+  if(!['homeAction','homeState','homeReply','homeActivity'].includes(type))return false;
+  if(!d||typeof d!=='object')return true;
+  if(type==='homeState'){netHomeApply(d,from);return true;}
+  if(type==='homeReply'){
+    const q=netHomePending.get(d.id);if(!q||q.owner!==from)return true;netHomePending.delete(d.id);
+    if(d.state)netHomeApply(d.state,from);if(d.text)say(d.text,4);q.done?.(d);return true;
+  }
+  const permission=netHomeGuests.get(from),h=owned.homes.find(h=>h.cell===d.cell),s=netViewOf(p);
+  if(!permission||permission.cell!==d.cell||permission.until<now||!h)return true;
+  if(type==='homeActivity'){
+    if(s?.rk!==netRoomKey('room',{kind:homeRoomKind(h.kind),cell:[h.cell%N,Math.floor(h.cell/N)],guestOf:net.selfId}))return true;
+    permission.until=now+1800;
+    netHomeActivity.set(from,{cell:d.cell,cooking:!!d.cooking,t:now});
+    const j=netHomeJobs.get(d.cell+':'+d.bench);if(j?.by===from)j.until=now+90;return true;
+  }
+  if(typeof d.id!=='string'||d.id.length>40||!netAllow(p.homeBucket||={},now,.1,10))return true;
+  p.homeReplies||=new Map();if(p.homeReplies.has(d.id)){net.tx.send('homeReply',p.homeReplies.get(d.id),from);return true;}
+  const w=workshopState(h),b=w.parts.find(b=>b.key===d.bench),key=d.cell+':'+d.bench;
+  let ok=true,text='',start=null;
+  if(d.op==='tv'){
+    const v=netHomeViews.get(netHomeViewKey(net.selfId,d.cell))||{tv:false};v.tv=!v.tv;netHomeViews.set(netHomeViewKey(net.selfId,d.cell),v);
+    if(netHomeCell()===d.cell&&!room.guestHome)room.tv=v.tv;
+  }else if(d.op==='power')w.powered=!w.powered;
+  else if(d.op==='plant'){[ok,text]=plantWeed(h,b);}
+  else if(d.op==='tend'){[ok,text]=tendWeed(b);}
+  else if(d.op==='harvest'){
+    if(!b||b.id!=='growrack'||!b.crop||b.crop.left>0){ok=false;text='The plant is still growing.';}
+    else{netSendGift(p,{item:{id:'weed',uses:4+(w.upgrades.lamp?2:0),q:b.crop.tended?'perfect':'fine'}});delete b.crop;text='Harvest sent to your bag.';}
+  }else if(d.op==='batchStart'){
+    if(!b||b.id!=='bench'||!workshopBenchReady(w,b)||!w.powered||!w.supplies||netHomeJobs.has(key)||(netHomeCell()===h.cell&&game?.kind==='workshop'&&workshopRun?.bench.key===b.key)){ok=false;text='That bench is busy or needs power and supplies.';}
+    else{w.supplies--;netHomeJobs.set(key,{cell:h.cell,bench:b.key,by:from,until:now+90});start={fan:w.parts.some(p=>p.id==='fan'&&p.bench===b.key),controller:!!w.upgrades.controller};}
+  }else if(d.op==='batchFinish'){
+    const j=netHomeJobs.get(key);
+    if(!j||j.by!==from){ok=false;text='This batch is no longer reserved.';}
+    else{netHomeJobs.delete(key);if(DRUG_QUALITY[d.quality]){netSendGift(p,{item:{id:'neon',uses:({perfect:6,fine:4,burnt:2}[d.quality])+(w.upgrades.press?2:0),q:d.quality}});text='Your batch is ready.';}else{w.supplies++;text='Batch cancelled; supplies returned.';}}
+  }else{ok=false;text='Unknown workshop action.';}
+  const reply={id:d.id,ok,text,start,state:netHomeState(h)};p.homeReplies.set(d.id,reply);if(p.homeReplies.size>80)p.homeReplies.delete(p.homeReplies.keys().next().value);
+  net.tx.send('homeReply',reply,from);netHomeBroadcast(h);saveGame();return true;
+}
+function openGuestWorkshop(){
+  workshopEl||=panel('workshop');const h=homeRecord(),w=workshopState(h),btn=(op,key,label)=>`<button class="item" data-guest-op="${op}" data-bench="${key}">${label}</button>`;
+  showPanel(workshopEl,`<h1>${netEsc(room.guestName||'Shared')} workshop</h1><p class="sub">${w.supplies} batches of supplies · ${w.powered?'Power on':'Power off'}. Finished batches go in your bag.</p>${btn('power',0,w.powered?'Switch power off':'Switch power on')}${w.parts.filter(p=>p.id==='bench'||p.id==='growrack').map(p=>p.id==='bench'?btn('run',p.key,'Run a Neon batch'):btn(p.crop?p.crop.left===0?'harvest':'tend':'plant',p.key,p.crop?p.crop.left===0?'Harvest weed':`Tend plant · ${Math.ceil(p.crop.left)}s left`:'Plant seed pod')).join('')}`);
+  workshopEl.onclick=e=>{const b=e.target.closest('[data-guest-op]');if(!b)return;const bench=w.parts.find(p=>p.key===+b.dataset.bench);if(b.dataset.guestOp==='run')return startGuestWorkshopBatch(bench);netHomeRequest(b.dataset.guestOp,{bench:bench?.key},()=>{if(room?.guestHome&&workshopEl.style.display==='flex')openGuestWorkshop();});};
+}
+function startGuestWorkshopBatch(bench){
+  if(!bench||inv.length>=INV_SIZE)return say('Make room in your bag first.',3);
+  hidePanel(workshopEl);netHomeRequest('batchStart',{bench:bench.key},reply=>{
+    if(!reply.ok||!room?.guestHome)return;
+    workshopRun={home:homeRecord(),bench};startGame('workshop','workshop','',reply.start);
+    game.onDone=quality=>netHomeRequest('batchFinish',{bench:bench.key,quality});
+  });
+}
+// Both directions require an explicit acceptance. Only the travelling player's
+// client moves them, and destinations are supplied after the request is accepted.
+let netTeleports;
+function netTeleportReset(){netTeleports=new Map();}
+function netTeleportPeerLeft(id){if(netTeleports)for(const [key,r]of netTeleports)if(r.peer===id)netTeleports.delete(key);}
+function netTeleportFrame(now){if(netTeleports)for(const [id,r]of netTeleports)if(r.until<now){netTeleports.delete(id);netLog('A teleport request expired.');netPlayersShow();}}
+function netTeleportCanMove(){return ['walk','room','roof','elplat'].includes(mode)&&!sleep&&!game&&!wanted.busted;}
+function netTeleportRequest(p,dir){
+  if(!net.on||!p.hello||p.mismatch)return;
+  if(dir==='to'&&!netTeleportCanMove())return say('Leave your vehicle or activity before teleporting.',3);
+  const id=netRandomId();netTeleports.set(id,{peer:p.id,dir,incoming:false,until:netNow()+30});
+  net.tx.send('teleport',{op:'request',id,dir},p.id);netLog(`Teleport request sent to ${p.name}. They have 30 seconds to accept.`);
+}
+function netTeleportShow(el){
+  const list=el.querySelector('[data-np="requests"]');if(!list)return;
+  const html=[...(netTeleports||[])].filter(([,r])=>r.incoming&&!r.accepted).map(([id,r])=>{
+    const p=net.peers.get(r.peer);if(!p)return '';
+    return `<p>${netEsc(p.name)} ${r.dir==='to'?'wants to teleport to you':'asks you to teleport to them'}. <button class="opt" data-np-act="tp-yes" data-req="${id}">Accept</button> <button class="opt" data-np-act="tp-no" data-req="${id}">Decline</button></p>`;
+  }).join('');
+  if(list.dataset.html!==html){list.innerHTML=html;list.dataset.html=html;}
+}
+const NET_PRIVATE_ROOMS=new Set(['home','loft','bellehome','islandhome']);
+function netTeleportRoomData(r,depth=0){
+  if(!r||depth>2||NET_PRIVATE_ROOMS.has(r.kind))return null;
+  const out={kind:r.kind};
+  for(const k of ['word','base','district','suite','grandHotel','st','netBoard','track','dest','rideT','section'])if(['string','number','boolean'].includes(typeof r[k]))out[k]=r[k];
+  for(const k of ['cell','ret','tower','opts'])if(Array.isArray(r[k]))out[k]=r[k].slice(0,8);
+  for(const k of ['lobby','below'])if(r[k])out[k]=netTeleportRoomData({...r[k],kind:r[k].kind||(k==='below'?'lighthouse':ROOM_FOR[r[k].word]||'hotel')},depth+1);
+  return out;
+}
+function netTeleportCheckRoom(d,depth=0){
+  if(!d||depth>2||typeof d.kind!=='string'||!Object.hasOwn(ROOM_DEFS,d.kind)||NET_PRIVATE_ROOMS.has(d.kind))return null;
+  const out={kind:d.kind};
+  for(const k of ['word','base','district'])if(typeof d[k]==='string')out[k]=netClean(d[k],60);
+  for(const k of ['suite','grandHotel'])if(typeof d[k]==='boolean')out[k]=d[k];
+  for(const k of ['st','netBoard','track','dest','rideT','section'])if(netNum(d[k]))out[k]=clamp(d[k],0,1e7);
+  for(const k of ['cell','ret','tower','opts'])if(Array.isArray(d[k])&&d[k].length<=8&&d[k].every(netNum))out[k]=d[k].slice();
+  if(out.dest!==undefined&&(!Number.isInteger(out.dest)||!stations[out.dest]))delete out.dest;
+  if(out.opts)out.opts=out.opts.filter(n=>Number.isInteger(n)&&stations[n]);
+  if(out.cell&&(out.cell.length!==2||out.cell.some(n=>!Number.isInteger(n)||n<0||n>=N)))return null;
+  if(out.ret&&(out.ret.length!==3||out.ret.slice(0,2).some(n=>n<0||n>=N)))return null;
+  if(['station','train'].includes(d.kind)&&(!Number.isInteger(out.st)||!stations[out.st]))return null;
+  for(const k of ['lobby','below'])if(d[k]){out[k]=netTeleportCheckRoom(d[k],depth+1);if(!out[k])return null;}
+  if(['hotelroom','grandhotelheist'].includes(d.kind)&&!out.lobby||d.kind==='lamproom'&&!out.below)return null;
+  if(d.kind==='jail')out.until=T;
+  out.t0=T-trainPhase({t0:T});return out;
+}
+function netTeleportPlace(peer){
+  const h=netHomeCell()!==null&&!room.guestHome?homeRecord():null;
+  if(h){netHomeInvite(peer,h);return {home:{cell:h.cell,kind:h.kind,door:h.door||room.ret?.slice(0,2),rec:JSON.parse(JSON.stringify(h)),name:net.name}};}
+  if(mode==='room'&&!room.guestHome){const interior=netTeleportRoomData(room);if(interior)return {interior,spawn:[px,py,a]};}
+  const loc=mapPlayerLocation(),land=netLandNear(loc.x,loc.y,3);
+  return land?{x:land[0],y:land[1],a,entrance:mode==='room'}:null;
+}
+function netTeleportAnswer(id,ok){
+  const r=netTeleports.get(id),p=r&&net.peers.get(r.peer);if(!p||!r.incoming||r.until<netNow())return;
+  if(!ok){net.tx.send('teleport',{op:'decline',id},p.id);netTeleports.delete(id);return;}
+  if(r.dir==='here'&&!netTeleportCanMove())return say('Leave your vehicle or activity before teleporting.',3);
+  if(r.dir==='to'){
+    const place=netTeleportPlace(p);if(!place)return say('There is no safe arrival spot here.',3);
+    net.tx.send('teleport',{op:'move',id,place},p.id);netTeleports.delete(id);
+  }else{r.accepted=true;net.tx.send('teleport',{op:'accept',id},p.id);}
+}
+function netTeleportApply(place,from){
+  if(!netTeleportCanMove())return say('Teleport cancelled: leave your vehicle or activity first.',3);
+  if(!place||typeof place!=='object')return;
+  let v=null,land=null,interior=null;
+  if(place.interior){
+    interior=netTeleportCheckRoom(place.interior);if(!interior||!Array.isArray(place.spawn)||place.spawn.length!==3||!place.spawn.every(netNum))return;
+  }else if(place.home){
+    const d=place.home;if(!Number.isInteger(d.cell)||!SHOP[d.cell]||ITEMS[d.kind]?.kind!=='home')return;
+    v={cell:d.cell,kind:d.kind,door:Array.isArray(d.door)&&d.door.length===2&&d.door.every(netNum)?d.door.map(worldCoord):null,home:netGuestHome(d),from,name:net.peers.get(from).name,until:netNow()+1800};
+  }else{
+    if(!netNum(place.x)||!netNum(place.y))return;
+    land=netLandNear(worldCoord(place.x),worldCoord(place.y),.5);if(!land)return say('The arrival spot is blocked.',3);
+  }
+  if(mode==='room')leaveRoom();
+  fx.skating=false;body.seat=null;body.z=body.vz=body.mx=body.my=body.peak=0;body.buf=-Infinity;body.hop=1;roofH=0;roofLot=null;climbing=null;chute=null;freecam=null;
+  for(const k in K)K[k]=0;
+  if(interior){const {kind,...extra}=interior;enterRoom(kind,extra,place.spawn);if(!roomOpen(px,py))[px,py]=room.def.spawn||[room.W/2,room.H-1.6];}
+  else if(v){net.invites.set(from,v);[px,py]=v.door||[v.cell%N+.5,Math.floor(v.cell/N)+.5];netEnterAsGuest(v);}else{room=null;me=null;mode='walk';[px,py]=land;a=netNum(place.a)?place.a:0;pitch=0;}
+  closeNetPlayers();say(place.entrance?'Teleport accepted. You arrive at their building entrance.':'Teleport accepted. You arrive beside your friend.',3);net.sendT=0;
+}
+function netTeleportMessage(type,d,from,p,now){
+  if(type!=='teleport')return false;
+  if(!d||typeof d.id!=='string'||!/^[A-Za-z0-9_-]{1,40}$/.test(d.id))return true;
+  if(d.op==='request'){
+    if(!['to','here'].includes(d.dir)||!netAllow(p.teleportBucket||={},now,5,2))return true;
+    netTeleports.set(d.id,{peer:from,dir:d.dir,incoming:true,until:now+30});
+    netLog(`${p.name} ${d.dir==='to'?'wants to teleport to you':'asks you to teleport to them'}. Hold Tab to accept or decline.`);netPlayersShow();return true;
+  }
+  const r=netTeleports.get(d.id);if(!r||r.peer!==from||r.until<now)return true;
+  if(d.op==='decline'){netTeleports.delete(d.id);netLog(`${p.name} declined the teleport request.`);}
+  else if(d.op==='accept'&&!r.incoming&&r.dir==='here'){
+    const place=netTeleportPlace(p);netTeleports.delete(d.id);
+    net.tx.send('teleport',place?{op:'move',id:d.id,place}:{op:'decline',id:d.id},from);
+  }else if(d.op==='move'&&(!r.incoming&&r.dir==='to'||r.incoming&&r.dir==='here'&&r.accepted)){
+    netTeleports.delete(d.id);netTeleportApply(d.place,from);
+  }
+  netPlayersShow();return true;
+}
 // Appearance belongs to the player, across saved games and multiplayer names.
 const PLAYER_APPEARANCE_KEY='asciiCity.appearance.v1';
 let playerAppearance=null;
@@ -59493,7 +59782,8 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
-  if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
+  if (netTyping() || netMenuOpen()) return;
+  if(netPlayersOpen()&&e.code!=='Tab'){if(e.code==='Escape')closeNetPlayers();return;} // (the chat box and the multiplayer menu keep their keys: net.js)
   if (netPlayersKey(e)) { if (!e.isTrusted && netPlayersOpen()) netPlayersPinned = true; return; } // (Tab: the players menu, net.js; from a phone's or pad's button it stays open)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
@@ -59804,14 +60094,18 @@ function drive(dt) {
 }
 
 let t0 = performance.now();
-function loop(t) {
-  netFrame(t); // (multiplayer: sent and received whatever else is going on, the menus and cabinets included: net.js)
+function loop(t,fromTimer=false,draw=true) {
+  netFrame(t,fromTimer); // (multiplayer: sent and received whatever else is going on, the menus and cabinets included: net.js)
   if(!game)hideMinigamePresentation();
-  controllerTick(clamp((t-t0)/1000,0,.05));
-  if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if(!fromTimer)controllerTick(clamp((t-t0)/1000,0,.05));
+  if (paused&&!net.on) { skateFixedReset();t0=t;hushSirens();transitSync();if(!fromTimer)requestAnimationFrame(loop);return; }
+  // Multiplayer menus stop input, not gravity, momentum or the rest of the city.
+  if(paused||fromTimer||netPlayersOpen()||netTyping()||netMenuOpen()){
+    for(const key in K)K[key]=0;for(const axis in CONTROLLER.motion)CONTROLLER.motion[axis]=0;gun.aimHeld=false;
+  }
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); if(!fromTimer)requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
@@ -59824,8 +60118,8 @@ function loop(t) {
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { skateFixedReset(); // a cabinet or a shift has the screen; the world carries on behind it
-    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); else hideMinigamePresentation(); audioTick(dt);
-    requestAnimationFrame(loop); return;
+    stepTraffic(dt, T); stepGame(dt); if(draw){if (game) drawGame(); else hideMinigamePresentation();} if(!fromTimer)audioTick(dt);
+    if(!fromTimer)requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
   if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && handheldMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
@@ -59923,9 +60217,9 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   stepTransitAnnouncements();
-  renderView(dt);
-  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
-  requestAnimationFrame(loop);
+  if(draw)renderView(dt);
+  if(!fromTimer){audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);}
+  if(!fromTimer)requestAnimationFrame(loop);
 }
 // the view from wherever the camera is this frame (behind the car, the plane, the board; the TV at the football; or your
 // own eyes, swaying if you've had a drink), drawn with render(). Also run with dt 0 for a screenshot (screenshots.js)

@@ -156,6 +156,7 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   const residence = homeRecord(room);
+  if(net.on&&residence)netHomeEntered(residence);
   if(residence)updateHomeLights();
   if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
@@ -186,7 +187,7 @@ function interact() {
       if (hs === 'workshop') return openWorkshop();
       if (hs === 'terrace') { room.ret = [...FERN_HOUSE.terrace, 0];return leaveRoom(); }
       if(hs==='shelf')return say('Look at the shelf board where you want to put an item.',3);
-      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
+      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', room.guestHome ? null : home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
         home.pets ||= home.pet ? [home.pet] : [];
@@ -201,6 +202,7 @@ function interact() {
         }
         return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
+      if (hs === 'tv' && netHomeTVToggle()) return;
       if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The telly flickers on.' + news : 'You switch the telly off.', news ? 6 : 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
@@ -363,8 +365,8 @@ function interact() {
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb' && sh.base !== 'fire') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
-    const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
-    if (guest) return netEnterAsGuest(guest);
+    const home = homeAt(sh), guest = netInviteAt(sh); // (a friend's place you've been invited to: net.js)
+    if (guest && (!home || mapWaypoint?.id === 'invite:' + guest.from)) return netEnterAsGuest(guest);
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);

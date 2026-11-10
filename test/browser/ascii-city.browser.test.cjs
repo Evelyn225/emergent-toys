@@ -489,7 +489,7 @@ test('brownstone bays project in front of their walls and their beveled faces re
       px = mod(bay.x + u * bay.c - v * bay.s + nx * 0.8, N);
       py = mod(bay.y + u * bay.s + v * bay.c + ny * 0.8, N);
       a = Math.atan2(-ny, -nx); render(0);
-      faces.push({ depth: ZB[cell], glass: [CYAN, WARM].includes(BG[cell] >> 4) });
+      faces.push({ depth: ZB[cell], glass: [WET, WARM].includes(BG[cell] >> 4) });
     }
     return { projection: wallDepth - frontDepth, faces };
   });
@@ -1647,7 +1647,8 @@ test('P to pee, any time: aimed where you look (your view stays put), falls unde
 }));
 
 test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you are thrown out; a cop who sees you in the street nicks you', () => withPage(async page => {
-  await page.evaluate(() => { tod = 20; needs.bladder = 30; enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [1.6, 5.3, Math.PI / 2]); });
+  const streetRet=await page.evaluate(()=>[px,py,a]); // every scripted room transition returns to the actual street
+  await page.evaluate(ret => { tod = 20; needs.bladder = 30; enterRoom('bar', { word: 'BAR', neon: MAG, ret }, [1.6, 5.3, Math.PI / 2]); },streetRet);
   await page.keyboard.press('KeyP');
   assert.deepStrictEqual(await page.evaluate(() => [!!(pee && pee.loo), msgText]), [true, 'You use the toilet.']);
   await page.waitForFunction(() => !pee, null, { timeout: 30000 }); // (game time: slower than the clock on a busy machine)
@@ -1656,13 +1657,13 @@ test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you 
   assert.ok(await page.evaluate(() => { px = 6; py = 2.4; a = -Math.PI / 2; return typeof room.line === 'string' && !promptText().includes('undefined'); }));
   // the bathroom's its own room, walls round it: miss the bowl in there and that's your business
   assert.deepStrictEqual(await page.evaluate(() => [ROOMW.cell(3, 5) > 0, ROOMW.cell(2, 4), inWc(1.6, 6.4), inWc(6, 3)]), [true, 0, true, false], 'a wall, a doorway, the toilet inside, the bar outside');
-  await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [2.5, 2.6, 0]); needs.bladder = 60; });
+  await page.evaluate(ret => { enterRoom('diner', { word: 'DINER', ret }, [2.5, 2.6, 0]); needs.bladder = 60; },streetRet);
   await page.keyboard.press('KeyP');
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, !!(pee && pee.loo), msgText]), [true, false, 'Not quite the toilet, but close enough.']);
   await page.waitForFunction(() => !pee, null, { timeout: 30000 });
   assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind]), ['room', 'diner'], 'still in the diner');
   // the diner, out in the middle of the floor
-  await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [8.5, 5, Math.PI / 2]); needs.bladder = 50; });
+  await page.evaluate(ret => { enterRoom('diner', { word: 'DINER', ret }, [8.5, 5, Math.PI / 2]); needs.bladder = 50; },streetRet);
   await page.keyboard.press('KeyP'); await page.waitForFunction(() => mode === 'walk', null, { timeout: 15000 }); // (game time: slower than the clock on a busy machine)
   assert.deepStrictEqual(await page.evaluate(() => [mode, !!pee]), ['walk', false]);
   assert.match(await page.evaluate(() => msgText), /thrown out/);

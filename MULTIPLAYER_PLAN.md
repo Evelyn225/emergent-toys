@@ -2,6 +2,15 @@
 
 Sketch, not a spec. Line refs are to `city/` as of this writing.
 
+## Social follow-up (protocol 12)
+
+- Public interiors identify the building, not the exact point where someone pressed E. Private flats also identify their owner; following a marked invitation selects the friend's flat even if you own one in the same building. Stations identify their station; carriage IDs and arrival phases use the shared 45-second train cycle.
+- Player map locations travel separately from interior coordinates. The map directory searches player names, keeps vehicle/interior markers, and labels last-known positions for quiet peers. Player waypoints follow the latest location.
+- Multiplayer menus block input while simulation and rendering continue. The background fallback steps normal physics too, so airborne players land. Offline pause stays unchanged.
+- Chat entry uses transparent monospace text and a terminal prompt. Give-money forms show a live available balance.
+- Homeowners authorize invited guests to operate their TV and workshop. The owner reserves supplies, resolves harvests and supplies the resulting items; guest bags stay personal. Guests cook with ingredients from their own bag. The shared stove, TV, grow racks and running processor/fan are visible to other visitors. Private storage and furniture placement stay restricted to the owner.
+- Teleport requests work in both directions through Players. The recipient explicitly accepts or declines; requests expire after 30 seconds. Public rooms can be joined directly. Homeowners can grant arrival in their home; a visitor cannot grant access to a third party's private home, so their destination uses the building entrance.
+
 ## Status
 
 - **Done (branch `multiplayer`)**: phases 0-2. `city/net-core.js` (pure: checks, smoothing, rules), `city/net.js` (transports,

@@ -674,9 +674,10 @@ test('the players menu and visiting: Tab shows everyone, whisper, give money and
     await A.evaluate(() => { carryItem({ id: 'candy', uses: 1 }); held = 0; dropHere(); netSendDrops(); });
     const dpos = await A.evaluate(() => { const d = dropped.find(d => d.at === ''); return [d.x, d.y]; });
     await until(B, () => [...net.peers.values()][0].drops?.length === 1, null, 'Bob sees it');
-    await B.evaluate(d => { px = d[0]; py = d[1]; }, dpos);
-    assert.match(await B.evaluate(() => promptText()), /pick up the candy bar \(Ann put it down\)/);
-    await B.evaluate(() => interact());
+    // Stage the pickup in one tick: normal collision updates can move this
+    // artificially positioned player away from the doorway between RPCs.
+    const dropPrompt = await B.evaluate(d => { px = d[0]; py = d[1]; const prompt = promptText(); interact(); return prompt; }, dpos);
+    assert.match(dropPrompt, /pick up the candy bar \(Ann put it down\)/);
     await until(B, () => inv.filter(i => i.id === 'candy').length === 2, null, 'in Bob\'s bag');
     assert.equal(await A.evaluate(() => dropped.filter(d => d.at === '').length), 0, 'gone from Ann\'s street');
 

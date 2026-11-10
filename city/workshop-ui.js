@@ -1,6 +1,6 @@
 // Physical workshop furniture, placement, supplies, and the customer outside your own building.
 let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
-const workshopHome = () => mode === 'room' && !room.guestHome ? homeRecord(room) : null; // (not at a friend's place: net.js)
+const workshopHome = () => mode === 'room' ? homeRecord(room) : null; // (not at a friend's place: net.js)
 // Keep the original placement/collision envelope; the fan has a real open
 // front, rear plate, supported shaft and separate blades behind its guard.
 function workshopFan(p,w,running){
@@ -79,7 +79,7 @@ function workshopProps(r, parts = null) { // (parts: draw these instead, as the 
       for (const x of [-.68,.68]) props.push(box(x,-.4,.025,.025,.68,1.82,solid(GRAY)));
       continue;
     }
-    const running = () => workshopRun?.home === home && workshopRun.bench.key === p.bench && game?.kind === 'workshop';
+    const running = () => workshopRun?.home === home && workshopRun.bench.key === p.bench && game?.kind === 'workshop' || netWorkshopRunning(home,p.bench);
     if(p.id==='processor')props.push(box(0,0,.24,.27,.93,1.6,workshopProcessorShade(p,w,running)));
     if (p.id === 'packer') props.push(box(0, 0, .23, .27, .93, 1.23, solid(GRAY, { panel: .2, top: '=' })),
       box(0, 0, .06, .22, 1.23, 1.5, solid(MAG, { top: '_' })));
@@ -100,6 +100,7 @@ function nearWorkshopBench() {
 // Buy (Mara's supplies and upgrades), How it works. It opens on Workshop once you have anything, on Buy before.
 let workshopTab = null;
 function openWorkshop(tab) {
+  if(room?.guestHome)return openGuestWorkshop();
   const home = workshopHome(); if (!home) return;
   const w = workshopState(home);
   workshopEl ||= panel('workshop');
@@ -168,7 +169,8 @@ function openWorkshop(tab) {
     if (b.dataset.place) return beginWorkshopPlacement(b.dataset.place);
     if (b.dataset.run) return startWorkshopBatch(w.parts.find(p=>p.key===+b.dataset.run));
     if (b.dataset.pack) {
-      const key = +b.dataset.pack;
+      const key = +b.dataset.pack,part=w.parts.find(p=>p.key===key);
+      if(netHomeBenchBusy(home,{key:part?.bench??key}))return say('Someone is using this equipment.',3);
       if (w.parts.find(p=>p.key===key)?.crop) return say('Harvest this plant before packing up the rack.',3);
       w.parts = w.parts.filter(p=>p.key!==key && p.bench!==key); refreshWorkshopRoom();
     }
@@ -178,6 +180,7 @@ function openWorkshop(tab) {
   };
 }
 function beginWorkshopPlacement(id) {
+  if(room?.guestHome)return say('Only the homeowner can move equipment.',3);
   const home = workshopHome(), w = home && workshopState(home);
   if (!w || !WORKSHOP_PARTS[id] || w.owned[id] <= w.parts.filter(p=>p.id===id).length) return;
   hidePanel(workshopEl); workshopPlacement = { id, home, a: 0, held }; held = -1;
@@ -257,6 +260,8 @@ function tickWorkshopHum() {
   v.o.frequency.setTargetAtTime(55 + heat * 140, now, 0.08); v.lp.frequency.setTargetAtTime(400 + heat * 1400, now, 0.1); v.g.gain.setTargetAtTime(0.035, now, 0.1);
 }
 function startWorkshopBatch(bench) {
+  if(room?.guestHome)return startGuestWorkshopBatch(bench);
+  if(netHomeBenchBusy(workshopHome(),bench))return say('Someone is already using this bench.',3);
   const home=workshopHome(), problem=home && workshopCanRun(home,bench);
   if (!home || problem) return say(problem || 'Use your own workshop.',4);
   hidePanel(workshopEl); workshopRun={home,bench};
@@ -280,7 +285,7 @@ function buyerDoor(home) {
 }
 function updateDrugBuyer() {
   if (T<buyerAwayUntil || !owned.homes.length || !drugBuyerInterested()) {drugBuyer=null;return;}
-  const inside=workshopHome(), home=inside || (drugBuyer && owned.homes.find(h=>h.cell===drugBuyer.home)) ||
+  const inside=room?.guestHome?null:workshopHome(), home=inside || (drugBuyer && owned.homes.find(h=>h.cell===drugBuyer.home)) ||
     owned.homes.reduce((b,h)=>near(h.cell%N,Math.floor(h.cell/N),px,py)<near(b.cell%N,Math.floor(b.cell/N),px,py)?h:b);
   const doorKey = home.door?.join(',') || '';
   if (drugBuyer?.home===home.cell && drugBuyer.doorKey===doorKey) return;
@@ -327,6 +332,7 @@ function workshopUse() {
   if(nearWorkshopSupplier()){openWorkshopSupplier();return true;}
   if(nearDrugBuyer()){openDrugSale();return true;}
   const b=nearWorkshopBench();
+  if(b&&room?.guestHome){if(b.id==='bench')startGuestWorkshopBatch(b);else if(b.crop?.left===0)netHomeRequest('harvest',{bench:b.key});else openGuestWorkshop();return true;}
   if(b?.id==='growrack') {
     if (b.crop?.left===0) {say(harvestWeed(workshopHome(),b)[1],5);refreshWorkshopRoom();updateDrugBuyer();saveGame();}
     else openWorkshop();

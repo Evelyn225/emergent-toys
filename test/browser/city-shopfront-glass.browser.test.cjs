@@ -67,7 +67,7 @@ test('every shop has its own front: styles vary, frames bevel, glass reflects th
   const at=(a,z,fp=.002)=>{BG[0]=0;CH[0]='?';shopfrontBay(0,a,w,z,0,H,sh,10,fp,false,1);return {bg:BG[0],ch:CH[0]};};
   tod=14;env(0);
   const glassLow=at(.12,.08),glassHigh=at(.12,.2),riser=at(.12,.03),pil=at(.01,.15);
-  if(glassLow.bg>>4!==CYAN||glassHigh.bg>>4!==CYAN||!((glassHigh.bg&15)>(glassLow.bg&15)))bad.push(['glass reflection',glassLow,glassHigh]);
+  if(glassLow.bg>>4!==WET||glassHigh.bg>>4!==WET||!((glassHigh.bg&15)>(glassLow.bg&15)))bad.push(['glass reflection',glassLow,glassHigh]);
   if(riser.bg>>4!==st.paint&&st.paint!==BLACK)bad.push(['stallriser',riser]);if(pil.bg>>4!==st.paint&&st.paint!==BLACK)bad.push(['pilaster',pil]);
   for(const c of [glassLow,glassHigh,riser,pil])if(c.ch!==' ')bad.push(['a character on the front',c.ch]);
   // the pilaster's bevel: its outer edge lit, its inner edge shaded, up close; one tone far off
