@@ -489,7 +489,7 @@ test('brownstone bays project in front of their walls and their beveled faces re
       px = mod(bay.x + u * bay.c - v * bay.s + nx * 0.8, N);
       py = mod(bay.y + u * bay.s + v * bay.c + ny * 0.8, N);
       a = Math.atan2(-ny, -nx); render(0);
-      faces.push({ depth: ZB[cell], glass: [CYAN, WARM].includes(BG[cell] >> 4) });
+      faces.push({ depth: ZB[cell], glass: [WET, WARM].includes(BG[cell] >> 4) });
     }
     return { projection: wallDepth - frontDepth, faces };
   });

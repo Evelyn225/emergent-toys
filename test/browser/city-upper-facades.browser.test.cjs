@@ -32,7 +32,7 @@ test('a window has a frame, a sill and glass that reflects the sky; corrugated s
   const bad=[],hue=c=>c>>4,at=(a,z,lit=false,fp=.002)=>{BG[0]=0;CH[0]='?';const hit=facadeWindow(0,a,.1,z,.2,lit,WARM,10,fp,STONE,3);return {hit,bg:BG[0],ch:CH[0]};};
   const sill=at(.05,-.004),frame=at(-.004,.1),low=at(.02,.02),high=at(.02,.18),litG=at(.02,.1,true),off=at(.05,-.05);
   if(hue(sill.bg)!==STONE||hue(frame.bg)!==STONE)bad.push(['frame or sill',sill,frame]);
-  if(hue(low.bg)!==CYAN||!((high.bg&15)>(low.bg&15)))bad.push(['glass reflection',low,high]);
+  if(hue(low.bg)!==WET||hue(high.bg)!==WET||!((high.bg&15)>(low.bg&15)))bad.push(['glass reflection',low,high]);
   if(hue(litG.bg)!==WARM)bad.push(['lit glass',litG]);if(off.hit)bad.push('drew outside the window');
   for(const c of [sill,frame,low,high,litG])if(c.ch!==' ')bad.push(['a character on a window',c.ch]);
   const rib=fp=>{const s=new Set();for(let a=0;a<.05;a+=.0005){corrugated(0,a,GRAY,10,fp);s.add(BG[0]);}return s.size;};
