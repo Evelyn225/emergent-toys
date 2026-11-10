@@ -14,15 +14,19 @@ function EMERGENCY_TERMINAL(x,y,kind){
   box('monitor-foot',0,-.15,.19,.12,.86,.88,.01,metal);
   box('monitor-neck',0,-.19,.025,.025,.88,1.12,.005,metal);
   box('monitor-shell',0,-.19,.48,.04,1.08,1.65,.018,desk);
+  const screenHalf=.435,textHalf=screenHalf-.075;
   const screen=(i,t,L)=>{
     const bg=C(BLUE,2);BG[i]=bg;
     if(HIT.face===3){
-      for(const [text,z,size]of [['DISPATCH',1.53,.10],[kind==='amb'?'PARAMEDIC':'FIRE & RESCUE',1.35,.07],['SIGN ON / OFF',1.18,.063]])
-        if(hotelFittingText(i,HIT.u,HIT.w,t,text,0,z,size,size*1.2,C(CYAN,14),bg))return true;
+      for(const [text,z,size]of [['DISPATCH',1.53,.072],[kind==='amb'?'PARAMEDIC':'FIRE & RESCUE',1.35,.052],['SIGN ON / OFF',1.18,.046]]){
+        // The text helper takes a per-character width, not the whole label.
+        const width=Math.min(size,textHalf*2/text.length);
+        if(hotelFittingText(i,HIT.u,HIT.w,t,text,0,z,width,width*1.2,C(CYAN,14),bg))return true;
+      }
     }
     set(i,' ',0);return true;
   };
-  box('screen',0,-.146,.435,.004,1.12,1.61,.005,screen);
+  box('screen',0,-.146,screenHalf,.004,1.12,1.61,.005,screen);
   box('keyboard',.08,.18,.32,.12,.86,.89,.008,metal);
   // Radio: speaker perforations disappear once smaller than a pixel.
   box('radio',.61,-.12,.13,.16,.86,1.10,.012,(i,t,L)=>{const grille=HIT.face===3&&Math.abs(HIT.u)<.09&&HIT.w<1.05;BG[i]=C(GRAY,grille?1:3+L*.2);set(i,' ',0);return true;});
