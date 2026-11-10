@@ -43,3 +43,14 @@ test('NPC detail transitions keep one outfit and use hysteresis instead of alter
   return out;
  });assert.deepEqual(r.map(x=>x.tier),[1,1,2,2,1]);assert.ok(r.every(x=>x.same&&x.skin===r[0].skin&&x.shade===r[0].skin));
 }));
+test('hose and rain puddles mirror solid facade colors and lettering, with depth rejecting objects in front',()=>session(async(A)=>{
+ const r=await A.evaluate(()=>{
+  const b=Math.floor(hor)+4,row=b+6,x=Math.floor(cols/2),i=row*cols+x,j=(2*b-row-1)*cols+x,ground=C(GRAY,4);
+  BASE.fill(b);FL.fill(0);CH.fill(' ');BG.fill(NONE);ZB.fill(Infinity);ZBG.fill(Infinity);LAMPL.fill(0);
+  const reset=()=>{FL[i]=2;BG[i]=ground;ZB[i]=ZBG[i]=1;BG[j]=C(RED,12);CH[j]=' ';ZB[j]=ZBG[j]=3;};
+  reset();reflect();const color=BG[i],matte=wetGround(ground),blank=CH[i]===' ';
+  reset();ZB[j]=ZBG[j]=.5;reflect();const occluded=BG[i]===matte;
+  reset();CH[j]='#';COL[j]=C(WARM,15);reflect();const text=CH[i]==='#'&&(COL[i]&15)<15;
+  return {color,matte,blank,occluded,text};
+ });assert.notEqual(r.color,r.matte);assert.ok(r.blank&&r.occluded&&r.text,JSON.stringify(r));
+}));

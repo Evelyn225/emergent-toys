@@ -6260,8 +6260,8 @@ function drawHoseWetness(){
    const x=rx*t-vx,y=ry*t-vy,z=eye+rz*t-q.z,u=q.nz?x:-q.ny*x+q.nx*y,v=q.nz?y:z;
    const edge=Math.hypot(u/radius,v/(radius*(q.nz?1:1.6)))+(noise((q.x+x)*25,(q.y+y+z)*25,417)-.5)*.24;
    if(edge>1)continue;const strength=q.life*Math.min(1,(1-edge)*4),bg=BG[i];
-   BG[i]=hazeTint(bg,C(bg>>4,(bg&15)*.6),strength*.65);
    if(q.nz&&q.water>.12&&edge<.8){FL[i]=2;ZBG[i]=t;}
+   else BG[i]=hazeTint(bg,C(bg>>4,(bg&15)*.6),strength*.65);
   }
  }
 }
@@ -15510,11 +15510,22 @@ function reflect() {
       if (f < 2) continue;
       const s = 2 * b - r - 1 + (f >= 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
       const lamp = f === 2 ? LAMPL[i] : 0; // a puddle under a streetlamp holds its light as well as the reflection
-      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
-        const lv = (COL[j] & 15) * 0.55;
-        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
-        if (f === 2) BG[i] = wetGround(BG[i], lamp * 0.4, i); // (the wet ground under it; a lamp's pool kept soft, so the reflection still reads)
-      }else if(f===2){set(i,' ',0);BG[i]=wetGround(BG[i],lamp,i);} // nothing to mirror: the wet ground, shading into a lamp's light
+      const source=s>=0&&s<rows&&FL[j]===0,depth=ZB[i];
+      if(f===2){
+        const under=wetGround(BG[i],lamp*.4,i);
+        // Modern facades and figures use solid background cells. Reflect those
+        // colours too; text-only reflections made fresh hose puddles look matte.
+        const reflectsBackground=source&&BG[j]!==NONE&&ZBG[j]>=depth;
+        const reflectsGlyph=source&&CH[j]&&CH[j]!==' '&&ZB[j]>=depth;
+        const slope=Math.max(0,(r-hor+.5)/projY),grazing=1-slope/Math.sqrt(1+slope*slope);
+        BG[i]=reflectsBackground?hazeTint(under,BG[j],.24+.32*grazing):wetGround(BG[i],lamp,i);
+        if(reflectsGlyph){
+          const lv=(COL[j]&15)*.55;CH[i]=CH[j];COL[i]=lamp*.8>lv?C(WARM,lamp*.8):C(COL[j]>>4,lv);
+        }else set(i,' ',0);
+      }else if(source&&CH[j]!==' '&&ZB[j]>=ZB[i]){
+        const lv=(COL[j]&15)*.55;
+        CH[i]=CH[j];COL[i]=f===4?C(CYAN,lv>4?6:3):C(COL[j]>>4,lv);
+      }
     }
   }
 }

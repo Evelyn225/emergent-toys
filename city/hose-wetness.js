@@ -50,8 +50,8 @@ function drawHoseWetness(){
    const x=rx*t-vx,y=ry*t-vy,z=eye+rz*t-q.z,u=q.nz?x:-q.ny*x+q.nx*y,v=q.nz?y:z;
    const edge=Math.hypot(u/radius,v/(radius*(q.nz?1:1.6)))+(noise((q.x+x)*25,(q.y+y+z)*25,417)-.5)*.24;
    if(edge>1)continue;const strength=q.life*Math.min(1,(1-edge)*4),bg=BG[i];
-   BG[i]=hazeTint(bg,C(bg>>4,(bg&15)*.6),strength*.65);
    if(q.nz&&q.water>.12&&edge<.8){FL[i]=2;ZBG[i]=t;}
+   else BG[i]=hazeTint(bg,C(bg>>4,(bg&15)*.6),strength*.65);
   }
  }
 }
