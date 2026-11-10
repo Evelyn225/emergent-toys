@@ -694,7 +694,7 @@ Object.assign(DENSE, {
   },
   programme: it => sculptSurface(26, 14, (x, y) => { // the cover: the ground's name, the fixture, a photo of the pitch
     if (Math.abs(x) > 7.2 || Math.abs(y) > 6.2) return null;
-    const t = dText(x, y, 0, -4.8, 'YARDS GROUND') || dText(x, y, 0, 4.6, typeof it?.of === 'string' ? it.of.toUpperCase().slice(0, 12) : 'PROGRAMME');
+    const t = dText(x, y, 0, -4.8, 'YARDS GROUND') || dText(x, y, 0, 4.6, typeof it?.of === 'string' ? it.of.toUpperCase().slice(0, 12) : 'PROGRAM');
     if (t) return [t, C(WHITE, 15), true];
     if (y > -3.6 && y < 3.4 && Math.abs(x) < 6.2) return Math.abs(fract((x + 6.2) / 2.5) - .5) < .02 || Math.abs(y + .1) < .15 ? ['-', C(WHITE, 12)] : dLit(.55 + (Math.floor((x + 6.2) / 1.25) & 1) * .1, GREEN, 6);
     return dLit(.7 - Math.abs(y) * .02, RED, 6);

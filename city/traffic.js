@@ -450,7 +450,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : c.kind === 'taxi' && (c.pass || c.off < -0.01) ? 0.26 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !playerCar(c) && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !playerCar(c) && !c.parked && (everywhere || c.ev || c.pursuit || c.returning&&typeof netPoliceObserved==='function'&&netPoliceObserved(c) || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;

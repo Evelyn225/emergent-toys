@@ -85,13 +85,13 @@ function peeBoxHit(ox, oy, oz, x, y, z, box) {
   return { t: enter, x: hx, y: hy, z: hz, nx, ny, nz, ux, uy, uz, vx, vy, vz, face };
 }
 
-function peeObjectHit(ox, oy, oz, x, y, z) {
+function peeObjectHit(ox, oy, oz, x, y, z, outdoors = false) {
   let best = null;
   const offer = box => {
     const hit = peeBoxHit(ox, oy, oz, x, y, z, box);
     if (hit && (!best || hit.t < best.t)) best = hit;
   };
-  if (mode === 'room') {
+  if (mode === 'room' && !outdoors) {
     for (const p of room.props) {
       if (p.tick || p.peeThrough) continue;
       if (p.box) offer(p.box);

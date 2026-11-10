@@ -25,7 +25,7 @@ function buildExtraSkateparks() {
       const bowl=addSkatePool(x,y,{radius:.4,height:.32,deck:.08},{rx:.5,ry:.81,curve:.22});
       bowl.spot=bowl.spotPark=true;
       SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-bowl.profile.height*2-.08,y,line:{x,y},
-        description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-metre walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
+        description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-meter walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
     }else{
       const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:1.1});
       mini.spot=mini.spotPark=true;
@@ -33,7 +33,7 @@ function buildExtraSkateparks() {
       skateSpotBox(x-.05,y+.45,.3,.1,.02,'manualpad','concrete');
       skateSpotBox(x+.75,y+.45,.25,.035,.035,'skateledge','concrete');
       SKATE_SPOTS.push({id:'skatepark-flow-yard',name:'Flow Yard Skatepark',x:x-half+.1,y,line:{x,y},
-        description:'A relaxed park with a wide mini ramp, low flat bar, six-metre manual pad and concrete ledge. Build lines across the open concrete, or practise pumping and rock to fakie.'});
+        description:'A relaxed park with a wide mini ramp, low flat bar, six-meter manual pad and concrete ledge. Build lines across the open concrete, or practice pumping and rock to fakie.'});
     }
   }
 }

@@ -43,7 +43,7 @@ function useScarf(it) {
 function readProgramme(it) {
   const n = it.uses; // (the programme keeps its fixture's slot in uses: saved with it)
   const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) ? stadiumFixtureTeams(n) : null;
-  if (!m) return ['A programme from an old match. You flick through the adverts.', 'page'];
+  if (!m) return ['A program from an old match. You flick through the ads.', 'page'];
   const xi = t => t.players.filter(p => !p.off && !p.sub).map(p => p.name).join(', ');
   return [`${m.teams[0].name}: ${xi(m.teams[0])}.  ${m.teams[1].name}: ${xi(m.teams[1])}.`, 'page'];
 }
@@ -74,11 +74,11 @@ function stadiumExtrasHtml(f) {
     <h2>a bet on it</h2>${betRows}
     <h2>the seller by the turnstiles</h2>
     ${[f.home, f.away].map(id => btn(`scarf:${id}`, `${clubName(id)} scarf`, fmt$(ITEMS.scarf.price), money < ITEMS.scarf.price)).join('')}
-    ${btn('programme', `Programme: ${clubShort(f.home)} v ${clubShort(f.away)}`, fmt$(ITEMS.programme.price), money < ITEMS.programme.price, 'Both line-ups (Q to read)')}`;
+    ${btn('programme', `Program: ${clubShort(f.home)} v ${clubShort(f.away)}`, fmt$(ITEMS.programme.price), money < ITEMS.programme.price, 'Both lineups (Q to read)')}`;
 }
 function stadiumExtra(f, x) {
   if (x === 'season') { if (!pay(SEASON_TICKET_PRICE)) return [false, 'Not enough on you.']; league.seasonTicket = league.season; return [true, 'Season ticket. Every match at the Yards this season: walk straight in.']; }
   if (x.startsWith('bet:')) { const [, pick, st] = x.split(':'); return placeBet(f, pick, +st); }
   if (x.startsWith('scarf:')) { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.scarf.price)) return [false, 'Not enough on you.']; carryItem({ id: 'scarf', uses: 0, of: x.slice(6) }); return [true, `A ${clubName(x.slice(6))} scarf. Q to hold it up.`]; }
-  if (x === 'programme') { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.programme.price)) return [false, 'Not enough on you.']; carryItem({ id: 'programme', uses: f.n, of: `${clubShort(f.home)} v ${clubShort(f.away)}` }); return [true, 'A programme. Q to read the line-ups.']; }
+  if (x === 'programme') { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.programme.price)) return [false, 'Not enough on you.']; carryItem({ id: 'programme', uses: f.n, of: `${clubShort(f.home)} v ${clubShort(f.away)}` }); return [true, 'A program. Q to read the lineups.']; }
 }

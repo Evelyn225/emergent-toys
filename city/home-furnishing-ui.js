@@ -145,7 +145,7 @@ function furnishingCandidate() {
       else {p.a=sy>0?Math.PI:0;p.y=sy>0?my-d.hy:my+1+d.hy;p.x=px+vx*t;}
       p.z=clamp(eye+pitch*rows/projY*t,.65,(room.def.height||3)-.4);found=true;break;
     }
-    if(!found)return {...p,ok:false,reason:'Look at a wall within three metres.'};
+    if(!found)return {...p,ok:false,reason:'Look at a wall within three meters.'};
   }else {
     p.x=Math.round((px+Math.cos(a)*1.8)*10)/10;p.y=Math.round((py+Math.sin(a)*1.8)*10)/10;
     const hx=Math.abs(Math.cos(p.a))*d.hx+Math.abs(Math.sin(p.a))*d.hy,hy=Math.abs(Math.sin(p.a))*d.hx+Math.abs(Math.cos(p.a))*d.hy;

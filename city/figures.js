@@ -120,7 +120,7 @@ const FIG_SOLE = [-1.2, 2.1], FIG_SHOE_LO = 0.8, FIG_SHOE_HI = 0.85;
 const FIG_SLEEVELESS = new Set(['tank', 'bikini']), FIG_LONG = new Set(['long', 'jacket', 'suit', 'uniform']);
 function figBody(look, key) {
   const P = figPose(key), bw = look.bw || 1, bd = 0.9 + 0.1 * bw, hs = look.kid ? 1.2 : 1, R = FR;
-  const parts = [], decals = [], legR = 1.15 * (0.85 + 0.15 * bw), shinR = 1.1 * (0.85 + 0.15 * bw);
+  const parts = [], decals = [], hands=[], legR = 1.15 * (0.85 + 0.15 * bw), shinR = 1.1 * (0.85 + 0.15 * bw);
   // the legs, from the hips down; then down to the floor unless they're up a pole
   let hipZ = P.seat != null ? P.seat + 1.3 : 13;
   const legs = [1, -1].map((sg, k) => {
@@ -206,6 +206,7 @@ function figBody(look, key) {
     const [up, ua, fp, fa] = P.arms[k], toU = d => fAdd(fMul(ex, d[0]), fAdd(fMul(ey, d[1]), fMul(ez, d[2])));
     const sh = U(sg * 4.05 * bw, 0, 6.35), du = toU(fLimb(up, ua, sg)), df = toU(fLimb(fp, fa, sg));
     const elbow = fAdd(sh, fMul(du, 4.3)), wrist = fAdd(elbow, fMul(df, 3.9)), hand = fAdd(wrist, fMul(df, 0.55));
+    hands[k]=hand;
     parts.push(figCap(sh, elbow, 0.95 * (0.9 + 0.1 * bw), sleeve, false), figCap(elbow, wrist, 0.85 * (0.9 + 0.1 * bw), fore, false), figEll(hand, ax, [0.95, 0.95, 0.95], () => R.SKIN));
     if (look.mic && sg === 1) parts.push(figEll(fAdd(hand, fMul(df, 0.9)), ax, [0.7, 0.7, 0.7], () => R.MIC, false));
     if (P.gun && sg === 1) parts.push(figBox(fAdd(hand, fAdd(fMul(df, 1.2), fMul(ez, 0.3))), ax, [0.35, 1.25, 0.5], () => R.MIC, false), // the pistol, gunmetal, and its grip down into the hand
@@ -239,7 +240,7 @@ function figBody(look, key) {
     const face=[point(faceFrom),point(faceTo)];for(const v of face)v[2]+=lift;
     return {parts,decals,face};
   }
-  return { parts, decals, face: [faceFrom, faceTo] };
+  return { hands,mouth:HU(0,2.85*hs,-.8*hs),parts, decals, face: [faceFrom, faceTo] };
 }
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
@@ -491,7 +492,9 @@ function figView(rx, ry, fx, fy, hold) {
   if (prev != null && prev !== v && Math.abs(mod(at - prev + FIG_VIEWS / 2, FIG_VIEWS) - FIG_VIEWS / 2) < 0.7) return prev;
   return hold.figView = v;
 }
-const figCount = new Uint16Array(FIG_ROLES);
+const figCount = new Uint16Array(FIG_ROLES),figShadowCount=new Uint16Array(FIG_ROLES);
+const FIG_FAMILY=Uint8Array.from({length:FIG_ROLES},(_,i)=>i);
+for(const k of ['HAIR','SKIN','TOP','BOT','HAT','PACK'])FIG_FAMILY[FR[k+'_D']]=FR[k];
 function figSample(spr, pu, pz, su, sz) {
   const S = spr.S || 1, W = FIG_W * S, H = FIG_H * S;
   pu *= S; pz *= S; su *= S; sz *= S;
@@ -509,10 +512,12 @@ function figSample(spr, pu, pz, su, sz) {
     if (a < 0 || a >= W || r < 0 || r >= H) continue;
     const k0 = spr[r * W + a];
     if (!k0) continue;
-    const k = FIG_COARSE[k0] || k0; n++;
+    const role = FIG_COARSE[k0] || k0,k=FIG_FAMILY[role]; n++;
+    if(role!==k)figShadowCount[k]++;
     if (++figCount[k] > bn) { bn = figCount[k]; best = k; }
   }
-  figCount.fill(0);
+  if(figShadowCount[best]>figCount[best]/2)best=FIG_DARK[best]||best;
+  figCount.fill(0);figShadowCount.fill(0);
   return n * 2.2 >= (a1 - a0 + 1) * (b1 - b0 + 1) ? best : 0;
 }
 // a sprite pixel this many screen cells across or more: cast it finer, about a pixel to a cell (in steps, so a few
@@ -526,15 +531,20 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   const sprite = dz => {
     if (!spr) {
       const rowsPer = unit / dz, hold = opts?.hold;
-      const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy, hold), pose, S);
+      let S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
+      // Hysteresis keeps tiny camera steps from swapping the head's detail tier.
+      const prev=hold?.figRequestedS;
+      if(!look.build&&prev&&S!==prev&&rowsPer>prev-.2&&rowsPer<(prev===1?2:prev+1)+.2)S=prev;
+      if(hold)hold.figRequestedS=S;
+      const view=figView(rx,ry,fx,fy,hold);
+      spr = figSprite(look, view, pose, S);
       // over this frame's allowance for new close-up sprites, figSprite falls back to a coarser one, which reads as a
       // different person (another build, the face gone): somebody you're keeping an eye on keeps the close-up one
       // they had last frame instead (their pose a frame behind), until theirs is ready
       if (hold) {
         const got = spr.S || 1, last = hold.figSpr;
-        if (got < S && last && (last.S || 1) === S && hold.figLook === look) spr = last;
-        else if (got === S) { hold.figSpr = spr; hold.figLook = look; }
+        if (got < S && last && (last.S || 1) === S && hold.figLook === look&&hold.figSprView===view) spr = last;
+        else if (got === S) { hold.figSpr = spr; hold.figLook = look;hold.figSprView=view; }
         hold.figS = spr.S || 1;
       }
     }
@@ -570,7 +580,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
 // solid colour), so they read as clearly at any size. They borrow the people's colour roles: BODY is a top, HEAD is
 // skin (so the one-pixel eye melts into the head far off, as ours do), BEAK a hat, LEG a shoe, WING trousers, MARK a
 // pack, PALE a shirt's inner. Body frame as for people: x their right, y ahead, z up, in sprite pixels.
-const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.SHADES, PUPIL: FR.HAIR, TONGUE: FR.MIC }; // (eyes and tongue on roles that don't melt into their neighbours far off, as people's one-pixel details do)
+const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.SHADES, PUPIL: FR.HAIR, TONGUE: FR.MIC }; // (eyes and tongue on roles that don't melt into their neighbors far off, as people's one-pixel details do)
 // Close-up animals are built small and scaled up to fill the sprite (more pixels, more detail); drawn at h / scale.
 const ANIMAL_SCALE = { cat: () => 2.5, dog: f => f >= 5 ? 2 : 1.4 };
 const scaleBody = ({ parts, decals }, k) => k === 1 ? { parts, decals } : {

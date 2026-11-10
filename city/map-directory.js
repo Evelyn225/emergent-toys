@@ -54,7 +54,7 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
   for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
-  if(STADIUM_SITE?.sh){const b=stadiumBounds();add({id:'stadium',name:'The Yards Ground',x:(b.x0+b.x1)/2,y:b.y1+.5,category:'activities',kind:'sight',description:'Football: the city league, Wednesdays 19:30 and Saturdays 15:00. Tickets at the turnstiles on the south side, $15 to $40.'});}
+  if(STADIUM_SITE?.sh){const b=stadiumBounds();add({id:'stadium',name:'The Yards Ground',x:(b.x0+b.x1)/2,y:b.y1+.5,category:'activities',kind:'sight',description:'Soccer: the city league, Wednesdays 19:30 and Saturdays 15:00. Tickets at the turnstiles on the south side, $15 to $40.'});}
   if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, ledges, a manual pad, mini ramp, bowl and vert ramp on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
   for(const sight of QUIET_PLACES)add({id:sight.id,name:sight.name,...sight.entry,category:'activities',kind:'sight',description:sight.description,status:'Quiet place · free'});
   if(typeof SKATE_SPOTS!=='undefined')for(const spot of SKATE_SPOTS)add({...spot,category:'activities',kind:'sight',status:'Skate spot · free · open all hours'});
@@ -93,7 +93,7 @@ function mapDirectory() {
   for(const f of emergencyIncidents())if(!f.out)add({id:f.id,name:f.kind==='medical'?'Medical call':f.kind==='car'?'Vehicle fire':'Building fire',x:f.x,y:f.y,category:'activities',kind:'incident',description:f.assigned?'Emergency crew assigned.':'Emergency call awaiting a crew.'});
   const incident=emergencyTarget();if(incident)add({id:'emergency-call',name:incident.what,x:incident.x,y:incident.y,category:'activities',kind:'objective',description:'Your emergency dispatch destination.'});
   const task=taskTarget(),job=jobTarget(),delivery=courierRoute();
-  for(const [id,p,name] of [['task',task,'Current favour'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
+  for(const [id,p,name] of [['task',task,'Current favor'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
     if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
   }
   return out;
@@ -211,7 +211,7 @@ function navigationTargets() {
   if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df',0,'',true);
   if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
   if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
-  add(taskTarget(),'CURRENT FAVOUR','#4ff');
+  add(taskTarget(),'CURRENT FAVOR','#4ff');
   if(mode==='taxi'&&me?.dest)add({x:me.dest[0],y:me.dest[1]},me.destName||'TAXI DESTINATION','#ffd575');
   return targets;
 }

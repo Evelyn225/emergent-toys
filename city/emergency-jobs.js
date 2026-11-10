@@ -12,7 +12,7 @@ function createMedicalCall(at){
   const sites=doors.filter(d=>!d.sh.base&&!map[idx(d.x,d.y)]&&!isWater(d.x,d.y)&&near(d.x,d.y,...at)>3&&near(d.x,d.y,...at)<24);
   const d=sites.length?pick(sites):doors.find(d=>!map[idx(d.x,d.y)]&&!isWater(d.x,d.y));if(!d)return null;
   const look=figLook({top:'long',bot:'pants',col:{top:[pick([BLUE,GREEN,ORANGE,MAG]),10]}});
-  const f={id:'medical-'+(++medicalCallId),kind:'medical',x:d.x,y:d.y,born:T,stage:'waiting',look,caseName:pick(['Cyclist with a sprained ankle','Fainting passenger','Fall on the pavement','Dizzy pedestrian'])};
+  const f={id:'medical-'+(++medicalCallId),kind:'medical',x:d.x,y:d.y,born:T,stage:'waiting',look,caseName:pick(['Cyclist with a sprained ankle','Fainting passenger','Fall on the sidewalk','Dizzy pedestrian'])};
   medicalCalls.push(f);registerIncident(f);return f;
 }
 function emergencyBase(kind,r=room){

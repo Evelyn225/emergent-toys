@@ -1020,7 +1020,7 @@ const FIG_SOLE = [-1.2, 2.1], FIG_SHOE_LO = 0.8, FIG_SHOE_HI = 0.85;
 const FIG_SLEEVELESS = new Set(['tank', 'bikini']), FIG_LONG = new Set(['long', 'jacket', 'suit', 'uniform']);
 function figBody(look, key) {
   const P = figPose(key), bw = look.bw || 1, bd = 0.9 + 0.1 * bw, hs = look.kid ? 1.2 : 1, R = FR;
-  const parts = [], decals = [], legR = 1.15 * (0.85 + 0.15 * bw), shinR = 1.1 * (0.85 + 0.15 * bw);
+  const parts = [], decals = [], hands=[], legR = 1.15 * (0.85 + 0.15 * bw), shinR = 1.1 * (0.85 + 0.15 * bw);
   // the legs, from the hips down; then down to the floor unless they're up a pole
   let hipZ = P.seat != null ? P.seat + 1.3 : 13;
   const legs = [1, -1].map((sg, k) => {
@@ -1106,6 +1106,7 @@ function figBody(look, key) {
     const [up, ua, fp, fa] = P.arms[k], toU = d => fAdd(fMul(ex, d[0]), fAdd(fMul(ey, d[1]), fMul(ez, d[2])));
     const sh = U(sg * 4.05 * bw, 0, 6.35), du = toU(fLimb(up, ua, sg)), df = toU(fLimb(fp, fa, sg));
     const elbow = fAdd(sh, fMul(du, 4.3)), wrist = fAdd(elbow, fMul(df, 3.9)), hand = fAdd(wrist, fMul(df, 0.55));
+    hands[k]=hand;
     parts.push(figCap(sh, elbow, 0.95 * (0.9 + 0.1 * bw), sleeve, false), figCap(elbow, wrist, 0.85 * (0.9 + 0.1 * bw), fore, false), figEll(hand, ax, [0.95, 0.95, 0.95], () => R.SKIN));
     if (look.mic && sg === 1) parts.push(figEll(fAdd(hand, fMul(df, 0.9)), ax, [0.7, 0.7, 0.7], () => R.MIC, false));
     if (P.gun && sg === 1) parts.push(figBox(fAdd(hand, fAdd(fMul(df, 1.2), fMul(ez, 0.3))), ax, [0.35, 1.25, 0.5], () => R.MIC, false), // the pistol, gunmetal, and its grip down into the hand
@@ -1139,7 +1140,7 @@ function figBody(look, key) {
     const face=[point(faceFrom),point(faceTo)];for(const v of face)v[2]+=lift;
     return {parts,decals,face};
   }
-  return { parts, decals, face: [faceFrom, faceTo] };
+  return { hands,mouth:HU(0,2.85*hs,-.8*hs),parts, decals, face: [faceFrom, faceTo] };
 }
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
@@ -1391,7 +1392,9 @@ function figView(rx, ry, fx, fy, hold) {
   if (prev != null && prev !== v && Math.abs(mod(at - prev + FIG_VIEWS / 2, FIG_VIEWS) - FIG_VIEWS / 2) < 0.7) return prev;
   return hold.figView = v;
 }
-const figCount = new Uint16Array(FIG_ROLES);
+const figCount = new Uint16Array(FIG_ROLES),figShadowCount=new Uint16Array(FIG_ROLES);
+const FIG_FAMILY=Uint8Array.from({length:FIG_ROLES},(_,i)=>i);
+for(const k of ['HAIR','SKIN','TOP','BOT','HAT','PACK'])FIG_FAMILY[FR[k+'_D']]=FR[k];
 function figSample(spr, pu, pz, su, sz) {
   const S = spr.S || 1, W = FIG_W * S, H = FIG_H * S;
   pu *= S; pz *= S; su *= S; sz *= S;
@@ -1409,10 +1412,12 @@ function figSample(spr, pu, pz, su, sz) {
     if (a < 0 || a >= W || r < 0 || r >= H) continue;
     const k0 = spr[r * W + a];
     if (!k0) continue;
-    const k = FIG_COARSE[k0] || k0; n++;
+    const role = FIG_COARSE[k0] || k0,k=FIG_FAMILY[role]; n++;
+    if(role!==k)figShadowCount[k]++;
     if (++figCount[k] > bn) { bn = figCount[k]; best = k; }
   }
-  figCount.fill(0);
+  if(figShadowCount[best]>figCount[best]/2)best=FIG_DARK[best]||best;
+  figCount.fill(0);figShadowCount.fill(0);
   return n * 2.2 >= (a1 - a0 + 1) * (b1 - b0 + 1) ? best : 0;
 }
 // a sprite pixel this many screen cells across or more: cast it finer, about a pixel to a cell (in steps, so a few
@@ -1426,15 +1431,20 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   const sprite = dz => {
     if (!spr) {
       const rowsPer = unit / dz, hold = opts?.hold;
-      const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
-      spr = figSprite(look, figView(rx, ry, fx, fy, hold), pose, S);
+      let S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
+      // Hysteresis keeps tiny camera steps from swapping the head's detail tier.
+      const prev=hold?.figRequestedS;
+      if(!look.build&&prev&&S!==prev&&rowsPer>prev-.2&&rowsPer<(prev===1?2:prev+1)+.2)S=prev;
+      if(hold)hold.figRequestedS=S;
+      const view=figView(rx,ry,fx,fy,hold);
+      spr = figSprite(look, view, pose, S);
       // over this frame's allowance for new close-up sprites, figSprite falls back to a coarser one, which reads as a
       // different person (another build, the face gone): somebody you're keeping an eye on keeps the close-up one
       // they had last frame instead (their pose a frame behind), until theirs is ready
       if (hold) {
         const got = spr.S || 1, last = hold.figSpr;
-        if (got < S && last && (last.S || 1) === S && hold.figLook === look) spr = last;
-        else if (got === S) { hold.figSpr = spr; hold.figLook = look; }
+        if (got < S && last && (last.S || 1) === S && hold.figLook === look&&hold.figSprView===view) spr = last;
+        else if (got === S) { hold.figSpr = spr; hold.figLook = look;hold.figSprView=view; }
         hold.figS = spr.S || 1;
       }
     }
@@ -1470,7 +1480,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
 // solid colour), so they read as clearly at any size. They borrow the people's colour roles: BODY is a top, HEAD is
 // skin (so the one-pixel eye melts into the head far off, as ours do), BEAK a hat, LEG a shoe, WING trousers, MARK a
 // pack, PALE a shirt's inner. Body frame as for people: x their right, y ahead, z up, in sprite pixels.
-const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.SHADES, PUPIL: FR.HAIR, TONGUE: FR.MIC }; // (eyes and tongue on roles that don't melt into their neighbours far off, as people's one-pixel details do)
+const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.SHADES, PUPIL: FR.HAIR, TONGUE: FR.MIC }; // (eyes and tongue on roles that don't melt into their neighbors far off, as people's one-pixel details do)
 // Close-up animals are built small and scaled up to fill the sprite (more pixels, more detail); drawn at h / scale.
 const ANIMAL_SCALE = { cat: () => 2.5, dog: f => f >= 5 ? 2 : 1.4 };
 const scaleBody = ({ parts, decals }, k) => k === 1 ? { parts, decals } : {
@@ -5733,7 +5743,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : c.kind === 'taxi' && (c.pass || c.off < -0.01) ? 0.26 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !playerCar(c) && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !playerCar(c) && !c.parked && (everywhere || c.ev || c.pursuit || c.returning&&typeof netPoliceObserved==='function'&&netPoliceObserved(c) || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -6193,6 +6203,63 @@ function stepCityFires(dt){
     if((typeof incidentOwned!=='function'||incidentOwned(f))&&fireActive(f)&&!f.assigned&&T-f.born>300)for(const n of f.nodes)coolFireNode(f,n,n.heat);
     if(f.out&&T-f.outAt>30){if(f.crewCar){const i=cars.indexOf(f.crewCar);if(i>=0)cars.splice(i,1);}if(f.car?.incidentVehicle||f.car?.incidentGhost){const i=cars.indexOf(f.car);if(i>=0)cars.splice(i,1);}cityFires.splice(k,1);}
   }
+}
+// Local surface water from the shared hose streams. It never changes the weather.
+const hoseWetPatches=[],HOSE_WET_MAX=96;
+function hoseSurfaceHit(from,to){
+ const ex=rel(to[0]-from[0]),ey=rel(to[1]-from[1]),ez=to[2]-from[2],len=Math.hypot(ex,ey,ez);
+ if(len<.01)return null;
+ const extend=Math.min(.22,len*.35),end=[from[0]+ex*(1+extend/len),from[1]+ey*(1+extend/len),from[2]+ez*(1+extend/len)];
+ let best=peeObjectHit(...from,...end,true);
+ const offer=h=>{if(h&&(!best||h.t<best.t))best=h;};
+ for(const c of cars)if(!c.wrecked||c.fireIncident){const v=VEHICLES[c.kind];if(v&&near(c.x,c.y,from[0],from[1])<3.5)offer(peeBoxHit(...from,...end,{x:c.x,y:c.y,c:c.hx,s:c.hy,hl:v[0],hw:v[1],z0:terrainHeight(c.x,c.y),z1:terrainHeight(c.x,c.y)+v[2]}));}
+ const steps=Math.ceil(len/.018);let prev=from;
+ for(let k=1;k<=steps;k++){
+  const t=k/steps,p=from.map((v,j)=>v+(end[j]-v)*t),x=worldCoord(p[0]),y=worldCoord(p[1]),ground=terrainHeight(x,y),height=map[idx(x,y)];
+  if(height>p[2]){const hit=peeWallHit(...prev,...p,height);if(hit){hit.t=(k-1+hit.t)/steps;offer(hit);}break;}
+  if(p[2]<=ground){let lo=(k-1)/steps,hi=t;for(let n=0;n<9;n++){const m=(lo+hi)/2,xx=from[0]+(end[0]-from[0])*m,yy=from[1]+(end[1]-from[1])*m,zz=from[2]+(end[2]-from[2])*m;if(zz<=terrainHeight(xx,yy))hi=m;else lo=m;}offer({t:hi,x:from[0]+(end[0]-from[0])*hi,y:from[1]+(end[1]-from[1])*hi,z:terrainHeight(x,y),nx:0,ny:0,nz:1});break;}
+  prev=p;
+ }
+ if(best){best.x=worldCoord(best.x);best.y=worldCoord(best.y);}return best;
+}
+function addHoseWetPatch(hit,dt){
+ if(!hit||hit.nz<0||isWater(hit.x,hit.y))return;
+ let q=hoseWetPatches.find(q=>q.nx*hit.nx+q.ny*hit.ny+q.nz*hit.nz>.95&&Math.hypot(rel(q.x-hit.x),rel(q.y-hit.y),q.z-hit.z)<.055);
+ if(!q){if(hoseWetPatches.length>=HOSE_WET_MAX)hoseWetPatches.shift();q={x:hit.x,y:hit.y,z:hit.z,nx:hit.nx,ny:hit.ny,nz:hit.nz,water:0,life:1,drip:.1,seed:hash(Math.floor(hit.x*300),Math.floor(hit.y*300),419)};hoseWetPatches.push(q);}
+ q.water=Math.min(1,q.water+dt*.65);q.life=1;
+}
+function wetHoseImpact(hit,dt){
+ addHoseWetPatch(hit,dt);
+ if(hit&&!hit.nz){const x=hit.x+hit.nx*.012,y=hit.y+hit.ny*.012;addHoseWetPatch({x,y,z:terrainHeight(x,y),nx:0,ny:0,nz:1},dt*.6);}
+}
+function stepHoseWetness(dt){
+ for(let k=hoseWetPatches.length-1;k>=0;k--){const q=hoseWetPatches[k];q.life-=dt/180;
+  if(q.life<=0){hoseWetPatches.splice(k,1);continue;}
+  if(q.nz||q.water<.08||mode==='room'||near(q.x,q.y,px,py)>vis)continue;
+  if((q.drip-=dt)>0)continue;q.drip=.15+(1-q.water)*.6;
+  const offset=(noise(q.seed*20,T*.6,412)-.5)*(.025+.06*q.water),x=q.x+q.nx*.004-q.ny*offset,y=q.y+q.ny*.004+q.nx*offset;
+  partAdd({kind:'drip',x,y,z:q.z-.01,vx:0,vy:0,vz:-.015,age:0,life:4,ground:terrainHeight(x,y),seed:q.seed});
+ }
+}
+function drawHoseWetness(){
+ if(mode==='room'||!hoseWetPatches.length)return;
+ for(const q of hoseWetPatches){
+  const [vx,vy]=R(q.x,q.y),depth=dx*vx+dy*vy,radius=(.035+.11*Math.sqrt(q.water))*Math.sqrt(q.life);
+  if(depth<.04||depth>vis||Math.hypot(vx,vy)>vis||q.nx*-vx+q.ny*-vy+q.nz*(eye-q.z)<=0)continue;
+  // Conservative projected bounds, then intersect each ray with the actual surface plane.
+  const nearDepth=Math.max(.03,depth-radius),cx=cols/2+(-dy*vx+dx*vy)*projX/depth,cy=hor-(q.z-eye)*projY/depth;
+  const rx_=radius*projX/nearDepth*2,ry_=radius*projY/nearDepth*2;
+  for(let r=Math.max(0,Math.floor(cy-ry_));r<Math.min(rows,Math.ceil(cy+ry_));r++)for(let c=Math.max(0,Math.floor(cx-rx_));c<Math.min(cols,Math.ceil(cx+rx_));c++){
+   const i=r*cols+c,tan=(2*(c+.5)/cols-1)*tf,rx=dx-dy*tan,ry=dy+dx*tan,rz=(hor-r-.5)/projY,den=q.nx*rx+q.ny*ry+q.nz*rz;
+   if(Math.abs(den)<1e-6)continue;const t=(q.nx*vx+q.ny*vy+q.nz*(q.z-eye))/den;
+   if(t<=0||Math.abs(ZBG[i]-t)>Math.max(.003,t*.004)||BG[i]===NONE)continue;
+   const x=rx*t-vx,y=ry*t-vy,z=eye+rz*t-q.z,u=q.nz?x:-q.ny*x+q.nx*y,v=q.nz?y:z;
+   const edge=Math.hypot(u/radius,v/(radius*(q.nz?1:1.6)))+(noise((q.x+x)*25,(q.y+y+z)*25,417)-.5)*.24;
+   if(edge>1)continue;const strength=q.life*Math.min(1,(1-edge)*4),bg=BG[i];
+   BG[i]=hazeTint(bg,C(bg>>4,(bg&15)*.6),strength*.65);
+   if(q.nz&&q.water>.12&&edge<.8){FL[i]=2;ZBG[i]=t;}
+  }
+ }
 }
 // Doom-style heat transport: hot fuel feeds the bottom, heat rises, drifts and
 // diffuses into cold air. A fixed clock keeps motion independent of frame rate.
@@ -7025,7 +7092,7 @@ const DISTRICT_LINES = {
   waterfront: ['Love watching the boats.', 'You can walk right out to the end of the pier.', 'Smell that sea air.'],
   downtown: ['Everyone downtown is in such a hurry.', 'My office is up on the fortieth floor.'],
   belle: ['The hotel lobby has a piano player after dinner.', 'Look up at those copper roofs when the sun catches them.', 'The old hotel ballroom is beautiful. Very strict about the guest list, though.'],
-  brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
+  brownstones: ['Quiet street, this.', 'My neighbor practices the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };
 const FAIR_LINES = ['Have you been up the wheel? You can see the whole city.', "The darts are rigged. I'm going again anyway.", "I've had three corn dogs. I regret nothing.",
@@ -7148,14 +7215,14 @@ const ROOM_TALK = {
   arcade: ['I had the high score on that one for six years. Some kid took it last week.', 'Don\'t touch the claw machine. It\'s rigged. I\'ve spent forty bucks proving it.', 'Got any quarters? No? Tokens? No?', 'Nobody understands the pain of a continue screen.'],
   laundry: ['Somebody stole one sock. Just one. Why.', 'This dryer eats coins. Use the one on the end.', 'I come here for the warm. Don\'t tell anyone.', 'Spin cycle\'s the best bit. Very relaxing.'],
   cinema: ['Shh! It\'s the good part.', 'I\'ve seen this four times. It doesn\'t get better.', 'The popcorn costs more than the ticket.', 'If that guy kicks my seat one more time...'],
-  hotel: ['Room service took an hour and forgot the fork.', 'I\'m here for a conference. I think. Lost the badge.', 'The lifts are haunted. Fourth floor, every night, ding.', 'Checking out. Taking all the little soaps.'],
-  walkup: ['Five floors, no lift. You get used to it. Your knees don\'t.', 'Mind the third step, it\'s been loose since the eighties.', 'Somebody keeps taking my newspaper.', 'Super says the heat\'s coming back on Tuesday. Which Tuesday, he didn\'t say.'],
-  tower: ['Sign in at the desk, please.', 'Forty floors and they still can\'t fix the lift music.', 'Express lift skips the first twenty. Saves a whole minute.', 'I work up top. Never once seen the roof.'],
-  freightlobby: ['Used to be a cannery. You can still smell it when it rains.', 'Mind the gate, it bites.', 'The freight lift takes your bike. And your patience.', 'We\'re all artists here. Or say we are.'],
+  hotel: ['Room service took an hour and forgot the fork.', 'I\'m here for a conference. I think. Lost the badge.', 'The elevators are haunted. Fourth floor, every night, ding.', 'Checking out. Taking all the little soaps.'],
+  walkup: ['Five floors, no elevator. You get used to it. Your knees don\'t.', 'Mind the third step, it\'s been loose since the eighties.', 'Somebody keeps taking my newspaper.', 'Super says the heat\'s coming back on Tuesday. Which Tuesday, he didn\'t say.'],
+  tower: ['Sign in at the desk, please.', 'Forty floors and they still can\'t fix the elevator music.', 'Express elevator skips the first twenty. Saves a whole minute.', 'I work up top. Never once seen the roof.'],
+  freightlobby: ['Used to be a cannery. You can still smell it when it rains.', 'Mind the gate, it bites.', 'The freight elevator takes your bike. And your patience.', 'We\'re all artists here. Or say we are.'],
   bellelobby: ['Madame on the second has lived here since before the war. Which war, nobody\'s sure.', 'Do close the cage gate behind you. Manners.', 'The chandelier came from Paris. Allegedly.', 'Wipe your feet. This carpet is older than both of us.'],
-  apts: ['The lift\'s been "being fixed" since March.', 'Whoever\'s cooking fish on three, I will find you.', 'Package room\'s a lottery. Never your parcel.', 'You new in the building? Don\'t park in 4B.'],
+  apts: ['The elevator\'s been "being fixed" since March.', 'Whoever\'s cooking fish on three, I will find you.', 'Package room\'s a lottery. Never your parcel.', 'You new in the building? Don\'t park in 4B.'],
   barber: ['Just a trim, I told him. Just. A. Trim.', 'Best gossip in the city is in this chair.', 'Don\'t let him talk you into the hot towel. Actually, do.', 'My barber knows more about me than my wife.'],
-  hospital: ['Been waiting two hours. My arm\'s fine now, honestly.', 'Vending machine\'s out of everything but the gross crisps.', 'Don\'t ask what happened. It involved a ladder.', 'They gave me a little bracelet. Feels like a festival.'],
+  hospital: ['Been waiting two hours. My arm\'s fine now, honestly.', 'Vending machine\'s out of everything but the gross chips.', 'Don\'t ask what happened. It involved a ladder.', 'They gave me a little bracelet. Feels like a festival.'],
   bank: ['Forty minutes in this queue to deposit four dollars.', 'One window open. Five tellers. Ask me how.', 'The pens are chained down. What do they think we are?', 'Do you think the vault\'s really full of gold? Like in cartoons?'],
   karaoke: ['I\'m doing Bohemian Rhapsody next. All of it. All the parts.', 'Liquid courage. It\'s working.', 'That guy\'s been singing the same song for an hour.', 'Pick a duet with me. Anything. Please.'],
   petshop: ['That parrot called me a name.', 'I came for fish food and I\'m leaving with a hamster. Don\'t judge.', 'The puppies are a trap. A beautiful trap.', 'Do lizards get lonely? Asking for me.'],
@@ -7163,7 +7230,7 @@ const ROOM_TALK = {
   station: ['Train\'s late. Again. Again again.', 'Mind the gap. I always think they mean my life.', 'Someone\'s been busking that same song for a week.', 'I\'ve missed my stop three times this month. Reading.', 'Rats down here are the size of cats. Friendly though.'],
   train: ['Don\'t sit there, it\'s sticky.', 'Next stop\'s mine. I think. Which line is this?', 'The guy over there is eating a whole rotisserie chicken.', 'Ten more minutes of sleep. Wake me at the end.'],
   cafe: ['Third oat latte. I am now vibrating.', 'Writing a novel. Chapter one. Since 2019.', 'The wifi password is on the board. Good luck reading it.', 'This is my office now. They haven\'t noticed.', 'The pastries go by ten. Rookie mistake to come at eleven.'],
-  tattoo: ['It\'s only the outline that hurts. Then the shading hurts.', 'My mum\'s going to kill me. It\'s her name though, so.', 'Walk-ins after six. Unless you want something small.', 'Pick something off the wall, everyone does.'],
+  tattoo: ['It\'s only the outline that hurts. Then the shading hurts.', 'My mom\'s going to kill me. It\'s her name though, so.', 'Walk-ins after six. Unless you want something small.', 'Pick something off the wall, everyone does.'],
   chickenshop: ['Ten-piece bucket. For me. Don\'t look at me like that.', 'The secret\'s in the batter. Nobody knows what it is. Not even them.', 'Extra crispy or nothing.', 'I only come in for the gravy.'],
   kebabshop: ['Best thing in the city at three in the morning. Second best at noon.', 'Chilli sauce and garlic. Live a little.', 'He remembers my order. Not sure that\'s a good sign.', 'Salad on it means it\'s healthy.'],
   bento: ['The salmon one goes first. Always.', 'Half price after eight. I set an alarm.', 'Room temperature is how it\'s meant to be. Don\'t microwave it.'],
@@ -7201,7 +7268,7 @@ const ROOM_TALK = {
   records: ['They don\'t make them like this any more. They literally don\'t, it\'s out of print.', 'I came in for one record. I always come in for one record.', 'Is it on vinyl? Then it\'s real.', 'He\'s been playing that same album all week. Nobody minds.'],
   books: ['I came in for one book. I have six.', 'The cat that lives here judged my choice.', 'Don\'t tell anyone, I just read here. For free.', 'Have you read anything good lately? Don\'t say the phone book.'],
   noodle: ['Slurping\'s a compliment here. Slurp loud.', 'Extra chilli was a mistake. A delicious mistake.', 'Best broth in the city. Simmers for two days.', 'I come here every night. They just bring my bowl.'],
-  garage: ['Funny noise when I brake. They\'re charging me for the funny noise.', 'Been here since noon. My car\'s "nearly done" since noon.', 'Tyres. Always tyres.'],
+  garage: ['Funny noise when I brake. They\'re charging me for the funny noise.', 'Been here since noon. My car\'s "nearly done" since noon.', 'Tires. Always tires.'],
   tea: ['Pung! ...no wait, sorry.', 'Don\'t play with Mrs Lau. She takes everything.', 'Green tea, mahjong, gossip. Perfect evening.', 'I\'ve been playing fifty years. Still lose to my sister.', 'The tiles are older than me. So are the players.'],
   storage: ['Everything I own is in a ten-by-ten box. Very freeing.', 'I keep my ex\'s stuff here. Paying monthly. Petty, I know.', 'Unit 47 hums at night. I don\'t ask.'],
   jail: ['I didn\'t do it. Well. I did that one.', 'Food\'s not bad. The company\'s worse.', 'First time? Keep your head down.', 'Officer! I demand my phone call! ...it was a pizza order.'],
@@ -7218,28 +7285,28 @@ const ROOM_TALK = {
   jade: ['My grandmother swore by jade. Lived to 103.', 'Is it real? The man says it\'s real.', 'For luck. Need all of it this month.'],
   casino: ['Feeling lucky. Felt lucky an hour ago too.', 'House always wins. I\'m here to make it work for it.', 'No clocks, no windows. What day is it?', 'Red. It\'s always red. Except when it isn\'t.', 'One more spin and I\'m going home. That was nine spins ago.'],
   exchange: ['Buy low, sell high. I keep doing the other one.', 'BYTE\'s going to the moon. Or the floor.', 'I\'ve been staring at this ticker for six hours.', 'Diversify, they said. So now I lose money in seven places.'],
-  grocer: ['Who puts the bananas next to the batteries? Who?', 'Feel this melon. No, really. Is that ripe?', 'Forty minutes choosing an avocado. All of them are rocks.', 'I came for eggs. I have no eggs. I have six kinds of crisps.'],
+  grocer: ['Who puts the bananas next to the batteries? Who?', 'Feel this melon. No, really. Is that ripe?', 'Forty minutes choosing an avocado. All of them are rocks.', 'I came for eggs. I have no eggs. I have six kinds of chips.'],
   deli: ['Ticket 51. They\'re on 38. I live here now.', 'The pastrami is a religious experience. I\'m not even joking.', 'Ask for extra pickle. They never say no.', 'Half a pound, sliced thin. Thinner. Thinner than that.'],
   hardware: ['I need a thing that goes in the other thing. You know the one.', 'Third trip today. The shelf\'s still not up.', 'They have every screw in the world except mine.', 'Don\'t ask him about drills. Twenty minutes, I\'m warning you.'],
   skate: ['Board\'s snapped. Third one this month. Worth it.', 'Saw a kid land a kickflip off that ramp. First try. Sickening.', 'These shoes cost more than my board. Priorities.', 'I\'m not loitering, I\'m sponsored. By myself.'],
-  sports: ['New trainers. They make me run faster. Placebo, probably.', 'My team\'s shirt changes every season. Every. Season.', 'I bought a treadmill. It\'s a coat rack now.', 'Tennis balls are all fuzz and lies.'],
+  sports: ['New sneakers. They make me run faster. Placebo, probably.', 'My team\'s shirt changes every season. Every. Season.', 'I bought a treadmill. It\'s a coat rack now.', 'Tennis balls are all fuzz and lies.'],
   toys: ['I\'m buying this for my nephew. Definitely for my nephew.', 'That train set\'s been going round since I was six.', 'The big bear watches you. Everywhere you go.', 'They don\'t make them like they used to. They make them louder.'],
   thrift: ['Found a jacket with twenty dollars in the pocket. Paid for itself.', 'Everything smells a bit like somebody\'s nan. I love it.', 'One person\'s junk. My entire wardrobe.', 'This lamp is hideous. I need it.'],
   pharmacy: ['Waiting on a prescription. They said ten minutes an hour ago.', 'Vitamins. All of them. Just in case.', 'Is it a cold or is it the end? Asking the shelf.', 'I only come in for the free blood pressure. It\'s always high in here.'],
   tobacco: ['Cuban. Don\'t tell anyone. It\'s not.', 'Doctor says quit. Doctor smokes.', 'The humidor\'s the only place in the city with good weather.', 'I don\'t smoke. I just like sitting in here.'],
   video: ['Late fees on this one would buy a car.', 'Be kind, rewind. It\'s the law.', 'Don\'t look behind the curtain. I\'m serious.', 'Every Friday. Same aisle. Never know what I want.'],
   herbs: ['Grandmother said this tea fixes everything. Everything.', 'It smells like a forest fell into a soup.', 'He weighed it twice. Gram perfect. Every time.', 'Ginseng for energy. Six coffees as backup.'],
-  phones: ['Cracked my screen again. Same corner. Every time.', 'It\'s the same phone as last year but in a new colour.', 'Number forty-seven. They\'re on twelve.', 'I just want a charger that lasts longer than a week.'],
+  phones: ['Cracked my screen again. Same corner. Every time.', 'It\'s the same phone as last year but in a new color.', 'Number forty-seven. They\'re on twelve.', 'I just want a charger that lasts longer than a week.'],
   pawn: ['That\'s my guitar on the wall. I\'m buying it back. Again.', 'Everything here has a story. Mostly sad ones.', 'He offered me twelve bucks for a gold watch. Twelve.', 'I\'m not selling, I\'m "short-term liquidating".'],
   liquor: ['It\'s for a party. A party of one.', 'The wine with the animal on it. That\'s all I know about wine.', 'Don\'t judge my basket.', 'They know me by name here. Not a great sign.'],
   gas: ['Forty on pump three. And these. And one of those.', 'I only came in for the bathroom key. It\'s on a hubcap.', 'That hot dog\'s been going round since Tuesday. I\'m having it.', 'Four dollars a gallon. I\'m walking from now on.', 'Coffee\'s free if you buy the cup. The cup is two dollars.'],
   terminal: ['My flight\'s delayed. Again. Third time today.', 'They changed the gate twice. I\'ve walked a marathon.', 'Nine dollars for a bottle of water. Nine.', 'I always get here three hours early. Always.', 'They lost my bag on the way IN.', 'Window seat. I\'ve been looking forward to it for a month.'],
-  jeweler: ['Just looking. With my eyes. Not my wallet.', 'That ring costs more than my flat.', 'The guard\'s been staring at me for ten minutes.', 'Anniversary. It needs to sparkle. A lot.'],
+  jeweler: ['Just looking. With my eyes. Not my wallet.', 'That ring costs more than my apartment.', 'The guard\'s been staring at me for ten minutes.', 'Anniversary. It needs to sparkle. A lot.'],
   stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.',
     'Twelve dollars for a soda. A SODA.', 'She remembered my name. She calls everyone "hon". Still.', 'I\'m an accountant. This is my one night.',
     'The one on the left pole is putting herself through law school. Tip her.', 'Wife thinks I\'m at bowling. I don\'t even own the shoes.',
     'Don\'t sit there, that chair\'s been sticky since 2003.', 'The VIP room is forty bucks for a song. A short song.', 'I come for the music. Honestly. Listen to that bass.',
-    'Shh. This is my favourite song.', 'Ran out of singles an hour ago. Just vibing now.'],
+    'Shh. This is my favorite song.', 'Ran out of singles an hour ago. Just vibing now.'],
 };
 const GENERIC_ROOM_TALK = ['Hi.', 'Oh, hello.', 'Can I help you?', 'Lovely place, isn\'t it.', 'Do I know you?'];
 let lastRoomLine = '';
@@ -8110,7 +8177,7 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
-  scarf: { name: 'club scarf', price: 12, kind: 'gear' }, programme: { name: 'match programme', price: 4, kind: 'gear' }, // (the football: it.of, the club; the fixture: stadium-extras.js)
+  scarf: { name: 'club scarf', price: 12, kind: 'gear' }, programme: { name: 'match program', price: 4, kind: 'gear' }, // (the football: it.of, the club; the fixture: stadium-extras.js)
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   petcat: { name: 'pet cat carrier', price: 80, kind: 'pet' },
   petdog: { name: 'pet dog carrier', price: 80, kind: 'pet' },
@@ -8133,7 +8200,7 @@ const ITEMS = {
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
   diamond: { name: 'the ASCII City Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
-  hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
+  hotelharbour: { name: 'Harbor at First Light', price: 6000, kind: 'gear' },
   hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
@@ -8461,7 +8528,7 @@ function useHeld(near) {
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
     case 'diamond': return [pick(['The ASCII City Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
     case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
-    case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
+    case 'hotelharbour': return ['You tilt Harbor at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
     case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
     case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
     case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
@@ -8538,7 +8605,7 @@ function itemName(it) {
   if (ITEMS[it.id].kind === 'drug') return `${DRUG_QUALITY[it.q] || 'standard'} ${ITEMS[it.id].name}`;
   if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
   if (it.id === 'scarf' && it.of) return `${clubName(it.of)} scarf`;
-  if (it.id === 'programme' && it.of != null && typeof it.of === 'string') return `programme: ${it.of}`;
+  if (it.id === 'programme' && it.of != null && typeof it.of === 'string') return `program: ${it.of}`;
   return it.kg ? catchName(it) : ITEMS[it.id].name;
 }
 const dropped = []; // inventory item plus { x, y, at, z }
@@ -8942,7 +9009,7 @@ const STOCK_THEMES = {
   GROCERY: [['FRUIT', 'o', RED], ['VEG', '%', GREEN], ['BREAD', '#', WARM], ['MILK', 'i', WHITE]],
   HERBS: [['ROOTS', '%', WARM], ['TEAS', '#', GREEN], ['JARS', 'U', ORANGE], ['DRIED', ':', YEL]],
   JADE: [['BANGLES', 'o', GREEN], ['FIGURES', '&', CYAN], ['BEADS', ':', RED], ['CHARMS', '*', YEL]],
-  PAWN: [['WATCHES', 'o', YEL], ['GUITARS', '%', BRICK], ['CAMERAS', '#', GRAY], ['JEWELLERY', '*', CYAN]],
+  PAWN: [['WATCHES', 'o', YEL], ['GUITARS', '%', BRICK], ['CAMERAS', '#', GRAY], ['JEWELRY', '*', CYAN]],
 };
 STOCK_THEMES.MARKET = STOCK_THEMES.FRUIT = STOCK_THEMES.GROCERY;
 const stockKinds = word => STOCK_THEMES[word] || STOCK_THEMES.DEFAULT;
@@ -9486,7 +9553,7 @@ GAMES.darts = (rnd = Math.random) => {
     if (last) text(Math.max(1, (W - Math.ceil(last.text.length / 2)) >> 1), 17, last.text, C(last.col, 15));
     text(24, 18, `won ${g.score} tickets`, C(YEL, 14));
   };
-  g.status = () => `TICKETS ${g.score}   ARROWS aim (it wanders: pick your moment)   SPACE throw   ${DART_PAY} a balloon, a star +${STAR_PAY}, three of a colour +${SWEEP_PAY}`;
+  g.status = () => `TICKETS ${g.score}   ARROWS aim (it wanders: pick your moment)   SPACE throw   ${DART_PAY} a balloon, a star +${STAR_PAY}, three of a color +${SWEEP_PAY}`;
   g.reward = () => g.score;
   return g;
 };
@@ -10352,7 +10419,7 @@ const STOCKS = [
   { sym: 'ELRL', name: 'Elevated Rail', price: 18, vol: 0.008, good: ['gets city funding for repairs', 'ridership at all-time high'], bad: ['el shut for repairs again', 'mayor blames the el for traffic'] },
   { sym: 'PIER', name: 'Sunset Pier Fun', price: 12, vol: 0.018, good: ['new rollercoaster announced', 'heatwave packs the pier'], bad: ['ferris wheel stuck for hours', 'storms close the pier'] },
   { sym: 'JADE', name: 'Chinatown Jade', price: 55, vol: 0.01, good: ['tourists snap up lucky charms', 'rare jade found'], bad: ['fake jade scandal', 'tourist season slow'] },
-  { sym: 'LUCK', name: 'Lucky Star Casino', price: 73, vol: 0.016, good: ['high roller loses big', 'licence renewed'], bad: ['someone hits the jackpot twice', 'gambling inquiry opened'] },
+  { sym: 'LUCK', name: 'Lucky Star Casino', price: 73, vol: 0.016, good: ['high roller loses big', 'license renewed'], bad: ['someone hits the jackpot twice', 'gambling inquiry opened'] },
   { sym: 'BYTE', name: 'ByteWave Tech', price: 110, vol: 0.024, good: ['launches a new phone', 'buys a rival'], bad: ['data leak!', 'CEO quits suddenly'] },
 ];
 for (const s of STOCKS) { // a past to chart from the start: a random walk that ends at today's price
@@ -10493,7 +10560,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognized' }, // (spotted: notoriety.js)
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
                  copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
@@ -10784,7 +10851,7 @@ function drawRoomPolice() {
 }
 function backToBeat(c) { // the chase is off: pick up the beat from the nearest corner
   const ix = Math.round((c.x - 1) / 8), iy = Math.round((c.y - 1) / 8);
-  c.corner = { ix, iy, qx: mod(c.x, 8) > 1 ? 1 : 0, qy: mod(c.y, 8) > 1 ? 1 : 0 }; c.goal = c.corner; c.chase = false;
+  c.corner = { ix, iy, qx: mod(c.x, 8) > 1 ? 1 : 0, qy: mod(c.y, 8) > 1 ? 1 : 0 }; c.goal = c.corner; c.chase = false;c.netAfterChase=true;
 }
 
 // ---- the patrol cars: a couple of dozen of the city's cars are police, cruising like the rest
@@ -10893,6 +10960,7 @@ function clearWanted() {
   const closestCar = (x, y) => units.reduce((best, c) => !best || near(c.x, c.y, x, y) < near(best.x, best.y, x, y) ? c : best, null);
   const exit = searchedRoom?.ret || room?.ret;
   for (const c of roomCops) {
+    c.netRk=typeof netRoomKey==='function'?netRoomKey():'';
     c.returning = true; c.returnCar = closestCar(...(exit || crimePos())); c.exitWorld = exit;
     c.returnDoor = mode === 'room' && room.grid ? roomDoorCell() : null; c.sees = false; c.pathT = 0;
   }
@@ -10974,7 +11042,7 @@ function stepReturningPolice(dt) {
     if (c.waitingCrew && !crew) {
       c.waitingCrew = false; c.merging = policeReturnLane(c); c.pursuitDrive = false; c.routeT = 0;
     }
-    if (!c.waitingCrew && (c.arrived || c.home || near(c.x, c.y, wx, wy) > SIM_R * 0.9)) {
+    if (!c.waitingCrew && (c.arrived || c.home || near(c.x, c.y, wx, wy) > SIM_R * 0.9&&!(typeof netPoliceObserved==='function'&&netPoliceObserved(c)))) {
       c.returning = false;
       if (c.base) c.base.out = false;
       endCall(c);
@@ -11174,8 +11242,8 @@ function stepCrime(dt) {
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
 function tidyPolice() {
   const [wx, wy] = crimePos();
-  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && !c.returning && near(c.x, c.y, wx, wy) > 30) cars.splice(k, 1); }
-  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25) footCops.splice(k, 1); }
+  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && !c.returning && near(c.x, c.y, wx, wy) > 30&&!(typeof netPoliceObserved==='function'&&netPoliceObserved(c))) cars.splice(k, 1); }
+  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25&&!(typeof netPoliceObserved==='function'&&netPoliceObserved(c))) footCops.splice(k, 1); }
 }
 // what being caught costs. Paying it settles everything, and the car goes back
 const HEIST_LOOT=new Set(['diamond','orrery','hotelmasterpiece','hotelharbour','hotelstilllife']);
@@ -11296,9 +11364,9 @@ const NEWS = {
   roadkill: (w, n) => n > 1 ? `${inWords(n)} pedestrians killed by the same car in ${w}. Police say the driver did not stop, any of the times.` : `A pedestrian was killed by a speeding car in ${w}. The driver did not stop. Police would like a word, and then several more.`,
   shotdown: (w, n) => n > 1 ? `${inWords(n)} people shot in ${w} in one day, all of them treated and released. Police call it a feud; the hospital calls it Tuesday.` : `A person was shot in ${w} and taken to hospital, where they are said to be furious. Police are looking for whoever did it.`, // (multiplayer: net.js)
   accomplice: w => `A passenger fled when police stopped a car in ${w}. Officers would like to know who they were, and why they ran.`, // (multiplayer: net.js)
-  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has cancelled all leave, and most of its patience.`,
+  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has canceled all leave, and most of its patience.`,
   // the football (league.js): a match you were at, the cup final, the champions, a thrashing
-  match: (w, n, e) => !e.score ? 'Football at the Yards. Both teams turned up.' : footballLine(e) + (e.scorers?.length ? ` ${footballScorers(e)}` : ' Neither side found the net, though both looked.') + ` ${newsPick(e.score[0] * 7 + e.score[1], ['The crowd went home.', 'A decent crowd saw it, and will say so.', 'The pies were described as hot.', 'Fans are already discussing the referee.'])}`,
+  match: (w, n, e) => !e.score ? 'Soccer at the Yards. Both teams turned up.' : footballLine(e) + (e.scorers?.length ? ` ${footballScorers(e)}` : ' Neither side found the net, though both looked.') + ` ${newsPick(e.score[0] * 7 + e.score[1], ['The crowd went home.', 'A decent crowd saw it, and will say so.', 'The pies were described as hot.', 'Fans are already discussing the referee.'])}`,
   cupfinal: (w, n, e) => { if (!e.score) return 'The City Cup final was played at the Yards. Somebody won it.'; const lose = clubTitle(e.winner === e.home ? e.away : e.home);
     return `${clubTitle(e.winner)} win the City Cup, ${e.pens ? `on penalties against ${lose} after a ${e.score[0]}-${e.score[1]} draw (${Math.max(...e.pens)}-${Math.min(...e.pens)})` : `beating ${lose} ${Math.max(...e.score)}-${Math.min(...e.score)}`} at the Yards. The trophy is understood to be on its way to a pub.`; },
   champions: (w, n, e) => !e.club ? 'The league season is over. A team finished top.' : `${clubTitle(e.club)} are league champions, finishing top with ${e.pts} points. Their manager thanked the fans, the players, and the fixture computer.`,
@@ -11474,7 +11542,7 @@ function summonCar(model) {
     c.x = worldCoord(l.x + l.hx * s); c.y = worldCoord(l.y + l.hy * s); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
     if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
   }
-  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.${towed}`, 'click'];
+  return [`You press the fob. A minute later your ${name} rolls up at the curb, lights blinking.${towed}`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_island' ? 'islandhome' : kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
@@ -11885,7 +11953,7 @@ Object.assign(ITEMS, {
   bluefish: { name: 'bluefish', price: 13, kind: 'fish', kg: [1, 6], col: BLUE },
   monkfish: { name: 'monkfish', price: 24, kind: 'fish', kg: [2, 12], col: BRICK, ugly: true },
   tuna: { name: 'bluefin tuna', price: 70, kind: 'fish', kg: [8, 45], col: BLUE },
-  mullet: { name: 'grey mullet', price: 4, kind: 'fish', kg: [0.4, 2.5], col: GRAY },
+  mullet: { name: 'gray mullet', price: 4, kind: 'fish', kg: [0.4, 2.5], col: GRAY },
   carp: { name: 'carp', price: 6, kind: 'fish', kg: [1, 9], col: YEL },
   perch: { name: 'perch', price: 5, kind: 'fish', kg: [0.2, 1.5], col: GREEN, stripes: true },
   bluegill: { name: 'bluegill', price: 3, kind: 'fish', kg: [0.1, 0.5], col: BLUE },
@@ -11902,14 +11970,14 @@ Object.assign(ITEMS, {
   tincan: { name: 'tin can', price: 0, kind: 'junk', line: 'A tin can. Beans, once.' },
   seaweed: { name: 'clump of seaweed', price: 0, kind: 'junk', line: 'A clump of seaweed. It smells exactly how you would expect.' },
   plasticbag: { name: 'plastic bag', price: 0, kind: 'junk', line: 'A plastic bag. You were going to put the fish in it, if you caught one.' },
-  tyre: { name: 'bicycle tyre', price: 0, kind: 'junk', line: 'A bicycle tyre. Flat, which is fair.' },
+  tyre: { name: 'bicycle tire', price: 0, kind: 'junk', line: 'A bicycle tire. Flat, which is fair.' },
   trafficcone: { name: 'traffic cone', price: 0, kind: 'junk', line: 'A traffic cone. Nobody knows how they get into the water. Nobody asks.' },
   flipflop: { name: 'flip-flop', price: 0, kind: 'junk', line: 'One flip-flop. Somebody walked home lopsided.' },
-  trolleywheel: { name: 'shopping trolley wheel', price: 0, kind: 'junk', line: 'A wheel off a shopping trolley. The rest of the trolley is still in there. It always is.' },
+  trolleywheel: { name: 'shopping cart wheel', price: 0, kind: 'junk', line: 'A wheel off a shopping cart. The rest of the trolley is still in there. It always is.' },
   soggybook: { name: 'soggy paperback', price: 0, kind: 'junk', line: 'A paperback, swollen to twice its size. A detective novel. You will never know who did it.' },
   // treasure: gear, so it keeps (and the pawn shop will take it)
   bottlemsg: { name: 'message in a bottle', price: 6, kind: 'gear', fished: true, line: 'A bottle with a rolled-up note in it. Q to read it.' },
-  oldcoin: { name: 'old silver coin', price: 45, kind: 'gear', fished: true, line: 'Something glints on the hook: a silver coin, black with age. A king you don\'t recognise.' },
+  oldcoin: { name: 'old silver coin', price: 45, kind: 'gear', fished: true, line: 'Something glints on the hook: a silver coin, black with age. A king you don\'t recognize.' },
   goldring: { name: 'gold ring', price: 140, kind: 'gear', fished: true, line: 'A gold ring, caught round the hook. There is an inscription inside. It says "Again?"' },
   pearl: { name: 'pearl', price: 110, kind: 'gear', fished: true, line: 'An oyster, clamped shut. You prise it open. A pearl, a good one.' },
   compass: { name: 'brass compass', price: 40, kind: 'gear', fished: true, line: 'A brass compass, green with the sea. The needle still finds north.' },
@@ -13885,7 +13953,7 @@ function loadFerryJourney(journey) {
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 11; // 11: shared emergency incidents, responders and sirens
+const NET_PROTOCOL = 12; // 12: persistent returning police and visible held/smoking props
 // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
@@ -13940,6 +14008,8 @@ function netCheckTick(d) {
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, siren:!!d.veh.siren, shift: !!d.veh.shift };
+  if(['cigarette','joint','pipe'].includes(d.smoking))out.smoking=d.smoking;
+  if(netNum(d.heldUses))out.heldUses=clamp(d.heldUses,0,999);
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
   if (d.away) out.away = true; // (in the pause menu or another tab)
   if (d.peaceful) out.peaceful = true; // (peaceful mode: can't hurt or rob anyone, nor be hurt or robbed)
@@ -13988,7 +14058,7 @@ function netCheckCops(d) {
   const out = [];
   for (const c of d.slice(0, NET_COPS_MAX)) {
     if (!c || !NET_COP_KINDS.includes(c.k) || !Number.isInteger(c.id) || c.id < 0 || !netNum(c.x) || !netNum(c.y) || !netNum(c.a)) continue;
-    const o = { k: c.k, id: c.id, x: c.x, y: c.y, a: c.a, z: netNum(c.z) ? clamp(c.z, 0, 50) : 0 };
+    const o = { k: c.k, id: c.id, x: c.x, y: c.y, a: c.a, z: netNum(c.z) ? clamp(c.z, 0, 50) : 0, returning:!!c.returning,rk:typeof c.rk==='string'&&c.rk.length<=80?c.rk:c.k==='room'?'':'out' };
     if (c.k === 'car') { if (typeof c.kind !== 'string' || c.kind.length > 15 || !netNum(c.body)) continue; o.kind = c.kind; o.body = c.body | 0; o.v = netNum(c.v) ? c.v : 0; }
     out.push(o);
   }
@@ -14151,6 +14221,13 @@ function netAppearanceOptions(raw){
  const l=netCheckLook(raw),custom=l.custom===1;
  return {hair:custom?PLAYER_HAIRS[l.hairStyle]:'short',hat:custom?['beanie','cap',null][l.headwear]:'beanie',top:custom?['long','tee','tank','jacket'][l.shirtStyle]:'long',bot:'pants',bw:1,
  col:{hair:custom?PLAYER_HAIR_COLOURS[l.hairColour]:[BRICK,4],skin:custom?FIG_SKINS[l.skin]:[SKIN,11],hat:[NET_COLOURS[l.hat],11],hatD:[NET_COLOURS[l.hat],7],top:[NET_COLOURS[l.top],7],inner:[WHITE,12],bot:[[BLUE,5],[GRAY,3],[BRICK,4]][l.bot],shoe:custom?[[WHITE,13],[GRAY,2],[BRICK,4],[RED,7]][l.shoes]:[WHITE,13],belt:[GRAY,2]}};
+}
+
+// A remote witness keeps a returning unit alive even after the suspect goes to jail.
+function netPoliceObserved(o){
+ if(!net.on)return false;
+ for(const p of net.peers.values()){if(!p.hello||p.stale||p.mismatch)continue;const s=netSample(p,netNow());if(s?.rk==='out'&&near(o.x,o.y,s.x,s.y)<MAXD+2)return true;}
+ return false;
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -16059,7 +16136,7 @@ function shopSceneWindow(i, u, z, u0, u1, z0, z1, sh, open, L, seed) {
 const INDUSTRIAL_KINDS = ['shed', 'mill', 'cold', 'works', 'shed', 'mill'];
 const INDUSTRIAL_NAMES = {
   shed: ['EAGLE FREIGHT', 'PIER 9 STORAGE', 'HARBOR SUPPLY', 'BAYSIDE HAULAGE', 'GULL LINE CARGO'],
-  mill: ['UNION MILLS', 'NORTHERN WOOLEN CO', 'HALE & SONS', 'ACME BISCUIT CO', 'STAR CORDAGE'],
+  mill: ['UNION MILLS', 'NORTHERN WOOLEN CO', 'HALE & SONS', 'ACME COOKIE CO', 'STAR CORDAGE'],
   cold: ['DELTA COLD STORE', 'POLAR FISH CO', 'ICEHOUSE 3', 'ARCTIC FREEZE'],
   works: ['IRON WORKS', 'CITY FOUNDRY', 'KESTREL MOTORS', 'ATLAS PRINTING'],
 };
@@ -27698,7 +27775,7 @@ const HOTEL_PAINTINGS = [
     '.rrrrrrryyyyyyrrrrrrrrr.',
     'rrrrrrrrrrrrrrrrrrrrrrrr',
   ] },
-  { id: 'hotelharbour', title: 'HARBOUR AT FIRST LIGHT', x: 7.3, w: 2.5, h: 1.55, art: [
+  { id: 'hotelharbour', title: 'HARBOR AT FIRST LIGHT', x: 7.3, w: 2.5, h: 1.55, art: [
     '..............................',
     '....................ooo.......',
     '...................ooooo......',
@@ -28882,6 +28959,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawBlood(); // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
+  drawHoseWetness(); // Water stays attached to the actual wall or ground surface.
   drawPeers(); // other players, in a multiplayer room (net.js)
   drawPeeMarks(); // stains on walls and solid static objects
   if (city) drawBulletHoles(); // (gun-ui.js)
@@ -29933,7 +30011,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: (room.tv ? 'E: telly off' : 'E: telly on') + videoTapePrompt() }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'Look at a shelf to place or take items', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: (room.tv ? 'E: TV off' : 'E: TV on') + videoTapePrompt() }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -29998,7 +30076,7 @@ function promptText() {
   if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   { const nd = netDropPrompt(); if (nd) return nd; } // (another player's: net.js)
-  if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: colour (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: colour (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
+  if (heldItem() && heldItem().id === 'spraypaint') { const it = heldItem(); return sprayAim() ? `Q (hold): spray | R: color (${SPRAY_NAMES[sprayColourOf(it)]}) | Shift: fat cap   (if the police see, it's vandalism)` : `R: color (${SPRAY_NAMES[sprayColourOf(it)]})   get close to a wall to spray`; }
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   const iceLine = winterIcePrompt();
@@ -30559,7 +30637,7 @@ function interact() {
         }
         return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
-      if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The telly flickers on.' + news : 'You switch the telly off.', news ? 6 : 2); }
+      if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The TV flickers on.' + news : 'You switch the TV off.', news ? 6 : 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
       enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
@@ -31039,7 +31117,7 @@ function createMedicalCall(at){
   const sites=doors.filter(d=>!d.sh.base&&!map[idx(d.x,d.y)]&&!isWater(d.x,d.y)&&near(d.x,d.y,...at)>3&&near(d.x,d.y,...at)<24);
   const d=sites.length?pick(sites):doors.find(d=>!map[idx(d.x,d.y)]&&!isWater(d.x,d.y));if(!d)return null;
   const look=figLook({top:'long',bot:'pants',col:{top:[pick([BLUE,GREEN,ORANGE,MAG]),10]}});
-  const f={id:'medical-'+(++medicalCallId),kind:'medical',x:d.x,y:d.y,born:T,stage:'waiting',look,caseName:pick(['Cyclist with a sprained ankle','Fainting passenger','Fall on the pavement','Dizzy pedestrian'])};
+  const f={id:'medical-'+(++medicalCallId),kind:'medical',x:d.x,y:d.y,born:T,stage:'waiting',look,caseName:pick(['Cyclist with a sprained ankle','Fainting passenger','Fall on the sidewalk','Dizzy pedestrian'])};
   medicalCalls.push(f);registerIncident(f);return f;
 }
 function emergencyBase(kind,r=room){
@@ -31459,7 +31537,7 @@ let carSmokeT = 0;
 function stepCarDamage(dt) {
   for (const c of stepCarFires(dt)) carBang(c);
   for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); if (c === me && mode === 'taxi') say('Your driver bails out and runs. E: get out, now!', 4); } // (the driver, out and running; no fare after that)
-  if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the bonnet. Get out, now!', 4); }
+  if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the hood. Get out, now!', 4); }
   if (me && !burning(me)) me.warnedFire = false;
   if ((carSmokeT -= dt) > 0) return;
   carSmokeT = 0.1;
@@ -31530,7 +31608,7 @@ function drawFirePlume(vx,vy,z,width,height,seed,strength=1){
 }
 const emergencyStreams=new Map();
 let emergencyWaterT=0,emergencySmokeT=0;
-function rememberWater(key,from,to){emergencyStreams.set(key,{from,to,until:netNow()+.25});}
+function rememberWater(key,from,to,dt=.15){const hit=hoseSurfaceHit(from,to);wetHoseImpact(hit,dt);emergencyStreams.set(key,{from,to:hit?[hit.x,hit.y,hit.z]:to,hit,until:netNow()+.25});}
 function sprayEmergencyWater(dt){
   const z=walkGround(px,py)+.17,slope=pitch*rows/projY,hit=hoseHit(px,py,z,a,slope);
   let end=hit?[hit.node.x,hit.node.y,hit.node.z]:[worldCoord(px+Math.cos(a)*2.6),worldCoord(py+Math.sin(a)*2.6),z+slope*2.6];
@@ -31538,7 +31616,7 @@ function sprayEmergencyWater(dt){
     const x=worldCoord(px+Math.cos(a)*d),y=worldCoord(py+Math.sin(a)*d),zz=z+slope*d;
     if(map[idx(x,y)]>zz||zz<terrainHeight(x,y)||solidAt(x,y,.003)){end=[x,y,Math.max(terrainHeight(x,y),zz)];break;}
   }
-  rememberWater('self',[px+Math.cos(a)*.08-Math.sin(a)*.026,py+Math.sin(a)*.08+Math.cos(a)*.026,z-.022],end);
+  rememberWater('self',[px+Math.cos(a)*.08-Math.sin(a)*.026,py+Math.sin(a)*.08+Math.cos(a)*.026,z-.022],end,dt);
   if(hit&&incidentOwned(hit.fire))coolFireNode(hit.fire,hit.node,dt);
   if((emergencyWaterT-=dt)<=0){
     emergencyWaterT=.15;
@@ -31546,6 +31624,8 @@ function sprayEmergencyWater(dt){
   }
 }
 function stepEmergencyWater(dt){
+  stepHoseWetness(dt);
+  for(const f of cityFires)if(fireActive(f)){const c=cars.find(c=>c.ev&&!c.mine&&c.fireIncident===f&&!c.home),n=c?fireCrewTarget(c):f.remoteCrew?.state==='scene'&&f.nodes.find(n=>n.heat>0);if(n){const origin=fireCrewOrigin(c||f.remoteCrew,f);wetHoseImpact(hoseSurfaceHit(origin,[n.x,n.y,n.z]),dt);}}
   if(emergencyHoseReady()&&(K.KeyQ||K.MouseUse))sprayEmergencyWater(dt);
   else emergencyWaterT=0;
   if((emergencySmokeT-=dt)<=0){
@@ -31555,7 +31635,7 @@ function stepEmergencyWater(dt){
     }
   }
 }
-function drawWaterStream(from,to){
+function drawWaterStream(from,to,impact){
   const [x,y,z]=from,ex=rel(to[0]-x),ey=rel(to[1]-y),ez=to[2]-z,[vx,vy]=R(x,y),range=Math.hypot(ex,ey),distance=Math.max(.01,range);
   const sideX=-ey/distance,sideY=ex/distance,arc=.28*(range/2.6)**2,backdrop=BG.slice(),savedGlow=drawNoGlow;
   const at=q=>[vx+ex*q,vy+ey*q,z+ez*q+arc*q*(1-q)];
@@ -31574,7 +31654,8 @@ function drawWaterStream(from,to){
       const across=Math.cos(angle)*spread,up=Math.sin(angle)*spread;
       drawRod(p[0]+sideX*across,p[1]+sideY*across,p[2]+up,tail[0]+sideX*across,tail[1]+sideY*across,tail[2]+up,.0009,shade(.4,j*1.3));
     }
-    const ground=to[2]<=terrainHeight(to[0],to[1])+.025;
+    if(!impact)return;
+    const ground=impact.nz>.5;
     for(let j=0;j<12;j++){
       const age=fract(T*2.7+j*.618),angle=j*2.39996,spread=.045*age,px_=vx+ex,py_=vy+ey;
       const sx=ground?Math.cos(angle)*spread:sideX*Math.cos(angle)*spread-ex/distance*.025*age;
@@ -31582,10 +31663,6 @@ function drawWaterStream(from,to){
       const lift=ground?Math.sin(age*Math.PI)*.04:Math.sin(angle)*.035*age-.06*age*age;
       drawRod(px_+sx,py_+sy,to[2]+lift,px_+sx,py_+sy,to[2]+lift-.004,.0009,shade(.38,j));
     }
-    drawShape(vx+ex,vy+ey,to[2]-.025,.035,.06,(i,u,h)=>{
-      const r=Math.hypot(u/.035,(h-.03)/.03);if(r>1||noise(u*180,h*180-T*.7,97)<.5)return false;
-      BG[i]=hazeTint(backdrop[i],C(GRAY,9),.12*(1-r));set(i,' ',0);return true;
-    });
   }finally{drawNoGlow=savedGlow;}
 }
 const emergencyCrewLook=figLook({hat:'hardhat',top:'long',bot:'pants',col:{hat:[YEL,13],top:[YEL,9],bot:[GRAY,4],shoe:[GRAY,2]}});
@@ -31601,14 +31678,14 @@ function emergencySprites(){
     if(n){
       const crew=c||remote,origin=fireCrewOrigin(crew,f),[vx,vy]=R(origin[0],origin[1]);
       drawFigure(vx,vy,walkGround(origin[0],origin[1]),.175,rel(n.x-origin[0]),rel(n.y-origin[1]),emergencyCrewLook,'aim');
-      drawWaterStream(origin,[n.x,n.y,n.z]);
+      const hit=hoseSurfaceHit(origin,[n.x,n.y,n.z]);drawWaterStream(origin,hit?[hit.x,hit.y,hit.z]:[n.x,n.y,n.z],hit);
     }
   }
   for(const f of medicalCalls)if(!f.out&&f.stage==='waiting'&&near(f.x,f.y,px,py)<vis){
     drawFigure(...R(f.x,f.y),walkGround(f.x,f.y),.175,0,-1,f.look,'sit0');
     drawArt(...R(f.x,f.y),.20,.035,.055,['+'],()=>C(CYAN,15));
   }
-  for(const [key,s]of emergencyStreams){if(s.until<netNow()){emergencyStreams.delete(key);continue;}drawWaterStream(s.from,s.to);}
+  for(const [key,s]of emergencyStreams){if(s.until<netNow()){emergencyStreams.delete(key);continue;}drawWaterStream(s.from,s.to,s.hit);}
 }
 let emergencyNozzlePicture=null;
 function drawHoseHeld(){
@@ -33690,7 +33767,7 @@ function buildPause() {
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
-      ${toggle('colorGrade', 'Colour grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}${toggle('roomPools', 'Pools of light indoors')}
+      ${toggle('colorGrade', 'Color grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}${toggle('roomPools', 'Pools of light indoors')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
@@ -34744,7 +34821,7 @@ ROOM_DEFS.stadium = {
 // into the ground, and a match on (a new one if there isn't one: the home side the Yards)
 // the sections a ticket buys: where you're shown to, and what it costs
 const STADIUM_SECTIONS = {
-  main: { name: 'Main stand, centre', price: 40, stand: 'north', note: 'Covered, on the halfway line: the best view in the house' },
+  main: { name: 'Main stand, center', price: 40, stand: 'north', note: 'Covered, on the halfway line: the best view in the house' },
   south: { name: 'South stand', price: 25, stand: 'south', note: 'Opposite the main stand, under the scoreboard' },
   terrace: { name: 'West terrace (standing)', price: 15, stand: 'west', note: 'Behind the goal with the home end. Loud' },
 };
@@ -35105,7 +35182,7 @@ function useScarf(it) {
 function readProgramme(it) {
   const n = it.uses; // (the programme keeps its fixture's slot in uses: saved with it)
   const m = stadiumMatch && stadiumMatch.slot === n ? stadiumMatch : Number.isInteger(n) ? stadiumFixtureTeams(n) : null;
-  if (!m) return ['A programme from an old match. You flick through the adverts.', 'page'];
+  if (!m) return ['A program from an old match. You flick through the ads.', 'page'];
   const xi = t => t.players.filter(p => !p.off && !p.sub).map(p => p.name).join(', ');
   return [`${m.teams[0].name}: ${xi(m.teams[0])}.  ${m.teams[1].name}: ${xi(m.teams[1])}.`, 'page'];
 }
@@ -35136,13 +35213,13 @@ function stadiumExtrasHtml(f) {
     <h2>a bet on it</h2>${betRows}
     <h2>the seller by the turnstiles</h2>
     ${[f.home, f.away].map(id => btn(`scarf:${id}`, `${clubName(id)} scarf`, fmt$(ITEMS.scarf.price), money < ITEMS.scarf.price)).join('')}
-    ${btn('programme', `Programme: ${clubShort(f.home)} v ${clubShort(f.away)}`, fmt$(ITEMS.programme.price), money < ITEMS.programme.price, 'Both line-ups (Q to read)')}`;
+    ${btn('programme', `Program: ${clubShort(f.home)} v ${clubShort(f.away)}`, fmt$(ITEMS.programme.price), money < ITEMS.programme.price, 'Both lineups (Q to read)')}`;
 }
 function stadiumExtra(f, x) {
   if (x === 'season') { if (!pay(SEASON_TICKET_PRICE)) return [false, 'Not enough on you.']; league.seasonTicket = league.season; return [true, 'Season ticket. Every match at the Yards this season: walk straight in.']; }
   if (x.startsWith('bet:')) { const [, pick, st] = x.split(':'); return placeBet(f, pick, +st); }
   if (x.startsWith('scarf:')) { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.scarf.price)) return [false, 'Not enough on you.']; carryItem({ id: 'scarf', uses: 0, of: x.slice(6) }); return [true, `A ${clubName(x.slice(6))} scarf. Q to hold it up.`]; }
-  if (x === 'programme') { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.programme.price)) return [false, 'Not enough on you.']; carryItem({ id: 'programme', uses: f.n, of: `${clubShort(f.home)} v ${clubShort(f.away)}` }); return [true, 'A programme. Q to read the line-ups.']; }
+  if (x === 'programme') { if (inv.length >= INV_SIZE) return [false, 'No room in your bag.']; if (!pay(ITEMS.programme.price)) return [false, 'Not enough on you.']; carryItem({ id: 'programme', uses: f.n, of: `${clubShort(f.home)} v ${clubShort(f.away)}` }); return [true, 'A program. Q to read the lineups.']; }
 }
 // ===== a top-down view of a simulated match (Dev tools > Other > Watch a match): the engine (match-engine.js) drawn
 // plainly on a canvas, to watch the football itself before there's a stadium round it. Players are discs in their
@@ -35301,7 +35378,7 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
   for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
-  if(STADIUM_SITE?.sh){const b=stadiumBounds();add({id:'stadium',name:'The Yards Ground',x:(b.x0+b.x1)/2,y:b.y1+.5,category:'activities',kind:'sight',description:'Football: the city league, Wednesdays 19:30 and Saturdays 15:00. Tickets at the turnstiles on the south side, $15 to $40.'});}
+  if(STADIUM_SITE?.sh){const b=stadiumBounds();add({id:'stadium',name:'The Yards Ground',x:(b.x0+b.x1)/2,y:b.y1+.5,category:'activities',kind:'sight',description:'Soccer: the city league, Wednesdays 19:30 and Saturdays 15:00. Tickets at the turnstiles on the south side, $15 to $40.'});}
   if(SKATEPARK)add({id:'skatepark',name:'Skatepark',x:SKATEPARK.bx*8+(SKATEPARK.x0+SKATEPARK.x1)/2,y:SKATEPARK.by*8+(SKATEPARK.y0+SKATEPARK.y1)/2,category:'activities',kind:'sight',description:'Flat bars, ledges, a manual pad, mini ramp, bowl and vert ramp on smooth concrete. Ollie onto an edge going along it to grind; A and D keep your balance, Space pops you off.',status:'Free · open all hours'});
   for(const sight of QUIET_PLACES)add({id:sight.id,name:sight.name,...sight.entry,category:'activities',kind:'sight',description:sight.description,status:'Quiet place · free'});
   if(typeof SKATE_SPOTS!=='undefined')for(const spot of SKATE_SPOTS)add({...spot,category:'activities',kind:'sight',status:'Skate spot · free · open all hours'});
@@ -35340,7 +35417,7 @@ function mapDirectory() {
   for(const f of emergencyIncidents())if(!f.out)add({id:f.id,name:f.kind==='medical'?'Medical call':f.kind==='car'?'Vehicle fire':'Building fire',x:f.x,y:f.y,category:'activities',kind:'incident',description:f.assigned?'Emergency crew assigned.':'Emergency call awaiting a crew.'});
   const incident=emergencyTarget();if(incident)add({id:'emergency-call',name:incident.what,x:incident.x,y:incident.y,category:'activities',kind:'objective',description:'Your emergency dispatch destination.'});
   const task=taskTarget(),job=jobTarget(),delivery=courierRoute();
-  for(const [id,p,name] of [['task',task,'Current favour'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
+  for(const [id,p,name] of [['task',task,'Current favor'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
     if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
   }
   return out;
@@ -35458,7 +35535,7 @@ function navigationTargets() {
   if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df',0,'',true);
   if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
   if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
-  add(taskTarget(),'CURRENT FAVOUR','#4ff');
+  add(taskTarget(),'CURRENT FAVOR','#4ff');
   if(mode==='taxi'&&me?.dest)add({x:me.dest[0],y:me.dest[1]},me.destName||'TAXI DESTINATION','#ffd575');
   return targets;
 }
@@ -37511,7 +37588,7 @@ Object.assign(DENSE, {
   },
   programme: it => sculptSurface(26, 14, (x, y) => { // the cover: the ground's name, the fixture, a photo of the pitch
     if (Math.abs(x) > 7.2 || Math.abs(y) > 6.2) return null;
-    const t = dText(x, y, 0, -4.8, 'YARDS GROUND') || dText(x, y, 0, 4.6, typeof it?.of === 'string' ? it.of.toUpperCase().slice(0, 12) : 'PROGRAMME');
+    const t = dText(x, y, 0, -4.8, 'YARDS GROUND') || dText(x, y, 0, 4.6, typeof it?.of === 'string' ? it.of.toUpperCase().slice(0, 12) : 'PROGRAM');
     if (t) return [t, C(WHITE, 15), true];
     if (y > -3.6 && y < 3.4 && Math.abs(x) < 6.2) return Math.abs(fract((x + 6.2) / 2.5) - .5) < .02 || Math.abs(y + .1) < .15 ? ['-', C(WHITE, 12)] : dLit(.55 + (Math.floor((x + 6.2) / 1.25) & 1) * .1, GREEN, 6);
     return dLit(.7 - Math.abs(y) * .02, RED, 6);
@@ -39710,13 +39787,13 @@ function peeBoxHit(ox, oy, oz, x, y, z, box) {
   return { t: enter, x: hx, y: hy, z: hz, nx, ny, nz, ux, uy, uz, vx, vy, vz, face };
 }
 
-function peeObjectHit(ox, oy, oz, x, y, z) {
+function peeObjectHit(ox, oy, oz, x, y, z, outdoors = false) {
   let best = null;
   const offer = box => {
     const hit = peeBoxHit(ox, oy, oz, x, y, z, box);
     if (hit && (!best || hit.t < best.t)) best = hit;
   };
-  if (mode === 'room') {
+  if (mode === 'room' && !outdoors) {
     for (const p of room.props) {
       if (p.tick || p.peeThrough) continue;
       if (p.box) offer(p.box);
@@ -40515,7 +40592,7 @@ function jailWithCabbie() {
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
   saveGame();
-  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.'+(deliveryFailed?' Your courier delivery failed.':''), 7);
+  say('The cruiser boxes the cab in. The officer runs the driver\'s license, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.'+(deliveryFailed?' Your courier delivery failed.':''), 7);
 }
 const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
   'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];
@@ -41290,7 +41367,7 @@ function stepBody(dt) {
       const dmg = fallHurt(fell);
       if (dmg > 0) {
         if (actx) playClip('ground-impact', 0.32);
-        if (hurt(dmg)) passOut(`You fell ${Math.round(fell)} metres. Somebody called an ambulance. You're lucky to be alive.`);
+        if (hurt(dmg)) passOut(`You fell ${Math.round(fell)} meters. Somebody called an ambulance. You're lucky to be alive.`);
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
@@ -41549,7 +41626,7 @@ function buildExtraSkateparks() {
       const bowl=addSkatePool(x,y,{radius:.4,height:.32,deck:.08},{rx:.5,ry:.81,curve:.22});
       bowl.spot=bowl.spotPark=true;
       SKATE_SPOTS.push({id:'skatepark-big-bowl',name:'Big Bowl Skatepark',x:x-bowl.hl-bowl.profile.height*2-.08,y,line:{x,y},
-        description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-metre walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
+        description:'A dedicated bowl park: a long, asymmetric pool with broad lobes, tighter curved pockets and 3.2-meter walls, with continuous steel coping. Walk up the access stairs, then face inward on the deck and push to drop in; pump and carve around the walls.'});
     }else{
       const mini=addSkateTransition(x,y-.45,{flat:.5,radius:.22,height:.14,width:1.1});
       mini.spot=mini.spotPark=true;
@@ -41557,7 +41634,7 @@ function buildExtraSkateparks() {
       skateSpotBox(x-.05,y+.45,.3,.1,.02,'manualpad','concrete');
       skateSpotBox(x+.75,y+.45,.25,.035,.035,'skateledge','concrete');
       SKATE_SPOTS.push({id:'skatepark-flow-yard',name:'Flow Yard Skatepark',x:x-half+.1,y,line:{x,y},
-        description:'A relaxed park with a wide mini ramp, low flat bar, six-metre manual pad and concrete ledge. Build lines across the open concrete, or practise pumping and rock to fakie.'});
+        description:'A relaxed park with a wide mini ramp, low flat bar, six-meter manual pad and concrete ledge. Build lines across the open concrete, or practice pumping and rock to fakie.'});
     }
   }
 }
@@ -41608,7 +41685,7 @@ function buildSkateSpots() {
     skateSpotBox(x, y, .3, .1, .02, 'manualpad', 'concrete');
     SKATE_PATCHES.push({ x, y, hl: .55, hw: .5 });
     SKATE_SPOTS.push({ id: 'skate-plaza', name: 'Concrete plaza · ledge line', x:x-.45, y, line:{x,y},
-      description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
+      description: 'Two parallel ledges and a six-meter manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
   }
   buildExtraSkateparks();
   buildStreetSkateSpots();
@@ -41622,7 +41699,7 @@ function refreshSkateSpotDirectory() {
     if (p.kind !== 'kerb' || districts.has(p.district)) continue;
     districts.add(p.district);
     const at = grindPathAt(p, p.length / 2).p;
-    SKATE_SPOTS.push({ id: `skate-kerb:${p.district}`, name: `${cap(p.district.replace(/[-_]/g, ' '))} · kerb line`, x: at[0], y: at[1],
+    SKATE_SPOTS.push({ id: `skate-kerb:${p.district}`, name: `${cap(p.district.replace(/[-_]/g, ' '))} · curb line`, x: at[0], y: at[1],
       description: 'A long kerbstone line between crossings. Ollie onto its edge to grind, pop out over the street, or use a manual to carry a combo between lines.' });
     if (districts.size >= 3) break;
   }
@@ -41740,14 +41817,14 @@ function buildStreetSkateSpots(){
   }
   const styles=['stairs','dock','banks','manuals','rails','gap'],used=new Set();
   const descriptions={
-    kickers:['Kicker and flat bar','A low launch ramp with a clear landing, plus a parallel steel flat bar. Practise small airs or line up an ollie onto the rail away from the street.'],
+    kickers:['Kicker and flat bar','A low launch ramp with a clear landing, plus a parallel steel flat bar. Practice small airs or line up an ollie onto the rail away from the street.'],
     flatbars:['Twin flat bars','Two low steel rails with separate approaches and room to roll out. A small bank links the lines on this quiet patch of paving.'],
     stairs:['Four-step rail','A roll-up bank reaches a 72 cm landing and four 18 cm stairs. Two steel handrails run flat, down the steps and out onto the approach; line up on the upper deck for a downhill grind or ollie the set.'],
     dock:['Loading dock','A bank reaches a 60 cm loading platform with grindable edges and a sloped steel exit rail. Pop off the dock or carry a manual across the adjacent low pad.'],
     banks:['Bank-to-ledge plaza','Broad banks lead onto a 45 cm deck with steel-edged grind lines. A low ledge and flat bar make alternate exits, with clear run-up and landing space.'],
-    manuals:['Manual link','Two low eight-metre pads with a two-metre gap, plus a parallel concrete ledge. Link manuals, flips and a grind across the open paving.'],
+    manuals:['Manual link','Two low eight-meter pads with a two-meter gap, plus a parallel concrete ledge. Link manuals, flips and a grind across the open paving.'],
     rails:['Angled rail line','Three low steel bars at different angles, with space between them to pop out, steer and transfer. A broad low bank offers another approach.'],
-    gap:['Ledge transfer','Two six-metre ledges separated by a three-metre transfer gap, plus a long low manual pad. Build speed on the clear approaches and link the line.']
+    gap:['Ledge transfer','Two six-meter ledges separated by a three-meter transfer gap, plus a long low manual pad. Build speed on the clear approaches and link the line.']
   };
   while(SKATE_STREET_SITES.length<14){
     // Keep the original eight lines stable; spread the additional small spots
@@ -43647,8 +43724,8 @@ function islandBuildingUse() {
 }
 
 const ISLAND_LOG_ENTRIES=[
-  'VISITORS\' LOG: "Shelter is open to anyone caught in the weather. Please shut the door and take your rubbish home."',
-  'A pencilled note: "Good fishing off the western jetty. Leave your boat alongside; the benches are for everyone."',
+  'VISITORS\' LOG: "Shelter is open to anyone caught in the weather. Please shut the door and take your trash home."',
+  'A penciled note: "Good fishing off the western jetty. Leave your boat alongside; the benches are for everyone."',
   'The last page: "Went over to Fern. The waterfall trail was worth the crossing. Left before sunset. -- M."',
 ];
 ROOM_DEFS.islandshelter={
@@ -54398,7 +54475,7 @@ function furnishingCandidate() {
       else {p.a=sy>0?Math.PI:0;p.y=sy>0?my-d.hy:my+1+d.hy;p.x=px+vx*t;}
       p.z=clamp(eye+pitch*rows/projY*t,.65,(room.def.height||3)-.4);found=true;break;
     }
-    if(!found)return {...p,ok:false,reason:'Look at a wall within three metres.'};
+    if(!found)return {...p,ok:false,reason:'Look at a wall within three meters.'};
   }else {
     p.x=Math.round((px+Math.cos(a)*1.8)*10)/10;p.y=Math.round((py+Math.sin(a)*1.8)*10)/10;
     const hx=Math.abs(Math.cos(p.a))*d.hx+Math.abs(Math.sin(p.a))*d.hy,hy=Math.abs(Math.sin(p.a))*d.hx+Math.abs(Math.cos(p.a))*d.hy;
@@ -56665,7 +56742,7 @@ function buildStreetScenes() {
     if(blockKind(bx,by)!=='plaza')continue;
     const x=bx*8+3.5,y=by*8+3.6;
     const clear=[[-.7,-.5],[.7,-.5],[-.7,.5],[.7,.5],[0,0]].every(([u,v])=>!map[idx(x+u,y+v)]&&!isWater(x+u,y+v)&&terrainHeight(x+u,y+v)<.005&&!solidAt(x+u,y+v,.05));
-    if(clear){STREET_SCENES.chalk={x,y,half:.66,depth:.75,name:'The pavement artist'};break;}
+    if(clear){STREET_SCENES.chalk={x,y,half:.66,depth:.75,name:'The sidewalk artist'};break;}
   }
   buildRailwayModels();buildMovingModels();
 }
@@ -56964,7 +57041,7 @@ function streetSceneNear() {
 function streetScenePrompt() {
   const which=streetSceneNear();
   if(which==='railway')return 'E: press the window railway button';
-  if(which==='moving')return movingPhase()==='loading'?'E: talk to the movers':streetSceneState.lampWeek===movingWeek()?'Moving day is over. The pavement is clear.':'E: take the free lamp';
+  if(which==='moving')return movingPhase()==='loading'?'E: talk to the movers':streetSceneState.lampWeek===movingWeek()?'Moving day is over. The sidewalk is clear.':'E: take the free lamp';
   if(which==='chalk')return 'E: look at the chalk drawing';
   return '';
 }
@@ -56979,7 +57056,7 @@ function streetSceneUse() {
     else if(streetSceneState.lampWeek!==movingWeek()) {
       if(inv.length>=INV_SIZE){say('Your bag is full. The lamp can wait.');return true;}
       carryItem({id:'movinglamp',uses:0},false);streetSceneState.lampWeek=movingWeek();saveGame();say('FREE TO A GOOD HOME. You take the little amber table lamp. It will fit on your display shelf.',5);
-    } else say('The van has gone. Just a rectangle of clean pavement where the boxes stood.',4);
+    } else say('The van has gone. Just a rectangle of clean sidewalk where the boxes stood.',4);
   } else say(snowCover>.15?'Snow covers the artist\'s patch of paving. The chalk box is packed away.':chalkWash()>.65?'Rain has almost erased the whale and its impossible city. A few blue chalk lines linger between the paving stones.':tod<9?'Clean paving. The artist usually starts around nine.':chalkProgress()<.5?'A chalk whale is taking shape. The artist taps a blue stick against the paving. "Come back later. It is taking the whole city for a ride. Stand on the white footprints for the best view."':'THE CITY SAILS. Stand on the white footprints: the stretched chalk lines resolve into a turquoise whale carrying a tiny golden skyline. From the side, the city tumbles back into streaks of chalk.',6);
   return true;
 }
@@ -57077,7 +57154,7 @@ function quietRoofGarden(s){
  for(const z of [.11,.18,.25])quietTimber(s,'trellis-rail',0,-.58,.8,.003,z,z+.006);
  for(let u=-.72;u<.8;u+=.12)quietTimber(s,'trellis-spar',u,-.58,.002,.002,.08,.25);
  quietPlaque(s,0,-.572,'PLEASE WATER',.16);
- s.targets.push({u:.36,v:-.16,z0:.03,z1:.18,label:'talk to the gardener',when:quietGardenerHere,text:()=>seasonIdx()===3?'“It looks empty now, but leave the stalks. The finches eat better than we do in January.” She checks the barrel tap once more.':'“The landlord called this wasted space. Now half the building comes up for tomatoes.” She presses a seedling back into its bed. “Take the lift. There is no prize for climbing the drainpipe.”'});
+ s.targets.push({u:.36,v:-.16,z0:.03,z1:.18,label:'talk to the gardener',when:quietGardenerHere,text:()=>seasonIdx()===3?'“It looks empty now, but leave the stalks. The finches eat better than we do in January.” She checks the barrel tap once more.':'“The landlord called this wasted space. Now half the building comes up for tomatoes.” She presses a seedling back into its bed. “Take the elevator. There is no prize for climbing the drainpipe.”'});
  quietPart(s,'planting-notebook',-.7,.205,.035,.023,.092,.098,'book');
  quietPart(s,'notebook-page',-.7,.205,.032,.02,.098,.0985,'chart');
  quietPart(s,'notebook-glass-weight',-.7,.205,.032,.02,.0985,.1,'glass');
@@ -57183,7 +57260,7 @@ function quietChartRoom(s){
   quietPart(s,'wind-arm',.8+Math.cos(a)*.03,-.3+Math.sin(a)*.03,.032,.002,.54,.544,'iron',false,{moving:'wind',angle:a});
   quietPart(s,'wind-cup',.8+Math.cos(a)*.065,-.3+Math.sin(a)*.065,.012,.012,.531,.55,'brass',false,{ellipsoid:true,moving:'cup',angle:a});
  }
- s.targets.push({u:0,v:-.29,z0:.09,z1:.12,label:'read the last tide ledger',text:'The final ledger entry is dated October 17. “Recorder failed again. Took the six o’clock reading by hand. Key left with the harbour office.” A pencilled line under it: “Back after the storm.” Salt has curled every page after that.'});
+ s.targets.push({u:0,v:-.29,z0:.09,z1:.12,label:'read the last tide ledger',text:'The final ledger entry is dated October 17. “Recorder failed again. Took the six o’clock reading by hand. Key left with the harbor office.” A penciled line under it: “Back after the storm.” Salt has curled every page after that.'});
 }
 function quietSiteClear(x,y,hx,hy){
  let lo=Infinity,hi=-Infinity;
@@ -57210,7 +57287,7 @@ function buildQuietPlaces(){
   const door=doors.find(d=>d.sh===b.sh);if(!door)continue;
   const x=b.x0+1.2,y=b.y0+.8;
   if(roofs.some(o=>near(o.x,o.y,x,y)<1.5)||COURIER_SCENERY.some(o=>near(o.x,o.y,x,y)<2)||COURIER_SURFACES.some(o=>near(o.x,o.y,x,y)<2))continue;
-  const s=quietSite('roof',x,y,b.h,1.05,.65,'Vale House · rooftop allotment','Raised tomato beds, a potting bench and a rain barrel above the neighbourhood. Enter the apartment lobby and take its existing lift to the roof. A resident tends the beds during the day.');
+  const s=quietSite('roof',x,y,b.h,1.05,.65,'Vale House · rooftop allotment','Raised tomato beds, a potting bench and a rain barrel above the neighborhood. Enter the apartment lobby and take its existing elevator to the roof. A resident tends the beds during the day.');
   s.entry={x:door.x,y:door.y};s.building=b;quietRoofGarden(s);break;
  }
  // A grassy shore clearing, clear of construction yards, paths and fittings.
@@ -57990,8 +58067,10 @@ function netSendTick(now) {
     s.pose = 'tumble' + clamp(age < .35 ? Math.floor(age / .35 * 3) : SK.bail > .5 ? 3 : 4 + Math.floor((.5 - SK.bail) / .5 * 4), 0, 7);
     s.sk = B ? { yaw: B.yaw, nose: 0, roll: B.roll, st: 1, bx: B.board[0], by: B.board[1], bz: B.board[2] } : { yaw: s.a, nose: 0, roll: 0, st: 1 };
   }
-  if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
+  if (NET_FEATURES.police) s.cops = netMyCops();
   if (skatingNow() && !car && !SK.bailAt) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
+  if(fx.smoke>0)s.smoking=fx.smokeKind==='joint'?'joint':fx.pipe?'pipe':'cigarette';
+  if(it&&ITEMS[it.id])s.heldUses=Math.max(0,it.uses||0);
   if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev, siren:!!car.siren };
   net.lastSent = s;
   net.tx.send('tick', s);
@@ -58027,7 +58106,7 @@ function netSyncCars(now) {
     const s = netSample(p, now);
     if (s && s.veh && s.veh.id && s.rk === 'out' && VEHICLES[s.veh.kind]) want.set(s.veh.id, { ...s.veh, x: s.x, y: s.y, a: s.a, owner: p.id, parked: false });
     if (s && s.cops && NET_FEATURES.police) for (const c of s.cops) if (c.k === 'car' && VEHICLES[c.kind]) // (the cruisers after them: lights and siren, but not after you)
-      want.set('cop:' + p.id + ':' + c.id, { kind: c.kind, body: c.body, x: c.x, y: c.y, a: c.a, v: c.v, owner: p.id, parked: false, patrol: true, cop: true });
+      want.set('cop:' + p.id + ':' + c.id, { kind: c.kind, body: c.body, x: c.x, y: c.y, a: c.a, v: c.v, returning:!!c.returning, owner: p.id, parked: false, patrol: true, cop: true });
   }
   for (const c of [...net.cars.values()]) if (!want.has(c.netId)) netDropCar(c);
   for (const [id, w] of want) {
@@ -58035,7 +58114,7 @@ function netSyncCars(now) {
     if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
     Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
       brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev, cop: !!w.cop,
-      state: w.cop||w.ev&&w.siren ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
+      state:w.cop?(w.returning?'back':'out'):w.ev&&w.siren?'out':undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
   }
   for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
 }
@@ -58764,7 +58843,7 @@ function drawPeers() {
     }
     if (!p.hello || p.mismatch || p.stale) { p.drawn = false; continue; }
     const s = p.view = netSample(p, now);
-    if (s && s.cops && s.rk === netRoomKey()) netDrawCops(p, s, inRoom);
+    if (s && s.cops) netDrawCops(p, s, inRoom);
     if (!netVisible(p, s)) { p.drawn = false; continue; }
     const vx = inRoom ? s.x - px : rel(s.x - px), vy = inRoom ? s.y - py : rel(s.y - py), fx = Math.cos(s.a), fy = Math.sin(s.a);
     if (p.lastX !== undefined && p.lastRk === s.rk) p.ph += Math.hypot(rel(s.x - p.lastX), rel(s.y - p.lastY)) * (inRoom ? 3 : 30);
@@ -58788,10 +58867,12 @@ function drawPeers() {
       const sk = s.sk, ang = sk.yaw + sk.st * Math.PI / 2, look = netFigLook(p), pose = /^(ride|push|crouch|skateair|mongo)/.test(s.pose) ? s.pose : 'ride1';
       drawSkateBoard(vx, vy, s.z, sk.yaw, sk.nose, sk.roll);
       drawFigure(vx, vy, s.z + SB.up + SB.ht, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, { light: 5, hold: p }); // (the plain figure: skate.js's per-pixel one is made to be seen from behind at a distance, and comes apart up close)
+      netDrawAccessories(p,s,vx,vy,pose,false);
       continue;
     }
     if (inRoom) drawFigure(vx, vy, s.z, 1.8, fx, fy, netFigLook(p), gait, { light: 9, hold: p });
     else drawFigure(vx, vy, s.z, 0.175, fx, fy, netFigLook(p), gait, { light: 6, hold: p });
+    netDrawAccessories(p,s,vx,vy,gait,inRoom);
     if (s.spray && !inRoom) { // the can out in front of them, and the mist off it
       const col = SPRAY_COLOURS[s.spray.col] ?? MAG, mx = vx + fx * 0.06, my = vy + fy * 0.06;
       drawArt(mx, my, s.z + 0.12, 0.03, 0.03, [fract(T * 7) < .5 ? '.:.' : ':.:'], () => C(col, 13));
@@ -58799,26 +58880,48 @@ function drawPeers() {
   }
 }
 
+// Props use the same posed hand and mouth anchors as the body, in both unit systems.
+function netDrawAccessories(p,s,vx,vy,pose,inRoom){
+  if(!s.held&&!s.smoking||/^(dead|down|tumble)/.test(pose))return;
+  const look=netFigLook(p),body=figCache.get(look.shape+'|'+pose)||figBody(look,pose),h=inRoom?1.8:s.sk?SB.rider:.175,unit=h/FIG_TALL;
+  const fx=Math.cos(s.a),fy=Math.sin(s.a),z=s.z+(s.sk?SB.up+SB.ht:0);
+  const at=v=>[vx+(-fy*v[0]+fx*v[1])*unit,vy+(fx*v[0]+fy*v[1])*unit,z+v[2]*unit];
+  if(s.held&&ITEMS[s.held]&&body.hands?.[0]&&!s.fish&&!(s.sk&&s.held==='skateboard')){
+    const d={id:s.held,uses:s.heldUses??ITEMS[s.held].uses??0},picture=droppedPicture(d),m=itemSize(d)*(inRoom?1:.1)/Math.max(picture.w,picture.h),hand=at(body.hands[0]);
+    drawArt(hand[0]+fx*unit,hand[1]+fy*unit,hand[2]-picture.h*m*.4,picture.w*m,picture.h*m,picture.art,(ch,r,L,k)=>{const c=picture.col(ch,r,k);return C(c>>4,(c&15)*clamp(L/11,.4,1));},true);
+  }
+  if(s.smoking&&body.mouth){
+    const mouth=at(body.mouth),length=(s.smoking==='joint'?2.3:3)*unit,end=[mouth[0]+fx*length,mouth[1]+fy*length,mouth[2]-.25*unit];
+    const shade=(col,lvl)=>(i,t,L)=>{BG[i]=C(col,lvl*clamp(L/11,.4,1));set(i,' ',0);return true;};
+    drawRod(...mouth,...end,.28*unit,shade(s.smoking==='pipe'?GRAY:WHITE,s.smoking==='pipe'?3:12));
+    if(s.smoking==='pipe')drawBox(boxAt(end[0],end[1],fx,fy,.7*unit,.7*unit,end[2]-.4*unit,end[2]+.8*unit),(i,t,L)=>{BG[i]=C(HIT.face===5?GRAY:WARM,HIT.face===5?3:6+Math.max(0,HIT.u/unit)*2);set(i,' ',0);return true;},rayCopperDrum);
+    else drawRod(...end,end[0]+fx*.45*unit,end[1]+fy*.45*unit,end[2],.3*unit,shade(ORANGE,13));
+  }
+}
+
 // ---- police: yours, sent while you're wanted (the cruisers go into everyone's traffic as stand-ins, netSyncCars), and
 // theirs drawn on foot. Your own patrol cars aren't drawn right where someone else's chase is, so they don't double up.
+let netCopN=0;
 function netMyCops() {
   const out = [], add = o => out.length < NET_COPS_MAX && out.push(o);
-  if (mode === 'room') roomCops.forEach((c, k) => { if (!c.dead) add({ k: 'room', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
-  for (const c of cars) if (c.pursuit && c.patrol && !playerCar(c) && !c.wrecked && near(c.x, c.y, px, py) < 40) add({ k: 'car', id: c.id, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), v: c.v });
-  footCops.forEach((c, k) => { if (c.chase && !c.dead && !c.down) add({ k: 'foot', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
-  roofCops.forEach((c, k) => { if (!c.dead) add({ k: 'roof', id: k, x: c.x, y: c.y, z: policeRoofHeight(c.x, c.y), a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  const active=c=>!c.dead&&!c.down&&(c.chase||c.pursuit||c.returning||c.returnCar||c.netAfterChase);
+  if (mode === 'room') roomCops.forEach((c, k) => { if (!c.dead) add({ rk:c.netRk||netRoomKey(), returning:!!c.returning, k: 'room', id:c.netCopId??=++netCopN, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  for (const c of cars) if ((c.pursuit || c.returning) && c.patrol && !playerCar(c) && !c.wrecked && (c.returning||near(c.x, c.y, px, py) < 40)) add({ rk:'out',returning:!!c.returning, k: 'car', id: c.id, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), v: c.v });
+  [...footCops].sort((a,b)=>(a.chase?0:a.returnCar?1:2)-(b.chase?0:b.returnCar?1:2)).forEach((c, k) => { if (active(c)&&(c.returnCar||c.netAfterChase&&netPoliceObserved(c)||near(c.x,c.y,...crimePos())<40)) add({ rk:'out',returning:!c.chase, k: 'foot', id:c.netCopId??=++netCopN, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  roofCops.forEach((c, k) => { if (!c.dead) add({ rk:'out',returning:!!c.returning, k: 'roof', id:c.netCopId??=++netCopN, x: c.x, y: c.y, z: policeRoofHeight(c.x, c.y), a: Math.atan2(c._fy || 0, c._fx || 1) }); });
   return out;
 }
 function netDrawCops(p, s, inRoom) {
-  const objs = p.copObjs ||= {};
+  const objs = p.copObjs ||= {},live=new Set(s.cops.map(c=>c.k+c.id));
+  for(const id of Object.keys(objs))if(!live.has(id))delete objs[id];
   for (const c of s.cops) {
-    if (c.k === 'car' || (c.k === 'room') !== inRoom) continue;
+    if (c.k === 'car' || (c.rk || (c.k==='room'?s.rk:'out')) !== netRoomKey()) continue;
     const o = objs[c.k + c.id] ||= { seed: (hash(c.id, c.k.length, 6113) * 1e9) | 0 };
     const vx = inRoom ? c.x - px : rel(c.x - px), vy = inRoom ? c.y - py : rel(c.y - py);
     if (!inRoom && Math.hypot(vx, vy) > vis) continue;
     const z = inRoom ? 0 : c.k === 'roof' ? c.z : walkGround(c.x, c.y);
-    drawFigure(vx, vy, z, inRoom ? 1.8 : 0.18, Math.cos(c.a), Math.sin(c.a), copLook(o), 'run' + (Math.floor(T * 10 + c.id) & 7), { light: inRoom ? 9 : 7 });
-    if (!inRoom && fract(T * 3) < 0.5) drawArt(vx, vy, z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+    drawFigure(vx, vy, z, inRoom ? 1.8 : 0.18, Math.cos(c.a), Math.sin(c.a), copLook(o), (c.returning?'walk':'run') + (Math.floor(T * (c.returning?5:10) + c.id) & 7), { light: inRoom ? 9 : 7 });
+    if (!inRoom && !c.returning && fract(T * 3) < 0.5) drawArt(vx, vy, z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
 const netCopCarNear = m => { if (!net.on || !net.cars) return false; for (const c of net.cars.values()) if (c.cop && Math.hypot(rel(c.x - m.x), rel(c.y - m.y)) < 1.5) return true; return false; };
@@ -58864,7 +58967,7 @@ function netCarHitsPlayer(c, fx, fy) {
     net.runT.set(p.id, now);
     const sg = Math.sign(c.v), yaw = c.travelA ?? Math.atan2(c.hy, c.hx);
     net.tx.send('runover', { sp: Math.abs(c.v), dx: Math.cos(yaw) * sg, dy: Math.sin(yaw) * sg }, p.id);
-    say(pick([`*THUMP* You knock ${p.name} flying.`, `*THUMP* ${p.name} goes over the bonnet.`]), 2.5);
+    say(pick([`*THUMP* You knock ${p.name} flying.`, `*THUMP* ${p.name} goes over the hood.`]), 2.5);
     crime('hit', c.x, c.y);
     return true;
   }
@@ -59295,8 +59398,8 @@ function appearancePreview(){
  appearanceEl.querySelector('[data-view-label]').textContent=['Front','Front quarter','Side','Back quarter','Back','Back quarter','Side','Front quarter'][Math.floor(appearanceView/2)%8];
 }
 function buildAppearance(){
- const colors=['Red','Blue','Green','Orange','Yellow','Purple','Cyan','White','Grey','Rust'];
- const fields=[['skin','Skin tone',PLAYER_STYLE_CHOICES.skin],['hairStyle','Hair',PLAYER_STYLE_CHOICES.hairStyle],['hairColour','Hair colour',PLAYER_STYLE_CHOICES.hairColour],['headwear','Headwear',PLAYER_STYLE_CHOICES.headwear],['hat','Hat colour',colors],['shirtStyle','Top style',PLAYER_STYLE_CHOICES.shirtStyle],['top','Top colour',colors],['bot','Trousers',['Blue jeans','Charcoal','Brown']],['shoes','Shoes',PLAYER_STYLE_CHOICES.shoes]];
+ const colors=['Red','Blue','Green','Orange','Yellow','Purple','Cyan','White','Gray','Rust'];
+ const fields=[['skin','Skin tone',PLAYER_STYLE_CHOICES.skin],['hairStyle','Hair',PLAYER_STYLE_CHOICES.hairStyle],['hairColour','Hair color',PLAYER_STYLE_CHOICES.hairColour],['headwear','Headwear',PLAYER_STYLE_CHOICES.headwear],['hat','Hat color',colors],['shirtStyle','Top style',PLAYER_STYLE_CHOICES.shirtStyle],['top','Top color',colors],['bot','Pants',['Blue jeans','Charcoal','Brown']],['shoes','Shoes',PLAYER_STYLE_CHOICES.shoes]];
  const el=menuEl('appearance',540,`<div class="panel" role="dialog" aria-label="Customize character" style="width:min(700px,calc(100vw - 24px))">
  <div class="panel-heading"><h1>Your character</h1><button class="panel-close" data-appearance-back aria-label="Close character customization">×</button></div>
  <p class="sub">Changes save automatically. Wear the same look in every room.</p>
@@ -59772,7 +59875,7 @@ function drive(dt) {
     if (fatal) { // too fast to survive: thrown down the road and still, as a shooting's victim (gun.js)
       knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); killFigure(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, cop);
       panicAt(hitPerson.x, hitPerson.y);
-      say(pick(cop ? ['*CRUNCH* The officer goes over the bonnet and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the bonnet and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
+      say(pick(cop ? ['*CRUNCH* The officer goes over the hood and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the hood and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
     } else {
       knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
       const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
@@ -60127,7 +60230,7 @@ const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', ge
 function touchHeldActions(out) {
   if(emergencyHoseReady()){out.push(['Spray hose','KeyQ','pop']);return;}
   const it = heldItem();
-  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (it.id === 'spraypaint') out.push(['Colour', 'KeyR', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+  if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (it.id === 'spraypaint') out.push(['Color', 'KeyR', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
   else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
 }
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)

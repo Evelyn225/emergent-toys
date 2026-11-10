@@ -22,7 +22,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognized' }, // (spotted: notoriety.js)
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
                  copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
@@ -313,7 +313,7 @@ function drawRoomPolice() {
 }
 function backToBeat(c) { // the chase is off: pick up the beat from the nearest corner
   const ix = Math.round((c.x - 1) / 8), iy = Math.round((c.y - 1) / 8);
-  c.corner = { ix, iy, qx: mod(c.x, 8) > 1 ? 1 : 0, qy: mod(c.y, 8) > 1 ? 1 : 0 }; c.goal = c.corner; c.chase = false;
+  c.corner = { ix, iy, qx: mod(c.x, 8) > 1 ? 1 : 0, qy: mod(c.y, 8) > 1 ? 1 : 0 }; c.goal = c.corner; c.chase = false;c.netAfterChase=true;
 }
 
 // ---- the patrol cars: a couple of dozen of the city's cars are police, cruising like the rest
@@ -422,6 +422,7 @@ function clearWanted() {
   const closestCar = (x, y) => units.reduce((best, c) => !best || near(c.x, c.y, x, y) < near(best.x, best.y, x, y) ? c : best, null);
   const exit = searchedRoom?.ret || room?.ret;
   for (const c of roomCops) {
+    c.netRk=typeof netRoomKey==='function'?netRoomKey():'';
     c.returning = true; c.returnCar = closestCar(...(exit || crimePos())); c.exitWorld = exit;
     c.returnDoor = mode === 'room' && room.grid ? roomDoorCell() : null; c.sees = false; c.pathT = 0;
   }
@@ -503,7 +504,7 @@ function stepReturningPolice(dt) {
     if (c.waitingCrew && !crew) {
       c.waitingCrew = false; c.merging = policeReturnLane(c); c.pursuitDrive = false; c.routeT = 0;
     }
-    if (!c.waitingCrew && (c.arrived || c.home || near(c.x, c.y, wx, wy) > SIM_R * 0.9)) {
+    if (!c.waitingCrew && (c.arrived || c.home || near(c.x, c.y, wx, wy) > SIM_R * 0.9&&!(typeof netPoliceObserved==='function'&&netPoliceObserved(c)))) {
       c.returning = false;
       if (c.base) c.base.out = false;
       endCall(c);
@@ -703,8 +704,8 @@ function stepCrime(dt) {
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
 function tidyPolice() {
   const [wx, wy] = crimePos();
-  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && !c.returning && near(c.x, c.y, wx, wy) > 30) cars.splice(k, 1); }
-  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25) footCops.splice(k, 1); }
+  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && !c.returning && near(c.x, c.y, wx, wy) > 30&&!(typeof netPoliceObserved==='function'&&netPoliceObserved(c))) cars.splice(k, 1); }
+  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25&&!(typeof netPoliceObserved==='function'&&netPoliceObserved(c))) footCops.splice(k, 1); }
 }
 // what being caught costs. Paying it settles everything, and the car goes back
 const HEIST_LOOT=new Set(['diamond','orrery','hotelmasterpiece','hotelharbour','hotelstilllife']);

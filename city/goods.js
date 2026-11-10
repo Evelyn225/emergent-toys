@@ -65,7 +65,7 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
-  scarf: { name: 'club scarf', price: 12, kind: 'gear' }, programme: { name: 'match programme', price: 4, kind: 'gear' }, // (the football: it.of, the club; the fixture: stadium-extras.js)
+  scarf: { name: 'club scarf', price: 12, kind: 'gear' }, programme: { name: 'match program', price: 4, kind: 'gear' }, // (the football: it.of, the club; the fixture: stadium-extras.js)
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   petcat: { name: 'pet cat carrier', price: 80, kind: 'pet' },
   petdog: { name: 'pet dog carrier', price: 80, kind: 'pet' },
@@ -88,7 +88,7 @@ const ITEMS = {
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
   diamond: { name: 'the ASCII City Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
-  hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
+  hotelharbour: { name: 'Harbor at First Light', price: 6000, kind: 'gear' },
   hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
@@ -416,7 +416,7 @@ function useHeld(near) {
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
     case 'diamond': return [pick(['The ASCII City Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
     case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
-    case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
+    case 'hotelharbour': return ['You tilt Harbor at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
     case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
     case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
     case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
@@ -493,7 +493,7 @@ function itemName(it) {
   if (ITEMS[it.id].kind === 'drug') return `${DRUG_QUALITY[it.q] || 'standard'} ${ITEMS[it.id].name}`;
   if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
   if (it.id === 'scarf' && it.of) return `${clubName(it.of)} scarf`;
-  if (it.id === 'programme' && it.of != null && typeof it.of === 'string') return `programme: ${it.of}`;
+  if (it.id === 'programme' && it.of != null && typeof it.of === 'string') return `program: ${it.of}`;
   return it.kg ? catchName(it) : ITEMS[it.id].name;
 }
 const dropped = []; // inventory item plus { x, y, at, z }

@@ -2,7 +2,7 @@
 // every client applies the same way so nobody needs a server to referee (MULTIPLAYER_PLAN.md). Each client still runs
 // its own city; the network only carries players, their chat and the shared clock. The transport and the drawing are in
 // net.js.
-const NET_PROTOCOL = 11; // 11: shared emergency incidents, responders and sirens
+const NET_PROTOCOL = 12; // 12: persistent returning police and visible held/smoking props
 // (2: spray-paint tags; 3: shared cars; 4: freehand spray paint; 5: guns; 6: rod hooks; 7: police; 8: away, and what more is shown; 9: peaceful, car hits, pickpocketing, balls; 10: whispers, gifts, invites, drops, more rides)
 const NET_MAX_PEERS = 7; // others in the room (eight players in all: everyone connects to everyone)
 const NET_TICK_HZ = 12, NET_DELAY = 0.15; // updates a second; how far behind their latest update others are drawn (s)
@@ -57,6 +57,8 @@ function netCheckTick(d) {
   const out = { t: d.t, x: d.x, y: d.y, z: clamp(d.z, -5, 200), a: d.a, mode: d.mode, rk: d.rk, pose, held: typeof d.held === 'string' ? d.held.slice(0, 24) : '', stars: clamp(d.stars | 0, 0, 5) };
   if (d.veh && typeof d.veh === 'object' && typeof d.veh.kind === 'string' && d.veh.kind.length < 16 && netNum(d.veh.body))
     out.veh = { id: netCarId(d.veh.id), kind: d.veh.kind, body: d.veh.body | 0, v: netNum(d.veh.v) ? d.veh.v : 0, brake: !!d.veh.brake, dmg: netNum(d.veh.dmg) ? clamp(d.veh.dmg, 0, 200) : 0, patrol: !!d.veh.patrol, ev: !!d.veh.ev, siren:!!d.veh.siren, shift: !!d.veh.shift };
+  if(['cigarette','joint','pipe'].includes(d.smoking))out.smoking=d.smoking;
+  if(netNum(d.heldUses))out.heldUses=clamp(d.heldUses,0,999);
   if (Array.isArray(d.cops)) out.cops = netCheckCops(d.cops);
   if (d.away) out.away = true; // (in the pause menu or another tab)
   if (d.peaceful) out.peaceful = true; // (peaceful mode: can't hurt or rob anyone, nor be hurt or robbed)
@@ -105,7 +107,7 @@ function netCheckCops(d) {
   const out = [];
   for (const c of d.slice(0, NET_COPS_MAX)) {
     if (!c || !NET_COP_KINDS.includes(c.k) || !Number.isInteger(c.id) || c.id < 0 || !netNum(c.x) || !netNum(c.y) || !netNum(c.a)) continue;
-    const o = { k: c.k, id: c.id, x: c.x, y: c.y, a: c.a, z: netNum(c.z) ? clamp(c.z, 0, 50) : 0 };
+    const o = { k: c.k, id: c.id, x: c.x, y: c.y, a: c.a, z: netNum(c.z) ? clamp(c.z, 0, 50) : 0, returning:!!c.returning,rk:typeof c.rk==='string'&&c.rk.length<=80?c.rk:c.k==='room'?'':'out' };
     if (c.k === 'car') { if (typeof c.kind !== 'string' || c.kind.length > 15 || !netNum(c.body)) continue; o.kind = c.kind; o.body = c.body | 0; o.v = netNum(c.v) ? c.v : 0; }
     out.push(o);
   }
@@ -268,4 +270,11 @@ function netAppearanceOptions(raw){
  const l=netCheckLook(raw),custom=l.custom===1;
  return {hair:custom?PLAYER_HAIRS[l.hairStyle]:'short',hat:custom?['beanie','cap',null][l.headwear]:'beanie',top:custom?['long','tee','tank','jacket'][l.shirtStyle]:'long',bot:'pants',bw:1,
  col:{hair:custom?PLAYER_HAIR_COLOURS[l.hairColour]:[BRICK,4],skin:custom?FIG_SKINS[l.skin]:[SKIN,11],hat:[NET_COLOURS[l.hat],11],hatD:[NET_COLOURS[l.hat],7],top:[NET_COLOURS[l.top],7],inner:[WHITE,12],bot:[[BLUE,5],[GRAY,3],[BRICK,4]][l.bot],shoe:custom?[[WHITE,13],[GRAY,2],[BRICK,4],[RED,7]][l.shoes]:[WHITE,13],belt:[GRAY,2]}};
+}
+
+// A remote witness keeps a returning unit alive even after the suspect goes to jail.
+function netPoliceObserved(o){
+ if(!net.on)return false;
+ for(const p of net.peers.values()){if(!p.hello||p.stale||p.mismatch)continue;const s=netSample(p,netNow());if(s?.rk==='out'&&near(o.x,o.y,s.x,s.y)<MAXD+2)return true;}
+ return false;
 }

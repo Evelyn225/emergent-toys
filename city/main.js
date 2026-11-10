@@ -284,7 +284,7 @@ function drive(dt) {
     if (fatal) { // too fast to survive: thrown down the road and still, as a shooting's victim (gun.js)
       knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); killFigure(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, cop);
       panicAt(hitPerson.x, hitPerson.y);
-      say(pick(cop ? ['*CRUNCH* The officer goes over the bonnet and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the bonnet and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
+      say(pick(cop ? ['*CRUNCH* The officer goes over the hood and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the hood and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
     } else {
       knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
       const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)

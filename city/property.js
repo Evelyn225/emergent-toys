@@ -61,7 +61,7 @@ function summonCar(model) {
     c.x = worldCoord(l.x + l.hx * s); c.y = worldCoord(l.y + l.hy * s); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
     if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
   }
-  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.${towed}`, 'click'];
+  return [`You press the fob. A minute later your ${name} rolls up at the curb, lights blinking.${towed}`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_island' ? 'islandhome' : kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';

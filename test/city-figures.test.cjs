@@ -141,3 +141,9 @@ test('dead figures have a complete horizontal silhouette in every view and sit a
  assert.ok(result.sides.every(([lo,hi])=>lo> -14.5&&hi<14.5),'the lying figure fits the sprite without cropping its head or feet');
  assert.ok(result.sides[0][1]-result.sides[0][0]>24,'the full standing height is laid along the ground');
 });
+
+test('distant sampling votes skin and shadow together instead of switching to the surrounding hair',()=>{
+ const {ev}=loadCity();
+ const result=ev(`(()=>{const s=new Uint8Array(FIG_W*FIG_H);const roles=[FR.SKIN,FR.SKIN_D,FR.HAIR,FR.SKIN,FR.SKIN_D,FR.HAIR,FR.HAIR,0,0];for(let y=0;y<3;y++)for(let x=0;x<3;x++)s[(FIG_H-1-y)*FIG_W+x]=roles[y*3+x];return figSample(s,1,1,2,2);})()`);
+ assert.equal(result,ev('FR.SKIN'));
+});
