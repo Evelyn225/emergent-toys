@@ -2,12 +2,16 @@
 const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
 const MAP_COLORS={contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
 const MAP_NAV={path:null,next:0,lastT:-99,routeFrom:null,nearby:false};
-let mapPlaceCache=null;
+let mapPlaceCache=null,mapRenderPosition=null;
 function mapPlayerLocation() {
+  if(mapRenderPosition)return {...mapRenderPosition};
   if(mode==='room') {
-    if(room?.ret?.length>=2)return {x:room.ret[0],y:room.ret[1]};
+    const ret=room?.ret||room?.lobby?.ret||room?.below?.ret;
+    if(ret?.length>=2)return {x:ret[0],y:ret[1]};
+    if(['station','train'].includes(room?.kind)&&stations[room.st]){const s=stations[room.st];return {x:s.x,y:s.y};}
     if(streetSpot)return {x:streetSpot.x,y:streetSpot.y};
   }
+  if((mode==='drive'||mode==='taxi')&&me)return {x:mode==='taxi'?(me.ex??me.x):me.x,y:mode==='taxi'?(me.ey??me.y):me.y};
   return {x:px,y:py};
 }
 const mapMetres = distance => distance>=1000?`${(distance/1000).toFixed(1)} km`:`${Math.round(distance/10)*10} m`;
@@ -199,12 +203,12 @@ function mapRouteDistance() {
 // are local, so an indoor destination is labelled outside rather than given a false bearing.
 function navigationTargets() {
   const targets=[],p=mapPlayerLocation();
-  const add=(t,name,color,radius=0,stop='')=>{
+  const add=(t,name,color,radius=0,stop='',routed=false)=>{
     if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
-    targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
+    targets.push({...t,name,color,radius,stop,routed,distance:mapDistance(p,t)*10});
   };
   const emergency=emergencyTarget();if(emergency)add(emergency,emergency.what,'#ff9977',emergency.radius,emergency.stop);
-  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
+  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df',0,'',true);
   if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
   if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
   add(taskTarget(),'CURRENT FAVOUR','#4ff');
@@ -221,7 +225,7 @@ function drawNavigationCompass(top) {
   const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
   const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
   const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
-  const distance=first===targets[0]&&mapWaypoint?mapRouteDistance():first.distance;
+  const distance=first.routed?mapRouteDistance():first.distance;
   const prefix=indoor?'OUTSIDE · ':first.radius&&first.distance<first.radius*10?first.stop+' · ':'';
   const suffix=` · ${mapMetres(distance)}`;let name=first.name;
   g.save();g.font=FS+'px monospace';g.textBaseline='top';

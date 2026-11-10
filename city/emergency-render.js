@@ -1,3 +1,14 @@
+function drawFirePlume(vx,vy,z,width,height,seed,strength=1){
+  if(strength<=0)return;
+  const scale=Math.sqrt(strength),w=width*(.35+.65*scale),h=height*(.2+.8*scale);
+  drawShape(vx,vy,z,w,h,(i,u,v)=>{
+    const heat=cityFlameHeat(u/w,v/h,seed,T);
+    if(heat<=.025)return false;
+    const hot=heat>.73&&v/h<.26,core=heat>.43;
+    BG[i]=C(hot?YEL:core?ORANGE:RED,hot?14:core?11+heat*3:7+heat*7);
+    set(i,' ',0);return true;
+  });
+}
 const emergencyStreams=new Map();
 let emergencyWaterT=0,emergencySmokeT=0;
 function rememberWater(key,from,to){emergencyStreams.set(key,{from,to,until:netNow()+.25});}
@@ -43,12 +54,7 @@ function emergencySprites(){
   for(const f of cityFires){
     if(near(f.x,f.y,px,py)>vis+1)continue;
     if(f.kind==='building')for(const [k,n]of f.nodes.entries())if(n.heat>0){
-      const [vx,vy]=R(n.x,n.y),strength=Math.max(.15,n.heat/n.max);
-      const shade=(i,t,L)=>{const h=hash(i,Math.floor(T*17),f.id.length+k);if(h<.18)return false;BG[i]=C(h>.72?YEL:h>.3?ORANGE:RED,8+h*7);set(i,' ',0);return true;};
-      for(let j=0;j<3;j++){
-        const sway=Math.sin(T*(6+j)+k*2+j)*.015,height=(.065+.075*Math.abs(Math.sin(T*(7+j)+k)))*strength;
-        drawRod(vx+(j-1)*.025,vy,n.z-.045,vx+(j-1)*.025+sway,vy,n.z+height,.014*strength,shade);
-      }
+      drawFirePlume(...R(n.x,n.y),n.z-.05,.11,.23,hash(Math.floor(n.x*100),Math.floor(n.y*100),k)*50,n.heat/n.max);
     }
     const c=cars.find(c=>c.ev&&!c.mine&&c.fireIncident===f&&!c.home),remote=f.remoteCrew;
     const n=c?fireCrewTarget(c):remote?.state==='scene'&&f.nodes.find(n=>n.heat>0);

@@ -6176,6 +6176,25 @@ function stepCityFires(dt){
     if(f.out&&T-f.outAt>30){if(f.crewCar){const i=cars.indexOf(f.crewCar);if(i>=0)cars.splice(i,1);}if(f.car?.incidentVehicle||f.car?.incidentGhost){const i=cars.indexOf(f.car);if(i>=0)cars.splice(i,1);}cityFires.splice(k,1);}
   }
 }
+// A continuous flame silhouette, sampled by the city's normal depth-tested
+// sprite renderer. Broad overlapping roots flare out, then curl into tapered
+// tips; coherent motion avoids the old cylinders and per-pixel static.
+function cityFlameHeat(u,v,seed,time){
+  if(v<0||v>1||Math.abs(u)>1)return 0;
+  let heat=0;
+  for(let j=0;j<5;j++){
+    const phase=seed*.73+j*2.37,speed=2.3+j*.31;
+    const height=.67+.16*Math.sin(phase+time*speed)+.13*Math.cos(phase*.8-time*1.7);
+    if(v>height)continue;
+    const t=v/height,root=(j-2)*.27;
+    const curl=Math.sin(phase+time*2.2-t*4)*.16*t*t;
+    const center=root*(.75+.55*Math.sin(t*Math.PI))+curl;
+    const width=(.27+.12*Math.sin(t*Math.PI))*(1-t)**.66;
+    const edge=Math.abs(u-center)/Math.max(.001,width);
+    if(edge<1)heat=Math.max(heat,(1-edge*edge)*(1-t*.6));
+  }
+  return heat;
+}
 // ===== aircraft: everything that flies from the airport (world.js has the airport, aircraft-render.js draws them,
 // flight.js flies the one you're in). Speeds in cells a second (1 = 36 km/h), heights in cells (1 = 10m).
 // The airliners belong to the airport: they sit at the gates, and every few minutes one pushes back, taxis out, rolls
@@ -18597,17 +18616,15 @@ function drawAmbulance(m, vx, vy, hx, hy) {
 }
 // a car on fire (damage.js): flames out of the bonnet, licking up the windscreen, higher as it goes on
 function drawCarFire(m, vx, vy, hx, hy) {
-  if (!burning(m)) return;
-  const [hl, hw, top] = VEHICLES[m.kind], fx_ = vx + hx * hl * 0.55, fy_ = vy + hy * hl * 0.55, tall = 0.07 + 0.12 * Math.min(1, m.fireT / BURN_T);
-  const flame = (i, t, L) => { // ragged: tongues of yellow and orange with the street showing between them
-    const hot = hash(i, Math.floor(T * 14), m.id);
-    if (hot < 0.3) return false;
-    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i,' ',0),true;
-  };
-  for (let k = 0; k < 4; k++) { // four tongues across the bonnet, each leaping and dropping on its own
-    const s_ = (k - 1.5) * hw * 0.5, fl = 0.45 + 0.55 * Math.abs(Math.sin(T * (9 + k * 2.3) + k * 1.7)), sway = 0.025 * Math.sin(T * 6 + k * 2);
-    drawRod(fx_ - hy * s_, fy_ + hx * s_, top, fx_ - hy * s_ + hx * sway, fy_ + hx * s_ + hy * sway, top + tall * fl, 0.016, flame);
+  if(!burning(m))return;
+  const f=m.fireIncident,[hl,hw,top]=VEHICLES[m.kind];
+  if(fireActive(f)){
+    for(const [k,n]of f.nodes.entries())if(n.heat>0)
+      drawFirePlume(vx+hx*hl*.55-hy*hw*(k-.5),vy+hy*hl*.55+hx*hw*(k-.5),top,.085,.2,m.id*.37+k*3,n.heat/n.max);
+    return;
   }
+  const tall=.15+.08*Math.min(1,m.fireT/BURN_T);
+  for(const side of [-1,1])drawFirePlume(vx+hx*hl*.55-hy*hw*side*.45,vy+hy*hl*.55+hx*hw*side*.45,top,.08,tall,m.id*.37+side*3);
 }
 let vehicleDrawFrame=null;
 function vehicleDrawBox(b,shade) {
@@ -31397,6 +31414,17 @@ function stepSpray(dt) { // (stepSleep hands it over: ten minutes in a fade)
   if (sleep.t > 2 && !sleep.said) { sleep.said = true; say(`Ten minutes later the shutter rolls up: new paint, the dents knocked out.${sleep.lost ? ' Nobody\'s looking for this car now.' : ''}`, 5); }
   if (sleep.t > 3.2) { sleep = null; fade = 0; }
 }
+function drawFirePlume(vx,vy,z,width,height,seed,strength=1){
+  if(strength<=0)return;
+  const scale=Math.sqrt(strength),w=width*(.35+.65*scale),h=height*(.2+.8*scale);
+  drawShape(vx,vy,z,w,h,(i,u,v)=>{
+    const heat=cityFlameHeat(u/w,v/h,seed,T);
+    if(heat<=.025)return false;
+    const hot=heat>.73&&v/h<.26,core=heat>.43;
+    BG[i]=C(hot?YEL:core?ORANGE:RED,hot?14:core?11+heat*3:7+heat*7);
+    set(i,' ',0);return true;
+  });
+}
 const emergencyStreams=new Map();
 let emergencyWaterT=0,emergencySmokeT=0;
 function rememberWater(key,from,to){emergencyStreams.set(key,{from,to,until:netNow()+.25});}
@@ -31442,12 +31470,7 @@ function emergencySprites(){
   for(const f of cityFires){
     if(near(f.x,f.y,px,py)>vis+1)continue;
     if(f.kind==='building')for(const [k,n]of f.nodes.entries())if(n.heat>0){
-      const [vx,vy]=R(n.x,n.y),strength=Math.max(.15,n.heat/n.max);
-      const shade=(i,t,L)=>{const h=hash(i,Math.floor(T*17),f.id.length+k);if(h<.18)return false;BG[i]=C(h>.72?YEL:h>.3?ORANGE:RED,8+h*7);set(i,' ',0);return true;};
-      for(let j=0;j<3;j++){
-        const sway=Math.sin(T*(6+j)+k*2+j)*.015,height=(.065+.075*Math.abs(Math.sin(T*(7+j)+k)))*strength;
-        drawRod(vx+(j-1)*.025,vy,n.z-.045,vx+(j-1)*.025+sway,vy,n.z+height,.014*strength,shade);
-      }
+      drawFirePlume(...R(n.x,n.y),n.z-.05,.11,.23,hash(Math.floor(n.x*100),Math.floor(n.y*100),k)*50,n.heat/n.max);
     }
     const c=cars.find(c=>c.ev&&!c.mine&&c.fireIncident===f&&!c.home),remote=f.remoteCrew;
     const n=c?fireCrewTarget(c):remote?.state==='scene'&&f.nodes.find(n=>n.heat>0);
@@ -35098,12 +35121,16 @@ function drawMatchDebug(m) {
 const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
 const MAP_COLORS={contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
 const MAP_NAV={path:null,next:0,lastT:-99,routeFrom:null,nearby:false};
-let mapPlaceCache=null;
+let mapPlaceCache=null,mapRenderPosition=null;
 function mapPlayerLocation() {
+  if(mapRenderPosition)return {...mapRenderPosition};
   if(mode==='room') {
-    if(room?.ret?.length>=2)return {x:room.ret[0],y:room.ret[1]};
+    const ret=room?.ret||room?.lobby?.ret||room?.below?.ret;
+    if(ret?.length>=2)return {x:ret[0],y:ret[1]};
+    if(['station','train'].includes(room?.kind)&&stations[room.st]){const s=stations[room.st];return {x:s.x,y:s.y};}
     if(streetSpot)return {x:streetSpot.x,y:streetSpot.y};
   }
+  if((mode==='drive'||mode==='taxi')&&me)return {x:mode==='taxi'?(me.ex??me.x):me.x,y:mode==='taxi'?(me.ey??me.y):me.y};
   return {x:px,y:py};
 }
 const mapMetres = distance => distance>=1000?`${(distance/1000).toFixed(1)} km`:`${Math.round(distance/10)*10} m`;
@@ -35295,12 +35322,12 @@ function mapRouteDistance() {
 // are local, so an indoor destination is labelled outside rather than given a false bearing.
 function navigationTargets() {
   const targets=[],p=mapPlayerLocation();
-  const add=(t,name,color,radius=0,stop='')=>{
+  const add=(t,name,color,radius=0,stop='',routed=false)=>{
     if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
-    targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
+    targets.push({...t,name,color,radius,stop,routed,distance:mapDistance(p,t)*10});
   };
   const emergency=emergencyTarget();if(emergency)add(emergency,emergency.what,'#ff9977',emergency.radius,emergency.stop);
-  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
+  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df',0,'',true);
   if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
   if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
   add(taskTarget(),'CURRENT FAVOUR','#4ff');
@@ -35317,7 +35344,7 @@ function drawNavigationCompass(top) {
   const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
   const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
   const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
-  const distance=first===targets[0]&&mapWaypoint?mapRouteDistance():first.distance;
+  const distance=first.routed?mapRouteDistance():first.distance;
   const prefix=indoor?'OUTSIDE · ':first.radius&&first.distance<first.radius*10?first.stop+' · ':'';
   const suffix=` · ${mapMetres(distance)}`;let name=first.name;
   g.save();g.font=FS+'px monospace';g.textBaseline='top';
@@ -59742,6 +59769,12 @@ function loop(t) {
 // the view from wherever the camera is this frame (behind the car, the plane, the board; the TV at the football; or your
 // own eyes, swaying if you've had a drink), drawn with render(). Also run with dt 0 for a screenshot (screenshots.js)
 function renderView(dt) {
+  // GPS, map distances and arrival prompts use the player, even while the world
+  // is temporarily rendered from a chase, aircraft, boat or TV camera.
+  const previous=mapRenderPosition;mapRenderPosition=mapPlayerLocation();
+  try{return renderCameraView(dt);}finally{mapRenderPosition=previous;}
+}
+function renderCameraView(dt) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
