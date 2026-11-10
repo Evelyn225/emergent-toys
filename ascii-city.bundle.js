@@ -5644,7 +5644,11 @@ function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null
     if (d > 3 && d < 10) scene = [p.x, p.y];
   }
   if (!scene) return null;
-  if(kind==='fire'&&typeof createCityFire==='function'){fireIncident=fireIncident||createCityFire(scene);if(!fireIncident)return null;scene=[fireIncident.x,fireIncident.y];}
+  if(kind==='fire'&&typeof createCityFire==='function'){
+    fireIncident=fireIncident||createCityFire(scene);if(!fireIncident)return null;
+    // Doorway coordinates describe the fire, not a drivable street segment.
+    const lane=laneNear(fireIncident.x,fireIncident.y);scene=[lane.x,lane.y];
+  }
   const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T, fireIncident };
   if (base && bd < BASE_R) { // out of the station, westbound from the kerb
     base.out = true;

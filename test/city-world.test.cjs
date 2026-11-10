@@ -238,14 +238,16 @@ test('a call-out: the nearest station sends its vehicle with lights and siren, i
   const { ev: e2 } = loadCity(2);
   // (up on a roof, so you're not standing in the road in its way)
   e2("var b_ = SERVICES.find(s => s.kind === 'fire'); px = b_.x - 3; py = b_.y + 0.3; mode = 'roof'; evTimer = 1e9; spawnEmergency('fire')");
+  assert.ok(e2("(c=>ROAD[idx(Math.floor(c.dest[0]),Math.floor(c.dest[1]))]>0)(cars.find(c=>c.ev&&c.base===b_))"),'the incident is reached from an actual street lane');
   const seen = new Set();
-  for (let k = 0; k < 6000 && seen.size < 5; k++) {
-    seen.add(e2(`stepTraffic(0.05, T += 0.05); (c => !c ? 'none' : c.state + (code(c) ? '+code' : ''))(cars.find(c => c.ev && c.base === b_))`));
+  // Real fires may burn for 300 seconds before natural burnout; include time to return.
+  for (let k = 0; k < 9000 && seen.size < 5; k++) {
+    seen.add(e2(`stepTraffic(0.05, T += 0.05); stepCityFires(0.05); (c => !c ? 'none' : c.state + (code(c) ? '+code' : ''))(cars.find(c => c.ev && c.base === b_))`));
     if (seen.has('out+code')) seen.add(e2('b_.out') ? 'base empty' : 'base full');
   }
   for (const s of ['out+code', 'scene', 'back', 'base empty']) assert.ok(seen.has(s), `saw ${s} (${[...seen]})`);
   assert.ok(!seen.has('back+code'), 'no siren on the way home');
-  for (let k = 0; k < 6000 && e2('b_.out'); k++) e2('stepTraffic(0.05, T += 0.05)');
+  for (let k = 0; k < 6000 && e2('b_.out'); k++) e2('stepTraffic(0.05, T += 0.05); stepCityFires(0.05)');
   assert.strictEqual(e2('b_.out || cars.some(c => c.base === b_)'), false, 'parked back at the station');
 });
 
