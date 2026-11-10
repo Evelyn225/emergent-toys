@@ -314,7 +314,7 @@ ROOM_DEFS.stadium = {
 // into the ground, and a match on (a new one if there isn't one: the home side the Yards)
 // the sections a ticket buys: where you're shown to, and what it costs
 const STADIUM_SECTIONS = {
-  main: { name: 'Main stand, centre', price: 40, stand: 'north', note: 'Covered, on the halfway line: the best view in the house' },
+  main: { name: 'Main stand, center', price: 40, stand: 'north', note: 'Covered, on the halfway line: the best view in the house' },
   south: { name: 'South stand', price: 25, stand: 'south', note: 'Opposite the main stand, under the scoreboard' },
   terrace: { name: 'West terrace (standing)', price: 15, stand: 'west', note: 'Behind the goal with the home end. Loud' },
 };

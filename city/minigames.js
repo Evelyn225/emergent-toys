@@ -315,7 +315,7 @@ const STOCK_THEMES = {
   GROCERY: [['FRUIT', 'o', RED], ['VEG', '%', GREEN], ['BREAD', '#', WARM], ['MILK', 'i', WHITE]],
   HERBS: [['ROOTS', '%', WARM], ['TEAS', '#', GREEN], ['JARS', 'U', ORANGE], ['DRIED', ':', YEL]],
   JADE: [['BANGLES', 'o', GREEN], ['FIGURES', '&', CYAN], ['BEADS', ':', RED], ['CHARMS', '*', YEL]],
-  PAWN: [['WATCHES', 'o', YEL], ['GUITARS', '%', BRICK], ['CAMERAS', '#', GRAY], ['JEWELLERY', '*', CYAN]],
+  PAWN: [['WATCHES', 'o', YEL], ['GUITARS', '%', BRICK], ['CAMERAS', '#', GRAY], ['JEWELRY', '*', CYAN]],
 };
 STOCK_THEMES.MARKET = STOCK_THEMES.FRUIT = STOCK_THEMES.GROCERY;
 const stockKinds = word => STOCK_THEMES[word] || STOCK_THEMES.DEFAULT;
@@ -859,7 +859,7 @@ GAMES.darts = (rnd = Math.random) => {
     if (last) text(Math.max(1, (W - Math.ceil(last.text.length / 2)) >> 1), 17, last.text, C(last.col, 15));
     text(24, 18, `won ${g.score} tickets`, C(YEL, 14));
   };
-  g.status = () => `TICKETS ${g.score}   ARROWS aim (it wanders: pick your moment)   SPACE throw   ${DART_PAY} a balloon, a star +${STAR_PAY}, three of a colour +${SWEEP_PAY}`;
+  g.status = () => `TICKETS ${g.score}   ARROWS aim (it wanders: pick your moment)   SPACE throw   ${DART_PAY} a balloon, a star +${STAR_PAY}, three of a color +${SWEEP_PAY}`;
   g.reward = () => g.score;
   return g;
 };

@@ -45,7 +45,7 @@ function buildStreetScenes() {
     if(blockKind(bx,by)!=='plaza')continue;
     const x=bx*8+3.5,y=by*8+3.6;
     const clear=[[-.7,-.5],[.7,-.5],[-.7,.5],[.7,.5],[0,0]].every(([u,v])=>!map[idx(x+u,y+v)]&&!isWater(x+u,y+v)&&terrainHeight(x+u,y+v)<.005&&!solidAt(x+u,y+v,.05));
-    if(clear){STREET_SCENES.chalk={x,y,half:.66,depth:.75,name:'The pavement artist'};break;}
+    if(clear){STREET_SCENES.chalk={x,y,half:.66,depth:.75,name:'The sidewalk artist'};break;}
   }
   buildRailwayModels();buildMovingModels();
 }
@@ -344,7 +344,7 @@ function streetSceneNear() {
 function streetScenePrompt() {
   const which=streetSceneNear();
   if(which==='railway')return 'E: press the window railway button';
-  if(which==='moving')return movingPhase()==='loading'?'E: talk to the movers':streetSceneState.lampWeek===movingWeek()?'Moving day is over. The pavement is clear.':'E: take the free lamp';
+  if(which==='moving')return movingPhase()==='loading'?'E: talk to the movers':streetSceneState.lampWeek===movingWeek()?'Moving day is over. The sidewalk is clear.':'E: take the free lamp';
   if(which==='chalk')return 'E: look at the chalk drawing';
   return '';
 }
@@ -359,7 +359,7 @@ function streetSceneUse() {
     else if(streetSceneState.lampWeek!==movingWeek()) {
       if(inv.length>=INV_SIZE){say('Your bag is full. The lamp can wait.');return true;}
       carryItem({id:'movinglamp',uses:0},false);streetSceneState.lampWeek=movingWeek();saveGame();say('FREE TO A GOOD HOME. You take the little amber table lamp. It will fit on your display shelf.',5);
-    } else say('The van has gone. Just a rectangle of clean pavement where the boxes stood.',4);
+    } else say('The van has gone. Just a rectangle of clean sidewalk where the boxes stood.',4);
   } else say(snowCover>.15?'Snow covers the artist\'s patch of paving. The chalk box is packed away.':chalkWash()>.65?'Rain has almost erased the whale and its impossible city. A few blue chalk lines linger between the paving stones.':tod<9?'Clean paving. The artist usually starts around nine.':chalkProgress()<.5?'A chalk whale is taking shape. The artist taps a blue stick against the paving. "Come back later. It is taking the whole city for a ride. Stand on the white footprints for the best view."':'THE CITY SAILS. Stand on the white footprints: the stretched chalk lines resolve into a turquoise whale carrying a tiny golden skyline. From the side, the city tumbles back into streaks of chalk.',6);
   return true;
 }

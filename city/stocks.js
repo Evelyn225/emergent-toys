@@ -8,7 +8,7 @@ const STOCKS = [
   { sym: 'ELRL', name: 'Elevated Rail', price: 18, vol: 0.008, good: ['gets city funding for repairs', 'ridership at all-time high'], bad: ['el shut for repairs again', 'mayor blames the el for traffic'] },
   { sym: 'PIER', name: 'Sunset Pier Fun', price: 12, vol: 0.018, good: ['new rollercoaster announced', 'heatwave packs the pier'], bad: ['ferris wheel stuck for hours', 'storms close the pier'] },
   { sym: 'JADE', name: 'Chinatown Jade', price: 55, vol: 0.01, good: ['tourists snap up lucky charms', 'rare jade found'], bad: ['fake jade scandal', 'tourist season slow'] },
-  { sym: 'LUCK', name: 'Lucky Star Casino', price: 73, vol: 0.016, good: ['high roller loses big', 'licence renewed'], bad: ['someone hits the jackpot twice', 'gambling inquiry opened'] },
+  { sym: 'LUCK', name: 'Lucky Star Casino', price: 73, vol: 0.016, good: ['high roller loses big', 'license renewed'], bad: ['someone hits the jackpot twice', 'gambling inquiry opened'] },
   { sym: 'BYTE', name: 'ByteWave Tech', price: 110, vol: 0.024, good: ['launches a new phone', 'buys a rival'], bad: ['data leak!', 'CEO quits suddenly'] },
 ];
 for (const s of STOCKS) { // a past to chart from the start: a random walk that ends at today's price

@@ -103,7 +103,7 @@ function jailWithCabbie() {
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
   saveGame();
-  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.'+(deliveryFailed?' Your courier delivery failed.':''), 7);
+  say('The cruiser boxes the cab in. The officer runs the driver\'s license, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.'+(deliveryFailed?' Your courier delivery failed.':''), 7);
 }
 const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
   'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];

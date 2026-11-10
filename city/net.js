@@ -294,8 +294,10 @@ function netSendTick(now) {
     s.pose = 'tumble' + clamp(age < .35 ? Math.floor(age / .35 * 3) : SK.bail > .5 ? 3 : 4 + Math.floor((.5 - SK.bail) / .5 * 4), 0, 7);
     s.sk = B ? { yaw: B.yaw, nose: 0, roll: B.roll, st: 1, bx: B.board[0], by: B.board[1], bz: B.board[2] } : { yaw: s.a, nose: 0, roll: 0, st: 1 };
   }
-  if (NET_FEATURES.police && wanted.stars > 0) s.cops = netMyCops();
+  if (NET_FEATURES.police) s.cops = netMyCops();
   if (skatingNow() && !car && !SK.bailAt) s.sk = { yaw: SKB.yaw, nose: SKB.pitch, roll: SKB.roll, st: SK.stance };
+  if(fx.smoke>0)s.smoking=fx.smokeKind==='joint'?'joint':fx.pipe?'pipe':'cigarette';
+  if(it&&ITEMS[it.id])s.heldUses=Math.max(0,it.uses||0);
   if (car) s.veh = { shift: !!(job && car.body === TAXI && mode === 'drive'), id: mode === 'drive' && NET_FEATURES.cars ? netMyCarId(car) : '', kind: car.kind, body: car.body, v: car.v, brake: !!car.brake, dmg: car.dmg || 0, patrol: !!car.patrol, ev: !!car.ev, siren:!!car.siren };
   net.lastSent = s;
   net.tx.send('tick', s);
@@ -331,7 +333,7 @@ function netSyncCars(now) {
     const s = netSample(p, now);
     if (s && s.veh && s.veh.id && s.rk === 'out' && VEHICLES[s.veh.kind]) want.set(s.veh.id, { ...s.veh, x: s.x, y: s.y, a: s.a, owner: p.id, parked: false });
     if (s && s.cops && NET_FEATURES.police) for (const c of s.cops) if (c.k === 'car' && VEHICLES[c.kind]) // (the cruisers after them: lights and siren, but not after you)
-      want.set('cop:' + p.id + ':' + c.id, { kind: c.kind, body: c.body, x: c.x, y: c.y, a: c.a, v: c.v, owner: p.id, parked: false, patrol: true, cop: true });
+      want.set('cop:' + p.id + ':' + c.id, { kind: c.kind, body: c.body, x: c.x, y: c.y, a: c.a, v: c.v, returning:!!c.returning, owner: p.id, parked: false, patrol: true, cop: true });
   }
   for (const c of [...net.cars.values()]) if (!want.has(c.netId)) netDropCar(c);
   for (const [id, w] of want) {
@@ -339,7 +341,7 @@ function netSyncCars(now) {
     if (!c) { c = { id: ++carId, remote: true, netId: id, path: [], last: [0, 0], off: 0 }; net.cars.set(id, c); cars.push(c); }
     Object.assign(c, { owner: w.owner, kind: w.kind, body: w.body, x: w.x, y: w.y, ex: w.x, ey: w.y, hx: Math.cos(w.a), hy: Math.sin(w.a), v: w.v || 0,
       brake: !!w.brake, dmg: w.dmg || 0, wrecked: !!w.wrecked, locked: !!w.locked, parked: !!w.parked, patrol: !!w.patrol, ev: !!w.ev, cop: !!w.cop,
-      state: w.cop||w.ev&&w.siren ? 'out' : undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
+      state:w.cop?(w.returning?'back':'out'):w.ev&&w.siren?'out':undefined }); // (out on a call: lights and siren, traffic.js's code(); never pursuit, which would make it one of yours)
   }
   for (const [id, t] of net.taken) if (now > t) net.taken.delete(id);
 }
@@ -1079,7 +1081,7 @@ function drawPeers() {
     }
     if (!p.hello || p.mismatch || p.stale) { p.drawn = false; continue; }
     const s = p.view = netSample(p, now);
-    if (s && s.cops && s.rk === netRoomKey()) netDrawCops(p, s, inRoom);
+    if (s && s.cops) netDrawCops(p, s, inRoom);
     if (!netVisible(p, s)) { p.drawn = false; continue; }
     const vx = inRoom ? s.x - px : rel(s.x - px), vy = inRoom ? s.y - py : rel(s.y - py), fx = Math.cos(s.a), fy = Math.sin(s.a);
     if (p.lastX !== undefined && p.lastRk === s.rk) p.ph += Math.hypot(rel(s.x - p.lastX), rel(s.y - p.lastY)) * (inRoom ? 3 : 30);
@@ -1103,10 +1105,12 @@ function drawPeers() {
       const sk = s.sk, ang = sk.yaw + sk.st * Math.PI / 2, look = netFigLook(p), pose = /^(ride|push|crouch|skateair|mongo)/.test(s.pose) ? s.pose : 'ride1';
       drawSkateBoard(vx, vy, s.z, sk.yaw, sk.nose, sk.roll);
       drawFigure(vx, vy, s.z + SB.up + SB.ht, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, { light: 5, hold: p }); // (the plain figure: skate.js's per-pixel one is made to be seen from behind at a distance, and comes apart up close)
+      netDrawAccessories(p,s,vx,vy,pose,false);
       continue;
     }
     if (inRoom) drawFigure(vx, vy, s.z, 1.8, fx, fy, netFigLook(p), gait, { light: 9, hold: p });
     else drawFigure(vx, vy, s.z, 0.175, fx, fy, netFigLook(p), gait, { light: 6, hold: p });
+    netDrawAccessories(p,s,vx,vy,gait,inRoom);
     if (s.spray && !inRoom) { // the can out in front of them, and the mist off it
       const col = SPRAY_COLOURS[s.spray.col] ?? MAG, mx = vx + fx * 0.06, my = vy + fy * 0.06;
       drawArt(mx, my, s.z + 0.12, 0.03, 0.03, [fract(T * 7) < .5 ? '.:.' : ':.:'], () => C(col, 13));
@@ -1114,26 +1118,48 @@ function drawPeers() {
   }
 }
 
+// Props use the same posed hand and mouth anchors as the body, in both unit systems.
+function netDrawAccessories(p,s,vx,vy,pose,inRoom){
+  if(!s.held&&!s.smoking||/^(dead|down|tumble)/.test(pose))return;
+  const look=netFigLook(p),body=figCache.get(look.shape+'|'+pose)||figBody(look,pose),h=inRoom?1.8:s.sk?SB.rider:.175,unit=h/FIG_TALL;
+  const fx=Math.cos(s.a),fy=Math.sin(s.a),z=s.z+(s.sk?SB.up+SB.ht:0);
+  const at=v=>[vx+(-fy*v[0]+fx*v[1])*unit,vy+(fx*v[0]+fy*v[1])*unit,z+v[2]*unit];
+  if(s.held&&ITEMS[s.held]&&body.hands?.[0]&&!s.fish&&!(s.sk&&s.held==='skateboard')){
+    const d={id:s.held,uses:s.heldUses??ITEMS[s.held].uses??0},picture=droppedPicture(d),m=itemSize(d)*(inRoom?1:.1)/Math.max(picture.w,picture.h),hand=at(body.hands[0]);
+    drawArt(hand[0]+fx*unit,hand[1]+fy*unit,hand[2]-picture.h*m*.4,picture.w*m,picture.h*m,picture.art,(ch,r,L,k)=>{const c=picture.col(ch,r,k);return C(c>>4,(c&15)*clamp(L/11,.4,1));},true);
+  }
+  if(s.smoking&&body.mouth){
+    const mouth=at(body.mouth),length=(s.smoking==='joint'?2.3:3)*unit,end=[mouth[0]+fx*length,mouth[1]+fy*length,mouth[2]];
+    const shade=(col,lvl)=>(i,t,L)=>{BG[i]=C(col,lvl*clamp(L/11,.4,1));set(i,' ',0);return true;};
+    drawRod(...mouth,...end,.28*unit,shade(s.smoking==='pipe'?GRAY:WHITE,s.smoking==='pipe'?3:12));
+    if(s.smoking==='pipe')drawBox(boxAt(end[0],end[1],fx,fy,.7*unit,.7*unit,end[2]-.4*unit,end[2]+.8*unit),(i,t,L)=>{BG[i]=C(HIT.face===5?GRAY:WARM,HIT.face===5?3:6+Math.max(0,HIT.u/unit)*2);set(i,' ',0);return true;},rayCopperDrum);
+    else drawRod(...end,end[0]+fx*.45*unit,end[1]+fy*.45*unit,end[2],.3*unit,shade(ORANGE,13));
+  }
+}
+
 // ---- police: yours, sent while you're wanted (the cruisers go into everyone's traffic as stand-ins, netSyncCars), and
 // theirs drawn on foot. Your own patrol cars aren't drawn right where someone else's chase is, so they don't double up.
+let netCopN=0;
 function netMyCops() {
   const out = [], add = o => out.length < NET_COPS_MAX && out.push(o);
-  if (mode === 'room') roomCops.forEach((c, k) => { if (!c.dead) add({ k: 'room', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
-  for (const c of cars) if (c.pursuit && c.patrol && !playerCar(c) && !c.wrecked && near(c.x, c.y, px, py) < 40) add({ k: 'car', id: c.id, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), v: c.v });
-  footCops.forEach((c, k) => { if (c.chase && !c.dead && !c.down) add({ k: 'foot', id: k, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
-  roofCops.forEach((c, k) => { if (!c.dead) add({ k: 'roof', id: k, x: c.x, y: c.y, z: policeRoofHeight(c.x, c.y), a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  const active=c=>!c.dead&&!c.down&&(c.chase||c.pursuit||c.returning||c.returnCar||c.netAfterChase);
+  if (mode === 'room') roomCops.forEach((c, k) => { if (!c.dead) add({ rk:c.netRk||netRoomKey(), returning:!!c.returning, k: 'room', id:c.netCopId??=++netCopN, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  for (const c of cars) if ((c.pursuit || c.returning) && c.patrol && !playerCar(c) && !c.wrecked && (c.returning||near(c.x, c.y, px, py) < 40)) add({ rk:'out',returning:!!c.returning, k: 'car', id: c.id, kind: c.kind, body: c.body, x: c.x, y: c.y, a: Math.atan2(c.hy, c.hx), v: c.v });
+  [...footCops].sort((a,b)=>(a.chase?0:a.returnCar?1:2)-(b.chase?0:b.returnCar?1:2)).forEach((c, k) => { if (active(c)&&(c.returnCar||c.netAfterChase&&netPoliceObserved(c)||near(c.x,c.y,...crimePos())<40)) add({ rk:'out',returning:!c.chase, k: 'foot', id:c.netCopId??=++netCopN, x: c.x, y: c.y, a: Math.atan2(c._fy || 0, c._fx || 1) }); });
+  roofCops.forEach((c, k) => { if (!c.dead) add({ rk:'out',returning:!!c.returning, k: 'roof', id:c.netCopId??=++netCopN, x: c.x, y: c.y, z: policeRoofHeight(c.x, c.y), a: Math.atan2(c._fy || 0, c._fx || 1) }); });
   return out;
 }
 function netDrawCops(p, s, inRoom) {
-  const objs = p.copObjs ||= {};
+  const objs = p.copObjs ||= {},live=new Set(s.cops.map(c=>c.k+c.id));
+  for(const id of Object.keys(objs))if(!live.has(id))delete objs[id];
   for (const c of s.cops) {
-    if (c.k === 'car' || (c.k === 'room') !== inRoom) continue;
+    if (c.k === 'car' || (c.rk || (c.k==='room'?s.rk:'out')) !== netRoomKey()) continue;
     const o = objs[c.k + c.id] ||= { seed: (hash(c.id, c.k.length, 6113) * 1e9) | 0 };
     const vx = inRoom ? c.x - px : rel(c.x - px), vy = inRoom ? c.y - py : rel(c.y - py);
     if (!inRoom && Math.hypot(vx, vy) > vis) continue;
     const z = inRoom ? 0 : c.k === 'roof' ? c.z : walkGround(c.x, c.y);
-    drawFigure(vx, vy, z, inRoom ? 1.8 : 0.18, Math.cos(c.a), Math.sin(c.a), copLook(o), 'run' + (Math.floor(T * 10 + c.id) & 7), { light: inRoom ? 9 : 7 });
-    if (!inRoom && fract(T * 3) < 0.5) drawArt(vx, vy, z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+    drawFigure(vx, vy, z, inRoom ? 1.8 : 0.18, Math.cos(c.a), Math.sin(c.a), copLook(o), (c.returning?'walk':'run') + (Math.floor(T * (c.returning?5:10) + c.id) & 7), { light: inRoom ? 9 : 7 });
+    if (!inRoom && !c.returning && fract(T * 3) < 0.5) drawArt(vx, vy, z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
 const netCopCarNear = m => { if (!net.on || !net.cars) return false; for (const c of net.cars.values()) if (c.cop && Math.hypot(rel(c.x - m.x), rel(c.y - m.y)) < 1.5) return true; return false; };
@@ -1179,7 +1205,7 @@ function netCarHitsPlayer(c, fx, fy) {
     net.runT.set(p.id, now);
     const sg = Math.sign(c.v), yaw = c.travelA ?? Math.atan2(c.hy, c.hx);
     net.tx.send('runover', { sp: Math.abs(c.v), dx: Math.cos(yaw) * sg, dy: Math.sin(yaw) * sg }, p.id);
-    say(pick([`*THUMP* You knock ${p.name} flying.`, `*THUMP* ${p.name} goes over the bonnet.`]), 2.5);
+    say(pick([`*THUMP* You knock ${p.name} flying.`, `*THUMP* ${p.name} goes over the hood.`]), 2.5);
     crime('hit', c.x, c.y);
     return true;
   }

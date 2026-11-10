@@ -45,7 +45,7 @@ function buildSkateSpots() {
     skateSpotBox(x, y, .3, .1, .02, 'manualpad', 'concrete');
     SKATE_PATCHES.push({ x, y, hl: .55, hw: .5 });
     SKATE_SPOTS.push({ id: 'skate-plaza', name: 'Concrete plaza · ledge line', x:x-.45, y, line:{x,y},
-      description: 'Two parallel ledges and a six-metre manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
+      description: 'Two parallel ledges and a six-meter manual pad on a small concrete plaza. Link a flip, a manual and a grind without losing the combo.' });
   }
   buildExtraSkateparks();
   buildStreetSkateSpots();
@@ -59,7 +59,7 @@ function refreshSkateSpotDirectory() {
     if (p.kind !== 'kerb' || districts.has(p.district)) continue;
     districts.add(p.district);
     const at = grindPathAt(p, p.length / 2).p;
-    SKATE_SPOTS.push({ id: `skate-kerb:${p.district}`, name: `${cap(p.district.replace(/[-_]/g, ' '))} · kerb line`, x: at[0], y: at[1],
+    SKATE_SPOTS.push({ id: `skate-kerb:${p.district}`, name: `${cap(p.district.replace(/[-_]/g, ' '))} · curb line`, x: at[0], y: at[1],
       description: 'A long kerbstone line between crossings. Ollie onto its edge to grind, pop out over the street, or use a manual to carry a combo between lines.' });
     if (districts.size >= 3) break;
   }

@@ -5,7 +5,7 @@ let carSmokeT = 0;
 function stepCarDamage(dt) {
   for (const c of stepCarFires(dt)) carBang(c);
   for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); if (c === me && mode === 'taxi') say('Your driver bails out and runs. E: get out, now!', 4); } // (the driver, out and running; no fare after that)
-  if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the bonnet. Get out, now!', 4); }
+  if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the hood. Get out, now!', 4); }
   if (me && !burning(me)) me.warnedFire = false;
   if ((carSmokeT -= dt) > 0) return;
   carSmokeT = 0.1;

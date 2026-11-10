@@ -378,10 +378,10 @@ function activityPixelSegment(a,b,ra,rb,col){
 function drawCigarette() {
   const u=Math.max(14,cv.height/36),s=Math.round(u*1.6),joint=fx.smokeKind==='joint';
   g.font=s+'px monospace';
-  const w=g.measureText('M').width,len=1+Math.round(6*fx.smoke/(joint?55:45)),x0=cv.width*.5-w,y0=cv.height-s*.9,dx=w*.95,dy=-s*.32;
+  const w=g.measureText('M').width,len=1+Math.round(6*fx.smoke/(joint?55:45)),x0=cv.width*.5-w,y0=cv.height-s*.9,dx=w*.95,dy=0;
   let tx,ty;
   if(fx.pipe){
-    tx=x0+5*dx;ty=y0+5*dy+s*.4;
+    tx=x0+5*dx;ty=y0+s*.2;
     activityPixelSegment({x:x0,y:y0+s*.5},{x:tx,y:ty+s*.3},s*.08,s*.13,C(BRICK,7));
     activityPixelEllipse(tx,ty+s*.2,w*.85,s*.55,C(BRICK,10));
     activityPixelEllipse(tx,ty-s*.2,w*.9,s*.19,C(BRICK,13));

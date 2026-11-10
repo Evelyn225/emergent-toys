@@ -126,7 +126,7 @@ function stepBody(dt) {
       const dmg = fallHurt(fell);
       if (dmg > 0) {
         if (actx) playClip('ground-impact', 0.32);
-        if (hurt(dmg)) passOut(`You fell ${Math.round(fell)} metres. Somebody called an ambulance. You're lucky to be alive.`);
+        if (hurt(dmg)) passOut(`You fell ${Math.round(fell)} meters. Somebody called an ambulance. You're lucky to be alive.`);
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }

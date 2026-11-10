@@ -26,8 +26,8 @@ function appearancePreview(){
  appearanceEl.querySelector('[data-view-label]').textContent=['Front','Front quarter','Side','Back quarter','Back','Back quarter','Side','Front quarter'][Math.floor(appearanceView/2)%8];
 }
 function buildAppearance(){
- const colors=['Red','Blue','Green','Orange','Yellow','Purple','Cyan','White','Grey','Rust'];
- const fields=[['skin','Skin tone',PLAYER_STYLE_CHOICES.skin],['hairStyle','Hair',PLAYER_STYLE_CHOICES.hairStyle],['hairColour','Hair colour',PLAYER_STYLE_CHOICES.hairColour],['headwear','Headwear',PLAYER_STYLE_CHOICES.headwear],['hat','Hat colour',colors],['shirtStyle','Top style',PLAYER_STYLE_CHOICES.shirtStyle],['top','Top colour',colors],['bot','Trousers',['Blue jeans','Charcoal','Brown']],['shoes','Shoes',PLAYER_STYLE_CHOICES.shoes]];
+ const colors=['Red','Blue','Green','Orange','Yellow','Purple','Cyan','White','Gray','Rust'];
+ const fields=[['skin','Skin tone',PLAYER_STYLE_CHOICES.skin],['hairStyle','Hair',PLAYER_STYLE_CHOICES.hairStyle],['hairColour','Hair color',PLAYER_STYLE_CHOICES.hairColour],['headwear','Headwear',PLAYER_STYLE_CHOICES.headwear],['hat','Hat color',colors],['shirtStyle','Top style',PLAYER_STYLE_CHOICES.shirtStyle],['top','Top color',colors],['bot','Pants',['Blue jeans','Charcoal','Brown']],['shoes','Shoes',PLAYER_STYLE_CHOICES.shoes]];
  const el=menuEl('appearance',540,`<div class="panel" role="dialog" aria-label="Customize character" style="width:min(700px,calc(100vw - 24px))">
  <div class="panel-heading"><h1>Your character</h1><button class="panel-close" data-appearance-back aria-label="Close character customization">×</button></div>
  <p class="sub">Changes save automatically. Wear the same look in every room.</p>

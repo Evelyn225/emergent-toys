@@ -19,7 +19,7 @@ const HOTEL_PAINTINGS = [
     '.rrrrrrryyyyyyrrrrrrrrr.',
     'rrrrrrrrrrrrrrrrrrrrrrrr',
   ] },
-  { id: 'hotelharbour', title: 'HARBOUR AT FIRST LIGHT', x: 7.3, w: 2.5, h: 1.55, art: [
+  { id: 'hotelharbour', title: 'HARBOR AT FIRST LIGHT', x: 7.3, w: 2.5, h: 1.55, art: [
     '..............................',
     '....................ooo.......',
     '...................ooooo......',

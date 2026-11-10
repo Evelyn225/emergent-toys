@@ -91,7 +91,7 @@ function quietRoofGarden(s){
  for(const z of [.11,.18,.25])quietTimber(s,'trellis-rail',0,-.58,.8,.003,z,z+.006);
  for(let u=-.72;u<.8;u+=.12)quietTimber(s,'trellis-spar',u,-.58,.002,.002,.08,.25);
  quietPlaque(s,0,-.572,'PLEASE WATER',.16);
- s.targets.push({u:.36,v:-.16,z0:.03,z1:.18,label:'talk to the gardener',when:quietGardenerHere,text:()=>seasonIdx()===3?'“It looks empty now, but leave the stalks. The finches eat better than we do in January.” She checks the barrel tap once more.':'“The landlord called this wasted space. Now half the building comes up for tomatoes.” She presses a seedling back into its bed. “Take the lift. There is no prize for climbing the drainpipe.”'});
+ s.targets.push({u:.36,v:-.16,z0:.03,z1:.18,label:'talk to the gardener',when:quietGardenerHere,text:()=>seasonIdx()===3?'“It looks empty now, but leave the stalks. The finches eat better than we do in January.” She checks the barrel tap once more.':'“The landlord called this wasted space. Now half the building comes up for tomatoes.” She presses a seedling back into its bed. “Take the elevator. There is no prize for climbing the drainpipe.”'});
  quietPart(s,'planting-notebook',-.7,.205,.035,.023,.092,.098,'book');
  quietPart(s,'notebook-page',-.7,.205,.032,.02,.098,.0985,'chart');
  quietPart(s,'notebook-glass-weight',-.7,.205,.032,.02,.0985,.1,'glass');
@@ -197,7 +197,7 @@ function quietChartRoom(s){
   quietPart(s,'wind-arm',.8+Math.cos(a)*.03,-.3+Math.sin(a)*.03,.032,.002,.54,.544,'iron',false,{moving:'wind',angle:a});
   quietPart(s,'wind-cup',.8+Math.cos(a)*.065,-.3+Math.sin(a)*.065,.012,.012,.531,.55,'brass',false,{ellipsoid:true,moving:'cup',angle:a});
  }
- s.targets.push({u:0,v:-.29,z0:.09,z1:.12,label:'read the last tide ledger',text:'The final ledger entry is dated October 17. “Recorder failed again. Took the six o’clock reading by hand. Key left with the harbour office.” A pencilled line under it: “Back after the storm.” Salt has curled every page after that.'});
+ s.targets.push({u:0,v:-.29,z0:.09,z1:.12,label:'read the last tide ledger',text:'The final ledger entry is dated October 17. “Recorder failed again. Took the six o’clock reading by hand. Key left with the harbor office.” A penciled line under it: “Back after the storm.” Salt has curled every page after that.'});
 }
 function quietSiteClear(x,y,hx,hy){
  let lo=Infinity,hi=-Infinity;
@@ -224,7 +224,7 @@ function buildQuietPlaces(){
   const door=doors.find(d=>d.sh===b.sh);if(!door)continue;
   const x=b.x0+1.2,y=b.y0+.8;
   if(roofs.some(o=>near(o.x,o.y,x,y)<1.5)||COURIER_SCENERY.some(o=>near(o.x,o.y,x,y)<2)||COURIER_SURFACES.some(o=>near(o.x,o.y,x,y)<2))continue;
-  const s=quietSite('roof',x,y,b.h,1.05,.65,'Vale House · rooftop allotment','Raised tomato beds, a potting bench and a rain barrel above the neighbourhood. Enter the apartment lobby and take its existing lift to the roof. A resident tends the beds during the day.');
+  const s=quietSite('roof',x,y,b.h,1.05,.65,'Vale House · rooftop allotment','Raised tomato beds, a potting bench and a rain barrel above the neighborhood. Enter the apartment lobby and take its existing elevator to the roof. A resident tends the beds during the day.');
   s.entry={x:door.x,y:door.y};s.building=b;quietRoofGarden(s);break;
  }
  // A grassy shore clearing, clear of construction yards, paths and fittings.

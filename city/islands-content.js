@@ -117,8 +117,8 @@ function islandBuildingUse() {
 }
 
 const ISLAND_LOG_ENTRIES=[
-  'VISITORS\' LOG: "Shelter is open to anyone caught in the weather. Please shut the door and take your rubbish home."',
-  'A pencilled note: "Good fishing off the western jetty. Leave your boat alongside; the benches are for everyone."',
+  'VISITORS\' LOG: "Shelter is open to anyone caught in the weather. Please shut the door and take your trash home."',
+  'A penciled note: "Good fishing off the western jetty. Leave your boat alongside; the benches are for everyone."',
   'The last page: "Went over to Fern. The waterfall trail was worth the crossing. Left before sunset. -- M."',
 ];
 ROOM_DEFS.islandshelter={
