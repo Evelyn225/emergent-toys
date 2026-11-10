@@ -29,21 +29,34 @@ const fireRoar = o => cookCtx && cookCtx.spot === o && game && game.g.id === 'co
 const FIRES = GRILLS.filter(o => o.on === 'fire'); // (campfires added later push themselves: coast-life.js, islands-content.js)
 // a camp's fire burns after dark, and whenever someone's cooking over it
 const fireLit = o => !o.nightOnly || night >= .3 || fireRoar(o) === 1;
+const campfireFlameSeed=o=>hash(Math.floor(o.x*100),Math.floor(o.y*100),1817)*50;
 function fireGlow(wx, wy) {
   let k = 0;
   for (const o of FIRES) {
     if(!fireLit(o))continue;
-    const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
-    if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
+    const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = .3 + fireRoar(o) * .2;
+    if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (.72+.26*cityFlameFrame(campfireFlameSeed(o),T).glow));
   }
   return k * clamp(Math.max(night, overcast * 0.5) * 1.4 - 0.1, 0, 1); // (by day you'd never see it)
+}
+// Add warm light to the material's existing colour. Keep its texture instead
+// of replacing the ground with an orange disc and rows of dot characters.
+const campfireLightLUT=new Uint16Array(255*25).fill(65535);
+function campfireLightColour(index,amount){
+  if(index===NONE||amount<=0)return index;
+  const band=clamp(Math.round(amount*24),0,24);if(!band)return index;
+  const key=index*25+band,known=campfireLightLUT[key];if(known!==65535)return known;
+  const rgb=PALRGB[index],gain=band/24,r=Math.min(255,rgb[0]+gain*90),g=Math.min(255,rgb[1]+gain*42),b=Math.min(255,rgb[2]+gain*12);
+  let best=index,error=Infinity;
+  for(let c=0;c<255;c++){const p=PALRGB[c],e=(p[0]-r)**2+(p[1]-g)**2+(p[2]-b)**2;if(e<error){best=c;error=e;}}
+  campfireLightLUT[key]=best;return best;
 }
 function drawCampfires() {
   for (const o of FIRES) {
     const [vx, vy] = R(o.x, o.y);
     if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
-    const ground=o.z??outdoorGroundHeight(o.x,o.y);
-    const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
+    const ground=o.z??outdoorGroundHeight(o.x,o.y),lit=fireLit(o),seed=campfireFlameSeed(o),glow=lit?cityFlameFrame(seed,T).glow:0;
+    const roar=fireRoar(o),warm=lit ? .35+.65*Math.max(night,overcast*.5) : 0;
     if (!o.ring) for (let k = 0; k < 10; k++) { // the stones (a ring the islands built has its own)
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
       dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i,' ',0),true; });
@@ -51,25 +64,20 @@ function drawCampfires() {
     if (!o.ring) for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
       drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
-        const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
-        BG[i]=ember?C(ORANGE,10+warm*3):C(BRICK,1+L*.15);return set(i,' ',0),true;
+        const ember=lit&&HIT.w-ground>.03&&noise(HIT.u*220,HIT.w*120,seed+k)>.5;
+        BG[i]=ember?C(ORANGE,9+glow*4):C(BRICK,1+L*.15);return set(i,' ',0),true;
       });
     }
-    if(!fireLit(o))continue;
-    // the flames and the sparks over them: a billboard, so it's round from every side
-    const H = 0.1 + 0.08 * roar, top = 0.36;
-    drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
-      if (z > H) { // above it: sparks drifting up and fading
-        const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
-        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) {BG[i]=C(z>H+.12?ORANGE:YEL,14-(z-H)*25);return set(i,' ',0),true;}
-        return false;
-      }
-      const h = z / H, n = noise(u * 55, z * 28 - T * 7, 1817), width = 0.055 * (1 - h) ** 0.7 * (0.75 + 0.5 * n); // tongues licking up, flickering
-      const off = Math.abs(u - Math.sin(T * 3 + z * 40) * 0.006 * h);
-      if (off > width) return false;
-      const core = off / Math.max(width, 1e-4) < 0.45 && h < 0.6;
-      BG[i]=C(core?(h<.25?WHITE:YEL):h>.7?RED:ORANGE,core?15:9+(1-h)*4);return set(i,' ',0),true;
-    });
+    // A shallow coal bed sits on the ground inside the logs and stone ring.
+    // Its cracks stay attached to the coals; only their heat pulses slowly.
+    drawBox(boxAt(vx,vy,1,0,.045,.045,ground+.003,ground+.009),(i,t,L)=>{
+      const grain=noise(HIT.u*180,HIT.v*180,seed),hot=lit&&grain>.42;
+      BG[i]=hot?C(grain>.72?YEL:ORANGE,7+glow*6):C(GRAY,1+L*.12);set(i,' ',0);return true;
+    },rayCopperDrum);
+    if(!lit)continue;
+    drawFirePlume(vx,vy,ground+.009,.072,.105+.085*roar,seed);
+    // The shared particle system supplies rising sparks and wind-blown smoke.
+
   }
 }
 // standing at one, out of doors

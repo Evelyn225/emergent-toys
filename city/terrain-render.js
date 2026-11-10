@@ -64,4 +64,6 @@ function terrainCell(i, x, y, depth, sx, sy, light) {
   BG[i] = surface ? C(background,level) : bgAt(background,level); // (water's surface is level: the hillside's slope doesn't shade it)
   set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
   if (snowCover > 0 && !surface?.water) paintSettledSnow(i, x, y, L, 1, 0);
+  const fire=FIRES.length?fireGlow(x,y):0;
+  if(fire>.01){BG[i]=campfireLightColour(BG[i],fire);COL[i]=campfireLightColour(COL[i],fire);}
 }

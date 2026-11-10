@@ -1,11 +1,10 @@
 function drawFirePlume(vx,vy,z,width,height,seed,strength=1){
-  if(strength<=0)return;
-  const scale=Math.sqrt(strength),w=width*(.35+.65*scale),h=height*(.2+.8*scale);
+  if(strength<=0||dx*vx+dy*vy<.05||dx*vx+dy*vy>vis||!inView(vx,vy,width+.02))return;
+  const scale=Math.sqrt(strength),w=width*(.35+.65*scale),h=height*(.2+.8*scale),frame=cityFlameFrame(seed,T);
   drawShape(vx,vy,z,w,h,(i,u,v)=>{
-    const heat=cityFlameHeat(u/w,v/h,seed,T);
-    if(heat<=.025)return false;
-    const hot=heat>.73&&v/h<.26,core=heat>.43;
-    BG[i]=C(hot?YEL:core?ORANGE:RED,hot?14:core?11+heat*3:7+heat*7);
+    const heat=cityFlameSample(frame,u/w,v/h)*(.55+.45*scale);
+    if(heat<=.075)return false;
+    BG[i]=heat>.96?C(WHITE,15):heat>.72?C(YEL,15):heat>.4?C(ORANGE,13):C(RED,7+heat*13);
     set(i,' ',0);return true;
   });
 }
@@ -37,17 +36,37 @@ function stepEmergencyWater(dt){
   }
 }
 function drawWaterStream(from,to){
-  const [x,y,z]=from,ex=rel(to[0]-x),ey=rel(to[1]-y),ez=to[2]-z,[vx,vy]=R(x,y);
-  const shade=(i,t,L)=>{const h=hash(i,Math.floor(T*25),93);BG[i]=C(h>.7?WHITE:CYAN,Math.max(6,L*.6)+h*4);set(i,' ',0);return true;};
-  for(let j=0;j<10;j++){
-    const t=j/10,u=(j+1)/10,at=q=>[vx+ex*q,vy+ey*q,z+ez*q-.035*q*(1-q)];
-    drawRod(...at(t),...at(u),.003+t*.006,shade);
-  }
-  // Breaking droplets at the exact impact point, rather than an opaque cone.
-  for(let j=0;j<5;j++){
-    const q=fract(T*3+j*.21),s=(j-2)*.008;
-    drawRod(vx+ex+s,vy+ey, to[2]+.015,vx+ex+s*2,vy+ey+s,to[2]-.035*q,.002,shade);
-  }
+  const [x,y,z]=from,ex=rel(to[0]-x),ey=rel(to[1]-y),ez=to[2]-z,[vx,vy]=R(x,y),range=Math.hypot(ex,ey),distance=Math.max(.01,range);
+  const sideX=-ey/distance,sideY=ex/distance,arc=.28*(range/2.6)**2,backdrop=BG.slice(),savedGlow=drawNoGlow;
+  const at=q=>[vx+ex*q,vy+ey*q,z+ez*q+arc*q*(1-q)];
+  const shade=(opacity,phase)=>(i,t,L)=>{
+    const shine=.5+.5*Math.sin(T*32-phase+HIT.w*350),tint=C(shine>.87?WHITE:WET,Math.max(4,L*.45)+shine*4);
+    BG[i]=hazeTint(backdrop[i],tint,opacity);set(i,' ',0);return true;
+  };
+  drawNoGlow=1; // Water reflects light; it is not an emissive cyan tube.
+  try{
+    // A narrow continuous pressure core. Surface highlights run towards impact.
+    for(let j=0;j<16;j++)drawRod(...at(j/16),...at((j+1)/16),.0014+j/16*.0007,shade(.62,j*.9));
+    // The outer jet breaks into droplets, moving with the water rather than
+    // blinking at unrelated cells. Its spread grows towards the impact point.
+    for(let j=0;j<22;j++){
+      const q=fract(T*2.1+j*.618),angle=j*2.39996,spread=(.001+.012*q*q)*Math.min(1,range/2.6),p=at(q),tail=at(Math.max(0,q-.022));
+      const across=Math.cos(angle)*spread,up=Math.sin(angle)*spread;
+      drawRod(p[0]+sideX*across,p[1]+sideY*across,p[2]+up,tail[0]+sideX*across,tail[1]+sideY*across,tail[2]+up,.0009,shade(.4,j*1.3));
+    }
+    const ground=to[2]<=terrainHeight(to[0],to[1])+.025;
+    for(let j=0;j<12;j++){
+      const age=fract(T*2.7+j*.618),angle=j*2.39996,spread=.045*age,px_=vx+ex,py_=vy+ey;
+      const sx=ground?Math.cos(angle)*spread:sideX*Math.cos(angle)*spread-ex/distance*.025*age;
+      const sy=ground?Math.sin(angle)*spread:sideY*Math.cos(angle)*spread-ey/distance*.025*age;
+      const lift=ground?Math.sin(age*Math.PI)*.04:Math.sin(angle)*.035*age-.06*age*age;
+      drawRod(px_+sx,py_+sy,to[2]+lift,px_+sx,py_+sy,to[2]+lift-.004,.0009,shade(.38,j));
+    }
+    drawShape(vx+ex,vy+ey,to[2]-.025,.035,.06,(i,u,h)=>{
+      const r=Math.hypot(u/.035,(h-.03)/.03);if(r>1||noise(u*180,h*180-T*.7,97)<.5)return false;
+      BG[i]=hazeTint(backdrop[i],C(GRAY,9),.12*(1-r));set(i,' ',0);return true;
+    });
+  }finally{drawNoGlow=savedGlow;}
 }
 const emergencyCrewLook=figLook({hat:'hardhat',top:'long',bot:'pants',col:{hat:[YEL,13],top:[YEL,9],bot:[GRAY,4],shoe:[GRAY,2]}});
 function emergencySprites(){

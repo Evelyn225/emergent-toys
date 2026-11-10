@@ -18,13 +18,17 @@ function drawDrugVision() {
   g.save();g.fillStyle='#000';g.fillRect(0,0,w,h);
   const breathe=1+weed*(.018+.012*Math.sin(T*.8))+neon*.012;
   g.translate(w/2,h/2);g.scale(breathe,breathe);g.translate(-w/2,-h/2);
-  // Smooth horizontal ribbons bend independently; overscan keeps their edges out of view.
-  const strip=12, pad=26*(weed+neon);
-  for (let y=0;y<h;y+=strip) {
-    const sh=Math.min(strip,h-y), v=y/h;
-    const shift=weed*Math.sin(v*5+T*.8)*8+neon*Math.sin(v*13-T*1.5)*17;
-    const stretch=neon*Math.sin(v*8+T*.9)*.035;
-    g.drawImage(source,0,y,w,sh,shift-pad-w*stretch/2,y,w+pad*2+w*stretch,sh);
+  // One continuous image for weed: breathing and tint without displaced row seams.
+  if (!neon) g.drawImage(source,0,0,w,h);
+  else {
+    const pad=26*(weed+neon);
+    // Neon keeps its independent psychedelic distortion.
+    const strip=12;
+    for (let y=0;y<h;y+=strip) {
+      const sh=Math.min(strip,h-y),v=y/h, shift=neon*Math.sin(v*13-T*1.5)*17;
+      const stretch=neon*Math.sin(v*8+T*.9)*.035;
+      g.drawImage(source,0,y,w,sh,shift-pad-w*stretch/2,y,w+pad*2+w*stretch,sh);
+    }
   }
   if (neon && drugVisionTrailReady) {
     g.globalCompositeOperation='screen';g.globalAlpha=.3*neon;

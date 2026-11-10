@@ -36,7 +36,7 @@ function sfGlass(i, a, z, z0, z1, w, lit, L, fine, seed) {
   const diag = a * .8 + z, streak = Math.max(0, 1 - Math.abs(fract(diag * 2.2 + seed * .37) - .3) / .07), streak2 = Math.max(0, 1 - Math.abs(fract(diag * 2.2 + seed * .37) - .42) / .025);
   const sheen = fine > .2 ? (streak * .7 + streak2 * .5) * fine : 0;
   if (lit) { BG[i] = C(WARM, (1.6 + night * 3.2 + up * .5) * (1 - reveal * .45) + sheen * .4); return; }
-  BG[i] = C(CYAN, (.9 + day * 1.4 + up * (.6 + day)) * (1 - reveal * .5) + sheen);
+  BG[i] = C(WET, (1.5 + day * 2.2 + up * (.8 + day)) * (1 - reveal * .45) + sheen);
 }
 // the opening's parts, top to bottom: head (frame), transom lights, the glass with its bars, the sill, the stallriser
 function shopfrontBay(i, a, w, z, z0, z1, sh, L, fp, lit, d) {

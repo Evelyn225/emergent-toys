@@ -69,12 +69,12 @@ function drawHaze() {
     const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
     for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth >= ZB[i]) continue;
+      if (depth >= ZB[i] && depth >= ZBG[i]) continue;
       const nx = (c + 0.5 - cx) / rw, ny = (r + 0.5 - cy) / rh, d = Math.hypot(nx, ny);
       if (d >= 1) continue;
       const dens = (1 - d * d) * (0.3 + 0.8 * noise(nx * 2.6 + p.seed, ny * 2.6 - T * 0.25, 991)) * Math.min(1, p.life * 1.6) * (p.kind === 'vape' ? 1.15 : 0.85); // (holds together most of its life, thins out at the end)
       if (dens < 0.22 || dens < 0.4 && hash(c, r, 993) > 0.6) continue; // thin: the world shows through
-      hazeCell(i, dens, p.kind);
+      hazeCell(i, dens, p.kind, depth);
     }
   }
   if (inside > 0.12) for (let i = 0; i < CH.length; i++) { // in the thick of it: the whole view clouds over
@@ -86,7 +86,8 @@ function drawHaze() {
 // The bounded cache avoids a nearest-palette search for every cloud cell/frame.
 const HAZE_TINTS=new Map();
 function hazeTint(background,target,opacity){
-  const bg=PALRGB[background]?background:C(GRAY,0),alpha=clamp(Math.round(opacity*8),1,8),key=(bg*256+target)*8+alpha-1;
+  if(opacity<=0)return background;
+  const bg=background!==NONE&&PALRGB[background]?background:C(BLACK,0),alpha=clamp(Math.round(opacity*8),1,8),key=(bg*256+target)*8+alpha-1;
   if(HAZE_TINTS.has(key))return HAZE_TINTS.get(key);
   const a=PALRGB[bg],b=PALRGB[target],f=alpha/8,r=a[0]+(b[0]-a[0])*f,g_=a[1]+(b[1]-a[1])*f,bl=a[2]+(b[2]-a[2])*f;
   let best=0,error=Infinity;
@@ -94,12 +95,10 @@ function hazeTint(background,target,opacity){
   if(HAZE_TINTS.size>=8192)HAZE_TINTS.delete(HAZE_TINTS.keys().next().value);
   HAZE_TINTS.set(key,best);return best;
 }
-function hazeCell(i,dens,kind){
+function hazeCell(i,dens,kind,depth=0){
   let target,opacity;
-  if(kind==='breath'){ // cold breath: a faint pale veil, the world (and its lettering) plain through it
-    if(BG[i]!==NONE||dens>.45)BG[i]=hazeTint(BG[i],C(WHITE,(10+dens*4)*Math.max(.6,amb)),dens*.38);FOGS[i]=FOGB[i]=0;return;
-  }
-  if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
+  if(kind==='breath'){target=C(WHITE,(10+dens*4)*Math.max(.6,amb));opacity=dens*.38;}
+  else if(kind==='soot'){target=C(GRAY,.3+dens*.8);opacity=dens*.9;}
   else if(kind==='fwsmoke'){
     const flash=Math.exp(-Math.max(0,T-fwLight.t)*2.5),col=flash>.15?fwLight.col:GRAY;
     target=C(col,(2+dens*4)*(.5+flash*2));opacity=dens*.65;
@@ -107,5 +106,11 @@ function hazeCell(i,dens,kind){
     const vape=kind==='vape',lit=Math.max(vape?.7:.35,amb)*(kind==='steam'?1.25:1);
     target=C(vape?WARM:GRAY,(8+dens*5)*lit);opacity=dens*(vape?.8:.6);
   }
-  BG[i]=hazeTint(BG[i],target,opacity);set(i,' ',0);FOGS[i]=FOGB[i]=0;
+  opacity=clamp(opacity,0,1);
+  // Keep lettering and the surface behind it at their own depths. Erasing glyphs
+  // turned glazed facades into flat black cutouts whenever a puff crossed them.
+  const smokeFog=mode==='room'?0:clamp((1-Math.exp(-Math.max(0,depth-.18)*fogAmt*1.9/vis))*FOG_LEVELS,0,FOG_LEVELS);
+  if(depth<ZBG[i]){BG[i]=hazeTint(BG[i],target,opacity);FOGB[i]=Math.round(FOGB[i]*(1-opacity)+smokeFog*opacity);}
+  if(depth<ZB[i]){COL[i]=hazeTint(COL[i],target,opacity);FOGS[i]=Math.round(FOGS[i]*(1-opacity)+smokeFog*opacity);}
+
 }

@@ -222,7 +222,7 @@ function navigationBearing(t) {
 function drawNavigationCompass(top) {
   const targets=navigationTargets();if(!targets.length)return 0;
   const bar=TOUCH?touchBarBox():null,right=bar&&top<bar.bottom&&bar.left>cv.width*.55?bar.left-12:cv.width;
-  const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
+  const width=Math.min(420*uiScale(),right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
   const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
   const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
   const distance=first.routed?mapRouteDistance():first.distance;

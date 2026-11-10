@@ -37,6 +37,7 @@ const MOBILE_BROWSER = navigator.userAgentData?.mobile || /Android|iPhone|iPod|i
   (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
 function applySettings() {
+  settings.uiScale=uiScale();document.documentElement.style.setProperty('--city-ui-scale',settings.uiScale);
   FOV = settings.fov * Math.PI / 180;
   if (DETAIL[settings.detail] !== FS) { FS = DETAIL[settings.detail]; resize(); }
   applyVolumes();
@@ -71,6 +72,7 @@ function buildPause() {
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
+      ${slider('uiScale', 'UI scale', .75, 2, .05)}
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
@@ -106,7 +108,7 @@ function buildPause() {
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
-      s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : k === 'lod' ? (+v).toFixed(1) + 'x' : Math.round(v * 100) + '%';
+      s.textContent = k === 'uiScale' ? Math.round(v*100)+'%' : k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : k === 'lod' ? (+v).toFixed(1) + 'x' : Math.round(v * 100) + '%';
     }
     for (const b of el.querySelectorAll('[data-bar]')) {
       const inp = el.querySelector(`[data-set="${b.dataset.bar}"]`), lo = +inp.min, hi = +inp.max;

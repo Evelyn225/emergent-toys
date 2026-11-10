@@ -14,14 +14,15 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, uiScale: 1, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
+const uiScale=()=>clamp(Number(settings.uiScale)||1,.75,2);
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
     if (!saved.v && saved.fov === 63) delete saved.fov; // the old default: move up to the new one
-    Object.assign(settings, saved, { v: 2 });
+    Object.assign(settings, saved, { v: 2 });settings.uiScale=uiScale();
   } catch (e) { /* private window etc: defaults */ }
 }
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* not saved, still applied */ } }

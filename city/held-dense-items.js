@@ -244,6 +244,22 @@ Object.assign(DENSE, {
   }),
   soda: dCan(RED, 'COLA', WHITE, (x, y) => Math.abs(y - 1.4 - Math.sin(x * 1.3) * .7) < .35 ? ['~', C(WHITE, 14)] : null),
   energy: dCan(GREEN, 'ZAP', YEL, (x, y) => Math.abs(x - (y > 1.5 ? 0.5 : -0.2) + (y - 1.5) * 0.25) < 0.4 && y > -0.6 && y < 4.4 ? ['/', C(YEL, 15)] : null), // a lightning bolt
+  milk: (it, f) => sculptSurface(24, 17, (x, y) => {
+    // Folded gable carton, blue dairy band and a creased paperboard body.
+    const top=-7+(1-f)*.8;
+    if(y<top||y>7||Math.abs(x)>3.8)return null;
+    if(y<top+2){
+      const half=1+(y-top)*1.4;
+      if(Math.abs(x)>half)return null;
+      return ['/',dCol(WHITE,x<0?.95:.65,9)];
+    }
+    if(y>6.4)return ['_',C(BLUE,9)];
+    if(Math.abs(x)>3.25)return ['|',C(WHITE,x<0?14:9)];
+    const t=dText(x,y,0,-.5,'MILK');if(t)return [t,C(WHITE,15),true];
+    if(y>-2&&y<1.2)return dLit(x<1?.85:.55,BLUE,7);
+    if(y>3.3&&y<4.2)return ['~',C(BLUE,9)];
+    return dLit(x<1?.9:.65,WHITE,9);
+  }),
   water: (it, f) => sculptSurface(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
     if (y < -7 && Math.abs(x) < 1.3) return dLit(0.4 + 0.5 * dCyl(x, 1.3), BLUE, 8);
     const hw = yy => yy < -5.2 ? 1.1 : yy < -3 ? 1.1 + (yy + 5.2) * 1.1 : 3.5;
