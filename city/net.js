@@ -716,7 +716,7 @@ function netHookFrame(dt) { // every frame: both ends of a line
 // only they see), give them money or something from your bag, invite them to your home, or head to one they've invited
 // you to. Hold Tab to look; click something and it stays open till you're done (Esc or Done).
 const NET_GIFT_WAIT = 10; // seconds for a gift to be taken before it comes back to you
-let netPlayersEl = null, netPlayersPinned = false, netPlayersForm = null, netPlayersT = 0;
+let netPlayersEl = null, netPlayersPinned = false, netPlayersForm = null, netPlayersT = 0, netPlayersSelected = null, netPlayersCollapsed = false;
 const netPlayersOpen = () => !!netPlayersEl && netPlayersEl.style.display === 'flex';
 function netPlayersKey(e) { // (main.js, on a key going down)
   if (e.code !== 'Tab') return false;
@@ -727,16 +727,60 @@ function netPlayersKey(e) { // (main.js, on a key going down)
 function netPlayersKeyUp(e) { if (e.code === 'Tab' && netPlayersOpen() && !netPlayersPinned) closeNetPlayers(); } // (main.js, on a key going up)
 function buildNetPlayers() {
   const el = menuEl('netplayers', 530, `
-    <div class="panel" role="dialog" aria-label="Players" style="width:min(560px, calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;overflow-wrap:anywhere;box-sizing:border-box">
-      <h1>Players</h1>
-      <p class="sub" data-np="room"></p>
+    <style>
+      #netplayers .panel{width:min(600px,calc(100vw - 32px));padding:0;overflow:hidden;overflow-wrap:anywhere;display:flex;flex-direction:column;outline:none;}
+      #netplayers .np-heading{padding:20px 24px 16px;border-bottom:1px solid #35423f;flex-shrink:0;}
+      #netplayers .np-heading h1{font-size:28px;}
+      #netplayers .np-heading .sub{margin:6px 0 0;font-size:14px;}
+      #netplayers .np-body{padding:8px 24px 16px;overflow-y:auto;min-height:0;overscroll-behavior:contain;scrollbar-gutter:stable;}
+      #netplayers [data-peer]{border-bottom:1px solid #35423f;}
+      #netplayers .np-player{display:grid;grid-template-columns:12px minmax(0,1fr) 16px;align-items:center;gap:12px;width:100%;min-height:64px;padding:12px 8px;text-align:left;}
+      #netplayers .np-player:hover,#netplayers .np-player[aria-expanded="true"]{background:#1d2b27;}
+      #netplayers .np-player:focus-visible{outline:2px solid #a9d9ca;outline-offset:-2px;}
+      #netplayers .np-swatch{width:10px;height:20px;border:1px solid #ffffff30;box-sizing:border-box;}
+      #netplayers .np-name{display:block;color:#edf0df;}
+      #netplayers [data-player-status]{display:block;color:#a1ada8;font-size:13px;line-height:1.5;margin-top:4px;}
+      #netplayers .np-arrow{color:#a9d9ca;}
+      #netplayers .np-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px 0;}
+      #netplayers .np-actions[hidden],#netplayers [data-np="form"]:empty{display:none;}
+      #netplayers .opt{min-height:40px;padding:7px 8px;border:1px solid #465452;background:#192320;color:#d9dfda;box-sizing:border-box;line-height:1.3;}
+      #netplayers .opt::before,#netplayers .opt::after{content:none;}
+      #netplayers .opt:hover,#netplayers .opt:focus-visible{background:#253732;outline:2px solid #a9d9ca;outline-offset:-2px;}
+      #netplayers [data-np="form"]{margin-top:16px;padding:16px 0 0;border-top:1px solid #465452;}
+      #netplayers .np-form-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+      #netplayers .np-form-bar input{flex:1 1 160px;min-height:42px;}
+      #netplayers .np-footer{display:flex;align-items:center;gap:16px;padding:12px 24px;border-top:1px solid #465452;flex-shrink:0;}
+      #netplayers .np-footer .sub{flex:1;margin:0;font-size:12px;}
+      #netplayers .np-footer .opt{min-width:84px;}
+      #netplayers .np-empty{padding:24px 8px;color:#a1ada8;}
+      @media(max-width:520px){#netplayers .np-heading{padding:16px;}#netplayers .np-body{padding:8px 16px 12px;}#netplayers .np-footer{padding:12px 16px;}#netplayers .np-actions{grid-template-columns:repeat(2,minmax(0,1fr));}#netplayers .opt{min-height:44px;}}
+    </style>
+    <div class="panel" role="dialog" aria-modal="true" aria-label="Players" tabindex="-1">
+      <header class="np-heading"><h1>Players</h1><p class="sub" data-np="room"></p></header>
+      <div class="np-body">
       <div data-np="requests"></div>
       <div data-np="list"></div>
-      <div data-np="form" style="margin-top:12px"></div>
-      <button class="item" data-np-act="done" style="margin-top:12px">Done <span class="k" style="margin-left:auto">Esc</span></button>
+      <div data-np="form"></div>
+      </div>
+      <footer class="np-footer"><p class="sub" data-np="hint">Release Tab to close · Select a player to interact</p><button class="opt" data-np-act="done">Done <span class="k">Esc</span></button></footer>
     </div>`);
+  el.addEventListener('pointerdown', e => { if (e.target.closest('.panel')) netPinPlayers(); });
   el.addEventListener('keydown', e => {
     if (e.code === 'Escape') { e.preventDefault(); closeNetPlayers(); }
+    else if ((e.code === 'ArrowDown' || e.code === 'ArrowUp' || e.code === 'Enter' && e.target.matches('.panel')) && e.target.matches('.panel,.np-player')) {
+      e.preventDefault(); netPinPlayers();
+      const players = [...el.querySelectorAll('.np-player')], i = players.indexOf(e.target);
+      const next = i < 0 ? (e.code === 'ArrowUp' ? players.length - 1 : 0) : (i + (e.code === 'ArrowUp' ? -1 : 1) + players.length) % players.length;
+      players[next]?.focus();
+    }
+    else if (e.code === 'Tab') {
+      if (e.repeat && !netPlayersPinned) { e.preventDefault(); e.stopPropagation(); return; }
+      netPinPlayers();
+      const buttons = [...el.querySelectorAll('button,input')].filter(b => !b.disabled && b.getClientRects().length);
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if (e.shiftKey && (e.target === first || e.target.matches('.panel'))) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && e.target === last) { e.preventDefault(); first?.focus(); }
+    }
     else if (e.code === 'Enter' && e.target.matches('input')) { e.preventDefault(); el.querySelector('[data-np-act="send"]')?.click(); }
     e.stopPropagation();
   });
@@ -746,7 +790,11 @@ function buildNetPlayers() {
     if (!b) return;
     const act = b.dataset.npAct, id = b.dataset.id, p = id && net.peers.get(id);
     if (act === 'done') return closeNetPlayers();
-    netPlayersPinned = true; // (doing something: it stays open)
+    netPinPlayers(); // (doing something: it stays open)
+    if (act === 'select') {
+      netPlayersCollapsed = netPlayersSelected === id ? !netPlayersCollapsed : false;
+      netPlayersForm = null; netPlayersSelected = id; return netPlayersShow(true);
+    }
     if (act === 'whisper' || act === 'cash' || act === 'item') { netPlayersForm = { act, id }; return netPlayersShow(true); }
     if ((act === 'tp-to' || act === 'tp-here') && p) { netTeleportRequest(p, act === 'tp-to' ? 'to' : 'here'); return netPlayersShow(true); }
     if (act === 'tp-yes' || act === 'tp-no') { netTeleportAnswer(b.dataset.req, act === 'tp-yes'); return netPlayersShow(true); }
@@ -763,55 +811,79 @@ function buildNetPlayers() {
   });
   return el;
 }
+function netPinPlayers() {
+  netPlayersPinned = true;
+  if (netPlayersEl) netPlayersEl.querySelector('[data-np="hint"]').textContent = 'Select a player · Esc to close';
+}
 function openNetPlayers() {
   netPlayersEl = netPlayersEl || buildNetPlayers();
-  netPlayersPinned = false; netPlayersForm = null;
+  netPlayersPinned = false; netPlayersForm = null; netPlayersCollapsed = false;
   for (const k in K) K[k] = 0;
   releaseHeldMouse(); releaseMouse();
   netPlayersEl.style.display = 'flex';
+  netPlayersEl.querySelector('[data-np="hint"]').textContent = 'Release Tab to close · Select a player to interact';
   netPlayersShow(true);
+  netPlayersEl.querySelector('.panel').focus({ preventScroll: true });
 }
 function closeNetPlayers() {
   if (!netPlayersEl) return;
+  // A hidden focused dialog would swallow the next Tab before main.js can reopen it.
+  if (netPlayersEl.contains(document.activeElement)) document.activeElement.blur();
   netPlayersEl.style.display = 'none'; netPlayersPinned = false; netPlayersForm = null;
   if (!paused) lockMouse();
 }
 function netWhere(p) { // where someone is, in a few words
   const s = netViewOf(p);
   if (!s) return '';
-  if (s.rk !== 'out') return 'inside, ' + (s.rk === netRoomKey() ? 'here with you' : (s.rk.split(':')[0] || 'somewhere'));
-  const d = Math.hypot(rel(s.x - px), rel(s.y - py)) * 10, place = typeof streetName === 'function' ? streetName(s.x, s.y) : '';
+  if (s.rk !== 'out') return 'Inside · ' + (s.rk === netRoomKey() ? 'here with you' : (s.rk.split(':')[0] || 'somewhere'));
+  const loc = mapPlayerLocation(), d = Math.hypot(rel(s.x - loc.x), rel(s.y - loc.y)) * 10, place = typeof streetName === 'function' ? streetName(s.x, s.y) : '';
   const how = s.veh ? 'driving' : s.ride ? 'riding' : s.craft ? (s.craft.k === 'air' ? 'flying' : 'on the water') : s.sk ? 'skating' : '';
   return [how, place, mode === 'room' ? '' : d < 1000 ? Math.round(d) + 'm away' : (d / 1000).toFixed(1) + 'km away'].filter(Boolean).join(', ');
 }
 function netPlayersShow(all = false) {
   if (!netPlayersOpen()) return;
   const el = netPlayersEl, others = [...net.peers.values()].filter(p => p.hello && !p.mismatch);
-  el.querySelector('[data-np="room"]').textContent = net.on ? `Room "${net.code}": you and ${others.length} other${others.length === 1 ? '' : 's'}.` : 'Not in a room. Esc, then Multiplayer, to join one.';
+  const active = document.activeElement, hadFocus = el.contains(active);
+  const recoverFocus = () => { if (hadFocus && !active.isConnected && !el.contains(document.activeElement)) el.querySelector('.np-player[aria-expanded="true"], [data-np-act="done"]')?.focus({ preventScroll: true }); };
+  el.querySelector('[data-np="room"]').textContent = net.on ? `Room ${net.code} · ${others.length + 1} player${others.length ? 's' : ''} online` : 'Not in a room. Esc, then Multiplayer, to join one.';
   netTeleportShow(el);
   const balance = el.querySelector('[data-np="balance"]'); if (balance) balance.textContent = 'Available: ' + fmt$(money);
   const canInvite = owned.homes.length > 0;
   const list = el.querySelector('[data-np="list"]');
-  const listHTML = others.length ? others.map(p => {
+  // Keep keyed rows in place: live positions and arrivals must not steal focus or reset scroll.
+  if (!others.some(p => p.id === netPlayersSelected)) { netPlayersSelected = others[0]?.id || null; netPlayersCollapsed = false; netPlayersForm = null; all = true; }
+  for (const row of [...list.children]) if (row.dataset.peer ? !others.some(p => p.id === row.dataset.peer) : others.length) row.remove();
+  if (!others.length && !list.firstChild) list.innerHTML = '<div class="np-empty">Nobody else here yet. Invite a friend using your room link.</div>';
+  for (const p of others) {
     const inv = net.invites.get(p.id), btn = (act, label) => `<button class="opt" data-np-act="${act}" data-id="${netEsc(p.id)}">${label}</button>`;
-    return `<div data-peer="${netEsc(p.id)}" style="padding:8px 0;border-top:1px solid #2a3338">
-      <div><b style="color:${NET_CSS[p.hello.look.top]}">${netEsc(p.name)}</b> <span data-player-status style="color:#89a"></span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btn('whisper', 'Whisper')}${btn('cash', 'Give money')}${btn('item', 'Give item')}${btn('tp-to', 'Request teleport to them')}${btn('tp-here', 'Ask them to teleport here')}${canInvite ? btn('invite', 'Invite home') : ''}${inv && inv.until > netNow() ? btn('go', 'Go to their home') : ''}</div>
-    </div>`;
-  }).join('') : '<div style="color:#789">Nobody else here yet.</div>';
-  if (list.dataset.html !== listHTML) { list.innerHTML = listHTML; list.dataset.html = listHTML; }
+    let row = [...list.children].find(row => row.dataset.peer === p.id);
+    if (!row) {
+      row = document.createElement('div'); row.dataset.peer = p.id;
+      row.innerHTML = `<button class="np-player" data-np-act="select" data-id="${netEsc(p.id)}" aria-expanded="false"><span class="np-swatch" aria-hidden="true"></span><span><b class="np-name"></b><span data-player-status></span></span><span class="np-arrow" aria-hidden="true">+</span></button><div class="np-actions" hidden></div>`;
+      list.appendChild(row);
+    }
+    row.querySelector('.np-name').textContent = p.name;
+    row.querySelector('.np-swatch').style.backgroundColor = NET_CSS[p.hello.look.top];
+    const selected = p.id === netPlayersSelected && !netPlayersCollapsed, toggle = row.querySelector('.np-player'), actions = row.querySelector('.np-actions');
+    toggle.setAttribute('aria-expanded', String(selected)); row.querySelector('.np-arrow').textContent = selected ? '−' : '+';
+    actions.hidden = !selected;
+    const html = btn('whisper', 'Whisper') + btn('cash', 'Give money') + btn('item', 'Give item') + btn('tp-to', 'Teleport to them') + btn('tp-here', 'Invite here') + (canInvite ? btn('invite', 'Invite home') : '') + (inv && inv.until > netNow() ? btn('go', 'Go to their home') : '');
+    if (actions.dataset.html !== html) { actions.innerHTML = html; actions.dataset.html = html; }
+  }
   for(const p of others){const s=netViewOf(p),tags=[s?.peaceful?'peaceful':'',s?.away?'paused':'',s?.stars?'*'.repeat(s.stars):''].filter(Boolean).join(' · '),row=[...list.children].find(row=>row.dataset.peer===p.id);if(row)row.querySelector('[data-player-status]').textContent=netWhere(p)+(tags?' · '+tags:'');}
-  if (!all) return;
+  if (!all) { recoverFocus(); return; }
   const f = netPlayersForm, q = f && net.peers.get(f.id), form = el.querySelector('[data-np="form"]');
-  if (!q) { form.innerHTML = ''; return; }
-  const input = (ph, type = 'text', max = NET_CHAT_MAX) => `<input data-np="input" type="${type}" maxlength="${max}" placeholder="${ph}" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;box-sizing:border-box;font:inherit;color:#eee;background:${f.act==='whisper'?'transparent':'#000'};border:${f.act==='whisper'?'0':'1px solid #567'};padding:6px 8px">`;
-  const bar = inner => `<div style="display:flex;gap:8px;align-items:center">${inner}<button class="opt" data-np-act="cancel">Cancel</button></div>`;
+  if (!q) { form.innerHTML = ''; recoverFocus(); return; }
+  const input = (ph, type = 'text', max = NET_CHAT_MAX) => `<input data-np="input" aria-label="${ph}" type="${type}" ${type === 'number' ? 'min="0.01" step="0.01"' : `maxlength="${max}"`} placeholder="${ph}" autocomplete="off" spellcheck="false" style="min-width:0;box-sizing:border-box;font:inherit;color:#eee;background:#0b1113;border:1px solid #64756e;padding:8px">`;
+  const bar = inner => `<div class="np-form-bar">${inner}<button class="opt" data-np-act="cancel">Cancel</button></div>`;
   if (f.act === 'whisper') form.innerHTML = `<p class="sub">Whisper to ${netEsc(q.name)} (only they see it)</p>` + bar(input('Say something...') + '<button class="opt" data-np-act="send">Send</button>');
   if (f.act === 'cash') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} money</p><p class="sub" data-np="balance">Available: ${fmt$(money)}</p>` + bar(input('Amount', 'number', 8) + '<button class="opt" data-np-act="send">Give</button>');
   if (f.act === 'item') form.innerHTML = `<p class="sub">Give ${netEsc(q.name)} something from your bag</p>` + (inv.length
     ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${inv.map((it, k) => `<button class="opt" data-np-act="give" data-k="${k}">${netEsc(itemName(it))}</button>`).join('')}</div>`
-    : '<div style="color:#789">Your bag is empty.</div>') + `<div style="margin-top:6px">${bar('')}</div>`;
-  form.querySelector('[data-np="input"]')?.focus();
+    : '<div style="color:#a1ada8">Your bag is empty.</div>') + `<div style="margin-top:6px">${bar('')}</div>`;
+  form.querySelector('[data-np="input"]')?.focus({ preventScroll: true });
+  form.scrollIntoView({ block: 'nearest' });
+  recoverFocus();
 }
 // whispers: to one player only, in the chat log in pink, no speech bubble
 function netWhisper(p, textIn) {

@@ -1,5 +1,11 @@
 # UI review
 
+## Multiplayer Tab menu follow-up
+
+The existing W95 font, mint rules and dark panels are retained. Player rows now expand one at a time, with grouped whisper/gift/teleport/home controls, separate location/status lines and a fixed room header and Done footer. The body scrolls independently; forms wrap on narrow phones and honor UI scaling. Keyed rows preserve focus, drafts and scroll during live updates and arrivals. Tab still previews while held; mouse interaction or arrow-key navigation pins the menu, Escape closes it, and keyboard focus stays inside until closing. Departing recipients clear their forms and restore focus. Closing blurs the hidden panel so Tab can reopen it.
+
+Validation: two new browser checks plus five existing social/teleport/home/background checks pass; the existing full players-menu/whisper/cash/item/visit/ride/taxi flow also passes. Four bundle freshness/parser checks pass. The new busy-room layout check fails against the exact pre-change bundle. Native desktop, 390px phone, 320px cash form, short landscape and 2560×1440 at 200% UI scale were reviewed; screenshots remain under `work/tab-menu-*`. Seven-peer warmed menu updates measured a local median 0.0 ms before / 0.1 ms after, p95 0.1 / 0.2 ms (100 samples each, coarse browser timing). No new animation-frame work is added; these are local UI observations, not an FPS guarantee.
+
 Keep ASCII City's pixel font, straight edges, restrained colour and ASCII game art. Improve hierarchy, legibility and use of space across desktop, controller and touch. Preserve existing actions, prices, saves and minigame rules. Changes are made in `city/*.js`, followed by the canonical rebuild. Each chunk needs native browser evidence, failing-before checks and real control coverage.
 
 ## Review findings

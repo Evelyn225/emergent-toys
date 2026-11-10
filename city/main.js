@@ -7,7 +7,7 @@ function relock(e) {
 onkeydown = e => {
   if (netTyping() || netMenuOpen()) return;
   if(netPlayersOpen()&&e.code!=='Tab'){if(e.code==='Escape')closeNetPlayers();return;} // (the chat box and the multiplayer menu keep their keys: net.js)
-  if (netPlayersKey(e)) { if (!e.isTrusted && netPlayersOpen()) netPlayersPinned = true; return; } // (Tab: the players menu, net.js; from a phone's or pad's button it stays open)
+  if (netPlayersKey(e)) { if (!e.isTrusted && netPlayersOpen()) netPinPlayers(); return; } // (Tab: the players menu, net.js; from a phone's or pad's button it stays open)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
