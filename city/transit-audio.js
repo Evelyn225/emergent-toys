@@ -45,8 +45,8 @@ function transitSnapshot() {
   }
   // The platform train continues its existing cycle while a rider picks a destination.
   if (mode === 'room' && (room.kind === 'station' || room.kind === 'train' && room.dest == null)) {
-    const phase = mod(T - room.t0, TRAIN_CYCLE);
-    return { phase, cycle: Math.floor((T - room.t0) / TRAIN_CYCLE) };
+    const phase = trainPhase(room);
+    return { phase, cycle: net.on && NET_FEATURES.clock ? Math.floor((dayNum * 24 + tod) * 20 / TRAIN_CYCLE) : Math.floor((T - room.t0) / TRAIN_CYCLE) };
   }
   return null;
 }
@@ -217,7 +217,7 @@ function stepTransitAnnouncements() {
     if (before.phase < 6 && now.phase >= 6 && room.kind === 'station') transitReminder('alight');
     if (before.phase < 18 - TRANSIT_PA.doorsLead && now.phase >= 18 - TRANSIT_PA.doorsLead) {
       const stationRoom = room;
-      transitAnnounce('doors', null, () => room === stationRoom && mod(T - room.t0, TRAIN_CYCLE) < 18, 1);
+      transitAnnounce('doors', null, () => room === stationRoom && trainPhase(room) < 18, 1);
     }
   }
 }

@@ -329,7 +329,7 @@ function openBigMap() {
   paused = true;
   for(const key in K)K[key]=0;
   releaseMouse();bigMapDraw();
-  const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
+  const tick = () => { if (!bigMapOpen()) return; if((net.on||BIGMAP.places.some(p=>p.kind==='player'))&&performance.now()-netMapRefreshT>=500){netRefreshMapPlaces(true);mapDirectoryUI();} bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
 }
 // Typing filters the directory; Enter visits matching results in distance order.

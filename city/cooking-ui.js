@@ -5,7 +5,7 @@
 // ---- out of doors: a kettle grill on its three legs, the coals glowing while you're cooking on it; and a campfire in its
 // ring of stones on Lighthouse Island, always burning a little, roaring while there's something over it
 let cookCtx = null; // what's on, and where: { on: 'stove' | 'grill' | 'fire', spot, recipe, pantry }
-const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : null;
+const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : netHomeCooking() ? 'stove' : null;
 SOLID_SHADE.grill = o => (i,t,L)=>{
   const f=HIT.face,w=HIT.w,lit=cookCtx&&cookCtx.spot===o.spot&&game&&game.g.id==='cook';
   if(w<.06&&f!==5){

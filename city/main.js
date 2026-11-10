@@ -5,7 +5,8 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
-  if (netTyping() || netMenuOpen()) return; // (the chat box and the multiplayer menu keep their keys: net.js)
+  if (netTyping() || netMenuOpen()) return;
+  if(netPlayersOpen()&&e.code!=='Tab'){if(e.code==='Escape')closeNetPlayers();return;} // (the chat box and the multiplayer menu keep their keys: net.js)
   if (netPlayersKey(e)) { if (!e.isTrusted && netPlayersOpen()) netPlayersPinned = true; return; } // (Tab: the players menu, net.js; from a phone's or pad's button it stays open)
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && ASCII_CITY_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
@@ -316,14 +317,18 @@ function drive(dt) {
 }
 
 let t0 = performance.now();
-function loop(t) {
-  netFrame(t); // (multiplayer: sent and received whatever else is going on, the menus and cabinets included: net.js)
+function loop(t,fromTimer=false,draw=true) {
+  netFrame(t,fromTimer); // (multiplayer: sent and received whatever else is going on, the menus and cabinets included: net.js)
   if(!game)hideMinigamePresentation();
-  controllerTick(clamp((t-t0)/1000,0,.05));
-  if (paused) { skateFixedReset();t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if(!fromTimer)controllerTick(clamp((t-t0)/1000,0,.05));
+  if (paused&&!net.on) { skateFixedReset();t0=t;hushSirens();transitSync();if(!fromTimer)requestAnimationFrame(loop);return; }
+  // Multiplayer menus stop input, not gravity, momentum or the rest of the city.
+  if(paused||fromTimer||netPlayersOpen()||netTyping()||netMenuOpen()){
+    for(const key in K)K[key]=0;for(const axis in CONTROLLER.motion)CONTROLLER.motion[axis]=0;gun.aimHeld=false;
+  }
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  if (freecam) { skateFixedReset();transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); if(!fromTimer)requestAnimationFrame(loop); return; }
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt;CONTROLLER.sampleT=T; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
@@ -336,8 +341,8 @@ function loop(t) {
   stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { skateFixedReset(); // a cabinet or a shift has the screen; the world carries on behind it
-    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); else hideMinigamePresentation(); audioTick(dt);
-    requestAnimationFrame(loop); return;
+    stepTraffic(dt, T); stepGame(dt); if(draw){if (game) drawGame(); else hideMinigamePresentation();} if(!fromTimer)audioTick(dt);
+    if(!fromTimer)requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
   if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && handheldMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
@@ -435,9 +440,9 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   stepTransitAnnouncements();
-  renderView(dt);
-  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
-  requestAnimationFrame(loop);
+  if(draw)renderView(dt);
+  if(!fromTimer){audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);}
+  if(!fromTimer)requestAnimationFrame(loop);
 }
 // the view from wherever the camera is this frame (behind the car, the plane, the board; the TV at the football; or your
 // own eyes, swaying if you've had a drink), drawn with render(). Also run with dt 0 for a screenshot (screenshots.js)

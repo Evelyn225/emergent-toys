@@ -123,7 +123,7 @@ const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px
 const homeSpot = () => {
   const s=room.def.spots;if(!s)return null;let best=null,bd=1.3;
   for(const k in s) {
-    if(room.guestHome&&k!=='tv'&&k!=='terrace')continue; // (a friend's place: their bed, closet and kitchen aren't yours to use, net.js)
+    if(room.guestHome&&!['tv','terrace','stove','workshop'].includes(k))continue; // (a friend's place: their bed, closet and kitchen aren't yours to use, net.js)
     let d=Math.hypot(px-s[k][0],py-s[k][1]);
     if(k==='bed' && room.def.bedBounds) {
       const [x,y,hx,hy]=room.def.bedBounds;
