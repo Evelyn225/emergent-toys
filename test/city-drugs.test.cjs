@@ -64,3 +64,14 @@ test('weed and Neon both attract buyers and mixed sales pay each quality without
   ev('sellDrugBatch()');assert.equal(ev('money'),76);assert.equal(ev('closet[0].uses'),3);
   assert.equal(ev('drugBuyerInterested(0,()=>0)'),true);
 });
+
+test('milk is sold with dairy and a sip fully clears both drug effects without consuming the whole carton',()=>{
+  const {ev}=loadCity();
+  for(const word of ['GROCERY','BODEGA','24/7','DELI','DELICATESSEN'])assert.ok(ev(`stockFor('',${JSON.stringify(word)}).includes('milk')`));
+  ev(`money=100;buy('milk');addDrugEffect('weed','perfect');addDrugEffect('neon','fine');stepDrugEffects(3);`);
+  assert.ok(ev(`drugVisualStrength('weed')>0&&drugVisualStrength('neon')>0`));
+  assert.match(ev('useHeld({})[0]'),/vision clears/);
+  assert.equal(ev('inv[0].uses'),2);assert.equal(ev('money'),97);
+  assert.equal(ev('drugEffectTags().length'),0);assert.equal(ev(`drugVisualStrength('weed')+drugVisualStrength('neon')`),0);
+  ev('useHeld({});useHeld({})');assert.equal(ev('inv.length'),0);
+});

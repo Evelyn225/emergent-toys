@@ -125,7 +125,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const bg = BG[i]; BG[i] = BG_UNSET;
       const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
-      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = 0; }
+      if (drew) { ZB[i] = t; FL[i] = 0; NOGLOW[i] = drawNoGlow; }
     }
   }
 }
@@ -161,6 +161,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 // set for the one render a screenshot takes (screenshots.js): just the world, no HUD and nothing in your hand
 let cleanShot = false;
 function render(dt,sceneOnly=false,mask=null) {
+  if(!sceneOnly)hudReadouts.length=0;
   videoBackroomTick();
   if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
@@ -264,9 +265,10 @@ function render(dt,sceneOnly=false,mask=null) {
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   if (!city) { roomPools(); tvGlow(); } // pools of light under a room's lamps, dim between; a TV's glow (room-light.js)
-  drawHaze(); // smoke hanging in the air, over everything it's in front of
   // (particles.js: after the puddles' reflections, before the fog)
-  if (city) { reflect(); drawParticles(dt); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); drawParticles(dt); fogSteps(); } else { FOGS.fill(0); FOGB.fill(0); }
+  drawHaze(); // Composite the cloud after atmospheric attenuation, keeping both depth layers.
+  if(city){drawFireworks();rainFx(dt);}
   if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
   if (city) { drawAnglerLines(); netDrawLines(); } // (the regulars' lines too; and other players', net.js)
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
@@ -310,6 +312,7 @@ const GLP_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0);
 const GLP_FS = `precision highp float;
 uniform sampler2D cells, pal, atlas; uniform vec2 grid, cell, atlasSize; uniform float slotW, canvasW, canvasH; uniform vec3 fog;
 vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+${FOG_SAMPLE_GLSL}
 #ifdef PF
 // the per-pixel post effects (post-fx.js postFxGrid sets these). Only in the program built with PF defined, so with
 // them all off the frame is drawn by the plain program, exactly as before (a GPU without real branches would
@@ -335,11 +338,12 @@ void main() {
   if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
   vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
   float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
-  vec3 col = mix(palette(d.b), fog, fb / 8.0);
-  if (d.r < 254.5 && fs < 7.5) {
+  vec2 mist=sampleGridFog(p/cell,vec2(fs,fb)/15.0);
+  vec3 col = mix(palette(d.b), fog, mist.y);
+  if (d.r < 254.5 && fs < 14.5) {
     vec2 l = p - c * cell;
     float a = texture2D(atlas, vec2((d.r * slotW + l.x) / atlasSize.x, l.y / atlasSize.y)).a;
-    col = mix(col, mix(palette(d.g), fog, fs / 8.0), a);
+    col = mix(col, mix(palette(d.g), fog, mist.x), a);
   }
 #ifdef PF
   col = postFx(col);
@@ -412,8 +416,8 @@ function glPresent(world = true) {
   const D = st.data, odd = []; // (cells whose character isn't plain ASCII: drawn over the top after)
   for (let i = 0, n = cols * rows; i < n; i++) {
     const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4, block = code >= 0x2580 ? BLOCK_CELLS.indexOf(ch) : -1;
-    D[j] = FOGS[i] >= 8 ? 255 : code > 32 && code < 127 ? code - 32 : block > 0 ? 95 + block : 255;
-    if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < 8 && !(code > 32 && code < 127)) odd.push(i);
+    D[j] = FOGS[i] >= FOG_LEVELS ? 255 : code > 32 && code < 127 ? code - 32 : block > 0 ? 95 + block : 255;
+    if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < FOG_LEVELS && !(code > 32 && code < 127)) odd.push(i);
     D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
   }
   gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
@@ -444,7 +448,7 @@ function present2D() {
   }
   // text: one fillText per run of same-coloured characters on a row (gaps of spaces are allowed inside a run);
   // the font is monospace so a run lines up with the grid, and it's far fewer canvas calls than one per cell
-  const blank = j => CH[j] === ' ' || FOGS[j] === 8; // fully fogged text is invisible
+  const blank = j => CH[j] === ' ' || FOGS[j] === FOG_LEVELS; // fully fogged text is invisible
   const singleWidth = ch => ch.length === 1 && ch.charCodeAt(0) < 128;
   for (let r = 0; r < rows; r++) for (let x = 0; x < cols;) {
     const i = r * cols + x;
@@ -457,12 +461,12 @@ function present2D() {
       if (block > 0) drawBlockCell(g, block, x * cw, r * FS); else g.fillText(CH[i],x * cw,r * FS,cw);
       x++; continue;
     }
-    const key = COL[i] * 9 + FOGS[i];
+    const key = COL[i] * 16 + FOGS[i];
     let s = CH[i], x1 = x + 1, end = x1;
     for (; x1 < cols; x1++) {
       const j = r * cols + x1;
       if (blank(j)) { s += ' '; continue; }
-      if (COL[j] * 9 + FOGS[j] !== key) break;
+      if (COL[j] * 16 + FOGS[j] !== key) break;
       if (!singleWidth(CH[j])) break;
       s += CH[j]; end = x1 + 1;
     }

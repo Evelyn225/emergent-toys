@@ -6,6 +6,9 @@ const MENU_CSS = `
           font: 16px/1.4 'W95', monospace; color: #d9dfda; }
   .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height:calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box;
                  padding: 26px 30px; background: #13191b; border:1px solid #465452; border-top:3px solid #a9d9ca; box-shadow:0 16px 56px #0008; scrollbar-width: thin; scrollbar-color:#63716d #13191b; }
+  .menu .panel { zoom:var(--city-ui-scale,1); max-width:calc((100vw - 24px)/var(--city-ui-scale,1)); max-height:calc((100dvh - 24px)/var(--city-ui-scale,1)) !important; }
+  #bigmap .bar,#bigmap .directory,#bigmap .tip,#net-chat,#controller-hint { zoom:var(--city-ui-scale,1); }
+  #bigmap .directory { max-width:calc((100vw - 24px)/var(--city-ui-scale,1)); }
   .menu h1 { margin: 0 0 2px; font: inherit; font-size: 32px; line-height: 1.1; color: #fff; letter-spacing: 1px; }
   .menu .sub { margin: 0 0 14px; color: #a1ada8; }
   .menu h2 { display: flex; align-items: center; gap: 10px; margin: 20px 0 6px; font: inherit; color: #a9d9ca; letter-spacing:1px; }
