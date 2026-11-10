@@ -23,3 +23,20 @@ test('the ambulance, fire engine and police car outside their stations can be ta
  const tops=await p.evaluate(()=>['amb','fire','police'].map(k=>EV_HANDLING[k].top));assert.ok(tops[2]>tops[0]&&tops[0]>tops[1],'top speed: police > ambulance > fire engine');
  const turn=await p.evaluate(()=>[EV_HANDLING.amb.steer,EV_HANDLING.fire.steer,EV_HANDLING.police.steer]);assert.ok(turn[1]<turn[0]&&turn[0]<1&&turn[2]>1);
 }));
+
+test('stealing an occupied patrol car ejects a uniformed officer who immediately pursues, not a civilian',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  clearWanted();reports.length=0;footCops.length=0;for(const p of people)p.hidden=true;
+  const c=cars.find(c=>c.patrol&&!c.ev&&!c.dropped&&SERVICES.every(s=>near(s.x,s.y,c.x,c.y)>3));
+  c.v=0;c.ex=c.x;c.ey=c.y;px=c.x-c.hy*.3;py=c.y+c.hx*.3;a=Math.atan2(c.hy,c.hx);mode='walk';me=null;render(0);
+  const civilians=people.map(p=>[p.x,p.y]);interact();
+  const officer=footCops[0],look=officer&&copLook(officer);
+  const result={taken:mode==='drive'&&me===c&&c.mine&&!c.patrol,officers:footCops.length,civilianMoved:people.some((p,i)=>p.x!==civilians[i][0]||p.y!==civilians[i][1]),uniform:look?.hat==='copcap'&&look?.top==='uniform'&&look?.badge,immediate:officer?.chase&&wanted.stars>0,clear:officer&&copFootClear(officer,officer.x,officer.y)};
+  if(officer){
+   c.x=worldCoord(c.x+c.hx*1.2);c.y=worldCoord(c.y+c.hy*1.2);c.ex=px=c.x;c.ey=py=c.y;
+   const before=near(officer.x,officer.y,c.x,c.y);for(let n=0;n<60;n++){T+=1/60;stepCrime(1/60);}result.closesDistance=near(officer.x,officer.y,c.x,c.y)<before-.1;
+   const count=footCops.length;ejectDriver(c);result.noDuplicate=footCops.length===count;
+  }
+  return result;
+ });assert.equal(r.officers,1);assert.equal(r.civilianMoved,false);assert.ok(r.taken&&r.uniform&&r.immediate&&r.clear&&r.closesDistance&&r.noDuplicate,JSON.stringify(r));
+}));
