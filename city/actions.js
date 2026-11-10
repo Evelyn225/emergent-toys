@@ -365,8 +365,8 @@ function interact() {
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb' && sh.base !== 'fire') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
-    const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
-    if (guest) return netEnterAsGuest(guest);
+    const home = homeAt(sh), guest = netInviteAt(sh); // (a friend's place you've been invited to: net.js)
+    if (guest && (!home || mapWaypoint?.id === 'invite:' + guest.from)) return netEnterAsGuest(guest);
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);

@@ -97,7 +97,7 @@ function netLeave() {
   netLog('You left the room.');
   netStatus('Not connected.');
 }
-addEventListener('pagehide', () => { if (net.on) net.tx.leave(); });
+addEventListener('pagehide', () => { if (net.on) { netHomeLeave(); saveGame(); net.tx.leave(); } });
 
 function netPeerJoined(id) {
   if (!net.on || net.peers.has(id)) return;

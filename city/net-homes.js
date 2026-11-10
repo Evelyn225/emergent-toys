@@ -11,7 +11,9 @@ function netHomeEntered(home){const v=netHomeViews?.get(netHomeViewKey(room.gues
 function netHomePeerLeft(id) {
   if(!netHomeGuests)return;
   netHomeGuests.delete(id); netHomeActivity.delete(id);
+  const before=netHomeJobs.size;
   for(const [key,j] of netHomeJobs)if(j.by===id){const h=owned.homes.find(h=>h.cell===j.cell);if(h)workshopState(h).supplies++;netHomeJobs.delete(key);}
+  if(netHomeJobs.size!==before)saveGame();
   for(const [key,q]of netHomePending)if(q.owner===id){netHomePending.delete(key);q.done?.({ok:false,text:'The homeowner disconnected.'});}
 }
 function netHomeLeave(){if(netHomeGuests)for(const id of [...netHomeGuests.keys()])netHomePeerLeft(id);}
@@ -75,7 +77,7 @@ function netHomeMessage(type,d,from,p,now) {
   const permission=netHomeGuests.get(from),h=owned.homes.find(h=>h.cell===d.cell),s=netViewOf(p);
   if(!permission||permission.cell!==d.cell||permission.until<now||!h)return true;
   if(type==='homeActivity'){
-    if(s?.rk!==homeRoomKind(h.kind)+':'+h.cell%N+','+Math.floor(h.cell/N))return true;
+    if(s?.rk!==netRoomKey('room',{kind:homeRoomKind(h.kind),cell:[h.cell%N,Math.floor(h.cell/N)],guestOf:net.selfId}))return true;
     permission.until=now+1800;
     netHomeActivity.set(from,{cell:d.cell,cooking:!!d.cooking,t:now});
     const j=netHomeJobs.get(d.cell+':'+d.bench);if(j?.by===from)j.until=now+90;return true;

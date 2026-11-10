@@ -4,7 +4,7 @@ Sketch, not a spec. Line refs are to `city/` as of this writing.
 
 ## Social follow-up (protocol 12)
 
-- Public interiors identify the building, not the exact point where someone pressed E. Stations identify their station; carriage IDs and arrival phases use the shared 45-second train cycle.
+- Public interiors identify the building, not the exact point where someone pressed E. Private flats also identify their owner; following a marked invitation selects the friend's flat even if you own one in the same building. Stations identify their station; carriage IDs and arrival phases use the shared 45-second train cycle.
 - Player map locations travel separately from interior coordinates. The map directory searches player names, keeps vehicle/interior markers, and labels last-known positions for quiet peers. Player waypoints follow the latest location.
 - Multiplayer menus block input while simulation and rendering continue. The background fallback steps normal physics too, so airborne players land. Offline pause stays unchanged.
 - Chat entry uses transparent monospace text and a terminal prompt. Give-money forms show a live available balance.

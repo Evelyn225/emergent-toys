@@ -172,3 +172,9 @@ test('custom player appearances accept only bounded choices and keep legacy colo
  assert.deepEqual(j(ev,`netCheckTick(${JSON.stringify(d)}).loc`),d.loc);
  assert.equal(ev(`netCheckTick(${JSON.stringify({...d,loc:{x:null,y:90}})}).loc`),undefined);
  });
+
+ test('online flats distinguish owners while an invited guest shares the host room',()=>{
+ const {ev}=loadCity();
+ const keys=j(ev,`(()=>{net.on=true;net.selfId='ann';const host=netRoomKey('room',{kind:'home',cell:[12,40]});net.selfId='bob';return [host,netRoomKey('room',{kind:'home',cell:[12,40]}),netRoomKey('room',{kind:'home',cell:[12,40],guestOf:'ann'})];})()`);
+ assert.notEqual(keys[0],keys[1]);assert.equal(keys[0],keys[2]);
+ });

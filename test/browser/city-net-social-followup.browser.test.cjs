@@ -49,10 +49,13 @@ test('same subway station and train draw peers despite different entry times and
  assert.equal(await A.evaluate(()=>{render(0);return [...net.peers.values()][0].drawn;}),true);
  const phases=await Promise.all([A,B].map(p=>p.evaluate(()=>trainPhase(room))));assert.ok(Math.abs(phases[0]-phases[1])<1,'one shared train timetable');
  const clock=await A.evaluate(()=>[dayNum,tod]);
- for(const [i,p]of [A,B].entries())await p.evaluate(([i,clock])=>{[dayNum,tod]=clock;enterRoom('train',{st:2,t0:T-10,opts:[],dest:null,track:0},[2,2.5+i*.6,Math.PI/2]);netSendTick(netNow());},[i,clock]);
+ for(const [i,p]of [A,B].entries())await p.evaluate(([i,clock])=>{[dayNum,tod]=clock;enterRoom('train',{st:2,t0:T-10,opts:[],dest:null,track:0},[2,2.5+i*.6,i?-Math.PI/2:Math.PI/2]);netSendTick(netNow());},[i,clock]);
  await until(A,()=>netViewOf([...net.peers.values()][0])?.rk===netRoomKey());
- assert.equal(await A.evaluate(()=>{render(0);return [...net.peers.values()][0].drawn;}),true);
- assert.equal(await B.evaluate(()=>{render(0);return [...net.peers.values()][0].drawn;}),true);
+ await until(B,()=>netViewOf([...net.peers.values()][0])?.rk===netRoomKey());
+ for(const p of [A,B]){
+  const visible=await p.evaluate(()=>{let pixels=0;const draw=drawFigure;drawFigure=(...args)=>{const peer=args.at(-1)?.hold?.hello;if(!peer)return draw(...args);const beforeCH=CH.slice(),beforeBG=BG.slice(),beforeCOL=COL.slice();const result=draw(...args);for(let i=0;i<cols*rows;i++)if(CH[i]!==beforeCH[i]||BG[i]!==beforeBG[i]||COL[i]!==beforeCOL[i])pixels++;return result;};try{render(0);return {drawn:[...net.peers.values()][0].drawn,pixels};}finally{drawFigure=draw;}});
+  assert.equal(visible.drawn,true);assert.ok(visible.pixels>0,'the other rider paints actual pixels: '+JSON.stringify(visible));
+ }
  await B.evaluate(()=>{room.netBoard++;netSendTick(netNow());});await until(A,()=>netViewOf([...net.peers.values()][0])?.rk!==netRoomKey());
  assert.equal(await A.evaluate(()=>{render(0);return [...net.peers.values()][0].drawn;}),false,'a different train remains separate');
 }));
@@ -71,6 +74,11 @@ async function sharedHome(A,B){
 
 test('invited guests share TV, cooking activity, workshop reserves and harvests with the owner',()=>pair(async(A,B)=>{
  await sharedHome(A,B);
+ const hostKey=await A.evaluate(()=>netRoomKey());
+ const ownKey=await B.evaluate(()=>{const h=JSON.parse(JSON.stringify(room.guestHome));owned.homes.push(h);const cell=room.cell;leaveRoom();enterRoom('home',{cell,ret:[...(h.door||[h.cell%N+.5,Math.floor(h.cell/N)+.5]),0]},ROOM_DEFS.home.entry);return netRoomKey();});
+ assert.notEqual(ownKey,hostKey,'two owners in the same building have separate flats');
+ const visited=await B.evaluate(()=>{leaveRoom();const p=[...net.peers.values()][0];netGoToInvite(p);const v=net.invites.get(p.id),sh=SHOP[v.cell],d=doors.find(d=>d.sh===sh);cars.length=0;px=d.x;py=d.y;a=Math.atan2(-d.ny,-d.nx);render(0);lookHit={mx:v.cell%N,my:Math.floor(v.cell/N),d:.1};interact();netSendTick(netNow());return {guest:room?.guestOf,rk:netRoomKey()};});
+ assert.equal(visited.guest,await A.evaluate(()=>net.selfId),'the marked invitation selects the friend flat at the shared door');assert.equal(visited.rk,hostKey);
  await B.evaluate(()=>netHomeTVToggle());await until(A,()=>room.tv===true);await until(B,()=>room.tv===true);
  assert.equal(await A.evaluate(()=>{const h=homeRecord(),cell=room.cell,ret=room.ret,kind=room.kind;leaveRoom();enterRoom(kind,{cell,ret},ROOM_DEFS[kind].entry);return room.tv;}),true,'returning owners retain the shared TV state');
  await A.evaluate(()=>netHomeTVToggle());await until(B,()=>room.tv===false);

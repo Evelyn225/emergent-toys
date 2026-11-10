@@ -13868,7 +13868,7 @@ const netCode = s => netClean(s, NET_CODE_MAX).toLowerCase().replace(/[^a-z0-9-]
 // its own, so two players are only in the same one if they came in by the same door.
 function netRoomKey(m = mode, r = room) {
   if (m !== 'room' || !r) return 'out';
-  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
+  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + (net.on ? (r.guestOf || net.selfId) + ':' : '') + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
   if (r.kind === 'station') return 'station:' + r.st;
   if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 20 / 45)); // (a carriage has no street door: the station it left and the shared 45-second arrival cycle)
   if (r.kind === 'stadium' || r.kind === 'terminal' || r.kind === 'lighthouse' || r.kind === 'lamproom') return r.kind + ':shared';
@@ -30635,8 +30635,8 @@ function interact() {
     if (sh.stadium) return openStadiumTickets(); // (the Yards ground's turnstiles: stadium.js)
     if (sh.base && sh.base !== 'amb' && sh.base !== 'fire') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
-    const home = homeAt(sh), guest = !home && netInviteAt(sh); // (a friend's place you've been invited to: net.js)
-    if (guest) return netEnterAsGuest(guest);
+    const home = homeAt(sh), guest = netInviteAt(sh); // (a friend's place you've been invited to: net.js)
+    if (guest && (!home || mapWaypoint?.id === 'invite:' + guest.from)) return netEnterAsGuest(guest);
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
@@ -57675,7 +57675,7 @@ function netLeave() {
   netLog('You left the room.');
   netStatus('Not connected.');
 }
-addEventListener('pagehide', () => { if (net.on) net.tx.leave(); });
+addEventListener('pagehide', () => { if (net.on) { netHomeLeave(); saveGame(); net.tx.leave(); } });
 
 function netPeerJoined(id) {
   if (!net.on || net.peers.has(id)) return;
@@ -59186,7 +59186,9 @@ function netHomeEntered(home){const v=netHomeViews?.get(netHomeViewKey(room.gues
 function netHomePeerLeft(id) {
   if(!netHomeGuests)return;
   netHomeGuests.delete(id); netHomeActivity.delete(id);
+  const before=netHomeJobs.size;
   for(const [key,j] of netHomeJobs)if(j.by===id){const h=owned.homes.find(h=>h.cell===j.cell);if(h)workshopState(h).supplies++;netHomeJobs.delete(key);}
+  if(netHomeJobs.size!==before)saveGame();
   for(const [key,q]of netHomePending)if(q.owner===id){netHomePending.delete(key);q.done?.({ok:false,text:'The homeowner disconnected.'});}
 }
 function netHomeLeave(){if(netHomeGuests)for(const id of [...netHomeGuests.keys()])netHomePeerLeft(id);}
@@ -59250,7 +59252,7 @@ function netHomeMessage(type,d,from,p,now) {
   const permission=netHomeGuests.get(from),h=owned.homes.find(h=>h.cell===d.cell),s=netViewOf(p);
   if(!permission||permission.cell!==d.cell||permission.until<now||!h)return true;
   if(type==='homeActivity'){
-    if(s?.rk!==homeRoomKind(h.kind)+':'+h.cell%N+','+Math.floor(h.cell/N))return true;
+    if(s?.rk!==netRoomKey('room',{kind:homeRoomKind(h.kind),cell:[h.cell%N,Math.floor(h.cell/N)],guestOf:net.selfId}))return true;
     permission.until=now+1800;
     netHomeActivity.set(from,{cell:d.cell,cooking:!!d.cooking,t:now});
     const j=netHomeJobs.get(d.cell+':'+d.bench);if(j?.by===from)j.until=now+90;return true;

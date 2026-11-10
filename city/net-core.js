@@ -42,7 +42,7 @@ const netCode = s => netClean(s, NET_CODE_MAX).toLowerCase().replace(/[^a-z0-9-]
 // its own, so two players are only in the same one if they came in by the same door.
 function netRoomKey(m = mode, r = room) {
   if (m !== 'room' || !r) return 'out';
-  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
+  if (r.cell && ['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return r.kind + ':' + (net.on ? (r.guestOf || net.selfId) + ':' : '') + Math.floor(r.cell[0]) + ',' + Math.floor(r.cell[1]); // (a home: by its cell, so its owner and a guest in by the same door are in the same place)
   if (r.kind === 'station') return 'station:' + r.st;
   if (r.kind === 'train') return 'train:' + r.st + ':' + (r.netBoard ??= Math.floor((dayNum * 24 + tod) * 20 / 45)); // (a carriage has no street door: the station it left and the shared 45-second arrival cycle)
   if (r.kind === 'stadium' || r.kind === 'terminal' || r.kind === 'lighthouse' || r.kind === 'lamproom') return r.kind + ':shared';
