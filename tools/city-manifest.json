@@ -30,6 +30,7 @@
     "city/gas.js",
     "city/damage.js",
     "city/emergency-incidents.js",
+    "city/fire-shapes.js",
     "city/aircraft.js",
     "city/fighters.js",
     "city/people.js",

@@ -442,6 +442,12 @@ function loop(t) {
 // the view from wherever the camera is this frame (behind the car, the plane, the board; the TV at the football; or your
 // own eyes, swaying if you've had a drink), drawn with render(). Also run with dt 0 for a screenshot (screenshots.js)
 function renderView(dt) {
+  // GPS, map distances and arrival prompts use the player, even while the world
+  // is temporarily rendered from a chase, aircraft, boat or TV camera.
+  const previous=mapRenderPosition;mapRenderPosition=mapPlayerLocation();
+  try{return renderCameraView(dt);}finally{mapRenderPosition=previous;}
+}
+function renderCameraView(dt) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
