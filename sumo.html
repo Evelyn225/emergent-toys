@@ -26,7 +26,7 @@
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #1b1424;
+      background: #efe9df;
       overflow: hidden;
       touch-action: none;
       user-select: none;
@@ -47,13 +47,13 @@
       pointer-events: auto;
       width: 64px; height: 64px;
       border-radius: 50%;
-      border: 3px solid #f4e7cf;
-      background: #1b1424;
-      color: #f4e7cf;
+      border: 3px solid #1d1b22;
+      background: transparent;
+      color: #1d1b22;
       font: bold 18px 'W95', monospace;
       touch-action: none;
     }
-    #touch button.on { background: #ff6b57; color: #1b1424; }
+    #touch button.on { background: #1d1b22; color: #efe9df; }
   </style>
 </head>
 <body>
@@ -65,7 +65,7 @@
          text-decoration: none; font-family: sans-serif; font-size: 18px;
          transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
          line-height: 1; display: flex; align-items: center; justify-content: center;"
-  onmouseover="this.style.transform='scale(1.2) rotate(5deg)';this.style.background='rgba(255,107,87,0.9)';this.style.borderColor='rgba(255,255,255,0.6)'"
+  onmouseover="this.style.transform='scale(1.2) rotate(5deg)';this.style.background='rgba(232,85,62,0.9)';this.style.borderColor='rgba(255,255,255,0.6)'"
   onmouseout="this.style.transform='scale(1) rotate(0deg)';this.style.background='rgba(0,0,0,0.8)';this.style.borderColor='rgba(255,255,255,0.3)'"
   onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
   onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
@@ -110,7 +110,7 @@ const ctx = cv.getContext('2d');
 
 // ── World + tuning ──────────────────────────────────────────────────
 const WW = 1000, WH = 600;                 // logical world size
-const PX0 = 200, PX1 = 800, PY = 420, TH = 46; // dohyo platform
+const PX0 = 200, PX1 = 800, PY = 420, TH = 18; // the ring: one ink bar
 const N = 28, R = 44;                      // skin points, rest radius
 const SUB = 8, DT = 1 / 60, H = DT / SUB;  // fixed step + substeps
 const G = 2300, DAMP = 0.9995;
@@ -123,20 +123,11 @@ const CHARGE_T = 0.75, SLAM_CD = 0.55, SLAM_RANGE = R * 2.7, WIN = 3;
 const OUT_Y = PY + 170;
 const TAU = Math.PI * 2;
 
-// One palette for everything. Solids are INK with a CREAM rim light;
-// the only saturated colours on screen belong to the two wrestlers.
-const PAL = {
-  ink:   '#1b1424',
-  ink2:  '#33253f',  // distant silhouettes, ring top face
-  cream: '#f4e7cf',  // rim light, eyes, sun, text
-  sky0:  '#2a1c3b',
-  sky1:  '#4a2848',
-  sky2:  '#77344f',
-  sky3:  '#a84a54',
-};
+// Minimal palette: paper, ink, and one colour per wrestler.
+const PAL = { paper: '#efe9df', ink: '#1d1b22' };
 const COLORS = [
-  { line: '#ff6b57', rgb: '255,107,87', name: 'RED' },
-  { line: '#43c6ac', rgb: '67,198,172', name: 'JADE' },
+  { fill: '#e8553e', name: 'RED' },
+  { fill: '#2a9d8f', name: 'GREEN' },
 ];
 
 // ── Body ────────────────────────────────────────────────────────────
@@ -289,7 +280,9 @@ function ground(b) {
     if (X <= PX0 || X >= PX1 || Y <= PY || Y >= PY + TH) continue;
     const dTop = Y - PY, dL = X - PX0, dR = PX1 - X, dBot = PY + TH - Y;
     const m = Math.min(dTop, dL, dR, dBot);
-    if (m === dTop) {
+    // came from above last substep → always land on top (no tunnelling
+    // through the thin bar on hard falls)
+    if (m === dTop || b.py[i] <= PY) {
       b.y[i] = PY;
       b.px[i] = b.x[i] - (b.x[i] - b.px[i]) * (1 - FR); // friction
       b.touch = true;
@@ -320,8 +313,7 @@ let bodies = [];
 let scores = [0, 0];
 let stateT = 0, msg = '', msgT = 0, loser = -1;
 let timeScale = 1, shake = 0, titleReset = 0;
-const parts = [];
-const impacts = [];   // comic impact stars on slam hits
+const rings = [];     // expanding impact rings on slam hits
 
 function newRound() {
   bodies = [makeBody(PX0 + 150, PY - R - 4, 0), makeBody(PX1 - 150, PY - R - 4, 1)];
@@ -452,12 +444,9 @@ function release(b, o) {
     }
     o.stun = 0.15 + 0.25 * c;
     shake = Math.max(shake, 5 + 12 * c);
-    const hx = (b.cx + o.cx) / 2, hy = (b.cy + o.cy) / 2;
-    burst(hx, hy, (10 + 14 * c) | 0, b.col.rgb, 260 + 260 * c);
-    impacts.push({ x: hx, y: hy, r: 26 + 34 * c, rot: Math.random() * TAU, t: 0, life: 0.2 });
+    rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 40 + 50 * c, t: 0, life: 0.28 });
     sfx('slam', c);
   } else {
-    burst(b.cx, b.maxY, 6, b.col.rgb, 120);
     sfx('puff');
   }
 }
@@ -469,17 +458,7 @@ function post(b, dt) {
   const was = b.onGround;
   b.onGround = b.touch;
   if (b.onGround && !was && vyBefore > 350) {
-    burst(b.cx, PY, 8, '244,231,207', 160);
     sfx('land');
-  }
-}
-
-// ── Particles ───────────────────────────────────────────────────────
-function burst(x, y, n, rgb, spd) {
-  for (let i = 0; i < n && parts.length < 400; i++) {
-    const a = Math.random() * TAU, s = spd * (0.3 + Math.random());
-    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - spd * 0.3,
-                 life: 1, decay: 1.2 + Math.random() * 1.5, size: 2 + Math.random() * 3, rgb });
   }
 }
 
@@ -537,13 +516,8 @@ function update(dt) {
     }
   }
 
-  for (let i = impacts.length - 1; i >= 0; i--) {
-    if ((impacts[i].t += dt) >= impacts[i].life) impacts.splice(i, 1);
-  }
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const p = parts[i];
-    p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-    if ((p.life -= p.decay * dt) <= 0) parts.splice(i, 1);
+  for (let i = rings.length - 1; i >= 0; i--) {
+    if ((rings[i].t += dt) >= rings[i].life) rings.splice(i, 1);
   }
   shake *= 0.85;
   for (const k in hit) delete hit[k];
@@ -580,10 +554,9 @@ function sfx(type, amt = 1) {
 }
 
 // ── Render ──────────────────────────────────────────────────────────
-// Flat silhouette style: no gradients, no blur, no alpha fades.
-// Every solid is INK with a 2px CREAM rim on its lit edge. Wrestlers are
-// ink bodies wrapped in a thick outline in their own colour; the outline
-// is stroked first and the fill laid on top, so it only shows outside.
+// Minimal: flat paper, one ink bar for the ring, flat-colour blobs with a
+// uniform ink outline and two dot eyes. Expression lives in the eyes and
+// the outline weight only.
 let DPR = 1, SW = 0, SH = 0, SCALE = 1, OX = 0, OY = 0;
 function resize() {
   DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -595,273 +568,115 @@ function resize() {
 }
 addEventListener('resize', resize);
 
-const HILLS = [[-3000, 400], [-200, 380], [60, 330], [170, 368], [300, 338], [420, 384],
-               [580, 348], [720, 390], [860, 334], [1000, 372], [1200, 344], [4000, 400]];
-
-function drawSky() {
-  // flat sunset bands (drawn huge so they also fill any letterbox)
-  const bands = [[-3000, 150, PAL.sky0], [150, 250, PAL.sky1], [250, 330, PAL.sky2], [330, 4000, PAL.sky3]];
-  for (const [y0, y1, c] of bands) { ctx.fillStyle = c; ctx.fillRect(-3000, y0, 7000, y1 - y0); }
-
-  // sun, sliced by sky-coloured stripes
-  ctx.fillStyle = PAL.cream;
-  ctx.beginPath(); ctx.arc(WW / 2, 300, 150, 0, TAU); ctx.fill();
-  ctx.fillStyle = PAL.sky3;
-  for (let i = 0; i < 4; i++) ctx.fillRect(WW / 2 - 160, 338 + i * 20, 320, 3 + i * 3);
-
-  // far hills
-  ctx.fillStyle = PAL.ink2;
-  ctx.beginPath();
-  ctx.moveTo(-3000, 4000);
-  for (const [x, y] of HILLS) ctx.lineTo(x, y);
-  ctx.lineTo(4000, 4000);
-  ctx.fill();
-}
-
-function drawTassel(x, color) {
-  ctx.strokeStyle = PAL.ink; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(x, 100); ctx.lineTo(x, 112); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(x, 124, 6, 12, 0, 0, TAU);
-  ctx.fillStyle = color; ctx.fill();
-  ctx.lineWidth = 3; ctx.stroke();
-}
-
-function drawArena() {
-  // hanging roof: cables, silhouette, cream rim, player-coloured tassels
-  ctx.strokeStyle = PAL.ink; ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(330, -300); ctx.lineTo(330, 60);
-  ctx.moveTo(670, -300); ctx.lineTo(670, 60);
-  ctx.stroke();
+function drawRing() {
   ctx.fillStyle = PAL.ink;
   ctx.beginPath();
-  ctx.moveTo(236, 100); ctx.lineTo(764, 100); ctx.lineTo(700, 64); ctx.lineTo(300, 64);
-  ctx.closePath(); ctx.fill();
-  ctx.fillRect(316, 56, 368, 9);
-  ctx.fillStyle = PAL.cream;
-  ctx.fillRect(316, 56, 368, 2);
-  drawTassel(250, COLORS[0].line);
-  drawTassel(750, COLORS[1].line);
-
-  // pillar
-  ctx.fillStyle = PAL.ink;
-  ctx.beginPath();
-  ctx.moveTo(PX0 + 12, PY + TH); ctx.lineTo(PX1 - 12, PY + TH);
-  ctx.lineTo(PX1 - 72, WH + 600); ctx.lineTo(PX0 + 72, WH + 600);
+  ctx.roundRect(PX0, PY, PX1 - PX0, TH, TH / 2);
   ctx.fill();
-
-  // ring: top face, front face, rim, rope line
-  ctx.fillStyle = PAL.ink2; ctx.fillRect(PX0, PY, PX1 - PX0, 10);
-  ctx.fillStyle = PAL.ink;  ctx.fillRect(PX0, PY + 10, PX1 - PX0, TH - 10);
-  ctx.fillStyle = PAL.cream; ctx.fillRect(PX0, PY, PX1 - PX0, 2);
-  ctx.fillStyle = PAL.ink2; ctx.fillRect(PX0 + 14, PY + 26, PX1 - PX0 - 28, 3);
-
-  // straw bales at the edge
-  for (const x of [PX0, PX1 - 22]) {
-    ctx.fillStyle = PAL.ink;   ctx.fillRect(x, PY - 7, 22, 9);
-    ctx.fillStyle = PAL.cream; ctx.fillRect(x, PY - 7, 22, 2);
-  }
-
-  // shikiri-sen start lines, in each wrestler's colour
-  ctx.fillStyle = COLORS[0].line; ctx.fillRect(WW / 2 - 54, PY + 4, 14, 3);
-  ctx.fillStyle = COLORS[1].line; ctx.fillRect(WW / 2 + 40, PY + 4, 14, 3);
 }
 
 // Closed Catmull-Rom through the skin points → smooth, even outline
-function blobPath(b, ox = 0, oy = 0) {
+function blobPath(b) {
   const x = b.x, y = b.y;
   ctx.beginPath();
-  ctx.moveTo(x[0] + ox, y[0] + oy);
+  ctx.moveTo(x[0], y[0]);
   for (let i = 0; i < N; i++) {
     const i0 = i === 0 ? N - 1 : i - 1, i2 = (i + 1) % N, i3 = (i + 2) % N;
     ctx.bezierCurveTo(
-      x[i] + (x[i2] - x[i0]) / 6 + ox,  y[i] + (y[i2] - y[i0]) / 6 + oy,
-      x[i2] - (x[i3] - x[i]) / 6 + ox,  y[i2] - (y[i3] - y[i]) / 6 + oy,
-      x[i2] + ox, y[i2] + oy);
+      x[i] + (x[i2] - x[i0]) / 6,  y[i] + (y[i2] - y[i0]) / 6,
+      x[i2] - (x[i3] - x[i]) / 6,  y[i2] - (y[i3] - y[i]) / 6,
+      x[i2], y[i2]);
   }
   ctx.closePath();
-}
-
-function drawShadow(b) {
-  if (b.cx < PX0 + 10 || b.cx > PX1 - 10 || b.maxY > PY + 2) return;
-  const h = Math.min(1, (PY - b.maxY) / 260);
-  ctx.fillStyle = PAL.ink;
-  ctx.beginPath();
-  ctx.ellipse(b.cx, PY + 5, R * (0.85 - 0.5 * h), 3.5, 0, 0, TAU);
-  ctx.fill();
 }
 
 function drawBody(b, o) {
-  const col = b.col;
-  const ew = b.maxX - b.minX, eh = b.maxY - b.minY;
-  const OUT = 9 + (b.charging ? 6 * b.charge : 0) + (b.puffT > 0 ? 4 : 0);
-  const kx = b.cx, ky = b.minY - 3; // topknot sits on the crown
-
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-
-  // Outline pass (knot + body), then fill pass → one merged silhouette
-  ctx.strokeStyle = col.line; ctx.lineWidth = OUT;
-  ctx.beginPath(); ctx.ellipse(kx, ky, 8, 6.5, 0, 0, TAU); ctx.stroke();
-  blobPath(b); ctx.stroke();
-  ctx.fillStyle = PAL.ink;
-  ctx.beginPath(); ctx.ellipse(kx, ky, 8, 6.5, 0, 0, TAU); ctx.fill();
-  blobPath(b); ctx.fill();
-
-  ctx.save();
-  blobPath(b); ctx.clip();
-
-  // rim light: same path nudged down-right, stroked → crescent top-left
-  blobPath(b, 4, 4);
-  ctx.strokeStyle = PAL.cream; ctx.lineWidth = 3;
+  blobPath(b);
+  ctx.fillStyle = b.col.fill;
+  ctx.fill();
+  ctx.lineWidth = 4 + (b.charging ? 4 * b.charge : 0);
+  ctx.strokeStyle = PAL.ink;
   ctx.stroke();
 
-  // mawashi belt + fringe
-  const by = b.cy + eh * 0.16, bh = Math.max(8, eh * 0.17);
-  ctx.fillStyle = col.line;
-  ctx.fillRect(b.minX - 10, by, ew + 20, bh);
-  ctx.fillStyle = PAL.ink;
-  ctx.fillRect(b.minX - 10, by + bh * 0.5 - 1, ew + 20, 2);
-  ctx.fillStyle = col.line;
-  for (let k = -2; k <= 2; k++) ctx.fillRect(b.cx + k * 7 - 1.5, by + bh, 3, eh * 0.11);
-  ctx.restore();
-
-  // face: stays upright while the skin tumbles, looks at the opponent
-  const ex = ew * 0.17, ey = b.cy - eh * 0.12;
+  // eyes stay upright while the skin tumbles, and track the opponent
+  const ew = b.maxX - b.minX, eh = b.maxY - b.minY;
+  const ex = ew * 0.16, ey = b.cy - eh * 0.12;
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
-  const lx = dx / d * 2.6, ly = dy / d * 2.6;
+  const lx = dx / d * 2, ly = dy / d * 2;
+  ctx.fillStyle = PAL.ink; ctx.strokeStyle = PAL.ink; ctx.lineWidth = 3.5;
   for (const s of [-1, 1]) {
     const X = b.cx + s * ex;
-    if (b.stun > 0) {
-      ctx.strokeStyle = PAL.cream; ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(X - 5, ey - 5); ctx.lineTo(X + 5, ey + 5);
-      ctx.moveTo(X + 5, ey - 5); ctx.lineTo(X - 5, ey + 5);
-      ctx.stroke();
+    if (b.stun > 0) {                    // dazed: flat
+      ctx.beginPath(); ctx.moveTo(X - 4, ey); ctx.lineTo(X + 4, ey); ctx.stroke();
+    } else if (b.charging) {             // straining: slanted toward centre
+      ctx.beginPath(); ctx.moveTo(X - s * 4, ey + 2); ctx.lineTo(X + s * 4, ey - 2); ctx.stroke();
     } else {
-      ctx.fillStyle = PAL.cream;
-      ctx.beginPath(); ctx.ellipse(X, ey, 6.5, 7.5, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = PAL.ink;
-      ctx.beginPath(); ctx.arc(X + lx, ey + ly + 0.5, 3.4, 0, TAU); ctx.fill();
-      if (b.charging) { // angry lid slants down toward the middle
-        ctx.beginPath();
-        ctx.moveTo(X - s * 9, ey - 1);
-        ctx.lineTo(X + s * 9, ey - 8);
-        ctx.lineTo(X + s * 9, ey - 14);
-        ctx.lineTo(X - s * 9, ey - 14);
-        ctx.fill();
-      }
+      ctx.beginPath(); ctx.arc(X + lx, ey + ly, b.puffT > 0 ? 4.5 : 3.5, 0, TAU); ctx.fill();
     }
-    // blush
-    ctx.fillStyle = col.line;
-    ctx.beginPath(); ctx.ellipse(X + s * 4, ey + 11, 4, 2, 0, 0, TAU); ctx.fill();
-  }
-
-  // mouth
-  const my = ey + 14;
-  if (b.puffT > 0 || b.stun > 0) {
-    ctx.strokeStyle = PAL.cream; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.ellipse(b.cx, my + 1, 3.5, 4.5, 0, 0, TAU); ctx.stroke();
-  } else if (b.charging) { // gritted teeth
-    ctx.fillStyle = PAL.cream; ctx.fillRect(b.cx - 6, my - 2, 12, 5);
-    ctx.fillStyle = PAL.ink;
-    ctx.fillRect(b.cx - 2.5, my - 2, 1.5, 5); ctx.fillRect(b.cx + 1, my - 2, 1.5, 5);
-  } else {
-    ctx.fillStyle = PAL.cream; ctx.fillRect(b.cx - 4, my, 8, 2);
-  }
-
-  // charge ring above the topknot
-  if (b.charging) {
-    const cy = ky - 24;
-    ctx.lineCap = 'butt';
-    ctx.strokeStyle = PAL.ink; ctx.lineWidth = 8;
-    ctx.beginPath(); ctx.arc(kx, cy, 9, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = b.charge >= 1 ? PAL.cream : col.line; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(kx, cy, 9, -Math.PI / 2, -Math.PI / 2 + TAU * b.charge); ctx.stroke();
-    ctx.lineCap = 'round';
   }
 }
 
-function drawImpact(e) {
-  const k = e.t / e.life, r = e.r * (0.6 + 0.6 * k);
-  ctx.beginPath();
-  for (let i = 0; i < 20; i++) {
-    const a = e.rot + i / 20 * TAU, rr = i % 2 ? r * 0.45 : r;
-    ctx[i ? 'lineTo' : 'moveTo'](e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr);
+function drawRings() {
+  ctx.strokeStyle = PAL.ink;
+  for (const e of rings) {
+    const k = e.t / e.life, ease = 1 - (1 - k) * (1 - k);
+    ctx.lineWidth = 5 * (1 - k);
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r * (0.3 + 0.7 * ease), 0, TAU); ctx.stroke();
   }
-  ctx.closePath();
-  ctx.lineJoin = 'miter';
-  ctx.lineWidth = 4; ctx.strokeStyle = PAL.ink; ctx.stroke();
-  ctx.fillStyle = k < 0.5 ? PAL.cream : PAL.ink2;
-  ctx.fill();
-  ctx.lineJoin = 'round';
 }
 
-function text(str, x, y, size, color, align = 'center') {
+function text(str, x, y, size, alpha = 1, align = 'center', color = PAL.ink) {
+  ctx.globalAlpha = alpha;
   ctx.font = `bold ${size}px W95, monospace`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(4, size * 0.18);
-  ctx.strokeStyle = PAL.ink;
-  ctx.strokeText(str, x, y);
   ctx.fillStyle = color;
   ctx.fillText(str, x, y);
+  ctx.globalAlpha = 1;
 }
 
 function drawHUD() {
   if (mode === 'title') {
-    text('SOFT BODY SUMO', WW / 2, 182, 54, PAL.cream);
-    if ((performance.now() / 500 | 0) % 2 === 0) {
-      text('[1] VS CPU', WW / 2 - 110, 236, 18, COLORS[0].line);
-      text('[2] TWO PLAYERS', WW / 2 + 90, 236, 18, COLORS[1].line);
-    }
-    text('P1   A D MOVE  ·  W JUMP  ·  HOLD S, RELEASE TO SLAM', WW / 2, 520, 13, COLORS[0].line);
-    text('P2   ARROWS MOVE  ·  UP JUMP  ·  HOLD DOWN, RELEASE TO SLAM', WW / 2, 546, 13, COLORS[1].line);
-    text('PUSH THEM OFF THE RING  ·  FIRST TO 3', WW / 2, 576, 11, PAL.cream);
+    text('soft body sumo', WW / 2, 190, 40);
+    text('1  vs cpu        2  two players', WW / 2, 240, 15, 0.7);
+    text('p1   a d move   w jump   hold s to slam', WW / 2, 500, 12, 0.45);
+    text('p2   arrows move   ↑ jump   hold ↓ to slam', WW / 2, 524, 12, 0.45);
     return;
   }
 
-  // score pips
-  text('P1', WW / 2 - 116, 30, 15, COLORS[0].line, 'right');
-  text(vsCPU ? 'CPU' : 'P2', WW / 2 + 116, 30, 15, COLORS[1].line, 'left');
+  // score: label + three pips per side
+  text('p1', WW / 2 - 104, 40, 12, 0.6, 'right');
+  text(vsCPU ? 'cpu' : 'p2', WW / 2 + 104, 40, 12, 0.6, 'left');
+  ctx.lineWidth = 2.5; ctx.strokeStyle = PAL.ink;
   for (let p = 0; p < 2; p++) {
     for (let k = 0; k < WIN; k++) {
-      const x = WW / 2 + (p ? 1 : -1) * (28 + k * 24);
-      ctx.beginPath(); ctx.arc(x, 30, 7, 0, TAU);
-      ctx.lineWidth = 6; ctx.strokeStyle = PAL.ink; ctx.stroke();
-      ctx.fillStyle = k < scores[p] ? COLORS[p].line : PAL.ink; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = COLORS[p].line; ctx.stroke();
+      const x = WW / 2 + (p ? 1 : -1) * (26 + k * 20);
+      ctx.beginPath(); ctx.arc(x, 40, 6, 0, TAU);
+      if (k < scores[p]) { ctx.fillStyle = COLORS[p].fill; ctx.fill(); }
+      ctx.stroke();
     }
   }
 
   if (msgT > 0) {
-    const pop = msg === 'SUMO!' ? 1 + Math.max(0, msgT - 0.5) * 2 : 1;
-    text(msg, WW / 2, 236, 58 * pop, PAL.cream);
+    const pop = msg === 'SUMO!' ? 1 + Math.max(0, msgT - 0.5) * 1.5 : 1;
+    text(msg.toLowerCase(), WW / 2, 240, 44 * pop);
   }
-  if (mode === 'over') {
-    text('[SPACE] REMATCH     [ESC] MENU', WW / 2, 288, 16, PAL.cream);
-  }
+  if (mode === 'over') text('space  rematch      esc  menu', WW / 2, 286, 13, 0.55);
 }
 
 function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  ctx.fillStyle = PAL.ink2;
+  ctx.fillStyle = PAL.paper;
   ctx.fillRect(0, 0, SW, SH);
 
   const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
   ctx.setTransform(DPR * SCALE, 0, 0, DPR * SCALE, (OX + sx * SCALE) * DPR, (OY + sy * SCALE) * DPR);
 
-  drawSky();
-  drawArena();
+  drawRing();
   const [A, B] = bodies;
-  drawShadow(A); drawShadow(B);
   drawBody(A, B); drawBody(B, A);
-
-  for (const p of parts) {
-    ctx.fillStyle = `rgb(${p.rgb})`;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 0.6 * p.life + 0.5, 0, TAU); ctx.fill();
-  }
-  for (const e of impacts) drawImpact(e);
+  drawRings();
   drawHUD();
 }
 
