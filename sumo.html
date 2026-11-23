@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <link rel="apple-touch-icon" sizes="180x180"
     href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32"
@@ -26,23 +26,25 @@
     canvas { display: block; }
     #touch {
       position: fixed;
-      left: 0; right: 0; bottom: 16px;
+      left: 0; right: 0;
+      bottom: calc(18px + env(safe-area-inset-bottom));
       display: none;
       justify-content: space-between;
-      padding: 0 16px;
+      padding: 0 calc(18px + env(safe-area-inset-right)) 0 calc(18px + env(safe-area-inset-left));
       z-index: 50;
       pointer-events: none;
     }
-    #touch .grp { display: flex; gap: 12px; }
+    #touch .grp { display: flex; gap: 14px; }
     #touch button {
       pointer-events: auto;
-      width: 64px; height: 64px;
+      width: 72px; height: 72px;
       border-radius: 50%;
       border: 3px solid #1d1b22;
-      background: transparent;
+      background: #efe9df;
       color: #1d1b22;
-      font: 600 20px 'Fredoka', sans-serif;
+      font: 600 22px 'Fredoka', sans-serif;
       touch-action: none;
+      -webkit-tap-highlight-color: transparent;
     }
     #touch button.on { background: #1d1b22; color: #efe9df; }
   </style>
@@ -344,9 +346,21 @@ function humanCtl(p) {
   return { left: keys.ArrowLeft, right: keys.ArrowRight, jump: hit.ArrowUp, slam: keys.ArrowDown };
 }
 
-// Touch controls (player 1)
+// ── Touch ───────────────────────────────────────────────────────────
+// Phones get on-screen buttons for player 1 during a match only; menus
+// become tap targets since there's no keyboard to read hints for.
+const TOUCH = matchMedia('(pointer: coarse)').matches;
 const touchEl = document.getElementById('touch');
-if (matchMedia('(pointer: coarse)').matches) touchEl.style.display = 'flex';
+let touchShown = false;
+function syncTouch() {
+  const show = TOUCH && (mode === 'ready' || mode === 'fight' || mode === 'ringout');
+  if (show === touchShown) return;
+  touchShown = show;
+  touchEl.style.display = show ? 'flex' : 'none';
+  if (!show) touchEl.querySelectorAll('button').forEach(btn => {
+    keys[btn.dataset.k] = false; btn.classList.remove('on');
+  });
+}
 touchEl.querySelectorAll('button').forEach(btn => {
   const k = btn.dataset.k;
   const down = e => { e.preventDefault(); keys[k] = true; hit[k] = true; btn.classList.add('on'); unlockAudio(); };
@@ -356,35 +370,69 @@ touchEl.querySelectorAll('button').forEach(btn => {
   btn.addEventListener('pointercancel', up);
   btn.addEventListener('pointerleave', up);
 });
-cv.addEventListener('pointerdown', () => {
+
+// Menu taps / clicks, hit-tested against a text row's on-screen y
+const MENU_DIFF_Y = 284, MENU_BACK_Y = 298;
+const onRow = (e, y) => Math.abs(e.clientY - (OY + y * SCALE)) < Math.max(24, 20 * SCALE);
+cv.addEventListener('pointerdown', e => {
   unlockAudio();
-  if (mode === 'title') startMatch(true);
-  else if (mode === 'over') startMatch(vsCPU);
+  if (mode === 'title') {
+    if (onRow(e, MENU_DIFF_Y)) cycleDiff(1);
+    else startMatch(true);
+  } else if (mode === 'over') {
+    if (TOUCH && onRow(e, MENU_BACK_Y) && Math.abs(e.clientX - (OX + WW / 2 * SCALE)) < 70) toTitle();
+    else startMatch(vsCPU);
+  }
 });
 
 // ── CPU ─────────────────────────────────────────────────────────────
-function aiCtl(b, o, dt) {
+// Difficulty only changes how the CPU decides, never its physics.
+const DIFFS = [
+  // slow to react, often stands still, weak hesitant slams, never dodges
+  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,    edgeJump: 0.15, idle: 0.35, escape: 0 },
+  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2,  edgeJump: 0.5,  idle: 0,    escape: 0 },
+  // fast; only crouches once it's close (charging halves your speed), holds
+  // the charge until contact, fires early to beat your slam, goes full power
+  // when you're near the edge, and hops over you when it's pinned
+  { name: 'hard',   react: [0.03, 0.05], slamP: 0.95, slamDist: 2.5, target: [0.60, 0.40], dodge: 0.35, edgeJump: 0.85, idle: 0,    escape: 0.5, smart: true },
+];
+let diff = 1;
+try { const v = localStorage.getItem('sumo-diff'); if (v !== null && +v >= 0 && +v < DIFFS.length) diff = +v; } catch (e) {}
+function cycleDiff(step) {
+  diff = (diff + step + DIFFS.length) % DIFFS.length;
+  try { localStorage.setItem('sumo-diff', diff); } catch (e) {}
+}
+
+function aiCtl(b, o, dt, D) {
   const s = b.ai;
   s.t -= dt;
   const dx = o.cx - b.cx, dy = o.cy - b.cy, dist = Math.hypot(dx, dy);
   const mid = (PX0 + PX1) / 2;
   const myEdge = Math.min(b.cx - PX0, PX1 - b.cx);
+  const oEdge  = Math.min(o.cx - PX0, PX1 - o.cx);
   if (s.t <= 0) {
-    s.t = 0.07 + Math.random() * 0.13; // reaction time
-    s.move = Math.sign(dx) || 1;
+    s.t = D.react[0] + Math.random() * D.react[1]; // reaction time
+    s.move = Math.random() < D.idle ? 0 : Math.sign(dx) || 1;
     if (b.cx < PX0 + 20 || b.cx > PX1 - 20) s.move = Math.sign(mid - b.cx);
-    if (o.charging && dist < R * 3 && myEdge > 160 && Math.random() < 0.2) s.move = -Math.sign(dx);
-    if (!s.slam && b.cd <= 0 && dist < R * 3.4 && Math.random() < 0.75) {
-      s.slam = true; s.target = 0.3 + Math.random() * 0.7;
+    if (o.charging && dist < R * 3 && myEdge > 160 && Math.random() < D.dodge) s.move = -Math.sign(dx);
+    if (!s.slam && b.cd <= 0 && dist < R * D.slamDist && Math.random() < D.slamP) {
+      s.slam = true; s.target = D.target[0] + Math.random() * D.target[1];
     }
-    if (myEdge < 70 && o.charging && b.onGround && Math.random() < 0.5) s.jump = true;
+    if (myEdge < 70 && o.charging && b.onGround && Math.random() < D.edgeJump) s.jump = true;
+    // pinned at the edge with the opponent on the inside: hop over them
+    if (myEdge < 90 && Math.sign(mid - b.cx) === Math.sign(dx) && dist < R * 2.6 &&
+        b.onGround && Math.random() < D.escape) s.jump = true;
     if (dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
     if (Math.random() < 0.015) s.jump = true;
   }
   const c = { left: s.move < 0, right: s.move > 0, jump: s.jump, slam: false };
   s.jump = false;
   if (s.slam) {
-    if (b.charge >= s.target || (b.charging && dist < R * 2.15 && b.charge > 0.3) || b.cd > 0) s.slam = false;
+    const contact = dist < R * 2.15;
+    const release = D.smart
+      ? (contact && (b.charge >= (oEdge < 140 ? 0.9 : 0.45) || (o.charging && b.charge >= 0.2))) || dist > R * 4
+      : b.charge >= s.target || (b.charging && contact && b.charge > 0.3);
+    if (release || b.cd > 0) s.slam = false;
     else c.slam = true;
   }
   return c;
@@ -421,18 +469,21 @@ function applyCtl(b, o, c, dt) {
 
 function release(b, o) {
   const c = Math.max(0.2, b.charge);
+  // Diminishing returns past half charge: full charge = 0.65 power, so a
+  // big slam still wins the shove but doesn't fling anyone off the ring.
+  const p = c <= 0.5 ? c : 0.5 + (c - 0.5) * 0.3;
   b.charging = false; b.charge = 0; b.cd = SLAM_CD;
-  b.puffT = 0.14; b.puffAmt = 1 + 0.25 * c;
+  b.puffT = 0.14; b.puffAmt = 1 + 0.25 * p;
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
   if (d < SLAM_RANGE) {
     const nx = dx / d, ny = dy / d;
-    const F = 70 + 230 * c, lift = 20 + 40 * c;
+    const F = 70 + 230 * p, lift = 20 + 40 * p;
     const vx = nx * F, vy = ny * F * 0.35 - lift;
     for (let i = 0; i < N; i++) {
       o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
       b.px[i] += vx * 0.22 * H;               // recoil
     }
-    o.stun = 0.08 + 0.14 * c;
+    o.stun = 0.08 + 0.14 * p;
     shake = Math.max(shake, 2 + 6 * c);
     rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 34 + 36 * c, t: 0, life: 0.28 });
     sfx('slam', c);
@@ -457,6 +508,8 @@ function update(dt) {
   if (mode === 'title') {
     if (hit.Digit1 || hit.Numpad1) startMatch(true);
     else if (hit.Digit2 || hit.Numpad2) startMatch(false);
+    else if (hit.ArrowLeft || hit.KeyA) cycleDiff(-1);
+    else if (hit.ArrowRight || hit.KeyD) cycleDiff(1);
   } else if (mode === 'over' && (hit.Space || hit.Enter)) {
     startMatch(vsCPU);
   }
@@ -466,10 +519,10 @@ function update(dt) {
   const [A, B] = bodies;
   let ca = {}, cb = {};
   if (mode === 'title') {
-    ca = aiCtl(A, B, dt); cb = aiCtl(B, A, dt); // attract mode
+    ca = aiCtl(A, B, dt, DIFFS[1]); cb = aiCtl(B, A, dt, DIFFS[1]); // attract mode
   } else if (mode !== 'ready') {
     ca = humanCtl(0);
-    cb = vsCPU ? aiCtl(B, A, dt) : humanCtl(1);
+    cb = vsCPU ? aiCtl(B, A, dt, DIFFS[diff]) : humanCtl(1);
   }
   applyCtl(A, B, ca, dt);
   applyCtl(B, A, cb, dt);
@@ -509,6 +562,7 @@ function update(dt) {
     if ((rings[i].t += dt) >= rings[i].life) rings.splice(i, 1);
   }
   shake *= 0.85;
+  syncTouch();
   for (const k in hit) delete hit[k];
 }
 
@@ -552,8 +606,13 @@ function resize() {
   SW = innerWidth; SH = innerHeight;
   cv.width = SW * DPR; cv.height = SH * DPR;
   cv.style.width = SW + 'px'; cv.style.height = SH + 'px';
-  SCALE = Math.min(SW / WW, SH / WH);
-  OX = (SW - WW * SCALE) / 2; OY = (SH - WH * SCALE) / 2;
+  // Portrait: frame just the ring (700 wide) instead of squeezing the
+  // whole 1000-wide world into a thin strip, and sit it a bit high so the
+  // thumb buttons get the bottom of the screen.
+  const portrait = SW < SH;
+  SCALE = Math.min(SW / (portrait ? 700 : WW), SH / WH);
+  OX = (SW - WW * SCALE) / 2;
+  OY = (SH - WH * SCALE) * (portrait ? 0.38 : 0.5);
 }
 addEventListener('resize', resize);
 
@@ -624,7 +683,9 @@ function drawRings() {
   }
 }
 
+const MIN_TEXT_PX = 11;
 function text(str, x, y, size, alpha = 1, align = 'center', color = PAL.ink) {
+  size = Math.max(size, MIN_TEXT_PX / SCALE);
   ctx.globalAlpha = alpha;
   ctx.font = `600 ${size}px Fredoka, sans-serif`;
   ctx.textAlign = align;
@@ -635,22 +696,32 @@ function text(str, x, y, size, alpha = 1, align = 'center', color = PAL.ink) {
 }
 
 function drawHUD() {
+  const dname = DIFFS[diff].name;
   if (mode === 'title') {
     text('soft body sumo', WW / 2, 190, 40);
-    text('1  vs cpu        2  two players', WW / 2, 240, 15, 0.7);
-    text('p1   a d move   w jump   hold s to slam', WW / 2, 500, 12, 0.45);
-    text('p2   arrows move   ↑ jump   hold ↓ to slam', WW / 2, 524, 12, 0.45);
+    if (TOUCH) {
+      text('tap to play', WW / 2, 240, 16, 0.7);
+      text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 15, 0.55);
+      text('\u25c0 \u25b6 move    \u25b2 jump    hold \u25cf to slam', WW / 2, 512, 12, 0.45);
+    } else {
+      text('1  vs cpu        2  two players', WW / 2, 240, 15, 0.7);
+      text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 15, 0.55);
+      text('p1   a d move   w jump   hold s to slam', WW / 2, 500, 12, 0.45);
+      text('p2   arrows move   \u2191 jump   hold \u2193 to slam', WW / 2, 524, 12, 0.45);
+    }
     return;
   }
 
-  // score: label + three pips per side
-  text('p1', WW / 2 - 104, 40, 12, 0.6, 'right');
-  text(vsCPU ? 'cpu' : 'p2', WW / 2 + 104, 40, 12, 0.6, 'left');
+  // score: label + three pips per side. Pinned near the top of the
+  // screen, which in portrait is well above the world's own top edge.
+  const sy = Math.min(40, (34 - OY) / SCALE);
+  text('p1', WW / 2 - 104, sy, 12, 0.6, 'right');
+  text(vsCPU ? `cpu \u00b7 ${dname}` : 'p2', WW / 2 + 104, sy, 12, 0.6, 'left');
   ctx.lineWidth = 2.5; ctx.strokeStyle = PAL.ink;
   for (let p = 0; p < 2; p++) {
     for (let k = 0; k < WIN; k++) {
       const x = WW / 2 + (p ? 1 : -1) * (26 + k * 20);
-      ctx.beginPath(); ctx.arc(x, 40, 6, 0, TAU);
+      ctx.beginPath(); ctx.arc(x, sy, 6, 0, TAU);
       if (k < scores[p]) { ctx.fillStyle = COLORS[p].fill; ctx.fill(); }
       ctx.stroke();
     }
@@ -658,9 +729,21 @@ function drawHUD() {
 
   if (msgT > 0) {
     const pop = msg === 'SUMO!' ? 1 + Math.max(0, msgT - 0.5) * 1.5 : 1;
-    text(msg.toLowerCase(), WW / 2, 240, 44 * pop);
+    text(msg.toLowerCase(), WW / 2, mode === 'over' ? 196 : 240, 44 * pop);
   }
-  if (mode === 'over') text('space  rematch      esc  menu', WW / 2, 286, 13, 0.55);
+  if (mode === 'over') {
+    if (TOUCH) {
+      text('tap to rematch', WW / 2, 246, 14, 0.6);
+      // "menu" gets an outlined pill so it reads as its own button
+      const h = Math.max(30, 34 / SCALE), w = h * 2.6;
+      ctx.lineWidth = Math.max(2.5, 2 / SCALE); ctx.strokeStyle = PAL.ink; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.roundRect(WW / 2 - w / 2, MENU_BACK_Y - h / 2, w, h, h / 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      text('menu', WW / 2, MENU_BACK_Y, 14, 0.6);
+    } else {
+      text('space  rematch      esc  menu', WW / 2, 246, 13, 0.55);
+    }
+  }
 }
 
 function draw() {
