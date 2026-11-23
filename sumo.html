@@ -11,19 +11,10 @@
     href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
   <title>Soft Body Sumo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    @font-face {
-      font-family: 'W95';
-      src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff');
-      font-weight: normal;
-      font-style: normal;
-    }
-    @font-face {
-      font-family: 'W95';
-      src: url('w95font-bold.woff2') format('woff2'), url('w95font-bold.woff') format('woff');
-      font-weight: bold;
-      font-style: normal;
-    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: #efe9df;
@@ -50,7 +41,7 @@
       border: 3px solid #1d1b22;
       background: transparent;
       color: #1d1b22;
-      font: bold 18px 'W95', monospace;
+      font: 600 20px 'Fredoka', sans-serif;
       touch-action: none;
     }
     #touch button.on { background: #1d1b22; color: #efe9df; }
@@ -312,7 +303,7 @@ let vsCPU = true;
 let bodies = [];
 let scores = [0, 0];
 let stateT = 0, msg = '', msgT = 0, loser = -1;
-let timeScale = 1, shake = 0, titleReset = 0;
+let shake = 0, titleReset = 0;
 const rings = [];     // expanding impact rings on slam hits
 
 function newRound() {
@@ -320,7 +311,6 @@ function newRound() {
   if (mode !== 'title' && mode !== 'over') {
     mode = 'ready'; stateT = 1.0; msg = 'READY'; msgT = 1.0;
   }
-  timeScale = 1;
 }
 function startMatch(cpu) {
   vsCPU = cpu; scores = [0, 0]; mode = 'ready'; newRound();
@@ -383,8 +373,8 @@ function aiCtl(b, o, dt) {
     s.t = 0.07 + Math.random() * 0.13; // reaction time
     s.move = Math.sign(dx) || 1;
     if (b.cx < PX0 + 20 || b.cx > PX1 - 20) s.move = Math.sign(mid - b.cx);
-    if (o.charging && dist < R * 3 && myEdge > 110 && Math.random() < 0.45) s.move = -Math.sign(dx);
-    if (!s.slam && b.cd <= 0 && dist < R * 3.4 && Math.random() < 0.55) {
+    if (o.charging && dist < R * 3 && myEdge > 160 && Math.random() < 0.2) s.move = -Math.sign(dx);
+    if (!s.slam && b.cd <= 0 && dist < R * 3.4 && Math.random() < 0.75) {
       s.slam = true; s.target = 0.3 + Math.random() * 0.7;
     }
     if (myEdge < 70 && o.charging && b.onGround && Math.random() < 0.5) s.jump = true;
@@ -432,19 +422,19 @@ function applyCtl(b, o, c, dt) {
 function release(b, o) {
   const c = Math.max(0.2, b.charge);
   b.charging = false; b.charge = 0; b.cd = SLAM_CD;
-  b.puffT = 0.14; b.puffAmt = 1 + 0.75 * c;
+  b.puffT = 0.14; b.puffAmt = 1 + 0.25 * c;
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
   if (d < SLAM_RANGE) {
     const nx = dx / d, ny = dy / d;
-    const F = 420 + 1000 * c, lift = 150 + 300 * c;
+    const F = 70 + 230 * c, lift = 20 + 40 * c;
     const vx = nx * F, vy = ny * F * 0.35 - lift;
     for (let i = 0; i < N; i++) {
       o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
       b.px[i] += vx * 0.22 * H;               // recoil
     }
-    o.stun = 0.15 + 0.25 * c;
-    shake = Math.max(shake, 5 + 12 * c);
-    rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 40 + 50 * c, t: 0, life: 0.28 });
+    o.stun = 0.08 + 0.14 * c;
+    shake = Math.max(shake, 2 + 6 * c);
+    rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 34 + 36 * c, t: 0, life: 0.28 });
     sfx('slam', c);
   } else {
     sfx('puff');
@@ -497,12 +487,11 @@ function update(dt) {
     mode = 'fight'; msg = 'SUMO!'; msgT = 0.7; sfx('go');
   } else if (mode === 'fight' && (outA || outB)) {
     loser = outA && outB ? -1 : outA ? 0 : 1;
-    mode = 'ringout'; stateT = 0.7; timeScale = 0.35;
+    mode = 'ringout'; stateT = 1.1; // real-time fall, short beat, next round
     msg = loser < 0 ? 'DOUBLE OUT' : 'RING OUT'; msgT = 0.7;
     shake = Math.max(shake, 10);
     sfx('out');
   } else if (mode === 'ringout' && stateT <= 0) {
-    timeScale = 1;
     if (loser >= 0) scores[1 - loser]++;
     if (scores[0] >= WIN || scores[1] >= WIN) {
       const w = scores[0] >= WIN ? 0 : 1;
@@ -615,6 +604,15 @@ function drawBody(b, o) {
       ctx.beginPath(); ctx.arc(X + lx, ey + ly, b.puffT > 0 ? 4.5 : 3.5, 0, TAU); ctx.fill();
     }
   }
+
+  // player label: 1 / 2, or "cpu" for the computer
+  const isCPU = b.idx === 1 && vsCPU && mode !== 'title';
+  const label = isCPU ? 'cpu' : String(b.idx + 1);
+  const size = Math.min(isCPU ? 17 : 26, eh * (isCPU ? 0.2 : 0.3));
+  ctx.font = `700 ${Math.round(size)}px Fredoka, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = PAL.ink;
+  ctx.fillText(label, b.cx, b.cy + eh * 0.2);
 }
 
 function drawRings() {
@@ -628,7 +626,7 @@ function drawRings() {
 
 function text(str, x, y, size, alpha = 1, align = 'center', color = PAL.ink) {
   ctx.globalAlpha = alpha;
-  ctx.font = `bold ${size}px W95, monospace`;
+  ctx.font = `600 ${size}px Fredoka, sans-serif`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
@@ -680,12 +678,12 @@ function draw() {
   drawHUD();
 }
 
-// ── Main loop: fixed timestep, slow-mo via timeScale ────────────────
+// ── Main loop: fixed timestep ───────────────────────────────────
 let last = performance.now(), acc = 0;
 function loop(now) {
   const frameDt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  acc += frameDt * timeScale;
+  acc += frameDt;
   let steps = 0;
   while (acc >= DT && steps < 5) { update(DT); acc -= DT; steps++; }
   if (steps === 5) acc = 0;
@@ -695,6 +693,8 @@ function loop(now) {
 
 resize();
 newRound();
+document.fonts.load('600 20px Fredoka');
+document.fonts.load('700 20px Fredoka');
 requestAnimationFrame(loop);
 </script>
 </body>
