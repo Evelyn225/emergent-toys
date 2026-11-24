@@ -112,6 +112,7 @@ const KE = 0.2;    // edge spring stiffness
 const KP = 0.2;    // pressure stiffness
 const FR = 0.08;   // ground friction per substep
 const MOVE = 1700, AIRMOVE = 650, ROLL = 1600, MAXV = 430, JUMP = 830;
+const BRAKE = 1800; // ground braking when you let go / reverse (px/s²)
 const CHARGE_T = 0.75, SLAM_CD = 0.55, SLAM_RANGE = R * 2.7, WIN = 3;
 const TAU = Math.PI * 2;
 
@@ -133,7 +134,7 @@ function makeBody(cx, cy, idx) {
     cx, cy, lcx: cx, lcy: cy, vx: 0, vy: 0,
     minX: 0, maxX: 0, minY: 0, maxY: 0,
     pressure: 1, charge: 0, charging: false,
-    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0, airJump: true,
+    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0, airJump: true, knocked: false, knockT: 0,
     ax: 0, roll: 0, touch: false, onGround: false,
     ai: { t: 0, move: 0, slam: false, target: 0.6, jump: false },
   };
@@ -516,10 +517,29 @@ function applyCtl(b, o, c, dt) {
   if (b.stun > 0) { b.stun -= dt; c = { slam: c.slam }; }
   const dir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
   const slow = b.charging ? 0.45 : 1;
-  let ax = dir * (b.onGround ? MOVE : AIRMOVE) * slow;
-  if (dir * b.vx > MAXV * slow) ax = 0;
-  b.ax = ax;
-  b.roll = dir * ROLL * slow * (b.onGround ? 1 : 0.25);
+  // speed cap applies to the spin too (it used to roll on past MAXV)
+  const capped = dir * b.vx > MAXV * slow;
+  b.ax = capped ? 0 : dir * (b.onGround ? MOVE : AIRMOVE) * slow;
+  b.roll = capped ? 0 : dir * ROLL * slow * (b.onGround ? 1 : 0.25);
+
+  // Ground braking. A blob is a wheel and a rolling wheel barely loses
+  // speed, so you used to coast for ages. When you let go, push against
+  // the motion and counter-spin; when you reverse, turn round harder.
+  // Skipped while you're sliding from a slam hit (until you've slowed to
+  // a crawl) so knockback distances don't change. The short grace period
+  // covers the frame of the hit, before the new speed has registered.
+  b.knockT -= dt;
+  if (b.knocked && b.knockT <= 0 && Math.abs(b.vx) < 40) b.knocked = false;
+  if (b.onGround && !b.knocked) {
+    const sv = Math.sign(b.vx), sp = Math.abs(b.vx);
+    if (dir === 0 && sp > 5) {
+      const k = Math.min(1, sp / 120); // ease off near zero: no jitter
+      b.ax = -sv * BRAKE * k;
+      b.roll = -sv * ROLL * k;
+    } else if (dir !== 0 && dir * b.vx < 0) {
+      b.ax += dir * BRAKE * 0.6;
+    }
+  }
 
   // slam first, so letting go of slam and pressing jump on the same
   // frame does both (a released charge no longer blocks the jump)
@@ -578,6 +598,7 @@ function release(b, o) {
       b.px[i] += vx * 0.22 * H;               // recoil
     }
     o.stun = 0.08 + 0.14 * p;
+    o.knocked = true; o.knockT = 0.15;       // let the knockback slide
     shake = Math.max(shake, 2 + 6 * c);
     rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 34 + 36 * c, t: 0, life: 0.28 });
     sfx('slam', c);
