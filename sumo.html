@@ -133,7 +133,7 @@ function makeBody(cx, cy, idx) {
     cx, cy, lcx: cx, lcy: cy, vx: 0, vy: 0,
     minX: 0, maxX: 0, minY: 0, maxY: 0,
     pressure: 1, charge: 0, charging: false,
-    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0,
+    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0, airJump: true,
     ax: 0, roll: 0, touch: false, onGround: false,
     ai: { t: 0, move: 0, slam: false, target: 0.6, jump: false },
   };
@@ -413,12 +413,12 @@ cv.addEventListener('pointerdown', e => {
 // Difficulty only changes how the CPU decides, never its physics.
 const DIFFS = [
   // slow to react, often stands still, weak hesitant slams, never dodges
-  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,    edgeJump: 0.15, idle: 0.35, escape: 0 },
-  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2,  edgeJump: 0.5,  idle: 0,    escape: 0 },
+  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,    edgeJump: 0.15, idle: 0.35, escape: 0,   edgeSense: 0.4, recover: 0.35 },
+  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2,  edgeJump: 0.5,  idle: 0,    escape: 0,   edgeSense: 0.9, recover: 0.9 },
   // fast; only crouches once it's close (charging halves your speed), holds
   // the charge until contact, fires early to beat your slam, goes full power
   // when you're near the edge, and hops over you when it's pinned
-  { name: 'hard',   react: [0.03, 0.05], slamP: 0.95, slamDist: 2.5, target: [0.60, 0.40], dodge: 0.35, edgeJump: 0.85, idle: 0,    escape: 0.5, smart: true },
+  { name: 'hard',   react: [0.03, 0.05], slamP: 0.95, slamDist: 2.5, target: [0.60, 0.40], dodge: 0.35, edgeJump: 0.85, idle: 0,    escape: 0.5, edgeSense: 1,   recover: 1, smart: true },
 ];
 let diff = 1;
 try { const v = localStorage.getItem('sumo-diff'); if (v !== null && +v >= 0 && +v < DIFFS.length) diff = +v; } catch (e) {}
@@ -446,8 +446,27 @@ function aiCtl(b, o, dt, D) {
     // pinned at the edge with the opponent on the inside: hop over them
     if (myEdge < 90 && Math.sign(mid - b.cx) === Math.sign(dx) && dist < R * 2.6 &&
         b.onGround && Math.random() < D.escape) s.jump = true;
-    if (dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
-    if (Math.random() < 0.015) s.jump = true;
+    // Don't hop after an opponent who jumped over you while you're running
+    // at the edge; that's how the edge-bait trick threw the CPU off.
+    const nearEdgeDir = b.cx < (PX0 + PX1) / 2 ? -1 : 1;
+    const runningOut = myEdge < 140 && Math.sign(b.vx) === nearEdgeDir && Math.abs(b.vx) > 60;
+    if (!runningOut && dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
+    if (!runningOut && Math.random() < 0.015) s.jump = true;
+    s.edgeAware = Math.random() < D.edgeSense;
+    // knocked off the ring and dropping: use the recovery jump
+    const offRing = b.cx < PX0 - 4 || b.cx > PX1 + 4;
+    if (offRing && !b.onGround && b.airJump && b.vy > -60 && Math.random() < D.recover) {
+      s.jump = true; s.slam = false; // can't jump while charging
+    }
+  }
+  // Edge sense, checked every frame so it can brake in time: don't run
+  // toward a nearby edge unless the opponent is on the ring between you
+  // and it (then you're pushing them, not yourself, off).
+  if (s.edgeAware && s.move !== 0 && b.onGround) {
+    const ahead = s.move > 0 ? PX1 - b.cx : b.cx - PX0;
+    const oBetween = o.onGround && Math.sign(dx) === s.move && Math.abs(dx) < ahead;
+    const stopDist = 70 + Math.max(0, s.move * b.vx) * 0.3;
+    if (!oBetween && ahead < stopDist) s.move = -s.move;
   }
   const c = { left: s.move < 0, right: s.move > 0, jump: s.jump, slam: false };
   s.jump = false;
@@ -465,7 +484,9 @@ function aiCtl(b, o, dt, D) {
 // ── Controls → forces ───────────────────────────────────────────────
 function applyCtl(b, o, c, dt) {
   b.jumpCd -= dt; b.cd -= dt; b.puffT -= dt;
-  if (b.stun > 0) { b.stun -= dt; c = {}; }
+  // stunned: no moving or jumping, but a held charge keeps building
+  // (getting hit used to wipe your inputs and fire your slam early)
+  if (b.stun > 0) { b.stun -= dt; c = { slam: c.slam }; }
   const dir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
   const slow = b.charging ? 0.45 : 1;
   let ax = dir * (b.onGround ? MOVE : AIRMOVE) * slow;
@@ -473,17 +494,39 @@ function applyCtl(b, o, c, dt) {
   b.ax = ax;
   b.roll = dir * ROLL * slow * (b.onGround ? 1 : 0.25);
 
-  if (c.jump && b.onGround && b.jumpCd <= 0 && !b.charging) {
-    for (let i = 0; i < N; i++) b.py[i] += JUMP * H;
-    b.jumpCd = 0.3;
-    sfx('jump');
-  }
-
+  // slam first, so letting go of slam and pressing jump on the same
+  // frame does both (a released charge no longer blocks the jump)
   if (c.slam && b.cd <= 0) {
     if (!b.charging) { b.charging = true; b.charge = 0; }
     b.charge = Math.min(1, b.charge + dt / CHARGE_T);
   } else if (b.charging) {
     release(b, o);
+  }
+
+  // re-arm the recovery jump only on a real landing (not the frame or two
+  // you're still touching the floor right after a jump)
+  if (b.onGround && b.jumpCd <= 0) b.airJump = true;
+  if (c.jump && b.jumpCd <= 0 && !b.charging) {
+    if (b.onGround) {
+      for (let i = 0; i < N; i++) b.py[i] += JUMP * H;
+      b.airJump = false;          // jumped on purpose: no recovery jump
+      b.jumpCd = 0.3;
+      sfx('jump');
+    } else if (b.airJump) {
+      // Recovery jump: only if you left the ground without jumping
+      // (pushed or slammed off). Replaces your fall speed rather than
+      // adding to it, and swaps most of the sideways knockback for a push
+      // the way you're holding, so you can actually get back to the ring.
+      const nvx = b.vx * 0.25 + dir * 300;
+      for (let i = 0; i < N; i++) {
+        b.py[i] += (b.vy + JUMP) * H;
+        b.px[i] += (b.vx - nvx) * H;
+      }
+      b.airJump = false;
+      b.jumpCd = 0.3;
+      rings.push({ x: b.cx, y: b.maxY, r: 30, t: 0, life: 0.22 });
+      sfx('jump');
+    }
   }
 
   // Crouch deflates, slam over-inflates, otherwise relax to 1
