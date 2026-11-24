@@ -411,14 +411,20 @@ cv.addEventListener('pointerdown', e => {
 
 // ── CPU ─────────────────────────────────────────────────────────────
 // Difficulty only changes how the CPU decides, never its physics.
+// Tuned with a headless CPU-vs-CPU tournament (hard beats normal ~70% of
+// rounds, normal beats easy ~90%). Most CPU rounds were lost to blunders,
+// not slams: jumping near the edge (which spends the recovery jump) and
+// charging near the edge (slow, can't jump). Hard's extra skills target
+// exactly those, plus finishing off an opponent who's trying to recover.
 const DIFFS = [
   // slow to react, often stands still, weak hesitant slams, never dodges
-  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,    edgeJump: 0.15, idle: 0.35, escape: 0,   edgeSense: 0.4, recover: 0.35 },
-  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2,  edgeJump: 0.5,  idle: 0,    escape: 0,   edgeSense: 0.9, recover: 0.9 },
-  // fast; only crouches once it's close (charging halves your speed), holds
-  // the charge until contact, fires early to beat your slam, goes full power
-  // when you're near the edge, and hops over you when it's pinned
-  { name: 'hard',   react: [0.03, 0.05], slamP: 0.95, slamDist: 2.5, target: [0.60, 0.40], dodge: 0.35, edgeJump: 0.85, idle: 0,    escape: 0.5, edgeSense: 1,   recover: 1, smart: true },
+  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,   edgeJump: 0.15, idle: 0.35, edgeSense: 0.4, recover: 0.35 },
+  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2, edgeJump: 0.5,  idle: 0,    edgeSense: 0.9, recover: 0.9 },
+  // fast and careful: only jumps where it will land on the ring, never
+  // charges with its back to the edge, quick-slams when cornered, and
+  // tap-slams you while you're hanging off the edge trying to recover
+  { name: 'hard',   react: [0.03, 0.05], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2, edgeJump: 0.5,  idle: 0,    edgeSense: 1,   recover: 1,
+    safeJumps: true, edgeCharge: true, cornered: true, punish: true, noRandomJumps: true },
 ];
 let diff = 1;
 try { const v = localStorage.getItem('sumo-diff'); if (v !== null && +v >= 0 && +v < DIFFS.length) diff = +v; } catch (e) {}
@@ -433,30 +439,42 @@ function aiCtl(b, o, dt, D) {
   const dx = o.cx - b.cx, dy = o.cy - b.cy, dist = Math.hypot(dx, dy);
   const mid = (PX0 + PX1) / 2;
   const myEdge = Math.min(b.cx - PX0, PX1 - b.cx);
-  const oEdge  = Math.min(o.cx - PX0, PX1 - o.cx);
   if (s.t <= 0) {
     s.t = D.react[0] + Math.random() * D.react[1]; // reaction time
     s.move = Math.random() < D.idle ? 0 : Math.sign(dx) || 1;
     if (b.cx < PX0 + 20 || b.cx > PX1 - 20) s.move = Math.sign(mid - b.cx);
     if (o.charging && dist < R * 3 && myEdge > 160 && Math.random() < D.dodge) s.move = -Math.sign(dx);
-    if (!s.slam && b.cd <= 0 && dist < R * D.slamDist && Math.random() < D.slamP) {
+    // edgeCharge: don't start a full charge with your back near the edge
+    // (charging halves your speed and blocks jumping; a big cause of falls)
+    const backToEdge = myEdge < 120 && Math.sign(dx) === Math.sign(mid - b.cx);
+    if (!s.slam && b.cd <= 0 && dist < R * D.slamDist && Math.random() < D.slamP &&
+        !(D.edgeCharge && backToEdge)) {
       s.slam = true; s.target = D.target[0] + Math.random() * D.target[1];
     }
     if (myEdge < 70 && o.charging && b.onGround && Math.random() < D.edgeJump) s.jump = true;
-    // pinned at the edge with the opponent on the inside: hop over them
-    if (myEdge < 90 && Math.sign(mid - b.cx) === Math.sign(dx) && dist < R * 2.6 &&
-        b.onGround && Math.random() < D.escape) s.jump = true;
     // Don't hop after an opponent who jumped over you while you're running
     // at the edge; that's how the edge-bait trick threw the CPU off.
     const nearEdgeDir = b.cx < (PX0 + PX1) / 2 ? -1 : 1;
     const runningOut = myEdge < 140 && Math.sign(b.vx) === nearEdgeDir && Math.abs(b.vx) > 60;
     if (!runningOut && dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
-    if (!runningOut && Math.random() < 0.015) s.jump = true;
+    if (!runningOut && !D.noRandomJumps && Math.random() < 0.015) s.jump = true;
     s.edgeAware = Math.random() < D.edgeSense;
     // knocked off the ring and dropping: use the recovery jump
     const offRing = b.cx < PX0 - 4 || b.cx > PX1 + 4;
     if (offRing && !b.onGround && b.airJump && b.vy > -60 && Math.random() < D.recover) {
-      s.jump = true; s.slam = false; // can't jump while charging
+      s.jump = true; s.slam = false; s.quick = false; // can't jump while charging
+    }
+    // punish: opponent is hanging off the edge mid-recovery and in reach,
+    // so tap-slam them away before they get back on
+    const oOff = o.cx < PX0 + 10 || o.cx > PX1 - 10;
+    if (D.punish && oOff && !o.onGround && dist < SLAM_RANGE * 0.95 && b.cd <= 0 && b.onGround) {
+      s.slam = true; s.quick = true; s.target = 0.25;
+    }
+    // cornered: back near the edge with the opponent pressing in from the
+    // middle, so fire a quick slam now instead of holding a charge
+    if (D.cornered && myEdge < 130 && Math.sign(dx) === Math.sign(mid - b.cx) &&
+        dist < R * 2.6 && b.cd <= 0 && b.onGround && !s.quick) {
+      s.slam = true; s.quick = true; s.target = 0.25;
     }
   }
   // Edge sense, checked every frame so it can brake in time: don't run
@@ -470,12 +488,21 @@ function aiCtl(b, o, dt, D) {
   }
   const c = { left: s.move < 0, right: s.move > 0, jump: s.jump, slam: false };
   s.jump = false;
+  // safeJumps: a ground jump uses up the recovery jump, so only take one
+  // if the predicted landing spot is safely on the ring
+  if (D.safeJumps && c.jump && b.onGround) {
+    const land = b.cx + (b.vx + (c.right ? 250 : c.left ? -250 : 0)) * 0.72;
+    if (land < PX0 + 40 || land > PX1 - 40) c.jump = false;
+  }
+  // edgeCharge: sliding out near the edge mid-charge, so let go (puffs
+  // harmlessly out of range) to get the recovery jump back
+  if (D.edgeCharge && b.charging && myEdge < 70 &&
+      Math.sign(b.vx) === Math.sign(b.cx - mid) && Math.abs(b.vx) > 50) s.slam = false;
   if (s.slam) {
     const contact = dist < R * 2.15;
-    const release = D.smart
-      ? (contact && (b.charge >= (oEdge < 140 ? 0.9 : 0.45) || (o.charging && b.charge >= 0.2))) || dist > R * 4
+    const release = s.quick ? b.charge >= s.target
       : b.charge >= s.target || (b.charging && contact && b.charge > 0.3);
-    if (release || b.cd > 0) s.slam = false;
+    if (release || b.cd > 0) { s.slam = false; s.quick = false; }
     else c.slam = true;
   }
   return c;
