@@ -477,7 +477,7 @@ function release(b, o) {
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
   if (d < SLAM_RANGE) {
     const nx = dx / d, ny = dy / d;
-    const F = 70 + 230 * p, lift = 20 + 40 * p;
+    const F = 90 + 285 * p, lift = 25 + 50 * p;
     const vx = nx * F, vy = ny * F * 0.35 - lift;
     for (let i = 0; i < N; i++) {
       o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
