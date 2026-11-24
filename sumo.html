@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Soft Body Sumo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #efe9df;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    canvas { display: block; }
+    #touch {
+      position: fixed;
+      left: 0; right: 0;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      display: none;
+      justify-content: space-between;
+      padding: 0 calc(18px + env(safe-area-inset-right)) 0 calc(18px + env(safe-area-inset-left));
+      z-index: 50;
+      pointer-events: none;
+    }
+    #touch .grp { display: flex; gap: 14px; }
+    #touch button {
+      pointer-events: auto;
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: 3px solid #1d1b22;
+      background: #efe9df;
+      color: #1d1b22;
+      font: 600 22px 'Fredoka', sans-serif;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #touch button.on { background: #1d1b22; color: #efe9df; }
+  </style>
+</head>
+<body>
+
+<a href="/"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         padding: 8px; background: rgba(0,0,0,0.8); color: white;
+         border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+         text-decoration: none; font-family: sans-serif; font-size: 18px;
+         transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+         line-height: 1; display: flex; align-items: center; justify-content: center;"
+  onmouseover="this.style.transform='scale(1.2) rotate(5deg)';this.style.background='rgba(232,85,62,0.9)';this.style.borderColor='rgba(255,255,255,0.6)'"
+  onmouseout="this.style.transform='scale(1) rotate(0deg)';this.style.background='rgba(0,0,0,0.8)';this.style.borderColor='rgba(255,255,255,0.3)'"
+  onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+  onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+</a>
+
+<canvas id="c"></canvas>
+
+<div id="touch">
+  <div class="grp">
+    <button data-k="KeyA">&#9664;</button>
+    <button data-k="KeyD">&#9654;</button>
+  </div>
+  <div class="grp">
+    <button data-k="KeyW">&#9650;</button>
+    <button data-k="KeyS">&#9679;</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ── Soft Body Sumo ───────────────────────────────────────────────────
+// Two jelly blobs on a dohyo. Push the other one off.
+//
+// Each blob is a ring of 22 point masses integrated with Verlet at
+// 8 substeps per frame, held together by three soft constraints:
+//   · edge springs        — keep the skin from tearing
+//   · gas pressure        — shoelace area vs. target area, pushed out
+//                           along vertex normals (this is the "jelly")
+//   · shape matching      — a gentle pull toward the best-fit rotated
+//                           rest circle, so blobs never turn inside out
+// Blob-vs-blob contact is real polygon collision: every skin point
+// inside the other blob is pushed out to the nearest edge, with the
+// correction split between the point and that edge's two endpoints.
+//
+// Slam = hold to crouch (pressure drops, blob squashes), release to
+// spike the pressure and shove whatever you're touching.
+
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// ── World + tuning ──────────────────────────────────────────────────
+const WW = 1000, WH = 600;                 // logical world size
+const PX0 = 200, PX1 = 800, PY = 420, TH = 18; // the ring: one ink bar
+const N = 28, R = 44;                      // skin points, rest radius
+const SUB = 8, DT = 1 / 60, H = DT / SUB;  // fixed step + substeps
+const G = 2300, DAMP = 0.9995;
+const KS = 0.02;   // shape-matching stiffness (lower = wobblier)
+const KE = 0.32;   // edge spring stiffness
+const KP = 0.3;    // pressure stiffness
+const FR = 0.08;   // ground friction per substep
+const MOVE = 1700, AIRMOVE = 650, ROLL = 1600, MAXV = 430, JUMP = 830;
+const CHARGE_T = 0.75, SLAM_CD = 0.55, SLAM_RANGE = R * 2.7, WIN = 3;
+const OUT_Y = PY + 170;
+const TAU = Math.PI * 2;
+
+// Minimal palette: paper, ink, and one colour per wrestler.
+const PAL = { paper: '#efe9df', ink: '#1d1b22' };
+const COLORS = [
+  { fill: '#e8553e', name: 'RED' },
+  { fill: '#2a9d8f', name: 'GREEN' },
+];
+
+// ── Body ────────────────────────────────────────────────────────────
+function makeBody(cx, cy, idx) {
+  const b = {
+    idx, col: COLORS[idx],
+    x:  new Float32Array(N), y:  new Float32Array(N),
+    px: new Float32Array(N), py: new Float32Array(N),
+    rx: new Float32Array(N), ry: new Float32Array(N), // rest offsets
+    nx: new Float32Array(N), ny: new Float32Array(N), // scratch normals
+    cx, cy, lcx: cx, lcy: cy, vx: 0, vy: 0,
+    minX: 0, maxX: 0, minY: 0, maxY: 0,
+    pressure: 1, charge: 0, charging: false,
+    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0,
+    ax: 0, roll: 0, touch: false, onGround: false,
+    ai: { t: 0, move: 0, slam: false, target: 0.6, jump: false },
+  };
+  for (let i = 0; i < N; i++) {
+    const a = i / N * TAU;
+    b.rx[i] = Math.cos(a) * R;
+    b.ry[i] = Math.sin(a) * R;
+    b.x[i] = b.px[i] = cx + b.rx[i];
+    b.y[i] = b.py[i] = cy + b.ry[i];
+  }
+  b.A0 = area(b);
+  b.L0 = 2 * R * Math.sin(Math.PI / N);
+  centre(b);
+  return b;
+}
+
+function area(b) {
+  let a = 0;
+  for (let i = 0, j = N - 1; i < N; j = i++) a += b.x[j] * b.y[i] - b.x[i] * b.y[j];
+  return a * 0.5;
+}
+
+function centre(b) {
+  let sx = 0, sy = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (let i = 0; i < N; i++) {
+    const x = b.x[i], y = b.y[i];
+    sx += x; sy += y;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  b.cx = sx / N; b.cy = sy / N;
+  b.minX = x0; b.maxX = x1; b.minY = y0; b.maxY = y1;
+}
+
+// Verlet step. Movement is a uniform push plus a tangential "roll"
+// force around the centroid, so blobs grip the clay and tumble.
+function integrate(b) {
+  const h2 = H * H, ax = b.ax, roll = b.roll / R;
+  for (let i = 0; i < N; i++) {
+    const ox = b.x[i] - b.cx, oy = b.y[i] - b.cy;
+    const vx = (b.x[i] - b.px[i]) * DAMP;
+    const vy = (b.y[i] - b.py[i]) * DAMP;
+    b.px[i] = b.x[i]; b.py[i] = b.y[i];
+    b.x[i] += vx + (ax - oy * roll) * h2;
+    b.y[i] += vy + (G  + ox * roll) * h2;
+  }
+}
+
+function constrain(b) {
+  const s = Math.sqrt(b.pressure); // linear scale of the rest shape
+  centre(b);
+  const cx = b.cx, cy = b.cy;
+
+  // Shape matching: best-fit rotation of rest shape, then pull toward it
+  let num = 0, den = 0;
+  for (let i = 0; i < N; i++) {
+    const ox = b.x[i] - cx, oy = b.y[i] - cy;
+    num += b.rx[i] * oy - b.ry[i] * ox;
+    den += b.rx[i] * ox + b.ry[i] * oy;
+  }
+  const ang = Math.atan2(num, den);
+  const c = Math.cos(ang) * s, sn = Math.sin(ang) * s;
+  for (let i = 0; i < N; i++) {
+    const tx = cx + b.rx[i] * c - b.ry[i] * sn;
+    const ty = cy + b.rx[i] * sn + b.ry[i] * c;
+    b.x[i] += (tx - b.x[i]) * KS;
+    b.y[i] += (ty - b.y[i]) * KS;
+  }
+
+  // Edge springs
+  const L = b.L0 * s;
+  for (let i = 0; i < N; i++) {
+    const j = i === N - 1 ? 0 : i + 1;
+    const dx = b.x[j] - b.x[i], dy = b.y[j] - b.y[i];
+    const d = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+    const k = (d - L) / d * 0.5 * KE;
+    b.x[i] += dx * k; b.y[i] += dy * k;
+    b.x[j] -= dx * k; b.y[j] -= dy * k;
+  }
+
+  // Pressure: area deficit spread over the perimeter, along normals
+  let perim = 0;
+  for (let i = 0; i < N; i++) {
+    const p = i === 0 ? N - 1 : i - 1, n = i === N - 1 ? 0 : i + 1;
+    const tx = b.x[n] - b.x[p], ty = b.y[n] - b.y[p];
+    const l = Math.sqrt(tx * tx + ty * ty) || 1e-6;
+    b.nx[i] = ty / l; b.ny[i] = -tx / l;
+    perim += l * 0.5;
+  }
+  const push = (b.A0 * b.pressure - area(b)) / perim * KP;
+  for (let i = 0; i < N; i++) {
+    b.x[i] += b.nx[i] * push;
+    b.y[i] += b.ny[i] * push;
+  }
+}
+
+function inside(b, X, Y) {
+  let r = false;
+  for (let i = 0, j = N - 1; i < N; j = i++) {
+    const yi = b.y[i], yj = b.y[j];
+    if ((yi > Y) !== (yj > Y) &&
+        X < (b.x[j] - b.x[i]) * (Y - yi) / (yj - yi) + b.x[i]) r = !r;
+  }
+  return r;
+}
+
+// Push every point of `a` that's inside `b` out to b's nearest edge.
+function collide(a, b) {
+  if (a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY) return;
+  for (let i = 0; i < N; i++) {
+    const X = a.x[i], Y = a.y[i];
+    if (X < b.minX || X > b.maxX || Y < b.minY || Y > b.maxY) continue;
+    if (!inside(b, X, Y)) continue;
+    let best = 1e18, bj = 0, bt = 0, qx = 0, qy = 0;
+    for (let j = 0; j < N; j++) {
+      const k = j === N - 1 ? 0 : j + 1;
+      const ex = b.x[k] - b.x[j], ey = b.y[k] - b.y[j];
+      let t = ((X - b.x[j]) * ex + (Y - b.y[j]) * ey) / (ex * ex + ey * ey || 1e-6);
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const cx = b.x[j] + ex * t, cy = b.y[j] + ey * t;
+      const d2 = (cx - X) * (cx - X) + (cy - Y) * (cy - Y);
+      if (d2 < best) { best = d2; bj = j; bt = t; qx = cx; qy = cy; }
+    }
+    const bk = bj === N - 1 ? 0 : bj + 1;
+    const dx = qx - X, dy = qy - Y;
+    a.x[i] += dx * 0.5; a.y[i] += dy * 0.5;
+    const w0 = 1 - bt, w1 = bt, f = 0.5 / (w0 * w0 + w1 * w1);
+    b.x[bj] -= dx * f * w0; b.y[bj] -= dy * f * w0;
+    b.x[bk] -= dx * f * w1; b.y[bk] -= dy * f * w1;
+  }
+}
+
+function ground(b) {
+  for (let i = 0; i < N; i++) {
+    const X = b.x[i], Y = b.y[i];
+    if (X <= PX0 || X >= PX1 || Y <= PY || Y >= PY + TH) continue;
+    const dTop = Y - PY, dL = X - PX0, dR = PX1 - X, dBot = PY + TH - Y;
+    const m = Math.min(dTop, dL, dR, dBot);
+    // came from above last substep → always land on top (no tunnelling
+    // through the thin bar on hard falls)
+    if (m === dTop || b.py[i] <= PY) {
+      b.y[i] = PY;
+      b.px[i] = b.x[i] - (b.x[i] - b.px[i]) * (1 - FR); // friction
+      b.touch = true;
+    } else if (m === dL) b.x[i] = PX0;
+    else if (m === dR)   b.x[i] = PX1;
+    else                 b.y[i] = PY + TH;
+  }
+}
+
+function physics() {
+  const [A, B] = bodies;
+  A.touch = B.touch = false;
+  for (let s = 0; s < SUB; s++) {
+    centre(A); integrate(A);
+    centre(B); integrate(B);
+    constrain(A); constrain(B);
+    centre(A); centre(B);
+    collide(A, B); collide(B, A);
+    ground(A); ground(B);
+  }
+  centre(A); centre(B);
+}
+
+// ── Game state ──────────────────────────────────────────────────────
+let mode = 'title';       // title | ready | fight | ringout | over
+let vsCPU = true;
+let bodies = [];
+let scores = [0, 0];
+let stateT = 0, msg = '', msgT = 0, loser = -1;
+let shake = 0, titleReset = 0;
+const rings = [];     // expanding impact rings on slam hits
+
+function newRound() {
+  bodies = [makeBody(PX0 + 150, PY - R - 4, 0), makeBody(PX1 - 150, PY - R - 4, 1)];
+  if (mode !== 'title' && mode !== 'over') {
+    mode = 'ready'; stateT = 1.0; msg = 'READY'; msgT = 1.0;
+  }
+}
+function startMatch(cpu) {
+  vsCPU = cpu; scores = [0, 0]; mode = 'ready'; newRound();
+}
+function toTitle() {
+  mode = 'title'; msg = ''; msgT = 0; newRound();
+}
+
+// ── Input ───────────────────────────────────────────────────────────
+const keys = {}, hit = {};
+const BLOCK = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'];
+addEventListener('keydown', e => {
+  if (BLOCK.includes(e.code)) e.preventDefault();
+  if (!e.repeat) hit[e.code] = true;
+  keys[e.code] = true;
+  unlockAudio();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+function humanCtl(p) {
+  if (p === 0) {
+    const ar = vsCPU; // vs CPU, player 1 can use arrows too
+    return {
+      left:  keys.KeyA || (ar && keys.ArrowLeft),
+      right: keys.KeyD || (ar && keys.ArrowRight),
+      jump:  hit.KeyW  || (ar && hit.ArrowUp),
+      slam:  keys.KeyS || (ar && keys.ArrowDown),
+    };
+  }
+  return { left: keys.ArrowLeft, right: keys.ArrowRight, jump: hit.ArrowUp, slam: keys.ArrowDown };
+}
+
+// ── Touch ───────────────────────────────────────────────────────────
+// Phones get on-screen buttons for player 1 during a match only; menus
+// become tap targets since there's no keyboard to read hints for.
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+const touchEl = document.getElementById('touch');
+let touchShown = false;
+function syncTouch() {
+  const show = TOUCH && (mode === 'ready' || mode === 'fight' || mode === 'ringout');
+  if (show === touchShown) return;
+  touchShown = show;
+  touchEl.style.display = show ? 'flex' : 'none';
+  if (!show) touchEl.querySelectorAll('button').forEach(btn => {
+    keys[btn.dataset.k] = false; btn.classList.remove('on');
+  });
+}
+touchEl.querySelectorAll('button').forEach(btn => {
+  const k = btn.dataset.k;
+  const down = e => { e.preventDefault(); keys[k] = true; hit[k] = true; btn.classList.add('on'); unlockAudio(); };
+  const up   = e => { e.preventDefault(); keys[k] = false; btn.classList.remove('on'); };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('pointerleave', up);
+});
+
+// Menu taps / clicks, hit-tested against a text row's on-screen y
+const MENU_DIFF_Y = 284, MENU_BACK_Y = 298;
+const onRow = (e, y) => Math.abs(e.clientY - (OY + y * SCALE)) < Math.max(24, 20 * SCALE);
+cv.addEventListener('pointerdown', e => {
+  unlockAudio();
+  if (mode === 'title') {
+    if (onRow(e, MENU_DIFF_Y)) cycleDiff(1);
+    else startMatch(true);
+  } else if (mode === 'over') {
+    if (TOUCH && onRow(e, MENU_BACK_Y) && Math.abs(e.clientX - (OX + WW / 2 * SCALE)) < 70) toTitle();
+    else startMatch(vsCPU);
+  }
+});
+
+// ── CPU ─────────────────────────────────────────────────────────────
+// Difficulty only changes how the CPU decides, never its physics.
+const DIFFS = [
+  // slow to react, often stands still, weak hesitant slams, never dodges
+  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,    edgeJump: 0.15, idle: 0.35, escape: 0 },
+  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2,  edgeJump: 0.5,  idle: 0,    escape: 0 },
+  // fast; only crouches once it's close (charging halves your speed), holds
+  // the charge until contact, fires early to beat your slam, goes full power
+  // when you're near the edge, and hops over you when it's pinned
+  { name: 'hard',   react: [0.03, 0.05], slamP: 0.95, slamDist: 2.5, target: [0.60, 0.40], dodge: 0.35, edgeJump: 0.85, idle: 0,    escape: 0.5, smart: true },
+];
+let diff = 1;
+try { const v = localStorage.getItem('sumo-diff'); if (v !== null && +v >= 0 && +v < DIFFS.length) diff = +v; } catch (e) {}
+function cycleDiff(step) {
+  diff = (diff + step + DIFFS.length) % DIFFS.length;
+  try { localStorage.setItem('sumo-diff', diff); } catch (e) {}
+}
+
+function aiCtl(b, o, dt, D) {
+  const s = b.ai;
+  s.t -= dt;
+  const dx = o.cx - b.cx, dy = o.cy - b.cy, dist = Math.hypot(dx, dy);
+  const mid = (PX0 + PX1) / 2;
+  const myEdge = Math.min(b.cx - PX0, PX1 - b.cx);
+  const oEdge  = Math.min(o.cx - PX0, PX1 - o.cx);
+  if (s.t <= 0) {
+    s.t = D.react[0] + Math.random() * D.react[1]; // reaction time
+    s.move = Math.random() < D.idle ? 0 : Math.sign(dx) || 1;
+    if (b.cx < PX0 + 20 || b.cx > PX1 - 20) s.move = Math.sign(mid - b.cx);
+    if (o.charging && dist < R * 3 && myEdge > 160 && Math.random() < D.dodge) s.move = -Math.sign(dx);
+    if (!s.slam && b.cd <= 0 && dist < R * D.slamDist && Math.random() < D.slamP) {
+      s.slam = true; s.target = D.target[0] + Math.random() * D.target[1];
+    }
+    if (myEdge < 70 && o.charging && b.onGround && Math.random() < D.edgeJump) s.jump = true;
+    // pinned at the edge with the opponent on the inside: hop over them
+    if (myEdge < 90 && Math.sign(mid - b.cx) === Math.sign(dx) && dist < R * 2.6 &&
+        b.onGround && Math.random() < D.escape) s.jump = true;
+    if (dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
+    if (Math.random() < 0.015) s.jump = true;
+  }
+  const c = { left: s.move < 0, right: s.move > 0, jump: s.jump, slam: false };
+  s.jump = false;
+  if (s.slam) {
+    const contact = dist < R * 2.15;
+    const release = D.smart
+      ? (contact && (b.charge >= (oEdge < 140 ? 0.9 : 0.45) || (o.charging && b.charge >= 0.2))) || dist > R * 4
+      : b.charge >= s.target || (b.charging && contact && b.charge > 0.3);
+    if (release || b.cd > 0) s.slam = false;
+    else c.slam = true;
+  }
+  return c;
+}
+
+// ── Controls → forces ───────────────────────────────────────────────
+function applyCtl(b, o, c, dt) {
+  b.jumpCd -= dt; b.cd -= dt; b.puffT -= dt;
+  if (b.stun > 0) { b.stun -= dt; c = {}; }
+  const dir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
+  const slow = b.charging ? 0.45 : 1;
+  let ax = dir * (b.onGround ? MOVE : AIRMOVE) * slow;
+  if (dir * b.vx > MAXV * slow) ax = 0;
+  b.ax = ax;
+  b.roll = dir * ROLL * slow * (b.onGround ? 1 : 0.25);
+
+  if (c.jump && b.onGround && b.jumpCd <= 0 && !b.charging) {
+    for (let i = 0; i < N; i++) b.py[i] += JUMP * H;
+    b.jumpCd = 0.3;
+    sfx('jump');
+  }
+
+  if (c.slam && b.cd <= 0) {
+    if (!b.charging) { b.charging = true; b.charge = 0; }
+    b.charge = Math.min(1, b.charge + dt / CHARGE_T);
+  } else if (b.charging) {
+    release(b, o);
+  }
+
+  // Crouch deflates, slam over-inflates, otherwise relax to 1
+  const target = b.charging ? 1 - 0.3 * b.charge : (b.puffT > 0 ? b.puffAmt : 1);
+  b.pressure += (target - b.pressure) * (b.puffT > 0 ? 0.55 : 0.2);
+}
+
+function release(b, o) {
+  const c = Math.max(0.2, b.charge);
+  // Diminishing returns past half charge: full charge = 0.65 power, so a
+  // big slam still wins the shove but doesn't fling anyone off the ring.
+  const p = c <= 0.5 ? c : 0.5 + (c - 0.5) * 0.3;
+  b.charging = false; b.charge = 0; b.cd = SLAM_CD;
+  b.puffT = 0.14; b.puffAmt = 1 + 0.25 * p;
+  const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
+  if (d < SLAM_RANGE) {
+    const nx = dx / d, ny = dy / d;
+    const F = 70 + 230 * p, lift = 20 + 40 * p;
+    const vx = nx * F, vy = ny * F * 0.35 - lift;
+    for (let i = 0; i < N; i++) {
+      o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
+      b.px[i] += vx * 0.22 * H;               // recoil
+    }
+    o.stun = 0.08 + 0.14 * p;
+    shake = Math.max(shake, 2 + 6 * c);
+    rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 34 + 36 * c, t: 0, life: 0.28 });
+    sfx('slam', c);
+  } else {
+    sfx('puff');
+  }
+}
+
+function post(b, dt) {
+  const vyBefore = b.vy;
+  b.vx = (b.cx - b.lcx) / dt; b.vy = (b.cy - b.lcy) / dt;
+  b.lcx = b.cx; b.lcy = b.cy;
+  const was = b.onGround;
+  b.onGround = b.touch;
+  if (b.onGround && !was && vyBefore > 350) {
+    sfx('land');
+  }
+}
+
+// ── Update ──────────────────────────────────────────────────────────
+function update(dt) {
+  if (mode === 'title') {
+    if (hit.Digit1 || hit.Numpad1) startMatch(true);
+    else if (hit.Digit2 || hit.Numpad2) startMatch(false);
+    else if (hit.ArrowLeft || hit.KeyA) cycleDiff(-1);
+    else if (hit.ArrowRight || hit.KeyD) cycleDiff(1);
+  } else if (mode === 'over' && (hit.Space || hit.Enter)) {
+    startMatch(vsCPU);
+  }
+  if (hit.Escape && mode !== 'title') toTitle();
+  if (hit.KeyM) muted = !muted;
+
+  const [A, B] = bodies;
+  let ca = {}, cb = {};
+  if (mode === 'title') {
+    ca = aiCtl(A, B, dt, DIFFS[1]); cb = aiCtl(B, A, dt, DIFFS[1]); // attract mode
+  } else if (mode !== 'ready') {
+    ca = humanCtl(0);
+    cb = vsCPU ? aiCtl(B, A, dt, DIFFS[diff]) : humanCtl(1);
+  }
+  applyCtl(A, B, ca, dt);
+  applyCtl(B, A, cb, dt);
+  physics();
+  post(A, dt); post(B, dt);
+
+  stateT -= dt; msgT -= dt;
+  const outA = A.cy > OUT_Y, outB = B.cy > OUT_Y;
+
+  if (mode === 'title' || mode === 'over') {
+    // free play: just respawn whoever falls
+    if ((outA || outB) && titleReset <= 0) titleReset = 1.2;
+    if (titleReset > 0 && (titleReset -= dt) <= 0) newRound();
+  } else if (mode === 'ready' && stateT <= 0) {
+    mode = 'fight'; msg = 'SUMO!'; msgT = 0.7; sfx('go');
+  } else if (mode === 'fight' && (outA || outB)) {
+    loser = outA && outB ? -1 : outA ? 0 : 1;
+    mode = 'ringout'; stateT = 1.1; // real-time fall, short beat, next round
+    msg = loser < 0 ? 'DOUBLE OUT' : 'RING OUT'; msgT = 0.7;
+    shake = Math.max(shake, 10);
+    sfx('out');
+  } else if (mode === 'ringout' && stateT <= 0) {
+    if (loser >= 0) scores[1 - loser]++;
+    if (scores[0] >= WIN || scores[1] >= WIN) {
+      const w = scores[0] >= WIN ? 0 : 1;
+      mode = 'over';
+      msg = (w === 1 && vsCPU ? 'CPU' : COLORS[w].name) + ' WINS';
+      msgT = 1e9;
+      sfx('win');
+      newRound();
+    } else {
+      newRound();
+    }
+  }
+
+  for (let i = rings.length - 1; i >= 0; i--) {
+    if ((rings[i].t += dt) >= rings[i].life) rings.splice(i, 1);
+  }
+  shake *= 0.85;
+  syncTouch();
+  for (const k in hit) delete hit[k];
+}
+
+// ── Audio (tiny synth blips) ────────────────────────────────────────
+let AC = null, muted = false;
+function unlockAudio() {
+  if (AC) return;
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+}
+function sfx(type, amt = 1) {
+  if (!AC || muted) return;
+  const t = AC.currentTime;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  const env = (f0, f1, dur, vol, wave) => {
+    o.type = wave;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.02);
+  };
+  switch (type) {
+    case 'jump': env(220, 560, 0.13, 0.10, 'sine'); break;
+    case 'land': env(110, 45, 0.10, 0.12, 'sine'); break;
+    case 'puff': env(300, 120, 0.08, 0.05, 'triangle'); break;
+    case 'slam': env(160 + 60 * amt, 40, 0.22, 0.10 + 0.08 * amt, 'square'); break;
+    case 'go':   env(520, 780, 0.18, 0.08, 'square'); break;
+    case 'out':  env(440, 70, 0.70, 0.12, 'triangle'); break;
+    case 'win':  env(392, 1046, 0.50, 0.08, 'square'); break;
+  }
+}
+
+// ── Render ──────────────────────────────────────────────────────────
+// Minimal: flat paper, one ink bar for the ring, flat-colour blobs with a
+// uniform ink outline and two dot eyes. Expression lives in the eyes and
+// the outline weight only.
+let DPR = 1, SW = 0, SH = 0, SCALE = 1, OX = 0, OY = 0;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  SW = innerWidth; SH = innerHeight;
+  cv.width = SW * DPR; cv.height = SH * DPR;
+  cv.style.width = SW + 'px'; cv.style.height = SH + 'px';
+  // Portrait: frame just the ring (700 wide) instead of squeezing the
+  // whole 1000-wide world into a thin strip, and sit it a bit high so the
+  // thumb buttons get the bottom of the screen.
+  const portrait = SW < SH;
+  SCALE = Math.min(SW / (portrait ? 700 : WW), SH / WH);
+  OX = (SW - WW * SCALE) / 2;
+  OY = (SH - WH * SCALE) * (portrait ? 0.38 : 0.5);
+}
+addEventListener('resize', resize);
+
+function drawRing() {
+  ctx.fillStyle = PAL.ink;
+  ctx.beginPath();
+  ctx.roundRect(PX0, PY, PX1 - PX0, TH, TH / 2);
+  ctx.fill();
+}
+
+// Closed Catmull-Rom through the skin points → smooth, even outline
+function blobPath(b) {
+  const x = b.x, y = b.y;
+  ctx.beginPath();
+  ctx.moveTo(x[0], y[0]);
+  for (let i = 0; i < N; i++) {
+    const i0 = i === 0 ? N - 1 : i - 1, i2 = (i + 1) % N, i3 = (i + 2) % N;
+    ctx.bezierCurveTo(
+      x[i] + (x[i2] - x[i0]) / 6,  y[i] + (y[i2] - y[i0]) / 6,
+      x[i2] - (x[i3] - x[i]) / 6,  y[i2] - (y[i3] - y[i]) / 6,
+      x[i2], y[i2]);
+  }
+  ctx.closePath();
+}
+
+function drawBody(b, o) {
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  blobPath(b);
+  ctx.fillStyle = b.col.fill;
+  ctx.fill();
+  ctx.lineWidth = 4 + (b.charging ? 4 * b.charge : 0);
+  ctx.strokeStyle = PAL.ink;
+  ctx.stroke();
+
+  // eyes stay upright while the skin tumbles, and track the opponent
+  const ew = b.maxX - b.minX, eh = b.maxY - b.minY;
+  const ex = ew * 0.16, ey = b.cy - eh * 0.12;
+  const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
+  const lx = dx / d * 2, ly = dy / d * 2;
+  ctx.fillStyle = PAL.ink; ctx.strokeStyle = PAL.ink; ctx.lineWidth = 3.5;
+  for (const s of [-1, 1]) {
+    const X = b.cx + s * ex;
+    if (b.stun > 0) {                    // dazed: flat
+      ctx.beginPath(); ctx.moveTo(X - 4, ey); ctx.lineTo(X + 4, ey); ctx.stroke();
+    } else if (b.charging) {             // straining: slanted toward centre
+      ctx.beginPath(); ctx.moveTo(X - s * 4, ey + 2); ctx.lineTo(X + s * 4, ey - 2); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.arc(X + lx, ey + ly, b.puffT > 0 ? 4.5 : 3.5, 0, TAU); ctx.fill();
+    }
+  }
+
+  // player label: 1 / 2, or "cpu" for the computer
+  const isCPU = b.idx === 1 && vsCPU && mode !== 'title';
+  const label = isCPU ? 'cpu' : String(b.idx + 1);
+  const size = Math.min(isCPU ? 17 : 26, eh * (isCPU ? 0.2 : 0.3));
+  ctx.font = `700 ${Math.round(size)}px Fredoka, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = PAL.ink;
+  ctx.fillText(label, b.cx, b.cy + eh * 0.2);
+}
+
+function drawRings() {
+  ctx.strokeStyle = PAL.ink;
+  for (const e of rings) {
+    const k = e.t / e.life, ease = 1 - (1 - k) * (1 - k);
+    ctx.lineWidth = 5 * (1 - k);
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r * (0.3 + 0.7 * ease), 0, TAU); ctx.stroke();
+  }
+}
+
+const MIN_TEXT_PX = 11;
+function text(str, x, y, size, alpha = 1, align = 'center', color = PAL.ink) {
+  size = Math.max(size, MIN_TEXT_PX / SCALE);
+  ctx.globalAlpha = alpha;
+  ctx.font = `600 ${size}px Fredoka, sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(str, x, y);
+  ctx.globalAlpha = 1;
+}
+
+function drawHUD() {
+  const dname = DIFFS[diff].name;
+  if (mode === 'title') {
+    text('soft body sumo', WW / 2, 190, 40);
+    if (TOUCH) {
+      text('tap to play', WW / 2, 240, 16, 0.7);
+      text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 15, 0.55);
+      text('\u25c0 \u25b6 move    \u25b2 jump    hold \u25cf to slam', WW / 2, 512, 12, 0.45);
+    } else {
+      text('1  vs cpu        2  two players', WW / 2, 240, 15, 0.7);
+      text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 15, 0.55);
+      text('p1   a d move   w jump   hold s to slam', WW / 2, 500, 12, 0.45);
+      text('p2   arrows move   \u2191 jump   hold \u2193 to slam', WW / 2, 524, 12, 0.45);
+    }
+    return;
+  }
+
+  // score: label + three pips per side. Pinned near the top of the
+  // screen, which in portrait is well above the world's own top edge.
+  const sy = Math.min(40, (34 - OY) / SCALE);
+  text('p1', WW / 2 - 104, sy, 12, 0.6, 'right');
+  text(vsCPU ? `cpu \u00b7 ${dname}` : 'p2', WW / 2 + 104, sy, 12, 0.6, 'left');
+  ctx.lineWidth = 2.5; ctx.strokeStyle = PAL.ink;
+  for (let p = 0; p < 2; p++) {
+    for (let k = 0; k < WIN; k++) {
+      const x = WW / 2 + (p ? 1 : -1) * (26 + k * 20);
+      ctx.beginPath(); ctx.arc(x, sy, 6, 0, TAU);
+      if (k < scores[p]) { ctx.fillStyle = COLORS[p].fill; ctx.fill(); }
+      ctx.stroke();
+    }
+  }
+
+  if (msgT > 0) {
+    const pop = msg === 'SUMO!' ? 1 + Math.max(0, msgT - 0.5) * 1.5 : 1;
+    text(msg.toLowerCase(), WW / 2, mode === 'over' ? 196 : 240, 44 * pop);
+  }
+  if (mode === 'over') {
+    if (TOUCH) {
+      text('tap to rematch', WW / 2, 246, 14, 0.6);
+      // "menu" gets an outlined pill so it reads as its own button
+      const h = Math.max(30, 34 / SCALE), w = h * 2.6;
+      ctx.lineWidth = Math.max(2.5, 2 / SCALE); ctx.strokeStyle = PAL.ink; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.roundRect(WW / 2 - w / 2, MENU_BACK_Y - h / 2, w, h, h / 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      text('menu', WW / 2, MENU_BACK_Y, 14, 0.6);
+    } else {
+      text('space  rematch      esc  menu', WW / 2, 246, 13, 0.55);
+    }
+  }
+}
+
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = PAL.paper;
+  ctx.fillRect(0, 0, SW, SH);
+
+  const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
+  ctx.setTransform(DPR * SCALE, 0, 0, DPR * SCALE, (OX + sx * SCALE) * DPR, (OY + sy * SCALE) * DPR);
+
+  drawRing();
+  const [A, B] = bodies;
+  drawBody(A, B); drawBody(B, A);
+  drawRings();
+  drawHUD();
+}
+
+// ── Main loop: fixed timestep ───────────────────────────────────
+let last = performance.now(), acc = 0;
+function loop(now) {
+  const frameDt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  acc += frameDt;
+  let steps = 0;
+  while (acc >= DT && steps < 5) { update(DT); acc -= DT; steps++; }
+  if (steps === 5) acc = 0;
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resize();
+newRound();
+document.fonts.load('600 20px Fredoka');
+document.fonts.load('700 20px Fredoka');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
