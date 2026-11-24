@@ -305,7 +305,7 @@ let vsCPU = true;
 let bodies = [];
 let scores = [0, 0];
 let stateT = 0, msg = '', msgT = 0, loser = -1;
-let shake = 0, titleReset = 0;
+let shake = 0, titleReset = 0, winner = 0;
 const rings = [];     // expanding impact rings on slam hits
 
 function newRound() {
@@ -372,20 +372,27 @@ touchEl.querySelectorAll('button').forEach(btn => {
 });
 
 // Menu taps / clicks, hit-tested against a text row's on-screen y
-const MENU_MODE_Y = 240, MENU_DIFF_Y = 284, MENU_BACK_Y = 298;
+// Desktop title is a vertical menu: vs cpu / two players, then the
+// difficulty row. Phones get "tap to play" + the difficulty row.
+const MENU_CPU_Y = 226, MENU_2P_Y = 258;
+const MENU_DIFF_Y = TOUCH ? 284 : 296, MENU_BACK_Y = 298;
 const onRow = (e, y) => Math.abs(e.clientY - (OY + y * SCALE)) < Math.max(24, 20 * SCALE);
+// tighter hit for the two stacked mode rows so they don't overlap
+const onTight = (e, y) => Math.abs(e.clientY - (OY + y * SCALE)) < 16 * SCALE;
 const worldX = e => (e.clientX - OX) / SCALE;
-// Which title item is under the pointer: 'cpu' | '2p' | 'diff' | null.
-// The mode row is split at the centre: left half vs cpu, right half 2p.
+let menuSel = 0; // 0 = vs cpu, 1 = two players
 function titleItem(e) {
   if (onRow(e, MENU_DIFF_Y)) return 'diff';
-  if (!TOUCH && onRow(e, MENU_MODE_Y) && Math.abs(worldX(e) - WW / 2) < 230)
-    return worldX(e) < WW / 2 ? 'cpu' : '2p';
+  if (TOUCH || Math.abs(worldX(e) - WW / 2) > 160) return null;
+  if (onTight(e, MENU_CPU_Y)) return 'cpu';
+  if (onTight(e, MENU_2P_Y)) return '2p';
   return null;
 }
 let hoverItem = null;
 cv.addEventListener('pointermove', e => {
   hoverItem = mode === 'title' && !TOUCH ? titleItem(e) : null;
+  if (hoverItem === 'cpu') menuSel = 0;
+  if (hoverItem === '2p') menuSel = 1;
   cv.style.cursor = hoverItem ? 'pointer' : '';
 });
 cv.addEventListener('pointerdown', e => {
@@ -495,7 +502,7 @@ function release(b, o) {
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
   if (d < SLAM_RANGE) {
     const nx = dx / d, ny = dy / d;
-    const F = 90 + 285 * p, lift = 25 + 50 * p;
+    const F = 110 + 415 * p, lift = 35 + 70 * p;
     const vx = nx * F, vy = ny * F * 0.35 - lift;
     for (let i = 0; i < N; i++) {
       o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
@@ -526,6 +533,9 @@ function update(dt) {
   if (mode === 'title') {
     if (hit.Digit1 || hit.Numpad1) startMatch(true);
     else if (hit.Digit2 || hit.Numpad2) startMatch(false);
+    else if (hit.ArrowUp || hit.KeyW) menuSel = 0;
+    else if (hit.ArrowDown || hit.KeyS) menuSel = 1;
+    else if (hit.Enter || hit.Space) startMatch(menuSel === 0);
     else if (hit.ArrowLeft || hit.KeyA) cycleDiff(-1);
     else if (hit.ArrowRight || hit.KeyD) cycleDiff(1);
   } else if (mode === 'over' && (hit.Space || hit.Enter)) {
@@ -538,9 +548,14 @@ function update(dt) {
   let ca = {}, cb = {};
   if (mode === 'title') {
     ca = aiCtl(A, B, dt, DIFFS[1]); cb = aiCtl(B, A, dt, DIFFS[1]); // attract mode
-  } else if (mode !== 'ready') {
+  } else if (mode === 'fight' || mode === 'ringout') {
     ca = humanCtl(0);
     cb = vsCPU ? aiCtl(B, A, dt, DIFFS[diff]) : humanCtl(1);
+  } else if (mode === 'over') {
+    // result screen: nobody fights (it read as the next match starting
+    // under the old "wins" text); the winner just hops now and then
+    const hop = { jump: Math.random() < 0.04 };
+    if (winner === 0) ca = hop; else cb = hop;
   }
   applyCtl(A, B, ca, dt);
   applyCtl(B, A, cb, dt);
@@ -566,6 +581,7 @@ function update(dt) {
     if (loser >= 0) scores[1 - loser]++;
     if (scores[0] >= WIN || scores[1] >= WIN) {
       const w = scores[0] >= WIN ? 0 : 1;
+      winner = w;
       mode = 'over';
       msg = (w === 1 && vsCPU ? 'CPU' : COLORS[w].name) + ' WINS';
       msgT = 1e9;
@@ -716,15 +732,28 @@ function text(str, x, y, size, alpha = 1, align = 'center', color = PAL.ink) {
 function drawHUD() {
   const dname = DIFFS[diff].name;
   if (mode === 'title') {
-    text('soft body sumo', WW / 2, 190, 40);
+    text('soft body sumo', WW / 2, TOUCH ? 190 : 176, 40);
     if (TOUCH) {
       text('tap to play', WW / 2, 240, 16, 0.7);
       text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 15, 0.55);
       text('\u25c0 \u25b6 move    \u25b2 jump    hold \u25cf to slam', WW / 2, 512, 12, 0.45);
     } else {
-      text('1  vs cpu', WW / 2 - 28, MENU_MODE_Y, 15, hoverItem === 'cpu' ? 1 : 0.7, 'right');
-      text('2  two players', WW / 2 + 28, MENU_MODE_Y, 15, hoverItem === '2p' ? 1 : 0.7, 'left');
-      text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 15, hoverItem === 'diff' ? 0.9 : 0.55);
+      // selected option: full ink + a dot marker; the other is faded
+      const opt = (label, y, i) => {
+        const on = menuSel === i;
+        text(label, WW / 2, y, 17, on ? 1 : 0.4);
+        if (on) {
+          const w = ctx.measureText(label).width;
+          ctx.fillStyle = PAL.ink;
+          ctx.beginPath(); ctx.arc(WW / 2 - w / 2 - 16, y, 4, 0, TAU); ctx.fill();
+        }
+      };
+      opt('vs cpu', MENU_CPU_Y, 0);
+      opt('two players', MENU_2P_Y, 1);
+      // difficulty only matters vs cpu, so it fades when 2p is selected
+      text(`cpu   \u2039 ${dname} \u203a`, WW / 2, MENU_DIFF_Y, 14,
+           menuSel === 1 ? 0.25 : hoverItem === 'diff' ? 0.9 : 0.55);
+      text('\u2191 \u2193 choose     \u2190 \u2192 difficulty     enter start', WW / 2, 474, 11, 0.4);
       text('p1   a d move   w jump   hold s to slam', WW / 2, 500, 12, 0.45);
       text('p2   arrows move   \u2191 jump   hold \u2193 to slam', WW / 2, 524, 12, 0.45);
     }
