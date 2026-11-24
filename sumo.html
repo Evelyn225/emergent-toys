@@ -496,13 +496,13 @@ function release(b, o) {
   const c = Math.max(0.2, b.charge);
   // Diminishing returns past half charge: full charge = 0.65 power, so a
   // big slam still wins the shove but doesn't fling anyone off the ring.
-  const p = c <= 0.5 ? c : 0.5 + (c - 0.5) * 0.3;
+  const p = c <= 0.5 ? c : 0.5 + (c - 0.5) * 0.15;
   b.charging = false; b.charge = 0; b.cd = SLAM_CD;
   b.puffT = 0.14; b.puffAmt = 1 + 0.25 * p;
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
   if (d < SLAM_RANGE) {
     const nx = dx / d, ny = dy / d;
-    const F = 110 + 415 * p, lift = 35 + 70 * p;
+    const F = 120 + 455 * p, lift = 38 + 77 * p;
     const vx = nx * F, vy = ny * F * 0.35 - lift;
     for (let i = 0; i < N; i++) {
       o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
