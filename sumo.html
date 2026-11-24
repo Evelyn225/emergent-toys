@@ -107,13 +107,13 @@ const PX0 = 200, PX1 = 800, PY = 420, TH = 18; // the ring: one ink bar
 const N = 28, R = 44;                      // skin points, rest radius
 const SUB = 8, DT = 1 / 60, H = DT / SUB;  // fixed step + substeps
 const G = 2300, DAMP = 0.9995;
-const KS = 0.02;   // shape-matching stiffness (lower = wobblier)
-const KE = 0.32;   // edge spring stiffness
-const KP = 0.3;    // pressure stiffness
+const KS = 0.012;  // shape-matching stiffness (lower = wobblier)
+const KE = 0.2;    // edge spring stiffness
+const KP = 0.2;    // pressure stiffness
 const FR = 0.08;   // ground friction per substep
 const MOVE = 1700, AIRMOVE = 650, ROLL = 1600, MAXV = 430, JUMP = 830;
+const BRAKE = 1800; // ground braking when you let go / reverse (px/s²)
 const CHARGE_T = 0.75, SLAM_CD = 0.55, SLAM_RANGE = R * 2.7, WIN = 3;
-const OUT_Y = PY + 170;
 const TAU = Math.PI * 2;
 
 // Minimal palette: paper, ink, and one colour per wrestler.
@@ -134,7 +134,7 @@ function makeBody(cx, cy, idx) {
     cx, cy, lcx: cx, lcy: cy, vx: 0, vy: 0,
     minX: 0, maxX: 0, minY: 0, maxY: 0,
     pressure: 1, charge: 0, charging: false,
-    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0,
+    puffT: 0, puffAmt: 1, cd: 0, stun: 0, jumpCd: 0, airJump: true, knocked: false, knockT: 0,
     ax: 0, roll: 0, touch: false, onGround: false,
     ai: { t: 0, move: 0, slam: false, target: 0.6, jump: false },
   };
@@ -412,14 +412,20 @@ cv.addEventListener('pointerdown', e => {
 
 // ── CPU ─────────────────────────────────────────────────────────────
 // Difficulty only changes how the CPU decides, never its physics.
+// Tuned with a headless CPU-vs-CPU tournament (hard beats normal ~70% of
+// rounds, normal beats easy ~90%). Most CPU rounds were lost to blunders,
+// not slams: jumping near the edge (which spends the recovery jump) and
+// charging near the edge (slow, can't jump). Hard's extra skills target
+// exactly those, plus finishing off an opponent who's trying to recover.
 const DIFFS = [
   // slow to react, often stands still, weak hesitant slams, never dodges
-  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,    edgeJump: 0.15, idle: 0.35, escape: 0 },
-  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2,  edgeJump: 0.5,  idle: 0,    escape: 0 },
-  // fast; only crouches once it's close (charging halves your speed), holds
-  // the charge until contact, fires early to beat your slam, goes full power
-  // when you're near the edge, and hops over you when it's pinned
-  { name: 'hard',   react: [0.03, 0.05], slamP: 0.95, slamDist: 2.5, target: [0.60, 0.40], dodge: 0.35, edgeJump: 0.85, idle: 0,    escape: 0.5, smart: true },
+  { name: 'easy',   react: [0.30, 0.25], slamP: 0.35, slamDist: 3.4, target: [0.15, 0.40], dodge: 0,   edgeJump: 0.15, idle: 0.35, edgeSense: 0.4, recover: 0.35 },
+  { name: 'normal', react: [0.07, 0.13], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2, edgeJump: 0.5,  idle: 0,    edgeSense: 0.9, recover: 0.9 },
+  // fast and careful: only jumps where it will land on the ring, never
+  // charges with its back to the edge, quick-slams when cornered, and
+  // tap-slams you while you're hanging off the edge trying to recover
+  { name: 'hard',   react: [0.03, 0.05], slamP: 0.75, slamDist: 3.4, target: [0.30, 0.70], dodge: 0.2, edgeJump: 0.5,  idle: 0,    edgeSense: 1,   recover: 1,
+    safeJumps: true, edgeCharge: true, cornered: true, punish: true, noRandomJumps: true },
 ];
 let diff = 1;
 try { const v = localStorage.getItem('sumo-diff'); if (v !== null && +v >= 0 && +v < DIFFS.length) diff = +v; } catch (e) {}
@@ -434,30 +440,70 @@ function aiCtl(b, o, dt, D) {
   const dx = o.cx - b.cx, dy = o.cy - b.cy, dist = Math.hypot(dx, dy);
   const mid = (PX0 + PX1) / 2;
   const myEdge = Math.min(b.cx - PX0, PX1 - b.cx);
-  const oEdge  = Math.min(o.cx - PX0, PX1 - o.cx);
   if (s.t <= 0) {
     s.t = D.react[0] + Math.random() * D.react[1]; // reaction time
     s.move = Math.random() < D.idle ? 0 : Math.sign(dx) || 1;
     if (b.cx < PX0 + 20 || b.cx > PX1 - 20) s.move = Math.sign(mid - b.cx);
     if (o.charging && dist < R * 3 && myEdge > 160 && Math.random() < D.dodge) s.move = -Math.sign(dx);
-    if (!s.slam && b.cd <= 0 && dist < R * D.slamDist && Math.random() < D.slamP) {
+    // edgeCharge: don't start a full charge with your back near the edge
+    // (charging halves your speed and blocks jumping; a big cause of falls)
+    const backToEdge = myEdge < 120 && Math.sign(dx) === Math.sign(mid - b.cx);
+    if (!s.slam && b.cd <= 0 && dist < R * D.slamDist && Math.random() < D.slamP &&
+        !(D.edgeCharge && backToEdge)) {
       s.slam = true; s.target = D.target[0] + Math.random() * D.target[1];
     }
     if (myEdge < 70 && o.charging && b.onGround && Math.random() < D.edgeJump) s.jump = true;
-    // pinned at the edge with the opponent on the inside: hop over them
-    if (myEdge < 90 && Math.sign(mid - b.cx) === Math.sign(dx) && dist < R * 2.6 &&
-        b.onGround && Math.random() < D.escape) s.jump = true;
-    if (dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
-    if (Math.random() < 0.015) s.jump = true;
+    // Don't hop after an opponent who jumped over you while you're running
+    // at the edge; that's how the edge-bait trick threw the CPU off.
+    const nearEdgeDir = b.cx < (PX0 + PX1) / 2 ? -1 : 1;
+    const runningOut = myEdge < 140 && Math.sign(b.vx) === nearEdgeDir && Math.abs(b.vx) > 60;
+    if (!runningOut && dy < -50 && dist < R * 3 && Math.random() < 0.25) s.jump = true;
+    if (!runningOut && !D.noRandomJumps && Math.random() < 0.015) s.jump = true;
+    s.edgeAware = Math.random() < D.edgeSense;
+    // knocked off the ring and dropping: use the recovery jump
+    const offRing = b.cx < PX0 - 4 || b.cx > PX1 + 4;
+    if (offRing && !b.onGround && b.airJump && b.vy > -60 && Math.random() < D.recover) {
+      s.jump = true; s.slam = false; s.quick = false; // can't jump while charging
+    }
+    // punish: opponent is hanging off the edge mid-recovery and in reach,
+    // so tap-slam them away before they get back on
+    const oOff = o.cx < PX0 + 10 || o.cx > PX1 - 10;
+    if (D.punish && oOff && !o.onGround && dist < SLAM_RANGE * 0.95 && b.cd <= 0 && b.onGround) {
+      s.slam = true; s.quick = true; s.target = 0.25;
+    }
+    // cornered: back near the edge with the opponent pressing in from the
+    // middle, so fire a quick slam now instead of holding a charge
+    if (D.cornered && myEdge < 130 && Math.sign(dx) === Math.sign(mid - b.cx) &&
+        dist < R * 2.6 && b.cd <= 0 && b.onGround && !s.quick) {
+      s.slam = true; s.quick = true; s.target = 0.25;
+    }
+  }
+  // Edge sense, checked every frame so it can brake in time: don't run
+  // toward a nearby edge unless the opponent is on the ring between you
+  // and it (then you're pushing them, not yourself, off).
+  if (s.edgeAware && s.move !== 0 && b.onGround) {
+    const ahead = s.move > 0 ? PX1 - b.cx : b.cx - PX0;
+    const oBetween = o.onGround && Math.sign(dx) === s.move && Math.abs(dx) < ahead;
+    const stopDist = 70 + Math.max(0, s.move * b.vx) * 0.3;
+    if (!oBetween && ahead < stopDist) s.move = -s.move;
   }
   const c = { left: s.move < 0, right: s.move > 0, jump: s.jump, slam: false };
   s.jump = false;
+  // safeJumps: a ground jump uses up the recovery jump, so only take one
+  // if the predicted landing spot is safely on the ring
+  if (D.safeJumps && c.jump && b.onGround) {
+    const land = b.cx + (b.vx + (c.right ? 250 : c.left ? -250 : 0)) * 0.72;
+    if (land < PX0 + 40 || land > PX1 - 40) c.jump = false;
+  }
+  // edgeCharge: sliding out near the edge mid-charge, so let go (puffs
+  // harmlessly out of range) to get the recovery jump back
+  if (D.edgeCharge && b.charging && myEdge < 70 &&
+      Math.sign(b.vx) === Math.sign(b.cx - mid) && Math.abs(b.vx) > 50) s.slam = false;
   if (s.slam) {
     const contact = dist < R * 2.15;
-    const release = D.smart
-      ? (contact && (b.charge >= (oEdge < 140 ? 0.9 : 0.45) || (o.charging && b.charge >= 0.2))) || dist > R * 4
+    const release = s.quick ? b.charge >= s.target
       : b.charge >= s.target || (b.charging && contact && b.charge > 0.3);
-    if (release || b.cd > 0) s.slam = false;
+    if (release || b.cd > 0) { s.slam = false; s.quick = false; }
     else c.slam = true;
   }
   return c;
@@ -466,25 +512,68 @@ function aiCtl(b, o, dt, D) {
 // ── Controls → forces ───────────────────────────────────────────────
 function applyCtl(b, o, c, dt) {
   b.jumpCd -= dt; b.cd -= dt; b.puffT -= dt;
-  if (b.stun > 0) { b.stun -= dt; c = {}; }
+  // stunned: no moving or jumping, but a held charge keeps building
+  // (getting hit used to wipe your inputs and fire your slam early)
+  if (b.stun > 0) { b.stun -= dt; c = { slam: c.slam }; }
   const dir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
   const slow = b.charging ? 0.45 : 1;
-  let ax = dir * (b.onGround ? MOVE : AIRMOVE) * slow;
-  if (dir * b.vx > MAXV * slow) ax = 0;
-  b.ax = ax;
-  b.roll = dir * ROLL * slow * (b.onGround ? 1 : 0.25);
+  // speed cap applies to the spin too (it used to roll on past MAXV)
+  const capped = dir * b.vx > MAXV * slow;
+  b.ax = capped ? 0 : dir * (b.onGround ? MOVE : AIRMOVE) * slow;
+  b.roll = capped ? 0 : dir * ROLL * slow * (b.onGround ? 1 : 0.25);
 
-  if (c.jump && b.onGround && b.jumpCd <= 0 && !b.charging) {
-    for (let i = 0; i < N; i++) b.py[i] += JUMP * H;
-    b.jumpCd = 0.3;
-    sfx('jump');
+  // Ground braking. A blob is a wheel and a rolling wheel barely loses
+  // speed, so you used to coast for ages. When you let go, push against
+  // the motion and counter-spin; when you reverse, turn round harder.
+  // Skipped while you're sliding from a slam hit (until you've slowed to
+  // a crawl) so knockback distances don't change. The short grace period
+  // covers the frame of the hit, before the new speed has registered.
+  b.knockT -= dt;
+  if (b.knocked && b.knockT <= 0 && Math.abs(b.vx) < 40) b.knocked = false;
+  if (b.onGround && !b.knocked) {
+    const sv = Math.sign(b.vx), sp = Math.abs(b.vx);
+    if (dir === 0 && sp > 5) {
+      const k = Math.min(1, sp / 120); // ease off near zero: no jitter
+      b.ax = -sv * BRAKE * k;
+      b.roll = -sv * ROLL * k;
+    } else if (dir !== 0 && dir * b.vx < 0) {
+      b.ax += dir * BRAKE * 0.6;
+    }
   }
 
+  // slam first, so letting go of slam and pressing jump on the same
+  // frame does both (a released charge no longer blocks the jump)
   if (c.slam && b.cd <= 0) {
     if (!b.charging) { b.charging = true; b.charge = 0; }
     b.charge = Math.min(1, b.charge + dt / CHARGE_T);
   } else if (b.charging) {
     release(b, o);
+  }
+
+  // re-arm the recovery jump only on a real landing (not the frame or two
+  // you're still touching the floor right after a jump)
+  if (b.onGround && b.jumpCd <= 0) b.airJump = true;
+  if (c.jump && b.jumpCd <= 0 && !b.charging) {
+    if (b.onGround) {
+      for (let i = 0; i < N; i++) b.py[i] += JUMP * H;
+      b.airJump = false;          // jumped on purpose: no recovery jump
+      b.jumpCd = 0.3;
+      sfx('jump');
+    } else if (b.airJump) {
+      // Recovery jump: only if you left the ground without jumping
+      // (pushed or slammed off). Replaces your fall speed rather than
+      // adding to it, and swaps most of the sideways knockback for a push
+      // the way you're holding, so you can actually get back to the ring.
+      const nvx = b.vx * 0.25 + dir * 300;
+      for (let i = 0; i < N; i++) {
+        b.py[i] += (b.vy + JUMP) * H;
+        b.px[i] += (b.vx - nvx) * H;
+      }
+      b.airJump = false;
+      b.jumpCd = 0.3;
+      rings.push({ x: b.cx, y: b.maxY, r: 30, t: 0, life: 0.22 });
+      sfx('jump');
+    }
   }
 
   // Crouch deflates, slam over-inflates, otherwise relax to 1
@@ -494,21 +583,22 @@ function applyCtl(b, o, c, dt) {
 
 function release(b, o) {
   const c = Math.max(0.2, b.charge);
-  // Diminishing returns past half charge: full charge = 0.65 power, so a
-  // big slam still wins the shove but doesn't fling anyone off the ring.
-  const p = c <= 0.5 ? c : 0.5 + (c - 0.5) * 0.15;
+  // Past half charge, power keeps rising but more slowly (full charge =
+  // 0.8 power), so holding all the way pays off without being absurd.
+  const p = c <= 0.5 ? c : 0.5 + (c - 0.5) * 0.6;
   b.charging = false; b.charge = 0; b.cd = SLAM_CD;
   b.puffT = 0.14; b.puffAmt = 1 + 0.25 * p;
   const dx = o.cx - b.cx, dy = o.cy - b.cy, d = Math.hypot(dx, dy) || 1;
   if (d < SLAM_RANGE) {
     const nx = dx / d, ny = dy / d;
-    const F = 120 + 455 * p, lift = 38 + 77 * p;
+    const F = 180 + 683 * p, lift = 57 + 115 * p;
     const vx = nx * F, vy = ny * F * 0.35 - lift;
     for (let i = 0; i < N; i++) {
       o.px[i] -= vx * H; o.py[i] -= vy * H;   // shove target
       b.px[i] += vx * 0.22 * H;               // recoil
     }
     o.stun = 0.08 + 0.14 * p;
+    o.knocked = true; o.knockT = 0.15;       // let the knockback slide
     shake = Math.max(shake, 2 + 6 * c);
     rings.push({ x: (b.cx + o.cx) / 2, y: (b.cy + o.cy) / 2, r: 34 + 36 * c, t: 0, life: 0.28 });
     sfx('slam', c);
@@ -563,7 +653,11 @@ function update(dt) {
   post(A, dt); post(B, dt);
 
   stateT -= dt; msgT -= dt;
-  const outA = A.cy > OUT_Y, outB = B.cy > OUT_Y;
+  // You lose by falling out the bottom of the screen (whole blob gone),
+  // not by crossing some line under the ring: hanging off the edge or
+  // dropping a little is still alive. The bottom depends on framing.
+  const bottom = Math.min(1400, (SH - OY) / SCALE);
+  const outA = A.minY > bottom, outB = B.minY > bottom;
 
   if (mode === 'title' || mode === 'over') {
     // free play: just respawn whoever falls
@@ -572,13 +666,15 @@ function update(dt) {
   } else if (mode === 'ready' && stateT <= 0) {
     mode = 'fight'; msg = 'SUMO!'; msgT = 0.7; sfx('go');
   } else if (mode === 'fight' && (outA || outB)) {
-    loser = outA && outB ? -1 : outA ? 0 : 1;
-    mode = 'ringout'; stateT = 1.1; // real-time fall, short beat, next round
-    msg = loser < 0 ? 'DOUBLE OUT' : 'RING OUT'; msgT = 0.7;
+    // first one out loses; if both leave on the same frame, the one
+    // further down left first. No draws.
+    loser = outA && outB ? (A.minY > B.minY ? 0 : 1) : outA ? 0 : 1;
+    mode = 'ringout'; stateT = 0.9; // short beat, next round
+    msg = (loser === 1 && vsCPU ? 'CPU' : COLORS[loser].name) + ' FELL'; msgT = 0.9;
     shake = Math.max(shake, 10);
     sfx('out');
   } else if (mode === 'ringout' && stateT <= 0) {
-    if (loser >= 0) scores[1 - loser]++;
+    scores[1 - loser]++;
     if (scores[0] >= WIN || scores[1] >= WIN) {
       const w = scores[0] >= WIN ? 0 : 1;
       winner = w;
