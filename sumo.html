@@ -107,13 +107,12 @@ const PX0 = 200, PX1 = 800, PY = 420, TH = 18; // the ring: one ink bar
 const N = 28, R = 44;                      // skin points, rest radius
 const SUB = 8, DT = 1 / 60, H = DT / SUB;  // fixed step + substeps
 const G = 2300, DAMP = 0.9995;
-const KS = 0.02;   // shape-matching stiffness (lower = wobblier)
-const KE = 0.32;   // edge spring stiffness
-const KP = 0.3;    // pressure stiffness
+const KS = 0.012;  // shape-matching stiffness (lower = wobblier)
+const KE = 0.2;    // edge spring stiffness
+const KP = 0.2;    // pressure stiffness
 const FR = 0.08;   // ground friction per substep
 const MOVE = 1700, AIRMOVE = 650, ROLL = 1600, MAXV = 430, JUMP = 830;
 const CHARGE_T = 0.75, SLAM_CD = 0.55, SLAM_RANGE = R * 2.7, WIN = 3;
-const OUT_Y = PY + 170;
 const TAU = Math.PI * 2;
 
 // Minimal palette: paper, ink, and one colour per wrestler.
@@ -563,7 +562,11 @@ function update(dt) {
   post(A, dt); post(B, dt);
 
   stateT -= dt; msgT -= dt;
-  const outA = A.cy > OUT_Y, outB = B.cy > OUT_Y;
+  // You lose by falling out the bottom of the screen (whole blob gone),
+  // not by crossing some line under the ring: hanging off the edge or
+  // dropping a little is still alive. The bottom depends on framing.
+  const bottom = Math.min(1400, (SH - OY) / SCALE);
+  const outA = A.minY > bottom, outB = B.minY > bottom;
 
   if (mode === 'title' || mode === 'over') {
     // free play: just respawn whoever falls
@@ -572,13 +575,15 @@ function update(dt) {
   } else if (mode === 'ready' && stateT <= 0) {
     mode = 'fight'; msg = 'SUMO!'; msgT = 0.7; sfx('go');
   } else if (mode === 'fight' && (outA || outB)) {
-    loser = outA && outB ? -1 : outA ? 0 : 1;
-    mode = 'ringout'; stateT = 1.1; // real-time fall, short beat, next round
-    msg = loser < 0 ? 'DOUBLE OUT' : 'RING OUT'; msgT = 0.7;
+    // first one out loses; if both leave on the same frame, the one
+    // further down left first. No draws.
+    loser = outA && outB ? (A.minY > B.minY ? 0 : 1) : outA ? 0 : 1;
+    mode = 'ringout'; stateT = 0.9; // short beat, next round
+    msg = (loser === 1 && vsCPU ? 'CPU' : COLORS[loser].name) + ' FELL'; msgT = 0.9;
     shake = Math.max(shake, 10);
     sfx('out');
   } else if (mode === 'ringout' && stateT <= 0) {
-    if (loser >= 0) scores[1 - loser]++;
+    scores[1 - loser]++;
     if (scores[0] >= WIN || scores[1] >= WIN) {
       const w = scores[0] >= WIN ? 0 : 1;
       winner = w;
