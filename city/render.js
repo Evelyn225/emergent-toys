@@ -267,7 +267,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawStream();
   if (!city) { roomPools(); tvGlow(); } // pools of light under a room's lamps, dim between; a TV's glow (room-light.js)
   // (particles.js: after the puddles' reflections, before the fog)
-  if (city) { reflect(); drawParticles(dt); fogSteps(); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); drawNeonSpill(); drawParticles(dt); fogSteps(); } else { FOGS.fill(0); FOGB.fill(0); }
   drawHaze(); // Composite the cloud after atmospheric attenuation, keeping both depth layers.
   if(city){drawFireworks();rainFx(dt);}
   if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();

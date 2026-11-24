@@ -351,7 +351,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, uiScale: 1, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', lod: 1, help: true, tripVisuals: 1, bloom: 0.6, uiScale: 1, colorGrade: true, rainStreaks: true, vignette: true, grain: true, eyeAdapt: true, fogRays: true, roomPools: true, neonSpill: true, controllerDeadzone: .15, controllerLook: 1, controllerSteering: 1, controllerInvertY: false, controllerVibration: true };
 // how much further out the detailed models and textures carry on (the Detail distance slider): 1 as built, up to 3x
 const uiScale=()=>clamp(Number(settings.uiScale)||1,.75,2);
 const lodScale = () => clamp(+settings.lod || 1, 0.5, 3);
@@ -28998,7 +28998,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawStream();
   if (!city) { roomPools(); tvGlow(); } // pools of light under a room's lamps, dim between; a TV's glow (room-light.js)
   // (particles.js: after the puddles' reflections, before the fog)
-  if (city) { reflect(); drawParticles(dt); fogSteps(); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); drawNeonSpill(); drawParticles(dt); fogSteps(); } else { FOGS.fill(0); FOGB.fill(0); }
   drawHaze(); // Composite the cloud after atmospheric attenuation, keeping both depth layers.
   if(city){drawFireworks();rainFx(dt);}
   if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
@@ -29718,6 +29718,48 @@ function drawParticles(dt) {
       if (gone > 0 && hash(Math.floor(p.seed * 1e4), Math.floor(p.age * 3), 3311) < gone) continue;
       speck(p.x, p.y, p.z + (down ? 0.003 : 0), down ? (p.seed > 0.5 ? ',' : '.') : '`,~\''[Math.floor(p.age * 5 + p.seed * 4) & 3], C(p.base, (4 + 8 * lit) * (down ? 0.75 : 1)), down ? 0.97 : 1);
     } else if (p.kind === 'spark') speck(p.x, p.y, p.z, f < 0.5 ? "'" : '.', C(f < 0.4 ? YEL : ORANGE, 14 - f * 6));
+  }
+}
+// ===== neon on the street: after dark, an open shop's sign throws its colour onto the pavement in front of it, a soft
+// pool fading over several metres, brighter where the ground is wet and brightest in a puddle (which mirrors the sign as
+// well: city-render.js reflect). Only the ground near you, in front of the sign: the wall behind it and the shop
+// next door stay their own colour. Apartment lobbies' plain white lettering throws none.
+
+const NEON_SPILL_REACH = 0.8; // (cells: 8m out from the wall: the pavement and the near side of the road)
+
+// The signs run the length of a shop's ground floor (city-render.js facade), so the light comes from the building
+// itself: from a patch of ground, the nearest building face along each of the four street directions, if that
+// building's shop is open and has a sign (not a shut one, not an apartment lobby's plain white lettering).
+const NEON_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function neonFaceAt(x, y) {
+  let best = 0, col = 0;
+  for (const [ux, uy] of NEON_DIRS) for (let t = 0.04; t < NEON_SPILL_REACH; t += 0.08) {
+    const cell = idx(Math.floor(x + ux * t), Math.floor(y + uy * t));
+    if (!map[cell]) continue;
+    const sh = SHOP[cell];
+    if (sh && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT && openAt(sh, tod)) {
+      const k = (1 - t / NEON_SPILL_REACH) ** 2;
+      if (k > best) { best = k; col = sh.neon; }
+    }
+    break; // (the first building face that way; what's behind it can't shine through)
+  }
+  return [best, col];
+}
+
+// in the scene, after the puddles' reflections and before the fog (render.js)
+function drawNeonSpill() {
+  if (!settings.neonSpill || mode === 'room') return;
+  const strength = clamp((night - 0.25) / 0.5, 0, 1) * (1 - 0.5 * clamp(fogAmt || 0, 0, 1)); // (from dusk; fog eats it)
+  if (strength <= 0) return;
+  const wetBoost = 1 + 0.8 * (wet || 0);
+  for (let r = Math.max(0, hor + 1); r < rows; r++) for (let c = 0; c < cols; c++) {
+    const i = r * cols + c, f = FL[i];
+    if ((f !== 1 && f !== 2) || !(ZB[i] > 0.05 && ZB[i] < 6) || BG[i] === NONE) continue; // (the ground near you, and puddles in it)
+    const [x, y] = cellPoint(i), [k, col] = neonFaceAt(x, y);
+    if (k < 0.03) continue;
+    // (soft: a tint, never a coat of paint; dithered so its edge fades rather than steps in the palette's eighths)
+    const a = Math.min(0.5, k * strength * wetBoost * (f === 2 ? 0.45 : 0.28)) + (BAYER[(r & 3) * 4 + (c & 3)] / 16 - 0.47) * 0.1;
+    if (a > 0.04) BG[i] = hazeTint(BG[i], C(col, 4 + 4 * k), a);
   }
 }
 // ===== light that falls where the lamps are, indoors. A room is otherwise lit evenly; here each screen cell, from its
@@ -33800,7 +33842,7 @@ function buildPause() {
       ${slider('fov', 'Field of view', 50, 120, 1)}
       ${slider('lod', 'Detail distance', 0.5, 3, 0.1)}
       ${slider('bloom', 'Bloom', 0, 1, 0.05)}
-      ${toggle('colorGrade', 'Color grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}${toggle('roomPools', 'Pools of light indoors')}
+      ${toggle('colorGrade', 'Color grading')}${toggle('rainStreaks', 'Rain streaks')}${toggle('vignette', 'Vignette')}${toggle('grain', 'Film grain')}${toggle('eyeAdapt', 'Eye adjustment')}${toggle('fogRays', 'Fog light rays')}${toggle('roomPools', 'Pools of light indoors')}${toggle('neonSpill', 'Neon on the street')}
       ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
